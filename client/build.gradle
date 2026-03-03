@@ -1,0 +1,47 @@
+plugins {
+    id 'base'
+    id 'com.github.node-gradle.node' version '7.0.1'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+node {
+    version = '18.18.0'
+    npmVersion = '9.8.1'
+    download = true
+    workDir = file("${project.projectDir}/.gradle/nodejs")
+    npmWorkDir = file("${project.projectDir}/.gradle/npm")
+    nodeProjectDir = file("${project.projectDir}")
+}
+
+task start(type: com.github.gradle.node.npm.task.NpmTask) {
+    dependsOn npmInstall
+    description = 'Start the React development server'
+    args = ['start']
+}
+
+task buildClient(type: com.github.gradle.node.npm.task.NpmTask) {
+    dependsOn npmInstall
+    description = 'Build the React application for production'
+    args = ['run', 'build']
+    inputs.files(fileTree('src'))
+    inputs.files(fileTree('public'))
+    inputs.file('package.json')
+    inputs.file('package-lock.json')
+    outputs.dir('build')
+}
+
+task testClient(type: com.github.gradle.node.npm.task.NpmTask) {
+    dependsOn npmInstall
+    description = 'Run React tests'
+    args = ['test', '--', '--watchAll=false']
+}
+
+clean {
+    delete 'build'
+    delete 'node_modules'
+    delete '.gradle'
+}
+
+build.dependsOn buildClient

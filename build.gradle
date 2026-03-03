@@ -1,0 +1,69 @@
+plugins {
+    id 'base'
+    id 'org.springframework.boot' version '3.2.0' apply false
+    id 'io.spring.dependency-management' version '1.1.4' apply false
+}
+
+group = 'com.sportconnect'
+version = '0.0.1-SNAPSHOT'
+
+subprojects {
+    apply plugin: 'java'
+    
+    group = 'com.sportconnect'
+    version = '0.0.1-SNAPSHOT'
+    
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+    
+    tasks.withType(JavaCompile) {
+        options.compilerArgs << '-parameters'
+    }
+    
+    repositories {
+        mavenCentral()
+    }
+    
+    // Apply Spring Boot dependency management to all modules
+    if (project.name != 'client') {
+        apply plugin: 'io.spring.dependency-management'
+        
+        dependencyManagement {
+            imports {
+                mavenBom "org.springframework.boot:spring-boot-dependencies:3.2.0"
+            }
+        }
+    }
+}
+
+clean {
+    delete rootProject.buildDir
+}
+
+build {
+    dependsOn ':server:build'
+    dependsOn ':client:buildClient'
+}
+
+task bootRun {
+    dependsOn ':server:bootRun'
+    description = 'Start the Spring Boot server'
+}
+
+task startClient {
+    dependsOn ':client:start'
+    description = 'Start the React client'
+}
+
+task startAll {
+    description = 'Start both server and client applications (run separately)'
+    doLast {
+        println 'To start both applications:'
+        println '  Server: ./gradlew :server:bootRun'
+        println '  Client: ./gradlew :client:start'
+        println 'Run these in separate terminal windows'
+    }
+}

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <!-- Week 1-2: Backend v0.1 - Foundation -->
+    <include file="db/changelog/changes/V001__create_users_and_roles.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V002__create_auth_tables.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V003__create_sports_tables.sql" relativeToChangelogFile="false"/>
+
+    <!-- Week 3-4: Backend v0.2 - Social Feed -->
+    <include file="db/changelog/changes/V004__create_posts_tables.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V005__create_social_tables.sql" relativeToChangelogFile="false"/>
+
+</databaseChangeLog>

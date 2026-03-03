@@ -1,0 +1,38 @@
+# Development Profile Configuration
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/sportconnect_dev
+    username: postgres
+    password: sa
+  
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ""
+
+# Development Server
+server:
+  port: 8080
+
+# Development Logging
+logging:
+  level:
+    root: INFO
+    com.sportconnect: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+
+# Development JWT (shorter expiration for testing)
+app:
+  jwt:
+    secret: dev-secret-key-for-development-only-change-in-production-min-256-bits
+    expiration: 3600000 # 1 hour
+    refresh-expiration: 86400000 # 1 day

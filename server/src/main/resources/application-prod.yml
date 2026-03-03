@@ -1,0 +1,43 @@
+# Production Profile Configuration
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+  
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+  
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+
+# Production Server
+server:
+  port: ${SERVER_PORT:8080}
+
+# Production Logging
+logging:
+  level:
+    root: WARN
+    com.sportconnect: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+  file:
+    name: /var/log/sportconnect/application.log
+
+# Production JWT (must be set via environment variables)
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: 86400000 # 24 hours
+    refresh-expiration: 604800000 # 7 days

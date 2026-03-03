@@ -1,0 +1,27 @@
+plugins {
+    id 'java'
+}
+
+dependencies {
+    // Module dependencies
+    implementation project(':modules:social:social-api')
+    implementation project(':modules:common')
+    implementation project(':modules:user:user-impl')
+    
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    
+    // Hibernate Spatial for location support
+    implementation 'org.hibernate.orm:hibernate-spatial:6.4.1.Final'
+    implementation 'org.locationtech.jts:jts-core:1.19.0'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Testing - JUnit & Mockito
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}

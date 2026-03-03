@@ -1,0 +1,131 @@
+# Spring Boot Application Configuration
+spring:
+  application:
+    name: sportconnect-api
+  
+  # Profile
+  profiles:
+    active: ${SPRING_PROFILE:dev}
+  
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:sportconnect}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  # JPA Configuration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          time_zone: UTC
+        default_schema: public
+    show-sql: false
+  
+  # Liquibase Configuration
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    enabled: true
+  
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+  
+  # Mail Configuration (for email verification)
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  
+  # Servlet Configuration
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: always
+    include-binding-errors: always
+  compression:
+    enabled: true
+
+# Application Configuration
+app:
+  jwt:
+    secret: ${JWT_SECRET:your-secret-key-change-this-in-production-min-256-bits}
+    expiration: 86400000 # 24 hours in milliseconds
+    refresh-expiration: 604800000 # 7 days in milliseconds
+  
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173}
+    allowed-methods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+  
+  email:
+    verification-url: ${EMAIL_VERIFICATION_URL:http://localhost:3000/verify-email}
+    reset-password-url: ${RESET_PASSWORD_URL:http://localhost:3000/reset-password}
+    from: ${EMAIL_FROM:noreply@sportconnect.com}
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.sportconnect: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# API Documentation (Swagger/OpenAPI)
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true

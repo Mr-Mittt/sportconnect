@@ -1,0 +1,16 @@
+plugins {
+    id 'java'
+}
+
+dependencies {
+    // Module dependencies
+    implementation project(':modules:common')
+    
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.data:spring-data-commons'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+}

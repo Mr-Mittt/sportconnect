@@ -1,0 +1,17 @@
+site_name: 'Fullstack App - Server'
+site_description: 'Spring Boot backend service for the fullstack application'
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - API Reference: api.md
+  - Development: development.md
+
+plugins:
+  - techdocs-core
+
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: indigo

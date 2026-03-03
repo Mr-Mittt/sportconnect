@@ -1,0 +1,17 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: fullstack-app-server
+  description: Spring Boot backend service for the fullstack application
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - java
+    - spring-boot
+    - backend
+    - api
+spec:
+  type: service
+  lifecycle: production
+  owner: team-backend
+  system: fullstack-app

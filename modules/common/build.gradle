@@ -1,0 +1,12 @@
+dependencies {
+    // Spring Web for REST support
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Jackson for JSON
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+}

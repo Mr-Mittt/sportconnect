@@ -1,0 +1,23 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'fullstack-app'
+
+// Modules organized under modules directory
+include 'server'
+include 'modules:common'
+include 'modules:auth:auth-api'
+include 'modules:auth:auth-impl'
+include 'modules:user:user-api'
+include 'modules:user:user-impl'
+include 'modules:sport:sport-api'
+include 'modules:sport:sport-impl'
+include 'modules:social:social-api'
+include 'modules:social:social-impl'
+
+// Main application modules
+include 'client'
