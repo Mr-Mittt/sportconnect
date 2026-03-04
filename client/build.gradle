@@ -25,11 +25,9 @@ task buildClient(type: com.github.gradle.node.npm.task.NpmTask) {
     dependsOn npmInstall
     description = 'Build the React application for production'
     args = ['run', 'build']
-    inputs.files(fileTree('src'))
-    inputs.files(fileTree('public'))
-    inputs.file('package.json')
-    inputs.file('package-lock.json')
-    outputs.dir('build')
+    
+    // Disable Gradle's incremental build tracking for npm tasks
+    outputs.upToDateWhen { false }
 }
 
 task testClient(type: com.github.gradle.node.npm.task.NpmTask) {

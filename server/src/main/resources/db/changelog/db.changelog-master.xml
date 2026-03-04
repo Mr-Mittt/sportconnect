@@ -14,4 +14,12 @@
     <include file="db/changelog/changes/V004__create_posts_tables.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/changes/V005__create_social_tables.sql" relativeToChangelogFile="false"/>
 
+    <!-- Week 5-6: Backend v0.3 - Group Functionality -->
+    <include file="db/changelog/changes/V007__create_group_roles_table.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V008__create_groups_table.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V009__create_group_members_table.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V010__create_group_join_requests_table.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V011__create_group_settings_table.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V012__add_group_fields_to_posts.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

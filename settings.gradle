@@ -16,8 +16,10 @@ include 'modules:user:user-api'
 include 'modules:user:user-impl'
 include 'modules:sport:sport-api'
 include 'modules:sport:sport-impl'
-include 'modules:social:social-api'
-include 'modules:social:social-impl'
+include 'modules:social:post-api'
+include 'modules:social:post-impl'
+include 'modules:social:group-api'
+include 'modules:social:group-impl'
 
 // Main application modules
 include 'client'
