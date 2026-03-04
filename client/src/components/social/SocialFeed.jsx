@@ -3,8 +3,10 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import CreatePostForm from './CreatePostForm';
 import PostCard from './PostCard';
 import api from '../../utils/api';
+import { useGroup } from '../../context/GroupContext';
 
 const SocialFeed = ({ currentUserId }) => {
+  const { selectedSpace, selectedGroupId } = useGroup();
   const [posts, setPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -13,7 +15,7 @@ const SocialFeed = ({ currentUserId }) => {
 
   useEffect(() => {
     fetchPosts();
-  }, []);
+  }, [selectedSpace, selectedGroupId]);
 
   const fetchPosts = async (pageNum = 0, refresh = false) => {
     if (refresh) {
@@ -23,9 +25,17 @@ const SocialFeed = ({ currentUserId }) => {
     }
 
     try {
-      const response = await api.get(
-        `/posts/feed?currentUserId=${currentUserId}&page=${pageNum}&size=10&sort=createdAt,desc`
-      );
+      // Fetch posts based on selected space
+      let endpoint;
+      if (selectedSpace === 'group' && selectedGroupId) {
+        // Fetch group-specific posts
+        endpoint = `/posts/group/${selectedGroupId}?currentUserId=${currentUserId}&page=${pageNum}&size=10&sort=createdAt,desc`;
+      } else {
+        // Fetch user's feed (default)
+        endpoint = `/posts/feed?currentUserId=${currentUserId}&page=${pageNum}&size=10&sort=createdAt,desc`;
+      }
+      
+      const response = await api.get(endpoint);
 
       const newPosts = response.data.data.content || [];
       
@@ -67,7 +77,16 @@ const SocialFeed = ({ currentUserId }) => {
     <div className="max-w-2xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Social Feed</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {selectedSpace === 'group' ? 'Group Feed' : 'Social Feed'}
+          </h1>
+          {selectedSpace === 'group' && selectedGroupId && (
+            <p className="text-sm text-gray-500 mt-1">
+              Viewing posts from this group
+            </p>
+          )}
+        </div>
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}

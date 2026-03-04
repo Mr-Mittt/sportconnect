@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { MapPin, Image, X, Loader2 } from 'lucide-react';
 import api from '../../utils/api';
+import { useGroup } from '../../context/GroupContext';
 
 const CreatePostForm = ({ onPostCreated, currentUserId }) => {
+  const { selectedSpace, selectedGroupId } = useGroup();
   const [content, setContent] = useState('');
   const [locationName, setLocationName] = useState('');
   const [sportId, setSportId] = useState('');
@@ -20,12 +22,19 @@ const CreatePostForm = ({ onPostCreated, currentUserId }) => {
     setIsSubmitting(true);
 
     try {
-      const response = await api.post(`/posts?userId=${currentUserId}`, {
+      const postData = {
         content: content.trim(),
         locationName: locationName || null,
         sportId: sportId || null,
         visibility,
-      });
+      };
+
+      // Add groupId if posting in a group space
+      if (selectedSpace === 'group' && selectedGroupId) {
+        postData.groupId = selectedGroupId;
+      }
+
+      const response = await api.post(`/posts?userId=${currentUserId}`, postData);
 
       setContent('');
       setLocationName('');

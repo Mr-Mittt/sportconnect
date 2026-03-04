@@ -28,7 +28,10 @@ dependencies {
     implementation project(':modules:auth:auth-impl')
     implementation project(':modules:user:user-impl')
     implementation project(':modules:sport:sport-impl')
-    implementation project(':modules:social:social-impl')
+    implementation project(':modules:social:post-impl')
+    implementation project(':modules:social:post-api')
+    implementation project(':modules:social:group-impl')
+    implementation project(':modules:social:group-api')
     implementation project(':modules:common')
     
     // Spring Boot Starters
@@ -44,6 +47,10 @@ dependencies {
     implementation 'org.liquibase:liquibase-core'
     runtimeOnly 'org.postgresql:postgresql'
     runtimeOnly 'com.h2database:h2'
+    
+    // Spatial/Geometry support (JTS)
+    implementation 'org.locationtech.jts:jts-core:1.19.0'
+    implementation 'org.hibernate.orm:hibernate-spatial:6.4.0.Final'
     
     // Jackson for Java 8 date/time
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
@@ -80,6 +87,11 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    systemProperty 'spring.profiles.active', 'test'
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+    }
 }
 
 bootJar {

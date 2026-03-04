@@ -1,0 +1,45 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+  
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+        default_schema: public
+  
+  liquibase:
+    enabled: false
+  
+  data:
+    redis:
+      enabled: false
+  
+  security:
+    enabled: false
+  
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
+logging:
+  level:
+    com.sportconnect: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.tool.schema: DEBUG
+    org.hibernate.engine.jdbc.env.internal: DEBUG
+    org.springframework.orm.jpa: DEBUG

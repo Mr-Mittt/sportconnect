@@ -3,9 +3,14 @@ package com.sportconnect.auth.service
 import com.sportconnect.auth.api.dto.LoginRequest
 import com.sportconnect.auth.api.dto.RegisterRequest
 import com.sportconnect.auth.api.service.JwtTokenService
+import com.sportconnect.auth.config.JwtProperties
 import com.sportconnect.auth.entity.RefreshToken
+import com.sportconnect.auth.repository.EmailVerificationRepository
+import com.sportconnect.auth.repository.PasswordResetTokenRepository
 import com.sportconnect.auth.repository.RefreshTokenRepository
 import com.sportconnect.common.exception.UnauthorizedException
+import com.sportconnect.user.repository.RoleRepository
+import com.sportconnect.user.repository.UserRepository
 import org.springframework.security.crypto.password.PasswordEncoder
 import spock.lang.Specification
 import spock.lang.Subject
@@ -17,6 +22,12 @@ class AuthServiceImplSpec extends Specification {
     RefreshTokenRepository refreshTokenRepository
     PasswordEncoder passwordEncoder
     JwtTokenService jwtTokenService
+    EmailService emailService
+    EmailVerificationRepository emailVerificationRepository
+    PasswordResetTokenRepository passwordResetTokenRepository
+    UserRepository userRepository
+    RoleRepository roleRepository
+    JwtProperties jwtProperties
     
     @Subject
     AuthServiceImpl authService
@@ -25,45 +36,108 @@ class AuthServiceImplSpec extends Specification {
         refreshTokenRepository = Mock(RefreshTokenRepository)
         passwordEncoder = Mock(PasswordEncoder)
         jwtTokenService = Mock(JwtTokenService)
+        emailService = Mock(EmailService)
+        emailVerificationRepository = Mock(EmailVerificationRepository)
+        passwordResetTokenRepository = Mock(PasswordResetTokenRepository)
+        userRepository = Mock(UserRepository)
+        roleRepository = Mock(RoleRepository)
+        jwtProperties = Mock(JwtProperties)
         
         authService = new AuthServiceImpl(
             refreshTokenRepository,
             passwordEncoder,
-            jwtTokenService
+            jwtTokenService,
+            emailService,
+            emailVerificationRepository,
+            passwordResetTokenRepository,
+            userRepository,
+            roleRepository,
+            jwtProperties
         )
     }
 
-    def "should throw UnsupportedOperationException when registering user"() {
+    def "should register user successfully"() {
         given: "a registration request"
         def request = RegisterRequest.builder()
             .email("test@example.com")
             .password("password123")
-            .firstName("John")
-            .lastName("Doe")
-            .username("johndoe")
+            .fullName("John Doe")
+            .phoneNumber("1234567890")
             .build()
 
-        when: "attempting to register"
-        authService.register(request)
+        and: "email doesn't exist"
+        userRepository.existsByEmail(request.email) >> false
+        
+        and: "role repository returns USER role"
+        def userRole = Mock(com.sportconnect.user.entity.Role)
+        userRole.getName() >> "USER"
+        roleRepository.findByName("USER") >> Optional.of(userRole)
+        
+        and: "user repository saves user"
+        def savedUser = Mock(com.sportconnect.user.entity.User)
+        savedUser.getId() >> UUID.randomUUID()
+        savedUser.getEmail() >> request.email
+        savedUser.getFirstName() >> "John"
+        savedUser.getLastName() >> "Doe"
+        savedUser.getUsername() >> null
+        savedUser.getRoles() >> [userRole]
+        userRepository.save(_) >> savedUser
+        
+        and: "jwt service generates tokens"
+        jwtTokenService.generateAccessToken(_) >> "access-token"
+        jwtTokenService.generateRefreshToken(_) >> "refresh-token"
+        jwtTokenService.getRefreshExpiration() >> 604800000L
+        jwtProperties.getExpiration() >> 3600000L
 
-        then: "should throw UnsupportedOperationException"
-        def exception = thrown(UnsupportedOperationException)
-        exception.message.contains("Register requires user module integration")
+        when: "registering user"
+        def result = authService.register(request)
+
+        then: "should return auth response"
+        result != null
+        result.accessToken == "access-token"
+        result.refreshToken == "refresh-token"
+        1 * refreshTokenRepository.save(_)
     }
 
-    def "should throw UnsupportedOperationException when logging in"() {
+    def "should login user successfully"() {
         given: "a login request"
         def request = LoginRequest.builder()
             .email("test@example.com")
             .password("password123")
             .build()
 
-        when: "attempting to login"
-        authService.login(request)
+        and: "user exists and is active"
+        def user = Mock(com.sportconnect.user.entity.User)
+        user.getId() >> UUID.randomUUID()
+        user.getEmail() >> request.email
+        user.getPasswordHash() >> "hashed-password"
+        user.getIsActive() >> true
+        user.getFirstName() >> "John"
+        user.getLastName() >> "Doe"
+        user.getUsername() >> null
+        user.getRoles() >> []
+        userRepository.findByEmail(request.email) >> Optional.of(user)
+        
+        and: "password matches"
+        passwordEncoder.matches(request.password, user.passwordHash) >> true
+        
+        and: "user repository saves updated user"
+        userRepository.save(_) >> user
+        
+        and: "jwt service generates tokens"
+        jwtTokenService.generateAccessToken(_) >> "access-token"
+        jwtTokenService.generateRefreshToken(_) >> "refresh-token"
+        jwtTokenService.getRefreshExpiration() >> 604800000L
+        jwtProperties.getExpiration() >> 3600000L
 
-        then: "should throw UnsupportedOperationException"
-        def exception = thrown(UnsupportedOperationException)
-        exception.message.contains("Login requires user module integration")
+        when: "logging in"
+        def result = authService.login(request)
+
+        then: "should return auth response"
+        result != null
+        result.accessToken == "access-token"
+        result.refreshToken == "refresh-token"
+        1 * refreshTokenRepository.save(_)
     }
 
     def "should throw UnauthorizedException when refresh token is invalid"() {
