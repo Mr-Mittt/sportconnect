@@ -12,10 +12,8 @@ import com.sportconnect.auth.repository.PasswordResetTokenRepository;
 import com.sportconnect.auth.repository.RefreshTokenRepository;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.UnauthorizedException;
-import com.sportconnect.user.entity.Role;
-import com.sportconnect.user.entity.User;
-import com.sportconnect.user.repository.RoleRepository;
-import com.sportconnect.user.repository.UserRepository;
+import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,13 +21,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
  * Auth service implementation
- * Note: This is a simplified version that works with user data as generic objects
- * The actual User entity will be in the user module
+ * Decoupled from user-impl, now depends only on user-api
  */
 @Service
 @RequiredArgsConstructor
@@ -42,15 +39,14 @@ public class AuthServiceImpl implements AuthService {
     private final EmailService emailService;
     private final EmailVerificationRepository emailVerificationRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
-    private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
+    private final UserService userService;
     private final JwtProperties jwtProperties;
 
     @Override
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         // Check if email already exists
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userService.existsByEmail(request.getEmail())) {
             throw new BadRequestException("Email already registered");
         }
 
@@ -59,77 +55,63 @@ public class AuthServiceImpl implements AuthService {
         String firstName = nameParts[0];
         String lastName = nameParts.length > 1 ? nameParts[1] : "";
 
-        // Create user
-        User user = User.builder()
-                .email(request.getEmail())
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .firstName(firstName)
-                .lastName(lastName)
-                .phoneNumber(request.getPhoneNumber())
-                .isEmailVerified(false)
-                .isActive(true)
-                .build();
+        // Create user via UserService
+        String encodedPassword = passwordEncoder.encode(request.getPassword());
+        UserResponse userResponse = userService.createUser(
+                request.getEmail(),
+                encodedPassword,
+                firstName,
+                lastName,
+                request.getPhoneNumber()
+        );
 
-        // Assign default USER role
-        Role userRole = roleRepository.findByName("USER")
-                .orElseThrow(() -> new RuntimeException("Default USER role not found"));
-        user.addRole(userRole);
-
-        User savedUser = userRepository.save(user);
-        log.info("Registered new user: {}", savedUser.getEmail());
+        log.info("Registered new user: {}", userResponse.getEmail());
 
         // Generate tokens
-        String accessToken = jwtTokenService.generateAccessToken(savedUser);
-        String refreshToken = jwtTokenService.generateRefreshToken(savedUser);
+        String accessToken = jwtTokenService.generateAccessToken(toTokenData(userResponse));
+        String refreshToken = jwtTokenService.generateRefreshToken(toTokenData(userResponse));
 
         // Save refresh token
-        createRefreshToken(savedUser.getId(), refreshToken);
+        createRefreshToken(userResponse.getId(), refreshToken);
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(jwtProperties.getExpiration())
-                .user(toUserResponse(savedUser))
+                .user(toUserResponse(userResponse))
                 .build();
     }
 
     @Override
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        // Find user by email
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
-
-        // Check if user is active
-        if (!user.getIsActive()) {
-            throw new UnauthorizedException("Account is deactivated");
-        }
-
-        // Verify password
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+        // Verify password via UserService
+        if (!userService.verifyPassword(request.getEmail(), request.getPassword())) {
             throw new UnauthorizedException("Invalid email or password");
         }
 
+        // Get user by email
+        UserResponse user = userService.getUserByEmail(request.getEmail());
+
         // Update last login
-        user.setLastLoginAt(LocalDateTime.now());
-        User updatedUser = userRepository.save(user);
+        userService.updateLastLogin(user.getId());
+
+        log.info("User logged in: {}", user.getEmail());
 
         // Generate tokens
-        String accessToken = jwtTokenService.generateAccessToken(updatedUser);
-        String refreshToken = jwtTokenService.generateRefreshToken(updatedUser);
+        String accessToken = jwtTokenService.generateAccessToken(toTokenData(user));
+        String refreshToken = jwtTokenService.generateRefreshToken(toTokenData(user));
 
         // Save refresh token
-        createRefreshToken(updatedUser.getId(), refreshToken);
-
-        log.info("User logged in: {}", updatedUser.getEmail());
+        createRefreshToken(user.getId(), refreshToken);
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(jwtProperties.getExpiration())
-                .user(toUserResponse(updatedUser))
+                .user(toUserResponse(user))
                 .build();
     }
 
@@ -147,17 +129,17 @@ public class AuthServiceImpl implements AuthService {
         refreshToken.setRevoked(true);
         refreshTokenRepository.save(refreshToken);
 
-        // Fetch user
-        User user = userRepository.findById(refreshToken.getUserId())
-                .orElseThrow(() -> new UnauthorizedException("User not found"));
+        // Fetch user via UserService
+        UUID userId = refreshToken.getUserId();
+        UserResponse user = userService.getUserById(userId);
 
         if (!user.getIsActive()) {
             throw new UnauthorizedException("Account is deactivated");
         }
 
         // Generate new tokens
-        String newAccessToken = jwtTokenService.generateAccessToken(user);
-        String newRefreshToken = jwtTokenService.generateRefreshToken(user);
+        String newAccessToken = jwtTokenService.generateAccessToken(toTokenData(user));
+        String newRefreshToken = jwtTokenService.generateRefreshToken(toTokenData(user));
 
         // Save new refresh token
         createRefreshToken(user.getId(), newRefreshToken);
@@ -182,7 +164,6 @@ public class AuthServiceImpl implements AuthService {
 
     /**
      * Helper method to create refresh token
-     * Will be used once user module is integrated
      */
     protected String createRefreshToken(UUID userId, String tokenString) {
         LocalDateTime expiresAt = LocalDateTime.now()
@@ -199,18 +180,28 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * Convert User entity to a simple response object
+     * Convert UserResponse to token data format for JWT generation
      */
-    private Object toUserResponse(User user) {
-        return java.util.Map.of(
+    private Map<String, Object> toTokenData(UserResponse user) {
+        return Map.of(
+                "id", user.getId(),
+                "email", user.getEmail(),
+                "username", user.getUsername() != null ? user.getUsername() : "",
+                "roles", user.getRoles()
+        );
+    }
+
+    /**
+     * Convert UserResponse to a simple response object for AuthResponse
+     */
+    private Object toUserResponse(UserResponse user) {
+        return Map.of(
                 "id", user.getId(),
                 "email", user.getEmail(),
                 "firstName", user.getFirstName() != null ? user.getFirstName() : "",
                 "lastName", user.getLastName() != null ? user.getLastName() : "",
                 "username", user.getUsername() != null ? user.getUsername() : "",
-                "roles", user.getRoles().stream()
-                        .map(Role::getName)
-                        .toList()
+                "roles", user.getRoles()
         );
     }
 }

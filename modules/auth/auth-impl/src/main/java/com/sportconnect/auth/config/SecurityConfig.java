@@ -43,13 +43,16 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/sports/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/users/**").permitAll()
-                        
+
+                        // Static resources (images, etc.)
+                        .requestMatchers("/images/**").permitAll()
+
                         // Swagger/OpenAPI
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
-                        
+
                         // Health check
                         .requestMatchers("/actuator/health").permitAll()
-                        
+
                         // All other requests require authentication
                         .anyRequest().authenticated()
                 )

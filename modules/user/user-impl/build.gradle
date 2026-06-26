@@ -13,6 +13,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     
+    // Password encoder (for password verification)
+    implementation 'org.springframework.security:spring-security-crypto'
+    
     // Hibernate Spatial for PostGIS
     implementation 'org.hibernate.orm:hibernate-spatial:6.4.0.Final'
     
@@ -29,4 +32,8 @@ dependencies {
     testImplementation 'org.spockframework:spock-core'
     testImplementation 'org.spockframework:spock-spring'
     testImplementation 'org.apache.groovy:groovy:4.0.15'
+}
+
+test {
+    useJUnitPlatform()
 }

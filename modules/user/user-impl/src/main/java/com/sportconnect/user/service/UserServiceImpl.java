@@ -5,10 +5,13 @@ import com.sportconnect.user.api.dto.LocationResponse;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.service.UserService;
+import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
+import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
@@ -16,7 +19,8 @@ import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -25,6 +29,8 @@ import java.util.stream.Collectors;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
     @Override
@@ -122,6 +128,69 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public boolean existsByUsername(String username) {
         return userRepository.existsByUsername(username);
+    }
+
+    @Override
+    @Transactional
+    public UserResponse createUser(String email, String passwordHash, String firstName, String lastName, String phoneNumber) {
+        User user = User.builder()
+                .email(email)
+                .passwordHash(passwordHash)
+                .firstName(firstName)
+                .lastName(lastName)
+                .phoneNumber(phoneNumber)
+                .isEmailVerified(false)
+                .isActive(true)
+                .build();
+
+        // Assign default USER role
+        Role userRole = roleRepository.findByName(Role.USER)
+                .orElseThrow(() -> new RuntimeException("Default USER role not found"));
+        user.addRole(userRole);
+
+        User savedUser = userRepository.save(user);
+        log.info("Created new user: {}", email);
+        return toUserResponse(savedUser);
+    }
+
+    @Override
+    @Transactional
+    public void updateUserPassword(UUID userId, String newPasswordHash) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        user.setPasswordHash(newPasswordHash);
+        userRepository.save(user);
+        log.info("Updated password for user: {}", userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<String> getUserRoles(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        return user.getRoles().stream()
+                .map(role -> role.getName())
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean verifyPassword(String email, String rawPassword) {
+        User user = userRepository.findByEmail(email)
+                .orElse(null);
+        if (user == null || !user.getIsActive()) {
+            return false;
+        }
+        return passwordEncoder.matches(rawPassword, user.getPasswordHash());
+    }
+
+    @Override
+    @Transactional
+    public void updateLastLogin(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        user.setLastLoginAt(LocalDateTime.now());
+        userRepository.save(user);
     }
 
     private UserResponse toUserResponse(User user) {

@@ -22,4 +22,7 @@
     <include file="db/changelog/changes/V011__create_group_settings_table.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/changes/V012__add_group_fields_to_posts.sql" relativeToChangelogFile="false"/>
 
+    <!-- Sport Thumbnails and Metadata -->
+    <include file="db/changelog/changes/V013__update_sports_with_thumbnails_and_metadata.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

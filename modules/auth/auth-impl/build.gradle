@@ -6,7 +6,7 @@ dependencies {
     // Module dependencies
     implementation project(':modules:auth:auth-api')
     implementation project(':modules:common')
-    implementation project(':modules:user:user-impl')
+    implementation project(':modules:user:user-api')
     
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'

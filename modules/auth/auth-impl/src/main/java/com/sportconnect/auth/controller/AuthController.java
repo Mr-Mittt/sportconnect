@@ -53,16 +53,15 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        // Note: This endpoint will need user module integration to find user by email
+        // Note: This endpoint needs user module integration to find user by email
         // For now, it's a placeholder that will be completed when user module is integrated
         return ResponseEntity.ok(ApiResponse.success("If the email exists, a password reset link has been sent", null));
     }
 
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        // Note: This endpoint will need user module integration to update user password
-        // For now, it validates the token
         UUID userId = passwordResetService.validateAndUseToken(request.getToken());
-        return ResponseEntity.ok(ApiResponse.success("Password reset token validated. User module integration needed to complete reset.", null));
+        passwordResetService.resetPassword(userId, request.getNewPassword());
+        return ResponseEntity.ok(ApiResponse.success("Password reset successfully", null));
     }
 }

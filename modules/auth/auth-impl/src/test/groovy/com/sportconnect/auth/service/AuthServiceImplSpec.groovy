@@ -9,13 +9,14 @@ import com.sportconnect.auth.repository.EmailVerificationRepository
 import com.sportconnect.auth.repository.PasswordResetTokenRepository
 import com.sportconnect.auth.repository.RefreshTokenRepository
 import com.sportconnect.common.exception.UnauthorizedException
-import com.sportconnect.user.repository.RoleRepository
-import com.sportconnect.user.repository.UserRepository
+import com.sportconnect.user.api.dto.UserResponse
+import com.sportconnect.user.api.service.UserService
 import org.springframework.security.crypto.password.PasswordEncoder
 import spock.lang.Specification
 import spock.lang.Subject
 
 import java.time.LocalDateTime
+import java.util.HashSet
 
 class AuthServiceImplSpec extends Specification {
 
@@ -25,10 +26,9 @@ class AuthServiceImplSpec extends Specification {
     EmailService emailService
     EmailVerificationRepository emailVerificationRepository
     PasswordResetTokenRepository passwordResetTokenRepository
-    UserRepository userRepository
-    RoleRepository roleRepository
+    UserService userService
     JwtProperties jwtProperties
-    
+
     @Subject
     AuthServiceImpl authService
 
@@ -39,10 +39,9 @@ class AuthServiceImplSpec extends Specification {
         emailService = Mock(EmailService)
         emailVerificationRepository = Mock(EmailVerificationRepository)
         passwordResetTokenRepository = Mock(PasswordResetTokenRepository)
-        userRepository = Mock(UserRepository)
-        roleRepository = Mock(RoleRepository)
+        userService = Mock(UserService)
         jwtProperties = Mock(JwtProperties)
-        
+
         authService = new AuthServiceImpl(
             refreshTokenRepository,
             passwordEncoder,
@@ -50,8 +49,7 @@ class AuthServiceImplSpec extends Specification {
             emailService,
             emailVerificationRepository,
             passwordResetTokenRepository,
-            userRepository,
-            roleRepository,
+            userService,
             jwtProperties
         )
     }
@@ -66,23 +64,22 @@ class AuthServiceImplSpec extends Specification {
             .build()
 
         and: "email doesn't exist"
-        userRepository.existsByEmail(request.email) >> false
-        
-        and: "role repository returns USER role"
-        def userRole = Mock(com.sportconnect.user.entity.Role)
-        userRole.getName() >> "USER"
-        roleRepository.findByName("USER") >> Optional.of(userRole)
-        
-        and: "user repository saves user"
-        def savedUser = Mock(com.sportconnect.user.entity.User)
-        savedUser.getId() >> UUID.randomUUID()
-        savedUser.getEmail() >> request.email
-        savedUser.getFirstName() >> "John"
-        savedUser.getLastName() >> "Doe"
-        savedUser.getUsername() >> null
-        savedUser.getRoles() >> [userRole]
-        userRepository.save(_) >> savedUser
-        
+        userService.existsByEmail(request.email) >> false
+
+        and: "password encoder encodes password"
+        passwordEncoder.encode(request.password) >> "encoded-password"
+
+        and: "user service creates user"
+        def userResponse = Mock(UserResponse)
+        userResponse.getId() >> UUID.randomUUID()
+        userResponse.getEmail() >> request.email
+        userResponse.getFirstName() >> "John"
+        userResponse.getLastName() >> "Doe"
+        userResponse.getUsername() >> null
+        userResponse.getRoles() >> new HashSet<>(["USER"])
+        userResponse.getIsActive() >> true
+        userService.createUser(_, _, _, _, _) >> userResponse
+
         and: "jwt service generates tokens"
         jwtTokenService.generateAccessToken(_) >> "access-token"
         jwtTokenService.generateRefreshToken(_) >> "refresh-token"
@@ -106,24 +103,20 @@ class AuthServiceImplSpec extends Specification {
             .password("password123")
             .build()
 
-        and: "user exists and is active"
-        def user = Mock(com.sportconnect.user.entity.User)
-        user.getId() >> UUID.randomUUID()
-        user.getEmail() >> request.email
-        user.getPasswordHash() >> "hashed-password"
-        user.getIsActive() >> true
-        user.getFirstName() >> "John"
-        user.getLastName() >> "Doe"
-        user.getUsername() >> null
-        user.getRoles() >> []
-        userRepository.findByEmail(request.email) >> Optional.of(user)
-        
-        and: "password matches"
-        passwordEncoder.matches(request.password, user.passwordHash) >> true
-        
-        and: "user repository saves updated user"
-        userRepository.save(_) >> user
-        
+        and: "password verification succeeds"
+        userService.verifyPassword(request.email, request.password) >> true
+
+        and: "user service returns user"
+        def userResponse = Mock(UserResponse)
+        userResponse.getId() >> UUID.randomUUID()
+        userResponse.getEmail() >> request.email
+        userResponse.getFirstName() >> "John"
+        userResponse.getLastName() >> "Doe"
+        userResponse.getUsername() >> null
+        userResponse.getRoles() >> new HashSet<>(["USER"])
+        userResponse.getIsActive() >> true
+        userService.getUserByEmail(request.email) >> userResponse
+
         and: "jwt service generates tokens"
         jwtTokenService.generateAccessToken(_) >> "access-token"
         jwtTokenService.generateRefreshToken(_) >> "refresh-token"
@@ -137,6 +130,7 @@ class AuthServiceImplSpec extends Specification {
         result != null
         result.accessToken == "access-token"
         result.refreshToken == "refresh-token"
+        1 * userService.updateLastLogin(_)
         1 * refreshTokenRepository.save(_)
     }
 
@@ -164,7 +158,7 @@ class AuthServiceImplSpec extends Specification {
             .token(tokenString)
             .expiresAt(LocalDateTime.now().minusDays(1))
             .build()
-        
+
         and: "repository returns expired token"
         refreshTokenRepository.findByToken(tokenString) >> Optional.of(expiredToken)
 
@@ -186,7 +180,7 @@ class AuthServiceImplSpec extends Specification {
             .expiresAt(LocalDateTime.now().plusDays(7))
             .revokedAt(LocalDateTime.now().minusHours(1))
             .build()
-        
+
         and: "repository returns revoked token"
         refreshTokenRepository.findByToken(tokenString) >> Optional.of(revokedToken)
 
@@ -196,6 +190,47 @@ class AuthServiceImplSpec extends Specification {
         then: "should throw UnauthorizedException"
         def exception = thrown(UnauthorizedException)
         exception.message == "Refresh token expired or revoked"
+    }
+
+    def "should refresh token successfully"() {
+        given: "a valid refresh token"
+        def tokenString = "valid-token"
+        def userId = UUID.randomUUID()
+        def validToken = RefreshToken.builder()
+            .id(1L)
+            .userId(userId)
+            .token(tokenString)
+            .expiresAt(LocalDateTime.now().plusDays(7))
+            .build()
+
+        and: "repository returns valid token"
+        refreshTokenRepository.findByToken(tokenString) >> Optional.of(validToken)
+
+        and: "user service returns user"
+        def userResponse = Mock(UserResponse)
+        userResponse.getId() >> userId
+        userResponse.getEmail() >> "test@example.com"
+        userResponse.getFirstName() >> "John"
+        userResponse.getLastName() >> "Doe"
+        userResponse.getUsername() >> null
+        userResponse.getRoles() >> new HashSet<>(["USER"])
+        userResponse.getIsActive() >> true
+        userService.getUserById(userId) >> userResponse
+
+        and: "jwt service generates tokens"
+        jwtTokenService.generateAccessToken(_) >> "new-access-token"
+        jwtTokenService.generateRefreshToken(_) >> "new-refresh-token"
+        jwtTokenService.getRefreshExpiration() >> 604800000L
+        jwtProperties.getExpiration() >> 3600000L
+
+        when: "refreshing token"
+        def result = authService.refreshToken(tokenString)
+
+        then: "should return new auth response"
+        result != null
+        result.accessToken == "new-access-token"
+        result.refreshToken == "new-refresh-token"
+        2 * refreshTokenRepository.save(_) // One to revoke old token, one to save new token
     }
 
     def "should logout user and revoke all tokens"() {

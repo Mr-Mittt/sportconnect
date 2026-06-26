@@ -4,8 +4,10 @@ import com.sportconnect.auth.entity.PasswordResetToken;
 import com.sportconnect.auth.repository.PasswordResetTokenRepository;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.NotFoundException;
+import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,22 +21,24 @@ public class PasswordResetService {
 
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
+    private final UserService userService;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public void createAndSendResetToken(UUID userId, String email) {
         passwordResetTokenRepository.deleteByUserId(userId);
-        
+
         String token = UUID.randomUUID().toString();
-        
+
         PasswordResetToken resetToken = PasswordResetToken.builder()
                 .userId(userId)
                 .token(token)
                 .expiresAt(LocalDateTime.now().plusHours(1))
                 .build();
-        
+
         passwordResetTokenRepository.save(resetToken);
         emailService.sendPasswordResetEmail(email, token);
-        
+
         log.info("Password reset token sent to user: {}", userId);
     }
 
@@ -56,5 +60,12 @@ public class PasswordResetService {
 
         log.info("Password reset token validated for user: {}", resetToken.getUserId());
         return resetToken.getUserId();
+    }
+
+    @Transactional
+    public void resetPassword(UUID userId, String newPassword) {
+        String encodedPassword = passwordEncoder.encode(newPassword);
+        userService.updateUserPassword(userId, encodedPassword);
+        log.info("Password reset completed for user: {}", userId);
     }
 }
