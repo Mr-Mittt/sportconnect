@@ -2,6 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## What Is SportConnect
+
+SportConnect is a social sports community platform — think Instagram + Meetup + booking marketplace, but for sports. Users can share game moments, find playing partners by skill/location, join or create sport groups, and (in future phases) discover and book facilities and equipment.
+
+**User types:** Normal User · Group Owner · Vendor (facility/equipment) · Admin
+
+**Current state:** Social core is implemented (auth, user profiles, sports, social feed, groups). Facility booking, partner matching, payments, and mobile app are planned next phases. See `PROGRESS.md` for the full roadmap.
+
+**Tech stack:** Java 21 / Spring Boot 3.2.0 backend · React 18 frontend · PostgreSQL + PostGIS · Redis · Liquibase · Spock (Groovy) tests
+
+## Documentation Convention
+
+Every new architecture discussion, design decision, implementation summary, or plan must be:
+1. Written as a separate MD file in `documentation/md/` named by topic (e.g. `PARTNER_FINDING_DESIGN.md`)
+2. Summarized into the relevant section of `PROGRESS.md`
+
 ## Commands
 
 ### Backend (Gradle)

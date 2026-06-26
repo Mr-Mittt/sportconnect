@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\": \"DOCUMENTATION REMINDER: If this turn involved any architecture discussion, design decision, implementation plan, or feature summary — create a new MD file for it in documentation/md/ (named by topic, e.g. PARTNER_FINDING_DESIGN.md) and add a summary of the key points to the relevant section of PROGRESS.md.\"}'",
+            "shell": "powershell"
+          }
+        ]
+      }
+    ]
+  }
+}

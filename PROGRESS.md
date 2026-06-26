@@ -6,19 +6,31 @@ Synthesized from all markdown documentation files. Last updated: June 2026.
 
 ## 1. Project Overview & Vision
 
-**SportConnect** is a full social sports community platform — conceived as "Instagram + WhatsApp + Meetup + Marketplace, but for sports."
+> **SportConnect is the app for sports groups — find them, run them, fill your sessions, and connect with players.**
 
-**Core user value:**
-- Share game moments (posts, videos, shorts)
-- Find partners for games (smart skill/location/time matching)
-- Discover and book sports facilities
-- Trade bookings and equipment
-- Join and manage sport groups
-- Real-time chat (1-on-1 and group)
+**Target user:** Casual sports player who belongs to one or more groups/clubs and currently uses WhatsApp + Facebook groups + spreadsheets to organize their sporting life.
 
-**User types:** Normal User · Group Owner · Vendor (facility) · Admin
+**The two pains it solves:**
+1. Existing tools aren't built for sports groups — no session management, no slot filling, no sport-specific filters
+2. No single app supports the individual player's sports identity across groups, sessions, and equipment
 
-**Origin:** Started as a badminton-only booking app (ARCHITECTURE_PROPOSAL.md), expanded to multi-sport (FINAL_ARCHITECTURE.md), then evolved into a full social network with booking and marketplace (SOCIAL_SPORTS_PLATFORM_ARCHITECTURE.md).
+**Day-1 differentiator:** A sports group can fill an empty session slot from outside their group, with the right player, in one post — with sport-specific filters (skill, position, gender, equipment).
+
+**Identity:** Community-first product centered on the group/club experience. Booking and marketplace features are V2+.
+
+**User types:** Player · Group Owner / Admin · Facility Vendor (V2) · Platform Admin
+
+**Core feature — The Calling System:**
+| Type | Who posts | Purpose |
+|---|---|---|
+| Session Calling | Group | Fill an empty slot in an upcoming session |
+| Game Calling | Player | Find a session/game to join |
+| Group Finding | Player | Find a group to join |
+| Player Finding | Group | Recruit new permanent members |
+
+**Phase roadmap:** MVP (groups + social + calling system) → V2 (geo-discovery + equipment trading + facility booking) → V3 (mobile app + payments + tournaments)
+
+Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 
 ---
 
