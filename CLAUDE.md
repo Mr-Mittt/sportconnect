@@ -15,8 +15,15 @@ SportConnect is a social sports community platform — think Instagram + Meetup 
 ## Documentation Convention
 
 Every new architecture discussion, design decision, implementation summary, or plan must be:
-1. Written as a separate MD file in `documentation/md/` named by topic (e.g. `PARTNER_FINDING_DESIGN.md`)
+1. Written as a separate MD file named by topic (e.g. `PARTNER_FINDING_DESIGN.md`)
 2. Summarized into the relevant section of `PROGRESS.md`
+
+**Where to put the MD file — hybrid rule:**
+
+| File belongs in | When |
+|---|---|
+| `documentation/md/` | Cross-cutting concerns: architecture decisions, product vision, phase roadmaps, DB strategy, payment/booking plans, competitive analysis, testing guides |
+| `modules/<domain>/docs/` | Module-specific: implementation details, design decisions, test summaries, fix write-ups scoped to one module (e.g. `modules/auth/docs/`, `modules/social/docs/`) |
 
 ## Commands
 
