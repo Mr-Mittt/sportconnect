@@ -367,6 +367,13 @@ conditional — CI has never executed. Follow-up **HF-12** (CI bootstrap + first
 manual GitHub steps) added to the backlog as the epic's release condition. All 14 HF tickets done;
 next is Phase 5 (MSW-0/AUTH-0; re-verify auth backlog A2 first).
 
+**HF-12 DONE — CI LIVE AND GREEN** (2026-07-08, `client/docs/HF-12_CI_BOOTSTRAP.md`): repo work
+pushed to GitHub; first `client-ci` runs caught a real bug (`**/lib` gitignore swallowed
+`client/src/shared/lib` — CI-only TS2307s, fixed with scoped negation); Linux baselines swapped
+via the update-baselines dispatch artifact (PR #2); **fully green run merged**. HF-9 item 7
+resolved → Home Feed epic release condition met. Caveat: branch protection unavailable (GitHub
+Free + private repo) — red checks block by convention only.
+
 **Infrastructure decisions** (2026-07-08, `infra/documentation/INFRASTRUCTURE_LAYOUT_AND_CICD.md`):
 hybrid infra layout (artifact-scoped files stay in `client/`/`server/`, environment-scoped in
 `infra/`, workflows must stay in `.github/workflows/`); **GitHub Actions is the CI/CD platform —

@@ -70,7 +70,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 13 | HF-11 | E2E functional test — Home Feed journey | `DONE` |
 | **Phase 4 — Home Feed release readiness** | | | |
 | 14 | HF-9 | QA / acceptance checklist (Home Feed) | `DONE` |
-| 14b | HF-12 | CI bootstrap + first green run (follow-up from HF-9 item 7) | `IN PROGRESS` |
+| 14b | HF-12 | CI bootstrap + first green run (follow-up from HF-9 item 7) | `DONE` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1 blocks AUTH-3/AUTH-5)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `TODO` |
 | 16 | AUTH-0 | Types, API client, auth store | `TODO` |
@@ -370,20 +370,22 @@ executed. **The Home Feed epic (HF-00..HF-9) is closed**; the unverified CI run 
 release condition, tracked as HF-12.
 
 ### HF-12 · CI bootstrap + first green run — follow-up ticket, not in the epic
-**Status:** `TODO` · **Type:** Infrastructure (ops) · **Dependency:** HF-10b, HF-9 · **Spec:** this entry +
-"CI bootstrap" section of `client/docs/HF-10B_VISUAL_REGRESSION_CI_GATE.md`
+**Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (ops) · **Dependency:** HF-10b, HF-9 ·
+**Summary:** `client/docs/HF-12_CI_BOOTSTRAP.md`
 
-Mostly manual GitHub steps (repo owner):
-1. Push/PR the client work so `client-ci` executes.
-2. Actions → client-ci → Run workflow with `update-baselines: true`; download the
-   `visual-baselines` artifact; replace `client/e2e/visual/__screenshots__/`; commit
-   (baselines become Linux-rendered — local Windows `pnpm test:visual` will then diff against
-   them; see HF-10b's summary for the working model).
-3. Settings → Branches → require the `client-ci / test` check on `master`.
-4. Verify one full green run on a PR touching `client/**`.
+Executed: work pushed, first `client-ci` runs surfaced and fixed a real bug (root `.gitignore`'s
+`**/lib` had swallowed `client/src/shared/lib` — CI-only TS2307s), `update-baselines` dispatch →
+Linux baselines committed via PR #2 → **fully green run, merged**. HF-9's item 7 is resolved.
 
-**Done when:** HF-9's item 7 notice is resolved — a linked green Actions run exists and the
-check is required.
+**Deltas:**
+- **Branch protection is NOT available** (GitHub Free + private repo) — `client-ci` runs on every
+  PR/push and reports red/green, but nothing physically blocks merging on red. Hard enforcement
+  requires making the repo public or upgrading the plan. Until then: a red check is
+  merge-blocking by convention.
+- Baselines are now **Linux-rendered**: local Windows `pnpm test:visual` will show diffs — CI is
+  the authoritative visual environment (working model in HF-10b's summary).
+- Root `.gitignore` has a scoped negation keeping `client/src/shared/lib` tracked — don't
+  "clean up" the `!client/src/shared/lib` lines.
 
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0
