@@ -3,41 +3,43 @@ plugins {
     id 'com.github.node-gradle.node' version '7.0.1'
 }
 
-group = 'com.example'
+group = 'com.sportconnect'
 version = '0.0.1-SNAPSHOT'
 
+// Gradle downloads its own Node/pnpm (pinned below) so CI builds are
+// reproducible regardless of what's installed on the machine. Local
+// development can just use pnpm directly — see README.md.
 node {
-    version = '18.18.0'
-    npmVersion = '9.8.1'
+    version = '24.14.0'
+    pnpmVersion = '10.34.4'
     download = true
     workDir = file("${project.projectDir}/.gradle/nodejs")
     npmWorkDir = file("${project.projectDir}/.gradle/npm")
+    pnpmWorkDir = file("${project.projectDir}/.gradle/pnpm")
     nodeProjectDir = file("${project.projectDir}")
 }
 
-task start(type: com.github.gradle.node.npm.task.NpmTask) {
-    dependsOn npmInstall
-    description = 'Start the React development server'
-    args = ['start']
+task start(type: com.github.gradle.node.pnpm.task.PnpmTask) {
+    dependsOn pnpmInstall
+    description = 'Start the Vite dev server'
+    args = ['run', 'dev']
 }
 
-task buildClient(type: com.github.gradle.node.npm.task.NpmTask) {
-    dependsOn npmInstall
-    description = 'Build the React application for production'
+task buildClient(type: com.github.gradle.node.pnpm.task.PnpmTask) {
+    dependsOn pnpmInstall
+    description = 'Type-check and build the client for production'
     args = ['run', 'build']
-    
-    // Disable Gradle's incremental build tracking for npm tasks
     outputs.upToDateWhen { false }
 }
 
-task testClient(type: com.github.gradle.node.npm.task.NpmTask) {
-    dependsOn npmInstall
-    description = 'Run React tests'
-    args = ['test', '--', '--watchAll=false']
+task testClient(type: com.github.gradle.node.pnpm.task.PnpmTask) {
+    dependsOn pnpmInstall
+    description = 'Run client unit/component tests (Vitest)'
+    args = ['run', 'test']
 }
 
 clean {
-    delete 'build'
+    delete 'dist'
     delete 'node_modules'
     delete '.gradle'
 }

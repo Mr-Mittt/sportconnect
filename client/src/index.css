@@ -1,17 +1,78 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/*
+ * Design tokens — the single source of truth for color in this app.
+ * Named 1:1 after the CSS variables in design-reference/design-reference-home-feed.html.
+ * Never hardcode a hex value in a component; if a design needs a color that
+ * has no token here, add the token first (see client/CLAUDE.md).
+ */
+@theme {
+  /* Surfaces */
+  --color-surface-0: #f7f7f4;
+  --color-surface-1: #f1efe8;
+  --color-surface-2: #ffffff;
+
+  /* Text */
+  --color-text-primary: #1a1a18;
+  --color-text-secondary: #5f5e5a;
+  /* Darkened from the mockup's #888780 (3.4:1, fails WCAG AA at 11-13px) to
+     meet 4.5:1 on every surface — HF-8; reference HTML updated to match. */
+  --color-text-muted: #6e6d66;
+  --color-text-accent: #185fa5;
+  --color-text-danger: #a32d2d;
+
+  /* Accent background (chips, subtle highlights) */
+  --color-bg-accent: #e6f1fb;
+
+  /* Borders */
+  --color-border: rgba(44, 44, 42, 0.12);
+  --color-border-strong: rgba(44, 44, 42, 0.24);
+  --color-border-accent: #378add;
+
+  /*
+   * Sport color ramps. Each sport uses one ramp everywhere it appears
+   * (badges, pills, avatars). Tailwind's default teal/purple scales are
+   * cleared so only the approved steps exist — accidentally using e.g.
+   * teal-500 fails instead of silently drifting from the design.
+   */
+  --color-teal-*: initial;
+  --color-teal-50: #e1f5ee; /* Football bg */
+  --color-teal-800: #085041; /* Football text */
+  --color-coral-50: #faece7; /* Basketball bg */
+  --color-coral-800: #712b13; /* Basketball text */
+  --color-purple-*: initial;
+  --color-purple-50: #eeedfe; /* Tennis bg */
+  --color-purple-800: #3c3489; /* Tennis text */
+
+  /* Layout: the mockup's centered content frame (960px) → max-w-frame */
+  --container-frame: 60rem;
+
+  /* Type scale additions used throughout the mockup (Tailwind has no 11/13px steps) */
+  --text-2xs: 11px;
+  --text-2xs--line-height: 1.4;
+  --text-2sm: 13px;
+  --text-2sm--line-height: 1.45;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/*
+ * The design system uses 0.5px hairline borders everywhere (the SportSwitcher's
+ * 2px active border is the one approved exception). Tailwind has no 0.5px step,
+ * so this is the canonical utility — don't write border-[0.5px] inline.
+ */
+@utility border-hairline {
+  border-width: 0.5px;
+}
+
+/* Directional hairlines — do NOT combine border-hairline with border-t/border-b:
+   that stacks a 1px directional border on top of a 0.5px all-sides one. */
+@utility border-hairline-t {
+  border-top-width: 0.5px;
+}
+
+@utility border-hairline-b {
+  border-bottom-width: 0.5px;
+}
+
+body {
+  @apply bg-surface-0 text-text-primary antialiased;
 }
