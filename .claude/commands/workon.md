@@ -6,7 +6,22 @@ Some phases branch on whether `module` is `client` (the React app), `infra` (rep
 
 ---
 
-## Phase 0 — Load the ticket
+## Phase 0 — Branch check
+
+Before touching any files — including the backlog status edit in the next phase:
+
+1. Run `git branch --show-current`.
+2. If the current branch is `master`: create and check out a new branch for this ticket (e.g.
+   `feature/<ticket-id>-<short-slug>` for code, `docs/<slug>` for doc-only work — match the naming
+   already used in this repo's merged PRs).
+3. If the current branch is anything else: **stop and ask the user which branch to work on.**
+   Don't assume the current branch is the right one to build on, and don't silently create a new
+   branch either — let the user decide (stay on this branch, branch off it, or switch elsewhere)
+   before proceeding to Phase 0b.
+
+---
+
+## Phase 0b — Load the ticket
 
 1. Parse $ARGUMENTS to extract `module` and `version`
 2. Derive the backlog file path:
