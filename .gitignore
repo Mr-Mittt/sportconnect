@@ -19,6 +19,10 @@
 **/target
 **/node_modules
 **/lib
+# **/lib is for Java dependency/build dirs — it must NOT swallow client source.
+# (Caused CI-only TS2307s: shared/lib was never committed while local builds passed.)
+!client/src/shared/lib
+!client/src/shared/lib/**
 **/.npm
 
 # Log files
