@@ -47,11 +47,6 @@ clean {
     delete rootProject.buildDir
 }
 
-build {
-    dependsOn ':server:build'
-    dependsOn ':client:buildClient'
-}
-
 task bootRun {
     dependsOn ':server:bootRun'
     description = 'Start the Spring Boot server'

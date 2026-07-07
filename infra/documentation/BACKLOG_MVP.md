@@ -29,7 +29,7 @@ green run exists" pattern.
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | INFRA-1 | Backend CI workflow (`server-ci.yml`) | `TODO` |
+| 1 | INFRA-1 | Backend CI workflow (`server-ci.yml`) | `DONE` |
 | 2 | INFRA-2 | Dev environment docker-compose | `TODO` |
 | 3 | INFRA-3 | Deployment pipeline (`deploy.yml`) | `TODO` — **blocked on the hosting decision** |
 
@@ -45,7 +45,7 @@ INFRA-3 → blocked on a hosting decision (provider, runtime shape); also wants 
 ## Tickets
 
 ### INFRA-1 · Backend CI workflow (`server-ci.yml`)
-**Status:** `TODO` · **Type:** Infrastructure (CI) · **Dependency:** none ·
+**Status:** `DONE` — see `infra/documentation/INFRA-1_BACKEND_CI_WORKFLOW.md` · **Type:** Infrastructure (CI) · **Dependency:** none ·
 **Spec:** `INFRASTRUCTURE_LAYOUT_AND_CICD.md` §2 + §3
 
 The backend currently has **zero CI** — nothing builds or runs the Spock suites on push.

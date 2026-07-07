@@ -384,6 +384,15 @@ in `infra/documentation/` (deliberate amendment to the docs-placement rule). Gap
 tickets now on a real backlog: `infra/documentation/BACKLOG_MVP.md` — INFRA-1 (backend CI),
 INFRA-2 (dev docker-compose), INFRA-3 (deploy pipeline, blocked on hosting decision) — picked up
 via `/workon infra mvp` (workon command extended for the infra module).
+- **INFRA-1 (2026-07-08):** Backend CI workflow — `.github/workflows/server-ci.yml` (JDK 21,
+  `./gradlew build`, no service containers needed: H2 for schema, `BaseIT`'s Testcontainers Redis
+  from A8 self-provisions via Docker already on `ubuntu-latest`); decoupled root `./gradlew build`
+  from the client's pnpm/Vite build at the source (removed `build.dependsOn` wiring in both root
+  `build.gradle` and `client/build.gradle`, rather than excluding it CI-side) so `./gradlew build`/
+  `test` are backend-only by construction; generated the previously-missing POSIX `gradlew` wrapper
+  (only `gradlew.bat` was tracked) with a `.gitattributes` LF/CRLF rule so it doesn't break on
+  Linux runners. Bootstrap (first green run, required-check marking) still pending — same
+  HF-12-style conditional, and branch protection is unavailable on this repo regardless.
 Full detail in `client/docs/BACKLOG_MVP.md` — one ordered queue merging the two refined epics
 (`client/docs/sporthub-home-feed-tickets.md` + `client/docs/sporthub-auth-feed-integration-tickets.md`),
 same format as the server module backlogs (`/workon client mvp`).
