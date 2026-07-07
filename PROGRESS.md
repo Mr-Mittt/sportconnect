@@ -391,8 +391,17 @@ via `/workon infra mvp` (workon command extended for the infra module).
   `build.gradle` and `client/build.gradle`, rather than excluding it CI-side) so `./gradlew build`/
   `test` are backend-only by construction; generated the previously-missing POSIX `gradlew` wrapper
   (only `gradlew.bat` was tracked) with a `.gitattributes` LF/CRLF rule so it doesn't break on
-  Linux runners. Bootstrap (first green run, required-check marking) still pending — same
-  HF-12-style conditional, and branch protection is unavailable on this repo regardless.
+  Linux runners. **Bootstrap confirmed:** `server-ci` went green on its first run (PR #4) — no
+  baseline-bootstrap step needed, unlike `client-ci`'s HF-12. Required-check marking is still not
+  mechanically enforceable on this repo (branch protection unavailable, GitHub Free + private).
+- **INFRA-2 (2026-07-08):** Dev environment docker-compose — `infra/docker-compose.dev.yml`
+  (`postgis/postgis:16-3.4` + `redis:7-alpine`, config values read directly from
+  `application-dev.yml`, not guessed), deps-only per explicit scope discussion (server/client keep
+  running natively — no Dockerfiles exist yet, and building them now would risk duplicating
+  INFRA-3's eventual, hosting-decision-dependent work). Verified beyond the ticket's own bar: not
+  just `docker compose up`, but a full `./gradlew :server:bootRun` against the stack — all 24
+  Liquibase migrations succeeded, PostGIS dialect initialized, app served a real `200` on
+  `/api/sports`.
 Full detail in `client/docs/BACKLOG_MVP.md` — one ordered queue merging the two refined epics
 (`client/docs/sporthub-home-feed-tickets.md` + `client/docs/sporthub-auth-feed-integration-tickets.md`),
 same format as the server module backlogs (`/workon client mvp`).

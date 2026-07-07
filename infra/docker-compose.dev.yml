@@ -1,0 +1,24 @@
+name: sportconnect-dev
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: sportconnect_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: sa
+    ports:
+      - "5432:5432"
+    volumes:
+      - sportconnect_dev_postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - sportconnect_dev_redis:/data
+
+volumes:
+  sportconnect_dev_postgres:
+  sportconnect_dev_redis:
