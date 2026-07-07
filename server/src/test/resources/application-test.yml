@@ -22,11 +22,7 @@ spring:
   
   liquibase:
     enabled: false
-  
-  data:
-    redis:
-      enabled: false
-  
+
   security:
     enabled: false
   

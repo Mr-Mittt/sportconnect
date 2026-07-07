@@ -19,8 +19,8 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | A2 | Refresh token via httpOnly cookie (client epic's BE-1) | `TODO` |
-| 2 | A3 | Fix `/api/auth/logout` authorization (client epic's BE-2) | `TODO` |
+| 1 | A2 | Refresh token via httpOnly cookie (client epic's BE-1) | `DONE` |
+| 2 | A3 | Fix `/api/auth/logout` authorization (client epic's BE-2) | `DONE` |
 
 **Dependencies:**
 ```
@@ -37,7 +37,7 @@ A2 blocks AUTH-3 and AUTH-5; A3 should ship before AUTH-4 reaches production.
 ## Tickets
 
 ### A2 · Refresh token via httpOnly cookie
-**Status:** `TODO`  
+**Status:** `DONE` (2026-07-08) · **Summary:** `modules/auth/docs/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md`  
 **Type:** Enhancement (Security)  
 **Origin:** BE-1 in `client/docs/sporthub-auth-feed-integration-tickets.md` — the new client's auth
 design (access token in memory, refresh token never readable by JS) requires this; also specified in
@@ -70,7 +70,7 @@ valid cookie succeeds; refresh with no/invalid cookie → 401; logout clears the
 ---
 
 ### A3 · Fix `/api/auth/logout` authorization
-**Status:** `TODO`  
+**Status:** `DONE` (2026-07-08) · **Summary:** `modules/auth/docs/A3_FIX_LOGOUT_AUTHORIZATION.md`  
 **Type:** Bug Fix (Security)  
 **Origin:** BE-2 in `client/docs/sporthub-auth-feed-integration-tickets.md`.
 

@@ -50,7 +50,10 @@ class JwtAuthenticationFilterSpec extends Specification {
         then: "authentication should be set in security context"
         def authentication = SecurityContextHolder.getContext().getAuthentication()
         authentication != null
-        authentication.principal == email
+        // Principal is the userId, not the email — SecurityUtils.extractUserId() across the app
+        // (GroupController, PostController, AuthController's own logout, etc.) parses the
+        // principal as a UUID; this assertion was stale from before that convention landed.
+        authentication.principal == userId
         authentication.authorities.size() == 1
         authentication.authorities[0].authority == "ROLE_USER"
     }

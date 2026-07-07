@@ -43,5 +43,3 @@ clean {
     delete 'node_modules'
     delete '.gradle'
 }
-
-build.dependsOn buildClient

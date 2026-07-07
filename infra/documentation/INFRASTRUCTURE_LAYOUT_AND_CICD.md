@@ -53,7 +53,7 @@ Terraform/compose) is what eventually populates `infra/` for real.
 |---|---|
 | `client-ci.yml` | ✅ Exists (HF-10b). **Never executed** — bootstrap tracked as client backlog **HF-12** (push → `update-baselines` dispatch → commit Linux baselines → mark `client-ci / test` required) |
 | PR template | ✅ `.github/PULL_REQUEST_TEMPLATE.md` (HF-10b) |
-| Backend CI | ❌ None — nothing builds/tests `modules/**`+`server/**` on push. Needs a `server-ci.yml`; first step is checking whether any Spock tests need real PostGIS/Redis (service containers) or are pure `Mock()` unit tests |
+| Backend CI | ✅ `server-ci.yml` exists (INFRA-1, 2026-07-08). **Never executed** — no push/PR has triggered it yet, same bootstrap gap `client-ci.yml` had before HF-12. No service containers needed: all integration tests run against H2, and `BaseIT`'s Testcontainers-managed Redis (A8) self-provisions via the Docker daemon already on `ubuntu-latest` runners |
 | Dev environment compose | ❌ Manual DB/Redis setup; `infra/docker-compose.dev.yml` proposed |
 | Deployment workflow / hosting | ❌ Not scoped; blocked on a hosting decision |
 

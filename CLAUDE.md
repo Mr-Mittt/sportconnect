@@ -32,7 +32,7 @@ Every new architecture discussion, design decision, implementation summary, or p
 # Run the server
 ./gradlew :server:bootRun
 
-# Build everything
+# Build the backend (all modules + server; does not touch client — its build is separate, see client/README.md)
 ./gradlew build
 
 # Run all tests

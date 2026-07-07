@@ -30,12 +30,14 @@ Verified against the actual backend source, not the docs:
    ticket happened — `modules/sport/sport-impl` shipped `SportController` (its backlog tickets
    A1–A4 are all `DONE`), including `GET /api/sports` and `GET /api/sports/profiles/user/{userId}`.
    The sport switcher **can** be de-mocked → new ticket **SPORT-1** below, not present in either epic.
-2. **BE-1 (refresh token via httpOnly cookie) has NOT shipped.** `POST /api/auth/refresh` still
-   takes `{ refreshToken }` in the body and returns it in the body (verified in `AuthController.java`).
-   Now tracked as **A2** in `modules/auth/docs/BACKLOG_MVP.md`. Blocks AUTH-3 and AUTH-5.
-3. **BE-2 (logout authorization) has NOT shipped.** `POST /api/auth/logout` is still
-   `logout(@RequestParam UUID userId)` with no principal check. Now tracked as **A3** in
-   `modules/auth/docs/BACKLOG_MVP.md`. Should land before AUTH-4 reaches production.
+2. **BE-1 (refresh token via httpOnly cookie) — SHIPPED 2026-07-08.** `POST /api/auth/refresh` now
+   reads the token from an httpOnly `refreshToken` cookie (never the body); login/register/refresh
+   set it via `Set-Cookie`. Tracked as **A2** in `modules/auth/docs/BACKLOG_MVP.md`, `DONE`.
+   **AUTH-3 and AUTH-5 are unblocked.**
+3. **BE-2 (logout authorization) — SHIPPED 2026-07-08.** `POST /api/auth/logout` now derives the
+   caller from the `Authorization: Bearer` header — no `userId` param at all, 401 if
+   missing/invalid. Tracked as **A3** in `modules/auth/docs/BACKLOG_MVP.md`, `DONE`. See
+   AUTH-4's entry below for the exact new contract.
 4. **Only matches/tournaments remain genuinely mock-only.** No backend module exists — HF-4 stays
    on `mockData.ts` through this entire MVP.
 5. **Post-impl's old F1 ticket** ("Frontend — personalized feed", noted in
@@ -71,7 +73,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | **Phase 4 — Home Feed release readiness** | | | |
 | 14 | HF-9 | QA / acceptance checklist (Home Feed) | `DONE` |
 | 14b | HF-12 | CI bootstrap + first green run (follow-up from HF-9 item 7) | `DONE` |
-| **Phase 5 — Auth integration (epic is draft — review first; BE-1 blocks AUTH-3/AUTH-5)** | | | |
+| **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `TODO` |
 | 16 | AUTH-0 | Types, API client, auth store | `TODO` |
 | 17 | AUTH-1 | Login | `TODO` |
@@ -103,20 +105,20 @@ HF-0, HF-10a → HF-1..HF-6 (components need types; parallel with each other)
 HF-1..HF-6 → HF-7 → HF-8, HF-10b, HF-11 → HF-9
 Phase 5 is independent of Phases 1–4 code-wise but the epic says to finish Home Feed first.
 MSW-0 ∥ AUTH-0 → AUTH-1..AUTH-6 → AUTH-8 → AUTH-7
-AUTH-3, AUTH-5 → blocked on auth backlog A2 (BE-1, httpOnly cookie) — do not build against
-  the body-based contract as a "temporary" version (client/CLAUDE.md forbids it)
-AUTH-4 in production → blocked on auth backlog A3 (BE-2, logout authorization)
+AUTH-3, AUTH-5, AUTH-4 → previously blocked on auth backlog A2/A3 — BOTH SHIPPED 2026-07-08,
+  no longer blocking. Build against the cookie-based /refresh contract and the param-less
+  /logout contract (see AUTH-3/AUTH-4/AUTH-5 entries below).
 Phase 5 → all of Phase 6
 FEED-0 → FEED-1..FEED-7, SPORT-1 → FEED-8 → FEED-10 → FEED-9
 HF-4 (matches) is NOT de-mocked in this MVP — no backend module exists.
 ```
 
-**Backend blockers (tracked outside this backlog):**
+**Backend blockers (tracked outside this backlog) — both resolved 2026-07-08:**
 
-| Blocker | Where tracked | Blocks |
-|---|---|---|
-| BE-1: refresh token → httpOnly cookie | `modules/auth/docs/BACKLOG_MVP.md` · A2 | AUTH-3, AUTH-5 |
-| BE-2: logout derives user from principal | `modules/auth/docs/BACKLOG_MVP.md` · A3 | AUTH-4 (production) |
+| Blocker | Where tracked | Blocked | Status |
+|---|---|---|---|
+| BE-1: refresh token → httpOnly cookie | `modules/auth/docs/BACKLOG_MVP.md` · A2 | AUTH-3, AUTH-5 | `DONE` |
+| BE-2: logout derives user from principal | `modules/auth/docs/BACKLOG_MVP.md` · A3 | AUTH-4 (production) | `DONE` |
 | Matches/tournaments module | Nowhere yet — needs its own design pass | de-mocking HF-4 |
 
 ---
@@ -410,22 +412,28 @@ auth slice. Access token in memory only — a test asserts no storage API is tou
 Register auto-logs-in (same `AuthResult` shape as login) — no artificial "now go log in" step.
 
 ### AUTH-3 · Session bootstrap on app load
-**Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0, **auth backlog A2 (BE-1)** · **Spec:** AUTH/FEED epic § AUTH-3
+**Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-3
 
 Refresh-on-load restores the session from the httpOnly cookie; the refresh response's `user` object
-doubles as "who am I" (no `/api/users/me` exists). **Hard-blocked on BE-1** — verified still
-unshipped 2026-07-06; do not build against the body-based contract.
+doubles as "who am I" (no `/api/users/me` exists). **No longer blocked** — auth backlog A2 (BE-1)
+shipped 2026-07-08; `POST /api/auth/refresh` genuinely reads/sets the cookie now. See
+`modules/auth/docs/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md`.
 
 ### AUTH-4 · ProtectedRoute + logout
 **Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-3 · **Spec:** AUTH/FEED epic § AUTH-4
 
 Wait for bootstrap before redirecting; logout clears the session even if the network call fails;
-redirect-back after login. Current logout contract is `POST /api/auth/logout?userId=` (query param,
-no body) — **re-check before implementing**, because auth backlog A3 (BE-2) changes it to
-principal-derived with no param.
+redirect-back after login.
+
+**Delta (2026-07-08):** auth backlog A3 (BE-2) has **shipped** — `POST /api/auth/logout` no
+longer takes a `userId` query param at all; it derives the caller from the `Authorization: Bearer`
+header (401 if missing/invalid). Implement against `POST /api/auth/logout` with no query string.
+See `modules/auth/docs/A3_FIX_LOGOUT_AUTHORIZATION.md`.
 
 ### AUTH-5 · 401 refresh-retry interceptor
-**Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0, **auth backlog A2 (BE-1)** · **Spec:** AUTH/FEED epic § AUTH-5
+**Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-5
+
+**No longer blocked** — auth backlog A2 (BE-1) shipped 2026-07-08.
 
 One silent refresh + one retry on 401; refresh failure → clean logout, never a retry loop.
 

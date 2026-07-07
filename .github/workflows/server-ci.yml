@@ -1,0 +1,62 @@
+# Backend CI — build + Spock test suites for all Gradle JVM modules (INFRA-1).
+#
+# Deliberately backend-only: root build.gradle no longer couples `build` to the client's
+# pnpm/Vite build (see build.gradle / client/build.gradle), so `./gradlew build` here never
+# touches client/. Client CI lives separately in client-ci.yml.
+#
+# No Postgres/Redis service containers: integration tests run against H2
+# (server/src/test/resources/application-test.yml), and BaseIT manages its own throwaway
+# Testcontainers Redis container — ubuntu-latest runners have Docker preinstalled, so that
+# works with zero extra CI wiring.
+
+name: server-ci
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'modules/**'
+      - 'server/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/server-ci.yml'
+  pull_request:
+    paths:
+      - 'modules/**'
+      - 'server/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/server-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - run: chmod +x gradlew
+
+      - run: ./gradlew build
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            **/build/reports/tests/test/
+            **/build/test-results/test/
+          retention-days: 14

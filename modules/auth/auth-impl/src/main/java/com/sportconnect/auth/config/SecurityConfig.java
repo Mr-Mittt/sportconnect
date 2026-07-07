@@ -39,6 +39,11 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
+                        // Logout must be authenticated (derives the user from the principal, see
+                        // AuthController) — ordered before the broader /api/auth/** permit below
+                        // since Spring Security uses first-match-wins.
+                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").authenticated()
+
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/sports/**").permitAll()

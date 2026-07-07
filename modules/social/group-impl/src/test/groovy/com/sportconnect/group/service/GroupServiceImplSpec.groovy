@@ -182,7 +182,7 @@ class GroupServiceImplSpec extends Specification {
                 Optional.of(GroupMember.builder().roleId(memberRole.id).build())
         1 * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         1 * pinnedPostRepository.findTop3ByGroupIdOrderByPinnedAtDesc(testGroup.id) >> [pin]
-        1 * postService.getPostById(10L, userId) >> pinnedPostResponse
+        1 * postService.getPostsByIds([10L], userId) >> [(10L): pinnedPostResponse]
 
         and: "response is correct"
         response != null
@@ -1032,8 +1032,7 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
         1 * pinnedPostRepository.findByGroupIdOrderByPinnedAtDesc(testGroup.id) >> [pin2, pin1]
-        1 * postService.getPostById(20L, userId) >> post2
-        1 * postService.getPostById(10L, userId) >> post1
+        1 * postService.getPostsByIds([20L, 10L], userId) >> [(20L): post2, (10L): post1]
 
         and: "both pinned posts are returned in order"
         result.size() == 2

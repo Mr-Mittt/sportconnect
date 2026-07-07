@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS users (
     is_email_verified BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
     last_login_at TIMESTAMP,
+    height_cm INTEGER,
+    weight_kg NUMERIC(5,2),
+    shoe_size_cm INTEGER,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP
 );
@@ -50,6 +53,9 @@ CREATE TABLE IF NOT EXISTS posts (
     sport_id BIGINT,
     visibility VARCHAR(20) DEFAULT 'public',
     is_active BOOLEAN DEFAULT TRUE,
+    post_type VARCHAR(20) NOT NULL DEFAULT 'USER_FEED',
+    last_interaction_at TIMESTAMP DEFAULT now(),
+    broadcast_end_time TIMESTAMP,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
@@ -70,13 +76,22 @@ CREATE TABLE IF NOT EXISTS comments (
     FOREIGN KEY (parent_comment_id) REFERENCES comments(id)
 );
 
+-- Create hashtags table
+CREATE TABLE IF NOT EXISTS hashtags (
+    id BIGSERIAL PRIMARY KEY,
+    tag VARCHAR(100) UNIQUE NOT NULL,
+    usage_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP NOT NULL
+);
+
 -- Create post_hashtags table
 CREATE TABLE IF NOT EXISTS post_hashtags (
     id BIGSERIAL PRIMARY KEY,
     post_id BIGINT NOT NULL,
     hashtag_id BIGINT NOT NULL,
     created_at TIMESTAMP NOT NULL,
-    FOREIGN KEY (post_id) REFERENCES posts(id)
+    FOREIGN KEY (post_id) REFERENCES posts(id),
+    FOREIGN KEY (hashtag_id) REFERENCES hashtags(id)
 );
 
 -- Create post_media table

@@ -87,7 +87,10 @@ app:
     secret: ${JWT_SECRET:your-secret-key-change-this-in-production-min-256-bits}
     expiration: 86400000 # 24 hours in milliseconds
     refresh-expiration: 604800000 # 7 days in milliseconds
-  
+
+  cookie:
+    secure: true # refresh-token cookie; dev profile overrides to false (plain HTTP locally)
+
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173}
     allowed-methods: GET,POST,PUT,DELETE,PATCH,OPTIONS

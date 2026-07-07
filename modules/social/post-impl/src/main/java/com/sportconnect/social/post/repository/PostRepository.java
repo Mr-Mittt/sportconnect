@@ -26,6 +26,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     Page<Post> findBySportIdAndIsActiveTrueOrderByCreatedAtDesc(Long sportId, Pageable pageable);
     
     Optional<Post> findByIdAndIsActiveTrue(Long id);
+
+    List<Post> findByIdInAndIsActiveTrue(List<Long> ids);
     
     @Query("SELECT p FROM Post p WHERE p.isActive = true AND p.visibility = 'public' AND p.postType = com.sportconnect.social.post.api.dto.PostType.USER_FEED ORDER BY p.createdAt DESC")
     Page<Post> findPublicPosts(Pageable pageable);

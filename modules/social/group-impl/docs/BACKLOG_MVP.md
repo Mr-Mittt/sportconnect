@@ -31,6 +31,7 @@
 | 10 | A6 | Fix cross-domain violation (UserRepository/User → UserService/UserFriendService) | `DONE` |
 | 11 | A7 | Fix N+1 queries in paginated list mappers | `DONE` |
 | 12 | A8 | Fix N+1 in getUserGroups | `DONE` |
+| 13 | A9 | Add privacy/membership check to `getGroup` | `TODO` |
 
 ---
 
@@ -294,6 +295,46 @@ paginated N+1: `GroupPinnedPost` rows per group are capped at exactly 3 by a bus
 pin-time (B6a), not by a query `LIMIT` or client-controlled pagination — so unlike the 7 paginated
 methods this ticket + A8 fixed, there's no scaling axis (more members, more history, bigger page size)
 for these two loops to grow along. Noted here for awareness but not ticketed.
+
+---
+
+### A9 · Add privacy/membership check to `getGroup`
+**Status:** `TODO`  
+**Type:** Bug Fix (Security) / Enhancement  
+**Scope:** `GroupServiceImpl.getGroup()` (and its controller), `GroupControllerTest`, `GroupServiceImplSpec`
+
+**Found during:** auth module A2/A3 work (2026-07-08) — investigating a stale integration test
+(`GroupControllerTest.getGroup_WithoutUserId_Success`) surfaced that `getGroup(groupId,
+currentUserId)` has **no privacy or membership enforcement at all**. It fetches the group by ID
+and returns full details — including the top-3 pinned posts — to any caller who reaches the
+endpoint, regardless of `isPrivate`, regardless of whether `currentUserId` is a member, and
+regardless of whether `currentUserId` is even non-null. `isPrivate` is returned as informational
+data in `GroupResponse` but never checked against the caller. The only thing currently gating this
+endpoint at all is `SecurityConfig`'s blanket `.anyRequest().authenticated()` rule — logged in as
+*some* user, not necessarily a member of *this* group.
+
+The stale test (which expected an unauthenticated call to succeed with `getGroup(1L, null)`) has
+been rewritten to assert the current, correct security-layer behavior instead (401 without auth) —
+see the auth module's A2/A3 closeout docs. This ticket is the follow-up: decide and implement
+actual *content*-level access control, which is a separate, deeper gap from "must be logged in."
+
+**Needs a product/design decision before implementation:**
+- Should a **private** group be visible at all to non-members? (Likely: no — hide full details;
+  decide the exact shape: 403 `ForbiddenException`, a minimal "this group is private" stub
+  response, or 404 to avoid confirming the group exists.)
+- Should a **public** group remain visible to any authenticated user regardless of membership?
+  (Likely: yes — this is the point of B5's public discovery/search flow; don't regress that.)
+- Is a null/absent `currentUserRole` in the response already an adequate signal for "you're not a
+  member," or does enforcement need to be stronger (i.e. block the read, not just omit the role)?
+
+**Suggested scope once decided:** in `getGroup`, if `group.getIsPrivate()` is true and the caller
+isn't a member (owner/admin/member — reuse the existing `isGroupMember`/`isGroupOwner`/
+`isGroupAdmin` checks), throw `ForbiddenException` instead of returning full details. Public
+groups unchanged. Add Spock coverage for both the private-member and private-non-member paths
+(currently only the "group not found" and implicit "always succeeds" paths are tested).
+
+**Not urgent for MVP unless private groups are already relied on for genuine privacy** — flag with
+product before scheduling; this is a real (if narrow) information-disclosure gap, not cosmetic.
 
 ---
 

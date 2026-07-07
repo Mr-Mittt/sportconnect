@@ -159,7 +159,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - `Hashtag`, `PostHashtag`, `UserFollow` entities (tables exist; UserFollow → replaced by Friendship in B1)
 - `PostServiceImpl`, `CommentServiceImpl`
 - `PostController` — 16 endpoints: create/read/update/delete posts, like/unlike, comment CRUD, feed, group posts, active broadcasts, broadcast end-time extension
-- **MVP backlog:** 11 tickets (A1–A5, B1–B6) in `modules/social/post-impl/docs/BACKLOG_MVP.md`; all `DONE`
+- **MVP backlog:** 12 tickets (A1–A8, B1–B6) in `modules/social/post-impl/docs/BACKLOG_MVP.md`; all `DONE`
 - **A1 (2026-06-30):** JWT-based identity — all `@RequestParam userId` removed from `PostController`; write endpoints use `@AuthenticationPrincipal`, read endpoints use `Authentication` + `SecurityUtils.extractUserId()`; `GET /api/posts/user/{userId}` renamed to `GET /api/posts/mine`
 - **A2 (2026-06-30):** Fix post delete permission — `PostServiceImpl.deletePost()` now allows group owner/admin to delete GROUP_POST and GROUP_BROADCAST posts in their group (reuses existing `GroupService.isGroupOwner/isGroupAdmin`)
 - **A3 (2026-07-01):** Group posts membership gate — `getGroupPosts()` now throws `ForbiddenException` for unauthenticated or non-member callers; `ForbiddenException` added to `modules/common`
@@ -171,6 +171,8 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - **A5 (2026-07-02):** Fix cross-domain violation in `CommentServiceImpl` — replaced direct `user-impl` `User`/`UserRepository` imports with `UserService` (`user-api`); new `resolveUserFullName()` helper preserves the exact `"Unknown User"` fallback via catching `ResourceNotFoundException`; removed the now-unnecessary `user-impl` Gradle dependency from `post-impl/build.gradle`; found during a cross-module audit alongside group-impl's sibling ticket A6; 1 new Spock test (17 total in `CommentServiceImplSpec`)
 - **A6 (2026-07-03):** Fix N+1 hashtag lookup in feed mappers — `mapToResponse` (shared by all 5 paginated feed methods) no longer calls `hashtagService.getTagsForPost()` per post; new batched `HashtagService.getTagsForPosts(List<Long>)` + `PostHashtagRepository.findTagsByPostIds()` resolve the whole page's hashtags in 1 query instead of N; `likeCount`/`commentCount`/`isLikedByCurrentUser` were already addressed (Redis) or a deliberate design choice, confirmed during a cross-module N+1 audit alongside group-impl's A7/A8 and user-impl's U8 — not touched; 2 new Spock tests
 - **A7 (2026-07-03):** Fix N+1 in `CommentServiceImpl.getPostComments` — `mapToResponse` no longer calls `userService.getUserById()` or re-queries replies per comment/reply; new batched `CommentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc()` + `UserService.getUsersByIds()` resolve the whole page's replies and authors in 2 queries total instead of 2 per comment; recursion into replies now happens over an in-memory map, naturally bounded to 1 level by A4's existing nesting rule (confirmed, not assumed); 1 test rewritten to exercise the real batched code path instead of an unrealistic `createComment`-based scenario
+- **A8 (2026-07-08):** `server:test` needs Redis — chose Testcontainers over making the Redis-backed paths degrade gracefully (that would've meant adding fallback logic to ~10 call sites across `PostServiceImpl`/`CommentServiceImpl` that don't have any today, since `getCount()` — called on every response, not just like/unlike — has no try/catch); `BaseIT` gets a singleton `GenericContainer` Redis (`redis:7-alpine`), started once per JVM via a static initializer + bound via `@DynamicPropertySource`, reaped automatically by Testcontainers' Ryuk sidecar; no new Gradle dependency needed for the container itself, but `org.testcontainers:testcontainers` had to be bumped `1.19.3` → `2.0.5` (the old version hardcodes a stale Docker API version rejected by current Docker engines); the sibling `org.testcontainers:postgresql:1.19.3` dependency was confirmed dead (zero references anywhere in `server/src/test`) and removed rather than version-matched; `application-test.yml`'s dead `spring.data.redis.enabled: false` line removed alongside it
+- **(2026-07-08):** Investigated and removed `JavaRevision.java`/`JavaRevisionTest.groovy` — a personal Java pass-by-reference scratch demo (not app code) swept into an unrelated feature commit back in March, asserting a stale/wrong expected value ever since; user confirmed deletion over fixing the assertion or leaving it. `server:test` is now fully green (27/27)
 
 #### `modules:social:group-api` + `modules:social:group-impl`
 - `Group`, `GroupMember`, `GroupRole` (pre-seeded: owner/admin/member), `GroupJoinRequest`, `GroupSettings` entities
@@ -382,6 +384,15 @@ in `infra/documentation/` (deliberate amendment to the docs-placement rule). Gap
 tickets now on a real backlog: `infra/documentation/BACKLOG_MVP.md` — INFRA-1 (backend CI),
 INFRA-2 (dev docker-compose), INFRA-3 (deploy pipeline, blocked on hosting decision) — picked up
 via `/workon infra mvp` (workon command extended for the infra module).
+- **INFRA-1 (2026-07-08):** Backend CI workflow — `.github/workflows/server-ci.yml` (JDK 21,
+  `./gradlew build`, no service containers needed: H2 for schema, `BaseIT`'s Testcontainers Redis
+  from A8 self-provisions via Docker already on `ubuntu-latest`); decoupled root `./gradlew build`
+  from the client's pnpm/Vite build at the source (removed `build.dependsOn` wiring in both root
+  `build.gradle` and `client/build.gradle`, rather than excluding it CI-side) so `./gradlew build`/
+  `test` are backend-only by construction; generated the previously-missing POSIX `gradlew` wrapper
+  (only `gradlew.bat` was tracked) with a `.gitattributes` LF/CRLF rule so it doesn't break on
+  Linux runners. Bootstrap (first green run, required-check marking) still pending — same
+  HF-12-style conditional, and branch protection is unavailable on this repo regardless.
 Full detail in `client/docs/BACKLOG_MVP.md` — one ordered queue merging the two refined epics
 (`client/docs/sporthub-home-feed-tickets.md` + `client/docs/sporthub-auth-feed-integration-tickets.md`),
 same format as the server module backlogs (`/workon client mvp`).
@@ -396,11 +407,37 @@ same format as the server module backlogs (`/workon client mvp`).
 
 **Corrections found while creating the backlog (verified against source 2026-07-06):**
 - `SportController` now exists (sport-impl A1–A4 all DONE) — the epics' "sport switcher stays mock" claim is stale; new ticket SPORT-1 de-mocks it. Only matches (HF-4) remain mock-only.
-- BE-1 (refresh token → httpOnly cookie) and BE-2 (logout trusts client-supplied `userId`) are still unshipped and were untracked — now ticketed as **A2/A3 in `modules/auth/docs/BACKLOG_MVP.md`**. A2 blocks client AUTH-3/AUTH-5.
+- BE-1 (refresh token → httpOnly cookie) and BE-2 (logout trusts client-supplied `userId`) were unshipped and untracked — ticketed as **A2/A3 in `modules/auth/docs/BACKLOG_MVP.md`**. **Both DONE as of 2026-07-08** — see below.
 - Post-impl's old F1 (frontend personalized feed) is absorbed by FEED-1.
 
+### Auth A2 + A3 DONE (2026-07-08) — client Phase 5 (AUTH-3/AUTH-5/AUTH-4) unblocked
+
+**A2** (`modules/auth/docs/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md`): refresh token moved to an
+httpOnly `Set-Cookie` (profile-conditional `Secure`, `SameSite=Strict`, `Path=/api/auth`);
+`AuthResponse.refreshToken` now `@JsonIgnore`d, never in the JSON body. Verified live against a
+running server (Docker Postgres/Redis), not just mocked tests.
+
+**A3** (`modules/auth/docs/A3_FIX_LOGOUT_AUTHORIZATION.md`): `/api/auth/logout` now derives the
+caller from the JWT principal (401 without one) instead of trusting a client-supplied `userId`.
+
+**Verifying A3 live surfaced and fixed several genuinely unrelated pre-existing bugs**, all with
+explicit go-ahead at each step (full story in A3's summary doc):
+- A circular Spring bean dependency between `PostServiceImpl` ↔ `GroupServiceImpl` that prevented
+  the app from starting at all (`@Lazy`-annotated constructor fix in `GroupServiceImpl`).
+- An N+1 query in `GroupServiceImpl.getGroup()`/`.getPinnedPosts()` (previously flagged-but-not-
+  ticketed in group-impl's A8) — fixed via a new batch `PostService.getPostsByIds()`.
+- `server:test` was 23/27 red: `schema.sql` (H2 test fixture) hadn't tracked ~4 migrations' worth
+  of columns/tables (`users.height_cm` etc., `posts.post_type` etc., the whole `hashtags` table) —
+  fixed; and `@WithMockUser`'s principal shape doesn't match this app's userId-string convention,
+  breaking ~21 integration tests — fixed via a new `BaseIT.authenticateAs()` helper.
+- Found a real, separate gap: `getGroup()` has no private-group/membership enforcement at all —
+  filed as **A9** in `modules/social/group-impl/docs/BACKLOG_MVP.md` (needs a product decision).
+- Left one test failing on purpose: `server:test`'s Redis dependency has no test-time Redis
+  available — filed as **A8** in `modules/social/post-impl/docs/BACKLOG_MVP.md`.
+- `server:test` final state: 25/27 (the 2 remaining are `JavaRevisionTest`, unrelated environment
+  noise, and the now-ticketed A8 Redis gap).
+
 ### Immediate Next (other backend completions)
-- **Auth A2/A3** — httpOnly refresh cookie + logout authorization fix (block the client's auth integration phase, see above)
 - **Complete forgot-password** — wire up UserService lookup in `AuthController`
 - **Notifications service** — in-app notifications for likes, comments, friend requests, group events
 
