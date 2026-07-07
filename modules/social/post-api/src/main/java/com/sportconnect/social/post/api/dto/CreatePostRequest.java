@@ -7,8 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Data
 @Builder
@@ -29,10 +29,12 @@ public class CreatePostRequest {
     private Long sportId;
     
     private Long groupId;
-    
+
+    private PostType postType;
+
     private String visibility; // public, friends, private
-    
+
     private List<String> mediaUrls;
-    
-    private List<String> hashtags;
+
+    private LocalDateTime broadcastEndTime; // optional; GROUP_BROADCAST only, defaults to now()+24h if omitted
 }

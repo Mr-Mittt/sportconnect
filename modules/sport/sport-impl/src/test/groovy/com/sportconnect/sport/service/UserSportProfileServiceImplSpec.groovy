@@ -1,6 +1,8 @@
 package com.sportconnect.sport.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest
 import com.sportconnect.sport.entity.Sport
@@ -14,9 +16,10 @@ class UserSportProfileServiceImplSpec extends Specification {
 
     UserSportProfileRepository profileRepository = Mock()
     SportRepository sportRepository = Mock()
+    ObjectMapper objectMapper = new ObjectMapper()
 
     @Subject
-    UserSportProfileServiceImpl profileService = new UserSportProfileServiceImpl(profileRepository, sportRepository)
+    UserSportProfileServiceImpl profileService = new UserSportProfileServiceImpl(profileRepository, sportRepository, objectMapper)
 
     def "createProfile should create new profile successfully"() {
         given:
@@ -28,6 +31,7 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .yearsOfExperience(3)
                 .preferredPosition("Forward")
                 .bio("Love playing basketball")
+                .attributes(["dominantHand": "left"])
                 .build()
 
         def sport = Sport.builder()
@@ -43,6 +47,7 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .yearsOfExperience(3)
                 .preferredPosition("Forward")
                 .bio("Love playing basketball")
+                .attributes(["dominantHand": "left"])
                 .isActive(true)
                 .build()
 
@@ -52,10 +57,39 @@ class UserSportProfileServiceImplSpec extends Specification {
         then:
         1 * sportRepository.findById(sportId) >> Optional.of(sport)
         1 * profileRepository.existsByUserIdAndSportId(userId, sportId) >> false
-        1 * profileRepository.save(_) >> profile
+        1 * profileRepository.save(_) >> { UserSportProfile savedProfile ->
+            assert savedProfile.attributes == ["dominantHand": "left"]
+            return profile
+        }
         result.userId == userId
         result.sportId == sportId
         result.skillLevel == "Intermediate"
+        result.attributes == ["dominantHand": "left"]
+    }
+
+    def "createProfile should reject oversized attributes payload"() {
+        given:
+        def userId = UUID.randomUUID()
+        def sportId = UUID.randomUUID()
+        def request = CreateUserSportProfileRequest.builder()
+                .sportId(sportId)
+                .skillLevel("Intermediate")
+                .attributes(["blob": "x" * 5000])
+                .build()
+
+        def sport = Sport.builder()
+                .id(sportId)
+                .name("Basketball")
+                .build()
+
+        when:
+        profileService.createProfile(userId, request)
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * profileRepository.existsByUserIdAndSportId(userId, sportId) >> false
+        0 * profileRepository.save(_)
+        thrown(BadRequestException)
     }
 
     def "createProfile should throw exception when sport not found"() {
@@ -156,9 +190,22 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         then:
         1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> profiles
-        1 * sportRepository.findById(sportId1) >> Optional.of(sport1)
-        1 * sportRepository.findById(sportId2) >> Optional.of(sport2)
+        1 * sportRepository.findAllById([sportId1, sportId2]) >> [sport1, sport2]
         result.size() == 2
+        result*.sportName as Set == ["Football", "Cricket"] as Set
+    }
+
+    def "getUserProfiles should return an empty list without querying sports when user has no profiles"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        def result = profileService.getUserProfiles(userId)
+
+        then:
+        1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> []
+        0 * sportRepository.findAllById(_)
+        result.isEmpty()
     }
 
     def "getUserProfileForSport should return specific profile"() {
@@ -206,10 +253,11 @@ class UserSportProfileServiceImplSpec extends Specification {
         given:
         def profileId = UUID.randomUUID()
         def sportId = UUID.randomUUID()
+        def ownerId = UUID.randomUUID()
 
         def profile = UserSportProfile.builder()
                 .id(profileId)
-                .userId(UUID.randomUUID())
+                .userId(ownerId)
                 .sportId(sportId)
                 .skillLevel("Beginner")
                 .yearsOfExperience(1)
@@ -229,7 +277,7 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .build()
 
         when:
-        def result = profileService.updateProfile(profileId, request)
+        def result = profileService.updateProfile(profileId, ownerId, request)
 
         then:
         1 * profileRepository.findById(profileId) >> Optional.of(profile)
@@ -244,31 +292,114 @@ class UserSportProfileServiceImplSpec extends Specification {
         result.skillLevel == "Intermediate"
     }
 
+    def "updateProfile should merge new attribute keys without dropping existing ones"() {
+        given:
+        def profileId = UUID.randomUUID()
+        def sportId = UUID.randomUUID()
+        def ownerId = UUID.randomUUID()
+
+        def profile = UserSportProfile.builder()
+                .id(profileId)
+                .userId(ownerId)
+                .sportId(sportId)
+                .skillLevel("Beginner")
+                .attributes(["dominantHand": "left"])
+                .build()
+
+        def request = CreateUserSportProfileRequest.builder()
+                .attributes(["strokeStyle": "freestyle"])
+                .build()
+
+        def sport = Sport.builder()
+                .id(sportId)
+                .name("Swimming")
+                .build()
+
+        when:
+        def result = profileService.updateProfile(profileId, ownerId, request)
+
+        then:
+        1 * profileRepository.findById(profileId) >> Optional.of(profile)
+        1 * profileRepository.save(_) >> { UserSportProfile savedProfile ->
+            assert savedProfile.attributes == ["dominantHand": "left", "strokeStyle": "freestyle"]
+            return savedProfile
+        }
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        result.attributes == ["dominantHand": "left", "strokeStyle": "freestyle"]
+    }
+
+    def "updateProfile should reject oversized attributes payload"() {
+        given:
+        def profileId = UUID.randomUUID()
+        def sportId = UUID.randomUUID()
+        def ownerId = UUID.randomUUID()
+
+        def profile = UserSportProfile.builder()
+                .id(profileId)
+                .userId(ownerId)
+                .sportId(sportId)
+                .build()
+
+        def request = CreateUserSportProfileRequest.builder()
+                .attributes(["blob": "x" * 5000])
+                .build()
+
+        when:
+        profileService.updateProfile(profileId, ownerId, request)
+
+        then:
+        1 * profileRepository.findById(profileId) >> Optional.of(profile)
+        0 * profileRepository.save(_)
+        thrown(BadRequestException)
+    }
+
     def "updateProfile should throw exception when profile not found"() {
         given:
         def profileId = UUID.randomUUID()
         def request = new CreateUserSportProfileRequest()
 
         when:
-        profileService.updateProfile(profileId, request)
+        profileService.updateProfile(profileId, UUID.randomUUID(), request)
 
         then:
         1 * profileRepository.findById(profileId) >> Optional.empty()
         thrown(ResourceNotFoundException)
     }
 
+    def "updateProfile should throw ForbiddenException when caller is not the owner"() {
+        given:
+        def profileId = UUID.randomUUID()
+        def ownerId = UUID.randomUUID()
+        def otherUserId = UUID.randomUUID()
+        def profile = UserSportProfile.builder()
+                .id(profileId)
+                .userId(ownerId)
+                .sportId(UUID.randomUUID())
+                .build()
+        def request = new CreateUserSportProfileRequest()
+
+        when:
+        profileService.updateProfile(profileId, otherUserId, request)
+
+        then:
+        1 * profileRepository.findById(profileId) >> Optional.of(profile)
+        0 * profileRepository.save(_)
+        thrown(ForbiddenException)
+    }
+
     def "deleteProfile should soft delete profile"() {
         given:
         def profileId = UUID.randomUUID()
+        def ownerId = UUID.randomUUID()
         def profile = UserSportProfile.builder()
                 .id(profileId)
-                .userId(UUID.randomUUID())
+                .userId(ownerId)
                 .sportId(UUID.randomUUID())
                 .isActive(true)
                 .build()
 
         when:
-        profileService.deleteProfile(profileId)
+        profileService.deleteProfile(profileId, ownerId)
 
         then:
         1 * profileRepository.findById(profileId) >> Optional.of(profile)
@@ -283,10 +414,31 @@ class UserSportProfileServiceImplSpec extends Specification {
         def profileId = UUID.randomUUID()
 
         when:
-        profileService.deleteProfile(profileId)
+        profileService.deleteProfile(profileId, UUID.randomUUID())
 
         then:
         1 * profileRepository.findById(profileId) >> Optional.empty()
         thrown(ResourceNotFoundException)
+    }
+
+    def "deleteProfile should throw ForbiddenException when caller is not the owner"() {
+        given:
+        def profileId = UUID.randomUUID()
+        def ownerId = UUID.randomUUID()
+        def otherUserId = UUID.randomUUID()
+        def profile = UserSportProfile.builder()
+                .id(profileId)
+                .userId(ownerId)
+                .sportId(UUID.randomUUID())
+                .isActive(true)
+                .build()
+
+        when:
+        profileService.deleteProfile(profileId, otherUserId)
+
+        then:
+        1 * profileRepository.findById(profileId) >> Optional.of(profile)
+        0 * profileRepository.save(_)
+        thrown(ForbiddenException)
     }
 }

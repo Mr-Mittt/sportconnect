@@ -12,8 +12,14 @@ import java.util.List;
 public interface CommentRepository extends JpaRepository<Comment, Long> {
     
     Page<Comment> findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(Long postId, Pageable pageable);
-    
+
+    List<Comment> findTop3ByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(Long postId);
+
     List<Comment> findByParentCommentIdAndIsActiveTrueOrderByCreatedAtAsc(Long parentCommentId);
-    
+
+    List<Comment> findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc(List<Long> parentCommentIds);
+
     long countByPostIdAndIsActiveTrue(Long postId);
+
+    long countByParentCommentIdAndIsActiveTrue(Long parentCommentId);
 }

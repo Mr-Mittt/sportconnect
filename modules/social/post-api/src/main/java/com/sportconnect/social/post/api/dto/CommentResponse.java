@@ -23,6 +23,7 @@ public class CommentResponse {
     private String content;
     private Long parentCommentId;
     private Long likeCount;
+    private Long replyCount;
     private Boolean isLikedByCurrentUser;
     private List<CommentResponse> replies;
     private LocalDateTime createdAt;

@@ -1,18 +1,26 @@
 package com.sportconnect.social.post.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.NotFoundException
+import com.sportconnect.group.api.service.GroupService
 import com.sportconnect.social.post.api.dto.CreatePostRequest
-import com.sportconnect.social.post.api.dto.PostResponse
+import com.sportconnect.social.post.api.dto.PostType
 import com.sportconnect.social.post.entity.Post
 import com.sportconnect.social.post.entity.PostLike
+import com.sportconnect.social.post.api.service.HashtagService
 import com.sportconnect.social.post.repository.CommentRepository
+import com.sportconnect.social.post.repository.PostHashtagRepository
 import com.sportconnect.social.post.repository.PostLikeRepository
 import com.sportconnect.social.post.repository.PostRepository
-import org.springframework.data.domain.Page
+import com.sportconnect.user.api.service.UserFriendService
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
-import org.springframework.data.domain.Pageable
+import org.springframework.data.redis.core.StringRedisTemplate
+import org.springframework.data.redis.core.ValueOperations
+import org.springframework.data.redis.core.ZSetOperations
+import org.springframework.data.redis.core.script.RedisScript
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -23,390 +31,849 @@ class PostServiceImplSpec extends Specification {
     PostRepository postRepository = Mock()
     PostLikeRepository postLikeRepository = Mock()
     CommentRepository commentRepository = Mock()
+    PostHashtagRepository postHashtagRepository = Mock()
+    GroupService groupService = Mock()
+    UserFriendService userFriendService = Mock()
+    HashtagService hashtagService = Mock()
+    StringRedisTemplate stringRedisTemplate = Mock()
+    ValueOperations<String, String> valueOps = Mock()
+    ZSetOperations<String, String> zSetOps = Mock()
+    ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules()
 
     @Subject
-    PostServiceImpl postService = new PostServiceImpl(postRepository, postLikeRepository, commentRepository)
+    PostServiceImpl postService = new PostServiceImpl(postRepository, postLikeRepository, commentRepository, postHashtagRepository, groupService, userFriendService, hashtagService, stringRedisTemplate, objectMapper)
+
+    def setup() {
+        stringRedisTemplate.opsForValue() >> valueOps
+        stringRedisTemplate.opsForZSet() >> zSetOps
+        zSetOps.reverseRange(_, _, _) >> []
+        commentRepository.findTop3ByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(_) >> []
+        hashtagService.getTagsForPost(_) >> []
+        hashtagService.getTagsForPosts(_) >> [:]
+        hashtagService.extractAndSaveHashtags(_, _) >> {}
+        hashtagService.decrementHashtagsForPost(_) >> {}
+    }
 
     UUID userId = UUID.randomUUID()
     Long postId = 1L
+    Long groupId = 5L
 
-    def "createPost should create post successfully"() {
-        given: "a create post request"
-        def request = CreatePostRequest.builder()
-                .content("Test post content")
-                .latitude(37.7749)
-                .longitude(-122.4194)
-                .locationName("San Francisco")
-                .sportId(1L)
-                .groupId(null)
-                .visibility("public")
-                .build()
+    // ── helpers ──────────────────────────────────────────────────────────────
 
-        and: "a saved post"
-        def savedPost = Post.builder()
+    private Post savedPost(PostType type = PostType.USER_FEED, Long gId = null) {
+        Post.builder()
                 .id(postId)
                 .userId(userId)
-                .content(request.content)
-                .locationName(request.locationName)
-                .sportId(request.sportId)
-                .visibility(request.visibility)
+                .groupId(gId)
+                .postType(type)
+                .content("content")
+                .visibility("public")
                 .media([])
                 .hashtags([])
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build()
-
-        when: "creating a post"
-        def result = postService.createPost(userId, request)
-
-        then: "post is saved"
-        1 * postRepository.save(_ as Post) >> savedPost
-        1 * postLikeRepository.countByPostId(postId) >> 0L
-        1 * commentRepository.countByPostIdAndIsActiveTrue(postId) >> 0L
-        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
-
-        and: "result is correct"
-        result != null
-        result.userId == userId
-        result.content == request.content
     }
 
-    def "createPost should default visibility to public when not specified"() {
-        given: "a request without visibility"
+    private void stubCounts() {
+        postLikeRepository.countByPostId(postId) >> 0L
+        commentRepository.countByPostIdAndIsActiveTrue(postId) >> 0L
+        postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
+    }
+
+    // ── createPost — USER_FEED ────────────────────────────────────────────────
+
+    def "createPost defaults to USER_FEED when postType is null"() {
+        given:
+        def request = CreatePostRequest.builder()
+                .content("Hello world")
+                .build()
+
+        when:
+        def result = postService.createPost(userId, request)
+
+        then:
+        1 * postRepository.save({ Post p -> p.postType == PostType.USER_FEED }) >> savedPost()
+        stubCounts()
+        result.postType == PostType.USER_FEED
+    }
+
+    def "createPost USER_FEED succeeds with no groupId"() {
+        given:
         def request = CreatePostRequest.builder()
                 .content("Test post")
-                .build()
-
-        and: "a saved post with public visibility"
-        def savedPost = Post.builder()
-                .id(postId)
-                .userId(userId)
-                .content(request.content)
+                .postType(PostType.USER_FEED)
                 .visibility("public")
-                .media([])
-                .hashtags([])
-                .createdAt(LocalDateTime.now())
                 .build()
 
-        when: "creating a post"
+        when:
         def result = postService.createPost(userId, request)
 
-        then: "post is saved with public visibility"
-        1 * postRepository.save(_ as Post) >> savedPost
-        1 * postLikeRepository.countByPostId(postId) >> 0L
-        1 * commentRepository.countByPostIdAndIsActiveTrue(postId) >> 0L
-        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
-
-        and: "visibility is public"
-        result.visibility == "public"
+        then:
+        1 * postRepository.save(_ as Post) >> savedPost()
+        stubCounts()
+        result != null
+        result.postType == PostType.USER_FEED
     }
 
-    def "createPost should set groupId when creating group post"() {
-        given: "a request with groupId"
-        def groupId = 5L
+    def "createPost USER_FEED with groupId throws BadRequestException"() {
+        given:
+        def request = CreatePostRequest.builder()
+                .content("Bad request")
+                .postType(PostType.USER_FEED)
+                .groupId(groupId)
+                .build()
+
+        when:
+        postService.createPost(userId, request)
+
+        then:
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    // ── createPost — GROUP_POST ───────────────────────────────────────────────
+
+    def "createPost GROUP_POST without groupId throws BadRequestException"() {
+        given:
+        def request = CreatePostRequest.builder()
+                .content("No group")
+                .postType(PostType.GROUP_POST)
+                .build()
+
+        when:
+        postService.createPost(userId, request)
+
+        then:
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "createPost GROUP_POST throws BadRequestException when user is not a member"() {
+        given:
         def request = CreatePostRequest.builder()
                 .content("Group post")
+                .postType(PostType.GROUP_POST)
                 .groupId(groupId)
                 .build()
 
-        and: "a saved post with groupId"
-        def savedPost = Post.builder()
-                .id(postId)
-                .userId(userId)
+        when:
+        postService.createPost(userId, request)
+
+        then:
+        1 * groupService.isGroupMember(groupId, userId) >> false
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "createPost GROUP_POST succeeds when user is a member"() {
+        given:
+        def request = CreatePostRequest.builder()
+                .content("Group post")
+                .postType(PostType.GROUP_POST)
                 .groupId(groupId)
-                .content(request.content)
-                .visibility("public")
-                .media([])
-                .hashtags([])
-                .createdAt(LocalDateTime.now())
                 .build()
 
-        when: "creating a post"
+        when:
         def result = postService.createPost(userId, request)
 
-        then: "post is saved with groupId"
-        1 * postRepository.save({ Post p -> p.groupId == groupId }) >> savedPost
-        1 * postLikeRepository.countByPostId(postId) >> 0L
-        1 * commentRepository.countByPostIdAndIsActiveTrue(postId) >> 0L
-        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
-
-        and: "result contains groupId"
+        then:
+        1 * groupService.isGroupMember(groupId, userId) >> true
+        1 * postRepository.save({ Post p -> p.postType == PostType.GROUP_POST && p.groupId == groupId }) >> savedPost(PostType.GROUP_POST, groupId)
+        stubCounts()
+        result.postType == PostType.GROUP_POST
         result.groupId == groupId
     }
 
-    def "getPostById should return post when found"() {
-        given: "an existing post"
-        def post = Post.builder()
-                .id(postId)
-                .userId(userId)
-                .content("Test content")
-                .visibility("public")
-                .media([])
-                .hashtags([])
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+    // ── createPost — GROUP_BROADCAST ──────────────────────────────────────────
+
+    def "createPost GROUP_BROADCAST without groupId throws BadRequestException"() {
+        given:
+        def request = CreatePostRequest.builder()
+                .content("Broadcast no group")
+                .postType(PostType.GROUP_BROADCAST)
                 .build()
 
-        when: "getting post by id"
+        when:
+        postService.createPost(userId, request)
+
+        then:
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "createPost GROUP_BROADCAST throws BadRequestException when user is not owner or admin"() {
+        given:
+        def request = CreatePostRequest.builder()
+                .content("Broadcast")
+                .postType(PostType.GROUP_BROADCAST)
+                .groupId(groupId)
+                .build()
+
+        when:
+        postService.createPost(userId, request)
+
+        then:
+        1 * groupService.isGroupOwner(groupId, userId) >> false
+        1 * groupService.isGroupAdmin(groupId, userId) >> false
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "createPost GROUP_BROADCAST succeeds when user is owner"() {
+        given:
+        def request = CreatePostRequest.builder()
+                .content("Broadcast by owner")
+                .postType(PostType.GROUP_BROADCAST)
+                .groupId(groupId)
+                .build()
+
+        when:
+        def result = postService.createPost(userId, request)
+
+        then:
+        1 * groupService.isGroupOwner(groupId, userId) >> true
+        0 * groupService.isGroupAdmin(groupId, userId)
+        1 * postRepository.save({ Post p -> p.postType == PostType.GROUP_BROADCAST }) >> savedPost(PostType.GROUP_BROADCAST, groupId)
+        stubCounts()
+        result.postType == PostType.GROUP_BROADCAST
+    }
+
+    def "createPost GROUP_BROADCAST succeeds when user is admin"() {
+        given:
+        def request = CreatePostRequest.builder()
+                .content("Broadcast by admin")
+                .postType(PostType.GROUP_BROADCAST)
+                .groupId(groupId)
+                .build()
+
+        when:
+        def result = postService.createPost(userId, request)
+
+        then:
+        1 * groupService.isGroupOwner(groupId, userId) >> false
+        1 * groupService.isGroupAdmin(groupId, userId) >> true
+        1 * postRepository.save(_ as Post) >> savedPost(PostType.GROUP_BROADCAST, groupId)
+        stubCounts()
+        result.postType == PostType.GROUP_BROADCAST
+    }
+
+    def "createPost GROUP_BROADCAST throws BadRequestException when an active broadcast already exists"() {
+        given:
+        def request = CreatePostRequest.builder()
+                .content("Broadcast")
+                .postType(PostType.GROUP_BROADCAST)
+                .groupId(groupId)
+                .build()
+
+        when:
+        postService.createPost(userId, request)
+
+        then:
+        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * postRepository.existsActiveGroupBroadcast(groupId) >> true
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "createPost GROUP_BROADCAST defaults broadcastEndTime to now plus 24 hours when not provided"() {
+        given:
+        def request = CreatePostRequest.builder()
+                .content("Broadcast")
+                .postType(PostType.GROUP_BROADCAST)
+                .groupId(groupId)
+                .build()
+
+        when:
+        def result = postService.createPost(userId, request)
+
+        then:
+        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * postRepository.existsActiveGroupBroadcast(groupId) >> false
+        1 * postRepository.save({ Post p ->
+            p.broadcastEndTime.isAfter(LocalDateTime.now().plusHours(23)) &&
+            p.broadcastEndTime.isBefore(LocalDateTime.now().plusHours(25))
+        }) >> savedPost(PostType.GROUP_BROADCAST, groupId)
+        stubCounts()
+        result.postType == PostType.GROUP_BROADCAST
+    }
+
+    def "createPost GROUP_BROADCAST throws BadRequestException when broadcastEndTime is not in the future"() {
+        given:
+        def request = CreatePostRequest.builder()
+                .content("Broadcast")
+                .postType(PostType.GROUP_BROADCAST)
+                .groupId(groupId)
+                .broadcastEndTime(LocalDateTime.now())
+                .build()
+
+        when:
+        postService.createPost(userId, request)
+
+        then:
+        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * postRepository.existsActiveGroupBroadcast(groupId) >> false
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "createPost GROUP_BROADCAST persists an explicit future broadcastEndTime"() {
+        given:
+        def futureTime = LocalDateTime.now().plusHours(2)
+        def request = CreatePostRequest.builder()
+                .content("Broadcast")
+                .postType(PostType.GROUP_BROADCAST)
+                .groupId(groupId)
+                .broadcastEndTime(futureTime)
+                .build()
+        def saved = savedPost(PostType.GROUP_BROADCAST, groupId)
+        saved.broadcastEndTime = futureTime
+
+        when:
+        def result = postService.createPost(userId, request)
+
+        then:
+        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * postRepository.existsActiveGroupBroadcast(groupId) >> false
+        1 * postRepository.save({ Post p -> p.broadcastEndTime == futureTime }) >> saved
+        stubCounts()
+        result.broadcastEndTime == futureTime
+    }
+
+    // ── getPostById ───────────────────────────────────────────────────────────
+
+    def "getPostById returns likeCount and commentCount from DB on cache miss"() {
+        given:
+        def post = savedPost()
+
+        when:
         def result = postService.getPostById(postId, userId)
 
-        then: "post is retrieved"
+        then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        // Redis cache miss → DB fallback
         1 * postLikeRepository.countByPostId(postId) >> 5L
         1 * commentRepository.countByPostIdAndIsActiveTrue(postId) >> 3L
         1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
-
-        and: "result is correct"
-        result != null
         result.id == postId
         result.likeCount == 5L
         result.commentCount == 3L
         result.isLikedByCurrentUser == true
     }
 
-    def "getPostById should throw NotFoundException when post not found"() {
-        when: "getting non-existent post"
+    def "getPostById reads likeCount and commentCount from Redis on cache hit"() {
+        given:
+        def post = savedPost()
+
+        when:
+        def result = postService.getPostById(postId, userId)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        valueOps.get("post:" + postId + ":likes") >> "7"
+        valueOps.get("post:" + postId + ":comments") >> "2"
+        0 * postLikeRepository.countByPostId(_)
+        0 * commentRepository.countByPostIdAndIsActiveTrue(_)
+        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
+        result.likeCount == 7L
+        result.commentCount == 2L
+    }
+
+    def "getPostById throws NotFoundException when post not found"() {
+        when:
         postService.getPostById(postId, userId)
 
-        then: "post not found"
+        then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.empty()
-
-        and: "exception is thrown"
         thrown(NotFoundException)
     }
 
-    def "getUserPosts should return user's posts"() {
-        given: "user's posts"
-        def post = Post.builder()
-                .id(postId)
-                .userId(userId)
-                .content("User post")
-                .visibility("public")
-                .media([])
-                .hashtags([])
-                .createdAt(LocalDateTime.now())
-                .build()
+    // ── getUserPosts ──────────────────────────────────────────────────────────
 
+    def "getUserPosts returns user's posts"() {
+        given:
         def pageable = PageRequest.of(0, 20)
-        def page = new PageImpl<>([post])
+        def page = new PageImpl<>([savedPost()])
 
-        when: "getting user posts"
+        when:
         def result = postService.getUserPosts(userId, userId, pageable)
 
-        then: "posts are retrieved"
+        then:
         1 * postRepository.findByUserIdAndIsActiveTrue(userId, pageable) >> page
-        1 * postLikeRepository.countByPostId(postId) >> 2L
-        1 * commentRepository.countByPostIdAndIsActiveTrue(postId) >> 1L
-        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
-
-        and: "result contains posts"
+        stubCounts()
         result.content.size() == 1
-        result.content[0].userId == userId
     }
 
-    def "getPublicFeed should return public posts excluding group posts"() {
-        given: "public posts"
-        def post = Post.builder()
-                .id(postId)
-                .userId(userId)
-                .groupId(null)
-                .content("Public post")
-                .visibility("public")
-                .media([])
-                .hashtags([])
-                .createdAt(LocalDateTime.now())
-                .build()
+    // ── getPersonalizedFeed ───────────────────────────────────────────────────
 
+    def "getPersonalizedFeed returns caller's own USER_FEED posts"() {
+        given:
         def pageable = PageRequest.of(0, 20)
-        def page = new PageImpl<>([post])
+        def page = new PageImpl<>([savedPost(PostType.USER_FEED)])
 
-        when: "getting public feed"
-        def result = postService.getPublicFeed(userId, pageable)
+        when:
+        def result = postService.getPersonalizedFeed(userId, pageable)
 
-        then: "public posts are retrieved"
-        1 * postRepository.findPublicPosts(pageable) >> page
-        1 * postLikeRepository.countByPostId(postId) >> 10L
-        1 * commentRepository.countByPostIdAndIsActiveTrue(postId) >> 5L
-        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
-
-        and: "result is correct"
+        then:
+        1 * userFriendService.getAcceptedFriendIds(userId) >> []
+        1 * groupService.getGroupIdsBySportProfiles(userId) >> []
+        1 * postRepository.findPersonalizedFeed(userId, [new UUID(0, 0)], [-1L], pageable) >> page
+        stubCounts()
         result.content.size() == 1
-        result.content[0].likeCount == 10L
-        result.content[0].commentCount == 5L
+        result.content[0].postType == PostType.USER_FEED
     }
 
-    def "getGroupPosts should return posts for specific group"() {
-        given: "group posts"
-        def groupId = 5L
-        def post = Post.builder()
-                .id(postId)
-                .userId(userId)
-                .groupId(groupId)
-                .content("Group post")
-                .visibility("public")
-                .media([])
-                .hashtags([])
-                .createdAt(LocalDateTime.now())
-                .build()
-
+    def "getPersonalizedFeed includes friends' USER_FEED posts"() {
+        given:
+        def friendId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 20)
-        def page = new PageImpl<>([post])
+        def friendPost = Post.builder()
+                .id(2L).userId(friendId).postType(PostType.USER_FEED)
+                .content("friend post").visibility("public")
+                .media([]).hashtags([]).createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def page = new PageImpl<>([friendPost])
 
-        when: "getting group posts"
+        when:
+        def result = postService.getPersonalizedFeed(userId, pageable)
+
+        then:
+        1 * userFriendService.getAcceptedFriendIds(userId) >> [friendId]
+        1 * groupService.getGroupIdsBySportProfiles(userId) >> []
+        1 * postRepository.findPersonalizedFeed(userId, [friendId], [-1L], pageable) >> page
+        postLikeRepository.countByPostId(2L) >> 0L
+        commentRepository.countByPostIdAndIsActiveTrue(2L) >> 0L
+        postLikeRepository.existsByPostIdAndUserId(2L, userId) >> false
+        result.content.size() == 1
+        result.content[0].userId == friendId
+    }
+
+    def "getPersonalizedFeed includes GROUP_POSTs from sport-matched groups"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        def groupPost = savedPost(PostType.GROUP_POST, groupId)
+        def page = new PageImpl<>([groupPost])
+
+        when:
+        def result = postService.getPersonalizedFeed(userId, pageable)
+
+        then:
+        1 * userFriendService.getAcceptedFriendIds(userId) >> []
+        1 * groupService.getGroupIdsBySportProfiles(userId) >> [groupId]
+        1 * postRepository.findPersonalizedFeed(userId, [new UUID(0, 0)], [groupId], pageable) >> page
+        stubCounts()
+        result.content.size() == 1
+        result.content[0].postType == PostType.GROUP_POST
+    }
+
+    def "getPersonalizedFeed returns empty page when user has no friends or groups"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        def page = new PageImpl<>([])
+
+        when:
+        def result = postService.getPersonalizedFeed(userId, pageable)
+
+        then:
+        1 * userFriendService.getAcceptedFriendIds(userId) >> []
+        1 * groupService.getGroupIdsBySportProfiles(userId) >> []
+        1 * postRepository.findPersonalizedFeed(userId, [new UUID(0, 0)], [-1L], pageable) >> page
+        result.content.isEmpty()
+    }
+
+    // ── getGroupPosts ─────────────────────────────────────────────────────────
+
+    def "getGroupPosts returns posts for group member"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        def page = new PageImpl<>([savedPost(PostType.GROUP_POST, groupId)])
+
+        when:
         def result = postService.getGroupPosts(groupId, userId, pageable)
 
-        then: "group posts are retrieved"
+        then:
+        1 * groupService.isGroupMember(groupId, userId) >> true
         1 * postRepository.findByGroupIdAndIsActiveTrue(groupId, pageable) >> page
-        1 * postLikeRepository.countByPostId(postId) >> 3L
-        1 * commentRepository.countByPostIdAndIsActiveTrue(postId) >> 2L
-        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
-
-        and: "result contains group posts"
+        stubCounts()
         result.content.size() == 1
         result.content[0].groupId == groupId
     }
 
-    def "updatePost should update post when user is owner"() {
-        given: "an existing post"
-        def post = Post.builder()
-                .id(postId)
-                .userId(userId)
-                .content("Old content")
-                .visibility("public")
-                .media([])
-                .hashtags([])
-                .build()
+    def "getGroupPosts throws ForbiddenException for non-member"() {
+        given:
+        def nonMember = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
 
-        and: "an update request"
+        when:
+        postService.getGroupPosts(groupId, nonMember, pageable)
+
+        then:
+        1 * groupService.isGroupMember(groupId, nonMember) >> false
+        thrown(ForbiddenException)
+    }
+
+    def "getGroupPosts throws ForbiddenException for unauthenticated caller"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        postService.getGroupPosts(groupId, null, pageable)
+
+        then:
+        0 * groupService.isGroupMember(_, _)
+        thrown(ForbiddenException)
+    }
+
+    // ── updatePost ────────────────────────────────────────────────────────────
+
+    def "updatePost succeeds when user is owner"() {
+        given:
+        def post = savedPost()
         def request = CreatePostRequest.builder()
-                .content("Updated content")
-                .locationName("New Location")
+                .content("Updated")
                 .build()
 
-        when: "updating the post"
+        when:
         def result = postService.updatePost(postId, userId, request)
 
-        then: "post is updated"
+        then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         1 * postRepository.save(_ as Post) >> post
-        1 * postLikeRepository.countByPostId(postId) >> 0L
-        1 * commentRepository.countByPostIdAndIsActiveTrue(postId) >> 0L
-        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
-
-        and: "result is returned"
+        stubCounts()
         result != null
     }
 
-    def "updatePost should throw BadRequestException when user is not owner"() {
-        given: "a post owned by another user"
-        def otherUserId = UUID.randomUUID()
-        def post = Post.builder()
-                .id(postId)
-                .userId(otherUserId)
-                .content("Content")
-                .build()
+    def "updatePost throws BadRequestException when user is not owner"() {
+        given:
+        def post = Post.builder().id(postId).userId(UUID.randomUUID()).content("X").build()
+        def request = CreatePostRequest.builder().content("Updated").build()
 
-        and: "an update request"
-        def request = CreatePostRequest.builder()
-                .content("Updated content")
-                .build()
-
-        when: "trying to update the post"
+        when:
         postService.updatePost(postId, userId, request)
 
-        then: "post is found"
+        then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-
-        and: "exception is thrown"
         thrown(BadRequestException)
     }
 
-    def "deletePost should soft delete post when user is owner"() {
-        given: "an active post"
+    def "updatePost allows group owner to edit GROUP_BROADCAST content as non-creator"() {
+        given:
+        def creatorId = UUID.randomUUID()
         def post = Post.builder()
-                .id(postId)
-                .userId(userId)
-                .content("Content")
-                .isActive(true)
-                .build()
+                .id(postId).userId(creatorId).groupId(groupId).postType(PostType.GROUP_BROADCAST)
+                .content("old").visibility("public").media([]).hashtags([])
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def request = CreatePostRequest.builder().content("Updated broadcast").build()
 
-        when: "deleting the post"
+        when:
+        def result = postService.updatePost(postId, userId, request)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * postRepository.save(_ as Post) >> post
+        stubCounts()
+        result != null
+    }
+
+    def "updatePost allows group admin to edit GROUP_BROADCAST content as non-creator"() {
+        given:
+        def creatorId = UUID.randomUUID()
+        def post = Post.builder()
+                .id(postId).userId(creatorId).groupId(groupId).postType(PostType.GROUP_BROADCAST)
+                .content("old").visibility("public").media([]).hashtags([])
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def request = CreatePostRequest.builder().content("Updated broadcast").build()
+
+        when:
+        def result = postService.updatePost(postId, userId, request)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * groupService.isGroupOwner(groupId, userId) >> false
+        1 * groupService.isGroupAdmin(groupId, userId) >> true
+        1 * postRepository.save(_ as Post) >> post
+        stubCounts()
+        result != null
+    }
+
+    def "updatePost throws BadRequestException when caller is neither creator nor group owner/admin for GROUP_BROADCAST"() {
+        given:
+        def creatorId = UUID.randomUUID()
+        def post = Post.builder()
+                .id(postId).userId(creatorId).groupId(groupId).postType(PostType.GROUP_BROADCAST)
+                .content("old").visibility("public").media([]).hashtags([])
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def request = CreatePostRequest.builder().content("Updated broadcast").build()
+
+        when:
+        postService.updatePost(postId, userId, request)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * groupService.isGroupOwner(groupId, userId) >> false
+        1 * groupService.isGroupAdmin(groupId, userId) >> false
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "updatePost still restricts GROUP_POST edits to the creator"() {
+        given:
+        def creatorId = UUID.randomUUID()
+        def post = Post.builder()
+                .id(postId).userId(creatorId).groupId(groupId).postType(PostType.GROUP_POST)
+                .content("old").visibility("public").media([]).hashtags([])
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def request = CreatePostRequest.builder().content("Updated").build()
+
+        when:
+        postService.updatePost(postId, userId, request)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * groupService._
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    // ── deletePost ────────────────────────────────────────────────────────────
+
+    def "deletePost soft deletes post when user is owner"() {
+        given:
+        def post = savedPost()
+
+        when:
         postService.deletePost(postId, userId)
 
-        then: "post is soft deleted"
+        then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         1 * postRepository.save({ Post p -> !p.isActive }) >> post
     }
 
-    def "deletePost should throw BadRequestException when user is not owner"() {
-        given: "a post owned by another user"
-        def otherUserId = UUID.randomUUID()
-        def post = Post.builder()
-                .id(postId)
-                .userId(otherUserId)
-                .content("Content")
-                .build()
+    def "deletePost throws BadRequestException when user is not owner"() {
+        given:
+        def post = Post.builder().id(postId).userId(UUID.randomUUID()).content("X").build()
 
-        when: "trying to delete the post"
+        when:
         postService.deletePost(postId, userId)
 
-        then: "post is found"
+        then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-
-        and: "exception is thrown"
+        0 * groupService._
         thrown(BadRequestException)
     }
 
-    def "likePost should create like when not already liked"() {
-        when: "liking a post"
-        postService.likePost(postId, userId)
+    def "deletePost allows group owner to delete GROUP_POST"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def post = savedPost(PostType.GROUP_POST, groupId)
 
-        then: "like is created"
-        1 * postRepository.existsById(postId) >> true
-        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
-        1 * postLikeRepository.save(_ as PostLike) >> new PostLike()
+        when:
+        postService.deletePost(postId, callerId)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * groupService.isGroupOwner(groupId, callerId) >> true
+        1 * postRepository.save({ Post p -> !p.isActive }) >> post
     }
 
-    def "likePost should throw BadRequestException when already liked"() {
-        when: "trying to like an already liked post"
-        postService.likePost(postId, userId)
+    def "deletePost allows group admin to delete GROUP_BROADCAST"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def post = savedPost(PostType.GROUP_BROADCAST, groupId)
 
-        then: "post exists and is already liked"
-        1 * postRepository.existsById(postId) >> true
-        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
+        when:
+        postService.deletePost(postId, callerId)
 
-        and: "exception is thrown"
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * groupService.isGroupOwner(groupId, callerId) >> false
+        1 * groupService.isGroupAdmin(groupId, callerId) >> true
+        1 * postRepository.save({ Post p -> !p.isActive }) >> post
+    }
+
+    def "deletePost throws BadRequestException when non-member tries to delete GROUP_POST"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def post = savedPost(PostType.GROUP_POST, groupId)
+
+        when:
+        postService.deletePost(postId, callerId)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * groupService.isGroupOwner(groupId, callerId) >> false
+        1 * groupService.isGroupAdmin(groupId, callerId) >> false
         thrown(BadRequestException)
     }
 
-    def "likePost should throw NotFoundException when post does not exist"() {
-        when: "trying to like non-existent post"
-        postService.likePost(postId, userId)
+    // ── getActiveBroadcasts ───────────────────────────────────────────────────
 
-        then: "post not found"
-        1 * postRepository.existsById(postId) >> false
+    def "getActiveBroadcasts returns broadcasts scoped to caller's sport-matched groups"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        def page = new PageImpl<>([savedPost(PostType.GROUP_BROADCAST, groupId)])
 
-        and: "exception is thrown"
+        when:
+        def result = postService.getActiveBroadcasts(userId, pageable)
+
+        then:
+        1 * groupService.getGroupIdsBySportProfiles(userId) >> [groupId]
+        1 * postRepository.findActiveBroadcasts([groupId], pageable) >> page
+        stubCounts()
+        result.content.size() == 1
+        result.content[0].postType == PostType.GROUP_BROADCAST
+    }
+
+    def "getActiveBroadcasts uses sentinel group id when caller has no sport-matched groups"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        def page = new PageImpl<>([])
+
+        when:
+        def result = postService.getActiveBroadcasts(userId, pageable)
+
+        then:
+        1 * groupService.getGroupIdsBySportProfiles(userId) >> []
+        1 * postRepository.findActiveBroadcasts([-1L], pageable) >> page
+        result.content.isEmpty()
+    }
+
+    // ── updateBroadcastEndTime ────────────────────────────────────────────────
+
+    def "updateBroadcastEndTime succeeds when caller is group owner"() {
+        given:
+        def post = savedPost(PostType.GROUP_BROADCAST, groupId)
+        def newEndTime = LocalDateTime.now().plusHours(6)
+
+        when:
+        def result = postService.updateBroadcastEndTime(postId, userId, newEndTime)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * postRepository.save({ Post p -> p.broadcastEndTime == newEndTime }) >> post
+        stubCounts()
+        result != null
+    }
+
+    def "updateBroadcastEndTime succeeds when caller is group admin"() {
+        given:
+        def post = savedPost(PostType.GROUP_BROADCAST, groupId)
+        def newEndTime = LocalDateTime.now().plusHours(6)
+
+        when:
+        def result = postService.updateBroadcastEndTime(postId, userId, newEndTime)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * groupService.isGroupOwner(groupId, userId) >> false
+        1 * groupService.isGroupAdmin(groupId, userId) >> true
+        1 * postRepository.save(_ as Post) >> post
+        stubCounts()
+        result != null
+    }
+
+    def "updateBroadcastEndTime throws BadRequestException when caller is neither owner nor admin"() {
+        given:
+        def post = savedPost(PostType.GROUP_BROADCAST, groupId)
+        def newEndTime = LocalDateTime.now().plusHours(6)
+
+        when:
+        postService.updateBroadcastEndTime(postId, userId, newEndTime)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * groupService.isGroupOwner(groupId, userId) >> false
+        1 * groupService.isGroupAdmin(groupId, userId) >> false
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "updateBroadcastEndTime throws BadRequestException when newEndTime is not strictly future"() {
+        given:
+        def post = savedPost(PostType.GROUP_BROADCAST, groupId)
+
+        when:
+        postService.updateBroadcastEndTime(postId, userId, LocalDateTime.now().minusMinutes(1))
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * groupService.isGroupOwner(groupId, userId) >> true
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "updateBroadcastEndTime throws BadRequestException when target post is not GROUP_BROADCAST"() {
+        given:
+        def post = savedPost(PostType.USER_FEED)
+
+        when:
+        postService.updateBroadcastEndTime(postId, userId, LocalDateTime.now().plusHours(1))
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * groupService._
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "updateBroadcastEndTime throws NotFoundException when post does not exist"() {
+        when:
+        postService.updateBroadcastEndTime(postId, userId, LocalDateTime.now().plusHours(1))
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.empty()
         thrown(NotFoundException)
     }
 
-    def "unlikePost should remove like when liked"() {
-        when: "unliking a post"
-        postService.unlikePost(postId, userId)
+    // ── likePost / unlikePost ─────────────────────────────────────────────────
 
-        then: "like is removed"
-        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
-        1 * postLikeRepository.deleteByPostIdAndUserId(postId, userId)
+    def "likePost creates like when not already liked"() {
+        when:
+        postService.likePost(postId, userId)
+
+        then:
+        1 * postRepository.existsById(postId) >> true
+        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
+        1 * postLikeRepository.save(_ as PostLike) >> new PostLike()
+        1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":likes"])
     }
 
-    def "unlikePost should throw BadRequestException when not liked"() {
-        when: "trying to unlike a post that wasn't liked"
+    def "likePost throws BadRequestException when already liked"() {
+        when:
+        postService.likePost(postId, userId)
+
+        then:
+        1 * postRepository.existsById(postId) >> true
+        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
+        thrown(BadRequestException)
+    }
+
+    def "likePost throws NotFoundException when post does not exist"() {
+        when:
+        postService.likePost(postId, userId)
+
+        then:
+        1 * postRepository.existsById(postId) >> false
+        thrown(NotFoundException)
+    }
+
+    def "unlikePost removes like when liked"() {
+        when:
         postService.unlikePost(postId, userId)
 
-        then: "post is not liked"
-        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
+        then:
+        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
+        1 * postLikeRepository.deleteByPostIdAndUserId(postId, userId)
+        1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":likes"])
+    }
 
-        and: "exception is thrown"
+    def "unlikePost throws BadRequestException when not liked"() {
+        when:
+        postService.unlikePost(postId, userId)
+
+        then:
+        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
         thrown(BadRequestException)
     }
 }

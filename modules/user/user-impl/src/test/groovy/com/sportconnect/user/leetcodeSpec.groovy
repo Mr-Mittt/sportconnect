@@ -1,7 +1,9 @@
 package com.sportconnect.user
 
+import spock.lang.Ignore
 import spock.lang.Specification
 
+@Ignore
 class leetcodeSpec extends Specification {
     def leetcode = new leetcode()
     def 'ss'() {

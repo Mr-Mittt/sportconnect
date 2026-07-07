@@ -1,6 +1,12 @@
 package com.sportconnect.auth.controller;
 
-import com.sportconnect.auth.api.dto.*;
+import com.sportconnect.auth.api.dto.AuthResponse;
+import com.sportconnect.auth.api.dto.ForgotPasswordRequest;
+import com.sportconnect.auth.api.dto.LoginRequest;
+import com.sportconnect.auth.api.dto.RefreshTokenRequest;
+import com.sportconnect.auth.api.dto.RegisterRequest;
+import com.sportconnect.auth.api.dto.ResetPasswordRequest;
+import com.sportconnect.auth.api.dto.VerifyEmailRequest;
 import com.sportconnect.auth.api.service.AuthService;
 import com.sportconnect.auth.service.EmailVerificationService;
 import com.sportconnect.auth.service.PasswordResetService;
@@ -8,7 +14,11 @@ import com.sportconnect.common.dto.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 

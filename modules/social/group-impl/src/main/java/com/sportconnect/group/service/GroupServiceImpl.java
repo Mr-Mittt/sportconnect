@@ -2,12 +2,42 @@ package com.sportconnect.group.service;
 
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.NotFoundException;
-import com.sportconnect.group.api.dto.*;
+import com.sportconnect.group.api.dto.CreateGroupRequest;
+import com.sportconnect.group.api.dto.CreateInvitationRequest;
+import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
+import com.sportconnect.group.api.dto.GroupInfoResponse;
+import com.sportconnect.group.api.dto.GroupInvitationResponse;
+import com.sportconnect.group.api.dto.GroupMemberResponse;
+import com.sportconnect.group.api.dto.GroupResponse;
+import com.sportconnect.group.api.dto.GroupSearchResponse;
+import com.sportconnect.group.api.dto.GroupSettingsResponse;
+import com.sportconnect.group.api.dto.JoinRequestResponse;
+import com.sportconnect.group.api.dto.PinnedPostResponse;
+import com.sportconnect.group.api.dto.UpdateGroupRequest;
+import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import com.sportconnect.group.api.service.GroupService;
-import com.sportconnect.group.entity.*;
-import com.sportconnect.group.repository.*;
-import com.sportconnect.user.entity.User;
-import com.sportconnect.user.repository.UserRepository;
+import com.sportconnect.group.entity.Group;
+import com.sportconnect.group.entity.GroupInvitation;
+import com.sportconnect.group.entity.GroupJoinRequest;
+import com.sportconnect.group.entity.GroupMember;
+import com.sportconnect.group.entity.GroupPinnedPost;
+import com.sportconnect.group.entity.GroupRole;
+import com.sportconnect.group.entity.GroupSettings;
+import com.sportconnect.group.repository.GroupInvitationRepository;
+import com.sportconnect.group.repository.GroupJoinRequestRepository;
+import com.sportconnect.group.repository.GroupMemberRepository;
+import com.sportconnect.group.repository.GroupPinnedPostRepository;
+import com.sportconnect.group.repository.GroupRepository;
+import com.sportconnect.group.repository.GroupRoleRepository;
+import com.sportconnect.group.repository.GroupSettingsRepository;
+import com.sportconnect.social.post.api.dto.PostResponse;
+import com.sportconnect.social.post.api.dto.PostType;
+import com.sportconnect.social.post.api.service.PostService;
+import com.sportconnect.sport.api.dto.UserSportProfileResponse;
+import com.sportconnect.sport.api.service.UserSportProfileService;
+import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.service.UserFriendService;
+import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -16,7 +46,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -28,7 +64,12 @@ public class GroupServiceImpl implements GroupService {
     private final GroupJoinRequestRepository joinRequestRepository;
     private final GroupSettingsRepository groupSettingsRepository;
     private final GroupRoleRepository groupRoleRepository;
-    private final UserRepository userRepository;
+    private final UserService userService;
+    private final UserFriendService userFriendService;
+    private final UserSportProfileService userSportProfileService;
+    private final PostService postService;
+    private final GroupPinnedPostRepository pinnedPostRepository;
+    private final GroupInvitationRepository invitationRepository;
 
     @Override
     @Transactional
@@ -38,8 +79,14 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Group name already exists");
         }
 
+        // Validate creator has a sport profile for the requested sport
+        if (!userSportProfileService.hasProfileForSport(userId, request.getSportId())) {
+            throw new BadRequestException("You must have a sport profile for this sport to create a group");
+        }
+
         // Create group
         Group group = Group.builder()
+                .sportId(request.getSportId())
                 .groupName(request.getGroupName())
                 .description(request.getDescription())
                 .avatarUrl(request.getAvatarUrl())
@@ -84,26 +131,115 @@ public class GroupServiceImpl implements GroupService {
         Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
                 .orElseThrow(() -> new NotFoundException("Group not found"));
 
-        return mapToGroupResponse(group, currentUserId);
+        GroupResponse response = mapToGroupResponse(group, currentUserId);
+
+        List<PostResponse> pinnedPosts = pinnedPostRepository
+                .findTop3ByGroupIdOrderByPinnedAtDesc(groupId)
+                .stream()
+                .map(pin -> {
+                    try {
+                        return postService.getPostById(pin.getPostId(), currentUserId);
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+
+        response.setPinnedPosts(pinnedPosts);
+        return response;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flow: fetches the membership page (already filtered to active groups at the query
+     * level, via {@code findByUserIdAndGroupIsActiveTrue}), then does exactly 3 more flat batched
+     * lookups regardless of page size — group + member-count ({@code findGroupsWithMemberCounts},
+     * a same-domain JOIN), creator names (cross-domain {@code UserService.getUsersByIds}), and
+     * role names ({@code groupRoleRepository.findAllById}, using role ids already present on the
+     * page's {@code GroupMember} rows — no extra per-user membership lookup needed). This
+     * replaced a prior per-page-item N+1 (5 queries per item) — see A8 in
+     * {@code BACKLOG_MVP.md}.
+     */
     @Override
     @Transactional(readOnly = true)
     public Page<GroupResponse> getUserGroups(UUID userId, Pageable pageable) {
-        Page<GroupMember> memberships = groupMemberRepository.findByUserId(userId, pageable);
-        
+        Page<GroupMember> memberships = groupMemberRepository.findByUserIdAndGroupIsActiveTrue(userId, pageable);
+
+        List<Long> groupIds = memberships.getContent().stream()
+                .map(GroupMember::getGroupId)
+                .distinct()
+                .collect(Collectors.toList());
+        List<Object[]> groupRows = groupIds.isEmpty()
+                ? List.of()
+                : groupRepository.findGroupsWithMemberCounts(groupIds);
+        Map<Long, Group> groupsById = groupRows.stream()
+                .collect(Collectors.toMap(row -> ((Group) row[0]).getId(), row -> (Group) row[0]));
+        Map<Long, Long> memberCountsById = groupRows.stream()
+                .collect(Collectors.toMap(row -> ((Group) row[0]).getId(), row -> ((Number) row[1]).longValue()));
+
+        List<UUID> creatorIds = groupsById.values().stream()
+                .map(Group::getCreatedBy)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<UUID, UserResponse> creatorsById = creatorIds.isEmpty() ? Map.of() : userService.getUsersByIds(creatorIds);
+
+        List<Integer> roleIds = memberships.getContent().stream()
+                .map(GroupMember::getRoleId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Integer, GroupRole> rolesById = roleIds.isEmpty()
+                ? Map.of()
+                : groupRoleRepository.findAllById(roleIds).stream()
+                        .collect(Collectors.toMap(GroupRole::getId, r -> r));
+
         return memberships.map(membership -> {
-            Group group = groupRepository.findById(membership.getGroupId())
-                    .orElseThrow(() -> new NotFoundException("Group not found"));
-            return mapToGroupResponse(group, userId);
+            Group group = groupsById.get(membership.getGroupId());
+            return mapToGroupResponse(group, creatorsById, memberCountsById, rolesById, membership.getRoleId());
         });
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<GroupResponse> getPublicGroups(Pageable pageable) {
-        return groupRepository.findByIsActiveTrueAndIsPrivateFalse(pageable)
-                .map(group -> mapToGroupResponse(group, null));
+    public Page<GroupSearchResponse> getPublicGroups(UUID currentUserId, Long sportId, String keyword, Pageable pageable) {
+        Page<Object[]> rawPage = currentUserId != null
+                ? groupRepository.searchPublicGroupsWithCounts(currentUserId, sportId, keyword, pageable)
+                : groupRepository.searchPublicGroupsAnon(sportId, keyword, pageable);
+
+        if (rawPage.isEmpty()) {
+            return org.springframework.data.domain.Page.empty(pageable);
+        }
+
+        Set<UUID> creatorIds = rawPage.getContent().stream()
+                .map(row -> ((Group) row[0]).getCreatedBy())
+                .collect(Collectors.toSet());
+        Map<UUID, String> creatorNames = userService.getUsersByIds(new ArrayList<>(creatorIds)).values().stream()
+                .collect(Collectors.toMap(UserResponse::getId, UserResponse::getFullName));
+
+        List<GroupSearchResponse> sorted = rawPage.getContent().stream()
+                .map(row -> {
+                    Group g = (Group) row[0];
+                    int memberCount = ((Number) row[1]).intValue();
+                    boolean isMember = currentUserId != null && ((Number) row[2]).longValue() > 0;
+                    return GroupSearchResponse.builder()
+                            .id(g.getId())
+                            .sportId(g.getSportId())
+                            .groupName(g.getGroupName())
+                            .description(g.getDescription())
+                            .avatarUrl(g.getAvatarUrl())
+                            .memberCount(memberCount)
+                            .createdByFullName(creatorNames.getOrDefault(g.getCreatedBy(), "Unknown User"))
+                            .isMember(isMember)
+                            .build();
+                })
+                .sorted(Comparator
+                        .<GroupSearchResponse, Boolean>comparing(r -> !r.getIsMember())
+                        .thenComparing(r -> r.getIsMember() ? r.getGroupName() : "")
+                        .thenComparing(Comparator.comparingInt(GroupSearchResponse::getMemberCount).reversed()))
+                .collect(Collectors.toList());
+
+        return new org.springframework.data.domain.PageImpl<>(sorted, pageable, rawPage.getTotalElements());
     }
 
     @Override
@@ -139,6 +275,14 @@ public class GroupServiceImpl implements GroupService {
 
         if (request.getIsPrivate() != null) {
             group.setIsPrivate(request.getIsPrivate());
+        }
+
+        if (request.getRules() != null) {
+            group.setRules(request.getRules());
+        }
+
+        if (request.getSchedule() != null) {
+            group.setSchedule(request.getSchedule());
         }
 
         group = groupRepository.save(group);
@@ -264,8 +408,24 @@ public class GroupServiceImpl implements GroupService {
             throw new NotFoundException("Group not found");
         }
 
-        return groupMemberRepository.findByGroupId(groupId, pageable)
-                .map(this::mapToGroupMemberResponse);
+        Page<GroupMember> membersPage = groupMemberRepository.findByGroupId(groupId, pageable);
+
+        List<UUID> userIds = membersPage.getContent().stream()
+                .map(GroupMember::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<UUID, UserResponse> usersById = userIds.isEmpty() ? Map.of() : userService.getUsersByIds(userIds);
+
+        List<Integer> roleIds = membersPage.getContent().stream()
+                .map(GroupMember::getRoleId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Integer, GroupRole> rolesById = roleIds.isEmpty()
+                ? Map.of()
+                : groupRoleRepository.findAllById(roleIds).stream()
+                        .collect(Collectors.toMap(GroupRole::getId, r -> r));
+
+        return membersPage.map(member -> mapToGroupMemberResponse(member, usersById, rolesById));
     }
 
     @Override
@@ -351,7 +511,12 @@ public class GroupServiceImpl implements GroupService {
         joinRequest = joinRequestRepository.save(joinRequest);
         log.info("Created join request {} for group {} by user {}", joinRequest.getId(), group.getId(), userId);
 
-        return mapToJoinRequestResponse(joinRequest);
+        Group requestGroup = groupRepository.findById(joinRequest.getGroupId()).orElse(null);
+        Map<Long, Group> groupsById = requestGroup != null
+                ? Map.of(requestGroup.getId(), requestGroup)
+                : Map.of();
+        Map<UUID, UserResponse> usersById = userService.getUsersByIds(List.of(userId));
+        return mapToJoinRequestResponse(joinRequest, groupsById, usersById);
     }
 
     @Override
@@ -429,15 +594,54 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Only group owner or admin can view join requests");
         }
 
-        return joinRequestRepository.findPendingRequestsByGroupId(groupId, pageable)
-                .map(this::mapToJoinRequestResponse);
+        Page<GroupJoinRequest> requestsPage = joinRequestRepository.findPendingRequestsByGroupId(groupId, pageable);
+        return mapJoinRequestsPage(requestsPage);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<JoinRequestResponse> getUserJoinRequests(UUID userId, Pageable pageable) {
-        return joinRequestRepository.findByUserIdAndStatus(userId, "pending", pageable)
-                .map(this::mapToJoinRequestResponse);
+        Page<GroupJoinRequest> requestsPage = joinRequestRepository.findByUserIdAndStatus(userId, "pending", pageable);
+        return mapJoinRequestsPage(requestsPage);
+    }
+
+    @Override
+    @Transactional
+    public void cancelJoinRequest(Long requestId, UUID callerId) {
+        GroupJoinRequest joinRequest = joinRequestRepository.findById(requestId)
+                .orElseThrow(() -> new NotFoundException("Join request not found"));
+
+        if (!joinRequest.getUserId().equals(callerId)) {
+            throw new BadRequestException("You can only cancel your own request");
+        }
+
+        Group group = groupRepository.findById(joinRequest.getGroupId())
+                .orElseThrow(() -> new NotFoundException("Group not found"));
+        if (!Boolean.TRUE.equals(group.getIsActive())) {
+            throw new BadRequestException("Group no longer exists");
+        }
+
+        if (!"pending".equals(joinRequest.getStatus())) {
+            throw new BadRequestException("Request is not pending");
+        }
+
+        joinRequestRepository.deleteById(requestId);
+        log.info("Cancelled join request {} by user {}", requestId, callerId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public GroupInfoResponse getGroupInfo(Long groupId) {
+        Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
+                .orElseThrow(() -> new NotFoundException("Group not found"));
+
+        return GroupInfoResponse.builder()
+                .groupId(group.getId())
+                .groupName(group.getGroupName())
+                .rules(group.getRules())
+                .schedule(group.getSchedule())
+                .updatedAt(group.getUpdatedAt())
+                .build();
     }
 
     @Override
@@ -547,10 +751,327 @@ public class GroupServiceImpl implements GroupService {
                 .orElse(null);
     }
 
+    // Feed helpers
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> getGroupIdsBySportProfiles(UUID userId) {
+        List<Long> sportIds = userSportProfileService.getUserProfiles(userId).stream()
+                .map(UserSportProfileResponse::getSportId)
+                .filter(id -> id != null)
+                .collect(Collectors.toList());
+        if (sportIds.isEmpty()) {
+            return List.of();
+        }
+        return groupRepository.findGroupIdsByUserAndSportIds(userId, sportIds);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> getGroupIdsForMember(UUID userId) {
+        return groupMemberRepository.findByUserId(userId).stream()
+                .map(GroupMember::getGroupId)
+                .collect(Collectors.toList());
+    }
+
+    // Pinned Posts
+
+    @Override
+    @Transactional
+    public PinnedPostResponse pinPost(Long groupId, UUID userId, Long postId) {
+        if (!groupRepository.existsById(groupId)) {
+            throw new NotFoundException("Group not found");
+        }
+
+        if (!canManageMembers(groupId, userId)) {
+            throw new BadRequestException("Only group owner or admin can pin posts");
+        }
+
+        long pinCount = pinnedPostRepository.countByGroupId(groupId);
+        if (pinCount >= 10) {
+            throw new BadRequestException("Pin limit reached (max 10). Unpin a post before pinning a new one.");
+        }
+
+        if (pinnedPostRepository.existsByGroupIdAndPostId(groupId, postId)) {
+            throw new BadRequestException("Post is already pinned");
+        }
+
+        PostResponse post = postService.getPostById(postId, userId);
+        if (post == null) {
+            throw new NotFoundException("Post not found");
+        }
+        if (!groupId.equals(post.getGroupId())) {
+            throw new BadRequestException("Post does not belong to this group");
+        }
+        if (PostType.GROUP_POST != post.getPostType()) {
+            throw new BadRequestException("Only GROUP_POST posts can be pinned");
+        }
+
+        GroupPinnedPost pin = GroupPinnedPost.builder()
+                .groupId(groupId)
+                .postId(postId)
+                .pinnedBy(userId)
+                .build();
+        pin = pinnedPostRepository.save(pin);
+
+        log.info("Post {} pinned in group {} by user {}", postId, groupId, userId);
+
+        return PinnedPostResponse.builder()
+                .postId(pin.getPostId())
+                .pinnedBy(pin.getPinnedBy())
+                .pinnedAt(pin.getPinnedAt())
+                .post(post)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public void unpinPost(Long groupId, UUID userId, Long postId) {
+        if (!groupRepository.existsById(groupId)) {
+            throw new NotFoundException("Group not found");
+        }
+
+        if (!canManageMembers(groupId, userId)) {
+            throw new BadRequestException("Only group owner or admin can unpin posts");
+        }
+
+        pinnedPostRepository.deleteByGroupIdAndPostId(groupId, postId);
+        log.info("Post {} unpinned from group {} by user {}", postId, groupId, userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PinnedPostResponse> getPinnedPosts(Long groupId, UUID currentUserId) {
+        if (!groupRepository.existsById(groupId)) {
+            throw new NotFoundException("Group not found");
+        }
+
+        if (!isGroupMember(groupId, currentUserId)) {
+            throw new BadRequestException("Only group members can view pinned posts");
+        }
+
+        return pinnedPostRepository.findByGroupIdOrderByPinnedAtDesc(groupId)
+                .stream()
+                .map(pin -> {
+                    try {
+                        PostResponse post = postService.getPostById(pin.getPostId(), currentUserId);
+                        return PinnedPostResponse.builder()
+                                .postId(pin.getPostId())
+                                .pinnedBy(pin.getPinnedBy())
+                                .pinnedAt(pin.getPinnedAt())
+                                .post(post)
+                                .build();
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    // Invitations
+
+    @Override
+    @Transactional
+    public GroupInvitationResponse createInvitation(Long groupId, UUID inviterId, CreateInvitationRequest request) {
+        Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
+                .orElseThrow(() -> new NotFoundException("Group not found"));
+
+        if (!isGroupMember(groupId, inviterId)) {
+            throw new BadRequestException("Only group members can send invitations");
+        }
+
+        GroupSettings settings = groupSettingsRepository.findByGroupId(groupId)
+                .orElseThrow(() -> new NotFoundException("Group settings not found"));
+        if (!Boolean.TRUE.equals(settings.getAllowMemberInvites())) {
+            throw new BadRequestException("Member invitations are not allowed in this group");
+        }
+
+        UUID inviteeId = request.getInviteeId();
+
+        if (groupMemberRepository.existsByGroupIdAndUserId(groupId, inviteeId)) {
+            throw new BadRequestException("User is already a member of this group");
+        }
+
+        if (!userFriendService.areFriends(inviterId, inviteeId)) {
+            throw new BadRequestException("You can only invite your friends");
+        }
+
+        boolean alreadyInvited = invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(
+                groupId, inviteeId, List.of("pending_owner", "pending_user"));
+        if (alreadyInvited) {
+            GroupInvitation existing = invitationRepository
+                    .findByGroupIdAndInviteeIdAndStatusIn(groupId, inviteeId, List.of("pending_owner", "pending_user"))
+                    .orElseThrow();
+            return mapToGroupInvitationResponse(existing, group.getGroupName(),
+                    userService.getUsersByIds(List.of(existing.getInviterId(), existing.getInviteeId())));
+        }
+
+        GroupInvitation invitation = GroupInvitation.builder()
+                .groupId(groupId)
+                .inviterId(inviterId)
+                .inviteeId(inviteeId)
+                .status("pending_owner")
+                .build();
+        invitation = invitationRepository.save(invitation);
+
+        log.info("Invitation created for user {} in group {} by member {}", inviteeId, groupId, inviterId);
+        return mapToGroupInvitationResponse(invitation, group.getGroupName(),
+                userService.getUsersByIds(List.of(invitation.getInviterId(), invitation.getInviteeId())));
+    }
+
+    @Override
+    @Transactional
+    public void approveInvitation(Long invitationId, UUID ownerId) {
+        GroupInvitation invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+
+        if (!canManageMembers(invitation.getGroupId(), ownerId)) {
+            throw new BadRequestException("Only group owner or admin can approve invitations");
+        }
+        if (!"pending_owner".equals(invitation.getStatus())) {
+            throw new BadRequestException("Invitation is not pending owner approval");
+        }
+
+        invitation.setStatus("pending_user");
+        invitation.setReviewedBy(ownerId);
+        invitation.setReviewedAt(LocalDateTime.now());
+        invitationRepository.save(invitation);
+
+        // TODO: notify — send in-app notification to invitee (pending ADR.md#in-app-notification)
+
+        log.info("Invitation {} approved by {}", invitationId, ownerId);
+    }
+
+    @Override
+    @Transactional
+    public void declineInvitation(Long invitationId, UUID ownerId) {
+        GroupInvitation invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+
+        if (!canManageMembers(invitation.getGroupId(), ownerId)) {
+            throw new BadRequestException("Only group owner or admin can decline invitations");
+        }
+        if (!"pending_owner".equals(invitation.getStatus())) {
+            throw new BadRequestException("Invitation is not pending owner approval");
+        }
+
+        invitation.setStatus("declined_by_owner");
+        invitation.setReviewedBy(ownerId);
+        invitation.setReviewedAt(LocalDateTime.now());
+        invitationRepository.save(invitation);
+
+        log.info("Invitation {} declined by owner {}", invitationId, ownerId);
+    }
+
+    @Override
+    @Transactional
+    public void acceptInvitation(Long invitationId, UUID inviteeId) {
+        GroupInvitation invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+
+        if (!inviteeId.equals(invitation.getInviteeId())) {
+            throw new BadRequestException("Only the invited user can accept this invitation");
+        }
+        if (!"pending_user".equals(invitation.getStatus())) {
+            throw new BadRequestException("Invitation is not pending your response");
+        }
+
+        GroupRole memberRole = groupRoleRepository.findByRoleName("group_member")
+                .orElseThrow(() -> new NotFoundException("Group member role not found"));
+
+        GroupMember member = GroupMember.builder()
+                .groupId(invitation.getGroupId())
+                .userId(inviteeId)
+                .roleId(memberRole.getId())
+                .build();
+        groupMemberRepository.save(member);
+
+        invitation.setStatus("accepted");
+        invitationRepository.save(invitation);
+
+        log.info("Invitation {} accepted by user {}", invitationId, inviteeId);
+    }
+
+    @Override
+    @Transactional
+    public void rejectInvitation(Long invitationId, UUID inviteeId) {
+        GroupInvitation invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+
+        if (!inviteeId.equals(invitation.getInviteeId())) {
+            throw new BadRequestException("Only the invited user can reject this invitation");
+        }
+        if (!"pending_user".equals(invitation.getStatus())) {
+            throw new BadRequestException("Invitation is not pending your response");
+        }
+
+        invitation.setStatus("declined_by_user");
+        invitationRepository.save(invitation);
+
+        log.info("Invitation {} rejected by user {}", invitationId, inviteeId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<GroupInvitationResponse> getGroupInvitations(Long groupId, UUID ownerId, Pageable pageable) {
+        if (!groupRepository.existsById(groupId)) {
+            throw new NotFoundException("Group not found");
+        }
+        if (!canManageMembers(groupId, ownerId)) {
+            throw new BadRequestException("Only group owner or admin can view invitations");
+        }
+        String groupName = groupRepository.findById(groupId).map(Group::getGroupName).orElse("Unknown Group");
+        Page<GroupInvitation> invitationsPage =
+                invitationRepository.findByGroupIdAndStatus(groupId, "pending_owner", pageable);
+        Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(invitationsPage.getContent());
+        return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, groupName, usersById));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<GroupInvitationResponse> getUserPendingInvitations(UUID userId, Pageable pageable) {
+        Page<GroupInvitation> invitationsPage =
+                invitationRepository.findByInviteeIdAndStatus(userId, "pending_user", pageable);
+
+        List<Long> groupIds = invitationsPage.getContent().stream()
+                .map(GroupInvitation::getGroupId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, String> groupNamesById = groupIds.isEmpty()
+                ? Map.of()
+                : groupRepository.findAllById(groupIds).stream()
+                        .collect(Collectors.toMap(Group::getId, Group::getGroupName));
+
+        Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(invitationsPage.getContent());
+
+        return invitationsPage.map(inv -> {
+            String groupName = groupNamesById.getOrDefault(inv.getGroupId(), "Unknown Group");
+            return mapToGroupInvitationResponse(inv, groupName, usersById);
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<GroupInvitationResponse> getMemberSentInvitations(Long groupId, UUID inviterId, Pageable pageable) {
+        if (!groupRepository.existsById(groupId)) {
+            throw new NotFoundException("Group not found");
+        }
+        if (!isGroupMember(groupId, inviterId)) {
+            throw new BadRequestException("Only group members can view their sent invitations");
+        }
+        String groupName = groupRepository.findById(groupId).map(Group::getGroupName).orElse("Unknown Group");
+        Page<GroupInvitation> invitationsPage =
+                invitationRepository.findByGroupIdAndInviterIdAndStatus(groupId, inviterId, "pending_owner", pageable);
+        Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(invitationsPage.getContent());
+        return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, groupName, usersById));
+    }
+
     // Helper methods
     private GroupResponse mapToGroupResponse(Group group, UUID currentUserId) {
-        String createdByFullName = userRepository.findById(group.getCreatedBy())
-                .map(User::getFullName)
+        String createdByFullName = userService.getUsersByIds(List.of(group.getCreatedBy())).values().stream()
+                .findFirst()
+                .map(UserResponse::getFullName)
                 .orElse("Unknown User");
 
         long memberCount = groupMemberRepository.countByGroupId(group.getId());
@@ -559,6 +1080,7 @@ public class GroupServiceImpl implements GroupService {
 
         return GroupResponse.builder()
                 .id(group.getId())
+                .sportId(group.getSportId())
                 .groupName(group.getGroupName())
                 .description(group.getDescription())
                 .avatarUrl(group.getAvatarUrl())
@@ -574,17 +1096,45 @@ public class GroupServiceImpl implements GroupService {
                 .build();
     }
 
-    private GroupMemberResponse mapToGroupMemberResponse(GroupMember member) {
-        String userFullName = userRepository.findById(member.getUserId())
-                .map(User::getFullName)
-                .orElse("Unknown User");
+    private GroupResponse mapToGroupResponse(Group group,
+                                              Map<UUID, UserResponse> creatorsById,
+                                              Map<Long, Long> memberCountsById,
+                                              Map<Integer, GroupRole> rolesById,
+                                              Integer currentUserRoleId) {
+        UserResponse creator = creatorsById.get(group.getCreatedBy());
+        String createdByFullName = creator != null ? creator.getFullName() : "Unknown User";
 
-        String userAvatarUrl = userRepository.findById(member.getUserId())
-                .map(User::getAvatarUrl)
-                .orElse(null);
+        long memberCount = memberCountsById.getOrDefault(group.getId(), 0L);
 
-        GroupRole role = groupRoleRepository.findById(member.getRoleId())
-                .orElse(null);
+        GroupRole role = currentUserRoleId != null ? rolesById.get(currentUserRoleId) : null;
+        String currentUserRole = role != null ? role.getRoleName() : null;
+
+        return GroupResponse.builder()
+                .id(group.getId())
+                .sportId(group.getSportId())
+                .groupName(group.getGroupName())
+                .description(group.getDescription())
+                .avatarUrl(group.getAvatarUrl())
+                .coverUrl(group.getCoverUrl())
+                .isPrivate(group.getIsPrivate())
+                .isActive(group.getIsActive())
+                .createdBy(group.getCreatedBy())
+                .createdByFullName(createdByFullName)
+                .memberCount((int) memberCount)
+                .currentUserRole(currentUserRole)
+                .createdAt(group.getCreatedAt())
+                .updatedAt(group.getUpdatedAt())
+                .build();
+    }
+
+    private GroupMemberResponse mapToGroupMemberResponse(GroupMember member,
+                                                          Map<UUID, UserResponse> usersById,
+                                                          Map<Integer, GroupRole> rolesById) {
+        UserResponse memberUser = usersById.get(member.getUserId());
+        String userFullName = memberUser != null ? memberUser.getFullName() : "Unknown User";
+        String userAvatarUrl = memberUser != null ? memberUser.getAvatarUrl() : null;
+
+        GroupRole role = rolesById.get(member.getRoleId());
 
         return GroupMemberResponse.builder()
                 .id(member.getId())
@@ -599,24 +1149,46 @@ public class GroupServiceImpl implements GroupService {
                 .build();
     }
 
-    private JoinRequestResponse mapToJoinRequestResponse(GroupJoinRequest request) {
-        String groupName = groupRepository.findById(request.getGroupId())
-                .map(Group::getGroupName)
-                .orElse("Unknown Group");
+    private Page<JoinRequestResponse> mapJoinRequestsPage(Page<GroupJoinRequest> requestsPage) {
+        List<Long> groupIds = requestsPage.getContent().stream()
+                .map(GroupJoinRequest::getGroupId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, Group> groupsById = groupIds.isEmpty()
+                ? Map.of()
+                : groupRepository.findAllById(groupIds).stream()
+                        .collect(Collectors.toMap(Group::getId, g -> g));
 
-        String userFullName = userRepository.findById(request.getUserId())
-                .map(User::getFullName)
-                .orElse("Unknown User");
+        List<UUID> userIds = new ArrayList<>();
+        for (GroupJoinRequest request : requestsPage.getContent()) {
+            userIds.add(request.getUserId());
+            if (request.getReviewedBy() != null) {
+                userIds.add(request.getReviewedBy());
+            }
+        }
+        List<UUID> distinctUserIds = userIds.stream().distinct().collect(Collectors.toList());
+        Map<UUID, UserResponse> usersById = distinctUserIds.isEmpty()
+                ? Map.of()
+                : userService.getUsersByIds(distinctUserIds);
 
-        String userAvatarUrl = userRepository.findById(request.getUserId())
-                .map(User::getAvatarUrl)
-                .orElse(null);
+        return requestsPage.map(request -> mapToJoinRequestResponse(request, groupsById, usersById));
+    }
 
-        String reviewedByFullName = request.getReviewedBy() != null
-                ? userRepository.findById(request.getReviewedBy())
-                        .map(User::getFullName)
-                        .orElse("Unknown User")
-                : null;
+    private JoinRequestResponse mapToJoinRequestResponse(GroupJoinRequest request,
+                                                          Map<Long, Group> groupsById,
+                                                          Map<UUID, UserResponse> usersById) {
+        Group group = groupsById.get(request.getGroupId());
+        String groupName = group != null ? group.getGroupName() : "Unknown Group";
+
+        UserResponse requestUser = usersById.get(request.getUserId());
+        String userFullName = requestUser != null ? requestUser.getFullName() : "Unknown User";
+        String userAvatarUrl = requestUser != null ? requestUser.getAvatarUrl() : null;
+
+        String reviewedByFullName = null;
+        if (request.getReviewedBy() != null) {
+            UserResponse reviewer = usersById.get(request.getReviewedBy());
+            reviewedByFullName = reviewer != null ? reviewer.getFullName() : "Unknown User";
+        }
 
         return JoinRequestResponse.builder()
                 .id(request.getId())
@@ -632,6 +1204,39 @@ public class GroupServiceImpl implements GroupService {
                 .reviewedAt(request.getReviewedAt())
                 .createdAt(request.getCreatedAt())
                 .updatedAt(request.getUpdatedAt())
+                .build();
+    }
+
+    private Map<UUID, UserResponse> buildInviterInviteeUserMap(List<GroupInvitation> invitations) {
+        List<UUID> userIds = new ArrayList<>();
+        for (GroupInvitation invitation : invitations) {
+            userIds.add(invitation.getInviterId());
+            userIds.add(invitation.getInviteeId());
+        }
+        List<UUID> distinctUserIds = userIds.stream().distinct().collect(Collectors.toList());
+        return distinctUserIds.isEmpty() ? Map.of() : userService.getUsersByIds(distinctUserIds);
+    }
+
+    private GroupInvitationResponse mapToGroupInvitationResponse(GroupInvitation invitation, String groupName,
+                                                                  Map<UUID, UserResponse> usersById) {
+        UserResponse inviter = usersById.get(invitation.getInviterId());
+        UserResponse invitee = usersById.get(invitation.getInviteeId());
+        String inviterFullName = inviter != null ? inviter.getFullName() : "Unknown User";
+        String inviteeFullName = invitee != null ? invitee.getFullName() : "Unknown User";
+
+        return GroupInvitationResponse.builder()
+                .id(invitation.getId())
+                .groupId(invitation.getGroupId())
+                .groupName(groupName)
+                .inviterId(invitation.getInviterId())
+                .inviterFullName(inviterFullName)
+                .inviteeId(invitation.getInviteeId())
+                .inviteeFullName(inviteeFullName)
+                .status(invitation.getStatus())
+                .reviewedBy(invitation.getReviewedBy())
+                .reviewedAt(invitation.getReviewedAt())
+                .createdAt(invitation.getCreatedAt())
+                .updatedAt(invitation.getUpdatedAt())
                 .build();
     }
 

@@ -8,6 +8,12 @@ group = 'com.sportconnect'
 version = '0.0.1-SNAPSHOT'
 
 subprojects {
+    // The client is a pnpm/Vite project (see client/build.gradle) — none of
+    // the Java/Spring configuration below applies to it
+    if (project.name == 'client') {
+        return
+    }
+
     apply plugin: 'java'
     
     group = 'com.sportconnect'
@@ -28,13 +34,11 @@ subprojects {
     }
     
     // Apply Spring Boot dependency management to all modules
-    if (project.name != 'client') {
-        apply plugin: 'io.spring.dependency-management'
-        
-        dependencyManagement {
-            imports {
-                mavenBom "org.springframework.boot:spring-boot-dependencies:3.2.0"
-            }
+    apply plugin: 'io.spring.dependency-management'
+
+    dependencyManagement {
+        imports {
+            mavenBom "org.springframework.boot:spring-boot-dependencies:3.2.0"
         }
     }
 }
@@ -51,19 +55,4 @@ build {
 task bootRun {
     dependsOn ':server:bootRun'
     description = 'Start the Spring Boot server'
-}
-
-task startClient {
-    dependsOn ':client:start'
-    description = 'Start the React client'
-}
-
-task startAll {
-    description = 'Start both server and client applications (run separately)'
-    doLast {
-        println 'To start both applications:'
-        println '  Server: ./gradlew :server:bootRun'
-        println '  Client: ./gradlew :client:start'
-        println 'Run these in separate terminal windows'
-    }
 }

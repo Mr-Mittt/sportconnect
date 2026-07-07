@@ -1,6 +1,13 @@
 package com.sportconnect.integration;
 
-import com.sportconnect.group.api.dto.*;
+import com.sportconnect.group.api.dto.CreateGroupRequest;
+import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
+import com.sportconnect.group.api.dto.GroupMemberResponse;
+import com.sportconnect.group.api.dto.GroupResponse;
+import com.sportconnect.group.api.dto.GroupSettingsResponse;
+import com.sportconnect.group.api.dto.JoinRequestResponse;
+import com.sportconnect.group.api.dto.UpdateGroupRequest;
+import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import com.sportconnect.group.api.service.GroupService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,11 +21,19 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class GroupControllerTest extends BaseIT {
 
@@ -151,9 +166,19 @@ class GroupControllerTest extends BaseIT {
     @WithMockUser(roles = "USER")
     void getPublicGroups_Success() throws Exception {
         // Arrange
-        Page<GroupResponse> page = new PageImpl<>(List.of(groupResponse), 
-                org.springframework.data.domain.PageRequest.of(0, 10), 1);
-        when(groupService.getPublicGroups(any())).thenReturn(page);
+        // Signature grew to (viewerId, sportId, search, pageable) → Page<GroupSearchResponse>
+        // in the group-spaces work
+        com.sportconnect.group.api.dto.GroupSearchResponse searchResponse =
+                com.sportconnect.group.api.dto.GroupSearchResponse.builder()
+                        .id(1L)
+                        .groupName("Test Group")
+                        .memberCount(1)
+                        .isMember(false)
+                        .build();
+        Page<com.sportconnect.group.api.dto.GroupSearchResponse> page =
+                new PageImpl<>(List.of(searchResponse),
+                        org.springframework.data.domain.PageRequest.of(0, 10), 1);
+        when(groupService.getPublicGroups(any(), any(), any(), any())).thenReturn(page);
 
         // Act & Assert
         mockMvc.perform(get("/api/groups/public")
@@ -163,7 +188,7 @@ class GroupControllerTest extends BaseIT {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].groupName").value("Test Group"));
 
-        verify(groupService).getPublicGroups(any());
+        verify(groupService).getPublicGroups(any(), any(), any(), any());
     }
 
     @Test

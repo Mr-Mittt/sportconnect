@@ -43,6 +43,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/sports/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/users/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/hashtags/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/posts/hashtag/**").permitAll()
 
                         // Static resources (images, etc.)
                         .requestMatchers("/images/**").permitAll()

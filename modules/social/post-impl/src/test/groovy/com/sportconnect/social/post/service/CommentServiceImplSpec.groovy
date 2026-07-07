@@ -1,18 +1,24 @@
 package com.sportconnect.social.post.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.social.post.api.dto.CommentResponse
 import com.sportconnect.social.post.api.dto.CreateCommentRequest
 import com.sportconnect.social.post.entity.Comment
 import com.sportconnect.social.post.entity.CommentLike
+import com.sportconnect.social.post.entity.Post
 import com.sportconnect.social.post.repository.CommentLikeRepository
 import com.sportconnect.social.post.repository.CommentRepository
 import com.sportconnect.social.post.repository.PostRepository
-import com.sportconnect.user.entity.User
-import com.sportconnect.user.repository.UserRepository
+import com.sportconnect.user.api.dto.UserResponse
+import com.sportconnect.user.api.service.UserService
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.redis.core.StringRedisTemplate
+import org.springframework.data.redis.core.ValueOperations
+import org.springframework.data.redis.core.ZSetOperations
+import org.springframework.data.redis.core.script.RedisScript
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -23,15 +29,26 @@ class CommentServiceImplSpec extends Specification {
     CommentRepository commentRepository = Mock()
     CommentLikeRepository commentLikeRepository = Mock()
     PostRepository postRepository = Mock()
-    UserRepository userRepository = Mock()
+    UserService userService = Mock()
+    StringRedisTemplate stringRedisTemplate = Mock()
+    ValueOperations<String, String> valueOps = Mock()
+    ZSetOperations<String, String> zSetOps = Mock()
+    ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules()
 
     @Subject
     CommentServiceImpl commentService = new CommentServiceImpl(
             commentRepository,
             commentLikeRepository,
             postRepository,
-            userRepository
+            userService,
+            stringRedisTemplate,
+            objectMapper
     )
+
+    def setup() {
+        stringRedisTemplate.opsForValue() >> valueOps
+        stringRedisTemplate.opsForZSet() >> zSetOps
+    }
 
     UUID userId = UUID.randomUUID()
     Long postId = 1L
@@ -56,7 +73,7 @@ class CommentServiceImplSpec extends Specification {
                 .build()
 
         and: "a user"
-        def user = User.builder()
+        def user = UserResponse.builder()
                 .id(userId)
                 .firstName("Test")
                 .lastName("User")
@@ -68,10 +85,18 @@ class CommentServiceImplSpec extends Specification {
         then: "post exists"
         1 * postRepository.existsById(postId) >> true
         1 * commentRepository.save(_ as Comment) >> savedComment
-        1 * commentLikeRepository.countByCommentId(commentId) >> 0L
+        1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":comments"])
+        // countByCommentId called once from mapToResponse, once from buildPreviewResponse in addToPreviewCache
+        2 * commentLikeRepository.countByCommentId(commentId) >> 0L
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
-        1 * userRepository.findById(userId) >> Optional.of(user)
-        1 * commentRepository.findByParentCommentIdAndIsActiveTrueOrderByCreatedAtAsc(commentId) >> []
+        // mapToResponse resolves the author via the batched getUsersByIds (single-id list at this call site);
+        // buildPreviewResponse (addToPreviewCache) still uses the single-item getUserById, unchanged
+        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        1 * userService.getUserById(userId) >> user
+        // a freshly created comment can never have replies yet — createComment passes an empty
+        // replies map directly instead of querying
+        0 * commentRepository.findByParentCommentIdAndIsActiveTrueOrderByCreatedAtAsc(_)
+        0 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc(_)
 
         and: "result is correct"
         result != null
@@ -116,7 +141,7 @@ class CommentServiceImplSpec extends Specification {
                 .build()
 
         and: "a user"
-        def user = User.builder()
+        def user = UserResponse.builder()
                 .id(userId)
                 .firstName("Test")
                 .lastName("User")
@@ -129,10 +154,13 @@ class CommentServiceImplSpec extends Specification {
         1 * postRepository.existsById(postId) >> true
         1 * commentRepository.existsById(parentCommentId) >> true
         1 * commentRepository.save(_ as Comment) >> savedComment
+        1 * stringRedisTemplate.execute(_ as RedisScript, ["comment:" + parentCommentId + ":replies"])
         1 * commentLikeRepository.countByCommentId(commentId) >> 0L
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
-        1 * userRepository.findById(userId) >> Optional.of(user)
-        1 * commentRepository.findByParentCommentIdAndIsActiveTrueOrderByCreatedAtAsc(commentId) >> []
+        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        0 * userService.getUserById(_)
+        0 * commentRepository.findByParentCommentIdAndIsActiveTrueOrderByCreatedAtAsc(_)
+        0 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc(_)
 
         and: "result has parent comment id"
         result.parentCommentId == parentCommentId
@@ -158,7 +186,10 @@ class CommentServiceImplSpec extends Specification {
     }
 
     def "getPostComments should return paginated comments"() {
-        given: "post comments"
+        given: "an active post"
+        def post = Post.builder().id(postId).isActive(true).build()
+
+        and: "post comments"
         def comment = Comment.builder()
                 .id(commentId)
                 .postId(postId)
@@ -173,7 +204,7 @@ class CommentServiceImplSpec extends Specification {
         def page = new PageImpl<>([comment])
 
         and: "a user"
-        def user = User.builder()
+        def user = UserResponse.builder()
                 .id(userId)
                 .firstName("Test")
                 .lastName("User")
@@ -182,17 +213,35 @@ class CommentServiceImplSpec extends Specification {
         when: "getting post comments"
         def result = commentService.getPostComments(postId, userId, pageable)
 
-        then: "comments are retrieved"
+        then: "post is active"
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+
+        and: "comments are retrieved"
         1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> page
         1 * commentLikeRepository.countByCommentId(commentId) >> 3L
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> true
-        1 * userRepository.findById(userId) >> Optional.of(user)
-        1 * commentRepository.findByParentCommentIdAndIsActiveTrueOrderByCreatedAtAsc(commentId) >> []
+        1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([commentId]) >> []
+        1 * userService.getUsersByIds([userId]) >> [(userId): user]
 
         and: "result is correct"
         result.content.size() == 1
         result.content[0].likeCount == 3L
+        result.content[0].replyCount == 0L
         result.content[0].isLikedByCurrentUser == true
+    }
+
+    def "getPostComments should throw NotFoundException when post is soft-deleted"() {
+        given: "a pageable"
+        def pageable = PageRequest.of(0, 20)
+
+        when: "getting comments for a soft-deleted post"
+        commentService.getPostComments(postId, userId, pageable)
+
+        then: "post not found as active"
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.empty()
+
+        and: "exception is thrown"
+        thrown(NotFoundException)
     }
 
     def "deleteComment should soft delete comment when user is owner"() {
@@ -211,6 +260,7 @@ class CommentServiceImplSpec extends Specification {
         then: "comment is soft deleted"
         1 * commentRepository.findById(commentId) >> Optional.of(comment)
         1 * commentRepository.save({ Comment c -> !c.isActive }) >> comment
+        1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":comments"])
     }
 
     def "deleteComment should throw NotFoundException when comment not found"() {
@@ -252,6 +302,7 @@ class CommentServiceImplSpec extends Specification {
         1 * commentRepository.existsById(commentId) >> true
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
         1 * commentLikeRepository.save(_ as CommentLike) >> new CommentLike()
+        1 * stringRedisTemplate.execute(_ as RedisScript, ["comment:" + commentId + ":likes"])
     }
 
     def "likeComment should throw NotFoundException when comment does not exist"() {
@@ -284,6 +335,7 @@ class CommentServiceImplSpec extends Specification {
         then: "like is removed"
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> true
         1 * commentLikeRepository.deleteByCommentIdAndUserId(commentId, userId)
+        1 * stringRedisTemplate.execute(_ as RedisScript, ["comment:" + commentId + ":likes"])
     }
 
     def "unlikeComment should throw BadRequestException when not liked"() {
@@ -297,8 +349,11 @@ class CommentServiceImplSpec extends Specification {
         thrown(BadRequestException)
     }
 
-    def "mapToResponse should include nested replies"() {
-        given: "a comment with replies"
+    def "getPostComments should include nested replies, batched not per-comment"() {
+        given: "a root comment with one reply"
+        def pageable = PageRequest.of(0, 20)
+        def post = Post.builder().id(postId).isActive(true).build()
+
         def parentComment = Comment.builder()
                 .id(1L)
                 .postId(postId)
@@ -320,34 +375,93 @@ class CommentServiceImplSpec extends Specification {
                 .build()
 
         and: "a user"
-        def user = User.builder()
+        def user = UserResponse.builder()
                 .id(userId)
                 .firstName("Test")
                 .lastName("User")
                 .build()
 
-        and: "a create comment request to trigger mapToResponse"
-        def request = CreateCommentRequest.builder()
-                .content("Parent comment")
-                .build()
+        when: "getting post comments"
+        def result = commentService.getPostComments(postId, userId, pageable)
 
-        when: "creating a comment with replies"
-        def result = commentService.createComment(postId, userId, request)
-
-        then: "comment is saved with replies"
-        1 * postRepository.existsById(postId) >> true
-        1 * commentRepository.save(_ as Comment) >> parentComment
+        then: "post is active, root comments and their replies are each fetched once for the whole page"
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([parentComment])
+        1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([1L]) >> [replyComment]
+        // both parent and reply are authored by the same user here — one batched call covers both
+        1 * userService.getUsersByIds([userId]) >> [(userId): user]
         1 * commentLikeRepository.countByCommentId(1L) >> 0L
         1 * commentLikeRepository.existsByCommentIdAndUserId(1L, userId) >> false
-        1 * userRepository.findById(userId) >> Optional.of(user)
-        1 * commentRepository.findByParentCommentIdAndIsActiveTrueOrderByCreatedAtAsc(1L) >> [replyComment]
         1 * commentLikeRepository.countByCommentId(2L) >> 0L
         1 * commentLikeRepository.existsByCommentIdAndUserId(2L, userId) >> false
-        1 * userRepository.findById(userId) >> Optional.of(user)
-        1 * commentRepository.findByParentCommentIdAndIsActiveTrueOrderByCreatedAtAsc(2L) >> []
 
-        and: "result includes replies"
-        result.replies.size() == 1
-        result.replies[0].content == "Reply comment"
+        and: "result includes the nested reply"
+        result.content.size() == 1
+        result.content[0].replies.size() == 1
+        result.content[0].replies[0].content == "Reply comment"
+    }
+
+    def "mapToResponse reads replyCount from Redis when cached"() {
+        given: "a comment with cached reply count"
+        def pageable = PageRequest.of(0, 20)
+        def post = Post.builder().id(postId).isActive(true).build()
+        def comment = Comment.builder()
+                .id(commentId)
+                .postId(postId)
+                .userId(userId)
+                .content("Test comment")
+                .parentCommentId(null)
+                .isActive(true)
+                .createdAt(LocalDateTime.now())
+                .build()
+        def user = UserResponse.builder().id(userId).firstName("Test").lastName("User").build()
+
+        when:
+        def result = commentService.getPostComments(postId, userId, pageable)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([comment])
+        valueOps.get("comment:" + commentId + ":likes") >> "4"
+        valueOps.get("comment:" + commentId + ":replies") >> "6"
+        0 * commentLikeRepository.countByCommentId(_)
+        0 * commentRepository.countByParentCommentIdAndIsActiveTrue(_)
+        1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
+        1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([commentId]) >> []
+        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        result.content[0].likeCount == 4L
+        result.content[0].replyCount == 6L
+    }
+
+    def "getPostComments falls back to Unknown User when the comment author no longer exists"() {
+        given: "an active post and a comment authored by a since-deleted user"
+        def pageable = PageRequest.of(0, 20)
+        def post = Post.builder().id(postId).isActive(true).build()
+        def comment = Comment.builder()
+                .id(commentId)
+                .postId(postId)
+                .userId(userId)
+                .content("Test comment")
+                .parentCommentId(null)
+                .isActive(true)
+                .createdAt(LocalDateTime.now())
+                .build()
+
+        when: "getting post comments"
+        def result = commentService.getPostComments(postId, userId, pageable)
+
+        then: "post is active"
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+
+        and: "comments are retrieved, but the author id resolves to nothing (deleted/missing user)"
+        1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([comment])
+        1 * commentLikeRepository.countByCommentId(commentId) >> 0L
+        1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
+        1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([commentId]) >> []
+        // getUsersByIds never throws — a missing id is simply absent from the returned map
+        1 * userService.getUsersByIds([userId]) >> [:]
+
+        and: "the fallback name is used instead of a 500"
+        result.content[0].userFullName == "Unknown User"
     }
 }

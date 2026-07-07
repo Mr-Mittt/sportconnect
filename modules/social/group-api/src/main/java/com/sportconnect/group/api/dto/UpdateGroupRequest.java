@@ -21,4 +21,10 @@ public class UpdateGroupRequest {
     private String avatarUrl;
     private String coverUrl;
     private Boolean isPrivate;
+
+    @Size(max = 10000, message = "Rules cannot exceed 10000 characters")
+    private String rules;
+
+    @Size(max = 5000, message = "Schedule cannot exceed 5000 characters")
+    private String schedule;
 }

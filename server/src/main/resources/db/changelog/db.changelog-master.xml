@@ -25,4 +25,40 @@
     <!-- Sport Thumbnails and Metadata -->
     <include file="db/changelog/changes/V013__update_sports_with_thumbnails_and_metadata.sql" relativeToChangelogFile="false"/>
 
+    <!-- Group Info Fields -->
+    <include file="db/changelog/changes/V014__add_rules_and_schedule_to_groups.sql" relativeToChangelogFile="false"/>
+
+    <!-- Group–Sport association -->
+    <include file="db/changelog/changes/V015__add_sport_id_to_groups.sql" relativeToChangelogFile="false"/>
+
+    <!-- B3: Three post types -->
+    <include file="db/changelog/changes/V016__add_post_type_to_posts.sql" relativeToChangelogFile="false"/>
+
+    <!-- B6a: Pinned posts -->
+    <include file="db/changelog/changes/V017__create_group_pinned_posts.sql" relativeToChangelogFile="false"/>
+
+    <!-- B1: Member invitation flow -->
+    <include file="db/changelog/changes/V018__create_group_invitations.sql" relativeToChangelogFile="false"/>
+
+    <!-- U1: Friendship system -->
+    <include file="db/changelog/changes/V019__create_friendship_tables.sql" relativeToChangelogFile="false"/>
+
+    <!-- B2: Personalized feed -->
+    <include file="db/changelog/changes/V020__add_last_interaction_at_to_posts.sql" relativeToChangelogFile="false"/>
+
+    <!-- B4: Redis comment preview cache -->
+    <include file="db/changelog/changes/V021__add_comment_indexes.sql" relativeToChangelogFile="false"/>
+
+    <!-- B5: Hashtag prefix search index -->
+    <include file="db/changelog/changes/V022__add_hashtag_pattern_index.sql" relativeToChangelogFile="false"/>
+
+    <!-- B6: GROUP_BROADCAST management -->
+    <include file="db/changelog/changes/V023__add_broadcast_end_time_to_posts.sql" relativeToChangelogFile="false"/>
+
+    <!-- U7: General physical profile stats -->
+    <include file="db/changelog/changes/V024__add_physical_stats_to_users.sql" relativeToChangelogFile="false"/>
+
+    <!-- A3: Flexible per-sport attributes -->
+    <include file="db/changelog/changes/V025__add_attributes_to_user_sport_profiles.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

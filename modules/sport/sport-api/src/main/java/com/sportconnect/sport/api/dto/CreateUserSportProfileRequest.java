@@ -8,6 +8,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Map;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -29,4 +31,11 @@ public class CreateUserSportProfileRequest {
 
     @Size(max = 500, message = "Bio must not exceed 500 characters")
     private String bio;
+
+    /**
+     * Sport-specific attributes (e.g. dominant hand, stroke style) that don't fit a fixed schema —
+     * no per-key validation here, the frontend owns which keys make sense for which sport. On
+     * update, these are merged into existing attributes rather than replacing them wholesale.
+     */
+    private Map<String, Object> attributes;
 }

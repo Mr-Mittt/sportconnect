@@ -1,14 +1,23 @@
 package com.sportconnect.user.service
 
+import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
+import com.sportconnect.user.api.dto.FriendRequestResponse
 import com.sportconnect.user.api.dto.LocationRequest
 import com.sportconnect.user.api.dto.UpdateProfileRequest
+import com.sportconnect.user.api.dto.UserFriendshipStatus
+import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.entity.Role
 import com.sportconnect.user.entity.User
+import com.sportconnect.user.repository.RoleRepository
 import com.sportconnect.user.repository.UserRepository
 import org.locationtech.jts.geom.Coordinate
 import org.locationtech.jts.geom.GeometryFactory
 import org.locationtech.jts.geom.PrecisionModel
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.PageRequest
+import org.springframework.security.crypto.password.PasswordEncoder
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -17,10 +26,13 @@ import java.time.LocalDate
 class UserServiceImplSpec extends Specification {
 
     UserRepository userRepository = Mock()
+    RoleRepository roleRepository = Mock()
+    PasswordEncoder passwordEncoder = Mock()
+    UserFriendService userFriendService = Mock()
     GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326)
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository)
+    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService)
 
     def "getUserById should return user when found and active"() {
         given:
@@ -73,7 +85,7 @@ class UserServiceImplSpec extends Specification {
         def result = userService.getUserByEmail(email)
 
         then:
-        1 * userRepository.findByEmail(email) >> Optional.of(user)
+        1 * userRepository.findByEmailAndIsActiveTrue(email) >> Optional.of(user)
         result.email == email
     }
 
@@ -85,7 +97,20 @@ class UserServiceImplSpec extends Specification {
         userService.getUserByEmail(email)
 
         then:
-        1 * userRepository.findByEmail(email) >> Optional.empty()
+        1 * userRepository.findByEmailAndIsActiveTrue(email) >> Optional.empty()
+        thrown(ResourceNotFoundException)
+    }
+
+    def "getUserByEmail should throw exception when user is soft-deleted"() {
+        given:
+        def email = "deleted@example.com"
+
+        when:
+        userService.getUserByEmail(email)
+
+        then:
+        1 * userRepository.findByEmailAndIsActiveTrue(email) >> Optional.empty()
+        0 * userRepository.findByEmail(_)
         thrown(ResourceNotFoundException)
     }
 
@@ -104,8 +129,21 @@ class UserServiceImplSpec extends Specification {
         def result = userService.getUserByUsername(username)
 
         then:
-        1 * userRepository.findByUsername(username) >> Optional.of(user)
+        1 * userRepository.findByUsernameAndIsActiveTrue(username) >> Optional.of(user)
         result.username == username
+    }
+
+    def "getUserByUsername should throw exception when user is soft-deleted"() {
+        given:
+        def username = "deleteduser"
+
+        when:
+        userService.getUserByUsername(username)
+
+        then:
+        1 * userRepository.findByUsernameAndIsActiveTrue(username) >> Optional.empty()
+        0 * userRepository.findByUsername(_)
+        thrown(ResourceNotFoundException)
     }
 
     def "updateProfile should update all fields when provided"() {
@@ -135,7 +173,7 @@ class UserServiceImplSpec extends Specification {
                 .build()
 
         when:
-        def result = userService.updateProfile(userId, request)
+        def result = userService.updateProfile(userId, userId, request)
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
@@ -151,6 +189,120 @@ class UserServiceImplSpec extends Specification {
             return savedUser
         }
         result.firstName == "New"
+    }
+
+    def "updateProfile should update physical stats when provided within bounds"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        def request = UpdateProfileRequest.builder()
+                .heightCm(180)
+                .weightKg(new BigDecimal("75.50"))
+                .shoeSizeCm(27)
+                .build()
+
+        when:
+        def result = userService.updateProfile(userId, userId, request)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * userRepository.save(_) >> { User savedUser ->
+            assert savedUser.heightCm == 180
+            assert savedUser.weightKg == new BigDecimal("75.50")
+            assert savedUser.shoeSizeCm == 27
+            return savedUser
+        }
+        result.heightCm == 180
+        result.weightKg == new BigDecimal("75.50")
+        result.shoeSizeCm == 27
+    }
+
+    def "updateProfile leaves physical stats unchanged when omitted"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .heightCm(170)
+                .weightKg(new BigDecimal("65.00"))
+                .shoeSizeCm(25)
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        def request = UpdateProfileRequest.builder().firstName("New").build()
+
+        when:
+        userService.updateProfile(userId, userId, request)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * userRepository.save(_) >> { User savedUser ->
+            assert savedUser.heightCm == 170
+            assert savedUser.weightKg == new BigDecimal("65.00")
+            assert savedUser.shoeSizeCm == 25
+            return savedUser
+        }
+    }
+
+    def "updateProfile throws BadRequestException when heightCm is out of bounds"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def request = UpdateProfileRequest.builder().heightCm(heightValue).build()
+
+        when:
+        userService.updateProfile(userId, userId, request)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        0 * userRepository.save(_)
+        thrown(BadRequestException)
+
+        where:
+        heightValue << [49, 301]
+    }
+
+    def "updateProfile throws BadRequestException when weightKg is out of bounds"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def request = UpdateProfileRequest.builder().weightKg(weightValue).build()
+
+        when:
+        userService.updateProfile(userId, userId, request)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        0 * userRepository.save(_)
+        thrown(BadRequestException)
+
+        where:
+        weightValue << [new BigDecimal("19.99"), new BigDecimal("300.01")]
+    }
+
+    def "updateProfile throws BadRequestException when shoeSizeCm is out of bounds"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def request = UpdateProfileRequest.builder().shoeSizeCm(shoeSizeValue).build()
+
+        when:
+        userService.updateProfile(userId, userId, request)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        0 * userRepository.save(_)
+        thrown(BadRequestException)
+
+        where:
+        shoeSizeValue << [9, 36]
     }
 
     def "updateProfile should update location when provided"() {
@@ -169,7 +321,7 @@ class UserServiceImplSpec extends Specification {
                 .build()
 
         when:
-        userService.updateProfile(userId, request)
+        userService.updateProfile(userId, userId, request)
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
@@ -187,11 +339,26 @@ class UserServiceImplSpec extends Specification {
         def request = new UpdateProfileRequest()
 
         when:
-        userService.updateProfile(userId, request)
+        userService.updateProfile(userId, userId, request)
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.empty()
         thrown(ResourceNotFoundException)
+    }
+
+    def "updateProfile should throw ForbiddenException when caller is not the target user"() {
+        given:
+        def userId = UUID.randomUUID()
+        def callerId = UUID.randomUUID()
+        def request = new UpdateProfileRequest()
+
+        when:
+        userService.updateProfile(userId, callerId, request)
+
+        then:
+        0 * userRepository.findByIdAndIsActiveTrue(_)
+        0 * userRepository.save(_)
+        thrown(ForbiddenException)
     }
 
     def "deleteUser should soft delete user"() {
@@ -301,5 +468,451 @@ class UserServiceImplSpec extends Specification {
         result.location.latitude == 40.7128
         result.location.longitude == -74.0060
         result.roles.contains("USER")
+    }
+
+    def "changePassword updates the hash when currentPassword matches"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .passwordHash("oldHash")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        when:
+        userService.changePassword(userId, "oldRaw", "newRaw12345")
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * passwordEncoder.matches("oldRaw", "oldHash") >> true
+        1 * passwordEncoder.encode("newRaw12345") >> "newHash"
+        1 * userRepository.save({ User u -> u.passwordHash == "newHash" }) >> user
+    }
+
+    def "changePassword throws BadRequestException when currentPassword does not match"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .passwordHash("oldHash")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        when:
+        userService.changePassword(userId, "wrongRaw", "newRaw12345")
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * passwordEncoder.matches("wrongRaw", "oldHash") >> false
+        0 * userRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "changePassword throws ResourceNotFoundException when user not found"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        userService.changePassword(userId, "oldRaw", "newRaw12345")
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.empty()
+        0 * userRepository.save(_)
+        thrown(ResourceNotFoundException)
+    }
+
+    def "changePassword allows newPassword identical to currentPassword"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .passwordHash("oldHash")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        when:
+        userService.changePassword(userId, "samePassword", "samePassword")
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * passwordEncoder.matches("samePassword", "oldHash") >> true
+        1 * passwordEncoder.encode("samePassword") >> "sameHash"
+        1 * userRepository.save(_) >> user
+    }
+
+    // ── createUser ────────────────────────────────────────────────────────────
+
+    def "createUser assigns the default USER role and saves the new user"() {
+        given:
+        def userRole = new Role(id: 1, name: "USER")
+        def savedUser = User.builder()
+                .id(UUID.randomUUID())
+                .email("new@example.com")
+                .passwordHash("hashedPw")
+                .firstName("New")
+                .lastName("User")
+                .phoneNumber("+1234567890")
+                .isEmailVerified(false)
+                .isActive(true)
+                .roles([userRole] as Set)
+                .build()
+
+        when:
+        def result = userService.createUser("new@example.com", "hashedPw", "New", "User", "+1234567890")
+
+        then:
+        1 * roleRepository.findByName(Role.USER) >> Optional.of(userRole)
+        1 * userRepository.save({ User u ->
+            u.email == "new@example.com" &&
+            u.passwordHash == "hashedPw" &&
+            u.isActive == true &&
+            u.isEmailVerified == false &&
+            u.roles.contains(userRole)
+        }) >> savedUser
+        result.email == "new@example.com"
+        result.roles.contains("USER")
+    }
+
+    def "createUser throws RuntimeException when the USER role is missing"() {
+        when:
+        userService.createUser("new@example.com", "hashedPw", "New", "User", "+1234567890")
+
+        then:
+        1 * roleRepository.findByName(Role.USER) >> Optional.empty()
+        0 * userRepository.save(_)
+        thrown(RuntimeException)
+    }
+
+    // ── updateUserPassword ───────────────────────────────────────────────────
+
+    def "updateUserPassword persists the given hash as-is without re-hashing"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .passwordHash("oldHash")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        when:
+        userService.updateUserPassword(userId, "alreadyHashedValue")
+
+        then:
+        1 * userRepository.findById(userId) >> Optional.of(user)
+        1 * userRepository.save({ User u -> u.passwordHash == "alreadyHashedValue" }) >> user
+        0 * passwordEncoder.encode(_)
+    }
+
+    def "updateUserPassword throws ResourceNotFoundException when user not found"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        userService.updateUserPassword(userId, "alreadyHashedValue")
+
+        then:
+        1 * userRepository.findById(userId) >> Optional.empty()
+        thrown(ResourceNotFoundException)
+    }
+
+    // ── getUserRoles ─────────────────────────────────────────────────────────
+
+    def "getUserRoles returns the correct set of role names"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .isActive(true)
+                .roles([new Role(id: 1, name: "USER"), new Role(id: 2, name: "ADMIN")] as Set)
+                .build()
+
+        when:
+        def result = userService.getUserRoles(userId)
+
+        then:
+        1 * userRepository.findById(userId) >> Optional.of(user)
+        result == ["USER", "ADMIN"] as Set
+    }
+
+    def "getUserRoles throws ResourceNotFoundException when user not found"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        userService.getUserRoles(userId)
+
+        then:
+        1 * userRepository.findById(userId) >> Optional.empty()
+        thrown(ResourceNotFoundException)
+    }
+
+    // ── verifyPassword ───────────────────────────────────────────────────────
+
+    def "verifyPassword returns true when password matches an active user"() {
+        given:
+        def email = "test@example.com"
+        def user = User.builder()
+                .id(UUID.randomUUID())
+                .email(email)
+                .passwordHash("storedHash")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        when:
+        def result = userService.verifyPassword(email, "rawPassword")
+
+        then:
+        1 * userRepository.findByEmail(email) >> Optional.of(user)
+        1 * passwordEncoder.matches("rawPassword", "storedHash") >> true
+        result == true
+    }
+
+    def "verifyPassword returns false when password does not match"() {
+        given:
+        def email = "test@example.com"
+        def user = User.builder()
+                .id(UUID.randomUUID())
+                .email(email)
+                .passwordHash("storedHash")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        when:
+        def result = userService.verifyPassword(email, "wrongPassword")
+
+        then:
+        1 * userRepository.findByEmail(email) >> Optional.of(user)
+        1 * passwordEncoder.matches("wrongPassword", "storedHash") >> false
+        result == false
+    }
+
+    def "verifyPassword returns false for an inactive (soft-deleted) user without checking the hash"() {
+        given:
+        def email = "deleted@example.com"
+        def user = User.builder()
+                .id(UUID.randomUUID())
+                .email(email)
+                .passwordHash("storedHash")
+                .isActive(false)
+                .roles([] as Set)
+                .build()
+
+        when:
+        def result = userService.verifyPassword(email, "rawPassword")
+
+        then:
+        1 * userRepository.findByEmail(email) >> Optional.of(user)
+        0 * passwordEncoder.matches(_, _)
+        result == false
+    }
+
+    def "verifyPassword returns false when user does not exist"() {
+        given:
+        def email = "notfound@example.com"
+
+        when:
+        def result = userService.verifyPassword(email, "rawPassword")
+
+        then:
+        1 * userRepository.findByEmail(email) >> Optional.empty()
+        0 * passwordEncoder.matches(_, _)
+        result == false
+    }
+
+    // ── updateLastLogin ──────────────────────────────────────────────────────
+
+    def "updateLastLogin sets lastLoginAt to now"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        when:
+        userService.updateLastLogin(userId)
+
+        then:
+        1 * userRepository.findById(userId) >> Optional.of(user)
+        1 * userRepository.save({ User u -> u.lastLoginAt != null }) >> user
+    }
+
+    def "updateLastLogin throws ResourceNotFoundException when user not found"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        userService.updateLastLogin(userId)
+
+        then:
+        1 * userRepository.findById(userId) >> Optional.empty()
+        thrown(ResourceNotFoundException)
+    }
+
+    // ── searchUsers ──────────────────────────────────────────────────────────
+
+    private User searchResultUser(UUID id, String firstName, String lastName, String username) {
+        User.builder()
+                .id(id)
+                .email("${username}@example.com")
+                .firstName(firstName)
+                .lastName(lastName)
+                .username(username)
+                .city("Hanoi")
+                .country("Vietnam")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+    }
+
+    def "searchUsers returns matches with NONE friendship status by default"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def otherId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+        def page = new PageImpl<>([searchResultUser(otherId, "Jane", "Doe", "janedoe")])
+
+        when:
+        def result = userService.searchUsers(callerId, "jane", pageable)
+
+        then:
+        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userFriendService.getAcceptedFriendIds(callerId) >> []
+        1 * userFriendService.getPendingSentRequests(callerId) >> []
+        1 * userFriendService.getPendingReceivedRequests(callerId) >> []
+        result.content.size() == 1
+        result.content[0].fullName == "Jane Doe"
+        result.content[0].username == "janedoe"
+        result.content[0].city == "Hanoi"
+        result.content[0].friendshipStatus == UserFriendshipStatus.NONE
+    }
+
+    def "searchUsers marks accepted friends as FRIENDS"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def friendId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+        def page = new PageImpl<>([searchResultUser(friendId, "Jane", "Doe", "janedoe")])
+
+        when:
+        def result = userService.searchUsers(callerId, "jane", pageable)
+
+        then:
+        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userFriendService.getAcceptedFriendIds(callerId) >> [friendId]
+        1 * userFriendService.getPendingSentRequests(callerId) >> []
+        1 * userFriendService.getPendingReceivedRequests(callerId) >> []
+        result.content[0].friendshipStatus == UserFriendshipStatus.FRIENDS
+    }
+
+    def "searchUsers marks a pending sent request as PENDING_SENT"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def targetId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+        def page = new PageImpl<>([searchResultUser(targetId, "Jane", "Doe", "janedoe")])
+        def sentRequest = FriendRequestResponse.builder().senderId(callerId).receiverId(targetId).build()
+
+        when:
+        def result = userService.searchUsers(callerId, "jane", pageable)
+
+        then:
+        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userFriendService.getAcceptedFriendIds(callerId) >> []
+        1 * userFriendService.getPendingSentRequests(callerId) >> [sentRequest]
+        1 * userFriendService.getPendingReceivedRequests(callerId) >> []
+        result.content[0].friendshipStatus == UserFriendshipStatus.PENDING_SENT
+    }
+
+    def "searchUsers marks a pending received request as PENDING_RECEIVED"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def targetId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+        def page = new PageImpl<>([searchResultUser(targetId, "Jane", "Doe", "janedoe")])
+        def receivedRequest = FriendRequestResponse.builder().senderId(targetId).receiverId(callerId).build()
+
+        when:
+        def result = userService.searchUsers(callerId, "jane", pageable)
+
+        then:
+        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userFriendService.getAcceptedFriendIds(callerId) >> []
+        1 * userFriendService.getPendingSentRequests(callerId) >> []
+        1 * userFriendService.getPendingReceivedRequests(callerId) >> [receivedRequest]
+        result.content[0].friendshipStatus == UserFriendshipStatus.PENDING_RECEIVED
+    }
+
+    def "searchUsers falls back to username for fullName when names are missing"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def otherId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+        def page = new PageImpl<>([searchResultUser(otherId, null, null, "janedoe")])
+
+        when:
+        def result = userService.searchUsers(callerId, "jane", pageable)
+
+        then:
+        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userFriendService.getAcceptedFriendIds(callerId) >> []
+        1 * userFriendService.getPendingSentRequests(callerId) >> []
+        1 * userFriendService.getPendingReceivedRequests(callerId) >> []
+        result.content[0].fullName == "janedoe"
+    }
+
+    def "searchUsers throws BadRequestException when keyword is blank"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        userService.searchUsers(callerId, "  ", pageable)
+
+        then:
+        0 * userRepository.searchActiveUsers(_, _, _)
+        thrown(BadRequestException)
+    }
+
+    def "searchUsers throws BadRequestException when keyword is shorter than 2 characters"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        userService.searchUsers(callerId, "j", pageable)
+
+        then:
+        0 * userRepository.searchActiveUsers(_, _, _)
+        thrown(BadRequestException)
+    }
+
+    def "searchUsers trims the keyword before querying"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+        def page = new PageImpl<>([])
+
+        when:
+        userService.searchUsers(callerId, "  jane  ", pageable)
+
+        then:
+        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userFriendService.getAcceptedFriendIds(callerId) >> []
+        1 * userFriendService.getPendingSentRequests(callerId) >> []
+        1 * userFriendService.getPendingReceivedRequests(callerId) >> []
     }
 }

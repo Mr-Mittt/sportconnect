@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Data
@@ -42,4 +43,10 @@ public class UpdateProfileRequest {
     private String city;
 
     private String country;
+
+    private Integer heightCm;
+
+    private BigDecimal weightKg;
+
+    private Integer shoeSizeCm;
 }

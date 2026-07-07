@@ -13,7 +13,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
@@ -79,8 +87,9 @@ public class SportController {
     @PostMapping("/profiles")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<UserSportProfileResponse>> createProfile(
-            @RequestParam UUID userId,
+            @AuthenticationPrincipal String userIdStr,
             @Valid @RequestBody CreateUserSportProfileRequest request) {
+        UUID userId = UUID.fromString(userIdStr);
         UserSportProfileResponse response = profileService.createProfile(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Sport profile created successfully", response));
@@ -110,15 +119,20 @@ public class SportController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<UserSportProfileResponse>> updateProfile(
             @PathVariable Long profileId,
+            @AuthenticationPrincipal String userIdStr,
             @Valid @RequestBody CreateUserSportProfileRequest request) {
-        UserSportProfileResponse response = profileService.updateProfile(profileId, request);
+        UUID callerId = UUID.fromString(userIdStr);
+        UserSportProfileResponse response = profileService.updateProfile(profileId, callerId, request);
         return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", response));
     }
 
     @DeleteMapping("/profiles/{profileId}")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<ApiResponse<Void>> deleteProfile(@PathVariable Long profileId) {
-        profileService.deleteProfile(profileId);
+    public ResponseEntity<ApiResponse<Void>> deleteProfile(
+            @PathVariable Long profileId,
+            @AuthenticationPrincipal String userIdStr) {
+        UUID callerId = UUID.fromString(userIdStr);
+        profileService.deleteProfile(profileId, callerId);
         return ResponseEntity.ok(ApiResponse.success("Profile deleted successfully", null));
     }
 }

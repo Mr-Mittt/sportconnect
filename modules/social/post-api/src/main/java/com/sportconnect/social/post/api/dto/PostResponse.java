@@ -19,6 +19,8 @@ public class PostResponse {
     private UUID userId;
     private String userFullName;
     private String userAvatarUrl;
+    private PostType postType;
+    private Long groupId;
     private String content;
     private Double latitude;
     private Double longitude;
@@ -28,10 +30,12 @@ public class PostResponse {
     private String visibility;
     private List<PostMediaResponse> media;
     private List<String> hashtags;
+    private List<CommentResponse> previewComments;
     private Long likeCount;
     private Long commentCount;
     private Long shareCount;
     private Boolean isLikedByCurrentUser;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime broadcastEndTime;
 }

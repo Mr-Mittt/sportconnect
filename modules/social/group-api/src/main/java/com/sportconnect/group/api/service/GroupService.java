@@ -1,9 +1,22 @@
 package com.sportconnect.group.api.service;
 
-import com.sportconnect.group.api.dto.*;
+import com.sportconnect.group.api.dto.CreateGroupRequest;
+import com.sportconnect.group.api.dto.CreateInvitationRequest;
+import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
+import com.sportconnect.group.api.dto.GroupInfoResponse;
+import com.sportconnect.group.api.dto.GroupInvitationResponse;
+import com.sportconnect.group.api.dto.GroupMemberResponse;
+import com.sportconnect.group.api.dto.GroupResponse;
+import com.sportconnect.group.api.dto.GroupSearchResponse;
+import com.sportconnect.group.api.dto.GroupSettingsResponse;
+import com.sportconnect.group.api.dto.JoinRequestResponse;
+import com.sportconnect.group.api.dto.PinnedPostResponse;
+import com.sportconnect.group.api.dto.UpdateGroupRequest;
+import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface GroupService {
@@ -13,9 +26,15 @@ public interface GroupService {
     
     GroupResponse getGroup(Long groupId, UUID currentUserId);
     
+    /**
+     * Returns the groups {@code userId} is a member of. Ordering is whatever {@code pageable}
+     * requests (no default sort applied). Only active (non-deleted) groups are included — a
+     * membership row left over from a since-deleted group is silently excluded rather than
+     * surfaced as an error.
+     */
     Page<GroupResponse> getUserGroups(UUID userId, Pageable pageable);
     
-    Page<GroupResponse> getPublicGroups(Pageable pageable);
+    Page<GroupSearchResponse> getPublicGroups(UUID currentUserId, Long sportId, String keyword, Pageable pageable);
     
     GroupResponse updateGroup(Long groupId, UUID userId, UpdateGroupRequest request);
     
@@ -45,6 +64,11 @@ public interface GroupService {
     
     Page<JoinRequestResponse> getUserJoinRequests(UUID userId, Pageable pageable);
 
+    void cancelJoinRequest(Long requestId, UUID callerId);
+
+    // Group Info
+    GroupInfoResponse getGroupInfo(Long groupId);
+
     // Group Settings
     GroupSettingsResponse getGroupSettings(Long groupId, UUID userId);
     
@@ -60,6 +84,35 @@ public interface GroupService {
     boolean canManageMembers(Long groupId, UUID userId);
     
     boolean canManagePosts(Long groupId, UUID userId);
-    
+
     String getUserRoleInGroup(Long groupId, UUID userId);
+
+    // Pinned Posts
+    PinnedPostResponse pinPost(Long groupId, UUID userId, Long postId);
+
+    void unpinPost(Long groupId, UUID userId, Long postId);
+
+    List<PinnedPostResponse> getPinnedPosts(Long groupId, UUID currentUserId);
+
+    // Feed helpers
+    List<Long> getGroupIdsBySportProfiles(UUID userId);
+
+    List<Long> getGroupIdsForMember(UUID userId);
+
+    // Invitations
+    GroupInvitationResponse createInvitation(Long groupId, UUID inviterId, CreateInvitationRequest request);
+
+    void approveInvitation(Long invitationId, UUID ownerId);
+
+    void declineInvitation(Long invitationId, UUID ownerId);
+
+    void acceptInvitation(Long invitationId, UUID inviteeId);
+
+    void rejectInvitation(Long invitationId, UUID inviteeId);
+
+    Page<GroupInvitationResponse> getGroupInvitations(Long groupId, UUID ownerId, Pageable pageable);
+
+    Page<GroupInvitationResponse> getUserPendingInvitations(UUID userId, Pageable pageable);
+
+    Page<GroupInvitationResponse> getMemberSentInvitations(Long groupId, UUID inviterId, Pageable pageable);
 }

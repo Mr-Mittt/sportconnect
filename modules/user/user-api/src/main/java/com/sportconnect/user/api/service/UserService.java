@@ -2,7 +2,12 @@ package com.sportconnect.user.api.service;
 
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.dto.UserSearchResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -17,6 +22,12 @@ public interface UserService {
     UserResponse getUserById(UUID userId);
 
     /**
+     * Batch lookup by ID. Missing/inactive ids are simply absent from the returned map —
+     * no exception is thrown, mirroring a plain findAllById() semantics.
+     */
+    Map<UUID, UserResponse> getUsersByIds(List<UUID> userIds);
+
+    /**
      * Get user by email
      */
     UserResponse getUserByEmail(String email);
@@ -27,9 +38,9 @@ public interface UserService {
     UserResponse getUserByUsername(String username);
 
     /**
-     * Update user profile
+     * Update user profile. Caller may only update their own profile.
      */
-    UserResponse updateProfile(UUID userId, UpdateProfileRequest request);
+    UserResponse updateProfile(UUID userId, UUID callerId, UpdateProfileRequest request);
 
     /**
      * Soft delete user
@@ -71,4 +82,15 @@ public interface UserService {
      * Update user's last login timestamp
      */
     void updateLastLogin(UUID userId);
+
+    /**
+     * Self-service password change. Verifies currentPassword before hashing and persisting newPassword.
+     */
+    void changePassword(UUID userId, String currentPassword, String newPassword);
+
+    /**
+     * Search other active users by name/username, enriched with the caller's friendship status
+     * toward each result. keyword is required (minimum 2 characters).
+     */
+    Page<UserSearchResponse> searchUsers(UUID callerId, String keyword, Pageable pageable);
 }

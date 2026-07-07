@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -28,6 +29,9 @@ public class UserResponse {
     private String avatarUrl;
     private String coverUrl;
     private LocationResponse location;
+    private Integer heightCm;
+    private BigDecimal weightKg;
+    private Integer shoeSizeCm;
     private Boolean isEmailVerified;
     private Boolean isActive;
     private Set<String> roles;

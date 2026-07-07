@@ -1,7 +1,16 @@
 package com.sportconnect.group.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -32,6 +41,17 @@ public class Group {
 
     @Column(name = "cover_url", length = 500)
     private String coverUrl;
+
+    @Column(columnDefinition = "TEXT")
+    @Builder.Default
+    private String rules = "";
+
+    @Column(columnDefinition = "TEXT")
+    @Builder.Default
+    private String schedule = "";
+
+    @Column(name = "sport_id")
+    private Long sportId;
 
     @Column(name = "is_private")
     @Builder.Default

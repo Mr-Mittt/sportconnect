@@ -23,7 +23,11 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 
     List<GroupMember> findByUserId(UUID userId);
 
-    Page<GroupMember> findByUserId(UUID userId, Pageable pageable);
+    @Query(
+        value = "SELECT gm FROM GroupMember gm, Group g WHERE gm.userId = :userId AND gm.groupId = g.id AND g.isActive = true",
+        countQuery = "SELECT COUNT(gm) FROM GroupMember gm, Group g WHERE gm.userId = :userId AND gm.groupId = g.id AND g.isActive = true"
+    )
+    Page<GroupMember> findByUserIdAndGroupIsActiveTrue(@Param("userId") UUID userId, Pageable pageable);
 
     @Query("SELECT gm FROM GroupMember gm WHERE gm.groupId = :groupId AND gm.roleId = :roleId")
     List<GroupMember> findByGroupIdAndRoleId(@Param("groupId") Long groupId, @Param("roleId") Integer roleId);

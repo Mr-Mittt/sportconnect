@@ -1,14 +1,27 @@
 package com.sportconnect.user.controller;
 
 import com.sportconnect.common.dto.ApiResponse;
+import com.sportconnect.user.api.dto.ChangePasswordRequest;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.dto.UserSearchResponse;
 import com.sportconnect.user.api.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
@@ -18,6 +31,16 @@ import java.util.UUID;
 public class UserController {
 
     private final UserService userService;
+
+    @GetMapping("/search")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Page<UserSearchResponse>>> searchUsers(
+            @RequestParam("q") String keyword,
+            @AuthenticationPrincipal String callerIdStr,
+            @PageableDefault(size = 20) Pageable pageable) {
+        Page<UserSearchResponse> response = userService.searchUsers(UUID.fromString(callerIdStr), keyword, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Search results retrieved successfully", response));
+    }
 
     @GetMapping("/{userId}")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable UUID userId) {
@@ -41,9 +64,19 @@ public class UserController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
             @PathVariable UUID userId,
+            @AuthenticationPrincipal String callerIdStr,
             @Valid @RequestBody UpdateProfileRequest request) {
-        UserResponse response = userService.updateProfile(userId, request);
+        UserResponse response = userService.updateProfile(userId, UUID.fromString(callerIdStr), request);
         return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", response));
+    }
+
+    @PutMapping("/me/password")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @AuthenticationPrincipal String callerIdStr,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        userService.changePassword(UUID.fromString(callerIdStr), request.getCurrentPassword(), request.getNewPassword());
+        return ResponseEntity.ok(ApiResponse.success("Password changed successfully", null));
     }
 
     @DeleteMapping("/{userId}")

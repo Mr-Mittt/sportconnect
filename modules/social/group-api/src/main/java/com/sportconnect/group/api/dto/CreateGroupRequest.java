@@ -1,6 +1,7 @@
 package com.sportconnect.group.api.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,6 +14,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CreateGroupRequest {
     
+    @NotNull(message = "Sport is required")
+    private Long sportId;
+
     @NotBlank(message = "Group name is required")
     @Size(min = 3, max = 100, message = "Group name must be between 3 and 100 characters")
     private String groupName;

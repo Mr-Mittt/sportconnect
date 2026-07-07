@@ -1,7 +1,21 @@
 package com.sportconnect.social.post.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
+import com.sportconnect.social.post.api.dto.PostType;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.locationtech.jts.geom.Point;
@@ -29,6 +43,11 @@ public class Post {
 
     @Column(name = "group_id")
     private Long groupId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "post_type", nullable = false, length = 20)
+    @Builder.Default
+    private PostType postType = PostType.USER_FEED;
 
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
@@ -61,6 +80,12 @@ public class Post {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "last_interaction_at")
+    private LocalDateTime lastInteractionAt;
+
+    @Column(name = "broadcast_end_time")
+    private LocalDateTime broadcastEndTime;
 
     @UpdateTimestamp
     @Column(name = "updated_at")

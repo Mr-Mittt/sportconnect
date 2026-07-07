@@ -12,7 +12,9 @@ import java.util.UUID;
 public interface UserSportProfileService {
 
     /**
-     * Create user sport profile
+     * Create user sport profile. {@code request.getAttributes()} (sport-specific, schema-less data)
+     * is stored as-is if present; rejected with {@code BadRequestException} if its serialized JSON
+     * exceeds ~4KB.
      */
     UserSportProfileResponse createProfile(UUID userId, CreateUserSportProfileRequest request);
 
@@ -32,12 +34,24 @@ public interface UserSportProfileService {
     UserSportProfileResponse getUserProfileForSport(UUID userId, Long sportId);
 
     /**
-     * Update user sport profile
+     * Update user sport profile. Only the profile's owner may update it — throws
+     * {@code ForbiddenException} if {@code callerId} does not match the profile's {@code userId}.
+     *
+     * <p>{@code request.getAttributes()}, if present, is <b>merged</b> into the existing
+     * attributes map rather than replacing it wholesale — a sport-specific form only sends the
+     * keys it cares about and shouldn't wipe out attributes set by a different flow. The merged
+     * result is rejected with {@code BadRequestException} if its serialized JSON exceeds ~4KB.
      */
-    UserSportProfileResponse updateProfile(Long profileId, CreateUserSportProfileRequest request);
+    UserSportProfileResponse updateProfile(Long profileId, UUID callerId, CreateUserSportProfileRequest request);
 
     /**
-     * Delete user sport profile
+     * Soft-delete a user sport profile. Only the profile's owner may delete it — throws
+     * {@code ForbiddenException} if {@code callerId} does not match the profile's {@code userId}.
      */
-    void deleteProfile(Long profileId);
+    void deleteProfile(Long profileId, UUID callerId);
+
+    /**
+     * Check if user has an active profile for a given sport
+     */
+    boolean hasProfileForSport(UUID userId, Long sportId);
 }
