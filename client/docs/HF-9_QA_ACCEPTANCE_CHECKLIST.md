@@ -14,15 +14,14 @@
 | 4 | Empty states: sport with zero posts / zero matches | ✅ | `Feed.test` + `UpcomingMatches.test` empty cases; full-page empty state in the visual baselines. Note: no mock sport is *partially* empty (posts-only or matches-only) — component tests cover the two empties independently |
 | 5 | Responsive at mobile/tablet/desktop | ✅ | HF-8's committed gate (overflow + axe at 375/768/1280, `e2e/flows/a11y.spec.ts`) + 9 visual baselines at the same widths; 9/9 passing |
 | 6 | No hardcoded colors — tokens only | ✅ | HF-10b token audit (zero hex / arbitrary px / off-palette classes in `src/`); only test files changed since. Dark mode: not in MVP scope — tokens make it a theme-block change when scoped |
-| 7 | HF-11's E2E journey passes **in CI** | ⚠️ **CONDITIONAL** | Passes locally (9/9, three runs across HF-11/HF-9). CI has never executed: nothing has been pushed since the workflow was created, and the two-step bootstrap (Linux baselines artifact + required-check setting) is manual. **Tracked as HF-12** |
+| 7 | HF-11's E2E journey passes **in CI** | ✅ **RESOLVED 2026-07-08** | HF-12 executed: first runs caught + fixed a real `.gitignore` bug, Linux baselines swapped in via dispatch artifact, **fully green `client-ci` run merged (PR #2)**. See `HF-12_CI_BOOTSTRAP.md` |
 
-## Notice — what is NOT yet verified
+## Notice — resolved (2026-07-08)
 
-The Home Feed epic is functionally complete and all automated checks pass **locally**. Not yet
-verified: the `client-ci` workflow executing green on GitHub Actions. Until HF-12 is done
-(push → run `update-baselines` dispatch → commit Linux baselines → mark `client-ci / test`
-required → one green PR run), CI protection is configured but unproven. This is the epic's
-release condition.
+Item 7's condition is met: `client-ci` runs green on GitHub Actions (lint/tsc/unit/e2e/visual,
+Linux baselines). One caveat survives: **branch protection is unavailable on the GitHub Free
+plan for private repos**, so the check reports but cannot block — a red `client-ci` is
+merge-blocking by convention until the repo goes public or the plan is upgraded.
 
 ## Epic closeout
 
