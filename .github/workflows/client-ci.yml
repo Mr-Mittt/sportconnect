@@ -1,0 +1,78 @@
+# Client CI — lint, typecheck, unit, e2e (incl. a11y gate), visual regression.
+# HF-10b: make the visual check a *required* status on PRs touching client/**
+# (GitHub → Settings → Branches → require "client-ci / test").
+#
+# Baseline bootstrap (one-time, and after any intended visual change):
+# committed screenshots are OS-specific; CI runs Linux. Run this workflow
+# manually (Actions → client-ci → Run workflow) with update-baselines=true,
+# download the "visual-baselines" artifact, replace
+# client/e2e/visual/__screenshots__/ with its contents, and commit.
+name: client-ci
+
+on:
+  push:
+    branches: [master]
+    paths: ['client/**', '.github/workflows/client-ci.yml']
+  pull_request:
+    paths: ['client/**', '.github/workflows/client-ci.yml']
+  workflow_dispatch:
+    inputs:
+      update-baselines:
+        description: 'Regenerate visual baselines (Linux) and upload as artifact instead of diffing'
+        type: boolean
+        default: false
+
+defaults:
+  run:
+    working-directory: client
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # reads packageManager from client/package.json
+        with:
+          package_json_file: client/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm exec tsc -b
+
+      - run: pnpm test
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - run: pnpm e2e
+
+      - name: Visual regression
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.update-baselines) }}
+        run: pnpm test:visual
+
+      - name: Regenerate visual baselines (bootstrap)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update-baselines }}
+        run: pnpm test:visual --update-snapshots
+
+      - name: Upload regenerated baselines
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update-baselines }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines
+          path: client/e2e/visual/__screenshots__/
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: client/playwright-report/
+          retention-days: 14

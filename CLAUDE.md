@@ -47,15 +47,36 @@ Every new architecture discussion, design decision, implementation summary, or p
 ./gradlew :modules:auth:auth-impl:test --tests "com.sportconnect.auth.service.AuthServiceImplSpec"
 ```
 
-### Frontend (React)
+### Frontend (React — new SportHub client, Vite + pnpm)
 ```bash
 cd client
-npm start       # dev server on :3000, proxied to :8080
-npm test
-npm run build
+pnpm install
+pnpm dev          # Vite dev server on :5173, /api proxied to :8080
+pnpm test         # Vitest unit/component tests
+pnpm lint         # ESLint (incl. jsx-a11y)
+pnpm build        # tsc -b + production build
+pnpm storybook    # Storybook on :6006
+pnpm e2e          # Playwright functional flows
 ```
+Gradle equivalents: `./gradlew :client:buildClient`, `:client:testClient`, `:client:start`.
+Full command + design-token reference: `client/README.md`. Conventions: `client/CLAUDE.md`.
 
 ## Architecture
+
+### Philosophy: Monolith-first, microservice-ready
+
+The current MVP is a monolith. All decisions prioritize simplicity for this monolith, but domain boundaries must stay clean enough to extract into microservices later. Every design discussion and implementation must honor these rules:
+
+- **Cross-domain communication through `-api` interfaces only** — never import a concrete class from another domain's `-impl` module
+- **Cross-domain references use IDs only** — no JPA `@ManyToOne` across domain boundaries (e.g. `Post` stores `userId: Long`, not `User user`)
+- **No shared mutable state between domains**
+- **Service interfaces as contracts** — injecting an interface means a future network transport (Feign, gRPC) is a drop-in swap
+
+### Java code style
+
+- **No wildcard imports** — every import must name the exact class (e.g. `import java.util.List;` not `import java.util.*;`). This applies to all Java files in every module.
+- **Domain-scoped tables** — each domain owns its tables so they can be extracted to a separate schema/service later
+- **No N+1 queries** — never call a repository/service method inside `.map()` over a `Page`/`List`, or inside a `for` loop, to resolve a per-item field. Collect all ids first and batch the lookup (e.g. a `getXByIds(List<UUID>)` returning a `Map<UUID, X>`), then resolve each item from the map. This applies across domain boundaries too — a batch method on a cross-domain `-api` interface is preferred over N calls to its single-item method.
 
 This is a multi-module Gradle monorepo with a Spring Boot backend and React frontend.
 
@@ -83,7 +104,7 @@ modules/
     group-api/
     group-impl/    # Group, GroupMember, GroupRole, GroupSettings entities
 server/            # Main application entry point; depends on all *-impl modules
-client/            # React 18 CRA app (Tailwind CSS)
+client/            # New SportHub client — Vite + React 18 + TS + Tailwind v4 + pnpm (scaffolded by HF-00; old CRA app removed 2026-07-06)
 ```
 
 The `server` module is the Spring Boot assembly point — it holds `SportConnectApplication.java`, `application.yml`, and all Liquibase migration scripts. It imports all `*-impl` modules; the `@SpringBootApplication` scan covers `com.sportconnect` globally.
@@ -96,7 +117,7 @@ Base API path is `/api`. Public endpoints: `/api/auth/**`, `/api/sports/**`, `GE
 
 ### Auth flow
 
-Stateless JWT (JJWT 0.12.x). Access token + refresh token pair. Tokens are stored in localStorage on the client (`accessToken`, `refreshToken`). `client/src/utils/api.js` handles automatic token refresh on 401. Redis is used to store refresh tokens and invalidate them on logout.
+Stateless JWT (JJWT 0.12.x). Access token + refresh token pair. The new client keeps the access token in memory only and expects the refresh token in an httpOnly cookie — the cookie contract is backend ticket A2 in `modules/auth/docs/BACKLOG_MVP.md` (until it ships, the API still returns `refreshToken` in the response body). The old client's localStorage token storage was an XSS exposure and must not be reintroduced.
 
 ### Database
 
@@ -110,4 +131,4 @@ Tests are written with the **Spock Framework** (Groovy), not JUnit. Test files l
 
 ### Frontend
 
-React 18 with React Router v6. `AuthContext` manages auth state. `GroupContext` manages group state. `client/src/utils/api.js` is the central axios instance — always import it instead of using axios directly. The `proxy` in `package.json` forwards all `/api` calls to `http://localhost:8080`.
+The old CRA client (AuthContext/GroupContext, localStorage tokens) was removed on 2026-07-06 for a from-scratch rebuild. The new client's stack (Vite, React 18 + TS strict, Tailwind, shadcn/ui, Zustand + TanStack Query, Vitest, Storybook, Playwright + MSW) and all conventions are defined in `client/CLAUDE.md`; the build order is `client/docs/BACKLOG_MVP.md`.
