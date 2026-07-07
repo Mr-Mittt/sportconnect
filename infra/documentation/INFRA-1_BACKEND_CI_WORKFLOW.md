@@ -76,12 +76,15 @@ workflow file itself, plus `workflow_dispatch` for manual runs. Job: checkout �
 - Confirmed the staged `gradlew` blob has LF line endings (`git show :gradlew | head -1 | od -c`).
 - Reviewed the workflow YAML by hand — no `actionlint` installed in this environment.
 
-## Conditional / not yet verified (HF-12 pattern)
+## Bootstrap status
 
-- **An actual green Actions run on a backend-touching PR** — can only be confirmed once this
-  branch is pushed and a PR opened; not verifiable from this session.
-- **Marking `server-ci / test` as a required check** — manual GitHub-settings step. Per session
-  017's HF-12 finding, branch protection isn't even mechanically available on this repo (GitHub
-  Free + private repo), so this is convention-only regardless, same as `client-ci`.
-
-Both are explicit follow-ups, not claimed as done.
+- **First Actions run: green.** PR #4 (`feature/auth-cookie-refresh-and-server-test-fixes` →
+  `master`) triggered `server-ci` and it passed on the first try — including the integration tests
+  (`GroupControllerTest`, `PostControllerIntegrationTest`), confirming the Testcontainers-managed
+  Redis container (A8) works with zero extra CI wiring on `ubuntu-latest`, as the design predicted.
+  Unlike `client-ci`'s HF-12 bootstrap, no baseline/artifact swap step was needed here — this
+  workflow had no OS-specific state to seed.
+- **Still pending, not mechanically enforceable regardless:** marking `server-ci / test` as a
+  required check. Per session 017's HF-12 finding, branch protection isn't available on this repo
+  (GitHub Free + private repo), so a red `server-ci` blocks merges by convention only, same as
+  `client-ci` — this isn't a gap specific to this ticket, it's a repo-plan constraint.

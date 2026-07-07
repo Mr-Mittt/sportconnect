@@ -51,9 +51,9 @@ Terraform/compose) is what eventually populates `infra/` for real.
 
 | Piece | Status |
 |---|---|
-| `client-ci.yml` | ✅ Exists (HF-10b). **Never executed** — bootstrap tracked as client backlog **HF-12** (push → `update-baselines` dispatch → commit Linux baselines → mark `client-ci / test` required) |
+| `client-ci.yml` | ✅ Exists (HF-10b) and **live/green** — bootstrap closed out via client backlog **HF-12** (Linux baselines committed; red checks block merges by convention only, since branch protection is unavailable on this repo) |
 | PR template | ✅ `.github/PULL_REQUEST_TEMPLATE.md` (HF-10b) |
-| Backend CI | ✅ `server-ci.yml` exists (INFRA-1, 2026-07-08). **Never executed** — no push/PR has triggered it yet, same bootstrap gap `client-ci.yml` had before HF-12. No service containers needed: all integration tests run against H2, and `BaseIT`'s Testcontainers-managed Redis (A8) self-provisions via the Docker daemon already on `ubuntu-latest` runners |
+| Backend CI | ✅ `server-ci.yml` exists (INFRA-1, 2026-07-08) and **green on its first run** (PR #4) — no baseline-bootstrap step needed, unlike `client-ci`. No service containers: all integration tests run against H2, and `BaseIT`'s Testcontainers-managed Redis (A8) self-provisions via the Docker daemon already on `ubuntu-latest` runners |
 | Dev environment compose | ❌ Manual DB/Redis setup; `infra/docker-compose.dev.yml` proposed |
 | Deployment workflow / hosting | ❌ Not scoped; blocked on a hosting decision |
 
