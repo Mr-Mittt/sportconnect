@@ -38,8 +38,8 @@ import com.sportconnect.sport.api.service.UserSportProfileService;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.api.service.UserService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -56,7 +56,6 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class GroupServiceImpl implements GroupService {
 
     private final GroupRepository groupRepository;
@@ -70,6 +69,41 @@ public class GroupServiceImpl implements GroupService {
     private final PostService postService;
     private final GroupPinnedPostRepository pinnedPostRepository;
     private final GroupInvitationRepository invitationRepository;
+
+    /**
+     * Explicit constructor (not {@code @RequiredArgsConstructor}) because {@code postService}
+     * must be {@code @Lazy}: PostServiceImpl depends on GroupService too (membership/permission
+     * checks), so eager construction of both beans forms a cycle Spring refuses to start with by
+     * default. postService is only used here for a handful of pinned-post lookups — a lazy proxy
+     * defers resolving the real PostServiceImpl bean until one of those calls actually happens,
+     * which is well after both beans exist. Relying on Lombok to copy @Lazy onto a generated
+     * constructor parameter is not guaranteed without a lombok.config entry, so this is spelled
+     * out by hand instead.
+     */
+    public GroupServiceImpl(
+            GroupRepository groupRepository,
+            GroupMemberRepository groupMemberRepository,
+            GroupJoinRequestRepository joinRequestRepository,
+            GroupSettingsRepository groupSettingsRepository,
+            GroupRoleRepository groupRoleRepository,
+            UserService userService,
+            UserFriendService userFriendService,
+            UserSportProfileService userSportProfileService,
+            @Lazy PostService postService,
+            GroupPinnedPostRepository pinnedPostRepository,
+            GroupInvitationRepository invitationRepository) {
+        this.groupRepository = groupRepository;
+        this.groupMemberRepository = groupMemberRepository;
+        this.joinRequestRepository = joinRequestRepository;
+        this.groupSettingsRepository = groupSettingsRepository;
+        this.groupRoleRepository = groupRoleRepository;
+        this.userService = userService;
+        this.userFriendService = userFriendService;
+        this.userSportProfileService = userSportProfileService;
+        this.postService = postService;
+        this.pinnedPostRepository = pinnedPostRepository;
+        this.invitationRepository = invitationRepository;
+    }
 
     @Override
     @Transactional
@@ -133,16 +167,12 @@ public class GroupServiceImpl implements GroupService {
 
         GroupResponse response = mapToGroupResponse(group, currentUserId);
 
-        List<PostResponse> pinnedPosts = pinnedPostRepository
-                .findTop3ByGroupIdOrderByPinnedAtDesc(groupId)
-                .stream()
-                .map(pin -> {
-                    try {
-                        return postService.getPostById(pin.getPostId(), currentUserId);
-                    } catch (Exception e) {
-                        return null;
-                    }
-                })
+        List<GroupPinnedPost> topPins = pinnedPostRepository.findTop3ByGroupIdOrderByPinnedAtDesc(groupId);
+        Map<Long, PostResponse> postsByPinnedPostId = postService.getPostsByIds(
+                topPins.stream().map(GroupPinnedPost::getPostId).collect(Collectors.toList()),
+                currentUserId);
+        List<PostResponse> pinnedPosts = topPins.stream()
+                .map(pin -> postsByPinnedPostId.get(pin.getPostId()))
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
 
@@ -850,22 +880,19 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Only group members can view pinned posts");
         }
 
-        return pinnedPostRepository.findByGroupIdOrderByPinnedAtDesc(groupId)
-                .stream()
-                .map(pin -> {
-                    try {
-                        PostResponse post = postService.getPostById(pin.getPostId(), currentUserId);
-                        return PinnedPostResponse.builder()
-                                .postId(pin.getPostId())
-                                .pinnedBy(pin.getPinnedBy())
-                                .pinnedAt(pin.getPinnedAt())
-                                .post(post)
-                                .build();
-                    } catch (Exception e) {
-                        return null;
-                    }
-                })
-                .filter(java.util.Objects::nonNull)
+        List<GroupPinnedPost> pins = pinnedPostRepository.findByGroupIdOrderByPinnedAtDesc(groupId);
+        Map<Long, PostResponse> postsByPinnedPostId = postService.getPostsByIds(
+                pins.stream().map(GroupPinnedPost::getPostId).collect(Collectors.toList()),
+                currentUserId);
+
+        return pins.stream()
+                .filter(pin -> postsByPinnedPostId.containsKey(pin.getPostId()))
+                .map(pin -> PinnedPostResponse.builder()
+                        .postId(pin.getPostId())
+                        .pinnedBy(pin.getPinnedBy())
+                        .pinnedAt(pin.getPinnedAt())
+                        .post(postsByPinnedPostId.get(pin.getPostId()))
+                        .build())
                 .collect(Collectors.toList());
     }
 

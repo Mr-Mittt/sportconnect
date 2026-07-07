@@ -12,7 +12,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 
 import java.util.UUID;
 
@@ -50,6 +49,7 @@ class PostControllerIntegrationTest extends BaseIT {
         user.setIsActive(true);
         User savedUser = userRepository.save(user);
         userId = savedUser.getId();
+        authenticateAs(userId);
     }
 
     @AfterEach
@@ -61,7 +61,6 @@ class PostControllerIntegrationTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void shouldCreatePost() throws Exception {
         CreatePostRequest request = CreatePostRequest.builder()
                 .content("Integration test post")

@@ -32,6 +32,7 @@
 | 11 | A5 | Fix cross-domain violation in CommentServiceImpl (UserRepository/User → UserService) | `DONE` |
 | 12 | A6 | Fix N+1 hashtag lookup in feed mappers | `DONE` |
 | 13 | A7 | Fix N+1 in CommentServiceImpl.getPostComments (cross-domain user lookup + per-comment replies query) | `DONE` |
+| 14 | A8 | `server:test` needs Redis — `PostControllerIntegrationTest.shouldCreatePost` fails without it | `DONE` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
 
@@ -521,5 +522,37 @@ change output, only call counts.
 **Out of scope:** `likeCount`/`replyCount`/`isLikedByCurrentUser` (already addressed or deliberate, see
 above). `buildPreviewResponse` (a separate, single-comment helper used elsewhere, not part of the
 paginated `getPostComments` path) — not touched here unless later found to also be called in a loop.
+
+---
+
+### A8 · `server:test` needs Redis
+**Status:** `DONE` — see `modules/social/post-impl/docs/A8_SERVER_TEST_REDIS_TESTCONTAINERS.md`  
+**Type:** Bug Fix (Test infra)  
+**Scope:** `server/src/test/resources/application-test.yml`, possibly `PostServiceImpl`'s
+Redis-counter code path (B3/B4)
+
+**Found during:** auth module A2/A3 work (2026-07-08), while chasing an unrelated integration-test
+schema-drift detour (see auth module's A2/A3 closeout docs). `PostControllerIntegrationTest
+.shouldCreatePost` fails with `RedisConnectionFailureException: Unable to connect to Redis` — the
+`test` profile's `spring.data.redis.enabled: false` in `application-test.yml` is **not a real
+Spring Boot property** (confirmed by this failure — it's a no-op, same category of dead config as
+`spring.security.enabled: false` in the same file, which also does nothing in Spring Boot 3.x).
+`PostServiceImpl.createPost` unconditionally touches Redis for the B3/B4 like-counter/comment-
+preview-cache features, so the test genuinely needs a real (or embedded/fake) Redis to pass — it
+isn't optional infrastructure for this code path.
+
+**Two possible fixes, need a decision before implementing:**
+1. **Give `server:test` a real Redis.** Natural fit with `infra/documentation/BACKLOG_MVP.md`'s
+   **INFRA-2** (dev docker-compose) — either reuse that compose file for CI/test runs too, or wire
+   Testcontainers' Redis module into `BaseIT` (spins up a throwaway container per test run,
+   `@Container` + `@DynamicPropertySource` overriding `spring.data.redis.host/port`).
+2. **Make the Redis-backed counter path test-profile-aware** so it degrades gracefully without
+   Redis (e.g. skip the cache write, fall back to a DB count) — changes production code to
+   accommodate a test gap, generally the less preferred direction unless Redis-optional behavior
+   is independently desired.
+
+**Not fixed as part of A2/A3** — deliberately left `PostControllerIntegrationTest.shouldCreatePost`
+red rather than scope-creep further into Redis test infrastructure; that session's actual schema-
+drift-in-`schema.sql` fixes (unrelated missing columns/tables) are unaffected and remain fixed.
 
 ---

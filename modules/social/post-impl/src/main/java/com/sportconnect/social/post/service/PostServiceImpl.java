@@ -152,9 +152,22 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional(readOnly = true)
+    public Map<Long, PostResponse> getPostsByIds(List<Long> postIds, UUID currentUserId) {
+        if (postIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Post> posts = postRepository.findByIdInAndIsActiveTrue(postIds);
+        Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(posts);
+        return posts.stream().collect(Collectors.toMap(
+                Post::getId,
+                post -> mapToResponse(post, currentUserId, hashtagsByPostId.getOrDefault(post.getId(), List.of()))));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<PostResponse> getUserPosts(UUID userId, UUID currentUserId, Pageable pageable) {
         Page<Post> postsPage = postRepository.findByUserIdAndIsActiveTrue(userId, pageable);
-        Map<Long, List<String>> hashtagsByPostId = getHashtagsForPage(postsPage);
+        Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
         return postsPage.map(post -> mapToResponse(post, currentUserId,
                 hashtagsByPostId.getOrDefault(post.getId(), List.of())));
     }
@@ -170,7 +183,7 @@ public class PostServiceImpl implements PostService {
         List<Long> safeGroupIds = groupIds.isEmpty() ? List.of(-1L) : groupIds;
 
         Page<Post> postsPage = postRepository.findPersonalizedFeed(callerId, safeFriendIds, safeGroupIds, pageable);
-        Map<Long, List<String>> hashtagsByPostId = getHashtagsForPage(postsPage);
+        Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
         return postsPage.map(post -> mapToResponse(post, callerId,
                 hashtagsByPostId.getOrDefault(post.getId(), List.of())));
     }
@@ -182,7 +195,7 @@ public class PostServiceImpl implements PostService {
             throw new ForbiddenException("You must be a group member to view posts");
         }
         Page<Post> postsPage = postRepository.findByGroupIdAndIsActiveTrue(groupId, pageable);
-        Map<Long, List<String>> hashtagsByPostId = getHashtagsForPage(postsPage);
+        Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
         return postsPage.map(post -> mapToResponse(post, currentUserId,
                 hashtagsByPostId.getOrDefault(post.getId(), List.of())));
     }
@@ -343,8 +356,8 @@ public class PostServiceImpl implements PostService {
      * in A6 — see {@code post-impl/docs/BACKLOG_MVP.md}). Single-item call sites (create/update/get
      * one post) skip this and call {@code hashtagService.getTagsForPost} directly instead.
      */
-    private Map<Long, List<String>> getHashtagsForPage(Page<Post> postsPage) {
-        List<Long> postIds = postsPage.getContent().stream()
+    private Map<Long, List<String>> getHashtagsForPosts(List<Post> posts) {
+        List<Long> postIds = posts.stream()
                 .map(Post::getId)
                 .distinct()
                 .collect(Collectors.toList());
@@ -406,7 +419,7 @@ public class PostServiceImpl implements PostService {
                 : List.of();
         List<Long> safeGroupIds = memberGroupIds.isEmpty() ? List.of(-1L) : memberGroupIds;
         Page<Post> postsPage = postHashtagRepository.findPostsByHashtag(normalizedTag, safeGroupIds, pageable);
-        Map<Long, List<String>> hashtagsByPostId = getHashtagsForPage(postsPage);
+        Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
         return postsPage.map(post -> mapToResponse(post, currentUserId,
                 hashtagsByPostId.getOrDefault(post.getId(), List.of())));
     }
@@ -417,7 +430,7 @@ public class PostServiceImpl implements PostService {
         List<Long> groupIds = groupService.getGroupIdsBySportProfiles(callerId);
         List<Long> safeGroupIds = groupIds.isEmpty() ? List.of(-1L) : groupIds;
         Page<Post> postsPage = postRepository.findActiveBroadcasts(safeGroupIds, pageable);
-        Map<Long, List<String>> hashtagsByPostId = getHashtagsForPage(postsPage);
+        Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
         return postsPage.map(post -> mapToResponse(post, callerId,
                 hashtagsByPostId.getOrDefault(post.getId(), List.of())));
     }

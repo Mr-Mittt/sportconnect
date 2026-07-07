@@ -15,7 +15,6 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,6 +26,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -49,6 +49,7 @@ class GroupControllerTest extends BaseIT {
     public void baseSetup() {
         super.baseSetup();
         userId = UUID.randomUUID();
+        authenticateAs(userId);
 
         groupResponse = GroupResponse.builder()
                 .id(1L)
@@ -65,6 +66,7 @@ class GroupControllerTest extends BaseIT {
                 .build();
 
         createRequest = CreateGroupRequest.builder()
+                .sportId(1L)
                 .groupName("New Group")
                 .description("New Description")
                 .isPrivate(false)
@@ -72,7 +74,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void createGroup_Success() throws Exception {
         // Arrange
         when(groupService.createGroup(eq(userId), any(CreateGroupRequest.class)))
@@ -94,7 +95,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void createGroup_InvalidRequest_ReturnsBadRequest() throws Exception {
         // Arrange
         CreateGroupRequest invalidRequest = CreateGroupRequest.builder()
@@ -113,7 +113,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void getGroup_Success() throws Exception {
         // Arrange
         when(groupService.getGroup(1L, userId)).thenReturn(groupResponse);
@@ -130,21 +129,25 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
-    void getGroup_WithoutUserId_Success() throws Exception {
-        // Arrange
-        when(groupService.getGroup(1L, null)).thenReturn(groupResponse);
+    void getGroup_WithoutAuthentication_ReturnsUnauthorized() throws Exception {
+        // getGroup has no per-group privacy/membership check (tracked as A9), but SecurityConfig
+        // still requires *some* authenticated caller for this endpoint (not in the permitAll
+        // list). Confirms that boundary rather than the removed "anonymous viewing succeeds"
+        // premise, which contradicted the actual SecurityConfig rules.
+        //
+        // .with(anonymous()) — not a manual SecurityContextHolder.clearContext() — is required
+        // here: baseSetup()'s authenticateAs(userId) context otherwise survives into this
+        // request regardless of a manual clear (MockMvc's security integration re-establishes it
+        // from the ThreadLocal before dispatch in a way a plain clearContext() call doesn't
+        // override); anonymous() is Spring Security Test's supported mechanism for this exact
+        // scenario.
+        mockMvc.perform(get("/api/groups/1").with(anonymous()))
+                .andExpect(status().isUnauthorized());
 
-        // Act & Assert
-        mockMvc.perform(get("/api/groups/1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
-
-        verify(groupService).getGroup(1L, null);
+        verify(groupService, never()).getGroup(any(), any());
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void getUserGroups_Success() throws Exception {
         // Arrange
         Page<GroupResponse> page = new PageImpl<>(List.of(groupResponse), 
@@ -163,7 +166,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void getPublicGroups_Success() throws Exception {
         // Arrange
         // Signature grew to (viewerId, sportId, search, pageable) → Page<GroupSearchResponse>
@@ -192,7 +194,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void updateGroup_Success() throws Exception {
         // Arrange
         UpdateGroupRequest updateRequest = UpdateGroupRequest.builder()
@@ -216,7 +217,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void deleteGroup_Success() throws Exception {
         // Arrange
         doNothing().when(groupService).deleteGroup(1L, userId);
@@ -233,7 +233,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void addMember_Success() throws Exception {
         // Arrange
         UUID targetUserId = UUID.randomUUID();
@@ -253,7 +252,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void removeMember_Success() throws Exception {
         // Arrange
         UUID targetUserId = UUID.randomUUID();
@@ -271,7 +269,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void updateMemberRole_Success() throws Exception {
         // Arrange
         UUID targetUserId = UUID.randomUUID();
@@ -290,7 +287,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void getGroupMembers_Success() throws Exception {
         // Arrange
         GroupMemberResponse memberResponse = GroupMemberResponse.builder()
@@ -320,7 +316,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void transferOwnership_Success() throws Exception {
         // Arrange
         UUID newOwnerId = UUID.randomUUID();
@@ -339,7 +334,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void leaveGroup_Success() throws Exception {
         // Arrange
         doNothing().when(groupService).leaveMember(1L, userId);
@@ -356,7 +350,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void createJoinRequest_Success() throws Exception {
         // Arrange
         CreateJoinRequestRequest request = CreateJoinRequestRequest.builder()
@@ -393,7 +386,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void acceptJoinRequest_Success() throws Exception {
         // Arrange
         doNothing().when(groupService).acceptJoinRequest(1L, userId);
@@ -410,7 +402,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void declineJoinRequest_Success() throws Exception {
         // Arrange
         doNothing().when(groupService).declineJoinRequest(1L, userId);
@@ -427,7 +418,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void getGroupJoinRequests_Success() throws Exception {
         // Arrange
         JoinRequestResponse response = JoinRequestResponse.builder()
@@ -454,7 +444,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void getUserJoinRequests_Success() throws Exception {
         // Arrange
         JoinRequestResponse response = JoinRequestResponse.builder()
@@ -479,7 +468,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void getGroupSettings_Success() throws Exception {
         // Arrange
         GroupSettingsResponse response = GroupSettingsResponse.builder()
@@ -503,7 +491,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void updateGroupSettings_Success() throws Exception {
         // Arrange
         UpdateGroupSettingsRequest request = UpdateGroupSettingsRequest.builder()
@@ -535,7 +522,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void isGroupOwner_ReturnsTrue() throws Exception {
         // Arrange
         when(groupService.isGroupOwner(1L, userId)).thenReturn(true);
@@ -551,7 +537,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void isGroupAdmin_ReturnsFalse() throws Exception {
         // Arrange
         when(groupService.isGroupAdmin(1L, userId)).thenReturn(false);
@@ -567,7 +552,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void isGroupMember_ReturnsTrue() throws Exception {
         // Arrange
         when(groupService.isGroupMember(1L, userId)).thenReturn(true);
@@ -583,7 +567,6 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void getUserRole_ReturnsRole() throws Exception {
         // Arrange
         when(groupService.getUserRoleInGroup(1L, userId)).thenReturn("group_owner");
