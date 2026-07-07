@@ -1,4 +1,18 @@
-You are implementing an approved feature plan for SportConnect. Work through the four phases below in order. Do not skip steps or reopen design decisions — those were settled in `/feature`.
+You are implementing an approved feature plan for SportConnect. Work through the phases below in order. Do not skip steps or reopen design decisions — those were settled in `/feature`.
+
+---
+
+## Phase 0 — Branch check
+
+Before touching any files:
+
+1. Run `git branch --show-current`.
+2. If the current branch is `master`: create and check out a new branch for this feature (e.g.
+   `feature/<short-slug>` — match the naming already used in this repo's merged PRs).
+3. If the current branch is anything else: **stop and ask the user which branch to work on.**
+   Don't assume the current branch is the right one to build on, and don't silently create a new
+   branch either — let the user decide (stay on this branch, branch off it, or switch elsewhere)
+   before proceeding to Phase 1.
 
 ---
 
