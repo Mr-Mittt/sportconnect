@@ -1,5 +1,6 @@
 package com.sportconnect.integration;
 
+import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.group.api.dto.CreateGroupRequest;
 import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
@@ -145,6 +146,23 @@ class GroupControllerTest extends BaseIT {
                 .andExpect(status().isUnauthorized());
 
         verify(groupService, never()).getGroup(any(), any());
+    }
+
+    @Test
+    void getGroup_PrivateGroupNonMember_ReturnsBadRequest() throws Exception {
+        // A9 — the privacy/membership decision itself is exercised in GroupServiceImplSpec
+        // (GroupService is mocked here). This confirms the controller/GlobalExceptionHandler
+        // wiring: a BadRequestException thrown by the service reaches the client as a 400 with
+        // the ApiResponse.error envelope, not as a 500 or an unwrapped stack trace.
+        when(groupService.getGroup(1L, userId))
+                .thenThrow(new BadRequestException("This group is private. Request to join to view its details"));
+
+        mockMvc.perform(get("/api/groups/1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("This group is private. Request to join to view its details"));
+
+        verify(groupService).getGroup(1L, userId);
     }
 
     @Test
