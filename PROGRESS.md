@@ -387,6 +387,14 @@ found and fixed along the way: `AuthServiceImpl.toUserResponse()` was missing `a
 "reality check" had missed — added both, `HashMap` replacing the null-hostile `Map.of(...)`.
 8/8 new unit tests, 64/64 full suite, strict `tsc`, lint, and build all clean.
 
+**MSW-0 DONE** (2026-07-08, `client/docs/MSW-0_MOCK_SERVICE_WORKER_HANDLER_SETUP.md`): browser-mode
+MSW wired into a Playwright fixture (`e2e/mocks/test.ts`, `page.addInitScript` dynamic-imports
+`e2e/mocks/server.ts` by URL — `src/` never imports MSW, zero production bundle impact). Scoped to
+auth handlers only (`e2e/mocks/handlers/auth.ts`) — feed/groups/sport handlers deferred to
+FEED-0/FEED-6/FEED-7/SPORT-1, same resequencing principle as AUTH-0. Self-verifying proof spec
+(`e2e/flows/msw-setup.spec.ts`, 4/4 passing) asserts `response.fromServiceWorker()` since no login
+UI exists yet to drive this through. 13/13 e2e, 64/64 unit, clean build.
+
 **Infrastructure decisions** (2026-07-08, `infra/documentation/INFRASTRUCTURE_LAYOUT_AND_CICD.md`):
 hybrid infra layout (artifact-scoped files stay in `client/`/`server/`, environment-scoped in
 `infra/`, workflows must stay in `.github/workflows/`); **GitHub Actions is the CI/CD platform —
