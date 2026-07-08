@@ -56,6 +56,7 @@ Deps-only — the server and client still run natively (`./gradlew :server:bootR
 # Run a single test class
 ./gradlew :modules:auth:auth-impl:test --tests "com.sportconnect.auth.service.AuthServiceImplSpec"
 ```
+First-time setup (Windows-focused, Docker/Testcontainers troubleshooting): `server/README.md`.
 
 ### Frontend (React — new SportHub client, Vite + pnpm)
 ```bash
