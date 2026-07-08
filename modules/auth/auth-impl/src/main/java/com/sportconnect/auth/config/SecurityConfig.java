@@ -54,8 +54,10 @@ public class SecurityConfig {
                         // Static resources (images, etc.)
                         .requestMatchers("/images/**").permitAll()
 
-                        // Swagger/OpenAPI
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        // Swagger/OpenAPI — /api-docs is this app's customized springdoc path
+                        // (see application.yml); /v3/api-docs is the springdoc default, kept
+                        // permitted too in case the customization is ever reverted.
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/api-docs/**", "/v3/api-docs/**").permitAll()
 
                         // Health check
                         .requestMatchers("/actuator/health").permitAll()

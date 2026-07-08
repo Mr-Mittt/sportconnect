@@ -393,6 +393,17 @@ via `/workon infra mvp` (workon command extended for the infra module).
   (only `gradlew.bat` was tracked) with a `.gitattributes` LF/CRLF rule so it doesn't break on
   Linux runners. Bootstrap (first green run, required-check marking) still pending — same
   HF-12-style conditional, and branch protection is unavailable on this repo regardless.
+- **Swagger/OpenAPI integration (2026-07-08, `documentation/md/SWAGGER_OPENAPI_INTEGRATION.md`):**
+  documented all 96 endpoints across 9 controllers (`@Tag`/`@Operation`/`@ApiResponses`, new
+  `OpenApiConfig` registering a JWT bearer security scheme) — springdoc was already wired but had
+  zero annotations anywhere. Also fixed `SecurityConfig` permitAll not covering the app's
+  customized `/api-docs` path (was 401ing unauthenticated `/api-docs` fetches despite Swagger UI
+  itself loading). Response codes verified per-endpoint against actual `throw new`/`orElseThrow`
+  calls, not templated — surfaced that `post-impl`/`group-impl` use 400 (not 403) for every
+  ownership/permission check, and that friend-request accept/decline/cancel are 404 (not 403) for
+  a non-owner since the repository lookup itself is scoped by receiver/sender id. Live-verified:
+  96 operations/9 tags in the generated spec, `/api-docs` reachable unauthenticated, and 4
+  documented response codes (401/200/404/200) matched real requests against a running server.
 Full detail in `client/docs/BACKLOG_MVP.md` — one ordered queue merging the two refined epics
 (`client/docs/sporthub-home-feed-tickets.md` + `client/docs/sporthub-auth-feed-integration-tickets.md`),
 same format as the server module backlogs (`/workon client mvp`).
