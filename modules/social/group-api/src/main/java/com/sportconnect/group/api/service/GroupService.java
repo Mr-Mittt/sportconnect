@@ -24,6 +24,12 @@ public interface GroupService {
     // Group CRUD Operations
     GroupResponse createGroup(UUID userId, CreateGroupRequest request);
     
+    /**
+     * Returns full group details, including the top-3 pinned posts. Public groups are visible to
+     * any caller. Private groups are visible only to members (owner/admin/member) — a non-member
+     * or {@code null} {@code currentUserId} gets a {@code BadRequestException} rather than the
+     * group's details, so callers can't read a private group's content just by knowing its id.
+     */
     GroupResponse getGroup(Long groupId, UUID currentUserId);
     
     /**

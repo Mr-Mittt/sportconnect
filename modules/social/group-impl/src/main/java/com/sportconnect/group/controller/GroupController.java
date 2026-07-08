@@ -76,9 +76,10 @@ public class GroupController {
                 .body(ApiResponse.success("Group created successfully", response));
     }
 
-    @Operation(summary = "Get a group by id", description = "No private-group/membership enforcement yet (tracked as A9) — any authenticated caller can view any active group's full details.")
+    @Operation(summary = "Get a group by id", description = "Public groups are visible to any authenticated caller. Private groups are visible only to members (owner/admin/member) — a non-member gets 400.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Group found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Group is private and the caller is not a member"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })

@@ -165,6 +165,13 @@ public class GroupServiceImpl implements GroupService {
         Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
                 .orElseThrow(() -> new NotFoundException("Group not found"));
 
+        // Privacy gate before the (relatively expensive) response mapping and pinned-post fetch below —
+        // membership is checked, not ownership/admin specifically, since isGroupMember covers all three roles.
+        if (Boolean.TRUE.equals(group.getIsPrivate())
+                && (currentUserId == null || !isGroupMember(groupId, currentUserId))) {
+            throw new BadRequestException("This group is private. Request to join to view its details");
+        }
+
         GroupResponse response = mapToGroupResponse(group, currentUserId);
 
         List<GroupPinnedPost> topPins = pinnedPostRepository.findTop3ByGroupIdOrderByPinnedAtDesc(groupId);

@@ -203,6 +203,89 @@ class GroupServiceImplSpec extends Specification {
         thrown(NotFoundException)
     }
 
+    // A9 — privacy/membership check on getGroup
+
+    def "getGroup should throw BadRequestException when group is private and caller is not a member"() {
+        given: "a private group"
+        testGroup.isPrivate = true
+        def privateGroup = testGroup
+
+        when: "a non-member requests the group"
+        groupService.getGroup(privateGroup.id, otherUserId)
+
+        then: "membership is checked and denied"
+        1 * groupRepository.findByIdAndIsActiveTrue(privateGroup.id) >> Optional.of(privateGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(privateGroup.id, otherUserId) >> false
+
+        and: "exception is thrown before any response data is built"
+        thrown(BadRequestException)
+        0 * userService.getUsersByIds(_)
+        0 * pinnedPostRepository.findTop3ByGroupIdOrderByPinnedAtDesc(_)
+    }
+
+    def "getGroup should throw BadRequestException when group is private and caller is anonymous"() {
+        given: "a private group"
+        testGroup.isPrivate = true
+        def privateGroup = testGroup
+
+        when: "an unauthenticated caller requests the group"
+        groupService.getGroup(privateGroup.id, null)
+
+        then: "denied without a membership lookup"
+        1 * groupRepository.findByIdAndIsActiveTrue(privateGroup.id) >> Optional.of(privateGroup)
+        0 * groupMemberRepository.existsByGroupIdAndUserId(_, _)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
+    }
+
+    def "getGroup should return group when private and caller is a member"() {
+        given: "a private group and a pinned post"
+        testGroup.isPrivate = true
+        def privateGroup = testGroup
+        def pin = GroupPinnedPost.builder()
+                .postId(10L).groupId(privateGroup.id).pinnedBy(userId)
+                .pinnedAt(LocalDateTime.now()).build()
+        def pinnedPostResponse = PostResponse.builder().id(10L).groupId(privateGroup.id)
+                .postType(PostType.GROUP_POST).content("Pinned content").build()
+
+        when: "a member requests the group"
+        def response = groupService.getGroup(privateGroup.id, userId)
+
+        then: "membership is confirmed and full details are returned"
+        1 * groupRepository.findByIdAndIsActiveTrue(privateGroup.id) >> Optional.of(privateGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(privateGroup.id, userId) >> true
+        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * groupMemberRepository.countByGroupId(privateGroup.id) >> 5L
+        1 * groupMemberRepository.findByGroupIdAndUserId(privateGroup.id, userId) >>
+                Optional.of(GroupMember.builder().roleId(memberRole.id).build())
+        1 * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
+        1 * pinnedPostRepository.findTop3ByGroupIdOrderByPinnedAtDesc(privateGroup.id) >> [pin]
+        1 * postService.getPostsByIds([10L], userId) >> [(10L): pinnedPostResponse]
+
+        and: "response is correct"
+        response != null
+        response.pinnedPosts.size() == 1
+    }
+
+    def "getGroup should return group when public and caller is not a member"() {
+        when: "a non-member requests a public group"
+        def response = groupService.getGroup(testGroup.id, otherUserId)
+
+        then: "no membership check is performed and full details are returned"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        0 * groupMemberRepository.existsByGroupIdAndUserId(_, _)
+        1 * userService.getUsersByIds(_) >> [(otherUserId): testUser]
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 5L
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
+        1 * pinnedPostRepository.findTop3ByGroupIdOrderByPinnedAtDesc(testGroup.id) >> []
+        1 * postService.getPostsByIds([], otherUserId) >> [:]
+
+        and: "response is correct"
+        response != null
+        response.currentUserRole == null
+    }
+
     def "updateGroup should update group when user is owner or admin"() {
         given: "an update request"
         def request = UpdateGroupRequest.builder()

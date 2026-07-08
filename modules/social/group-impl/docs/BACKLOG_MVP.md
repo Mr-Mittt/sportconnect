@@ -31,7 +31,7 @@
 | 10 | A6 | Fix cross-domain violation (UserRepository/User → UserService/UserFriendService) | `DONE` |
 | 11 | A7 | Fix N+1 queries in paginated list mappers | `DONE` |
 | 12 | A8 | Fix N+1 in getUserGroups | `DONE` |
-| 13 | A9 | Add privacy/membership check to `getGroup` | `TODO` |
+| 13 | A9 | Add privacy/membership check to `getGroup` | `DONE` |
 
 ---
 
@@ -299,7 +299,7 @@ for these two loops to grow along. Noted here for awareness but not ticketed.
 ---
 
 ### A9 · Add privacy/membership check to `getGroup`
-**Status:** `TODO`  
+**Status:** `DONE` (2026-07-08) · **Summary:** `modules/social/group-impl/docs/A9_PRIVACY_MEMBERSHIP_CHECK_GETGROUP.md`  
 **Type:** Bug Fix (Security) / Enhancement  
 **Scope:** `GroupServiceImpl.getGroup()` (and its controller), `GroupControllerTest`, `GroupServiceImplSpec`
 
