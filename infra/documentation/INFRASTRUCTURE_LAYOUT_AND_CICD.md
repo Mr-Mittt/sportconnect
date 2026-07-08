@@ -55,11 +55,13 @@ Terraform/compose) is what eventually populates `infra/` for real.
 | PR template | ✅ `.github/PULL_REQUEST_TEMPLATE.md` (HF-10b) |
 | Backend CI | ✅ `server-ci.yml` exists (INFRA-1, 2026-07-08) and **green on its first run** (PR #4) — no baseline-bootstrap step needed, unlike `client-ci`. No service containers: all integration tests run against H2, and `BaseIT`'s Testcontainers-managed Redis (A8) self-provisions via the Docker daemon already on `ubuntu-latest` runners |
 | Dev environment compose | ✅ `infra/docker-compose.dev.yml` (INFRA-2, 2026-07-08) — deps-only (Postgres+PostGIS, Redis); verified end-to-end via a full `./gradlew :server:bootRun` against it, not just `docker compose up` |
-| Deployment workflow / hosting | ❌ Not scoped; blocked on a hosting decision |
+| Deployment workflow / hosting | ✅ Hosting decision made (2026-07-08, `INFRA-3_HOSTING_DECISION.md`) — AWS free tier, single EC2 + RDS, split into INFRA-3..6; none implemented yet |
 
 ## 4. Tickets
 
 Tracked in `infra/documentation/BACKLOG_MVP.md` (pick up via `/workon infra mvp`):
-**INFRA-1** backend CI workflow · **INFRA-2** dev docker-compose · **INFRA-3** deployment
-pipeline (blocked on the hosting decision). The client-ci bootstrap remains client backlog
-**HF-12**.
+**INFRA-1** backend CI workflow · **INFRA-2** dev docker-compose · **INFRA-3** AWS foundation
+(EC2 + RDS + S3/CloudFront + OIDC role) · **INFRA-4** server Dockerfile + GHCR publish ·
+**INFRA-5** client static build + S3/CloudFront deploy · **INFRA-6** `deploy.yml` orchestration.
+Hosting decision recorded in `infra/documentation/INFRA-3_HOSTING_DECISION.md`. The client-ci
+bootstrap remains client backlog **HF-12**.
