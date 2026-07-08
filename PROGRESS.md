@@ -377,6 +377,16 @@ via the update-baselines dispatch artifact (PR #2); **fully green run merged**. 
 resolved → Home Feed epic release condition met. Caveat: branch protection unavailable (GitHub
 Free + private repo) — red checks block by convention only.
 
+**AUTH-0 DONE** (2026-07-08, `client/docs/AUTH-0_TYPES_API_CLIENT_STORE.md`): auth types
+(`src/features/auth/types.ts`), shared `ApiResponse<T>` envelope (`src/shared/types/api.ts`, new),
+axios `apiClient` (`withCredentials`, `/api` proxy, separately-testable `attachAuthHeader`
+interceptor), Zustand `authStore` (no persist middleware — the point). Resequenced ahead of MSW-0
+(user decision — MSW-0's own acceptance criteria needs this ticket's types first). Backend gap
+found and fixed along the way: `AuthServiceImpl.toUserResponse()` was missing `avatarUrl`/
+`phoneNumber` entirely (only 6 of the real `UserResponse`'s fields), which the epic doc's own
+"reality check" had missed — added both, `HashMap` replacing the null-hostile `Map.of(...)`.
+8/8 new unit tests, 64/64 full suite, strict `tsc`, lint, and build all clean.
+
 **Infrastructure decisions** (2026-07-08, `infra/documentation/INFRASTRUCTURE_LAYOUT_AND_CICD.md`):
 hybrid infra layout (artifact-scoped files stay in `client/`/`server/`, environment-scoped in
 `infra/`, workflows must stay in `.github/workflows/`); **GitHub Actions is the CI/CD platform —

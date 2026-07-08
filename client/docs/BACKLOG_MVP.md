@@ -75,7 +75,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14b | HF-12 | CI bootstrap + first green run (follow-up from HF-9 item 7) | `DONE` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `TODO` |
-| 16 | AUTH-0 | Types, API client, auth store | `TODO` |
+| 16 | AUTH-0 | Types, API client, auth store | `DONE` |
 | 17 | AUTH-1 | Login | `TODO` |
 | 18 | AUTH-2 | Register | `TODO` |
 | 19 | AUTH-3 | Session bootstrap on app load | `TODO` |
@@ -396,12 +396,32 @@ Browser-mode MSW wired into a Playwright fixture; handlers for auth/feed/groups 
 same `types.ts` as the real hooks; zero real network calls verified via Playwright's network log.
 **Delta:** also add sport handlers (`GET /api/sports`, `GET /api/sports/profiles/user/{userId}`)
 for SPORT-1, which didn't exist when the epic was written.
+**Delta (2026-07-08, resequenced):** the backlog's implementation order lists MSW-0 before AUTH-0,
+but its own acceptance criteria requires handlers to be typed against AUTH-0/FEED-0's `types.ts`
+files — which don't exist until those tickets ship. User decision: do **AUTH-0 first**, then
+MSW-0, despite the `∥` (parallel) marking in the dependency graph. MSW-0 remains `TODO` until
+AUTH-0 lands.
 
 ### AUTH-0 · Types, API client, auth store
-**Status:** `TODO` · **Type:** Foundation · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § AUTH-0
+**Status:** `DONE` (2026-07-08) · **Type:** Foundation · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § AUTH-0 ·
+**Summary:** `client/docs/AUTH-0_TYPES_API_CLIENT_STORE.md`
 
 Types 1:1 with real DTOs, `apiClient` with `withCredentials: true` + Bearer interceptor, Zustand
 auth slice. Access token in memory only — a test asserts no storage API is touched.
+
+**Deltas for later tickets:**
+- **`User.firstName`/`lastName`/`username` are non-nullable `string`**, not `string | null` as the
+  epic sketch guessed — the backend coerces a missing value to `""` before serialization.
+- **`avatarUrl`/`phoneNumber` added to the backend response** (`AuthServiceImpl.toUserResponse()`)
+  as part of this ticket — they didn't exist in `AuthResponse.user` before, only in the unrelated
+  full `UserResponse` DTO the epic's reality-check section was actually describing. Both are
+  `string | null` on the client type.
+- New shared `src/shared/types/api.ts` (`ApiResponse<T>`) — reuse this for FEED-0's types, don't
+  redefine the envelope per feature.
+- `attachAuthHeader` in `src/app/apiClient.ts` is a named export specifically so AUTH-1..AUTH-5 (and
+  their tests) can exercise it directly rather than mocking axios internals.
+- TopBar is still not wired to `avatarUrl` — no ticket in either epic covers that; flagged, not
+  built.
 
 ### AUTH-1 · Login
 **Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-1

@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -192,16 +193,21 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * Convert UserResponse to a simple response object for AuthResponse
+     * Convert UserResponse to a simple response object for AuthResponse.user. A mutable map (not
+     * {@code Map.of}) is required here because avatarUrl/phoneNumber are frequently absent for a
+     * new user — {@code Map.of} throws on any null value, so the previously-Map.of-only version of
+     * this method could never have carried those two fields safely.
      */
     private Object toUserResponse(UserResponse user) {
-        return Map.of(
-                "id", user.getId(),
-                "email", user.getEmail(),
-                "firstName", user.getFirstName() != null ? user.getFirstName() : "",
-                "lastName", user.getLastName() != null ? user.getLastName() : "",
-                "username", user.getUsername() != null ? user.getUsername() : "",
-                "roles", user.getRoles()
-        );
+        Map<String, Object> response = new HashMap<>();
+        response.put("id", user.getId());
+        response.put("email", user.getEmail());
+        response.put("firstName", user.getFirstName() != null ? user.getFirstName() : "");
+        response.put("lastName", user.getLastName() != null ? user.getLastName() : "");
+        response.put("username", user.getUsername() != null ? user.getUsername() : "");
+        response.put("phoneNumber", user.getPhoneNumber());
+        response.put("avatarUrl", user.getAvatarUrl());
+        response.put("roles", user.getRoles());
+        return response;
     }
 }
