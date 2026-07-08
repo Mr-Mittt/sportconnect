@@ -31,7 +31,7 @@ JWT token lifecycle, Spring Security filter chain, email verification, and passw
 POST /api/auth/register
 POST /api/auth/login
 POST /api/auth/refresh
-POST /api/auth/logout?userId={uuid}
+POST /api/auth/logout             ← caller derived from the JWT principal, no userId param
 POST /api/auth/verify-email
 POST /api/auth/forgot-password    ← PLACEHOLDER (returns 200, does nothing)
 POST /api/auth/reset-password

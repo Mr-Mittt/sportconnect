@@ -30,7 +30,7 @@ POST   /api/sports                                         ROLE_ADMIN
 PUT    /api/sports/{sportId}                               ROLE_ADMIN
 DELETE /api/sports/{sportId}                               soft delete — ROLE_ADMIN
 
-POST   /api/sports/profiles?userId=                        ROLE_USER
+POST   /api/sports/profiles                                 ROLE_USER — userId from JWT principal
 GET    /api/sports/profiles/{profileId}                    public
 GET    /api/sports/profiles/user/{userId}                  public
 GET    /api/sports/profiles/user/{userId}/sport/{sportId}

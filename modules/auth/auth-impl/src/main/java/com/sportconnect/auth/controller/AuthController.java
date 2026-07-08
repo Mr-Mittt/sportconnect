@@ -14,6 +14,9 @@ import com.sportconnect.auth.service.PasswordResetService;
 import com.sportconnect.common.auth.SecurityUtils;
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.common.exception.UnauthorizedException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -31,6 +34,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Tag(name = "Auth", description = "Registration, login, token refresh, logout, and password/email verification.")
 public class AuthController {
 
     private static final String REFRESH_COOKIE_NAME = "refreshToken";
@@ -46,6 +50,12 @@ public class AuthController {
      * cookie (see {@link #buildRefreshCookie}) rather than returning it in the body — the
      * response's {@code data.refreshToken} is always absent (see {@link AuthResponse}).
      */
+    @Operation(summary = "Register a new user", security = {},
+            description = "Registers a new user and logs them in immediately. Sets the refresh token as an httpOnly cookie rather than returning it in the body.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Registered and logged in"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or email already registered")
+    })
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
         AuthResponse response = authService.register(request);
@@ -55,6 +65,13 @@ public class AuthController {
     }
 
     /** Same refresh-token-cookie contract as {@link #register}. */
+    @Operation(summary = "Log in", security = {},
+            description = "Same refresh-token-cookie contract as register.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid email or password, or account deactivated")
+    })
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
@@ -70,6 +87,12 @@ public class AuthController {
      * Missing cookie → 401, not 400 (reused {@link UnauthorizedException} instead of letting
      * Spring's default {@code MissingRequestCookieException} handling produce a 400).
      */
+    @Operation(summary = "Rotate the refresh token", security = {},
+            description = "Reads the refresh token from the httpOnly cookie (never the request body) and rotates it: the response carries a fresh refresh-token cookie, and the old token is revoked server-side.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Token refreshed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Refresh token cookie missing, expired, or revoked")
+    })
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(
             @CookieValue(value = REFRESH_COOKIE_NAME, required = false) String refreshToken) {
@@ -89,6 +112,12 @@ public class AuthController {
      * {@code SecurityConfig} authorizes {@code POST /api/auth/logout} ahead of the broader
      * {@code /api/auth/**} permit.
      */
+    @Operation(summary = "Log out",
+            description = "Derives the caller from the authenticated principal and revokes all of their refresh tokens.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Logged out"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(Authentication authentication) {
         authService.logout(SecurityUtils.extractUserId(authentication));
@@ -123,12 +152,25 @@ public class AuthController {
                 .build();
     }
 
+    @Operation(summary = "Verify an email address", security = {},
+            description = "Consumes the token sent in the verification email.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Email verified"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, already verified, or token expired"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invalid verification token")
+    })
     @PostMapping("/verify-email")
     public ResponseEntity<ApiResponse<Void>> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
         emailVerificationService.verifyEmail(request.getToken());
         return ResponseEntity.ok(ApiResponse.success("Email verified successfully", null));
     }
 
+    @Operation(summary = "Request a password reset email", security = {},
+            description = "Placeholder — always returns success without actually sending anything (not yet wired to UserService lookup by email).")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Always returned, regardless of whether the email exists"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed")
+    })
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         // Note: This endpoint needs user module integration to find user by email
@@ -136,6 +178,13 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("If the email exists, a password reset link has been sent", null));
     }
 
+    @Operation(summary = "Reset a password", security = {},
+            description = "Consumes the token sent in the reset-password email.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Password reset"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, token already used, or token expired"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invalid reset token")
+    })
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         UUID userId = passwordResetService.validateAndUseToken(request.getToken());

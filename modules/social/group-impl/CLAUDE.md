@@ -27,7 +27,7 @@ Roles are **pre-seeded strings** from V007 migration. Always fetch by name via
 | Class | Purpose |
 |---|---|
 | `GroupServiceImpl` | 600+ line service; all business logic and permission guards |
-| `GroupController` | 24 endpoints at `/api/groups` |
+| `GroupController` | 36 endpoints at `/api/groups` |
 
 ## Endpoints
 
