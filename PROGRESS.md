@@ -402,6 +402,14 @@ via `/workon infra mvp` (workon command extended for the infra module).
   just `docker compose up`, but a full `./gradlew :server:bootRun` against the stack — all 24
   Liquibase migrations succeeded, PostGIS dialect initialized, app served a real `200` on
   `/api/sports`.
+- **Hosting decision (2026-07-08, `infra/documentation/INFRA-3_HOSTING_DECISION.md`):** AWS,
+  free-tier-first — single EC2 instance (Docker + Nginx/Caddy + self-hosted Redis) + RDS
+  PostgreSQL/PostGIS + S3/CloudFront for the client, GHCR for images, GitHub OIDC for deploy
+  credentials; no ALB/NAT Gateway/ElastiCache/Fargate (all cost money outside free tier). Only
+  `production` deploys to AWS for now — `dev`/`staging` stay local-only (INFRA-2). Unblocked and
+  split the old INFRA-3 into **INFRA-3** (AWS foundation) → **INFRA-4** (server image/GHCR) +
+  **INFRA-5** (client S3/CloudFront) → **INFRA-6** (`deploy.yml` orchestration), all `TODO` on
+  `infra/documentation/BACKLOG_MVP.md`.
 - **Swagger/OpenAPI integration (2026-07-08, `documentation/md/SWAGGER_OPENAPI_INTEGRATION.md`):**
   documented all 96 endpoints across 9 controllers (`@Tag`/`@Operation`/`@ApiResponses`, new
   `OpenApiConfig` registering a JWT bearer security scheme) — springdoc was already wired but had
