@@ -46,6 +46,7 @@ Every new architecture discussion, design decision, implementation summary, or p
 # Run a single test class
 ./gradlew :modules:auth:auth-impl:test --tests "com.sportconnect.auth.service.AuthServiceImplSpec"
 ```
+First-time setup (Windows-focused, Docker/Testcontainers troubleshooting): `server/README.md`.
 
 ### Frontend (React — new SportHub client, Vite + pnpm)
 ```bash
