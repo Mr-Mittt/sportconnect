@@ -27,6 +27,16 @@ Every new architecture discussion, design decision, implementation summary, or p
 
 ## Commands
 
+### Dev environment (Postgres+PostGIS, Redis)
+```bash
+# Start local dev dependencies (one-time or after a reboot)
+docker compose -f infra/docker-compose.dev.yml up -d
+
+# Stop them (data persists in named volumes)
+docker compose -f infra/docker-compose.dev.yml down
+```
+Deps-only — the server and client still run natively (`./gradlew :server:bootRun`, `pnpm dev`) for a fast edit-reload loop. Details: `infra/documentation/INFRA-2_DEV_DOCKER_COMPOSE.md`.
+
 ### Backend (Gradle)
 ```bash
 # Run the server
@@ -46,6 +56,7 @@ Every new architecture discussion, design decision, implementation summary, or p
 # Run a single test class
 ./gradlew :modules:auth:auth-impl:test --tests "com.sportconnect.auth.service.AuthServiceImplSpec"
 ```
+First-time setup (Windows-focused, Docker/Testcontainers troubleshooting): `server/README.md`.
 
 ### Frontend (React — new SportHub client, Vite + pnpm)
 ```bash

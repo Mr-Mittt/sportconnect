@@ -28,9 +28,10 @@ Vitest + React Testing Library · Storybook · Playwright · pnpm
 | `pnpm e2e` | Playwright functional flows (`e2e/flows/`, starts the dev server itself) |
 | `pnpm test:visual` | Playwright visual-regression project (`e2e/visual/`) |
 
-Gradle equivalents (used by CI / the monorepo root build; they download their own pinned
-Node + pnpm into `client/.gradle/`): `./gradlew :client:buildClient`, `:client:testClient`,
-`:client:start`. The root `./gradlew build` runs `buildClient` too.
+Gradle equivalents (download their own pinned Node + pnpm into `client/.gradle/`, so they work
+without pnpm installed globally): `./gradlew :client:buildClient`, `:client:testClient`,
+`:client:start`. These are standalone tasks, not run by `client-ci.yml` (which calls `pnpm`
+directly) or by the root `./gradlew build` (backend-only — see root `CLAUDE.md`).
 
 ## Design tokens
 

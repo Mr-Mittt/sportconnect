@@ -54,7 +54,7 @@ Terraform/compose) is what eventually populates `infra/` for real.
 | `client-ci.yml` | ✅ Exists (HF-10b) and **live/green** — bootstrap closed out via client backlog **HF-12** (Linux baselines committed; red checks block merges by convention only, since branch protection is unavailable on this repo) |
 | PR template | ✅ `.github/PULL_REQUEST_TEMPLATE.md` (HF-10b) |
 | Backend CI | ✅ `server-ci.yml` exists (INFRA-1, 2026-07-08) and **green on its first run** (PR #4) — no baseline-bootstrap step needed, unlike `client-ci`. No service containers: all integration tests run against H2, and `BaseIT`'s Testcontainers-managed Redis (A8) self-provisions via the Docker daemon already on `ubuntu-latest` runners |
-| Dev environment compose | ❌ Manual DB/Redis setup; `infra/docker-compose.dev.yml` proposed |
+| Dev environment compose | ✅ `infra/docker-compose.dev.yml` (INFRA-2, 2026-07-08) — deps-only (Postgres+PostGIS, Redis); verified end-to-end via a full `./gradlew :server:bootRun` against it, not just `docker compose up` |
 | Deployment workflow / hosting | ❌ Not scoped; blocked on a hosting decision |
 
 ## 4. Tickets
