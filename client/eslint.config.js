@@ -8,7 +8,14 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'storybook-static', 'test-results', 'playwright-report', 'docs'],
+    ignores: [
+      'dist',
+      'storybook-static',
+      'test-results',
+      'playwright-report',
+      'docs',
+      'public/mockServiceWorker.js', // msw-generated, not authored
+    ],
   },
   {
     files: ['**/*.{ts,tsx}'],
@@ -23,6 +30,16 @@ export default tseslint.config(
     languageOptions: {
       ecmaVersion: 2023,
       globals: globals.browser,
+    },
+  },
+  {
+    // Playwright fixtures (e.g. test.extend({ page: async ({ page }, use) => ... }))
+    // use a callback param literally named `use` — react-hooks/rules-of-hooks
+    // misreads that as a React hook call outside a component. This is pure
+    // Playwright test infra, never React component code.
+    files: ['e2e/**/*.ts'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
     },
   },
 );

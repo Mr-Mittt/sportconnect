@@ -74,7 +74,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14 | HF-9 | QA / acceptance checklist (Home Feed) | `DONE` |
 | 14b | HF-12 | CI bootstrap + first green run (follow-up from HF-9 item 7) | `DONE` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
-| 15 | MSW-0 | Mock Service Worker handler setup | `TODO` |
+| 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
 | 17 | AUTH-1 | Login | `TODO` |
 | 18 | AUTH-2 | Register | `TODO` |
@@ -390,7 +390,8 @@ Linux baselines committed via PR #2 → **fully green run, merged**. HF-9's item
   "clean up" the `!client/src/shared/lib` lines.
 
 ### MSW-0 · Mock Service Worker handler setup
-**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0
+**Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·
+**Summary:** `client/docs/MSW-0_MOCK_SERVICE_WORKER_HANDLER_SETUP.md`
 
 Browser-mode MSW wired into a Playwright fixture; handlers for auth/feed/groups typed against the
 same `types.ts` as the real hooks; zero real network calls verified via Playwright's network log.
@@ -401,6 +402,14 @@ but its own acceptance criteria requires handlers to be typed against AUTH-0/FEE
 files — which don't exist until those tickets ship. User decision: do **AUTH-0 first**, then
 MSW-0, despite the `∥` (parallel) marking in the dependency graph. MSW-0 remains `TODO` until
 AUTH-0 lands.
+**Delta (2026-07-08, scope narrowed):** shipped **auth handlers only**
+(`e2e/mocks/handlers/auth.ts`). The same problem that blocked MSW-0 on AUTH-0 recurs for
+`feed.ts`/`groups.ts`/sport handlers — they'd need FEED-0/SPORT-1's `types.ts` files, which also
+don't exist yet. Applied the same principle rather than re-asking: **FEED-0/FEED-6/FEED-7/SPORT-1
+each add their own handler file when they ship** (same pattern as `HF-11`'s MSW upgrade map).
+`e2e/mocks/handlers/index.ts` documents this explicitly. The Playwright fixture
+(`e2e/mocks/test.ts`) and worker (`e2e/mocks/server.ts`) are feature-agnostic — later tickets only
+add a new handlers file and extend `index.ts`'s array, no fixture/wiring changes needed.
 
 ### AUTH-0 · Types, API client, auth store
 **Status:** `DONE` (2026-07-08) · **Type:** Foundation · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § AUTH-0 ·
