@@ -30,7 +30,7 @@ green run exists" pattern.
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | INFRA-1 | Backend CI workflow (`server-ci.yml`) | `DONE` |
-| 2 | INFRA-2 | Dev environment docker-compose | `TODO` |
+| 2 | INFRA-2 | Dev environment docker-compose | `DONE` |
 | 3 | INFRA-3 | Deployment pipeline (`deploy.yml`) | `TODO` — **blocked on the hosting decision** |
 
 **Dependencies:**
@@ -63,7 +63,7 @@ Deliver `.github/workflows/server-ci.yml`:
   same pattern as HF-12)
 
 ### INFRA-2 · Dev environment docker-compose
-**Status:** `TODO` · **Type:** Infrastructure (dev env) · **Dependency:** none ·
+**Status:** `DONE` — see `infra/documentation/INFRA-2_DEV_DOCKER_COMPOSE.md` · **Type:** Infrastructure (dev env) · **Dependency:** none ·
 **Spec:** `INFRASTRUCTURE_LAYOUT_AND_CICD.md` §1 + §4-2
 
 One-command local dev dependencies — today the PostgreSQL+PostGIS/Redis setup is manual.
