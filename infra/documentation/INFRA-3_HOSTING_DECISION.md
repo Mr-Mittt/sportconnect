@@ -59,6 +59,21 @@ After it lapses, this same shape reverts to standard pricing (roughly $15–20/m
 RDS pair). Revisit the hosting decision before/at that point rather than being surprised by a
 bill — no action needed now, just noting it so it isn't forgotten.
 
+## Alternatives considered (and passed on)
+
+Surveyed after the AWS decision, to record why they weren't picked instead — so this doesn't get
+re-litigated from scratch later:
+
+| Option | Why not |
+|---|---|
+| **Oracle Cloud "Always Free"** | The closest AWS equivalent — permanently free ARM compute (4 OCPUs/24GB RAM) generous enough to self-host the server, Postgres+PostGIS, and Redis together, no 12-month clock. Real blocker: ARM capacity is frequently unavailable for new signups ("out of host capacity" errors) since the free pool is a limited, oversubscribed physical allocation, not elastic cloud capacity. Worth revisiting if AWS's 12-month clock becomes a real cost concern. |
+| **Azure** | Same shape as AWS (12-month free VM), plus a free Postgres Flexible Server SKU — but three separate free-tier clocks to track across services instead of one. No clear advantage over AWS. |
+| **Google Cloud** | Cloud Run compute is genuinely always-free, but Cloud SQL (managed Postgres) has **no free tier at all** — billed from day one. The database is the one piece this app can't skip, so GCP doesn't actually solve the problem. |
+| **Render** | Free web service + free Postgres, but the free Postgres is **auto-deleted after 30 days** — fine for a demo, not for anything meant to stay up. |
+| **Supabase (DB) + Vercel (client)** | Supabase ships PostGIS enabled by default on its free tier — best-in-class free Postgres+PostGIS fit — and Vercel's free static hosting is excellent. Neither hosts a long-running JVM process, though, so this only solves 2 of 3 pieces; would still need a separate compute host. |
+| **Fly.io / Railway** | Both commonly recommended, both no longer offer a real free tier: Fly.io ended no-card free allowances for new orgs in 2024 (now requires a payment method); Railway retired its unlimited free plan in 2023 (one-time trial credit only, then usage-based). |
+| **Self-host on a personal laptop** | Genuinely $0 and technically workable (Cloudflare Tunnel solves the CGNAT/no-public-IP problem most home ISPs create), but the risk profile is different in kind, not degree: a compromised laptop has your actual files on it (vs. a disposable cloud VM), uptime depends on the machine never sleeping/rebooting, and there's no failover. Reasonable for a dedicated spare machine hosting a low-stakes demo; not something to point real users' trust at. |
+
 ## What this unblocks
 
 INFRA-3 (as originally scoped, "deployment pipeline") is split into four tickets on
