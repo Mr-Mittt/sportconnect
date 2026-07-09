@@ -15,6 +15,11 @@ const buttonVariants = cva(
         default: 'border-hairline border-border bg-surface-1 text-text-primary hover:bg-surface-2',
         outline: 'border-hairline border-border-strong bg-transparent text-text-primary hover:bg-surface-1',
         ghost: 'text-text-secondary hover:bg-surface-1 hover:text-text-primary',
+        // First use of border-accent's color as a fill rather than a border/text
+        // accent (design-reference-login.html's solid CTA button) — reusing the
+        // existing token rather than introducing a new one, since the value is
+        // already the right blue; only the utility (bg- vs border-) differs.
+        primary: 'bg-border-accent text-white hover:opacity-90',
       },
       size: {
         default: 'h-9 px-3',

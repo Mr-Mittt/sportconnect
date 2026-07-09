@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.29.0/dist/tabler-icons.min.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  @keyframes cg-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+</style>
+</helmet>
+<div style="width:360px;height:340px;position:relative;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;margin:0 auto;">
+
+  <!-- earth: shaded 3D globe backdrop (drop a real earth/continents image onto it) -->
+  <div style="position:absolute;left:22px;top:14px;width:304px;height:304px;border-radius:50%;overflow:hidden;background:radial-gradient(circle at 36% 30%, #ffffff 0%, #f5f4f0 42%, #e7e6de 74%, #d4d3cb 100%);box-shadow:0 22px 44px rgba(44,44,42,0.20),inset -14px -16px 34px rgba(44,44,42,0.10),inset 10px 10px 24px rgba(255,255,255,0.75);">
+    <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="earth-globe" src="earth.png" shape="circle" fit="cover" placeholder="Drop an earth image" style="width:100%;height:100%;opacity:0.5;" hint-size="304px,304px"></x-import>
+  </div>
+
+  <svg width="360" height="340" viewBox="0 0 360 340" style="position:absolute;inset:0;" aria-hidden="true">
+    <line x1="110" y1="48" x2="180" y2="88" stroke="#085041" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="250" y1="48" x2="180" y2="88" stroke="#085041" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="241" y1="145" x2="180" y2="88" stroke="#085041" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="119" y1="145" x2="180" y2="88" stroke="#085041" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="330" y1="185" x2="260" y2="226" stroke="#3C3489" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="260" y1="307" x2="260" y2="226" stroke="#3C3489" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="241" y1="145" x2="260" y2="226" stroke="#3C3489" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="180" y1="252" x2="260" y2="226" stroke="#3C3489" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="30" y1="185" x2="100" y2="226" stroke="#712B13" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="100" y1="307" x2="100" y2="226" stroke="#712B13" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="180" y1="252" x2="100" y2="226" stroke="#712B13" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="119" y1="145" x2="100" y2="226" stroke="#712B13" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="241" y1="145" x2="180" y2="180" stroke="#1E6AA8" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="180" y1="252" x2="180" y2="180" stroke="#1E6AA8" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+    <line x1="119" y1="145" x2="180" y2="180" stroke="#1E6AA8" stroke-opacity="0.32" stroke-width="2" stroke-linecap="round"></line>
+  </svg>
+
+  <!-- centre: badminton group (background-less) -->
+  <div style="position:absolute;left:148px;top:148px;width:64px;height:64px;display:flex;align-items:center;justify-content:center;"><i class="ti ti-ping-pong" style="font-size:44px;color:#1E6AA8;filter:drop-shadow(0 2px 3px rgba(30,106,168,0.28));" aria-hidden="true"></i></div>
+
+  <!-- satellite sport groups (background-less) -->
+  <div style="position:absolute;left:163px;top:71px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;"><i class="ti ti-ball-football" style="font-size:30px;color:#085041;" aria-hidden="true"></i></div>
+  <div style="position:absolute;left:243px;top:209px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;"><i class="ti ti-barbell" style="font-size:30px;color:#3C3489;" aria-hidden="true"></i></div>
+  <div style="position:absolute;left:83px;top:209px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;"><i class="ti ti-bike" style="font-size:30px;color:#712B13;" aria-hidden="true"></i></div>
+
+  <!-- people (3D bubbles): simple user + group-people icons -->
+  <div style="position:absolute;left:90px;top:28px;width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 34% 28%, #ffffff 0%, #f2f1ec 55%, #d9d8d1 100%);box-shadow:0 8px 15px rgba(44,44,42,0.22),inset 0 -3px 6px rgba(0,0,0,0.08),inset 0 2px 4px rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;animation:cg-float 4.5s ease-in-out 0.0s infinite;"><i class="ti ti-user" style="font-size:20px;color:#5f5e5a;" aria-hidden="true"></i></div>
+  <div style="position:absolute;left:230px;top:28px;width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 34% 28%, #ffffff 0%, #f2f1ec 55%, #d9d8d1 100%);box-shadow:0 8px 15px rgba(44,44,42,0.22),inset 0 -3px 6px rgba(0,0,0,0.08),inset 0 2px 4px rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;animation:cg-float 4.5s ease-in-out 0.4s infinite;"><i class="ti ti-users" style="font-size:22px;color:#5f5e5a;" aria-hidden="true"></i></div>
+  <div style="position:absolute;left:310px;top:165px;width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 34% 28%, #ffffff 0%, #f2f1ec 55%, #d9d8d1 100%);box-shadow:0 8px 15px rgba(44,44,42,0.22),inset 0 -3px 6px rgba(0,0,0,0.08),inset 0 2px 4px rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;animation:cg-float 4.5s ease-in-out 0.8s infinite;"><i class="ti ti-user" style="font-size:20px;color:#5f5e5a;" aria-hidden="true"></i></div>
+  <div style="position:absolute;left:240px;top:287px;width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 34% 28%, #ffffff 0%, #f2f1ec 55%, #d9d8d1 100%);box-shadow:0 8px 15px rgba(44,44,42,0.22),inset 0 -3px 6px rgba(0,0,0,0.08),inset 0 2px 4px rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;animation:cg-float 4.5s ease-in-out 1.2s infinite;"><i class="ti ti-user" style="font-size:20px;color:#5f5e5a;" aria-hidden="true"></i></div>
+  <div style="position:absolute;left:10px;top:165px;width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 34% 28%, #ffffff 0%, #f2f1ec 55%, #d9d8d1 100%);box-shadow:0 8px 15px rgba(44,44,42,0.22),inset 0 -3px 6px rgba(0,0,0,0.08),inset 0 2px 4px rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;animation:cg-float 4.5s ease-in-out 1.6s infinite;"><i class="ti ti-users" style="font-size:22px;color:#5f5e5a;" aria-hidden="true"></i></div>
+  <div style="position:absolute;left:80px;top:287px;width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 34% 28%, #ffffff 0%, #f2f1ec 55%, #d9d8d1 100%);box-shadow:0 8px 15px rgba(44,44,42,0.22),inset 0 -3px 6px rgba(0,0,0,0.08),inset 0 2px 4px rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;animation:cg-float 4.5s ease-in-out 2.0s infinite;"><i class="ti ti-user" style="font-size:20px;color:#5f5e5a;" aria-hidden="true"></i></div>
+  <div style="position:absolute;left:221px;top:125px;width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 34% 28%, #ffffff 0%, #f2f1ec 55%, #d9d8d1 100%);box-shadow:0 8px 15px rgba(44,44,42,0.22),inset 0 -3px 6px rgba(0,0,0,0.08),inset 0 2px 4px rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;animation:cg-float 4.5s ease-in-out 2.4s infinite;"><i class="ti ti-users" style="font-size:22px;color:#5f5e5a;" aria-hidden="true"></i></div>
+  <div style="position:absolute;left:160px;top:232px;width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 34% 28%, #ffffff 0%, #f2f1ec 55%, #d9d8d1 100%);box-shadow:0 8px 15px rgba(44,44,42,0.22),inset 0 -3px 6px rgba(0,0,0,0.08),inset 0 2px 4px rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;animation:cg-float 4.5s ease-in-out 2.8s infinite;"><i class="ti ti-user" style="font-size:20px;color:#5f5e5a;" aria-hidden="true"></i></div>
+  <div style="position:absolute;left:99px;top:125px;width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 34% 28%, #ffffff 0%, #f2f1ec 55%, #d9d8d1 100%);box-shadow:0 8px 15px rgba(44,44,42,0.22),inset 0 -3px 6px rgba(0,0,0,0.08),inset 0 2px 4px rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;animation:cg-float 4.5s ease-in-out 3.2s infinite;"><i class="ti ti-user" style="font-size:20px;color:#5f5e5a;" aria-hidden="true"></i></div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:360,&quot;height&quot;:340}}"></script>
+</body>
+</html>

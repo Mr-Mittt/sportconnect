@@ -73,10 +73,11 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | **Phase 4 — Home Feed release readiness** | | | |
 | 14 | HF-9 | QA / acceptance checklist (Home Feed) | `DONE` |
 | 14b | HF-12 | CI bootstrap + first green run (follow-up from HF-9 item 7) | `DONE` |
+| 14c | HF-13 | Regenerate visual-regression baselines (follow-up from AUTH-1's cn() border-hairline fix) | `TODO` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
-| 17 | AUTH-1 | Login | `TODO` |
+| 17 | AUTH-1 | Login | `DONE` |
 | 18 | AUTH-2 | Register | `TODO` |
 | 19 | AUTH-3 | Session bootstrap on app load | `TODO` |
 | 20 | AUTH-4 | ProtectedRoute + logout | `TODO` |
@@ -389,6 +390,34 @@ Linux baselines committed via PR #2 → **fully green run, merged**. HF-9's item
 - Root `.gitignore` has a scoped negation keeping `client/src/shared/lib` tracked — don't
   "clean up" the `!client/src/shared/lib` lines.
 
+### HF-13 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
+**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** AUTH-1's `cn()` fix
+
+**Found during AUTH-1:** `cn()` (`src/shared/lib/utils.ts`, built on `tailwind-merge`) silently
+dropped the custom `border-hairline`/`-t`/`-r`/`-b` utilities whenever combined with any
+`border-{color}` class in the same className — `tailwind-merge` didn't recognize the custom name
+and bucketed it into the border-color conflict group, so only the color class survived and
+`border-width` fell back to the browser default of `0px`. This broke every `Button` `default`/
+`outline` variant's border app-wide (silently, since `default`'s background fill still read as a
+button visually) — AUTH-1's borderless OAuth buttons were the first place with nothing to mask it.
+Fixed in AUTH-1 by registering these utilities under their real `tailwind-merge` conflict groups
+(`border-w`/`border-w-t`/`border-w-r`/`border-w-b`) via `extendTailwindMerge`. See AUTH-1's summary
+for the full investigation.
+
+**Why this is its own ticket, not folded into AUTH-1:** the fix is global (`cn()` is shared
+infrastructure), so it also changes Home Feed's already-shipped rendering — buttons/pills that
+were silently missing their border now show it, shifting layout enough that HF-10b's committed
+baselines (`e2e/visual/__screenshots__/`) are stale (confirmed: `pnpm test:visual` diff ratios
+jumped from the known ~0.01 Windows/Linux noise floor to up to 0.05, with actual image-dimension
+changes on some breakpoints). User decision: keep the fix (it's correct, and leaving it half-fixed
+would be worse), regenerate baselines as this separate follow-up rather than blocking AUTH-1 on it.
+
+**To execute:** same process as HF-12 — trigger the `client-ci` workflow's `update-baselines`
+manual dispatch on GitHub, download the `visual-baselines` artifact, replace
+`client/e2e/visual/__screenshots__/` with its contents, commit. A human visual check of the new
+baselines against `design-reference-home-feed.html` is worth doing at the same time, to confirm
+the now-visible borders genuinely match the mockup's intent and this isn't masking a second bug.
+
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·
 **Summary:** `client/docs/MSW-0_MOCK_SERVICE_WORKER_HANDLER_SETUP.md`
@@ -433,7 +462,30 @@ auth slice. Access token in memory only — a test asserts no storage API is tou
   built.
 
 ### AUTH-1 · Login
-**Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-1
+**Status:** `DONE` (2026-07-09) · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-1 ·
+**Summary:** `client/docs/AUTH-1_LOGIN.md`
+
+**Deltas for later tickets:**
+- **`design-reference-login.html` now exists** (`client/design-reference/`) — created mid-ticket,
+  supersedes the epic's plain-text description as the visual spec. Its left-panel two-column card
+  layout (`CommunityIllustration` + form) is shared with AUTH-2's Register page per the mockup —
+  reuse `CommunityIllustration` and the `shadow-card`/elevated-card token, don't rebuild.
+- **OAuth buttons (Facebook/Google/Apple) render disabled**, not omitted — matches the mockup
+  visually but non-functional until a real OAuth ticket exists. AUTH-2 should follow the same
+  pattern if its mockup includes them.
+- **Password show/hide toggle shipped in AUTH-1**, not AUTH-6 as the epic originally assigned —
+  the mockup made it core to the form. AUTH-6 no longer needs to add this.
+- **New shared primitives:** `src/shared/ui/input.tsx`, `label.tsx` (hand-written, not shadcn
+  CLI-generated — the CLI writes to a broken path on Windows and pulls in an inconsistent
+  dependency, see AUTH-1's summary), `Button`'s new `primary` variant (solid `border-accent` fill).
+  Reuse these rather than re-deriving styles for AUTH-2's form fields/submit button.
+- **`cn()` bug fix (`src/shared/lib/utils.ts`):** `border-hairline` utilities are now correctly
+  registered with `tailwind-merge` — no longer silently dropped when combined with a
+  `border-{color}` class. This changes rendering for every existing `border-hairline` usage
+  app-wide (previously invisible borders now show). See **HF-13** (new ticket, `TODO`) for the
+  required visual-regression baseline regen this causes.
+- **`QueryClientProvider` now wraps the app** (`main.tsx`) — FEED-0 and later tickets needing
+  TanStack Query don't need to add this themselves.
 
 ### AUTH-2 · Register
 **Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-2
