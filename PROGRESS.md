@@ -414,6 +414,12 @@ Verified against both MSW and the real running backend (registered a live user, 
 `AuthResponse.user`'s shape matches exactly, including AUTH-0's `avatarUrl`/`phoneNumber` fix).
 77/77 unit tests, clean build.
 
+**HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
+HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
+AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and
+did a human visual check on two of them — borders now render correctly on post cards, sport-switcher
+pills, match cards, and CTAs, nothing unintentionally broken.
+
 **Infrastructure decisions** (2026-07-08, `infra/documentation/INFRASTRUCTURE_LAYOUT_AND_CICD.md`):
 hybrid infra layout (artifact-scoped files stay in `client/`/`server/`, environment-scoped in
 `infra/`, workflows must stay in `.github/workflows/`); **GitHub Actions is the CI/CD platform —

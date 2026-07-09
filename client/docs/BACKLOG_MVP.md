@@ -73,7 +73,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | **Phase 4 — Home Feed release readiness** | | | |
 | 14 | HF-9 | QA / acceptance checklist (Home Feed) | `DONE` |
 | 14b | HF-12 | CI bootstrap + first green run (follow-up from HF-9 item 7) | `DONE` |
-| 14c | HF-13 | Regenerate visual-regression baselines (follow-up from AUTH-1's cn() border-hairline fix) | `TODO` |
+| 14c | HF-13 | Regenerate visual-regression baselines (follow-up from AUTH-1's cn() border-hairline fix) | `DONE` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -391,7 +391,8 @@ Linux baselines committed via PR #2 → **fully green run, merged**. HF-9's item
   "clean up" the `!client/src/shared/lib` lines.
 
 ### HF-13 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
-**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** AUTH-1's `cn()` fix
+**Status:** `DONE` (2026-07-09) · **Type:** Infrastructure (Testing) · **Dependency:** AUTH-1's `cn()` fix ·
+**Summary:** `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`
 
 **Found during AUTH-1:** `cn()` (`src/shared/lib/utils.ts`, built on `tailwind-merge`) silently
 dropped the custom `border-hairline`/`-t`/`-r`/`-b` utilities whenever combined with any
