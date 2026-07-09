@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { LoginPage } from './features/auth/LoginPage';
+import { RegisterPage } from './features/auth/RegisterPage';
 import { HomeFeedPage } from './features/home-feed/HomeFeedPage';
 import { AppShell } from './shared/components/AppShell';
 import { ComingSoonPage } from './shared/components/ComingSoonPage';
@@ -10,6 +11,7 @@ function App() {
       {/* Pre-auth routes render outside AppShell — no TopBar/NavTabs for a
           logged-out visitor. */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<HomeFeedPage />} />
         <Route path="/friends" element={<ComingSoonPage title="Friends" />} />

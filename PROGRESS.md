@@ -414,6 +414,17 @@ Verified against both MSW and the real running backend (registered a live user, 
 `AuthResponse.user`'s shape matches exactly, including AUTH-0's `avatarUrl`/`phoneNumber` fix).
 77/77 unit tests, clean build.
 
+**AUTH-2 DONE** (2026-07-09, `client/docs/AUTH-2_REGISTER.md`): Register — `RegisterPage`/
+`RegisterForm` against `POST /api/auth/register` (auto-logs-in, same `AuthResult` shape as login).
+Extracted `AuthShell` from `LoginPage`'s inlined two-column shell so Login and Register share the
+same illustration/tagline panel (no `design-reference-register.html` exists; user confirmed reusing
+Login's shell plus a disabled OAuth row for visual parity). Found jsdom hardcodes
+`tooShort: () => false`, so `minLength` never blocks submission under Vitest/RTL — replaced that
+test with an attribute assertion and verified the real constraint manually against a live browser +
+the real backend instead. Verified against the real running backend via a throwaway Playwright spec
+(fresh registration → auto-login → Home Feed; duplicate email → real `"Email already registered"`
+inline, no redirect). 91/91 unit tests, clean build.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and

@@ -78,7 +78,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
 | 17 | AUTH-1 | Login | `DONE` |
-| 18 | AUTH-2 | Register | `TODO` |
+| 18 | AUTH-2 | Register | `DONE` |
 | 19 | AUTH-3 | Session bootstrap on app load | `TODO` |
 | 20 | AUTH-4 | ProtectedRoute + logout | `TODO` |
 | 21 | AUTH-5 | 401 refresh-retry interceptor | `TODO` |
@@ -489,9 +489,22 @@ auth slice. Access token in memory only — a test asserts no storage API is tou
   TanStack Query don't need to add this themselves.
 
 ### AUTH-2 · Register
-**Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-2
+**Status:** `DONE` (2026-07-09) · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-2 ·
+**Summary:** `client/docs/AUTH-2_REGISTER.md`
 
 Register auto-logs-in (same `AuthResult` shape as login) — no artificial "now go log in" step.
+
+**Deltas for later tickets:**
+- **No `design-reference-register.html` exists** — user decision (recommended options): Register
+  reuses Login's two-column shell verbatim (now extracted as `AuthShell.tsx`,
+  `src/features/auth/components/`) plus a disabled OAuth row for visual parity. Any future auth
+  page (e.g. forgot-password, if unblocked later) should reuse `AuthShell` too rather than re-
+  inlining the shell markup.
+- **jsdom does not enforce `minLength` (`tooShort` is hardcoded `false` in jsdom's
+  `HTMLInputElement` impl)** — don't write a Vitest/RTL test asserting a `minLength` blocks
+  submission, it will pass falsely or fail depending on jsdom internals. Assert the attribute
+  instead (`toHaveAttribute('minLength', ...)`) and verify the real constraint manually in a
+  browser. `required` is unaffected — jsdom does enforce that one.
 
 ### AUTH-3 · Session bootstrap on app load
 **Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-3

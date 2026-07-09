@@ -27,6 +27,13 @@ describe('App routing', () => {
     expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument();
   });
 
+  it('renders RegisterPage on /register, outside AppShell (no TopBar/NavTabs)', () => {
+    renderApp(['/register']);
+    expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
+    expect(screen.queryByText('SportHub')).toBeInTheDocument(); // the register page's own logo, not TopBar's
+    expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument();
+  });
+
   it('renders the assembled Home Feed on / (HF-7 replaced the placeholder)', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
