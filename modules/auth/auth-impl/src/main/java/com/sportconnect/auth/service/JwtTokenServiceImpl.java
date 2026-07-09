@@ -17,6 +17,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -91,11 +92,21 @@ public class JwtTokenServiceImpl implements JwtTokenService {
         return jwtProperties.getRefreshExpiration();
     }
 
+    // jti is required, not decorative: iat/exp are second-precision in the JWT
+    // spec, and every other claim here is deterministic per user. Without a
+    // random id, two tokens generated for the same user within the same
+    // second are byte-identical strings — refresh_tokens.token is UNIQUE, so
+    // that collision throws a DataIntegrityViolationException (500) instead
+    // of just minting a second valid token. Found via AUTH-3 (client), which
+    // made this reachable in practice: an app-load session-bootstrap refresh
+    // firing within a second of the login/register call that preceded it
+    // (e.g. opening a second tab right after signing up).
     private String generateToken(Map<String, Object> userData, Long expiration) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expiration);
 
         return Jwts.builder()
+                .setId(UUID.randomUUID().toString())
                 .setSubject(userData.get("id").toString())
                 .claim("email", userData.get("email"))
                 .claim("username", userData.get("username"))

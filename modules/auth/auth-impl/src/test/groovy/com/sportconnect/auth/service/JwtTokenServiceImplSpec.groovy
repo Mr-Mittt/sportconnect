@@ -166,6 +166,23 @@ class JwtTokenServiceImplSpec extends Specification {
         expiration == 604800000L
     }
 
+    def "should generate a unique token on every call, even for the same user within the same second"() {
+        given: "the same user data used twice in immediate succession"
+        def userData = [
+            id: UUID.randomUUID(),
+            email: "test@example.com",
+            username: "testuser",
+            roles: ["USER"]
+        ]
+
+        when: "generating two refresh tokens back to back"
+        def tokenOne = jwtTokenService.generateRefreshToken(userData)
+        def tokenTwo = jwtTokenService.generateRefreshToken(userData)
+
+        then: "the tokens differ despite identical claims (jti makes them unique)"
+        tokenOne != tokenTwo
+    }
+
     def "should handle token with missing claims gracefully"() {
         given: "a token"
         def userData = [

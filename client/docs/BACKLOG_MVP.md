@@ -79,7 +79,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
 | 17 | AUTH-1 | Login | `DONE` |
 | 18 | AUTH-2 | Register | `DONE` |
-| 19 | AUTH-3 | Session bootstrap on app load | `TODO` |
+| 19 | AUTH-3 | Session bootstrap on app load | `DONE` |
 | 20 | AUTH-4 | ProtectedRoute + logout | `TODO` |
 | 21 | AUTH-5 | 401 refresh-retry interceptor | `TODO` |
 | 22 | AUTH-6 | Auth hardening (errors, rate-limit messaging, a11y) | `TODO` |
@@ -507,12 +507,28 @@ Register auto-logs-in (same `AuthResult` shape as login) — no artificial "now 
   browser. `required` is unaffected — jsdom does enforce that one.
 
 ### AUTH-3 · Session bootstrap on app load
-**Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-3
+**Status:** `DONE` (2026-07-09) · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-3 ·
+**Summary:** `client/docs/AUTH-3_SESSION_BOOTSTRAP.md`
 
 Refresh-on-load restores the session from the httpOnly cookie; the refresh response's `user` object
 doubles as "who am I" (no `/api/users/me` exists). **No longer blocked** — auth backlog A2 (BE-1)
 shipped 2026-07-08; `POST /api/auth/refresh` genuinely reads/sets the cookie now. See
 `modules/auth/docs/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md`.
+
+**Deltas for later tickets:**
+- **`App.test.tsx` now always wraps `QueryClientProvider`** (`renderApp` helper used by every case,
+  not just `/login`/`/register`) — `App` calls `useSessionBootstrap()` unconditionally, so any test
+  rendering `<App />` needs a query client, matching real `main.tsx` structure. Future tests adding
+  cases to this file should keep using `renderApp`, not a bare `<MemoryRouter>`.
+- **Found and fixed a real backend bug bundled into this branch (user decision — own-branch was the
+  alternative, declined):** `JwtTokenServiceImpl.generateToken()` had no random component, so two
+  refresh tokens for the same user within the same second collided on `refresh_tokens.token`'s
+  `UNIQUE` constraint (500). Fixed with a `jti` claim. See **A4**
+  (`modules/auth/docs/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md`) — not a client-side concern for AUTH-4/5
+  to work around, the fix is already in place.
+- **`useSessionBootstrap()` is called once, at the app root (`App.tsx`), regardless of route** —
+  AUTH-4's `ProtectedRoute` should read `authStore.isBootstrapping`/`user` rather than re-triggering
+  or duplicating this call anywhere else.
 
 ### AUTH-4 · ProtectedRoute + logout
 **Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-3 · **Spec:** AUTH/FEED epic § AUTH-4
