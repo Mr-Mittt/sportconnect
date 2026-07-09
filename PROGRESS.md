@@ -395,6 +395,25 @@ FEED-0/FEED-6/FEED-7/SPORT-1, same resequencing principle as AUTH-0. Self-verify
 (`e2e/flows/msw-setup.spec.ts`, 4/4 passing) asserts `response.fromServiceWorker()` since no login
 UI exists yet to drive this through. 13/13 e2e, 64/64 unit, clean build.
 
+**AUTH-1 DONE** (2026-07-09, `client/docs/AUTH-1_LOGIN.md`): Login — two-column card
+(`LoginPage`/`LoginForm`/`CommunityIllustration`) built against a new `design-reference-login.html`
+the user created mid-ticket, which became the authoritative visual spec and expanded scope beyond
+the epic's plain text (OAuth buttons rendered-but-disabled per the backlog's OAuth deferral,
+password show/hide toggle pulled forward from AUTH-6, illustration + `/register` link built at full
+fidelity). `useLogin()` (new `@tanstack/react-query` dependency, first ticket needing it —
+`QueryClientProvider` added to `main.tsx`) wraps the mutation and populates `authStore` directly.
+Found and fixed a real, previously-invisible bug along the way: `cn()`
+(`src/shared/lib/utils.ts`) was silently dropping the custom `border-hairline` utility whenever
+merged with a `border-{color}` class — `tailwind-merge` misclassified it into the border-color
+conflict group — breaking every `Button` `default`/`outline` variant's border app-wide, unnoticed
+until AUTH-1's borderless OAuth buttons had nothing left to mask it. Fixed via
+`extendTailwindMerge`; the fix is correctly global but changes Home Feed's already-shipped
+rendering, so HF-10b's committed visual-regression baselines are now stale — filed as **HF-13**
+(regenerate via the existing `update-baselines` CI dispatch) rather than blocking this ticket.
+Verified against both MSW and the real running backend (registered a live user, confirmed
+`AuthResponse.user`'s shape matches exactly, including AUTH-0's `avatarUrl`/`phoneNumber` fix).
+77/77 unit tests, clean build.
+
 **Infrastructure decisions** (2026-07-08, `infra/documentation/INFRASTRUCTURE_LAYOUT_AND_CICD.md`):
 hybrid infra layout (artifact-scoped files stay in `client/`/`server/`, environment-scoped in
 `infra/`, workflows must stay in `.github/workflows/`); **GitHub Actions is the CI/CD platform —

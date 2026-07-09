@@ -31,6 +31,12 @@ export default tseslint.config(
       ecmaVersion: 2023,
       globals: globals.browser,
     },
+    rules: {
+      // jsx-a11y only recognizes the literal `label` element by default —
+      // our shared Label component wraps it, so the rule can't see through
+      // to the real <label htmlFor> it renders without this hint.
+      'jsx-a11y/label-has-associated-control': ['error', { labelComponents: ['Label'] }],
+    },
   },
   {
     // Playwright fixtures (e.g. test.extend({ page: async ({ page }, use) => ... }))

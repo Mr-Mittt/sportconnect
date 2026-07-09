@@ -44,6 +44,15 @@
   --color-purple-50: #eeedfe; /* Tennis bg */
   --color-purple-800: #3c3489; /* Tennis text */
 
+  /*
+   * Decorative-only accent for the Login/Register CommunityIllustration's
+   * central hub icon + its connector lines (design-reference-login.html).
+   * Deliberately NOT a 4th sport ramp — it doesn't represent a real SportKey,
+   * just the illustration's central "hub" motif, so it skips the pink/gray
+   * ramp-priority sequence a real 4th sport would follow.
+   */
+  --color-decor-hub: #1e6aa8;
+
   /* Layout: the mockup's centered content frame (960px) → max-w-frame */
   --container-frame: 60rem;
 
@@ -73,6 +82,34 @@
   border-bottom-width: 0.5px;
 }
 
+@utility border-hairline-r {
+  border-right-width: 0.5px;
+}
+
 body {
   @apply bg-surface-0 text-text-primary antialiased;
+}
+
+/* CommunityIllustration's floating avatar circles (design-reference-login.html) */
+@keyframes float-avatar {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@utility animate-float-avatar {
+  animation: float-avatar 4.5s ease-in-out infinite;
+}
+
+/* Elevated-card treatment (Login/Register split-panel card) — distinct from
+   the plain hairline-bordered cards used elsewhere (e.g. Home Feed's rail
+   cards), which have no shadow at all. */
+@utility shadow-card {
+  box-shadow:
+    0 1px 3px rgba(44, 44, 42, 0.06),
+    0 12px 40px rgba(44, 44, 42, 0.06);
 }
