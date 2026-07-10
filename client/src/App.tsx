@@ -5,11 +5,11 @@ import { useSessionBootstrap } from './features/auth/useSessionBootstrap';
 import { HomeFeedPage } from './features/home-feed/HomeFeedPage';
 import { AppShell } from './shared/components/AppShell';
 import { ComingSoonPage } from './shared/components/ComingSoonPage';
+import { ProtectedRoute } from './shared/components/ProtectedRoute';
 
 function App() {
   // Restores the session from the httpOnly refresh cookie on every app
-  // load, regardless of route — see AUTH-3. ProtectedRoute (AUTH-4) will
-  // gate on authStore.isBootstrapping once it exists.
+  // load, regardless of route — see AUTH-3.
   useSessionBootstrap();
 
   return (
@@ -18,7 +18,13 @@ function App() {
           logged-out visitor. */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route element={<AppShell />}>
+      <Route
+        element={
+          <ProtectedRoute>
+            <AppShell />
+          </ProtectedRoute>
+        }
+      >
         <Route path="/" element={<HomeFeedPage />} />
         <Route path="/friends" element={<ComingSoonPage title="Friends" />} />
         <Route path="/groups" element={<ComingSoonPage title="Groups" />} />

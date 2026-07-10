@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import { expect, test } from '../mocks/test.ts';
 
 /*
  * HF-10b: full-page visual regression of the REAL HomeFeedPage.
@@ -15,6 +16,12 @@ import { expect, test } from '@playwright/test';
  * render identically on every run. The empty state uses the ?visual-state
  * seam in useHomeFeedData's mock internals (no mock sport is empty) — when
  * FEED-1 de-mocks the hook, replace it with MSW handlers.
+ *
+ * AUTH-4 update: Home Feed now sits behind ProtectedRoute — every case seeds
+ * an authenticated session (MSW-backed) landing on its target path/query
+ * (seedAuthenticatedSession's redirect-back mechanism), instead of a bare
+ * page.goto(). The clock freeze happens before that navigation so it's in
+ * effect for the whole flow, login screen included.
  *
  * NOTE: baselines are OS-specific (font rendering). The committed set is
  * regenerated on Linux via the client-ci workflow's update-baselines input —
@@ -35,7 +42,7 @@ for (const width of breakpoints) {
     test(`home feed — ${state.name} @ ${width}px`, async ({ page }) => {
       await page.clock.setFixedTime(FROZEN_TIME);
       await page.setViewportSize({ width, height: 900 });
-      await page.goto(`/${state.query}`);
+      await seedAuthenticatedSession(page, `/${state.query}`);
 
       if (state.name === 'empty') {
         await expect(page.getByText('No posts yet for this sport.')).toBeVisible();

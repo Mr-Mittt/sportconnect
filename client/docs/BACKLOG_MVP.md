@@ -74,13 +74,14 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14 | HF-9 | QA / acceptance checklist (Home Feed) | `DONE` |
 | 14b | HF-12 | CI bootstrap + first green run (follow-up from HF-9 item 7) | `DONE` |
 | 14c | HF-13 | Regenerate visual-regression baselines (follow-up from AUTH-1's cn() border-hairline fix) | `DONE` |
+| 14d | HF-14 | Regenerate visual-regression baselines (follow-up from AUTH-4's TopBar avatar-menu change) | `TODO` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
 | 17 | AUTH-1 | Login | `DONE` |
 | 18 | AUTH-2 | Register | `DONE` |
 | 19 | AUTH-3 | Session bootstrap on app load | `DONE` |
-| 20 | AUTH-4 | ProtectedRoute + logout | `TODO` |
+| 20 | AUTH-4 | ProtectedRoute + logout | `DONE` |
 | 21 | AUTH-5 | 401 refresh-retry interceptor | `TODO` |
 | 22 | AUTH-6 | Auth hardening (errors, rate-limit messaging, a11y) | `TODO` |
 | 23 | AUTH-8 | E2E functional test — auth journey | `TODO` |
@@ -419,6 +420,23 @@ manual dispatch on GitHub, download the `visual-baselines` artifact, replace
 baselines against `design-reference-home-feed.html` is worth doing at the same time, to confirm
 the now-visible borders genuinely match the mockup's intent and this isn't masking a second bug.
 
+### HF-14 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
+**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** AUTH-4's TopBar avatar-menu change ·
+**Summary:** `client/docs/AUTH-4_PROTECTED_ROUTE_LOGOUT.md`
+
+**Found during AUTH-4:** `TopBar.tsx`'s avatar area changed (chevron + dropdown-menu wiring for the
+new logout entry point) — `TopBar` renders on every page, so this shifts Home Feed's already-shipped
+rendering the same way AUTH-1's `cn()` fix did (HF-13). Confirmed via `pnpm test:visual`: all 9
+committed baselines now legitimately diff (0.02–0.03 pixel-ratio, consistent across repeated runs —
+not flakiness), since the top-right corner of every capture now shows the new chevron/avatar-menu
+markup. Same reasoning as HF-13 for why this is its own ticket: the change is correct and shouldn't
+be reverted, but regenerating baselines is a separate concern from the feature that caused the drift.
+
+**To execute:** identical process to HF-12/HF-13 — trigger the `client-ci` workflow's
+`update-baselines` manual dispatch on GitHub, download the `visual-baselines` artifact, replace
+`client/e2e/visual/__screenshots__/` with its contents, commit. Worth a human visual check that the
+new baselines show the avatar chevron correctly and nothing else drifted unexpectedly.
+
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·
 **Summary:** `client/docs/MSW-0_MOCK_SERVICE_WORKER_HANDLER_SETUP.md`
@@ -531,7 +549,8 @@ shipped 2026-07-08; `POST /api/auth/refresh` genuinely reads/sets the cookie now
   or duplicating this call anywhere else.
 
 ### AUTH-4 · ProtectedRoute + logout
-**Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-3 · **Spec:** AUTH/FEED epic § AUTH-4
+**Status:** `DONE` (2026-07-10) · **Type:** Feature · **Dependency:** AUTH-3 · **Spec:** AUTH/FEED epic § AUTH-4 ·
+**Summary:** `client/docs/AUTH-4_PROTECTED_ROUTE_LOGOUT.md`
 
 Wait for bootstrap before redirecting; logout clears the session even if the network call fails;
 redirect-back after login.
@@ -540,6 +559,25 @@ redirect-back after login.
 longer takes a `userId` query param at all; it derives the caller from the `Authorization: Bearer`
 header (401 if missing/invalid). Implement against `POST /api/auth/logout` with no query string.
 See `modules/auth/docs/A3_FIX_LOGOUT_AUTHORIZATION.md`.
+
+**Deltas for later tickets:**
+- **Logout entry point is an avatar dropdown menu** (`TopBar`'s `user`/`onLogout` props, new
+  `src/shared/ui/dropdown-menu.tsx` primitive) — user decision after reviewing an HTML mockup pitch
+  built from real design tokens; not frozen as a `design-reference-*.html`. `TopBar`'s API changed:
+  `userInitials`/`onAvatarClick` → `user: { initials, name, email }` + `onLogout`.
+  `requiredRole`-mismatch redirects to `/` (no dedicated unauthorized page exists).
+- **`e2e/mocks/fixtures.ts` gained `seedAuthenticatedSession(page, targetPath?)`** — the only
+  reliable way to reach a route behind `ProtectedRoute` in an E2E spec. AUTH-8/FEED-10 (both build
+  new E2E specs touching authenticated routes) should use this rather than re-deriving an
+  auth-seeding approach — see AUTH-4's summary for why direct cookie injection and raw-fetch-based
+  seeding both failed under real parallel-worker load.
+- **HF-14 filed**: Home Feed's 9 committed visual-regression baselines are stale (TopBar's markup
+  changed). Any ticket touching `TopBar` again before HF-14 lands should expect the same staleness
+  and roll it into the same regen rather than filing a third near-identical ticket.
+- **`a11y.spec.ts`, `smoke.spec.ts`, `home-feed-journey.spec.ts`, `app-home-feed.spec.ts`** now import
+  `test`/`expect` from `../mocks/test.ts` (MSW-wired) instead of `@playwright/test` directly, and
+  seed a session before asserting on Home Feed. Any new E2E spec touching an authenticated route
+  should follow the same pattern from the start.
 
 ### AUTH-5 · 401 refresh-retry interceptor
 **Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-5
