@@ -442,6 +442,31 @@ signup). Fixed with a `jti` (`UUID.randomUUID()`) claim, bundled into this branc
 — see **A4** (`modules/auth/docs/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md`). 95/95 client unit tests,
 auth-impl suite green, clean build.
 
+**AUTH-4 DONE** (2026-07-10, `client/docs/AUTH-4_PROTECTED_ROUTE_LOGOUT.md`): ProtectedRoute +
+logout — `AppShell`'s route now gated by `ProtectedRoute` (loading state while bootstrapping, `/login`
+redirect-back via router state, `/` redirect on `requiredRole` mismatch); `useLogout()` clears the
+session even if `POST /auth/logout` fails. Logout entry point is a new avatar dropdown menu (new
+`DropdownMenu` primitive on `@radix-ui/react-dropdown-menu`, new `--shadow-menu` token) — direction
+approved via an HTML mockup pitch built from real design tokens before implementation, verified via
+Storybook rather than frozen as a visual-regression baseline (too small an addition to the *existing*
+TopBar for that machinery). Redirect-back after auth applies to both Login and Register, per user
+decision. Found and fixed a real, unrelated regression: `ProtectedRoute` broke 4 previously-green E2E
+specs that assumed unauthenticated access to Home Feed (`a11y`, `smoke`, `home-feed-journey`, the
+visual-regression spec) — fixed with a new `seedAuthenticatedSession()` E2E helper, after two dead
+ends confirmed empirically (direct cookie injection is invisible to MSW's private
+`localStorage`-backed cookie store; a raw mocked-fetch login races AUTH-3's bootstrap effect against
+MSW's per-navigation worker-ready handshake, ~80% failure rate under parallel workers). Working design
+drives the real login form and relies on `ProtectedRoute`'s own redirect-back mechanism, reliable
+across repeated parallel runs. Home Feed's 9 committed visual-regression baselines are now stale
+(TopBar's markup changed) — filed as **HF-14**, same process as HF-13, not executed here.
+Added `PublicOnlyRoute` (new, inverse of `ProtectedRoute`) after review: an already-authenticated
+visitor manually navigating to `/login`/`/register` previously just saw the form again, unguarded —
+now redirects to Home Feed. Hit and fixed a second race the same shape as AUTH-3's StrictMode one:
+`PublicOnlyRoute`'s reactive redirect competed with a just-completed login's own `navigate()` call
+(both triggered by the same `setSession()` update) — fixed by deciding `redirect` vs `render` once,
+via a `useRef`, instead of re-evaluating on every render. 115/115 client unit tests, 13/13 e2e, clean
+build.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and

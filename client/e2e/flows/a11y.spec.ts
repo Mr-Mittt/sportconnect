@@ -1,5 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import { expect, test } from '../mocks/test.ts';
 
 /*
  * HF-8: accessibility + responsive gate for the Home Feed. Two invariants at
@@ -8,13 +9,19 @@ import { expect, test } from '@playwright/test';
  *  2. axe reports zero critical/serious violations
  * Runs against the real app (same e2e project as the functional flows), so a
  * regressing token or layout change fails CI, not a manual audit.
+ *
+ * AUTH-4 update: Home Feed now sits behind ProtectedRoute, so every case
+ * seeds an authenticated session (MSW-backed) before loading it.
  */
 
 const breakpoints = [375, 768, 1280] as const;
 
 async function loadHomeFeed(page: import('@playwright/test').Page, width: number) {
   await page.setViewportSize({ width, height: 900 });
-  await page.goto('/');
+  // Lands on / after login (SPA navigate, no reload) — no separate
+  // page.goto('/') needed, and adding one would reintroduce AUTH-3's
+  // bootstrap-vs-MSW-worker-ready race on a fresh navigation.
+  await seedAuthenticatedSession(page);
   // Rail content present = page fully assembled
   await expect(page.getByRole('region', { name: 'Upcoming matches' })).toBeVisible();
 }

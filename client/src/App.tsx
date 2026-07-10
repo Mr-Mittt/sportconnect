@@ -5,20 +5,42 @@ import { useSessionBootstrap } from './features/auth/useSessionBootstrap';
 import { HomeFeedPage } from './features/home-feed/HomeFeedPage';
 import { AppShell } from './shared/components/AppShell';
 import { ComingSoonPage } from './shared/components/ComingSoonPage';
+import { ProtectedRoute } from './shared/components/ProtectedRoute';
+import { PublicOnlyRoute } from './shared/components/PublicOnlyRoute';
 
 function App() {
   // Restores the session from the httpOnly refresh cookie on every app
-  // load, regardless of route — see AUTH-3. ProtectedRoute (AUTH-4) will
-  // gate on authStore.isBootstrapping once it exists.
+  // load, regardless of route — see AUTH-3.
   useSessionBootstrap();
 
   return (
     <Routes>
       {/* Pre-auth routes render outside AppShell — no TopBar/NavTabs for a
-          logged-out visitor. */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route element={<AppShell />}>
+          logged-out visitor. PublicOnlyRoute sends an already-authenticated
+          visitor to Home Feed instead of showing the form again. */}
+      <Route
+        path="/login"
+        element={
+          <PublicOnlyRoute>
+            <LoginPage />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <PublicOnlyRoute>
+            <RegisterPage />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        element={
+          <ProtectedRoute>
+            <AppShell />
+          </ProtectedRoute>
+        }
+      >
         <Route path="/" element={<HomeFeedPage />} />
         <Route path="/friends" element={<ComingSoonPage title="Friends" />} />
         <Route path="/groups" element={<ComingSoonPage title="Groups" />} />

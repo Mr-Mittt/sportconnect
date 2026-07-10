@@ -4,13 +4,34 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './app/apiClient';
+import { useAuthStore } from './app/authStore';
 import App from './App';
 
-// App itself calls useSessionBootstrap() on mount (AUTH-3), and LoginPage/
-// RegisterPage need TanStack Query too — main.tsx provides a
-// QueryClientProvider at the real app root (outside App itself), so every
-// test rendering <App /> must wrap it here to match production.
-function renderApp(initialEntries: string[]) {
+const fixtureUser = {
+  id: '1',
+  email: 'jordan@example.com',
+  firstName: 'Jordan',
+  lastName: 'Lee',
+  username: 'jordanlee',
+  phoneNumber: null,
+  avatarUrl: null,
+  roles: ['USER'],
+};
+
+const fixtureAuthResponse = {
+  data: {
+    success: true,
+    message: 'Token refreshed successfully',
+    data: { accessToken: 'token-abc', tokenType: 'Bearer', expiresIn: 3600, user: fixtureUser },
+    timestamp: new Date().toISOString(),
+  },
+};
+
+// App itself calls useSessionBootstrap() on mount (AUTH-3), and every route
+// under AppShell is now gated by ProtectedRoute (AUTH-4) — main.tsx provides
+// a QueryClientProvider at the real app root, so every test rendering
+// <App /> must wrap it here to match production.
+function renderApp(initialEntries: Array<string | { pathname: string; state?: unknown }>) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
@@ -23,10 +44,11 @@ function renderApp(initialEntries: string[]) {
 
 describe('App routing', () => {
   beforeEach(() => {
-    // No MSW in Vitest (it's Playwright-only, see MSW-0) — mock the
-    // session-bootstrap call so it resolves deterministically instead of
-    // hitting a real network call in jsdom. Rejecting simulates "no valid
-    // refresh cookie", the normal logged-out case these route tests run as.
+    // Reset the singleton authStore between tests — Zustand state doesn't
+    // reset on its own between renders, unlike a fresh QueryClient per test.
+    useAuthStore.setState({ user: null, accessToken: null, isBootstrapping: true });
+    // No MSW in Vitest (Playwright-only, see MSW-0) — default to "no valid
+    // session" so auth-page tests don't need an authenticated fixture.
     vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('no session'));
   });
 
@@ -34,43 +56,109 @@ describe('App routing', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders LoginPage on /login, outside AppShell (no TopBar/NavTabs)', () => {
+  it('renders LoginPage on /login, outside AppShell (no TopBar/NavTabs)', async () => {
     renderApp(['/login']);
-    expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument());
     expect(screen.queryByText('SportHub')).toBeInTheDocument(); // the login page's own logo, not TopBar's
     expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument();
   });
 
-  it('renders RegisterPage on /register, outside AppShell (no TopBar/NavTabs)', () => {
+  it('renders RegisterPage on /register, outside AppShell (no TopBar/NavTabs)', async () => {
     renderApp(['/register']);
-    expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument());
     expect(screen.queryByText('SportHub')).toBeInTheDocument(); // the register page's own logo, not TopBar's
     expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument();
   });
 
-  it('renders the assembled Home Feed on / (HF-7 replaced the placeholder)', () => {
+  it('redirects to /login when a logged-out visitor hits a protected route directly', async () => {
     renderApp(['/']);
-    expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument());
+  });
+
+  it('redirects an already-authenticated visitor away from /login to Home Feed', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
+    renderApp(['/login']);
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
+    expect(screen.queryByRole('heading', { name: 'Welcome back' })).not.toBeInTheDocument();
+  });
+
+  it('redirects an already-authenticated visitor away from /register to Home Feed', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
+    renderApp(['/register']);
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
+    expect(screen.queryByRole('heading', { name: 'Create your account' })).not.toBeInTheDocument();
+  });
+
+  it('renders the assembled Home Feed on / for an authenticated user (HF-7 replaced the placeholder)', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
+    renderApp(['/']);
+
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
     expect(screen.getAllByRole('article').length).toBeGreaterThan(0);
     expect(screen.getByRole('region', { name: 'Upcoming matches' })).toBeInTheDocument();
   });
 
-  it('renders a stub route (Friends) on /friends', () => {
+  it('renders a stub route (Friends) on /friends for an authenticated user', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
     renderApp(['/friends']);
-    expect(screen.getByRole('heading', { name: 'Friends' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Friends' })).toBeInTheDocument());
   });
 
   it('clicking a NavTab navigates and marks it active', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
     const user = userEvent.setup();
     renderApp(['/']);
+
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: 'Groups' }));
     expect(screen.getByRole('heading', { name: 'Groups' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Groups' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('calls POST /auth/refresh on mount to restore the session (AUTH-3)', async () => {
-    renderApp(['/']);
+    renderApp(['/login']);
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/auth/refresh'));
     expect(apiClient.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('logging out from the account menu clears the session and redirects to /login', async () => {
+    vi.spyOn(apiClient, 'post').mockImplementation((url: string) => {
+      if (url === '/auth/logout') {
+        return Promise.resolve({
+          data: { success: true, message: 'Logged out successfully', data: null, timestamp: new Date().toISOString() },
+        });
+      }
+      return Promise.resolve(fixtureAuthResponse);
+    });
+
+    const user = userEvent.setup();
+    renderApp(['/']);
+
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Your account' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Log out' }));
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument());
+    expect(useAuthStore.getState().user).toBeNull();
+  });
+
+  it('redirects to /login for a protected route while logged out, and back to it after a successful login', async () => {
+    vi.spyOn(apiClient, 'post').mockImplementation((url: string) => {
+      if (url === '/auth/refresh') return Promise.reject(new Error('no session'));
+      if (url === '/auth/login') return Promise.resolve(fixtureAuthResponse);
+      return Promise.reject(new Error(`unexpected call: ${url}`));
+    });
+
+    const user = userEvent.setup();
+    renderApp(['/groups']);
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument());
+
+    await user.type(screen.getByLabelText('Email'), 'jordan@example.com');
+    await user.type(screen.getByLabelText('Password'), 'password123');
+    await user.click(screen.getByRole('button', { name: 'Log in' }));
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Groups' })).toBeInTheDocument());
   });
 });

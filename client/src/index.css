@@ -113,3 +113,12 @@ body {
     0 1px 3px rgba(44, 44, 42, 0.06),
     0 12px 40px rgba(44, 44, 42, 0.06);
 }
+
+/* Small-menu elevation (TopBar's avatar dropdown) — same rgba(44,44,42,…)
+   family as shadow-card, tighter and lower since it's sized for a ~240px
+   menu, not a full card. */
+@utility shadow-menu {
+  box-shadow:
+    0 1px 3px rgba(44, 44, 42, 0.08),
+    0 4px 14px rgba(44, 44, 42, 0.14);
+}

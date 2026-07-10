@@ -1,14 +1,19 @@
-import { expect, test } from '@playwright/test';
+import { seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import { expect, test } from '../mocks/test.ts';
 
 /*
  * HF-11: the 7-step Home Feed journey (HF epic § HF-11), fully mock-driven —
- * no MSW, no network. Auto-waiting assertions only; no sleeps.
+ * MSW only used for auth (Home Feed's own data stays mock-internal until
+ * FEED-1 de-mocks it). Auto-waiting assertions only; no sleeps.
  *
  * Premise corrections vs the epic's literal steps (user-approved; see the
  * backlog entry's deltas): hashtag and match-CTA callbacks are deliberate
  * no-ops until FEED-6/FEED-1 land, so steps 5–6 assert reachability and
  * distinct states rather than a fabricated side effect; the mock user is AT
  * the 3-sport cap, so step 7 asserts HF-2's at-cap behavior (aria-disabled).
+ *
+ * AUTH-4 update: Home Feed now sits behind ProtectedRoute — step 1 seeds an
+ * authenticated session (MSW-backed) instead of a bare page.goto('/').
  *
  * MSW follow-ups once Phases 5–6 de-mock the hooks (per the epic, recorded
  * here so they aren't lost): step 1 needs handlers for feed/trending/
@@ -23,8 +28,8 @@ test('Home Feed journey', async ({ page }) => {
   const matchCtas = upcoming.getByRole('button', { name: /join|view details/ });
 
   await test.step('1. load — shell, switcher, feed, and all three rail blocks render', async () => {
-    await page.goto('/');
-    await expect(page.getByText('SportHub')).toBeVisible();
+    await seedAuthenticatedSession(page);
+    await expect(page.getByText('SportHub', { exact: true })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
     await expect(page.getByRole('group', { name: 'Sport filter' })).toBeVisible();
     await expect(page.getByRole('article')).toHaveCount(4);
