@@ -578,6 +578,13 @@ See `modules/auth/docs/A3_FIX_LOGOUT_AUTHORIZATION.md`.
   `test`/`expect` from `../mocks/test.ts` (MSW-wired) instead of `@playwright/test` directly, and
   seed a session before asserting on Home Feed. Any new E2E spec touching an authenticated route
   should follow the same pattern from the start.
+- **Added `PublicOnlyRoute`** (new, `src/shared/components/`, inverse of `ProtectedRoute`) wrapping
+  `/login`/`/register` — an already-authenticated visitor is redirected to `/` instead of seeing the
+  form again. Not in the original epic; added after review. **If any future route guard needs to
+  react to `authStore.user` changing while it stays mounted, decide once via a `useRef` (see
+  `PublicOnlyRoute`'s own implementation comment) rather than re-evaluating live on every render** —
+  a reactive redirect here raced a just-completed login's own `navigate()` call, both triggered by
+  the same `setSession()` update, and which one won was not a safe assumption.
 
 ### AUTH-5 · 401 refresh-retry interceptor
 **Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-5

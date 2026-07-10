@@ -56,16 +56,16 @@ describe('App routing', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders LoginPage on /login, outside AppShell (no TopBar/NavTabs)', () => {
+  it('renders LoginPage on /login, outside AppShell (no TopBar/NavTabs)', async () => {
     renderApp(['/login']);
-    expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument());
     expect(screen.queryByText('SportHub')).toBeInTheDocument(); // the login page's own logo, not TopBar's
     expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument();
   });
 
-  it('renders RegisterPage on /register, outside AppShell (no TopBar/NavTabs)', () => {
+  it('renders RegisterPage on /register, outside AppShell (no TopBar/NavTabs)', async () => {
     renderApp(['/register']);
-    expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument());
     expect(screen.queryByText('SportHub')).toBeInTheDocument(); // the register page's own logo, not TopBar's
     expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument();
   });
@@ -73,6 +73,20 @@ describe('App routing', () => {
   it('redirects to /login when a logged-out visitor hits a protected route directly', async () => {
     renderApp(['/']);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument());
+  });
+
+  it('redirects an already-authenticated visitor away from /login to Home Feed', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
+    renderApp(['/login']);
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
+    expect(screen.queryByRole('heading', { name: 'Welcome back' })).not.toBeInTheDocument();
+  });
+
+  it('redirects an already-authenticated visitor away from /register to Home Feed', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
+    renderApp(['/register']);
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
+    expect(screen.queryByRole('heading', { name: 'Create your account' })).not.toBeInTheDocument();
   });
 
   it('renders the assembled Home Feed on / for an authenticated user (HF-7 replaced the placeholder)', async () => {

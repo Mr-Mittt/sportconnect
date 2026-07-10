@@ -459,7 +459,13 @@ MSW's per-navigation worker-ready handshake, ~80% failure rate under parallel wo
 drives the real login form and relies on `ProtectedRoute`'s own redirect-back mechanism, reliable
 across repeated parallel runs. Home Feed's 9 committed visual-regression baselines are now stale
 (TopBar's markup changed) — filed as **HF-14**, same process as HF-13, not executed here.
-110/110 client unit tests, 14/14 e2e, clean build.
+Added `PublicOnlyRoute` (new, inverse of `ProtectedRoute`) after review: an already-authenticated
+visitor manually navigating to `/login`/`/register` previously just saw the form again, unguarded —
+now redirects to Home Feed. Hit and fixed a second race the same shape as AUTH-3's StrictMode one:
+`PublicOnlyRoute`'s reactive redirect competed with a just-completed login's own `navigate()` call
+(both triggered by the same `setSession()` update) — fixed by deciding `redirect` vs `render` once,
+via a `useRef`, instead of re-evaluating on every render. 115/115 client unit tests, 13/13 e2e, clean
+build.
 
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following

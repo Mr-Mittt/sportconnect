@@ -66,6 +66,30 @@ unchanged.
 - `LoginPage.tsx` and `RegisterPage.tsx` — read `location.state?.from` via `useLocation()`, navigate
   there instead of the hardcoded `/`.
 
+### `PublicOnlyRoute.tsx` (new, `src/shared/components/`) — added after initial review
+
+Not in the original epic text, added after the user asked what happens if an already-authenticated
+visitor navigates to `/login`/`/register` directly (stale bookmark, browser back, etc.) — the answer,
+before this addition, was "nothing: the form just renders again, unguarded." `PublicOnlyRoute` is the
+inverse of `ProtectedRoute`: same `isBootstrapping` wait (to avoid flashing the form for a user who
+actually has a valid session), then redirects an authenticated visitor to `/` instead of rendering
+`children`. Wraps both `/login` and `/register` in `App.tsx`.
+
+New shared `AuthLoadingState.tsx` extracted (used by both `ProtectedRoute` and `PublicOnlyRoute` —
+identical "waiting on bootstrap" JSX, not worth duplicating twice).
+
+**A second race, found and fixed the same way as the E2E one below:** `PublicOnlyRoute` reactively
+redirects whenever `authStore.user` becomes truthy — but so does a *successful login completed on the
+page it wraps*. `useLogin`'s `onSuccess` calls `setSession()` (making `user` truthy) and then
+`navigate(from)` in the same synchronous callback; `PublicOnlyRoute`'s own Zustand subscription reacts
+to that same `setSession()` call and wants to redirect to `/` too. Confirmed empirically (not assumed)
+via the existing `App.test.tsx` redirect-back integration test, which started failing — landing on
+Home Feed instead of the originally-attempted route — the instant `PublicOnlyRoute` was wired in.
+Fixed by making the redirect decision **once**, via a `useRef` (same pattern as
+`useSessionBootstrap`'s StrictMode guard): `PublicOnlyRoute` decides `redirect` vs `render` the first
+time `isBootstrapping` resolves, and never reconsiders — a login completed inside its own `children`
+is the child page's `navigate()` to handle, not this guard's to race against.
+
 ## A real, unrelated regression found and fixed: four existing E2E specs broke
 
 `ProtectedRoute` wrapping `AppShell` means every route under it — including Home Feed — now requires
@@ -124,16 +148,21 @@ introduce OS-mismatch noise. Filed as **HF-14** in the backlog, same process as 
 ## Verification
 
 - `pnpm exec tsc -b` / `pnpm lint` — clean.
-- `pnpm test` — 110/110 (existing 95 + 15 new: 5 `TopBar`, 5 `ProtectedRoute`, 2 `useLogout`, 2
-  `LoginPage`/`RegisterPage` redirect-back cases, 1 new `App.test.tsx` logout+redirect-back
-  integration case — plus `App.test.tsx`'s existing Home Feed/Friends/NavTab cases restructured to
-  authenticate first).
+- `pnpm test` — 115/115 (95 pre-AUTH-4 + 15 from the initial AUTH-4 build + 5 new `PublicOnlyRoute`
+  cases; also fixed the 2 original `/login`/`/register` `App.test.tsx` cases, which needed
+  `await waitFor(...)` once those routes started going through `PublicOnlyRoute`'s async
+  `isBootstrapping` check). Full suite re-run 3× clean to confirm the ref-guard fix actually resolved
+  the race rather than masking it.
 - `pnpm build` / `pnpm build-storybook` — clean.
-- `pnpm exec playwright test --project=e2e` — 14/14 (including the 4 retrofitted specs).
+- `pnpm exec playwright test --project=e2e` — 13/13 after the `PublicOnlyRoute` addition (one fewer
+  than before since the throwaway verification spec from the first pass had already been deleted).
 - **Real backend verification** (`./gradlew :server:bootRun`, dev profile, real Postgres/Redis),
-  driven via a throwaway Playwright script (deleted after use): direct nav to `/groups` while logged
-  out → `/login`; register → lands on Home Feed (no redirect-back state on that hop, confirmed as
-  expected — the "Create an account" link is a plain `<Link>`, not a state-carrying redirect); logout
-  via the avatar menu → session cleared, redirected to `/login`; direct nav to `/groups` again → log
-  in → redirect-back lands on `/groups`, not Home Feed; Escape closes the account menu via keyboard
-  without triggering logout.
+  driven via throwaway Playwright scripts (deleted after use):
+  - First pass: direct nav to `/groups` while logged out → `/login`; register → lands on Home Feed
+    (no redirect-back state on that hop, confirmed as expected — the "Create an account" link is a
+    plain `<Link>`, not a state-carrying redirect); logout via the avatar menu → session cleared,
+    redirected to `/login`; direct nav to `/groups` again → log in → redirect-back lands on
+    `/groups`, not Home Feed; Escape closes the account menu via keyboard without triggering logout.
+  - Second pass (`PublicOnlyRoute`): register → already authenticated → manually navigating to
+    `/login` redirects straight to Home Feed without showing the form; same for `/register`; logout
+    → `/login` reachable normally again.

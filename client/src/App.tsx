@@ -6,6 +6,7 @@ import { HomeFeedPage } from './features/home-feed/HomeFeedPage';
 import { AppShell } from './shared/components/AppShell';
 import { ComingSoonPage } from './shared/components/ComingSoonPage';
 import { ProtectedRoute } from './shared/components/ProtectedRoute';
+import { PublicOnlyRoute } from './shared/components/PublicOnlyRoute';
 
 function App() {
   // Restores the session from the httpOnly refresh cookie on every app
@@ -15,9 +16,24 @@ function App() {
   return (
     <Routes>
       {/* Pre-auth routes render outside AppShell — no TopBar/NavTabs for a
-          logged-out visitor. */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+          logged-out visitor. PublicOnlyRoute sends an already-authenticated
+          visitor to Home Feed instead of showing the form again. */}
+      <Route
+        path="/login"
+        element={
+          <PublicOnlyRoute>
+            <LoginPage />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <PublicOnlyRoute>
+            <RegisterPage />
+          </PublicOnlyRoute>
+        }
+      />
       <Route
         element={
           <ProtectedRoute>

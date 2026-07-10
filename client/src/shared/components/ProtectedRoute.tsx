@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
+import { AuthLoadingState } from './AuthLoadingState';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -26,11 +27,7 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   const location = useLocation();
 
   if (isBootstrapping) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-2sm text-text-muted">
-        Loading…
-      </div>
-    );
+    return <AuthLoadingState />;
   }
 
   if (!user) {
