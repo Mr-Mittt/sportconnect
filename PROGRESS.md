@@ -425,6 +425,23 @@ the real backend instead. Verified against the real running backend via a throwa
 (fresh registration → auto-login → Home Feed; duplicate email → real `"Email already registered"`
 inline, no redirect). 91/91 unit tests, clean build.
 
+**AUTH-3 DONE** (2026-07-09, `client/docs/AUTH-3_SESSION_BOOTSTRAP.md`): Session bootstrap on app
+load — `useSessionBootstrap()` fires `POST /api/auth/refresh` once on mount (App.tsx, every route,
+since ProtectedRoute doesn't exist yet), restoring `authStore` from the httpOnly cookie so a valid
+session survives a hard refresh; a failed refresh is the normal logged-out case, silent, no visible
+error. Guarded with a `useRef` against React 18 StrictMode's dev-only double-invoke of mount
+effects, which would otherwise fire two concurrent `/refresh` calls sharing one single-use cookie —
+traced through `AuthServiceImpl`/`AuthController` and confirmed harmless even unguarded (loser gets
+a 401 with no `Set-Cookie`), but wasteful. `App.test.tsx` restructured so every case renders through
+a `QueryClientProvider` (previously only `/login` did — a real gap `App`'s new unconditional
+`useSessionBootstrap()` call would have crashed on). Real-backend verification surfaced a genuine,
+unrelated bug: `JwtTokenServiceImpl.generateToken()` had no random component, so two tokens for the
+same user within the same second collided on `refresh_tokens.token`'s `UNIQUE` constraint (500) —
+AUTH-3's automatic on-load refresh made this newly reachable (e.g. a second tab opened right after
+signup). Fixed with a `jti` (`UUID.randomUUID()`) claim, bundled into this branch per user decision
+— see **A4** (`modules/auth/docs/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md`). 95/95 client unit tests,
+auth-impl suite green, clean build.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and

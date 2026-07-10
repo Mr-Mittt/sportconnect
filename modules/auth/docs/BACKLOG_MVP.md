@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | A2 | Refresh token via httpOnly cookie (client epic's BE-1) | `DONE` |
 | 2 | A3 | Fix `/api/auth/logout` authorization (client epic's BE-2) | `DONE` |
+| 3 | A4 | JWT `jti` claim for guaranteed token uniqueness | `DONE` |
 
 **Dependencies:**
 ```
@@ -28,6 +29,8 @@ A2 and A3 are independent of each other, but both touch AuthController.java —
 consider doing them in the same session.
 Both block the new client's auth integration (see client/docs/BACKLOG_MVP.md):
 A2 blocks AUTH-3 and AUTH-5; A3 should ship before AUTH-4 reaches production.
+A4 has no dependencies — discovered during AUTH-3's manual verification, fixed
+alongside it on the same client branch (user decision).
 ```
 
 *(Ticket numbering starts at A2 — A1 was moved to `BACKLOG_V1.md`, see Removed / Deferred.)*
@@ -93,6 +96,27 @@ header. Update `client/docs/BACKLOG_MVP.md`'s AUTH-4 note when this lands.
 
 **Tests:** authenticated logout revokes the caller's own token; unauthenticated call → 401; a
 supplied `userId` param (if tolerated at all) cannot revoke a different user's session.
+
+---
+
+### A4 · JWT `jti` claim for guaranteed token uniqueness
+**Status:** `DONE` (2026-07-09) · **Summary:** `modules/auth/docs/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md`
+**Type:** Bug Fix
+**Origin:** discovered during the client's AUTH-3 (`client/docs/BACKLOG_MVP.md`) manual verification
+against the real running backend — not part of that ticket's own scope.
+
+`JwtTokenServiceImpl.generateToken()` built every JWT from entirely deterministic claims (user id,
+email, username, roles, `iat`, `exp` — no random component). JWT `iat`/`exp` are second-precision,
+so two tokens generated for the same user within the same wall-clock second were byte-identical,
+colliding against `refresh_tokens.token`'s `UNIQUE` constraint (500, not caught gracefully).
+AUTH-3's automatic on-load `/refresh` call made this newly reachable in ordinary usage (e.g. a
+second tab opened right after signing up).
+
+**Fix:** added a `jti` claim (`UUID.randomUUID()`) to `generateToken()` — the standard JWT claim for
+exactly this purpose. No DB migration needed.
+
+**Tests:** `JwtTokenServiceImplSpec` — two tokens generated back-to-back for identical user data now
+assert `!=`.
 
 ---
 
