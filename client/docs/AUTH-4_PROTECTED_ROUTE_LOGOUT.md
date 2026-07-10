@@ -85,10 +85,22 @@ page it wraps*. `useLogin`'s `onSuccess` calls `setSession()` (making `user` tru
 to that same `setSession()` call and wants to redirect to `/` too. Confirmed empirically (not assumed)
 via the existing `App.test.tsx` redirect-back integration test, which started failing — landing on
 Home Feed instead of the originally-attempted route — the instant `PublicOnlyRoute` was wired in.
-Fixed by making the redirect decision **once**, via a `useRef` (same pattern as
-`useSessionBootstrap`'s StrictMode guard): `PublicOnlyRoute` decides `redirect` vs `render` the first
-time `isBootstrapping` resolves, and never reconsiders — a login completed inside its own `children`
-is the child page's `navigate()` to handle, not this guard's to race against.
+Fixed by making the redirect decision **once**: `PublicOnlyRoute` decides `redirect` vs `render` the
+first time `isBootstrapping` resolves, and never reconsiders — a login completed inside its own
+`children` is the child page's `navigate()` to handle, not this guard's to race against.
+
+**Implementation detail that changed after the first pass:** the initial fix used a `useRef` to lock
+the decision in (same pattern as `useSessionBootstrap`'s StrictMode guard), which worked and passed
+every test — but failed `pnpm lint` under `eslint-plugin-react-hooks` v7's newer, stricter rules:
+`react-hooks/refs` forbids reading/writing `ref.current` during render at all (not just conditionally),
+and the natural next attempt — moving the lock into a `useEffect` + `useState` — tripped
+`react-hooks/set-state-in-effect` (React's own "you might not need an effect" guidance). Landed on
+React's actually-documented pattern for this exact situation: call `setState` conditionally **during
+render** (not inside an effect), guarded so it only ever fires once. `useState<Decision>('pending')`
++ `if (decision === 'pending' && !isBootstrapping) setDecision(...)` — the moment `decision` isn't
+`'pending'` anymore, that branch stops running for the rest of the component instance's lifetime,
+giving the identical "decide once" guarantee without a ref. Re-verified: 115/115 unit tests (run
+twice), `pnpm lint`/`tsc -b` both clean, production build clean.
 
 ## A real, unrelated regression found and fixed: four existing E2E specs broke
 
