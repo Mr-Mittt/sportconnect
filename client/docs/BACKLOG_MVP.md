@@ -74,7 +74,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14 | HF-9 | QA / acceptance checklist (Home Feed) | `DONE` |
 | 14b | HF-12 | CI bootstrap + first green run (follow-up from HF-9 item 7) | `DONE` |
 | 14c | HF-13 | Regenerate visual-regression baselines (follow-up from AUTH-1's cn() border-hairline fix) | `DONE` |
-| 14d | HF-14 | Regenerate visual-regression baselines (follow-up from AUTH-4's TopBar avatar-menu change) | `TODO` |
+| 14d | HF-14 | Regenerate visual-regression baselines (follow-up from AUTH-4's TopBar avatar-menu change) | `DONE` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -421,8 +421,8 @@ baselines against `design-reference-home-feed.html` is worth doing at the same t
 the now-visible borders genuinely match the mockup's intent and this isn't masking a second bug.
 
 ### HF-14 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
-**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** AUTH-4's TopBar avatar-menu change ·
-**Summary:** `client/docs/AUTH-4_PROTECTED_ROUTE_LOGOUT.md`
+**Status:** `DONE` (2026-07-10) · **Type:** Infrastructure (Testing) · **Dependency:** AUTH-4's TopBar avatar-menu change ·
+**Summary:** `client/docs/HF-14_REGENERATE_VISUAL_BASELINES.md`
 
 **Found during AUTH-4:** `TopBar.tsx`'s avatar area changed (chevron + dropdown-menu wiring for the
 new logout entry point) — `TopBar` renders on every page, so this shifts Home Feed's already-shipped

@@ -464,8 +464,17 @@ visitor manually navigating to `/login`/`/register` previously just saw the form
 now redirects to Home Feed. Hit and fixed a second race the same shape as AUTH-3's StrictMode one:
 `PublicOnlyRoute`'s reactive redirect competed with a just-completed login's own `navigate()` call
 (both triggered by the same `setSession()` update) — fixed by deciding `redirect` vs `render` once,
-via a `useRef`, instead of re-evaluating on every render. 115/115 client unit tests, 13/13 e2e, clean
-build.
+guarded so it fires exactly one time (`useState` + a conditional `setState` during render, not a
+`useRef` — the ref version passed every test but failed `pnpm lint` under
+`eslint-plugin-react-hooks` v7's `react-hooks/refs` rule; the natural `useEffect` replacement then
+tripped `react-hooks/set-state-in-effect`, landing on React's own documented pattern instead).
+115/115 client unit tests, 13/13 e2e, clean build.
+
+**HF-14 DONE** (2026-07-10, `client/docs/HF-14_REGENERATE_VISUAL_BASELINES.md`): regenerated
+Home Feed's 9 committed visual-regression baselines via the `update-baselines` CI dispatch,
+following AUTH-4's TopBar avatar-menu change (same pattern as HF-13's `cn()` follow-up). Diffed old
+vs. new before replacing (all 9 genuinely changed) and human-reviewed two of them — the avatar
+chevron renders correctly, nothing else shifted.
 
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
