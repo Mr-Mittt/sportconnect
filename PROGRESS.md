@@ -491,6 +491,21 @@ and relies on `ProtectedRoute`'s existing reactive redirect rather than a manual
 (still mock-backed pending FEED-1), so logout was the available real authenticated call. 13/13 new
 + 124/124 client-wide unit tests, clean build.
 
+**AUTH-6 DONE** (2026-07-12, `client/docs/AUTH-6_AUTH_HARDENING.md`): auth hardening — scope split
+during Phase 1: rate-limit error surfacing pulled out entirely after confirming the backend has no
+rate-limiting implementation at all (no filter, no `bucket4j`/`resilience4j`, no config — documented
+as an unbuilt TODO in `README_AUTH_SETUP.md`), filed as backend ticket **A5**
+(`modules/auth/docs/BACKLOG_MVP.md`) instead of building against a made-up response shape; show/hide
+toggle was already done in AUTH-1. Remaining scope — a11y hardening — extended `e2e/flows/
+a11y.spec.ts` (HF-8's own delta said to extend it, not fork it) with an axe scan + no-overflow gate
+for `/login`/`/register` at 375/768/1280px, plus dedicated Tab-order tests (axe doesn't check
+interaction). First axe run caught a real bug: the primary submit button's white-on-`#378add` text
+is 3.59:1, failing WCAG AA — traced to `design-reference-login.html`'s own inline style, not an
+implementation drift (the mockup itself violates its own accessibility baseline). Fixed with a new
+`--color-accent-solid` token (6.53:1) and updated the reference HTML to match, same pattern as HF-8's
+`text-muted` fix. 124/124 unit tests unaffected, 27/27 e2e (21 in the extended a11y spec) pass, clean
+build.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and

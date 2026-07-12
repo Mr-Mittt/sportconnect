@@ -24,6 +24,14 @@
   /* Accent background (chips, subtle highlights) */
   --color-bg-accent: #e6f1fb;
 
+  /* Solid-fill accent for primary CTA buttons (Login/Register submit). White
+     text on border-accent's #378add is 3.59:1 — fails WCAG AA (needs 4.5:1).
+     The mockup's own inline style used #378add directly (rgb(55, 138, 221)) —
+     same class of bug HF-8 found and fixed for text-muted. This darker shade
+     (same hex as text-accent) gives 6.53:1; reference HTML updated to match
+     — AUTH-6. */
+  --color-accent-solid: #185fa5;
+
   /* Borders */
   --color-border: rgba(44, 44, 42, 0.12);
   --color-border-strong: rgba(44, 44, 42, 0.24);

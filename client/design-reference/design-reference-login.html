@@ -138,7 +138,11 @@
       
 
       <a data-dc-tpl="24" href="http://localhost:63342/fullstack-app/fullstack-app.client/design-reference/Profile.dc.html" style="text-decoration: none;">
-        <button data-dc-tpl="25" style="width: 100%; font-family: inherit; font-size: 14px; font-weight: 500; color: rgb(255, 255, 255); background: rgb(55, 138, 221); border-width: medium; border-style: none; border-color: currentcolor; border-image: none; border-radius: 8px; padding: 12px; cursor: pointer; transition: background 0.12s;">Sign in or Sign up</button>
+        <!-- AUTH-6: background darkened from rgb(55, 138, 221) — white text on
+             that shade is 3.59:1, failing WCAG AA (needs 4.5:1). rgb(24, 95, 165)
+             (--color-accent-solid) gives 6.53:1. Same class of fix as HF-8's
+             text-muted darkening; don't restore the original mockup value. -->
+        <button data-dc-tpl="25" style="width: 100%; font-family: inherit; font-size: 14px; font-weight: 500; color: rgb(255, 255, 255); background: rgb(24, 95, 165); border-width: medium; border-style: none; border-color: currentcolor; border-image: none; border-radius: 8px; padding: 12px; cursor: pointer; transition: background 0.12s;">Sign in or Sign up</button>
       </a><div data-dc-tpl="26" style="display: flex; align-items: center; gap: 12px; margin: 20px 0px;">
         <div data-dc-tpl="27" style="flex: 1 1 0%; height: 0.5px; background: rgba(44, 44, 42, 0.12);"></div>
         <span data-dc-tpl="28" style="font-size: 12px; color: rgb(110, 109, 102);">or</span>
