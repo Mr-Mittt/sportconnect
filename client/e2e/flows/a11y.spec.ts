@@ -57,3 +57,100 @@ test('sport-filtered state — axe reports no critical/serious violations', asyn
   await expect(page.getByRole('article')).toHaveCount(1);
   expect(await gatingViolations(page)).toEqual([]);
 });
+
+/*
+ * AUTH-6: same a11y gate extended to Login/Register — logged-out routes, not
+ * behind ProtectedRoute, so no seedAuthenticatedSession() call. MSW's default
+ * /auth/refresh handler 401s without a cookie (fixtures.ts), which is the
+ * normal logged-out bootstrap outcome these pages render against anyway.
+ */
+
+const authPages = [
+  { path: '/login', heading: 'Welcome back' },
+  { path: '/register', heading: 'Create your account' },
+] as const;
+
+async function loadAuthPage(
+  page: import('@playwright/test').Page,
+  path: '/login' | '/register',
+  heading: string,
+  width: number,
+) {
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto(path);
+  await page.evaluate('window.__mswReady');
+  await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+}
+
+for (const { path, heading } of authPages) {
+  for (const width of breakpoints) {
+    test(`${path} @ ${width}px — no horizontal overflow`, async ({ page }) => {
+      await loadAuthPage(page, path, heading, width);
+      const overflow = await page.evaluate<number>(
+        'document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth',
+      );
+      expect(overflow, 'page must not scroll horizontally').toBeLessThanOrEqual(0);
+    });
+
+    test(`${path} @ ${width}px — axe reports no critical/serious violations`, async ({ page }) => {
+      await loadAuthPage(page, path, heading, width);
+      expect(await gatingViolations(page)).toEqual([]);
+    });
+  }
+}
+
+// Full keyboard navigation: axe checks name/role/value and contrast, but not
+// tab order — this walks Tab through every real control (skipping the
+// disabled OAuth row, which native `disabled` already removes from tab
+// order) and asserts the sequence explicitly, once per form.
+test('/login: Tab reaches every control in order', async ({ page }) => {
+  await page.goto('/login');
+  await page.evaluate('window.__mswReady');
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Email', { exact: true })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  // exact: true — getByLabel does substring matching by default, and
+  // "Password" is a substring of the toggle button's aria-label "Show password".
+  await expect(page.getByLabel('Password', { exact: true })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Show password' })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Log in' })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Create an account' })).toBeFocused();
+});
+
+test('/register: Tab reaches every control in order', async ({ page }) => {
+  await page.goto('/register');
+  await page.evaluate('window.__mswReady');
+  await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Email', { exact: true })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  // exact: true — getByLabel does substring matching by default, and
+  // "Password" is a substring of the toggle button's aria-label "Show password".
+  await expect(page.getByLabel('Password', { exact: true })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Show password' })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Full name')).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Phone number (optional)')).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Create account' })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Log in' })).toBeFocused();
+});

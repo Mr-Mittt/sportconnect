@@ -83,7 +83,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 19 | AUTH-3 | Session bootstrap on app load | `DONE` |
 | 20 | AUTH-4 | ProtectedRoute + logout | `DONE` |
 | 21 | AUTH-5 | 401 refresh-retry interceptor | `DONE` |
-| 22 | AUTH-6 | Auth hardening (errors, rate-limit messaging, a11y) | `TODO` |
+| 22 | AUTH-6 | Auth hardening (errors, rate-limit messaging, a11y) | `DONE` |
 | 23 | AUTH-8 | E2E functional test — auth journey | `TODO` |
 | 24 | AUTH-7 | QA / acceptance checklist (auth) | `TODO` |
 | **Phase 6 — Feed/groups/sport integration (de-mocks HF-2/3/5/6)** | | | |
@@ -115,12 +115,13 @@ FEED-0 → FEED-1..FEED-7, SPORT-1 → FEED-8 → FEED-10 → FEED-9
 HF-4 (matches) is NOT de-mocked in this MVP — no backend module exists.
 ```
 
-**Backend blockers (tracked outside this backlog) — both resolved 2026-07-08:**
+**Backend blockers (tracked outside this backlog):**
 
 | Blocker | Where tracked | Blocked | Status |
 |---|---|---|---|
-| BE-1: refresh token → httpOnly cookie | `modules/auth/docs/BACKLOG_MVP.md` · A2 | AUTH-3, AUTH-5 | `DONE` |
-| BE-2: logout derives user from principal | `modules/auth/docs/BACKLOG_MVP.md` · A3 | AUTH-4 (production) | `DONE` |
+| BE-1: refresh token → httpOnly cookie | `modules/auth/docs/BACKLOG_MVP.md` · A2 | AUTH-3, AUTH-5 | `DONE` (2026-07-08) |
+| BE-2: logout derives user from principal | `modules/auth/docs/BACKLOG_MVP.md` · A3 | AUTH-4 (production) | `DONE` (2026-07-08) |
+| BE-3: login/registration rate limiting | `modules/auth/docs/BACKLOG_MVP.md` · A5 | a future client ticket (not yet filed) for rate-limit error surfacing, split out of AUTH-6 on 2026-07-12 | `TODO` |
 | Matches/tournaments module | Nowhere yet — needs its own design pass | de-mocking HF-4 |
 
 ---
@@ -617,10 +618,39 @@ One silent refresh + one retry on 401; refresh failure → clean logout, never a
   `GET /posts/feed`-style read has never been exercised against the real backend by this ticket.
 
 ### AUTH-6 · Auth hardening
-**Status:** `TODO` · **Type:** Hardening · **Dependency:** AUTH-1, AUTH-2 · **Spec:** AUTH/FEED epic § AUTH-6
+**Status:** `DONE` (2026-07-12) · **Type:** Hardening · **Dependency:** AUTH-1, AUTH-2 · **Spec:** AUTH/FEED epic § AUTH-6 ·
+**Summary:** `client/docs/AUTH-6_AUTH_HARDENING.md`
 
 Rate-limit error surfacing (confirm the actual error shape first — unverified), a11y, show/hide
 password toggle.
+
+**Delta (scope split, 2026-07-12):** show/hide password toggle already shipped in AUTH-1 (pulled
+forward — see AUTH-1's entry above). **Rate-limit error surfacing is out of scope for this ticket**
+— verified against the real backend that no rate-limiting exists at all (no filter/interceptor, no
+`bucket4j`/`resilience4j`, no config; `AUTHENTICATION_DESIGN.md` documents the intended policy but
+`README_AUTH_SETUP.md` explicitly lists it as an unbuilt TODO). There's no error shape to surface
+because the backend never returns one. Filed as backend ticket **A5**
+(`modules/auth/docs/BACKLOG_MVP.md`) instead of building speculative client code against a made-up
+response shape. Once A5 ships, file a new client ticket for the `useLogin`/`useRegister` error
+branch — don't fold it back into this one, which is closing out with only its a11y scope. **This
+ticket's actual remaining scope is the a11y/axe pass** (keyboard navigation + screen-reader
+labeling + a committed axe scan gate on Login/Register, extending `e2e/flows/a11y.spec.ts`'s HF-8
+pattern).
+
+**Deltas for later tickets:**
+- **`Button`'s `primary` variant now uses a new `--color-accent-solid` token (`#185fa5`), not
+  `bg-border-accent`.** The axe gate caught a real WCAG AA contrast failure (white text on
+  `border-accent`'s `#378add` = 3.59:1, needs 4.5:1) traced to `design-reference-login.html`'s own
+  inline style — the mockup itself has the bug, not just the implementation. Same class of issue as
+  HF-8's `text-muted` fix; reference HTML updated to match (`rgb(24, 95, 165)`), don't "restore" the
+  original mockup value. Any future page reusing the `primary` button variant inherits the fix
+  automatically.
+- **`e2e/flows/a11y.spec.ts` now covers `/login`/`/register`** (axe + no-overflow at 3 breakpoints,
+  plus explicit Tab-order tests) — future auth-adjacent pages (forgot-password, if unblocked) should
+  extend this file too, per HF-8's own precedent, not start a new one.
+- **Playwright's `getByLabel()` does substring matching by default** — `getByLabel('Password')`
+  collides with the show/hide toggle's `aria-label="Show password"`. Use `{ exact: true }` for any
+  future e2e assertion targeting the password field specifically.
 
 ### AUTH-8 · E2E functional test — auth journey
 **Status:** `TODO` · **Type:** Testing · **Dependency:** MSW-0, AUTH-1..AUTH-5 · **Spec:** AUTH/FEED epic § AUTH-8
