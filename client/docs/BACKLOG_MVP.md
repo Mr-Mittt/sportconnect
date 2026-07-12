@@ -82,7 +82,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 18 | AUTH-2 | Register | `DONE` |
 | 19 | AUTH-3 | Session bootstrap on app load | `DONE` |
 | 20 | AUTH-4 | ProtectedRoute + logout | `DONE` |
-| 21 | AUTH-5 | 401 refresh-retry interceptor | `TODO` |
+| 21 | AUTH-5 | 401 refresh-retry interceptor | `DONE` |
 | 22 | AUTH-6 | Auth hardening (errors, rate-limit messaging, a11y) | `TODO` |
 | 23 | AUTH-8 | E2E functional test — auth journey | `TODO` |
 | 24 | AUTH-7 | QA / acceptance checklist (auth) | `TODO` |
@@ -587,11 +587,34 @@ See `modules/auth/docs/A3_FIX_LOGOUT_AUTHORIZATION.md`.
   the same `setSession()` update, and which one won was not a safe assumption.
 
 ### AUTH-5 · 401 refresh-retry interceptor
-**Status:** `TODO` · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-5
-
-**No longer blocked** — auth backlog A2 (BE-1) shipped 2026-07-08.
+**Status:** `DONE` (2026-07-11) · **Type:** Feature · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § AUTH-5 ·
+**Summary:** `client/docs/AUTH-5_401_REFRESH_RETRY_INTERCEPTOR.md`
 
 One silent refresh + one retry on 401; refresh failure → clean logout, never a retry loop.
+
+**Deltas for later tickets:**
+- **`handleResponseError()`** is a new named export on `apiClient.ts` (same reasoning as AUTH-0's
+  `attachAuthHeader`) — reuse it as the reference pattern for any future interceptor logic that
+  needs direct unit-testability instead of mocking axios's adapter pipeline.
+- **`/auth/refresh`, `/auth/login`, `/auth/register` are excluded from the retry flow**
+  (`NO_RETRY_URLS` in `apiClient.ts`) — a 401 on any of those means "recursion risk" or "bad
+  credentials", not "expired session". **`/auth/logout` is deliberately NOT excluded** (user
+  decision) — a logout racing an expired token still gets retried so it fully revokes server-side.
+- **Concurrent 401s are deduped** via a shared module-level `refreshPromise` — the backend rotates
+  the refresh token on every use, so two independent refresh calls off the same stale cookie would
+  race and the loser would 401. Any future code adding a second "trigger a refresh" path (there
+  isn't one today beyond `useSessionBootstrap` and this interceptor) should share this same
+  primitive rather than introducing a second independent refresh call.
+- **No `window.location` redirect on refresh failure** — `clearSession()` alone is sufficient
+  because `ProtectedRoute` (AUTH-4) already reacts to `authStore.user` going `null`. Don't
+  reintroduce a manual redirect here.
+- **Retry uses `apiClient.request(originalRequest)`, not `apiClient(originalRequest)`** — same
+  runtime behavior, but only `.request` is spy-able as a normal object method in tests.
+- **Real-backend verification used `/auth/logout` as the target endpoint, not `/posts/feed`** —
+  Home Feed still reads `mockData.ts` until FEED-1 ships, so today `/auth/logout` is the only real
+  authenticated, non-bootstrap call the app actually makes. FEED-1/FEED-6/FEED-7/SPORT-1 should each
+  re-confirm this interceptor still works once their real endpoints exist, since a 401 on a
+  `GET /posts/feed`-style read has never been exercised against the real backend by this ticket.
 
 ### AUTH-6 · Auth hardening
 **Status:** `TODO` · **Type:** Hardening · **Dependency:** AUTH-1, AUTH-2 · **Spec:** AUTH/FEED epic § AUTH-6

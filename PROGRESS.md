@@ -476,6 +476,21 @@ following AUTH-4's TopBar avatar-menu change (same pattern as HF-13's `cn()` fol
 vs. new before replacing (all 9 genuinely changed) and human-reviewed two of them — the avatar
 chevron renders correctly, nothing else shifted.
 
+**AUTH-5 DONE** (2026-07-11, `client/docs/AUTH-5_401_REFRESH_RETRY_INTERCEPTOR.md`): 401
+refresh-retry interceptor — `apiClient.ts`'s response interceptor gained an exported
+`handleResponseError()` (same testability pattern as AUTH-0's `attachAuthHeader`): on a `401`, one
+silent `/auth/refresh` + retry via `apiClient.request()`, excluding `/auth/refresh`/`/auth/login`/
+`/auth/register` from the retry flow (recursion risk / not an expired-session scenario) but
+deliberately *not* excluding `/auth/logout` (user decision — a logout racing an expired token
+should still fully revoke server-side). Concurrent 401s share one module-level `refreshPromise` so
+they don't race the backend's single-use refresh-token rotation. Refresh failure clears the session
+and relies on `ProtectedRoute`'s existing reactive redirect rather than a manual
+`window.location` jump. Verified against the real running backend (not just MSW): forced a `401` on
+`POST /auth/logout` via Playwright route interception through the real TopBar dropdown, observed
+`401 → refresh 200 → logout 200` — Home Feed itself has no real endpoint to force a 401 against yet
+(still mock-backed pending FEED-1), so logout was the available real authenticated call. 13/13 new
++ 124/124 client-wide unit tests, clean build.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and
