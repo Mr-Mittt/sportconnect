@@ -67,7 +67,13 @@ After implementation:
    ```
    ./gradlew :<module>:<module>-impl:test
    ```
-4. If frontend was changed, start the dev server and walk the happy path manually:
+4. **Always run `./gradlew :server:test` too — never skip this, even if step 3 is green.**
+   Module-level Spock specs mock every dependency, so they can't catch a missing table in the test
+   profile's H2 `schema.sql`, a Spring wiring issue from a new constructor dependency, or a real
+   MockMvc mismatch — only a real `@SpringBootTest` context surfaces those. If any
+   `*IntegrationTest`/`*IT` class touches what changed, a green module-test run alone does not mean
+   verification is done.
+5. If frontend was changed, start the dev server and walk the happy path manually:
    ```
    cd client && npm start
    ```
