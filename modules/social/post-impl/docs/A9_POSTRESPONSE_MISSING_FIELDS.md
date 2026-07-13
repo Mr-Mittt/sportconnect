@@ -70,6 +70,17 @@ deliberate, separately-scoped follow-up (needs its own decision on cache manager
   returns `"sportName":null` without erroring (no accidental `NullPointerException` from the new
   `sportsById.get(post.getSportId())` call when `sportId` itself is null — guarded before the map
   lookup, not after).
+- **`./gradlew :server:test` (the actual `@SpringBootTest` integration layer) — initially missed,
+  caught when explicitly asked "did you verify IT test?" after the first round of verification.**
+  Running it surfaced a real failure: `PostControllerIntegrationTest.shouldCreatePost` went
+  500 (`org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "sports" not found`). Root cause: the test
+  profile's `server/src/test/resources/schema.sql` is a hand-maintained, minimal H2 schema covering
+  only what previous tests needed — `sports` was never in it, because nothing before A9 ever queried
+  that table directly from a test-scoped code path (`getSportsByIds` is the first). Fixed by adding a
+  `sports` table to `schema.sql`, mirroring the real Liquibase migration's shape (`V003__create_sports
+  _tables.sql`) but with no seed data, consistent with every other table in that file (populated by
+  the tests themselves, not pre-seeded). Re-ran `:server:test` in full afterward — all tests pass,
+  not just the one that was failing.
 
 ## Key decisions
 

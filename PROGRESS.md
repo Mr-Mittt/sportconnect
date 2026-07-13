@@ -566,7 +566,12 @@ design review — sport data is effectively static at runtime, but eviction stra
 decision. Verified live against a running backend: `userFullName`/`sportName`/`shareCount` all
 populate correctly now, on both the single-item and paginated/batched code paths, with a `null`
 `sportId` still resolving to `sportName: null` without erroring. All post-impl and sport-impl tests
-pass, whole-server build clean.
+pass, whole-server build clean. **`:server:test`'s actual `@SpringBootTest` integration layer was
+missed in the first verification pass** — asked directly whether IT tests were checked, ran them,
+and `PostControllerIntegrationTest.shouldCreatePost` failed 500 (`Table "sports" not found"`): the
+test profile's hand-maintained H2 `schema.sql` never had a `sports` table, since nothing before A9
+queried it from a test-scoped path. Fixed by adding the table (mirroring the real Liquibase
+migration's shape, no seed data). Full `:server:test` re-run green afterward.
 
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following

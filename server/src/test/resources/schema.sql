@@ -42,6 +42,21 @@ CREATE TABLE IF NOT EXISTS user_roles (
     FOREIGN KEY (role_id) REFERENCES roles(id)
 );
 
+-- Create sports table (needed once PostServiceImpl started querying it directly — A9,
+-- modules/social/post-impl/docs/BACKLOG_MVP.md)
+CREATE TABLE IF NOT EXISTS sports (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(100) UNIQUE NOT NULL,
+    description TEXT,
+    category VARCHAR(50),
+    icon_url VARCHAR(500),
+    min_players INTEGER,
+    max_players INTEGER,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
 -- Create posts table
 CREATE TABLE IF NOT EXISTS posts (
     id BIGSERIAL PRIMARY KEY,
