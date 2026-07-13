@@ -14,7 +14,11 @@ import com.sportconnect.social.post.repository.CommentRepository
 import com.sportconnect.social.post.repository.PostHashtagRepository
 import com.sportconnect.social.post.repository.PostLikeRepository
 import com.sportconnect.social.post.repository.PostRepository
+import com.sportconnect.sport.api.dto.SportResponse
+import com.sportconnect.sport.api.service.SportService
+import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserFriendService
+import com.sportconnect.user.api.service.UserService
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -34,6 +38,8 @@ class PostServiceImplSpec extends Specification {
     PostHashtagRepository postHashtagRepository = Mock()
     GroupService groupService = Mock()
     UserFriendService userFriendService = Mock()
+    UserService userService = Mock()
+    SportService sportService = Mock()
     HashtagService hashtagService = Mock()
     StringRedisTemplate stringRedisTemplate = Mock()
     ValueOperations<String, String> valueOps = Mock()
@@ -41,7 +47,7 @@ class PostServiceImplSpec extends Specification {
     ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules()
 
     @Subject
-    PostServiceImpl postService = new PostServiceImpl(postRepository, postLikeRepository, commentRepository, postHashtagRepository, groupService, userFriendService, hashtagService, stringRedisTemplate, objectMapper)
+    PostServiceImpl postService = new PostServiceImpl(postRepository, postLikeRepository, commentRepository, postHashtagRepository, groupService, userFriendService, userService, sportService, hashtagService, stringRedisTemplate, objectMapper)
 
     def setup() {
         stringRedisTemplate.opsForValue() >> valueOps
@@ -52,6 +58,10 @@ class PostServiceImplSpec extends Specification {
         hashtagService.getTagsForPosts(_) >> [:]
         hashtagService.extractAndSaveHashtags(_, _) >> {}
         hashtagService.decrementHashtagsForPost(_) >> {}
+        // Default: no author/sport resolves — existing tests don't assert on these fields,
+        // so they keep passing unchanged with the "Unknown User"/null fallback (A9).
+        userService.getUsersByIds(_) >> [:]
+        sportService.getSportsByIds(_) >> [:]
     }
 
     UUID userId = UUID.randomUUID()
@@ -114,6 +124,91 @@ class PostServiceImplSpec extends Specification {
         stubCounts()
         result != null
         result.postType == PostType.USER_FEED
+    }
+
+    // ── A9: userFullName/userAvatarUrl/sportName/shareCount ───────────────────
+
+    def "createPost resolves userFullName/userAvatarUrl from the batch-resolved author"() {
+        given:
+        def request = CreatePostRequest.builder().content("Hello world").build()
+        def author = UserResponse.builder()
+                .id(userId)
+                .firstName("Jordan")
+                .lastName("Lee")
+                .avatarUrl("https://example.com/avatar.png")
+                .build()
+
+        when:
+        def result = postService.createPost(userId, request)
+
+        then:
+        1 * postRepository.save(_ as Post) >> savedPost()
+        stubCounts()
+        userService.getUsersByIds([userId]) >> [(userId): author]
+        result.userFullName == "Jordan Lee"
+        result.userAvatarUrl == "https://example.com/avatar.png"
+    }
+
+    def "createPost falls back to Unknown User when the author is not found"() {
+        given:
+        def request = CreatePostRequest.builder().content("Hello world").build()
+
+        when:
+        def result = postService.createPost(userId, request)
+
+        then:
+        1 * postRepository.save(_ as Post) >> savedPost()
+        stubCounts()
+        // setup()'s default userService.getUsersByIds(_) >> [:] applies — no override needed
+        result.userFullName == "Unknown User"
+        result.userAvatarUrl == null
+    }
+
+    def "createPost resolves sportName when sportId matches a known sport"() {
+        given:
+        Long sportId = 3L
+        def request = CreatePostRequest.builder().content("Hello world").sportId(sportId).build()
+        def sport = SportResponse.builder().id(sportId).name("Tennis").build()
+        def postWithSport = Post.builder()
+                .id(postId).userId(userId).postType(PostType.USER_FEED).content("content")
+                .visibility("public").sportId(sportId).media([]).hashtags([])
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+
+        when:
+        def result = postService.createPost(userId, request)
+
+        then:
+        1 * postRepository.save(_ as Post) >> postWithSport
+        stubCounts()
+        sportService.getSportsByIds([sportId]) >> [(sportId): sport]
+        result.sportName == "Tennis"
+    }
+
+    def "createPost leaves sportName null when the post has no sportId"() {
+        given:
+        def request = CreatePostRequest.builder().content("Hello world").build()
+
+        when:
+        def result = postService.createPost(userId, request)
+
+        then:
+        1 * postRepository.save(_ as Post) >> savedPost()
+        stubCounts()
+        0 * sportService.getSportsByIds(_)
+        result.sportName == null
+    }
+
+    def "createPost defaults shareCount to 0, never null"() {
+        given:
+        def request = CreatePostRequest.builder().content("Hello world").build()
+
+        when:
+        def result = postService.createPost(userId, request)
+
+        then:
+        1 * postRepository.save(_ as Post) >> savedPost()
+        stubCounts()
+        result.shareCount == 0L
     }
 
     def "createPost USER_FEED with groupId throws BadRequestException"() {

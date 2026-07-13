@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -52,6 +53,13 @@ public class SportServiceImpl implements SportService {
         Sport sport = sportRepository.findById(sportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
         return toSportResponse(sport);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, SportResponse> getSportsByIds(List<Long> sportIds) {
+        return sportRepository.findAllById(sportIds).stream()
+                .collect(Collectors.toMap(Sport::getId, this::toSportResponse));
     }
 
     @Override

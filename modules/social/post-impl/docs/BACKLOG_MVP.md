@@ -33,7 +33,7 @@
 | 12 | A6 | Fix N+1 hashtag lookup in feed mappers | `DONE` |
 | 13 | A7 | Fix N+1 in CommentServiceImpl.getPostComments (cross-domain user lookup + per-comment replies query) | `DONE` |
 | 14 | A8 | `server:test` needs Redis — `PostControllerIntegrationTest.shouldCreatePost` fails without it | `DONE` |
-| 15 | A9 | Fix `PostResponse` never populating `userFullName`/`sportName`/`shareCount` | `TODO` |
+| 15 | A9 | Fix `PostResponse` never populating `userFullName`/`sportName`/`shareCount` | `DONE` |
 | 16 | A10 | Fix `GET /api/posts/hashtag/{tag}` — always 500s (conflicting `ORDER BY`) | `TODO` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
@@ -560,9 +560,10 @@ drift-in-`schema.sql` fixes (unrelated missing columns/tables) are unaffected an
 ---
 
 ### A9 · Fix `PostResponse` never populating `userFullName`/`sportName`/`shareCount`
-**Status:** `TODO`
+**Status:** `DONE` (2026-07-13) · **Summary:** `modules/social/post-impl/docs/A9_POSTRESPONSE_MISSING_FIELDS.md`
 **Type:** Bug Fix
-**Scope:** `PostServiceImpl.mapToResponse()` only
+**Scope:** `PostServiceImpl.mapToResponse()` (ended up touching all 10 call sites, plus a new
+`sport-api`/`sport-impl` batch method and a new `post-impl` Gradle dependency — see summary doc)
 **Found during:** client ticket FEED-0 (`client/docs/BACKLOG_MVP.md`), verified live against a
 running backend (2026-07-13) — not assumed from reading code alone.
 

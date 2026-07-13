@@ -21,7 +21,11 @@ import com.sportconnect.social.post.repository.CommentRepository;
 import com.sportconnect.social.post.repository.PostHashtagRepository;
 import com.sportconnect.social.post.repository.PostLikeRepository;
 import com.sportconnect.social.post.repository.PostRepository;
+import com.sportconnect.sport.api.dto.SportResponse;
+import com.sportconnect.sport.api.service.SportService;
+import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.service.UserFriendService;
+import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Coordinate;
@@ -41,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.LongSupplier;
@@ -65,6 +70,8 @@ public class PostServiceImpl implements PostService {
     private final PostHashtagRepository postHashtagRepository;
     private final GroupService groupService;
     private final UserFriendService userFriendService;
+    private final UserService userService;
+    private final SportService sportService;
     private final HashtagService hashtagService;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
@@ -139,7 +146,9 @@ public class PostServiceImpl implements PostService {
         hashtagService.extractAndSaveHashtags(post.getId(), request.getContent());
         log.info("Created post {} for user {}", post.getId(), userId);
 
-        return mapToResponse(post, userId, hashtagService.getTagsForPost(post.getId()));
+        List<Post> single = List.of(post);
+        return mapToResponse(post, userId, hashtagService.getTagsForPost(post.getId()),
+                getUsersForPosts(single), getSportsForPosts(single));
     }
 
     @Override
@@ -147,7 +156,9 @@ public class PostServiceImpl implements PostService {
     public PostResponse getPostById(Long postId, UUID currentUserId) {
         Post post = postRepository.findByIdAndIsActiveTrue(postId)
                 .orElseThrow(() -> new NotFoundException("Post not found"));
-        return mapToResponse(post, currentUserId, hashtagService.getTagsForPost(post.getId()));
+        List<Post> single = List.of(post);
+        return mapToResponse(post, currentUserId, hashtagService.getTagsForPost(post.getId()),
+                getUsersForPosts(single), getSportsForPosts(single));
     }
 
     @Override
@@ -158,9 +169,12 @@ public class PostServiceImpl implements PostService {
         }
         List<Post> posts = postRepository.findByIdInAndIsActiveTrue(postIds);
         Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(posts);
+        Map<UUID, UserResponse> usersById = getUsersForPosts(posts);
+        Map<Long, SportResponse> sportsById = getSportsForPosts(posts);
         return posts.stream().collect(Collectors.toMap(
                 Post::getId,
-                post -> mapToResponse(post, currentUserId, hashtagsByPostId.getOrDefault(post.getId(), List.of()))));
+                post -> mapToResponse(post, currentUserId, hashtagsByPostId.getOrDefault(post.getId(), List.of()),
+                        usersById, sportsById)));
     }
 
     @Override
@@ -168,8 +182,10 @@ public class PostServiceImpl implements PostService {
     public Page<PostResponse> getUserPosts(UUID userId, UUID currentUserId, Pageable pageable) {
         Page<Post> postsPage = postRepository.findByUserIdAndIsActiveTrue(userId, pageable);
         Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
+        Map<UUID, UserResponse> usersById = getUsersForPosts(postsPage.getContent());
+        Map<Long, SportResponse> sportsById = getSportsForPosts(postsPage.getContent());
         return postsPage.map(post -> mapToResponse(post, currentUserId,
-                hashtagsByPostId.getOrDefault(post.getId(), List.of())));
+                hashtagsByPostId.getOrDefault(post.getId(), List.of()), usersById, sportsById));
     }
 
     @Override
@@ -184,8 +200,10 @@ public class PostServiceImpl implements PostService {
 
         Page<Post> postsPage = postRepository.findPersonalizedFeed(callerId, safeFriendIds, safeGroupIds, pageable);
         Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
+        Map<UUID, UserResponse> usersById = getUsersForPosts(postsPage.getContent());
+        Map<Long, SportResponse> sportsById = getSportsForPosts(postsPage.getContent());
         return postsPage.map(post -> mapToResponse(post, callerId,
-                hashtagsByPostId.getOrDefault(post.getId(), List.of())));
+                hashtagsByPostId.getOrDefault(post.getId(), List.of()), usersById, sportsById));
     }
 
     @Override
@@ -196,8 +214,10 @@ public class PostServiceImpl implements PostService {
         }
         Page<Post> postsPage = postRepository.findByGroupIdAndIsActiveTrue(groupId, pageable);
         Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
+        Map<UUID, UserResponse> usersById = getUsersForPosts(postsPage.getContent());
+        Map<Long, SportResponse> sportsById = getSportsForPosts(postsPage.getContent());
         return postsPage.map(post -> mapToResponse(post, currentUserId,
-                hashtagsByPostId.getOrDefault(post.getId(), List.of())));
+                hashtagsByPostId.getOrDefault(post.getId(), List.of()), usersById, sportsById));
     }
 
     @Override
@@ -227,7 +247,9 @@ public class PostServiceImpl implements PostService {
         post = postRepository.save(post);
         log.info("Updated post {}", postId);
 
-        return mapToResponse(post, userId, hashtagService.getTagsForPost(post.getId()));
+        List<Post> single = List.of(post);
+        return mapToResponse(post, userId, hashtagService.getTagsForPost(post.getId()),
+                getUsersForPosts(single), getSportsForPosts(single));
     }
 
     @Override
@@ -350,11 +372,10 @@ public class PostServiceImpl implements PostService {
     }
 
     /**
-     * Shared by all 5 paginated feed methods ({@code getUserPosts}, {@code getPersonalizedFeed},
-     * {@code getGroupPosts}, {@code getPostsByHashtag}, {@code getActiveBroadcasts}) to batch the
-     * per-post hashtag lookup into one query per page instead of one per post (was the N+1 fixed
-     * in A6 — see {@code post-impl/docs/BACKLOG_MVP.md}). Single-item call sites (create/update/get
-     * one post) skip this and call {@code hashtagService.getTagsForPost} directly instead.
+     * Shared by every {@code mapToResponse} call site (paginated and single-item alike) to batch
+     * the per-post hashtag lookup into one query per page/batch instead of one per post (was the
+     * N+1 fixed in A6 — see {@code post-impl/docs/BACKLOG_MVP.md}). Single-item call sites pass a
+     * singleton {@code List.of(post)} rather than maintaining a separate unbatched code path.
      */
     private Map<Long, List<String>> getHashtagsForPosts(List<Post> posts) {
         List<Long> postIds = posts.stream()
@@ -364,7 +385,46 @@ public class PostServiceImpl implements PostService {
         return postIds.isEmpty() ? Map.of() : hashtagService.getTagsForPosts(postIds);
     }
 
-    private PostResponse mapToResponse(Post post, UUID currentUserId, List<String> hashtags) {
+    /**
+     * Batches the cross-domain author lookup for a page/batch of posts (A9 — see
+     * {@code post-impl/docs/BACKLOG_MVP.md}). Same shape as {@code getHashtagsForPosts} and the
+     * exact convention {@code CommentServiceImpl.mapToResponse} already established: even
+     * single-item call sites route through this (with a singleton list) rather than calling
+     * {@code userService.getUserById} directly, so there's one code path, not two.
+     */
+    private Map<UUID, UserResponse> getUsersForPosts(List<Post> posts) {
+        List<UUID> userIds = posts.stream()
+                .map(Post::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+        return userIds.isEmpty() ? Map.of() : userService.getUsersByIds(userIds);
+    }
+
+    /**
+     * Batches the cross-domain sport-name lookup for a page/batch of posts (A9). {@code sportId}
+     * is optional on a post (null for USER_FEED posts with no sport tagged), so nulls are filtered
+     * out before the batch call rather than passed through.
+     */
+    private Map<Long, SportResponse> getSportsForPosts(List<Post> posts) {
+        List<Long> sportIds = posts.stream()
+                .map(Post::getSportId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        return sportIds.isEmpty() ? Map.of() : sportService.getSportsByIds(sportIds);
+    }
+
+    /**
+     * Pure mapper — no DB/cross-domain calls for author or sport name (both pre-resolved by the
+     * caller via {@code getUsersForPosts}/{@code getSportsForPosts}). {@code userFullName} falls
+     * back to {@code "Unknown User"} if the author isn't found (e.g. a hard-deleted account — same
+     * fallback {@code CommentServiceImpl.mapToResponse} uses, kept consistent across both mappers).
+     * {@code sportName} is null if the post has no {@code sportId}, or if the id doesn't resolve to
+     * a known sport. {@code shareCount} is hardcoded to 0 — post-sharing itself is unimplemented
+     * (deferred to V1's C6); this only fixes the field being null instead of a real count.
+     */
+    private PostResponse mapToResponse(Post post, UUID currentUserId, List<String> hashtags,
+                                        Map<UUID, UserResponse> usersById, Map<Long, SportResponse> sportsById) {
         List<PostMediaResponse> mediaResponses = post.getMedia().stream()
                 .map(media -> PostMediaResponse.builder()
                         .id(media.getId())
@@ -387,9 +447,18 @@ public class PostServiceImpl implements PostService {
             longitude = post.getLocation().getX();
         }
 
+        UserResponse author = usersById.get(post.getUserId());
+        String userFullName = author != null ? author.getFullName() : "Unknown User";
+        String userAvatarUrl = author != null ? author.getAvatarUrl() : null;
+
+        SportResponse sport = post.getSportId() != null ? sportsById.get(post.getSportId()) : null;
+        String sportName = sport != null ? sport.getName() : null;
+
         return PostResponse.builder()
                 .id(post.getId())
                 .userId(post.getUserId())
+                .userFullName(userFullName)
+                .userAvatarUrl(userAvatarUrl)
                 .postType(post.getPostType())
                 .groupId(post.getGroupId())
                 .content(post.getContent())
@@ -397,12 +466,14 @@ public class PostServiceImpl implements PostService {
                 .longitude(longitude)
                 .locationName(post.getLocationName())
                 .sportId(post.getSportId())
+                .sportName(sportName)
                 .visibility(post.getVisibility())
                 .media(mediaResponses)
                 .hashtags(hashtags)
                 .previewComments(getPreviewComments(post.getId()))
                 .likeCount(likeCount)
                 .commentCount(commentCount)
+                .shareCount(0L)
                 .isLikedByCurrentUser(isLiked)
                 .createdAt(post.getCreatedAt())
                 .updatedAt(post.getUpdatedAt())
@@ -420,8 +491,10 @@ public class PostServiceImpl implements PostService {
         List<Long> safeGroupIds = memberGroupIds.isEmpty() ? List.of(-1L) : memberGroupIds;
         Page<Post> postsPage = postHashtagRepository.findPostsByHashtag(normalizedTag, safeGroupIds, pageable);
         Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
+        Map<UUID, UserResponse> usersById = getUsersForPosts(postsPage.getContent());
+        Map<Long, SportResponse> sportsById = getSportsForPosts(postsPage.getContent());
         return postsPage.map(post -> mapToResponse(post, currentUserId,
-                hashtagsByPostId.getOrDefault(post.getId(), List.of())));
+                hashtagsByPostId.getOrDefault(post.getId(), List.of()), usersById, sportsById));
     }
 
     @Override
@@ -431,8 +504,10 @@ public class PostServiceImpl implements PostService {
         List<Long> safeGroupIds = groupIds.isEmpty() ? List.of(-1L) : groupIds;
         Page<Post> postsPage = postRepository.findActiveBroadcasts(safeGroupIds, pageable);
         Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
+        Map<UUID, UserResponse> usersById = getUsersForPosts(postsPage.getContent());
+        Map<Long, SportResponse> sportsById = getSportsForPosts(postsPage.getContent());
         return postsPage.map(post -> mapToResponse(post, callerId,
-                hashtagsByPostId.getOrDefault(post.getId(), List.of())));
+                hashtagsByPostId.getOrDefault(post.getId(), List.of()), usersById, sportsById));
     }
 
     @Override
@@ -460,6 +535,8 @@ public class PostServiceImpl implements PostService {
         post = postRepository.save(post);
         log.info("Updated broadcast end time for post {}", postId);
 
-        return mapToResponse(post, callerId, hashtagService.getTagsForPost(post.getId()));
+        List<Post> single = List.of(post);
+        return mapToResponse(post, callerId, hashtagService.getTagsForPost(post.getId()),
+                getUsersForPosts(single), getSportsForPosts(single));
     }
 }
