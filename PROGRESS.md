@@ -553,6 +553,26 @@ One flaky pagination test replaced with a pure-function unit test after confirmi
 `--no-file-parallelism` it was CPU contention, not a logic bug. 142/142 unit tests (3 consecutive
 clean runs), 29/29 e2e, clean build/lint.
 
+**A9 DONE** (2026-07-13, `modules/social/post-impl/docs/A9_POSTRESPONSE_MISSING_FIELDS.md`): fixed
+`PostServiceImpl.mapToResponse()` never populating `userFullName`/`userAvatarUrl`/`sportName`/
+`shareCount` (found during FEED-0's live-backend verification). Added
+`SportService.getSportsByIds()` (new cross-domain batch method, `sport-api`/`sport-impl`, first
+dependency from `post-impl` on the sport domain), batched the user/sport lookups per page the same
+way A6/A7 already batched hashtags, and reused `CommentServiceImpl`'s exact `"Unknown User"` fallback
+convention rather than inventing a new one. `shareCount` hardcoded to `0` (real sharing logic stays
+deferred to V1's `C6`). Filed a follow-up (`modules/sport/sport-impl/docs/BACKLOG_MVP.md` · **A5**,
+caching sport lookups) rather than building caching into this bug fix, per user direction during
+design review — sport data is effectively static at runtime, but eviction strategy is its own
+decision. Verified live against a running backend: `userFullName`/`sportName`/`shareCount` all
+populate correctly now, on both the single-item and paginated/batched code paths, with a `null`
+`sportId` still resolving to `sportName: null` without erroring. All post-impl and sport-impl tests
+pass, whole-server build clean. **`:server:test`'s actual `@SpringBootTest` integration layer was
+missed in the first verification pass** — asked directly whether IT tests were checked, ran them,
+and `PostControllerIntegrationTest.shouldCreatePost` failed 500 (`Table "sports" not found"`): the
+test profile's hand-maintained H2 `schema.sql` never had a `sports` table, since nothing before A9
+queried it from a test-scoped path. Fixed by adding the table (mirroring the real Liquibase
+migration's shape, no seed data). Full `:server:test` re-run green afterward.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and

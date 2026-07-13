@@ -91,6 +91,37 @@ class SportServiceImplSpec extends Specification {
         thrown(ResourceNotFoundException)
     }
 
+    def "getSportsByIds should return a map keyed by id for found sports"() {
+        given:
+        def sports = [
+            Sport.builder().id(1L).name("Football").category("Team Sports").isActive(true).build(),
+            Sport.builder().id(2L).name("Tennis").category("Racket Sports").isActive(true).build()
+        ]
+
+        when:
+        def result = sportService.getSportsByIds([1L, 2L])
+
+        then:
+        1 * sportRepository.findAllById([1L, 2L]) >> sports
+        result.size() == 2
+        result[1L].name == "Football"
+        result[2L].name == "Tennis"
+    }
+
+    def "getSportsByIds should silently omit ids that don't resolve to a sport"() {
+        given:
+        def sports = [Sport.builder().id(1L).name("Football").isActive(true).build()]
+
+        when:
+        def result = sportService.getSportsByIds([1L, 999L])
+
+        then:
+        1 * sportRepository.findAllById([1L, 999L]) >> sports
+        result.size() == 1
+        result[1L].name == "Football"
+        !result.containsKey(999L)
+    }
+
     def "getAllActiveSports should return only active sports"() {
         given:
         def sports = [

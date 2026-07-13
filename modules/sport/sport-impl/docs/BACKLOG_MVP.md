@@ -23,6 +23,7 @@
 | 2 | A2 | Sport profile ownership check (update + delete) | `DONE` |
 | 3 | A3 | Flexible per-sport attributes (JSONB) | `DONE` |
 | 4 | A4 | Batch sport lookup in getUserProfiles (cleanliness, not a scaling fix) | `DONE` |
+| 5 | A5 | Cache sport lookups — sport data is effectively static at runtime | `TODO` |
 
 **Dependencies:**
 ```
@@ -178,5 +179,40 @@ same shape as the batching helpers added in group-impl/post-impl/user-impl, just
 
 **Out of scope:** no change to what data is displayed — same fields/values, same `"Unknown"`
 fallback for a missing sport.
+
+---
+
+### A5 · Cache sport lookups — sport data is effectively static at runtime
+**Status:** `TODO`
+**Type:** Enhancement (Performance)
+**Scope:** `SportServiceImpl.java` (and possibly `UserSportProfileServiceImpl`'s own per-profile
+sport lookup, see A4)
+**Found during:** post-impl's A9 (`modules/social/post-impl/docs/BACKLOG_MVP.md`) — user's own
+observation while approving A9's design: A9 adds `SportService.getSportsByIds(...)` as a new
+cross-domain call from `PostServiceImpl`, hit once per feed page load (every `GET /api/posts/feed`,
+`/posts/group/{id}`, `/posts/hashtag/{tag}`, `/posts/broadcast` call). Sport rows change essentially
+never at runtime (admin-only CRUD, a handful of rows total, confirmed via `GET /api/sports` — ~12
+seeded sports) — hitting Postgres for the same handful of rows on every single feed request across
+every user is unnecessary DB load for data that's effectively immutable in normal operation.
+
+**Not blocking A9** — A9 ships with a plain (uncached) `sportRepository.findAllById(...)` call,
+correct and simple for a first cut. This ticket is the deliberate follow-up, not a "should have done
+it right the first time" — caching invalidation is its own design decision (see below) and doesn't
+belong bundled into a bug-fix ticket.
+
+**Fix approach (needs a decision before implementing):**
+- Spring's `@Cacheable`/`@CacheEvict` (`spring-boot-starter-cache` + a `CacheManager` bean — simplest
+  is `ConcurrentMapCacheManager` for a single-instance monolith, matching this repo's "don't add
+  infrastructure the code doesn't need" principle from `CLAUDE.md`; Redis is already available
+  elsewhere in this repo (`post-impl`'s like counters) if a shared/distributed cache is preferred
+  instead, but that's more infrastructure than a dozen near-static rows justifies).
+- Cache `getSportById`, `getSportsByIds`, and `getAllActiveSports` (the three read paths actually
+  called from outside this module); `@CacheEvict` (or a manual cache-clear call) on `createSport`,
+  `updateSport`, `deleteSport` so an admin's sport edit isn't invisible until a restart.
+- No TTL needed if eviction on write is reliable — but a long TTL (e.g. 1 hour) as a safety net
+  against a missed eviction path is a reasonable belt-and-suspenders addition.
+
+**Out of scope:** no change to what data is returned — purely a caching layer in front of existing,
+unchanged read methods.
 
 ---

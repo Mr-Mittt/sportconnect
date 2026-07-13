@@ -172,6 +172,13 @@ Follow the folder structure in `client/CLAUDE.md` exactly — files named after 
    before moving on.
 2. Run the backend: `./gradlew :server:bootRun`
 3. Run the module's tests: `./gradlew :<module>:<module>-impl:test`
+4. **Always run `./gradlew :server:test` too — never skip this, even if step 3 is green.**
+   Module-level Spock specs mock every dependency (repositories, cross-domain services), so they
+   can't catch things only a real `@SpringBootTest` context surfaces: a missing table in the test
+   profile's H2 `schema.sql`, a Spring wiring/bean issue from a new constructor dependency, a
+   real MockMvc request/response mismatch. If any `*IntegrationTest`/`*IT` class touches the
+   module you changed, treat a passing `:server:test` as mandatory evidence, not optional
+   extra credit — a green module-test run alone is not sufficient to call Phase 5 done.
 
 **Client:**
 
