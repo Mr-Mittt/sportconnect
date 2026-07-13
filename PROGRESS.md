@@ -506,6 +506,24 @@ implementation drift (the mockup itself violates its own accessibility baseline)
 `text-muted` fix. 124/124 unit tests unaffected, 27/27 e2e (21 in the extended a11y spec) pass, clean
 build.
 
+**AUTH-8 DONE** (2026-07-13, `client/docs/AUTH-8_E2E_AUTH_JOURNEY.md`): E2E auth journey — ships 6 of
+the epic's 7 steps across two independent tests (not one continuous journey) and drops the "zero real
+network calls" acceptance criterion, all tracing to one real, instrumented finding: MSW's
+per-navigation Service Worker setup races the app's own bootstrap fetch, and the race gets *worse*
+with more navigations in a test (confirmed via real timing data — Vite's module cache speeds up the
+app's mount on repeat navigations, MSW's SW handshake doesn't get the same speedup, so the gap widens
+in the app's favor). Four fixes tried and rejected before concluding this needs an architecture
+change: a cookie mirror (necessary but not sufficient — real `Set-Cookie` is never honored for a
+mocked response), gating the refresh request via `page.route()` (bypasses SW dispatch entirely),
+gating the app's entry module the same way (deadlocked), and bounded retries (made it *worse* — 15
+retries had a 0% success rate where 5 occasionally worked). Filed as backend/infra ticket **MSW-1**
+(`client/docs/BACKLOG_MVP.md`) recommending a standalone mock HTTP server to replace the
+per-navigation Service Worker setup entirely; step 5 (reload-persistence) deferred there. Step 6
+(simulated expired session) redesigned to trigger via AUTH-5's 401-retry interceptor instead of a
+reload — reaches the same target state reliably (20/20 clean runs under repeated parallel load, vs.
+the reload version's ~35–60% failure rate) without ever risking the race. 124/124 unit tests
+unaffected, 29/29 e2e pass across 6 consecutive full-suite runs.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and

@@ -84,7 +84,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 20 | AUTH-4 | ProtectedRoute + logout | `DONE` |
 | 21 | AUTH-5 | 401 refresh-retry interceptor | `DONE` |
 | 22 | AUTH-6 | Auth hardening (errors, rate-limit messaging, a11y) | `DONE` |
-| 23 | AUTH-8 | E2E functional test — auth journey | `TODO` |
+| 23 | AUTH-8 | E2E functional test — auth journey | `DONE` |
 | 24 | AUTH-7 | QA / acceptance checklist (auth) | `TODO` |
 | **Phase 6 — Feed/groups/sport integration (de-mocks HF-2/3/5/6)** | | | |
 | 25 | FEED-0 | Types + TanStack Query hooks scaffold | `TODO` |
@@ -99,6 +99,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 34 | FEED-8 | Integration hardening (loading/error/empty states, pagination edges) | `TODO` |
 | 35 | FEED-10 | E2E functional test — feed/groups journey | `TODO` |
 | 36 | FEED-9 | QA / acceptance checklist (integration) | `TODO` |
+| 37 | MSW-1 | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `TODO` |
 
 **Dependencies:**
 ```
@@ -653,7 +654,19 @@ pattern).
   future e2e assertion targeting the password field specifically.
 
 ### AUTH-8 · E2E functional test — auth journey
-**Status:** `TODO` · **Type:** Testing · **Dependency:** MSW-0, AUTH-1..AUTH-5 · **Spec:** AUTH/FEED epic § AUTH-8
+**Status:** `DONE` (2026-07-13) · **Type:** Testing · **Dependency:** MSW-0, AUTH-1..AUTH-5 · **Spec:** AUTH/FEED epic § AUTH-8 ·
+**Summary:** `client/docs/AUTH-8_E2E_AUTH_JOURNEY.md`
+
+**Delta:** ships 6 of the epic's 7 steps, split across two independent tests instead of one
+continuous journey, and drops the "zero real network calls" acceptance criterion. All three changes
+trace to one real, instrumented finding: MSW's per-navigation Service Worker setup races the app's
+own bootstrap fetch, and the race gets *worse* with more navigations in one test (Vite's module
+cache speeds up the app, not MSW's SW handshake). **Step 5 (reload-persistence) is not
+implemented** — filed as backend/infra ticket **MSW-1** below with a recommended fix (standalone
+mock server). Step 6 (simulated expired session) is redesigned to trigger via AUTH-5's 401-retry
+interceptor instead of a reload, avoiding the same race entirely — see the summary doc for the full
+investigation, including why a straightforward retry-based fix was tried and made things worse, not
+better.
 
 ### AUTH-7 · QA / acceptance checklist (auth)
 **Status:** `TODO` · **Type:** QA · **Dependency:** AUTH-6, AUTH-8 · **Spec:** AUTH/FEED epic § AUTH-7
@@ -750,9 +763,107 @@ zero-profiles fixture renders without error.
 **Delta:** add a checklist line — HF-2's mock swapped for SPORT-1's real hook with no visible UI
 regression (same bar as HF-3/HF-5/HF-6).
 
----
+### MSW-1 · Standalone mock server for e2e
+**Status:** `TODO`
+**Type:** Infrastructure (Testing)
+**Origin:** discovered during AUTH-8 — a genuine, reproducible race between MSW's per-navigation
+Service Worker setup and the app's own bootstrap fetch, root-caused with instrumented timing data.
+Not fixable by waiting longer or retrying more (see "Why not X" below) — the fix has to change
+*how* MSW is wired in, not how long a test waits for it.
 
-## Removed / Deferred
+**The problem, precisely:** `e2e/mocks/test.ts` re-runs the full `import('/e2e/mocks/server.ts') →
+setupWorker() → worker.start()` chain via `page.addInitScript()` on *every* navigation, including
+`page.reload()`. That chain takes ~150–300ms (real, measured: Service Worker registration +
+activation + a `postMessage` handshake). Meanwhile `App.tsx`'s `useSessionBootstrap()` fires
+`POST /api/auth/refresh` as soon as React mounts — and on a `page.reload()` specifically, Vite's
+dev-server module cache means the app mounts *faster* on each successive navigation within the same
+test, while MSW's setup cost stays roughly flat (Service Worker registration isn't a cacheable HTTP
+fetch the way JS modules are). The two curves cross a few navigations in: early on MSW usually wins,
+by the 4th–5th real navigation in the same test the app reliably wins and the refresh request falls
+through to the real network layer instead of being intercepted.
+
+This is why `AUTH-8`'s step 5 ("reload while logged in — still authenticated") could not be reliably
+tested and was skipped rather than shipped flaky — see `client/docs/AUTH-8_E2E_AUTH_JOURNEY.md` for
+the full investigation and instrumented timeline.
+
+**Why not X (things that look like fixes but aren't, all tried for AUTH-8):**
+- A fixed sleep before checking — the epic's own "no arbitrary waits" rule rules it out anyway, and
+  it wouldn't be reliable across machines/CI load regardless.
+- A bigger retry budget — makes it *worse*, not better: more retries means more navigations, which
+  pushes the app's warm-cache advantage further ahead, not closer. Confirmed empirically: 15 retries
+  had a *lower* success rate than 5.
+- Gating the `/auth/refresh` request via `page.route()` until MSW is confirmed ready — the request
+  never reached MSW's handler at all afterward; CDP-level route interception appears to bypass the
+  Service Worker dispatch path once it grabs a request.
+- Gating the app's entry module (`/src/main.tsx`) the same way — deadlocked; that also blocked Vite
+  dev server's concurrent fetch of the MSW setup module the wait itself depended on.
+- A one-time "warm-up" navigation before the real test steps — doesn't help, and plausibly hurts:
+  warming up *helps the wrong side* of the race (the app's cache), the same way extra retries do.
+
+**Recommended fix — Version A: run mocking as a real, separate process, not a browser Service
+Worker.**
+
+Instead of intercepting requests *inside the page* (which is inherently tied to that page's own
+lifecycle and re-triggers on every navigation), run an actual small HTTP server — reusing the
+handler *logic* already in `e2e/mocks/handlers/*.ts` — that's already listening on a real port
+before any test starts. Point Vite's dev proxy at that port instead of `:8080` for e2e runs.
+
+- **Server:** either (a) a thin adapter that feeds real Node `http` requests through the *same*
+  `http.post(url, resolver)` handler definitions already written (convert `IncomingMessage` →
+  `Request`, run the matching resolver, write the `Response` back — Node 18+'s global
+  `Request`/`Response` from `undici` make this straightforward, no extra dependency), or (b) a
+  small hand-written Express/`http` server duplicating the same behavior. (a) avoids maintaining
+  two copies of the same auth/feed mock logic and should be the default choice unless it proves
+  awkward in practice.
+- **Lifecycle:** Playwright's `webServer` config option accepts an array, not just one entry — add
+  a second `webServer` block for the mock server alongside the existing `pnpm dev` one, so
+  Playwright starts/stops it automatically with the same guarantees the dev server already gets.
+- **Routing:** an env var (e.g. `VITE_API_PROXY_TARGET`) read in `vite.config.ts`, set only for the
+  e2e/visual-regression Playwright run, pointing the `/api` proxy at the mock server's port instead
+  of `:8080`.
+- **Verification technique changes:** `response.fromServiceWorker()` (used today in
+  `msw-setup.spec.ts` and AUTH-8's journey spec to prove "no real backend involved") no longer
+  applies — these become genuine real network calls, just to a fake backend. Replace with an
+  introspection point on the mock server itself (a request log the test can query, or a dedicated
+  `/__mock/*` endpoint) — needs deciding as part of this ticket, not assumed.
+- **A real, valuable side effect:** a real server can set genuine `Set-Cookie` response headers that
+  the browser actually honors (unlike a Service-Worker-mocked response — see AUTH-8's summary for
+  why that never works, httpOnly or not). This would let a reload-persistence test work directly,
+  with no `seedRefreshCookieMirror`-style workaround needed at all.
+- **Scope check:** `playwright.config.ts` currently shares one `webServer` (`pnpm dev`) across both
+  the `e2e` and `visual-regression` projects — confirm during Phase 2 explore whether
+  `visual-regression`'s specs (Home Feed only, still mock-data-internal, no real endpoint calls) are
+  affected by switching the shared dev server's proxy target, or whether they need to keep pointing
+  at `:8080`/nothing.
+
+**Effort estimate — Version A: ~1.5–2.5 days.** Breakdown: mock server + adapter (~0.5–1 day,
+handlers are already well-structured, main work is the Node request/response adapter and getting
+cookie semantics right); Playwright `webServer` array + Vite proxy env wiring (~1–2 hours);
+migrating the 2–3 specs that use `fromServiceWorker()` today to the new verification technique
+(~2–4 hours); full e2e suite re-verification under the new topology (~2–4 hours, exploratory —
+likely to surface something not anticipated here). This is a known-working pattern (a real backend
+process for e2e mocking is common practice), so the estimate has reasonable confidence.
+
+**Effort estimate — Version B (considered, not recommended): keep the Service Worker, make the
+per-navigation handshake itself faster/lighter, rather than replacing the architecture.**
+MSW doesn't expose a public "lightweight reconnect to an already-active worker" API — `worker.start()`
+is the only documented entry point, and skipping it entirely leaves the new page instance with no
+message channel to the (already-active) Service Worker, since Worker "clients" are per-document and
+the handshake is what registers this specific document as active. A real Version B would mean either
+monkey-patching MSW's internals (fragile — breaks silently on any MSW version bump, and reverse-
+engineering undocumented internals is itself the bulk of the work) or hand-rolling a custom, minimal
+SW registration protocol talking to the same `mockServiceWorker.js` script MSW ships (a full
+reimplementation of part of MSW's browser client). **Estimate: at least 0.5–1 day of pure feasibility
+investigation before any implementation estimate is even possible, with no guarantee it's achievable
+at all** — meaingfully worse effort-to-confidence ratio than Version A, which is why Version A is the
+recommendation despite touching more files.
+
+**Acceptance criteria (once picked up):**
+- A `page.reload()`-based reload-persistence test (the one AUTH-8 had to skip) passes reliably —
+  run it repeated (`--repeat-each=10` or similar) with zero flakes before considering this done.
+- All existing e2e specs still pass under the new mock topology.
+- `AUTH-8`'s auth-journey spec gains its step 5 back (or a note explaining why not, if Version A
+  turns up a new blocker).
 
 | Item | Decision |
 |---|---|
