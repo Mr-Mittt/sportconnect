@@ -118,23 +118,119 @@ MVP ticket B5 implements hashtag extraction + trending + suggest + posts-by-hash
 
 ## Implementation Order
 
-*(To be defined when V1 planning begins. Suggested starting point based on dependencies:)*
+*(C1–C10 below are still at the IDEA stage, order TBD. C11 is fully specified and ready to start.)*
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | C1 | Presigned S3 upload flow | `IDEA` |
-| 2 | C2 | Post media (images + video) | `IDEA` |
-| 3 | C3 | Comment image | `IDEA` |
-| 4 | C4 | Comment quote | `IDEA` |
-| 5 | C5 | Visibility enforcement | `IDEA` |
-| 6 | C6 | Post sharing / repost | `IDEA` |
-| 7 | C7 | Real-time comments (WebSocket) | `IDEA` |
-| 8 | C8 | Personalized feed caching (Redis fan-out) | `IDEA` |
-| 9 | C9 | EXIF strip + async malware scan | `IDEA` |
-| 10 | C10 | Hashtag explore / browse page | `IDEA` |
+| 1 | C11 | Migrate Post/Comment/Hashtag ids to Snowflake IDs | `TODO` |
+| 2 | C1 | Presigned S3 upload flow | `IDEA` |
+| 3 | C2 | Post media (images + video) | `IDEA` |
+| 4 | C3 | Comment image | `IDEA` |
+| 5 | C4 | Comment quote | `IDEA` |
+| 6 | C5 | Visibility enforcement | `IDEA` |
+| 7 | C6 | Post sharing / repost | `IDEA` |
+| 8 | C7 | Real-time comments (WebSocket) | `IDEA` |
+| 9 | C8 | Personalized feed caching (Redis fan-out) | `IDEA` |
+| 10 | C9 | EXIF strip + async malware scan | `IDEA` |
+| 11 | C10 | Hashtag explore / browse page | `IDEA` |
 
 ---
 
 ## Tickets
 
-*(Tickets will be written here with full detail during V1 planning. Reference the IDEA section above for scope and design decisions already made.)*
+*(C1–C10: to be written with full detail during V1 planning. Reference the IDEA section above for scope and design decisions already made.)*
+
+### C11 · Migrate Post/Comment/Hashtag ids to Snowflake IDs
+**Status:** `TODO` · **Type:** Enhancement (Architecture) · **Filed:** 2026-07-13, during client ticket FEED-0
+**Companion ticket:** `modules/social/group-impl/docs/BACKLOG_V1.md` · A1 (Group/GroupMember — same generator, separate module)
+
+#### Motivation
+
+`Post`, `Comment`, `Hashtag` (and `PostMedia`/`PostLike`/`PostHashtag`/`CommentLike`) currently use
+`@GeneratedValue(strategy = GenerationType.IDENTITY)` / Postgres `BIGSERIAL` — plain sequential
+auto-increment. Two real costs of this, surfaced while scoping the client's FEED-0 ticket:
+
+1. **Enumerable ids.** A sequential `postId`/`commentId` lets an authenticated caller infer content
+   volume/growth by incrementing (access itself is still permission-gated by existing
+   membership/ownership checks — this is an information-disclosure concern, not an authorization
+   bypass).
+2. **Not safely mergeable across independent generators.** This repo is explicitly
+   "monolith-first, microservice-ready" (root `CLAUDE.md`) — if `post`/`group` are ever extracted
+   into separate services, two independent auto-increment sequences can collide. Snowflake IDs
+   (time + worker-id + sequence, packed into a 64-bit `long`) are collision-free across independent
+   generators with no coordination, while staying wire-compatible with the existing `BIGINT` columns
+   and every existing FK (`post_id`, `comment_id` etc. — confirmed via the migration changelogs,
+   all already `BIGINT`, so **no column-type or FK changes needed anywhere**).
+
+`User` already uses a UUID id (`GenerationType.UUID`) — that split (identity/security-sensitive →
+UUID, high-volume content → sequential) was inherited from the earliest migrations (V001 vs. V004+)
+with no documented rationale anywhere in the repo (checked `PROGRESS.md`, `documentation/md/`,
+module docs, session logs) — this ticket doesn't touch `User`, only the sequential side.
+
+#### Design
+
+**New shared component — lives in `modules/common`, not `post-impl`,** since both this ticket and
+the companion Group ticket need the exact same generator (cross-cutting utility, same reasoning
+`ApiResponse<T>` and the shared exception types already live in `common`, not duplicated per
+domain). This ticket builds it; the Group companion ticket reuses it as-is.
+
+- `com.sportconnect.common.id.SnowflakeIdGenerator` — Hibernate 6.3
+  (`org.hibernate.id.IdentifierGenerator` custom implementation, confirmed as the running Hibernate
+  version via `bootRun` logs). Packs `(timestamp_ms - customEpoch) << 22 | (workerId << 12) |
+  sequence`. Worker id hardcoded to `0` for now — this monolith runs as a single instance today, so
+  the classic Snowflake multi-writer coordination problem doesn't exist yet; hardcoding it (rather
+  than building config-driven worker-id assignment) avoids solving a problem this deployment doesn't
+  have. Revisit only when/if this becomes an actual multi-instance deployment.
+- Swap `@GeneratedValue(strategy = GenerationType.IDENTITY)` → the new generator on: `Post`,
+  `Comment`, `Hashtag` (client-facing, required). Optionally also `PostMedia`, `PostLike`,
+  `PostHashtag`, `CommentLike` for full consistency within this module — these are never serialized
+  to the client, so this part is a "nice to have for consistency," not required to unblock anything.
+- `IDENTITY` relies on the DB assigning the value *after* insert; a Snowflake id must be assigned by
+  the app *before* insert. This is a strategy change, not just an annotation swap — the id needs to
+  be set on the entity (via the custom generator, wired the standard Hibernate way) before
+  `save()`/`persist()`.
+- **JSON safety (the part that actually matters for the client):** a real Snowflake value can exceed
+  `Number.MAX_SAFE_INTEGER` (2^53-1) within a few years of any chosen epoch — a JS/TS client parsing
+  a raw large integer JSON literal silently loses precision. Twitter's own API solves this by also
+  emitting an `id_str` field; the simpler fix here is `@JsonSerialize(using =
+  com.fasterxml.jackson.databind.ser.std.ToStringSerializer.class)` directly on the `Long id` (and
+  `postId`, `groupId`, `parentCommentId` etc.) fields in `PostResponse`, `CommentResponse`,
+  `HashtagResponse`, `PostMediaResponse` — the id becomes a JSON *string* on the wire, not a number.
+  **This must ship in the same PR as the generator swap** — shipping the id-format change without
+  the serializer change would silently corrupt ids for any client parsing them as JS numbers.
+- No production data exists yet (dev-only MVP) — no backfill/migration script needed.
+
+#### Client-side impact — do not skip this note
+
+The client's FEED-0 ticket (`client/docs/BACKLOG_MVP.md`) types `Post.id`, `Comment.id`/`postId`/
+`parentCommentId`, `Hashtag.id` as **`number`**, a deliberate decision to proceed with the simplest
+correct type for the *current*, still-`BIGSERIAL` backend — made explicitly aware that this ticket
+existing would eventually require revisiting it. **When this ticket ships, a follow-up client
+ticket must change those fields from `number` to `string`** (matching the `ToStringSerializer`
+change above) and fix every downstream callsite: query-key params (`groupFeed(groupId: number)` →
+`string`), MSW fixture literals (`id: 123` → `id: '123'`), any numeric id comparisons/sorts, and
+test assertions — across FEED-0 itself and everything built on it by then (FEED-1/2/3/6/8/9,
+potentially more). `tsc -b` will surface every callsite mechanically (not a silent-bug risk, just
+real churn) — file that follow-up ticket in `client/docs/BACKLOG_MVP.md` (or the next client
+version's backlog, if MVP is closed by then) when this one is scheduled, don't fold it in here.
+
+#### Out of scope
+
+- `User`'s UUID id — unaffected, not part of this ticket.
+- Config-driven multi-worker-id support — hardcoded `workerId = 0` is correct for the current
+  single-instance deployment; revisit only if/when this actually runs as multiple instances.
+- The client-side type change itself — tracked as a follow-up client ticket once this ships, not
+  built here.
+- Backfilling existing rows — no production data exists to backfill.
+
+#### Tests
+
+- Unit test for `SnowflakeIdGenerator` itself (uniqueness under rapid sequential calls within the
+  same millisecond, monotonic-ish ordering, fits in a signed 64-bit range).
+- Update `PostServiceImplSpec`/`CommentServiceImplSpec`/hashtag specs wherever a literal id value
+  (e.g. `1L`) is currently asserted — Snowflake-generated ids won't be small sequential numbers
+  starting at 1, so any test relying on that needs to assert against the id the generator actually
+  returned, not a hardcoded literal.
+- Confirm `PostResponse`/`CommentResponse`/`HashtagResponse` serialize `id` fields as JSON strings
+  (integration test hitting a real controller, checking the raw JSON body — not just the
+  deserialized Java object, which would hide a missing `@JsonSerialize` annotation).

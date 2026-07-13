@@ -1,0 +1,165 @@
+// Typed 1:1 against the real backend DTOs, verified against source
+// (modules/social/post-api, modules/social/group-api) — not the AUTH/FEED
+// epic doc's illustrative sketch, which predates a few corrections (see
+// FEED-0's implementation summary).
+//
+// Id types deliberately mirror the backend's actual generation strategy:
+// Post/Comment/Group/GroupMember/Hashtag use a JPA `Long`/Postgres
+// `BIGSERIAL` id today, so `number` is correct here. This is a value
+// judgment, not an oversight — a filed backend ticket
+// (modules/social/post-impl/docs/BACKLOG_V1.md · C11,
+// modules/social/group-impl/docs/BACKLOG_V1.md · A1) would migrate these to
+// Snowflake ids, which requires flipping these fields to `string` (a real
+// Snowflake value can exceed JS's Number.MAX_SAFE_INTEGER). Don't "fix" this
+// preemptively — wait for that migration to actually ship, then do the
+// `number` -> `string` flip as its own follow-up ticket.
+import type { ApiResponse } from '@/shared/types/api';
+
+export type PostType = 'USER_FEED' | 'GROUP_POST' | 'GROUP_BROADCAST';
+
+// Swagger docs this as exactly these 3 values (CreatePostRequest.visibility);
+// the backend field itself is a plain String, not a Java enum.
+export type PostVisibility = 'public' | 'friends' | 'private';
+
+export interface PostMedia {
+  id: number;
+  mediaType: 'image' | 'video';
+  mediaUrl: string;
+  thumbnailUrl: string | null;
+  displayOrder: number;
+}
+
+// Recursive to match CommentResponse.replies — one level of nesting in
+// practice (a reply to a reply is not rejected server-side, per post-impl's
+// A4), but the type itself doesn't enforce a depth limit.
+export interface Comment {
+  id: number;
+  postId: number;
+  userId: string;
+  userFullName: string;
+  userAvatarUrl: string | null;
+  content: string;
+  parentCommentId: number | null;
+  likeCount: number;
+  replyCount: number;
+  isLikedByCurrentUser: boolean;
+  replies: Comment[];
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+}
+
+export interface Post {
+  id: number;
+  userId: string;
+  // Nullable, verified against a live backend (2026-07-13): PostServiceImpl
+  // .mapToResponse() never populates userFullName, sportName, or shareCount —
+  // no builder call for any of the three, confirmed by reading the mapper
+  // directly. Unlike CommentResponse (which DOES resolve userFullName
+  // correctly via a working lookup), this is Post-specific. Filed as a
+  // backend bug blocking FEED-1's author-name rendering:
+  // modules/social/post-impl/docs/BACKLOG_MVP.md.
+  userFullName: string | null;
+  userAvatarUrl: string | null;
+  postType: PostType;
+  groupId: number | null;
+  content: string;
+  latitude: number | null;
+  longitude: number | null;
+  locationName: string | null;
+  sportId: number | null;
+  sportName: string | null; // see userFullName's note — never populated today, same bug
+  visibility: PostVisibility;
+  media: PostMedia[];
+  // Does NOT include a leading '#' — verified against a live backend
+  // (2026-07-13): HashtagServiceImpl's extraction regex `#(\w+)` captures
+  // group 1 only, stripping the '#'. This differs from HF-0/HF-3/HF-5's
+  // mock-data convention (mock hashtags DO include '#') — a mapping/prefix
+  // step is needed wherever FEED-1/FEED-6 bridge real data into those
+  // existing mock-convention-based components.
+  hashtags: string[];
+  previewComments: Comment[];
+  likeCount: number;
+  commentCount: number;
+  // Nullable — see userFullName's note, same never-populated bug.
+  shareCount: number | null;
+  isLikedByCurrentUser: boolean;
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+  broadcastEndTime: string | null; // ISO timestamp, GROUP_BROADCAST only
+}
+
+export interface Hashtag {
+  id: number;
+  // Does NOT include a leading '#' — same verified behavior as Post.hashtags
+  // above (both come from the same extraction/storage path).
+  tag: string;
+  usageCount: number;
+}
+
+// pinnedPosts is only populated by GET /api/groups/{groupId} (getGroup) —
+// null on every other endpoint that returns a GroupResponse (e.g. the
+// user-groups list this feature's useUserGroups() hook calls).
+export interface Group {
+  id: number;
+  sportId: number;
+  groupName: string;
+  description: string | null;
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  isPrivate: boolean;
+  isActive: boolean;
+  createdBy: string;
+  createdByFullName: string;
+  memberCount: number;
+  currentUserRole: string | null;
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+  pinnedPosts: Post[] | null;
+}
+
+export interface GroupMember {
+  id: number;
+  groupId: number;
+  userId: string;
+  userFullName: string;
+  userAvatarUrl: string | null;
+  roleId: number;
+  roleName: string;
+  roleLevel: number;
+  joinedAt: string; // ISO timestamp
+}
+
+export interface CreatePostPayload {
+  content: string;
+  latitude?: number;
+  longitude?: number;
+  locationName?: string;
+  sportId?: number;
+  groupId?: number;
+  postType?: PostType;
+  visibility?: PostVisibility;
+  mediaUrls?: string[];
+  broadcastEndTime?: string; // ISO timestamp; GROUP_BROADCAST only, server defaults to now()+24h if omitted
+}
+
+export interface CreateCommentPayload {
+  content: string;
+  parentCommentId?: number;
+}
+
+// Matches Spring Data's Page<T> JSON serialization exactly (confirmed
+// against the real controllers — every paginated feed/group/hashtag
+// endpoint returns this shape wrapped in ApiResponse<T>).
+export interface PageResponse<T> {
+  content: T[];
+  totalPages: number;
+  totalElements: number;
+  number: number; // current page index, 0-based
+  size: number;
+  first: boolean;
+  last: boolean;
+  numberOfElements: number;
+  empty: boolean;
+}
+
+export type PagedApiResponse<T> = ApiResponse<PageResponse<T>>;
