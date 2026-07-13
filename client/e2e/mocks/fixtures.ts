@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import type { User } from '../../src/features/auth/types.ts';
+import type { Group, Hashtag, PageResponse, Post } from '../../src/features/feed/types.ts';
 
 // Reused across AUTH-8 and FEED-10 rather than each test inventing its own
 // ad-hoc response shapes (per MSW-0's acceptance criteria).
@@ -21,6 +22,99 @@ export const mockAccessToken = 'mock-access-token';
 // round-trip (set on login/register/refresh, checked on refresh/logout).
 // Real tests never read this directly — the browser handles the cookie.
 export const mockRefreshToken = 'mock-refresh-token';
+
+// Feed/groups/hashtags fixtures (FEED-0) — reused by feed.ts's handlers and
+// by any future FEED-1..FEED-10 e2e spec, same reasoning as the auth
+// fixtures above.
+export const mockGroup: Group = {
+  id: 1,
+  sportId: 1,
+  groupName: 'Friday Night Football',
+  description: 'Weekly 5-a-side, all skill levels welcome.',
+  avatarUrl: null,
+  coverUrl: null,
+  isPrivate: false,
+  isActive: true,
+  createdBy: mockUser.id,
+  createdByFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  memberCount: 12,
+  currentUserRole: 'group_member',
+  createdAt: '2026-06-01T10:00:00',
+  updatedAt: '2026-06-01T10:00:00',
+  pinnedPosts: null,
+};
+
+export const mockPost: Post = {
+  id: 1,
+  userId: mockUser.id,
+  userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  userAvatarUrl: null,
+  postType: 'USER_FEED',
+  groupId: null,
+  content: 'Great match today! #fridayrun',
+  latitude: null,
+  longitude: null,
+  locationName: null,
+  sportId: 1,
+  sportName: 'Football',
+  visibility: 'public',
+  media: [],
+  // No leading '#' — matches the real backend's extraction/storage format
+  // (verified against a live backend, 2026-07-13), not HF-0's mock-data
+  // convention, which does include '#'.
+  hashtags: ['fridayrun'],
+  previewComments: [],
+  likeCount: 3,
+  commentCount: 1,
+  shareCount: 0,
+  isLikedByCurrentUser: false,
+  createdAt: '2026-07-13T09:00:00',
+  updatedAt: '2026-07-13T09:00:00',
+  broadcastEndTime: null,
+};
+
+export const mockGroupPost: Post = {
+  ...mockPost,
+  id: 2,
+  postType: 'GROUP_POST',
+  groupId: mockGroup.id,
+  content: 'Who is in for Friday? #fridayrun',
+  createdAt: '2026-07-13T08:00:00',
+  updatedAt: '2026-07-13T08:00:00',
+};
+
+export const mockBroadcastPost: Post = {
+  ...mockPost,
+  id: 3,
+  postType: 'GROUP_BROADCAST',
+  groupId: mockGroup.id,
+  content: 'Pitch is booked for 7pm — see you all there!',
+  hashtags: [],
+  createdAt: '2026-07-13T07:00:00',
+  updatedAt: '2026-07-13T07:00:00',
+  broadcastEndTime: '2026-07-14T07:00:00',
+};
+
+export const mockHashtag: Hashtag = {
+  id: 1,
+  tag: 'fridayrun', // no leading '#' — see mockPost.hashtags' note above
+  usageCount: 12,
+};
+
+/** Builds a Spring Data `Page<T>`-shaped response from a full content array. */
+export function mockPageResponse<T>(content: T[]): PageResponse<T> {
+  return {
+    content,
+    totalPages: 1,
+    totalElements: content.length,
+    number: 0,
+    size: Math.max(content.length, 20),
+    first: true,
+    last: true,
+    numberOfElements: content.length,
+    empty: content.length === 0,
+  };
+}
 
 /**
  * Gets a spec's page into an authenticated state on `targetPath` (default

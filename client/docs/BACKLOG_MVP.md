@@ -87,7 +87,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 23 | AUTH-8 | E2E functional test — auth journey | `DONE` |
 | 24 | AUTH-7 | QA / acceptance checklist (auth) | `DONE` |
 | **Phase 6 — Feed/groups/sport integration (de-mocks HF-2/3/5/6)** | | | |
-| 25 | FEED-0 | Types + TanStack Query hooks scaffold | `TODO` |
+| 25 | FEED-0 | Types + TanStack Query hooks scaffold | `DONE` |
 | 26 | FEED-1 | Feed + PostCard (real — absorbs post-impl's old F1) | `TODO` |
 | 27 | FEED-2 | CommentSection (real) | `TODO` |
 | 28 | FEED-3 | CreatePostForm (real) | `TODO` |
@@ -686,11 +686,48 @@ status check. 5/5 items pass.
 - **Phase 5 (auth integration) is fully closed as of this ticket.** Phase 6 (FEED-0 onward) is next.
 
 ### FEED-0 · Types + data hooks scaffold
-**Status:** `TODO` · **Type:** Foundation · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § FEED-0
+**Status:** `DONE` (2026-07-13) · **Type:** Foundation · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § FEED-0 ·
+**Summary:** `client/docs/FEED-0_TYPES_TANSTACK_QUERY_HOOKS_SCAFFOLD.md`
 
 TanStack Query hooks (`usePersonalFeed`, `useGroupFeed`, `useTrendingHashtags`,
 `useActiveBroadcasts`, `useUserGroups`, mutations) with `useInfiniteQuery` paging off Spring's
 `Page` shape.
+
+**Decision (2026-07-13): `Post`/`Comment`/`Group`/`GroupMember`/`Hashtag` ids are typed `number`**,
+matching the backend's current `Long`/`BIGSERIAL` ids as-is. This was a deliberate, discussed choice
+— not an oversight — made while aware that a backend Snowflake-ID migration is now filed
+(`modules/social/post-impl/docs/BACKLOG_V1.md` · C11, `modules/social/group-impl/docs/BACKLOG_V1.md`
+· A1) and would require flipping these fields to `string` (a real Snowflake value can exceed JS's
+`Number.MAX_SAFE_INTEGER`, so the backend side of that migration also adds
+`@JsonSerialize(ToStringSerializer)` to emit ids as JSON strings). **When C11/A1 ship, file one
+follow-up client ticket** covering the `number` → `string` flip across `types.ts`, `queryKeys.ts`,
+MSW fixtures, and every ticket built on this one by then (FEED-1/2/3/4/6/7/8/9) — don't fold it
+silently into whichever ticket happens to be active when the backend change lands.
+
+**Deltas for later tickets (all found via live real-backend verification, 2026-07-13 — not assumed
+from the epic doc):**
+- **`Post.userFullName`/`sportName`/`shareCount` are typed nullable, not the epic's implied
+  non-null** — `PostServiceImpl.mapToResponse()` never populates any of the three today (confirmed:
+  no builder call for them at all). Filed as backend bug **A9**
+  (`modules/social/post-impl/docs/BACKLOG_MVP.md`) — **blocks FEED-1** from rendering a real author
+  name/avatar until fixed. FEED-1 must build a fallback (e.g. "Unknown" / initials placeholder) for
+  as long as A9 is open, not assume the field is always present.
+- **`Post.hashtags`/`Hashtag.tag` do NOT include a leading `#`** — verified against the real
+  extraction regex (`#(\w+)`, captures group 1 only). This is real, permanent backend behavior, not a
+  bug — differs from HF-0/HF-3/HF-5's mock-data convention (mock hashtags DO include `#`). FEED-1/
+  FEED-6 must prepend `#` when bridging real data into those existing mock-convention components,
+  or update the components' convention — a decision for whichever ticket lands first.
+- **`GET /api/posts/hashtag/{tag}` (this ticket's `usePostsByHashtag`) 500s unconditionally** —
+  confirmed via live calls, both `#`-prefixed and not. Root cause: the repository's custom `@Query`'s
+  own `ORDER BY` conflicts with the controller's `@PageableDefault` sort, and Spring Data JPA appends
+  a second, invalid `ORDER BY` against the wrong entity. Filed as backend bug **A10**
+  (`modules/social/post-impl/docs/BACKLOG_MVP.md`) — **blocks FEED-6**'s hashtag click-through
+  entirely until fixed. `usePostsByHashtag` is typed/wired correctly (including stripping the leading
+  `#` before calling the endpoint, per the point above) but cannot be exercised end-to-end today.
+- All other endpoints this ticket calls (`/posts/feed`, `/posts/group/{id}`, `/posts/broadcast`,
+  `/hashtags/trending`, `/groups/user/{id}`, like/unlike/delete/create) were verified live and match
+  `types.ts` exactly — the `PageResponse<T>` envelope (`content/totalPages/totalElements/number/size/
+  first/last/numberOfElements/empty`) matches Spring's real serialization field-for-field.
 
 ### FEED-1 · Feed + PostCard (real)
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0, HF-3 · **Spec:** AUTH/FEED epic § FEED-1

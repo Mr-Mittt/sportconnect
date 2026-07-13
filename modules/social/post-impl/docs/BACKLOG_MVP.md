@@ -33,6 +33,8 @@
 | 12 | A6 | Fix N+1 hashtag lookup in feed mappers | `DONE` |
 | 13 | A7 | Fix N+1 in CommentServiceImpl.getPostComments (cross-domain user lookup + per-comment replies query) | `DONE` |
 | 14 | A8 | `server:test` needs Redis — `PostControllerIntegrationTest.shouldCreatePost` fails without it | `DONE` |
+| 15 | A9 | Fix `PostResponse` never populating `userFullName`/`sportName`/`shareCount` | `TODO` |
+| 16 | A10 | Fix `GET /api/posts/hashtag/{tag}` — always 500s (conflicting `ORDER BY`) | `TODO` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
 
@@ -554,5 +556,98 @@ isn't optional infrastructure for this code path.
 **Not fixed as part of A2/A3** — deliberately left `PostControllerIntegrationTest.shouldCreatePost`
 red rather than scope-creep further into Redis test infrastructure; that session's actual schema-
 drift-in-`schema.sql` fixes (unrelated missing columns/tables) are unaffected and remain fixed.
+
+---
+
+### A9 · Fix `PostResponse` never populating `userFullName`/`sportName`/`shareCount`
+**Status:** `TODO`
+**Type:** Bug Fix
+**Scope:** `PostServiceImpl.mapToResponse()` only
+**Found during:** client ticket FEED-0 (`client/docs/BACKLOG_MVP.md`), verified live against a
+running backend (2026-07-13) — not assumed from reading code alone.
+
+`PostServiceImpl.mapToResponse()` (~line 390) never calls `.userFullName(...)`,
+`.userAvatarUrl(...)`, `.sportName(...)`, or `.shareCount(...)` on the `PostResponse.builder()` —
+those four fields are simply absent from the builder chain, so they always serialize as `null`
+(`shareCount` too, despite being conceptually a count — it's a boxed `Long`, not a primitive, so
+it's `null` rather than `0`). Confirmed via three live calls: `POST /api/posts` (create),
+`GET /api/posts/{id}`, and `GET /api/posts/feed` all return `"userFullName":null,
+"sportName":null,"shareCount":null` for a real post from a user who genuinely has a full name, and
+even with `sportId` explicitly set on create.
+
+**Why `userFullName` matters most:** `CommentServiceImpl`'s own mapper (A5, `DONE`) correctly
+resolves `userFullName` via `userService.getUserById(...)` — same live-verified test user's comment
+came back `"userFullName":"Feed Zero QA"` on the identical account that got `null` from every Post
+endpoint. This is a Post-specific gap, not a "the user has no name" data issue, and not something
+CommentServiceImpl needs fixing too.
+
+**Why this blocks client work:** `client/docs/BACKLOG_MVP.md`'s FEED-1 (Feed + PostCard, real) needs
+`userFullName`/`userAvatarUrl` to render "who posted this" — currently unbuildable against the real
+contract without a client-side workaround. `sportName` blocks any sport-badge rendering on a post
+card that only has `sportId`. `shareCount` blocks the share-count display placeholder, though
+post-impl's own module doc already notes share logic itself is unimplemented (V1 scope, `C6`) — this
+ticket is just about the field existing and being non-null (e.g. `0`), independent of whether share
+logic itself ships.
+
+**Fix approach:**
+- `userFullName`/`userAvatarUrl`: resolve via `userService.getUsersByIds(...)` (already used
+  elsewhere in this module per A6/A7's batching convention) — batch across the page in each of the 5
+  paginated callers of `mapToResponse` (same shape as A6's hashtag batching), pass the resolved
+  `Map<UUID, UserResponse>` into the mapper rather than looking it up per-item inside it.
+- `sportName`: resolve via the sport module's `-api` interface (check `modules/sport/sport-api`'s
+  service for a `getSportsByIds`/`getSportById`-style batch method; add one if it doesn't exist,
+  following the same cross-domain-batch convention).
+- `shareCount`: set to `0L` (or the real query if `C6`/post-sharing has landed by the time this is
+  picked up) rather than leaving the builder call absent.
+
+**Tests:** Update `PostServiceImplSpec` wherever `mapToResponse`'s output is asserted — add explicit
+assertions that `userFullName`/`sportName`/`shareCount` are non-null on a fresh post, not just that
+the response builds without error (the bug shipped silently specifically because nothing asserted
+these fields were populated).
+
+---
+
+### A10 · Fix `GET /api/posts/hashtag/{tag}` — always 500s
+**Status:** `TODO`
+**Type:** Bug Fix
+**Scope:** `PostHashtagRepository.findPostsByHashtag`, `PostController.getPostsByHashtag`
+**Found during:** client ticket FEED-0, verified live against a running backend (2026-07-13).
+
+`GET /api/posts/hashtag/{tag}` throws `org.hibernate.query.sqm.UnknownPathException` for **every**
+call, with or without a leading `#`, with or without any posts existing — confirmed via two live
+calls (`%23feed0check` and `feed0check`, both 500). Root cause, read directly from the runtime error
+and the repository source:
+
+- `PostHashtagRepository.findPostsByHashtag`'s `@Query` already has its own static
+  `ORDER BY ph.post.lastInteractionAt DESC`.
+- `PostController.getPostsByHashtag`'s `@PageableDefault(size = 20, sort = "lastInteractionAt",
+  direction = Sort.Direction.DESC)` supplies a `Pageable` that ALSO carries a `Sort`.
+- Spring Data JPA appends the `Pageable`'s `Sort` properties onto the query as an *additional*
+  `ORDER BY` clause, resolved against the query's root entity — which here is `PostHashtag ph`, not
+  `Post`. The generated query ends up as `ORDER BY ph.post.lastInteractionAt DESC,
+  ph.lastInteractionAt desc` — and `PostHashtag` has no `lastInteractionAt` field of its own (only
+  `Post` does, already correctly referenced via `ph.post.lastInteractionAt` in the static clause).
+  Hibernate throws immediately trying to resolve the second, dynamically-appended path.
+
+**Why this blocks client work:** `client/docs/BACKLOG_MVP.md`'s FEED-6 (TrendingHashtags, real) and
+its `usePostsByHashtag` hook (FEED-0) are typed and wired correctly against the documented contract,
+but this endpoint cannot return data at all today — not a data-shape issue like A9, a hard 500 on
+every call.
+
+**Fix approach (pick one):**
+1. Remove the static `ORDER BY` from the `@Query` and rely solely on the `Pageable`'s `Sort` — but
+   the `Sort` property name (`"lastInteractionAt"`) would then need to resolve against `Post` (the
+   method's actual return type), not `PostHashtag` (the `FROM` root) — likely needs the query
+   restructured to select from `Post` with a `WHERE EXISTS (... PostHashtag ...)` subquery instead of
+   `FROM PostHashtag`, so Spring Data's sort-property resolution lines up with the returned type.
+2. Keep the static `ORDER BY` and stop the controller from supplying a conflicting default `Sort` for
+   this specific endpoint — e.g. a plain `@PageableDefault(size = 20)` with no `sort`, so Spring Data
+   has nothing to append. Simpler, smaller diff — verify no other caller depends on
+   `getPostsByHashtag`'s pagination honoring a client-supplied sort override before choosing this.
+
+**Tests:** No existing Spock coverage caught this (confirmed no test currently exercises this
+endpoint against a real query — add one). Add a `PostServiceImplSpec`/integration test that actually
+calls `getPostsByHashtag` end-to-end (not just mocking the repository) so a future regression here
+fails a test instead of only surfacing via manual/live verification again.
 
 ---

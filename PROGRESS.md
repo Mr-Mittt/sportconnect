@@ -535,6 +535,24 @@ the backlog note). `pnpm e2e` (29/29, including both `auth-journey.spec.ts` test
 has no GitHub Actions access — flagged as a follow-up for a human to confirm on the actual
 `client-ci` run. **Phase 5 (auth integration) is now fully closed.**
 
+**FEED-0 DONE** (2026-07-13, `client/docs/FEED-0_TYPES_TANSTACK_QUERY_HOOKS_SCAFFOLD.md`): Phase 6
+kickoff — `src/features/feed/types.ts` + 10 TanStack Query hooks (`usePersonalFeed`, `useGroupFeed`,
+`usePostsByHashtag`, `useTrendingHashtags`, `useActiveBroadcasts`, `useUserGroups`, `useLikePost`,
+`useUnlikePost`, `useDeletePost`, `useCreatePost`), plus `e2e/mocks/handlers/feed.ts`. No UI wiring —
+foundation only. Live-backend verification (register/create/like/comment against a real running
+server, not just MSW) found and filed two real backend bugs: **A9** (`PostResponse` never populates
+`userFullName`/`sportName`/`shareCount` — blocks FEED-1) and **A10** (`GET /api/posts/hashtag/{tag}`
+500s unconditionally, a query-generation bug — blocks FEED-6), both in
+`modules/social/post-impl/docs/BACKLOG_MVP.md`. Also filed forward-looking Snowflake-ID migration
+tickets (`modules/social/post-impl/docs/BACKLOG_V1.md` · C11, `modules/social/group-impl/docs/
+BACKLOG_V1.md` · A1) after finding `User`'s UUID-vs-everything-else's-`BIGSERIAL` id split has no
+documented rationale anywhere in the repo — ids stay `number` for now, by deliberate decision, not
+oversight. One test-infra fix: `tsconfig.node.json` couldn't resolve a transitively-pulled `@/` alias
+import (switched `module`/`moduleResolution` from `nodenext` to `esnext`/`bundler`, added `paths`).
+One flaky pagination test replaced with a pure-function unit test after confirming via
+`--no-file-parallelism` it was CPU contention, not a logic bug. 142/142 unit tests (3 consecutive
+clean runs), 29/29 e2e, clean build/lint.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and
