@@ -118,21 +118,23 @@ MVP ticket B5 implements hashtag extraction + trending + suggest + posts-by-hash
 
 ## Implementation Order
 
-*(C1–C10 below are still at the IDEA stage, order TBD. C11 is fully specified and ready to start.)*
+*(C1–C10 below are still at the IDEA stage, order TBD. C11 and C12 are fully specified and ready to
+start, in that order — C12 depends on C11, see C12's Motivation section.)*
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | C11 | Migrate Post/Comment/Hashtag ids to Snowflake IDs | `TODO` |
-| 2 | C1 | Presigned S3 upload flow | `IDEA` |
-| 3 | C2 | Post media (images + video) | `IDEA` |
-| 4 | C3 | Comment image | `IDEA` |
-| 5 | C4 | Comment quote | `IDEA` |
-| 6 | C5 | Visibility enforcement | `IDEA` |
-| 7 | C6 | Post sharing / repost | `IDEA` |
-| 8 | C7 | Real-time comments (WebSocket) | `IDEA` |
-| 9 | C8 | Personalized feed caching (Redis fan-out) | `IDEA` |
-| 10 | C9 | EXIF strip + async malware scan | `IDEA` |
-| 11 | C10 | Hashtag explore / browse page | `IDEA` |
+| 2 | C12 | Cursor pagination for feed-shaped endpoints | `TODO` |
+| 3 | C1 | Presigned S3 upload flow | `IDEA` |
+| 4 | C2 | Post media (images + video) | `IDEA` |
+| 5 | C3 | Comment image | `IDEA` |
+| 6 | C4 | Comment quote | `IDEA` |
+| 7 | C5 | Visibility enforcement | `IDEA` |
+| 8 | C6 | Post sharing / repost | `IDEA` |
+| 9 | C7 | Real-time comments (WebSocket) | `IDEA` |
+| 10 | C8 | Personalized feed caching (Redis fan-out) | `IDEA` |
+| 11 | C9 | EXIF strip + async malware scan | `IDEA` |
+| 12 | C10 | Hashtag explore / browse page | `IDEA` |
 
 ---
 
@@ -234,3 +236,102 @@ version's backlog, if MVP is closed by then) when this one is scheduled, don't f
 - Confirm `PostResponse`/`CommentResponse`/`HashtagResponse` serialize `id` fields as JSON strings
   (integration test hitting a real controller, checking the raw JSON body — not just the
   deserialized Java object, which would hide a missing `@JsonSerialize` annotation).
+
+---
+
+### C12 · Cursor pagination for feed-shaped endpoints
+**Status:** `TODO` · **Type:** Enhancement (Architecture) · **Filed:** 2026-07-13, during design
+review following client ticket FEED-0
+**Depends on:** `C11` (must ship first — see Motivation)
+**Full design:** `documentation/md/CURSOR_PAGINATION_MIGRATION.md`
+
+#### Motivation
+
+`GET /api/posts/feed`, `/mine`, `/broadcast`, `/hashtag/{tag}`, `/group/{groupId}` all return
+Spring Data `Page<PostResponse>` backed by offset `Pageable`. Wrong shape for infinite scroll, for
+three concrete reasons (full detail in the design doc):
+
+1. `Page.getTotalElements()` forces a `COUNT(*)` on every request — pure waste, since an
+   infinite-scroll UI never renders "page N of M."
+2. Offset pagination drifts under concurrent writes: a post inserted between two scroll fetches
+   shifts the `OFFSET`, causing duplicate or skipped posts on the client's next fetch. This is a
+   correctness bug, not just a perf concern.
+3. `OFFSET` scan cost grows with scroll depth — the opposite of the desired infinite-scroll UX.
+
+**Why this depends on C11:** a cursor built from the current `BIGSERIAL` id would encode a raw
+sequential value into an (in principle client-persisted/bookmarked) opaque cursor string. If C11
+lands afterward, every id already in circulation switches numeric range/ordering relative to
+newly-generated Snowflake ids at the migration boundary, breaking any cursor issued before the
+switch. Sequencing C11 first means C12 is designed against the final id scheme from day one, with
+no transitional cursor format to support.
+
+#### Design
+
+- New shared `com.sportconnect.common.dto.CursorPage<T>` (`record CursorPage<T>(List<T> content,
+  String nextCursor, boolean hasMore)`) in `modules/common`, replacing `Page<PostResponse>` as the
+  return type on the five endpoints listed above. Same "lives in `common`" reasoning as
+  `ApiResponse<T>` and C11's `SnowflakeIdGenerator` — shared across whichever domains need it, not
+  duplicated per-module.
+- `nextCursor` is an opaque, base64-encoded string. The client never parses or constructs it —
+  only round-trips it back as a query param on the next fetch.
+- Per-endpoint cursor encoding (internal, can change without breaking the client contract as long
+  as the string stays opaque):
+  - `/mine`, `/broadcast`, `/hashtag/{tag}`, `/group/{groupId}` — all order by creation, so once
+    C11 ships, the Snowflake `id` alone is already collision-free and time-ordered. Cursor encodes
+    just `id`.
+  - `/feed` (`findPersonalizedFeed`) — orders by `lastInteractionAt`
+    (`PostRepository.updateLastInteractionAt()` bumps it independently of id on new
+    likes/comments), which drifts from id/creation order. Cursor encodes the compound
+    `(lastInteractionAt, id)`, with `id` as the tie-breaker for equal timestamps.
+- Repository queries change from `Pageable`-based `findBy...` derived queries /
+  `@Query(...Page<Post>...)` to explicit keyset `@Query`s: `WHERE (sort_key, id) < (:lastSortKey,
+  :lastId) ORDER BY sort_key DESC, id DESC LIMIT :size` (parameterized `LIMIT`, no `Pageable`, no
+  `COUNT` query).
+- New composite indexes to back the keyset seek: `(created_at, id)` for the four creation-ordered
+  endpoints (may already be adequately served by an existing `id`/`created_at` index — check
+  before adding a redundant one) and `(last_interaction_at, id)` for the feed.
+- Controllers: `page`/`size` query params → `cursor` (optional, absent = first page) + `size`;
+  response body changes from `ApiResponse<Page<PostResponse>>` to
+  `ApiResponse<CursorPage<PostResponse>>`.
+
+#### Client-side impact — do not skip this note
+
+Breaking response-shape change for every `useInfiniteQuery` hook FEED-0 built:
+
+- `PageResponse<T>` (`client/src/features/feed/types.ts`) → `CursorPageResponse<T>` matching
+  `CursorPage<T>`'s JSON.
+- `getNextPageParam()` (`client/src/features/feed/pagination.ts`) changes from
+  `PageResponse<T> => number | undefined` (reading `.number`/`.last`) to
+  `CursorPageResponse<T> => string | undefined` (reading `.nextCursor`/`.hasMore`). Its dedicated
+  `pagination.test.ts` gets rewritten against the new shape.
+- `usePersonalFeed`/`useGroupFeed`/`usePostsByHashtag`/`useActiveBroadcasts`'s `pageParam` becomes
+  a cursor string instead of a page number; initial fetch passes no cursor.
+- `e2e/mocks/handlers/feed.ts` MSW fixtures need the same shape change.
+- File the actual client-side ticket when C12 is scheduled (in whichever client backlog is open by
+  then), matching the pattern C11 used — don't fold the client change into this ticket.
+
+#### Out of scope
+
+- `GET /api/posts/{postId}/comments` — also offset-paginated today, but per-post comment volume is
+  bounded, so the `COUNT(*)`/drift cost is far less pressing than the feed endpoints. Separate
+  future ticket if comment volume ever justifies it.
+- `group-impl`'s own paginated endpoints (`getUserGroups`, `getGroupMembers`,
+  `getGroupJoinRequests`, `getGroupInvitations`, etc.) — bounded, low-volume lists, not
+  infinite-scroll feed surfaces. Not touched by this ticket.
+- V1 `C8` (Redis feed caching) — orthogonal (caching decides *where* the feed is read from, this
+  ticket decides *how* a page of it is bounded); can land independently, either order.
+- Backfilling a cursor-compatible index for any existing production data — no production data
+  exists yet (dev-only MVP).
+
+#### Tests
+
+- Repository-level test proving no duplicate/skipped rows when a row is inserted between two
+  cursor fetches (the concrete correctness bug offset pagination has today) — insert a row
+  mid-pagination in the test and assert the second page's cursor still resumes correctly.
+- Unit test for the cursor encode/decode round-trip (both the simple `id`-only cursor and the
+  compound `(lastInteractionAt, id)` cursor for `/feed`), including a malformed/tampered cursor
+  input returning a clean 400 rather than a raw parse exception leaking internal shape.
+- Update `PostServiceImplSpec` wherever a test currently asserts against `Page<PostResponse>`
+  (`.getTotalElements()`, `.getTotalPages()`, `.getContent()`) to assert against `CursorPage`
+  (`.content()`, `.nextCursor()`, `.hasMore()`) instead.
+- Confirm `hasMore: false` / `nextCursor: null` on the last page for all five migrated endpoints.
