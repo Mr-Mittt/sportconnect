@@ -524,6 +524,17 @@ reload — reaches the same target state reliably (20/20 clean runs under repeat
 the reload version's ~35–60% failure rate) without ever risking the race. 124/124 unit tests
 unaffected, 29/29 e2e pass across 6 consecutive full-suite runs.
 
+**AUTH-7 DONE** (2026-07-13, `client/docs/AUTH-7_QA_ACCEPTANCE_CHECKLIST.md`): QA/acceptance pass
+for the whole auth epic — 5/5 items pass. Drove the real UI (no MSW) against a real running backend
+with a standalone Playwright script: register → auto-login → reload-persists-session → logout →
+deep-link-redirect → re-login, 8/8 assertions green, zero tokens ever in `localStorage`/
+`sessionStorage`. Re-verified BE-1/BE-2 directly against `AuthController.java` source (cookie-based
+refresh, header-derived logout with no query param — confirmed live via `curl`, not just trusted from
+the backlog note). `pnpm e2e` (29/29, including both `auth-journey.spec.ts` tests), `pnpm test`
+(124/124), clean `tsc -b`/lint used as a local proxy for the "passes in CI" item, since this session
+has no GitHub Actions access — flagged as a follow-up for a human to confirm on the actual
+`client-ci` run. **Phase 5 (auth integration) is now fully closed.**
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and

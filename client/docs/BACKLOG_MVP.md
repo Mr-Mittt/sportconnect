@@ -85,7 +85,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 21 | AUTH-5 | 401 refresh-retry interceptor | `DONE` |
 | 22 | AUTH-6 | Auth hardening (errors, rate-limit messaging, a11y) | `DONE` |
 | 23 | AUTH-8 | E2E functional test — auth journey | `DONE` |
-| 24 | AUTH-7 | QA / acceptance checklist (auth) | `TODO` |
+| 24 | AUTH-7 | QA / acceptance checklist (auth) | `DONE` |
 | **Phase 6 — Feed/groups/sport integration (de-mocks HF-2/3/5/6)** | | | |
 | 25 | FEED-0 | Types + TanStack Query hooks scaffold | `TODO` |
 | 26 | FEED-1 | Feed + PostCard (real — absorbs post-impl's old F1) | `TODO` |
@@ -669,10 +669,21 @@ investigation, including why a straightforward retry-based fix was tried and mad
 better.
 
 ### AUTH-7 · QA / acceptance checklist (auth)
-**Status:** `TODO` · **Type:** QA · **Dependency:** AUTH-6, AUTH-8 · **Spec:** AUTH/FEED epic § AUTH-7
+**Status:** `DONE` (2026-07-13) · **Type:** QA · **Dependency:** AUTH-6, AUTH-8 · **Spec:** AUTH/FEED epic § AUTH-7 ·
+**Summary:** `client/docs/AUTH-7_QA_ACCEPTANCE_CHECKLIST.md`
 
 Includes a manual pass against the *real* backend (MSW doesn't substitute) and a BE-1/BE-2
-status check.
+status check. 5/5 items pass.
+
+**Deltas for later tickets:**
+- **Item 2's epic wording ("query param, not body") is stale** — re-confirmed live against
+  `AuthController.java`: logout is header-derived only, no param of any kind (matches AUTH-4's
+  already-documented delta). Nothing new here, just re-verified rather than assumed.
+- **"Passes in CI" (item 5) verified via a local `pnpm e2e` run (29/29 green)**, not an actual
+  GitHub Actions run — this session had no GitHub access. Flagged as a follow-up for a human to
+  spot-check the real `client-ci` run once this ticket's branch is up, same "local ≠ CI" caveat
+  HF-12/HF-13 already established for the visual-regression project.
+- **Phase 5 (auth integration) is fully closed as of this ticket.** Phase 6 (FEED-0 onward) is next.
 
 ### FEED-0 · Types + data hooks scaffold
 **Status:** `TODO` · **Type:** Foundation · **Dependency:** AUTH-0 · **Spec:** AUTH/FEED epic § FEED-0
