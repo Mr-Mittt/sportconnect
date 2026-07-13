@@ -573,6 +573,23 @@ test profile's hand-maintained H2 `schema.sql` never had a `sports` table, since
 queried it from a test-scoped path. Fixed by adding the table (mirroring the real Liquibase
 migration's shape, no seed data). Full `:server:test` re-run green afterward.
 
+**A10 DONE** (2026-07-14, `modules/social/post-impl/docs/A10_FIX_HASHTAG_ENDPOINT_500.md`): fixed
+`GET /api/posts/hashtag/{tag}` 500ing on every call — `PostController`'s `@PageableDefault(sort =
+"lastInteractionAt")` made Spring Data JPA append a second `ORDER BY` resolved against
+`findPostsByHashtag`'s query root (`PostHashtag`, which has no such field), throwing
+`UnknownPathException` before the repository's own static `ORDER BY ph.post.lastInteractionAt`
+ever ran. Fixed by dropping the conflicting default sort from the controller (confirmed safe: the
+client's `usePostsByHashtag` hook never sends a `sort` override, and `HashtagController`'s other
+two paginated endpoints already use this same no-default-sort pattern) rather than restructuring
+the query. Added a real `PostControllerIntegrationTest` case (no existing Spock coverage could
+catch this — it's a Hibernate query-generation bug, invisible to a mocked-repository unit test),
+which surfaced two more pre-existing test-infra gaps fixed in the same pass: `schema.sql` had no
+`groups`/`group_members`/`group_roles` tables at all (nothing in `:server:test` had ever exercised
+a real, unmocked `GroupService` call before — `getPostsByHashtag` does, for any authenticated
+caller), and the new seed data for `group_roles` broke context reuse across test classes (H2
+persists across separate `@SpringBootTest` context loads within one suite run, so a second
+`schema.sql` execution hit a primary-key violation on a plain `INSERT`) — fixed via H2's `MERGE
+INTO ... KEY(id)`. `:modules:social:post-impl:test` and `:server:test` (28/28) both green.
 **Cursor pagination design + V1 ticket C12 filed** (2026-07-13,
 `documentation/md/CURSOR_PAGINATION_MIGRATION.md`,
 `modules/social/post-impl/docs/BACKLOG_V1.md` · C12): design discussion on why `Page<PostResponse>`

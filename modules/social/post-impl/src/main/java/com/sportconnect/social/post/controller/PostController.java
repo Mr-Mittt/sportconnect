@@ -302,7 +302,7 @@ public class PostController {
     public ResponseEntity<ApiResponse<Page<PostResponse>>> getPostsByHashtag(
             @PathVariable String tag,
             Authentication authentication,
-            @PageableDefault(size = 20, sort = "lastInteractionAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @PageableDefault(size = 20) Pageable pageable) {
         Page<PostResponse> response = postService.getPostsByHashtag(tag, SecurityUtils.extractUserId(authentication), pageable);
         return ResponseEntity.ok(ApiResponse.success("Posts retrieved successfully", response));
     }

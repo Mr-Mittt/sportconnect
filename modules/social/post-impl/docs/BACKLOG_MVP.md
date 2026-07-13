@@ -34,7 +34,7 @@
 | 13 | A7 | Fix N+1 in CommentServiceImpl.getPostComments (cross-domain user lookup + per-comment replies query) | `DONE` |
 | 14 | A8 | `server:test` needs Redis — `PostControllerIntegrationTest.shouldCreatePost` fails without it | `DONE` |
 | 15 | A9 | Fix `PostResponse` never populating `userFullName`/`sportName`/`shareCount` | `DONE` |
-| 16 | A10 | Fix `GET /api/posts/hashtag/{tag}` — always 500s (conflicting `ORDER BY`) | `TODO` |
+| 16 | A10 | Fix `GET /api/posts/hashtag/{tag}` — always 500s (conflicting `ORDER BY`) | `DONE` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
 
@@ -609,7 +609,7 @@ these fields were populated).
 ---
 
 ### A10 · Fix `GET /api/posts/hashtag/{tag}` — always 500s
-**Status:** `TODO`
+**Status:** `DONE` (2026-07-14) · **Summary:** `modules/social/post-impl/docs/A10_FIX_HASHTAG_ENDPOINT_500.md`
 **Type:** Bug Fix
 **Scope:** `PostHashtagRepository.findPostsByHashtag`, `PostController.getPostsByHashtag`
 **Found during:** client ticket FEED-0, verified live against a running backend (2026-07-13).
