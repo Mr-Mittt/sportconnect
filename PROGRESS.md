@@ -590,6 +590,26 @@ caller), and the new seed data for `group_roles` broke context reuse across test
 persists across separate `@SpringBootTest` context loads within one suite run, so a second
 `schema.sql` execution hit a primary-key violation on a plain `INSERT`) — fixed via H2's `MERGE
 INTO ... KEY(id)`. `:modules:social:post-impl:test` and `:server:test` (28/28) both green.
+**Cursor pagination design + V1 ticket C12 filed** (2026-07-13,
+`documentation/md/CURSOR_PAGINATION_MIGRATION.md`,
+`modules/social/post-impl/docs/BACKLOG_V1.md` · C12): design discussion on why `Page<PostResponse>`
+(offset `Pageable`) is the wrong shape for `post-impl`'s five feed-shaped read endpoints
+(`/feed`, `/mine`, `/broadcast`, `/hashtag/{tag}`, `/group/{groupId}`) — a `COUNT(*)` on every
+request, offset drift under concurrent inserts (duplicate/skipped posts on scroll), and `OFFSET`
+scan cost growing with scroll depth. Decision: keyset/cursor pagination, new shared
+`CursorPage<T>` in `modules/common`. Sequenced as C12, explicitly **after** C11 (the Snowflake ID
+ticket filed during FEED-0) rather than independently: a cursor built from today's `BIGSERIAL` id
+would encode a raw sequential value, and C11 landing afterward would change every id's
+numeric range/ordering at the migration boundary, breaking any cursor already issued — shipping
+C11 first avoids a transitional cursor format entirely. Confirmed via `PostRepository.java` that
+four of the five endpoints order by creation (id-sortable once C11 ships) but
+`findPersonalizedFeed` (`/feed`) orders by `lastInteractionAt` (bumped independently of id on new
+likes/comments), so that one endpoint needs a compound `(lastInteractionAt, id)` cursor rather than
+id alone. Also traced the client-side coupling: FEED-0's `PageResponse<T>` type and
+`useInfiniteQuery`-based hooks (`usePersonalFeed`/`useGroupFeed`/`usePostsByHashtag`/
+`useActiveBroadcasts`, `getNextPageParam()`) all assume numeric page params and will need a
+follow-up client ticket when C12 is scheduled, same pattern as C11's own client-impact note.
+Design/ticket only — no code changed.
 
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
