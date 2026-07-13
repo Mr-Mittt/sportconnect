@@ -57,6 +57,53 @@ CREATE TABLE IF NOT EXISTS sports (
     updated_at TIMESTAMP
 );
 
+-- Create group_roles / groups / group_members tables (needed once a real
+-- @SpringBootTest first exercised an authenticated GroupService call for real
+-- instead of mocking it — A10, modules/social/post-impl/docs/BACKLOG_MVP.md;
+-- PostServiceImpl.getPostsByHashtag calls groupService.getGroupIdsForMember()
+-- for any authenticated caller, which queries group_members directly)
+CREATE TABLE IF NOT EXISTS group_roles (
+    id INTEGER PRIMARY KEY,
+    role_name VARCHAR(50) UNIQUE NOT NULL,
+    description VARCHAR(500),
+    level INTEGER NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+MERGE INTO group_roles (id, role_name, description, level) KEY(id) VALUES
+    (1, 'group_owner', 'Group creator with full control', 3),
+    (2, 'group_admin', 'Group administrator with elevated permissions', 2),
+    (3, 'group_member', 'Regular group member', 1);
+
+CREATE TABLE IF NOT EXISTS groups (
+    id BIGSERIAL PRIMARY KEY,
+    group_name VARCHAR(100) UNIQUE NOT NULL,
+    description VARCHAR(500),
+    avatar_url VARCHAR(500),
+    cover_url VARCHAR(500),
+    is_private BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    rules VARCHAR(2000) NOT NULL DEFAULT '',
+    schedule VARCHAR(2000) NOT NULL DEFAULT '',
+    sport_id BIGINT,
+    created_by UUID NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS group_members (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    user_id UUID NOT NULL,
+    role_id INTEGER NOT NULL,
+    joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_group_user UNIQUE(group_id, user_id),
+    FOREIGN KEY (group_id) REFERENCES groups(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (role_id) REFERENCES group_roles(id)
+);
+
 -- Create posts table
 CREATE TABLE IF NOT EXISTS posts (
     id BIGSERIAL PRIMARY KEY,
