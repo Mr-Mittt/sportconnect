@@ -17,10 +17,26 @@ const noop = () => {};
  * (768px; HF-8 hardens responsiveness). TopBar/NavTabs come from AppShell, not
  * here. activeSport is page-local by design — move it to the Zustand store
  * when a second page needs it (client/CLAUDE.md).
+ *
+ * Feed's posts are real (FEED-1, `usePersonalFeed()` behind
+ * `useHomeFeedData()`) — sportProfiles/upcomingMatches/hashtags/broadcasts
+ * stay mock until SPORT-1/FEED-6/FEED-7 land. isLoading/isError now come
+ * from the real feed query; Feed itself renders nothing for either today
+ * (FEED-8 owns the actual loading/error UI).
  */
 export function HomeFeedPage() {
   const [activeSport, setActiveSport] = useState<SportKey | 'all'>('all');
-  const { data, toggleLike } = useHomeFeedData();
+  const {
+    data,
+    isLoading,
+    isError,
+    toggleLike,
+    deletePost,
+    currentUserId,
+    hasMorePosts,
+    isFetchingMorePosts,
+    fetchMorePosts,
+  } = useHomeFeedData();
 
   const sportsByKey = useMemo(
     () =>
@@ -49,8 +65,15 @@ export function HomeFeedPage() {
             posts={data.posts}
             activeSport={activeSport}
             sportsByKey={sportsByKey}
+            currentUserId={currentUserId}
             onToggleLike={toggleLike}
             onHashtagClick={noop}
+            onDeletePost={deletePost}
+            hasMorePosts={hasMorePosts}
+            isFetchingMorePosts={isFetchingMorePosts}
+            onLoadMore={fetchMorePosts}
+            isLoading={isLoading}
+            isError={isError}
           />
         </div>
         <div className="flex min-w-0 flex-col gap-3.5">

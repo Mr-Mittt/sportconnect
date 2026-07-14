@@ -75,6 +75,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14b | HF-12 | CI bootstrap + first green run (follow-up from HF-9 item 7) | `DONE` |
 | 14c | HF-13 | Regenerate visual-regression baselines (follow-up from AUTH-1's cn() border-hairline fix) | `DONE` |
 | 14d | HF-14 | Regenerate visual-regression baselines (follow-up from AUTH-4's TopBar avatar-menu change) | `DONE` |
+| 14e | HF-15 | Regenerate visual-regression baselines (follow-up from FEED-1's real feed + delete menu) | `TODO` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -88,7 +89,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 24 | AUTH-7 | QA / acceptance checklist (auth) | `DONE` |
 | **Phase 6 — Feed/groups/sport integration (de-mocks HF-2/3/5/6)** | | | |
 | 25 | FEED-0 | Types + TanStack Query hooks scaffold | `DONE` |
-| 26 | FEED-1 | Feed + PostCard (real — absorbs post-impl's old F1) | `TODO` |
+| 26 | FEED-1 | Feed + PostCard (real — absorbs post-impl's old F1) | `DONE` |
 | 27 | FEED-2 | CommentSection (real) | `TODO` |
 | 28 | FEED-3 | CreatePostForm (real) | `TODO` |
 | 29 | FEED-4 | Group switching (real groups list) | `TODO` |
@@ -439,6 +440,26 @@ be reverted, but regenerating baselines is a separate concern from the feature t
 `client/e2e/visual/__screenshots__/` with its contents, commit. Worth a human visual check that the
 new baselines show the avatar chevron correctly and nothing else drifted unexpectedly.
 
+### HF-15 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
+**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-1's real feed + delete menu ·
+**Summary:** `client/docs/FEED-1_FEED_POSTCARD_REAL.md`
+
+**Found during FEED-1:** Home Feed's `Feed`/`PostCard` are real now (`usePersonalFeed()`), and
+`PostCard` gained a new "..." delete menu (owned-post only). Confirmed via
+`pnpm exec playwright test --project=visual-regression`: all 9 committed Home Feed baselines
+legitimately diff (0.01–0.03 pixel-ratio) — real post content (different author names/text) differs
+from the old mock content, and 2 of the 3 e2e fixture posts are owned by the seeded test user, so
+the new delete menu icon now appears on them. Direct image inspection of the actual vs. expected
+screenshots confirmed this is the correct new rendering, not a regression. Same reasoning as
+HF-13/HF-14 for why this is its own ticket: the feature change is correct and shouldn't be
+reverted, but regenerating baselines is a separate concern.
+
+**To execute:** identical process to HF-12/HF-13/HF-14 — trigger the `client-ci` workflow's
+`update-baselines` manual dispatch on GitHub, download the `visual-baselines` artifact, replace
+`client/e2e/visual/__screenshots__/` with its contents, commit. Worth a human visual check that the
+3 real posts, their sport badges, and the 2 delete-menu icons all render as expected and nothing
+else drifted unexpectedly.
+
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·
 **Summary:** `client/docs/MSW-0_MOCK_SERVICE_WORKER_HANDLER_SETUP.md`
@@ -730,10 +751,31 @@ from the epic doc):**
   first/last/numberOfElements/empty`) matches Spring's real serialization field-for-field.
 
 ### FEED-1 · Feed + PostCard (real)
-**Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0, HF-3 · **Spec:** AUTH/FEED epic § FEED-1
+**Status:** `DONE` (2026-07-14) · **Summary:** `client/docs/FEED-1_FEED_POSTCARD_REAL.md`
+**Type:** Integration · **Dependency:** FEED-0, HF-3 · **Spec:** AUTH/FEED epic § FEED-1
 
 De-mocks HF-3 against `GET /api/posts/feed`; optimistic like with rollback; delete own posts.
 Absorbs post-impl's old F1 ticket ("Frontend — personalized feed").
+
+**Deltas for later tickets:**
+- **Temporary `sportId` bridge added:** `src/features/feed/sportIdMap.ts` maps `SportKey` →
+  real backend `sportId` (football→5/Soccer, basketball→6, tennis→2), confirmed live against
+  `GET /api/sports`. SPORT-1 replaces this file with the real backend-driven mapping — reuse the
+  same football↔Soccer naming decision, don't re-litigate it.
+- **`e2e/mocks/handlers/feed.ts` is now a small stateful fake backend**, not a fixed responder —
+  `postsState` is mutated by the like/unlike/delete/create handlers. Any future ticket adding a
+  feed-shaped MSW handler with a mutation should follow this pattern, not a static response, or
+  its own optimistic-mutation-then-invalidate cycle will self-clobber the same way this ticket's
+  first attempt did.
+- **`e2e/mocks/fixtures.ts`'s `mockPost.sportId` was `1` (Badminton) — corrected to `5` (Soccer)**,
+  a real bug (there's no "Football" sport in the real backend at all). Any ticket relying on
+  `mockPost`'s sport should use the corrected value.
+- **HF-15 filed** (visual-regression baselines stale — real content + new delete menu). Any
+  ticket touching `PostCard`/`Feed` again before HF-15 lands should expect the same staleness and
+  roll it into the same regen, per the HF-13/HF-14 precedent.
+- **FEED-8's loading/error UI** now has real `isLoading`/`isError` wired all the way through
+  (`useHomeFeedData` → `Feed`) — `Feed` currently renders `null` for both (matching HF-7's own
+  precedent), FEED-8 replaces that with the real skeleton/retry UI.
 
 ### FEED-2 · CommentSection (real)
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-1 · **Spec:** AUTH/FEED epic § FEED-2

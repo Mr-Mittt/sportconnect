@@ -91,10 +91,56 @@ describe('App routing', () => {
 
   it('renders the assembled Home Feed on / for an authenticated user (HF-7 replaced the placeholder)', async () => {
     vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
+    // FEED-1: the feed is real now (usePersonalFeed) — needs its own fixture,
+    // separate from the auth bootstrap mock above.
+    vi.spyOn(apiClient, 'get').mockResolvedValue({
+      data: {
+        success: true,
+        message: '',
+        data: {
+          content: [
+            {
+              id: 1,
+              userId: 'someone-else',
+              userFullName: 'Marcus Lee',
+              userAvatarUrl: null,
+              postType: 'USER_FEED',
+              groupId: null,
+              content: 'Great session tonight.',
+              latitude: null,
+              longitude: null,
+              locationName: null,
+              sportId: null,
+              sportName: null,
+              visibility: 'public',
+              media: [],
+              hashtags: [],
+              previewComments: [],
+              likeCount: 0,
+              commentCount: 0,
+              shareCount: 0,
+              isLikedByCurrentUser: false,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              broadcastEndTime: null,
+            },
+          ],
+          totalPages: 1,
+          totalElements: 1,
+          number: 0,
+          size: 20,
+          first: true,
+          last: true,
+          numberOfElements: 1,
+          empty: false,
+        },
+        timestamp: '',
+      },
+    });
     renderApp(['/']);
 
     await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
-    expect(screen.getAllByRole('article').length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByRole('article').length).toBeGreaterThan(0));
     expect(screen.getByRole('region', { name: 'Upcoming matches' })).toBeInTheDocument();
   });
 

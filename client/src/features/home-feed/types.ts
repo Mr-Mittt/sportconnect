@@ -4,19 +4,8 @@
 export type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { SportKey } from '@/shared/types/sport';
 
-export interface Post {
-  id: string;
-  sport: SportKey;
-  authorName: string;
-  authorInitials: string;
-  authorAvatarUrl?: string;
-  createdAt: string; // ISO timestamp
-  text: string;
-  hashtags: string[];
-  likeCount: number;
-  commentCount: number;
-  likedByMe: boolean;
-}
+// Post moved to @/features/feed/types (FEED-1) — that's the real DTO shape
+// now, the mock one it replaced is gone.
 
 export interface UpcomingMatch {
   id: string;

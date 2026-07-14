@@ -1,10 +1,70 @@
-import { render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import type { ReactNode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { apiClient } from '@/app/apiClient';
+import type { PageResponse, Post } from '@/features/feed/types';
 import { HomeFeedPage } from './HomeFeedPage';
 
-// Mock data fixture facts (mockData.ts): 4 posts (2 football / 1 basketball /
-// 1 tennis), 3 matches (1 per sport), 4 hashtags, 2 broadcasts.
+// Feed fixture facts (mirrors the old mockPosts set 1:1, real shape now —
+// see e2e/mocks/handlers/feed.ts for the same set used in e2e/visual specs):
+// 4 posts (2 football/Soccer sportId 5, 1 basketball sportId 6, 1 tennis
+// sportId 2), Marcus Lee's post first with 14 likes.
+// Matches/hashtags/broadcasts are unaffected mock data (3 matches, 4
+// hashtags, 2 broadcasts, per mockData.ts).
+
+function post(overrides: Partial<Post> & Pick<Post, 'id' | 'userFullName' | 'sportId'>): Post {
+  return {
+    userId: 'someone-else',
+    userAvatarUrl: null,
+    postType: 'USER_FEED',
+    groupId: null,
+    content: `${overrides.userFullName}'s post`,
+    latitude: null,
+    longitude: null,
+    locationName: null,
+    sportName: null,
+    visibility: 'public',
+    media: [],
+    hashtags: [],
+    previewComments: [],
+    likeCount: 0,
+    commentCount: 0,
+    shareCount: 0,
+    isLikedByCurrentUser: false,
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    broadcastEndTime: null,
+    ...overrides,
+  };
+}
+
+const feedPosts: Post[] = [
+  post({ id: 1, userFullName: 'Marcus Lee', sportId: 5, likeCount: 14, hashtags: ['fridayrun'] }),
+  post({ id: 2, userFullName: 'Priya Shah', sportId: 6, likeCount: 9 }),
+  post({ id: 3, userFullName: 'Diego Alvarez', sportId: 2, likeCount: 21 }),
+  post({ id: 4, userFullName: 'Hana Kim', sportId: 5, likeCount: 32 }),
+];
+
+function feedPage(posts: Post[]): PageResponse<Post> {
+  return {
+    content: posts,
+    totalPages: 1,
+    totalElements: posts.length,
+    number: 0,
+    size: 20,
+    first: true,
+    last: true,
+    numberOfElements: posts.length,
+    empty: posts.length === 0,
+  };
+}
+
+function wrapper({ children }: { children: ReactNode }) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
 
 const getMatchCtas = () => screen.getAllByRole('button', { name: /join|view details/ });
 // #fridayrun exists both as a post hashtag and a trending row — scope to the rail cards
@@ -12,10 +72,17 @@ const trendingCard = () => within(screen.getByRole('region', { name: 'Trending h
 const broadcastsCard = () => within(screen.getByRole('region', { name: 'Group broadcasts' }));
 
 describe('HomeFeedPage', () => {
-  it('renders switcher, feed, and all three rail cards from the hook', () => {
-    render(<HomeFeedPage />);
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(apiClient, 'get').mockResolvedValue({
+      data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' },
+    });
+  });
+
+  it('renders switcher, feed, and all three rail cards from the hook', async () => {
+    render(<HomeFeedPage />, { wrapper });
     expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument();
-    expect(screen.getAllByRole('article')).toHaveLength(4);
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
     expect(getMatchCtas()).toHaveLength(3);
     expect(trendingCard().getByText('#fridayrun')).toBeInTheDocument();
     expect(broadcastsCard().getByText('Riverside Ballers')).toBeInTheDocument();
@@ -23,7 +90,8 @@ describe('HomeFeedPage', () => {
 
   it('sport selection filters feed and matches together; trending/broadcasts unaffected', async () => {
     const user = userEvent.setup();
-    render(<HomeFeedPage />);
+    render(<HomeFeedPage />, { wrapper });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
 
     await user.click(screen.getByRole('button', { name: 'Basketball' }));
     expect(screen.getAllByRole('article')).toHaveLength(1);
@@ -40,22 +108,48 @@ describe('HomeFeedPage', () => {
 
   it('like toggle increments through the hook and reverts on second click', async () => {
     const user = userEvent.setup();
-    render(<HomeFeedPage />);
+    // A static GET mock would be clobbered by the mutation's background
+    // onSettled invalidate (which refetches the mounted /posts/feed query)
+    // reverting the optimistic UI right back — a real backend would instead
+    // confirm the new liked state, so the fixture needs to behave the same
+    // way: a tiny stateful fake server, not a fixed response.
+    let currentPosts = feedPosts;
+    vi.spyOn(apiClient, 'get').mockImplementation(async () => ({
+      data: { success: true, message: '', data: feedPage(currentPosts), timestamp: '' },
+    }));
+    vi.spyOn(apiClient, 'post').mockImplementation(async (url: string) => {
+      const postId = Number(url.match(/\/posts\/(\d+)\/like/)?.[1]);
+      currentPosts = currentPosts.map((p) =>
+        p.id === postId ? { ...p, isLikedByCurrentUser: true, likeCount: p.likeCount + 1 } : p,
+      );
+      return { data: { success: true, message: '', data: null, timestamp: '' } };
+    });
+    vi.spyOn(apiClient, 'delete').mockImplementation(async (url: string) => {
+      const postId = Number(url.match(/\/posts\/(\d+)\/like/)?.[1]);
+      currentPosts = currentPosts.map((p) =>
+        p.id === postId ? { ...p, isLikedByCurrentUser: false, likeCount: p.likeCount - 1 } : p,
+      );
+      return { data: { success: true, message: '', data: null, timestamp: '' } };
+    });
+    render(<HomeFeedPage />, { wrapper });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
 
     const likeButton = screen.getAllByRole('button', { name: 'Like' })[0];
-    expect(likeButton).toHaveTextContent('14'); // Marcus Lee's post, first in mock order
+    expect(likeButton).toHaveTextContent('14'); // Marcus Lee's post, first in feed order
     await user.click(likeButton);
 
-    const unlikeButton = screen.getAllByRole('button', { name: 'Unlike' })[0];
-    expect(unlikeButton).toHaveTextContent('15');
-    expect(unlikeButton).toHaveAttribute('aria-pressed', 'true');
+    const unlikeButton = await screen.findAllByRole('button', { name: 'Unlike' });
+    expect(unlikeButton[0]).toHaveTextContent('15');
+    expect(unlikeButton[0]).toHaveAttribute('aria-pressed', 'true');
 
-    await user.click(unlikeButton);
-    expect(screen.getAllByRole('button', { name: 'Like' })[0]).toHaveTextContent('14');
+    await user.click(unlikeButton[0]);
+    const reverted = await screen.findAllByRole('button', { name: 'Like' });
+    expect(reverted[0]).toHaveTextContent('14');
   });
 
-  it('"Add sport" is at the 3-profile cap with mock data (aria-disabled, per HF-2)', () => {
-    render(<HomeFeedPage />);
+  it('"Add sport" is at the 3-profile cap with mock sport profiles (aria-disabled, per HF-2)', async () => {
+    render(<HomeFeedPage />, { wrapper });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
     expect(screen.getByRole('button', { name: 'Add sport' })).toHaveAttribute(
       'aria-disabled',
       'true',
