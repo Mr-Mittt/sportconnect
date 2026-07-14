@@ -590,6 +590,7 @@ caller), and the new seed data for `group_roles` broke context reuse across test
 persists across separate `@SpringBootTest` context loads within one suite run, so a second
 `schema.sql` execution hit a primary-key violation on a plain `INSERT`) — fixed via H2's `MERGE
 INTO ... KEY(id)`. `:modules:social:post-impl:test` and `:server:test` (28/28) both green.
+
 **Cursor pagination design + V1 ticket C12 filed** (2026-07-13,
 `documentation/md/CURSOR_PAGINATION_MIGRATION.md`,
 `modules/social/post-impl/docs/BACKLOG_V1.md` · C12): design discussion on why `Page<PostResponse>`
@@ -650,6 +651,21 @@ expected. `pnpm exec playwright test --project=visual-regression` still reports 
 Linux-rendered; local Windows runs diverge on font rendering; CI is authoritative). Confirmed via
 direct diff-image inspection that the residual local diff is sub-pixel text-position/anti-aliasing
 noise, not a content mismatch — same text, same layout in both images.
+
+**Swagger — authorize with email + password** (2026-07-14,
+`modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
+replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow
+(`OpenApiConfig.java`) backed by a new adapter endpoint, `POST /api/auth/oauth-token`
+(`SwaggerOAuth2TokenController`, `auth-impl`, `@Hidden` from the rendered docs) — accepts the
+standard OAuth2 form fields, delegates to the same `AuthService.login()` the real
+`/api/auth/login` uses, and returns the standard `{access_token, token_type, expires_in}` shape
+(converting `expiresIn` from milliseconds to seconds, a real unit mismatch caught during
+implementation). The real API's own auth mechanism is untouched — this only changes how Swagger
+UI itself acquires a token for its "Try it out" calls. Live-verified: the issued token works
+against a real protected endpoint, `/api/auth/oauth-token` is confirmed absent from `/api-docs`'s
+rendered paths while `/api/auth/login` still appears, and a real browser walkthrough (Playwright)
+confirmed the Authorize dialog now takes email + password and reaches "Authorized." `:modules:
+auth:auth-impl:test` and `:server:test` both green.
 
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
