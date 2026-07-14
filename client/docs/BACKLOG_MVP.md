@@ -795,10 +795,35 @@ Absorbs post-impl's old F1 ticket ("Frontend — personalized feed").
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-1 · **Spec:** AUTH/FEED epic § FEED-2
 
 ### FEED-3 · CreatePostForm (real)
-**Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0 · **Spec:** AUTH/FEED epic § FEED-3
+**Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0 (also practically wants FEED-1
+merged first — see delta below) · **Spec:** AUTH/FEED epic § FEED-3
 
 Maps to `CreatePostRequest`; 5000-char limit enforced client-side; broadcast creation belongs to
 FEED-7, not this composer.
+
+**Deltas (2026-07-14, from design review — not yet implemented):**
+- **New visual spec:** `client/design-reference/design-reference-home-feed-v2.html` — adds a
+  composer card (avatar + auto-growing textarea, placeholder "What's on your mind, {name}?") between
+  the SportSwitcher and the feed. Action row: Photo / Location / Tag sport buttons, plus a Post
+  button that's disabled until there's text (enabled state: `border-accent` fill, white text).
+  Diffed against the original mockup — this composer card is the **only** structural change;
+  everything else (nav, switcher, feed cards, rail) is identical.
+- **User decision: v2 replaces v1 as the canonical reference.** When this ticket is picked up,
+  rename `design-reference-home-feed-v2.html` → `design-reference-home-feed.html` (replacing the
+  old file) rather than keeping both — matches HF-10a's "one frozen reference per page" convention.
+  This means HF-10b/FEED-1's existing visual-regression baselines need regenerating for the
+  composer too, on top of the already-filed **HF-15** (FEED-1's real-content diff) — likely worth
+  doing as one combined baseline regen once this ticket's UI lands, not two separate passes.
+- **User decision: Photo / Location / Tag sport buttons stay as inert mockup buttons for this
+  ticket** — same pattern as HF-3/HF-4's `sendPrompt`-style no-ops for affordances with no
+  destination yet, not real pickers. Only the textarea + Post button are functionally wired to
+  `useCreatePost()`.
+- **Practical sequencing note:** formal dependency is still just FEED-0, but implementation should
+  branch off `feature/feed-1-feed-postcard-real` (not `master`) once picked up — that branch has the
+  real `Post` type, `usePersonalFeed()` cache, and `optimisticFeedUpdates.ts` helpers this ticket's
+  "prepend the new post to the current feed view without a full refetch" acceptance criterion needs
+  to hook into. Building against `master`'s still-mock `Feed` would be throwaway work. Rebase onto
+  `master` once FEED-1 actually merges.
 
 ### FEED-4 · Group switching (real)
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0 · **Spec:** AUTH/FEED epic § FEED-4
