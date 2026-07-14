@@ -16,7 +16,10 @@ import { useEffect, useRef } from 'react';
 export function useInfiniteScrollSentinel(onIntersect: () => void, enabled: boolean) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const onIntersectRef = useRef(onIntersect);
-  onIntersectRef.current = onIntersect;
+
+  useEffect(() => {
+    onIntersectRef.current = onIntersect;
+  }, [onIntersect]);
 
   useEffect(() => {
     if (!enabled) return undefined;

@@ -20,7 +20,6 @@ class FakeIntersectionObserver {
   observe = vi.fn();
   disconnect = vi.fn();
   unobserve = vi.fn();
-  constructor(_callback: IntersectionObserverCallback) {}
 }
 
 const makePost = (id: number, sportId: number | null, userFullName: string): Post => ({
