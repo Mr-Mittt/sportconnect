@@ -611,6 +611,46 @@ id alone. Also traced the client-side coupling: FEED-0's `PageResponse<T>` type 
 follow-up client ticket when C12 is scheduled, same pattern as C11's own client-impact note.
 Design/ticket only — no code changed.
 
+**FEED-1 DONE** (2026-07-14, `client/docs/FEED-1_FEED_POSTCARD_REAL.md`): de-mocked Home Feed's
+`Feed`/`PostCard` against the real `GET /api/posts/feed` — larger than a data-source swap, since
+HF-3 shipped with zero pagination affordance (flat mock array) and a completely different `Post`
+shape. Added: real optimistic like/unlike/delete (`onMutate`/`onError`/`onSettled` against a new
+shared `optimisticFeedUpdates.ts` cache helper), a new `useInfiniteScrollSentinel` hook
+(`IntersectionObserver` + an always-rendered "Load more" button as the required keyboard/
+screen-reader fallback), a temporary `sportIdMap.ts` bridging `SportKey` to the backend's real
+`sportId` (confirmed live: Soccer=5, Basketball=6, Tennis=2 — the backend has no sport actually
+named "Football"), and a new "..." delete menu on `PostCard` (reusing `TopBar`'s dropdown-menu
+primitive), shown only for the caller's own posts. **Found and fixed a real bug in FEED-0's
+already-built MSW fixtures while extending them, not replacing them:** `mockPost.sportId` was `1`
+(Badminton) with `sportName: 'Football'` — inconsistent with the real backend; corrected to `5`
+(Soccer). Also made the feed MSW handlers **stateful** (mutated by like/unlike/delete/create)
+after catching — first in Vitest, then confirming the same root cause would hit e2e too — that a
+stateless handler gets clobbered by the mutation's own background `invalidateQueries` refetch,
+which a real backend wouldn't do (it would confirm the new state, not revert it). Rewrote
+`home-feed-journey.spec.ts` (added a new delete step), `a11y.spec.ts`, and `app-home-feed.spec.ts`
+(empty state now uses a real MSW override, replacing the `?visual-state=empty` seam per HF-10b's
+own delta). Verified live against the actually running backend end-to-end (register → create →
+feed → like → unlike → delete → hashtag, all correct — re-confirming A9/A10 still hold) and via a
+real browser (Playwright, no MSW) against the real Vite dev server. `pnpm vitest run` 164/164,
+`playwright --project=e2e` 29/29, Storybook builds clean. All 9 Home Feed visual-regression
+baselines diffed at the time (real content + new delete-menu rendering, confirmed via direct image
+inspection, not a regression) — filed as follow-up **HF-15**, now also `DONE` (see below).
+
+**HF-15 DONE** (2026-07-14, `client/docs/FEED-1_FEED_POSTCARD_REAL.md`): regenerated Home Feed's
+9 committed visual-regression baselines via the `update-baselines` CI dispatch, following FEED-1's
+real feed content + new delete-menu rendering. Only 6 of the 9 actually changed byte-for-byte
+(`default`/`basketball` at all 3 breakpoints) — the 3 `empty` state baselines came back
+byte-identical to what was already committed, because the empty state's rendered result didn't
+actually change: matches are still emptied via the `?visual-state=empty` query param, and the feed
+is now emptied via a real MSW override (`seedEmptyFeedOnNextLoad`) instead of the old seam, but
+both produce the same empty page. Human-verified the new `default`/`basketball` captures show the
+3 real posts, correct sport badges, correct like/comment counts, and the 2 delete-menu icons as
+expected. `pnpm exec playwright test --project=visual-regression` still reports all 9 as
+"different" **when run locally on Windows** — expected per HF-12's own note (baselines are
+Linux-rendered; local Windows runs diverge on font rendering; CI is authoritative). Confirmed via
+direct diff-image inspection that the residual local diff is sub-pixel text-position/anti-aliasing
+noise, not a content mismatch — same text, same layout in both images.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and
