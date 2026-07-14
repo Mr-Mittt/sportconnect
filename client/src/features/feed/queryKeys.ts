@@ -12,4 +12,5 @@ export const feedKeys = {
   trendingHashtags: () => [...feedKeys.all, 'trending-hashtags'] as const,
   broadcasts: () => [...feedKeys.all, 'broadcasts'] as const,
   userGroups: (userId: string) => [...feedKeys.all, 'user-groups', userId] as const,
+  comments: (postId: number) => [...feedKeys.all, 'comments', postId] as const,
 };

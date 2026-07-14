@@ -43,6 +43,7 @@ const meta = {
     onToggleLike: () => {},
     onHashtagClick: () => {},
     onDeletePost: () => {},
+    onOpenComments: () => {},
     currentUserId: 'someone-else',
   },
 } satisfies Meta<typeof PostCard>;

@@ -31,6 +31,7 @@ interface PostCardProps {
   onToggleLike: (postId: number) => void;
   onHashtagClick: (tag: string) => void;
   onDeletePost: (postId: number) => void;
+  onOpenComments: (postId: number) => void;
 }
 
 function initialsFor(fullName: string): string {
@@ -66,6 +67,7 @@ export function PostCard({
   onToggleLike,
   onHashtagClick,
   onDeletePost,
+  onOpenComments,
 }: PostCardProps) {
   const displayName = post.userFullName ?? 'Unknown User';
   const isOwnPost = currentUserId !== undefined && post.userId === currentUserId;
@@ -154,10 +156,15 @@ export function PostCard({
           )}
           {post.likeCount}
         </button>
-        <span className="flex items-center gap-1 text-xs text-text-secondary">
+        <button
+          type="button"
+          aria-label="View comments"
+          onClick={() => onOpenComments(post.id)}
+          className="flex cursor-pointer items-center gap-1 rounded p-0.5 text-xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+        >
           <IconMessageCircle className="size-4" aria-hidden="true" />
           {post.commentCount}
-        </span>
+        </button>
       </div>
     </article>
   );

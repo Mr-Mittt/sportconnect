@@ -147,6 +147,11 @@ export interface CreateCommentPayload {
   parentCommentId?: number;
 }
 
+// CreateCommentRequest.content's real server-side @Size(max = 1000) —
+// enforced client-side too (FEED-2) so the textarea/input never lets a user
+// type past what the backend will actually accept.
+export const MAX_COMMENT_LENGTH = 1000;
+
 // Matches Spring Data's Page<T> JSON serialization exactly (confirmed
 // against the real controllers — every paginated feed/group/hashtag
 // endpoint returns this shape wrapped in ApiResponse<T>).

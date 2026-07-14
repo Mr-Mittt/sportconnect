@@ -76,6 +76,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14c | HF-13 | Regenerate visual-regression baselines (follow-up from AUTH-1's cn() border-hairline fix) | `DONE` |
 | 14d | HF-14 | Regenerate visual-regression baselines (follow-up from AUTH-4's TopBar avatar-menu change) | `DONE` |
 | 14e | HF-15 | Regenerate visual-regression baselines (follow-up from FEED-1's real feed + delete menu) | `DONE` |
+| 14f | HF-16 | Regenerate visual-regression baselines (follow-up from FEED-2's comment button + dialog) | `TODO` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -90,7 +91,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | **Phase 6 — Feed/groups/sport integration (de-mocks HF-2/3/5/6)** | | | |
 | 25 | FEED-0 | Types + TanStack Query hooks scaffold | `DONE` |
 | 26 | FEED-1 | Feed + PostCard (real — absorbs post-impl's old F1) | `DONE` |
-| 27 | FEED-2 | CommentSection (real) | `TODO` |
+| 27 | FEED-2 | CommentSection (real) | `DONE` |
 | 28 | FEED-3 | CreatePostForm (real) | `TODO` |
 | 29 | FEED-4 | Group switching (real groups list) | `TODO` |
 | 30 | FEED-5 | CreateGroupModal + JoinGroupModal (real) | `TODO` |
@@ -474,6 +475,25 @@ the code that changed the rendering need to land together — this repo's `maste
 FEED-1's changes, so there's no "baselines vs. shipped code" mismatch window to avoid, unlike the
 HF-13/HF-14 case where the triggering change had already merged.
 
+### HF-16 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
+**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-2's comment button + dialog ·
+**Summary:** `client/docs/FEED-2_COMMENTSECTION_REAL.md`
+
+**Found during FEED-2:** `PostCard`'s comment icon changed from a static `<span>` to a clickable
+`<button>` (needed for the new comment dialog). Confirmed via
+`pnpm exec playwright test --project=visual-regression`: all 9 committed Home Feed baselines
+legitimately diff (~0.01–0.02 pixel-ratio) — a small but real layout nudge from the button's
+padding/focus-ring affordances. Direct image inspection of the actual render confirmed correct
+content/layout, not a regression. Same reasoning as HF-13/14/15: the feature change is correct and
+shouldn't be reverted, but regenerating baselines is a separate concern from the feature that caused
+the drift.
+
+**To execute:** identical process to HF-12/13/14/15 — trigger the `client-ci` workflow's
+`update-baselines` manual dispatch on GitHub, download the `visual-baselines` artifact, replace
+`client/e2e/visual/__screenshots__/` with its contents, commit. Worth a human visual check that the
+comment button renders correctly (no dialog-open state leaking into a static capture) and nothing
+else drifted unexpectedly.
+
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·
 **Summary:** `client/docs/MSW-0_MOCK_SERVICE_WORKER_HANDLER_SETUP.md`
@@ -792,7 +812,53 @@ Absorbs post-impl's old F1 ticket ("Frontend — personalized feed").
   precedent), FEED-8 replaces that with the real skeleton/retry UI.
 
 ### FEED-2 · CommentSection (real)
-**Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-1 · **Spec:** AUTH/FEED epic § FEED-2
+**Status:** `DONE` (2026-07-14) · **Type:** Integration · **Dependency:** FEED-1 · **Spec:** AUTH/FEED epic § FEED-2 ·
+**Summary:** `client/docs/FEED-2_COMMENTSECTION_REAL.md`
+
+De-mocks nothing (no `CommentSection` existed before this ticket) — wires a new modal comment thread
+(`GET`/`POST /posts/{postId}/comments`, delete, like/unlike) from `PostCard`'s comment icon. No
+`design-reference-*.html` covered this surface, so 3 scope questions were confirmed with the user
+before implementation (recorded as deltas below).
+
+**Deltas for later tickets:**
+- **Modal dialog (user decision)**, not inline expand — new shared `Dialog` primitive
+  (`src/shared/ui/dialog.tsx`, `@radix-ui/react-dialog`) and a new `--color-overlay` token. Any
+  future modal (e.g. FEED-5's CreateGroupModal/JoinGroupModal) should reuse this primitive.
+- **Reply-to-comment, one level deep, is in scope (user decision)** — the backend already enforces
+  "no reply-to-a-reply" server-side and returns each root comment's `replies` fully populated, so no
+  generic recursion or extra endpoint was needed.
+- **"View more comments" is a plain button (user decision)**, not `Feed`'s
+  `useInfiniteScrollSentinel` auto-load pattern.
+- **`CommentSection` takes all data as props — no internal data hook, no `postId` prop.**
+  `HomeFeedPage` owns `useCommentsData(activeCommentsPostId, isOpen)`, matching every other Home
+  Feed component's presentational/controlled convention (this was a mid-implementation correction —
+  see the summary doc). Any future ticket extending `CommentSection` should keep it hook-free.
+- **`MAX_COMMENT_LENGTH` (1000, matches the backend's real `@Size(max = 1000)`) now lives in
+  `feed/types.ts`** — reuse it, don't hardcode `1000` again.
+- **Real bug found and fixed in `useDeleteComment`'s optimistic rollback** (two overlapping cache
+  snapshots, one silently clobbering the other) — see the summary doc; the fix pattern (one snapshot
+  scoped to `feedKeys.all`, since `feedKeys.comments(postId)` nests under it by design) is the
+  reference for any future hook needing to roll back more than one cache scope at once.
+- **HF-16 filed** (visual-regression baselines stale — comment `<span>` became a `<button>`). Any
+  ticket touching `PostCard` again before HF-16 lands should expect the same staleness and roll it
+  into the same regen, per the HF-13/14/15 precedent.
+- **`design-reference-post-modal.html` added retroactively** (`client/design-reference/`),
+  extracted from the shipped implementation rather than pre-implementation (no mockup existed for
+  this ticket). Static, interactive (like/reply/delete/add-comment all wired in vanilla JS,
+  mirroring the real optimistic behavior) — not yet wired into the `visual-regression` Playwright
+  project (no baseline screenshots/spec file exist for it, unlike HF-10a's home-feed baselines). A
+  future ticket should decide whether to add that CI coverage, same shape as HF-10a/b did for Home
+  Feed, if this modal's visual regression risk is judged worth it.
+- **The reference was then hand-revised by the user and the implementation updated to match** (same
+  day) — the dialog header now shows the commented-on post itself (author/time/sport badge, close
+  button stacked above the badge) instead of a generic "Comments" title, and the post's own content
+  is repeated at the top of the dialog body above the comment list. `CommentSection` gained `post`/
+  `sport` props (resolved by `HomeFeedPage` from its loaded feed data) for this. The composer/reply
+  "Post" buttons also picked up a muted-gray→solid-blue disabled/enabled color swap (a `className`
+  override on `Button`, not a new variant — see FEED-2's summary doc addendum for why, and note for
+  FEED-3 if its composer's own `border-accent`-swap button ends up wanting the same pattern a third
+  time). `shared/ui/dialog.tsx`'s title-only `DialogHeader` was removed as dead code in favor of
+  lower-level `DialogTitle`/`DialogClose` exports, since `CommentSection` now builds a custom header.
 
 ### FEED-3 · CreatePostForm (real)
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0 (also practically wants FEED-1

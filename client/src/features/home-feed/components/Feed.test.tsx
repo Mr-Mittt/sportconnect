@@ -61,6 +61,7 @@ const baseProps = {
   onToggleLike: noop,
   onHashtagClick: noop,
   onDeletePost: noop,
+  onOpenComments: noop,
   onLoadMore: noop,
   hasMorePosts: false,
   isFetchingMorePosts: false,

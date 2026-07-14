@@ -1,11 +1,23 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
+import { useAuthStore } from '@/app/authStore';
 import type { PageResponse, Post } from '@/features/feed/types';
 import { HomeFeedPage } from './HomeFeedPage';
+
+const testUser = {
+  id: 'user-1',
+  email: 'jordan@example.com',
+  firstName: 'Jordan',
+  lastName: 'Lee',
+  username: 'jordanlee',
+  phoneNumber: null,
+  avatarUrl: null,
+  roles: ['ROLE_USER'],
+};
 
 // Feed fixture facts (mirrors the old mockPosts set 1:1, real shape now —
 // see e2e/mocks/handlers/feed.ts for the same set used in e2e/visual specs):
@@ -74,9 +86,20 @@ const broadcastsCard = () => within(screen.getByRole('region', { name: 'Group br
 describe('HomeFeedPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    useAuthStore.getState().setSession(testUser, 'access-token');
     vi.spyOn(apiClient, 'get').mockResolvedValue({
       data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' },
     });
+  });
+
+  afterEach(() => {
+    // Explicit unmount before clearing the session: Vitest runs afterEach
+    // hooks inside-out (this file's hook before src/test/setup.ts's global
+    // `cleanup()`), so without this, HomeFeedPage briefly re-renders with
+    // authStore.user === null while still mounted — and it non-null-asserts
+    // user (guaranteed by ProtectedRoute in the real app), which throws.
+    cleanup();
+    useAuthStore.getState().clearSession();
   });
 
   it('renders switcher, feed, and all three rail cards from the hook', async () => {
