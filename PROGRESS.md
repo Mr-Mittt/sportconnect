@@ -686,9 +686,19 @@ stacked above the badge) instead of a generic "Comments" title, with the post's 
 above the comment list; the composer/reply "Post" buttons now swap muted-gray→solid-blue on
 disabled/enabled (a scoped `Button` `className` override, not a new variant). `pnpm test` 200/200,
 typecheck/lint/build clean, re-verified live against the running backend (confirmed the button's
-actual computed background-color changes, not just a class name).
+actual computed background-color changes, not just a class name). Filed **FEED-11** (`TODO`) to add
+`visual-regression` Playwright coverage for the modal — it has none today (Storybook + Vitest only),
+unlike Home Feed's page-level baselines.
 
-**Swagger — authorize with email + password** (2026-07-14,
+**FEED-2 follow-up, filed after merge** (2026-07-14, PR #32 already merged, so filed rather than
+built on the merged branch): the user asked for the comment modal to fetch its own post
+(`GET /api/posts/{postId}`) instead of reading it out of `HomeFeedPage`'s already-loaded feed cache,
+specifically so the modal becomes reachable by a direct URL (a shared link, notification deep link,
+or a post outside the currently loaded feed pages) rather than only openable by clicking through an
+already-rendered post card. Filed as **FEED-12** (`TODO`) — a new `usePost(postId)` hook, a
+`/posts/:postId` route, and sane close/back behavior when opened via direct URL. Sequenced before
+**FEED-11** in the backlog's dependency notes (not a hard block): once the modal is URL-addressable,
+FEED-11's visual-regression spec can `page.goto()` it directly instead of clicking through the feed.
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow
 (`OpenApiConfig.java`) backed by a new adapter endpoint, `POST /api/auth/oauth-token`
