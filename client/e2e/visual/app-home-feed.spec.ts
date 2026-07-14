@@ -1,4 +1,4 @@
-import { seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import { seedAuthenticatedSession, seedEmptyFeedOnNextLoad } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -13,9 +13,11 @@ import { expect, test } from '../mocks/test.ts';
  * fails; intended changes regenerate via `pnpm test:visual --update-snapshots`.
  *
  * The clock is frozen so mock timestamps ("2h ago", "Tomorrow, 7:00 PM")
- * render identically on every run. The empty state uses the ?visual-state
- * seam in useHomeFeedData's mock internals (no mock sport is empty) — when
- * FEED-1 de-mocks the hook, replace it with MSW handlers.
+ * render identically on every run. The empty state used to rely on the
+ * ?visual-state seam in useHomeFeedData's mock internals (no mock sport was
+ * empty) — FEED-1 replaced it with an MSW override
+ * (seedEmptyFeedOnNextLoad) once the feed went real, per this comment's own
+ * original note.
  *
  * AUTH-4 update: Home Feed now sits behind ProtectedRoute — every case seeds
  * an authenticated session (MSW-backed) landing on its target path/query
@@ -42,6 +44,9 @@ for (const width of breakpoints) {
     test(`home feed — ${state.name} @ ${width}px`, async ({ page }) => {
       await page.clock.setFixedTime(FROZEN_TIME);
       await page.setViewportSize({ width, height: 900 });
+      if (state.name === 'empty') {
+        await seedEmptyFeedOnNextLoad(page);
+      }
       await seedAuthenticatedSession(page, `/${state.query}`);
 
       if (state.name === 'empty') {

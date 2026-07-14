@@ -22,8 +22,12 @@ async function loadHomeFeed(page: import('@playwright/test').Page, width: number
   // page.goto('/') needed, and adding one would reintroduce AUTH-3's
   // bootstrap-vs-MSW-worker-ready race on a fresh navigation.
   await seedAuthenticatedSession(page);
-  // Rail content present = page fully assembled
+  // Rail content present = page fully assembled. Feed is real now (FEED-1) —
+  // also wait for it to actually finish loading, so the overflow/axe checks
+  // below exercise the fully-loaded page consistently rather than racing
+  // Feed's (null-rendering) loading state.
   await expect(page.getByRole('region', { name: 'Upcoming matches' })).toBeVisible();
+  await expect(page.getByRole('article').first()).toBeVisible();
 }
 
 async function gatingViolations(page: import('@playwright/test').Page) {
@@ -53,7 +57,8 @@ for (const width of breakpoints) {
 test('sport-filtered state — axe reports no critical/serious violations', async ({ page }) => {
   await loadHomeFeed(page, 1280);
   await page.getByRole('button', { name: 'Basketball', exact: true }).click();
-  // Filtered feed rendered (single basketball post from mock data)
+  // Filtered feed rendered (single basketball post — FEED-1's real feed,
+  // e2e/mocks/handlers/feed.ts's mockBasketballPost fixture)
   await expect(page.getByRole('article')).toHaveCount(1);
   expect(await gatingViolations(page)).toEqual([]);
 });

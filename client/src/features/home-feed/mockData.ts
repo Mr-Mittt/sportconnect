@@ -1,10 +1,4 @@
-import type {
-  GroupBroadcast,
-  Post,
-  SportProfile,
-  TrendingHashtag,
-  UpcomingMatch,
-} from './types';
+import type { GroupBroadcast, SportProfile, TrendingHashtag, UpcomingMatch } from './types';
 
 /*
  * Mock data ported from the approved mockup (design-reference/design-reference-home-feed.html).
@@ -33,56 +27,9 @@ export const mockSportProfiles: SportProfile[] = [
   { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' },
 ];
 
-export const mockPosts: Post[] = [
-  {
-    id: 'post-1',
-    sport: 'football',
-    authorName: 'Marcus Lee',
-    authorInitials: 'ML',
-    createdAt: hoursAgo(2),
-    text: 'Great 5-a-side session tonight, 3 wins in a row for the squad.',
-    hashtags: ['#5aside', '#fridayrun'],
-    likeCount: 14,
-    commentCount: 3,
-    likedByMe: false,
-  },
-  {
-    id: 'post-2',
-    sport: 'basketball',
-    authorName: 'Priya Shah',
-    authorInitials: 'PS',
-    createdAt: hoursAgo(4),
-    text: 'Looking for 2 more players for Sunday pickup at Riverside courts.',
-    hashtags: ['#pickup', '#riverside'],
-    likeCount: 9,
-    commentCount: 6,
-    likedByMe: false,
-  },
-  {
-    id: 'post-3',
-    sport: 'tennis',
-    authorName: 'Diego Alvarez',
-    authorInitials: 'DA',
-    createdAt: hoursAgo(6),
-    text: 'New PB on serve speed this week. Coach says footwork is finally clicking.',
-    hashtags: ['#tennislife'],
-    likeCount: 21,
-    commentCount: 2,
-    likedByMe: false,
-  },
-  {
-    id: 'post-4',
-    sport: 'football',
-    authorName: 'Hana Kim',
-    authorInitials: 'HK',
-    createdAt: hoursAgo(24),
-    text: 'Our clan is hosting a mini tournament next Saturday, open to all levels.',
-    hashtags: ['#tournament', '#openclan'],
-    likeCount: 32,
-    commentCount: 11,
-    likedByMe: false,
-  },
-];
+// mockPosts (FEED-1) removed — Feed is real now, backed by usePersonalFeed().
+// See e2e/mocks/handlers/feed.ts for the MSW fixture that mirrors this same
+// 4-post set (same authors/counts/hashtags/sport split) in the real shape.
 
 export const mockUpcomingMatches: UpcomingMatch[] = [
   {

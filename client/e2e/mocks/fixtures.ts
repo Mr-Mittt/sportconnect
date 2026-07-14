@@ -55,8 +55,12 @@ export const mockPost: Post = {
   latitude: null,
   longitude: null,
   locationName: null,
-  sportId: 1,
-  sportName: 'Football',
+  // 5, not 1 — the real `sports` table has no "Football" row, only "Soccer"
+  // (id 5, confirmed via V003__create_sports_tables.sql's INSERT order).
+  // FEED-1's temporary sportId<->SportKey map treats them as the same sport;
+  // this fixture needs the real id to filter correctly under that map.
+  sportId: 5,
+  sportName: 'Soccer',
   visibility: 'public',
   media: [],
   // No leading '#' — matches the real backend's extraction/storage format
@@ -81,6 +85,24 @@ export const mockGroupPost: Post = {
   content: 'Who is in for Friday? #fridayrun',
   createdAt: '2026-07-13T08:00:00',
   updatedAt: '2026-07-13T08:00:00',
+};
+
+// A friend's post, not the logged-in test user's — covers the "no delete
+// menu on someone else's post" case and gives the feed a second sport
+// (basketball, sportId 6) so sport-filtering has something real to filter.
+export const mockBasketballPost: Post = {
+  ...mockPost,
+  id: 4,
+  userId: '22222222-2222-4222-8222-222222222222',
+  userFullName: 'Priya Shah',
+  content: 'Looking for 2 more players for Sunday pickup at Riverside courts. #pickup',
+  hashtags: ['pickup'],
+  sportId: 6,
+  sportName: 'Basketball',
+  likeCount: 9,
+  commentCount: 6,
+  createdAt: '2026-07-13T06:00:00',
+  updatedAt: '2026-07-13T06:00:00',
 };
 
 export const mockBroadcastPost: Post = {
@@ -249,5 +271,19 @@ export async function simulateExpiredSessionOnNextLoad(page: Page): Promise<void
   await page.addInitScript(
     "window.__mswReady.then(() => import('/e2e/mocks/expireSession.ts')" +
       '.then(({ overrideRefreshToExpired }) => overrideRefreshToExpired(window.__mswWorker)));',
+  );
+}
+
+/**
+ * Same mechanism as simulateExpiredSessionOnNextLoad, for FEED-1's visual-
+ * regression empty state — HF-10b's own delta said to replace the old
+ * `?visual-state=empty` seam (removed from useHomeFeedData) with an MSW
+ * override once the feed went real. Call this, then navigate; the next
+ * `GET /posts/feed` on that page returns zero posts.
+ */
+export async function seedEmptyFeedOnNextLoad(page: Page): Promise<void> {
+  await page.addInitScript(
+    "window.__mswReady.then(() => import('/e2e/mocks/emptyFeed.ts')" +
+      '.then(({ overrideFeedToEmpty }) => overrideFeedToEmpty(window.__mswWorker)));',
   );
 }

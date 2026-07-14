@@ -1,18 +1,17 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useAuthStore } from '@/app/authStore';
+import { useDeletePost } from '@/features/feed/hooks/useDeletePost';
+import { useLikePost } from '@/features/feed/hooks/useLikePost';
+import { usePersonalFeed } from '@/features/feed/hooks/usePersonalFeed';
+import { useUnlikePost } from '@/features/feed/hooks/useUnlikePost';
+import type { Post } from '@/features/feed/types';
 import {
   mockGroupBroadcasts,
-  mockPosts,
   mockSportProfiles,
   mockTrendingHashtags,
   mockUpcomingMatches,
 } from './mockData';
-import type {
-  GroupBroadcast,
-  Post,
-  SportProfile,
-  TrendingHashtag,
-  UpcomingMatch,
-} from './types';
+import type { GroupBroadcast, SportProfile, TrendingHashtag, UpcomingMatch } from './types';
 
 export interface HomeFeedData {
   sportProfiles: SportProfile[];
@@ -23,46 +22,67 @@ export interface HomeFeedData {
 }
 
 /**
- * The Home Feed's single data boundary (HF-7). Currently mock-backed; the
- * integration phase swaps the internals per dataset (FEED-1 posts, FEED-6
- * hashtags, FEED-7 broadcasts, SPORT-1 profiles; matches stay mock — no
- * backend exists) without changing this return shape, so HomeFeedPage never
- * notices the swap. isLoading/isError are always false here but are part of
- * the contract per the data-layer convention.
+ * The Home Feed's single data boundary (HF-7). FEED-1 de-mocks `posts` behind
+ * `usePersonalFeed()` — sportProfiles/upcomingMatches/hashtags/broadcasts stay
+ * mock until SPORT-1/FEED-6/FEED-7 land (matches stay mock for this whole
+ * MVP, no backend module exists). HomeFeedPage never notices which internals
+ * are real vs. mock — that's the point of this hook boundary.
  *
- * toggleLike flips likedByMe and adjusts likeCount synchronously — the
- * controlled-like contract from HF-3. FEED-1 replaces this with a TanStack
- * optimistic mutation behind the same signature.
+ * toggleLike(postId) decides like vs. unlike itself, since PostCard's
+ * controlled-like contract (HF-3) only ever reports "the user clicked this
+ * post's like control," not which direction — the real API has two separate
+ * endpoints, so this hook resolves the direction from the post's current
+ * `isLikedByCurrentUser` before delegating to the matching optimistic
+ * mutation (useLikePost/useUnlikePost, FEED-1).
+ *
+ * The `?visual-state=empty` seam only still applies to `upcomingMatches` —
+ * matches have no backend, so there's no other way to reach that empty
+ * state. `posts`' empty state now comes from a real (MSW-backed in tests)
+ * empty feed response, not this seam (HF-10b's own delta said to make this
+ * exact swap once FEED-1 de-mocked the hook).
  */
 export function useHomeFeedData(): {
   data: HomeFeedData;
   isLoading: boolean;
   isError: boolean;
-  toggleLike: (postId: string) => void;
+  toggleLike: (postId: number) => void;
+  deletePost: (postId: number) => void;
+  currentUserId: string | undefined;
+  hasMorePosts: boolean;
+  isFetchingMorePosts: boolean;
+  fetchMorePosts: () => void;
 } {
-  // Test seam for the visual-regression spec (HF-10b): no mock sport is empty,
-  // so the empty state is unreachable through the UI. Empties only posts +
-  // matches — the same subset HF-10a's mockup empty state cleared. Goes away
-  // when FEED-1 swaps these internals for real queries; the visual spec's
-  // empty state then comes from MSW handlers instead.
   const isVisualEmpty =
     new URLSearchParams(window.location.search).get('visual-state') === 'empty';
 
-  const [posts, setPosts] = useState<Post[]>(isVisualEmpty ? [] : mockPosts);
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const feedQuery = usePersonalFeed();
+  const likeMutation = useLikePost();
+  const unlikeMutation = useUnlikePost();
+  const deleteMutation = useDeletePost();
 
-  const toggleLike = useCallback((postId: string) => {
-    setPosts((prev) =>
-      prev.map((post) =>
-        post.id === postId
-          ? {
-              ...post,
-              likedByMe: !post.likedByMe,
-              likeCount: post.likeCount + (post.likedByMe ? -1 : 1),
-            }
-          : post,
-      ),
-    );
-  }, []);
+  const posts = useMemo(
+    () => feedQuery.data?.pages.flatMap((page) => page.content) ?? [],
+    [feedQuery.data],
+  );
+
+  const toggleLike = useCallback(
+    (postId: number) => {
+      const post = posts.find((candidate) => candidate.id === postId);
+      if (!post) return;
+      if (post.isLikedByCurrentUser) {
+        unlikeMutation.mutate(postId);
+      } else {
+        likeMutation.mutate(postId);
+      }
+    },
+    [posts, likeMutation, unlikeMutation],
+  );
+
+  const deletePost = useCallback(
+    (postId: number) => deleteMutation.mutate(postId),
+    [deleteMutation],
+  );
 
   const data = useMemo<HomeFeedData>(
     () => ({
@@ -75,5 +95,15 @@ export function useHomeFeedData(): {
     [posts, isVisualEmpty],
   );
 
-  return { data, isLoading: false, isError: false, toggleLike };
+  return {
+    data,
+    isLoading: feedQuery.isLoading,
+    isError: feedQuery.isError,
+    toggleLike,
+    deletePost,
+    currentUserId,
+    hasMorePosts: feedQuery.hasNextPage ?? false,
+    isFetchingMorePosts: feedQuery.isFetchingNextPage,
+    fetchMorePosts: () => feedQuery.fetchNextPage(),
+  };
 }

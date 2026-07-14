@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Post } from '@/features/feed/types';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import type { Post } from '../types';
 import { Feed } from './Feed';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
@@ -15,64 +16,116 @@ const sportsByKey: Record<SportKey, SportProfile> = {
   tennis: { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' },
 };
 
-const makePost = (id: string, sport: SportKey, authorName: string): Post => ({
+class FakeIntersectionObserver {
+  observe = vi.fn();
+  disconnect = vi.fn();
+  unobserve = vi.fn();
+}
+
+const makePost = (id: number, sportId: number | null, userFullName: string): Post => ({
   id,
-  sport,
-  authorName,
-  authorInitials: 'XX',
-  createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-  text: `${authorName}'s post`,
+  userId: 'someone-else',
+  userFullName,
+  userAvatarUrl: null,
+  postType: 'USER_FEED',
+  groupId: null,
+  content: `${userFullName}'s post`,
+  latitude: null,
+  longitude: null,
+  locationName: null,
+  sportId,
+  sportName: null,
+  visibility: 'public',
+  media: [],
   hashtags: [],
+  previewComments: [],
   likeCount: 0,
   commentCount: 0,
-  likedByMe: false,
+  shareCount: 0,
+  isLikedByCurrentUser: false,
+  createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  updatedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  broadcastEndTime: null,
 });
 
 const posts = [
-  makePost('post-1', 'football', 'Marcus'),
-  makePost('post-2', 'basketball', 'Priya'),
-  makePost('post-3', 'football', 'Hana'),
+  makePost(1, 5, 'Marcus'), // football (Soccer, id 5)
+  makePost(2, 6, 'Priya'), // basketball
+  makePost(3, 5, 'Hana'), // football
 ];
 
+const noop = () => {};
+const baseProps = {
+  sportsByKey,
+  currentUserId: 'someone-else',
+  onToggleLike: noop,
+  onHashtagClick: noop,
+  onDeletePost: noop,
+  onLoadMore: noop,
+  hasMorePosts: false,
+  isFetchingMorePosts: false,
+  isLoading: false,
+  isError: false,
+};
+
 describe('Feed', () => {
+  beforeEach(() => {
+    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver);
+  });
+
   it('shows all posts when activeSport is "all"', () => {
-    render(
-      <Feed
-        posts={posts}
-        activeSport="all"
-        sportsByKey={sportsByKey}
-        onToggleLike={() => {}}
-        onHashtagClick={() => {}}
-      />,
-    );
+    render(<Feed {...baseProps} posts={posts} activeSport="all" />);
     expect(screen.getAllByRole('article')).toHaveLength(3);
   });
 
-  it('filters posts by the active sport', () => {
-    render(
-      <Feed
-        posts={posts}
-        activeSport="football"
-        sportsByKey={sportsByKey}
-        onToggleLike={() => {}}
-        onHashtagClick={() => {}}
-      />,
-    );
+  it('filters posts by the active sport via the temporary sportId map', () => {
+    render(<Feed {...baseProps} posts={posts} activeSport="football" />);
     expect(screen.getAllByRole('article')).toHaveLength(2);
     expect(screen.queryByText("Priya's post")).not.toBeInTheDocument();
   });
 
   it('renders the empty state for a sport with zero posts', () => {
-    render(
-      <Feed
-        posts={posts}
-        activeSport="tennis"
-        sportsByKey={sportsByKey}
-        onToggleLike={() => {}}
-        onHashtagClick={() => {}}
-      />,
-    );
+    render(<Feed {...baseProps} posts={posts} activeSport="tennis" />);
     expect(screen.getByText('No posts yet for this sport.')).toBeInTheDocument();
     expect(screen.queryAllByRole('article')).toHaveLength(0);
+  });
+
+  it('renders nothing while isLoading (not the empty-state message)', () => {
+    render(<Feed {...baseProps} posts={[]} activeSport="all" isLoading />);
+    expect(screen.queryByText('No posts yet for this sport.')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('article')).toHaveLength(0);
+  });
+
+  it('renders nothing while isError', () => {
+    render(<Feed {...baseProps} posts={[]} activeSport="all" isError />);
+    expect(screen.queryByText('No posts yet for this sport.')).not.toBeInTheDocument();
+  });
+
+  it('shows a "Load more" button when hasMorePosts, calling onLoadMore on click', async () => {
+    const user = userEvent.setup();
+    const onLoadMore = vi.fn();
+    render(
+      <Feed {...baseProps} posts={posts} activeSport="all" hasMorePosts onLoadMore={onLoadMore} />,
+    );
+    const button = screen.getByRole('button', { name: 'Load more' });
+    await user.click(button);
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the load-more button and shows a loading label while fetching the next page', () => {
+    render(<Feed {...baseProps} posts={posts} activeSport="all" hasMorePosts isFetchingMorePosts />);
+    const button = screen.getByRole('button', { name: 'Loading…' });
+    expect(button).toBeDisabled();
+  });
+
+  it('does not render a load-more button when there is no next page', () => {
+    render(<Feed {...baseProps} posts={posts} activeSport="all" hasMorePosts={false} />);
+    expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument();
+  });
+
+  it('resolves each post’s sport badge via the real sportId, not a mock sport field', () => {
+    render(<Feed {...baseProps} posts={posts} activeSport="all" />);
+    expect(screen.getAllByText('Football')).toHaveLength(2);
+    expect(screen.getAllByText('Basketball')).toHaveLength(1);
   });
 });

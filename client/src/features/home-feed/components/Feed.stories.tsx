@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { Post } from '@/features/feed/types';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import type { Post } from '../types';
 import { Feed } from './Feed';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
@@ -16,37 +16,70 @@ const sportsByKey: Record<SportKey, SportProfile> = {
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000).toISOString();
 
-const posts: Post[] = [
-  {
-    id: 'post-1',
-    sport: 'football',
-    authorName: 'Marcus Lee',
-    authorInitials: 'ML',
+function post(overrides: Partial<Post> & Pick<Post, 'id' | 'userFullName'>): Post {
+  return {
+    userId: 'someone-else',
+    userAvatarUrl: null,
+    postType: 'USER_FEED',
+    groupId: null,
+    content: `${overrides.userFullName}'s post`,
+    latitude: null,
+    longitude: null,
+    locationName: null,
+    sportId: null,
+    sportName: null,
+    visibility: 'public',
+    media: [],
+    hashtags: [],
+    previewComments: [],
+    likeCount: 0,
+    commentCount: 0,
+    shareCount: 0,
+    isLikedByCurrentUser: false,
     createdAt: hoursAgo(2),
-    text: 'Great 5-a-side session tonight, 3 wins in a row for the squad.',
-    hashtags: ['#5aside', '#fridayrun'],
+    updatedAt: hoursAgo(2),
+    broadcastEndTime: null,
+    ...overrides,
+  };
+}
+
+const posts: Post[] = [
+  post({
+    id: 1,
+    userFullName: 'Marcus Lee',
+    sportId: 5,
+    content: 'Great 5-a-side session tonight, 3 wins in a row for the squad.',
+    hashtags: ['5aside', 'fridayrun'],
     likeCount: 14,
     commentCount: 3,
-    likedByMe: false,
-  },
-  {
-    id: 'post-2',
-    sport: 'basketball',
-    authorName: 'Priya Shah',
-    authorInitials: 'PS',
-    createdAt: hoursAgo(4),
-    text: 'Looking for 2 more players for Sunday pickup at Riverside courts.',
-    hashtags: ['#pickup', '#riverside'],
+  }),
+  post({
+    id: 2,
+    userFullName: 'Priya Shah',
+    sportId: 6,
+    content: 'Looking for 2 more players for Sunday pickup at Riverside courts.',
+    hashtags: ['pickup', 'riverside'],
     likeCount: 9,
     commentCount: 6,
-    likedByMe: true,
-  },
+    isLikedByCurrentUser: true,
+  }),
 ];
 
 const meta = {
   title: 'HomeFeed/Feed',
   component: Feed,
-  args: { sportsByKey, onToggleLike: () => {}, onHashtagClick: () => {} },
+  args: {
+    sportsByKey,
+    currentUserId: 'someone-else',
+    onToggleLike: () => {},
+    onHashtagClick: () => {},
+    onDeletePost: () => {},
+    onLoadMore: () => {},
+    hasMorePosts: false,
+    isFetchingMorePosts: false,
+    isLoading: false,
+    isError: false,
+  },
 } satisfies Meta<typeof Feed>;
 
 export default meta;
@@ -62,4 +95,12 @@ export const FilteredBasketball: Story = {
 
 export const EmptyForSport: Story = {
   args: { posts, activeSport: 'tennis' },
+};
+
+export const HasMorePosts: Story = {
+  args: { posts, activeSport: 'all', hasMorePosts: true },
+};
+
+export const LoadingNextPage: Story = {
+  args: { posts, activeSport: 'all', hasMorePosts: true, isFetchingMorePosts: true },
 };
