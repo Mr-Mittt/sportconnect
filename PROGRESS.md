@@ -699,6 +699,20 @@ already-rendered post card. Filed as **FEED-12** (`TODO`) — a new `usePost(pos
 `/posts/:postId` route, and sane close/back behavior when opened via direct URL. Sequenced before
 **FEED-11** in the backlog's dependency notes (not a hard block): once the modal is URL-addressable,
 FEED-11's visual-regression spec can `page.goto()` it directly instead of clicking through the feed.
+
+**HF-16 DONE** (2026-07-14, `client/docs/BACKLOG_MVP.md`): regenerated Home Feed's 9
+visual-regression baselines via the `update-baselines` CI dispatch, following FEED-2's `PostCard`
+comment `<span>` → `<button>` change. Only 6 of the 9 actually changed byte-for-byte
+(`default`/`basketball` at all 3 breakpoints) — the 3 `empty`-state baselines came back
+byte-identical, since the empty state renders zero posts and the comment button never appears in
+that capture. Human-verified the changed captures show correct content/layout/counts at all 3
+breakpoints. `pnpm exec playwright test --project=visual-regression` still reports all 9 as
+"different" **when run locally on Windows** — expected per HF-12's own note (CI is the authoritative
+Linux-rendered environment); confirmed via direct diff-image inspection of the byte-identical
+`empty` state that the local diff is purely Windows/Linux font-rendering noise, not a content
+mismatch.
+
+**Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow
 (`OpenApiConfig.java`) backed by a new adapter endpoint, `POST /api/auth/oauth-token`
