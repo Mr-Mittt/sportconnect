@@ -102,6 +102,8 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 35 | FEED-10 | E2E functional test — feed/groups journey | `TODO` |
 | 36 | FEED-9 | QA / acceptance checklist (integration) | `TODO` |
 | 37 | MSW-1 | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `TODO` |
+| 38 | FEED-12 | Comment modal fetches its own post + URL-addressable deep link — **new ticket, not in either epic** | `TODO` |
+| 39 | FEED-11 | Visual regression harness for the post comment modal — **new ticket, not in either epic** | `TODO` |
 
 **Dependencies:**
 ```
@@ -115,6 +117,10 @@ AUTH-3, AUTH-5, AUTH-4 → previously blocked on auth backlog A2/A3 — BOTH SHI
   /logout contract (see AUTH-3/AUTH-4/AUTH-5 entries below).
 Phase 5 → all of Phase 6
 FEED-0 → FEED-1..FEED-7, SPORT-1 → FEED-8 → FEED-10 → FEED-9
+FEED-2 → FEED-12 → FEED-11 (FEED-12 decouples the comment modal from the feed's loaded-post cache
+  and makes it URL-addressable; FEED-11's visual-regression spec is simpler once it can just
+  page.goto() a post URL instead of clicking through the feed — sequence FEED-12 before FEED-11,
+  though FEED-11 doesn't hard-block on it if picked up first).
 HF-4 (matches) is NOT de-mocked in this MVP — no backend module exists.
 ```
 
@@ -846,9 +852,8 @@ before implementation (recorded as deltas below).
   extracted from the shipped implementation rather than pre-implementation (no mockup existed for
   this ticket). Static, interactive (like/reply/delete/add-comment all wired in vanilla JS,
   mirroring the real optimistic behavior) — not yet wired into the `visual-regression` Playwright
-  project (no baseline screenshots/spec file exist for it, unlike HF-10a's home-feed baselines). A
-  future ticket should decide whether to add that CI coverage, same shape as HF-10a/b did for Home
-  Feed, if this modal's visual regression risk is judged worth it.
+  project (no baseline screenshots/spec file exist for it, unlike HF-10a's home-feed baselines).
+  **Filed as FEED-11** (`TODO`, below) rather than left as an open question.
 - **The reference was then hand-revised by the user and the implementation updated to match** (same
   day) — the dialog header now shows the commented-on post itself (author/time/sport badge, close
   button stacked above the badge) instead of a generic "Comments" title, and the post's own content
@@ -1059,6 +1064,112 @@ recommendation despite touching more files.
 - All existing e2e specs still pass under the new mock topology.
 - `AUTH-8`'s auth-journey spec gains its step 5 back (or a note explaining why not, if Version A
   turns up a new blocker).
+
+### FEED-12 · Comment modal fetches its own post + URL-addressable deep link — new ticket, not in either epic
+**Status:** `TODO` · **Type:** Feature · **Dependency:** FEED-2 (`DONE`) ·
+**Origin:** raised by the user right after FEED-2 merged (PR #32) — today `CommentSection`'s `post`/
+`sport` props are resolved by `HomeFeedPage` purely by looking up `data.posts.find(post => post.id
+=== activeCommentsPostId)` against `usePersonalFeed()`'s already-loaded cache
+(`HomeFeedPage.tsx`). Two real consequences of that:
+
+1. **The modal can only ever open for a post the feed has already fetched.** A post outside the
+   currently loaded pages (e.g., paginated further than the user has scrolled, or from a different
+   feed view entirely) has no path to a comment dialog today.
+2. **There is no URL that opens directly to a post's comment thread.** No route reads a `postId`
+   from the URL at all — the dialog is 100% driven by in-memory page state
+   (`activeCommentsPostId`), so a shared link, a notification deep link, or a page refresh while the
+   dialog is open all have nowhere to go.
+
+**What changes:**
+1. A new `usePost(postId)` hook (TanStack Query) wrapping `GET /api/posts/{postId}` (confirmed to
+   exist — `PostController.getPost()`, returns the same `PostResponse` shape `usePersonalFeed`
+   already types against, no new client type needed). Query key should be independent of the feed
+   (e.g. `feedKeys.post(postId)`) but consider seeding it via `initialData` from the feed cache when
+   the post is already known there, so opening the dialog from within an already-loaded feed doesn't
+   trigger a redundant network round-trip — only the "not in cache" / direct-URL path should
+   actually hit the network.
+2. `CommentSection`'s `post`/`sport` props come from this dedicated fetch instead of
+   `HomeFeedPage`'s feed-cache lookup — this decouples the modal entirely from feed pagination
+   state, and is what actually makes it work from a cold direct-URL load.
+3. A URL route — recommend path-based (`/posts/:postId`), matching this app's existing route style
+   (`App.tsx`'s flat `<Route path="/...">` list) over a query param, since a query-param convention
+   was already deliberately retired once (`?visual-state=empty`, removed per HF-10b's own delta once
+   a real seam existed). **Exactly what renders at that route is a real design decision, not
+   assumed here** — same kind of question FEED-2's modal-vs-inline was, worth confirming with the
+   user at pickup rather than guessing: does `/posts/:id` render the full `HomeFeedPage` underneath
+   with the dialog pre-opened (simplest, reuses everything), or a lighter dedicated single-post
+   shell? The former is almost certainly right unless there's a reason to avoid loading/rendering
+   the whole feed just to view one post's comments.
+4. Close behavior when opened via direct URL needs to be sane — e.g. navigate back to `/` on close
+   rather than leaving a bare page behind the dialog. Decide whether browser back/forward should
+   also close it (likely yes, for free, if using a real route rather than a state flag).
+5. New MSW handler: `GET /api/posts/:postId` doesn't exist in `e2e/mocks/handlers/feed.ts` yet
+   (only list/feed endpoints and `DELETE /api/posts/:postId` exist today) — add it, reusing
+   `postsState`.
+
+**Sequencing note:** this simplifies **FEED-11** (below) — once the modal is reachable by URL,
+FEED-11's visual-regression spec can `page.goto('/posts/123')` directly instead of navigating to `/`
+and clicking through a real post card to open the dialog. Recommended to pick this up before FEED-11,
+though not a hard blocker if FEED-11 lands first (its spec would just need a follow-up simplification
+pass afterward).
+
+**Acceptance criteria:**
+- Loading `/posts/{id}` as a fresh page load (no prior feed fetch, e.g. a new tab) renders the
+  correct post + comment thread, including for a post that would not be present in the feed's first
+  loaded page.
+- Opening the dialog via the existing in-feed click-to-open flow still works, with no regression and
+  no unnecessary duplicate fetch when the post is already in the feed's cache.
+- Closing the dialog when it was opened via direct URL returns to a sane page state (not a bare
+  backdrop with nothing behind it).
+- `usePost`/MSW handler covered by Vitest, same pattern as `useComments`'s own test file.
+
+### FEED-11 · Visual regression harness for the post comment modal — new ticket, not in either epic
+**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-2 (`DONE`) ·
+**Origin:** raised during FEED-2's implementation — the modal has no visual-regression coverage
+today, unlike Home Feed (HF-10a/b) or the auth pages (their own `a11y.spec.ts`/visual specs).
+
+**Why this is its own ticket, not folded into FEED-2:** the comment dialog already has a
+`design-reference-post-modal.html` reference and full Storybook + Vitest coverage — this ticket is
+specifically about the missing Playwright `visual-regression` project coverage (pixel-diffing the
+real rendered page against frozen baselines), the same layer HF-10a/b added for Home Feed. Deferred
+at FEED-2 time because it's a genuine scoping decision (see below), not a quick add.
+
+**What makes this different from HF-10a/b's harness (read before starting):**
+- Home Feed's baselines are captured by `page.goto('/')` plus a query param for the empty state —
+  a URL is enough. The comment modal is **not reachable by URL today** — a spec has to
+  `page.goto('/')`, find a real post card, click its "View comments" button, and wait for the
+  dialog's open transition to settle before screenshotting. **Check FEED-12's status before
+  starting this**: if FEED-12 (above) has shipped by then, just `page.goto('/posts/{id}')` directly
+  instead — simpler and removes the click-through step entirely. If FEED-12 hasn't landed yet, fall
+  back to the click-through approach described here rather than blocking on it. Decide whether to
+  screenshot the whole page (dialog + dimmed backdrop, matching how a user actually sees it) or just
+  the dialog element (`page.locator('[role="dialog"]')`) — the former matches
+  `design-reference-post-modal.html`'s own framing, the latter is cheaper to maintain if the backdrop
+  content (feed posts) is expected to drift independently.
+- **Meaningful states to cover** (mirroring HF-10a's "3 breakpoints × 3 states" shape): empty
+  thread, populated (root comments + at least one reply, to catch indentation drift), and the
+  disabled→enabled Post button treatment (FEED-2's addendum) — arguably 2 button-state captures at
+  one breakpoint rather than duplicated across all 3, to keep the baseline count sane. Loading/error
+  states are intentionally NOT frozen here, same precedent as Feed's own visual spec (HF-10b) never
+  capturing `isLoading`/`isError` — those are Storybook's job.
+- **MSW dependency:** unlike Home Feed's visual spec (which currently drives mock-internal state via
+  `usePersonalFeed`'s real query against MSW handlers already wired for `e2e`), this needs the
+  `feedHandlers`' `commentsState` (FEED-2) to already have deterministic fixture data seeded for
+  whichever post the spec opens — reuse `mockPost`/`mockComment` from `e2e/mocks/fixtures.ts`, don't
+  invent a second fixture set.
+- **Freezing time still applies** — reuse the same `page.clock.setFixedTime()` pattern HF-10b
+  established for Home Feed's relative timestamps, since `CommentItem` also renders
+  `formatRelativeTime()`.
+
+**Acceptance criteria (once picked up):**
+- New baselines committed under `e2e/visual/__screenshots__/` (naming convention:
+  `post-modal-<state>-<width>.png`, matching Home Feed's `home-feed-<state>-<width>.png` pattern).
+- Baselines generated via the same `client-ci` `update-baselines` dispatch as Home Feed's (Linux-
+  rendered, per HF-12's precedent) — not committed from a local Windows run.
+- Wired into the existing `visual-regression` Playwright project (`playwright.config.ts`) — no new
+  project/config needed, same as `app-home-feed.spec.ts`.
+- A token-hardcoding audit pass over `CommentSection.tsx`/`CommentItem.tsx`/`shared/ui/dialog.tsx`,
+  matching HF-10b's own "diff against tokens, not just pixels" scope.
 
 | Item | Decision |
 |---|---|
