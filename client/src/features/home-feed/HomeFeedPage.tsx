@@ -4,6 +4,7 @@ import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CommentSection } from './components/CommentSection';
+import { CreatePostForm } from './components/CreatePostForm';
 import { Feed } from './components/Feed';
 import { GroupBroadcasts } from './components/GroupBroadcasts';
 import { TrendingHashtags } from './components/TrendingHashtags';
@@ -42,6 +43,8 @@ export function HomeFeedPage() {
     isError,
     toggleLike,
     deletePost,
+    createPost,
+    isCreatingPost,
     currentUserId,
     hasMorePosts,
     isFetchingMorePosts,
@@ -82,6 +85,14 @@ export function HomeFeedPage() {
           onAddSport={noop}
         />
       </div>
+      <CreatePostForm
+        currentUser={{ firstName: user.firstName, fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
+        onSubmit={createPost}
+        isSubmitting={isCreatingPost}
+        onPhotoClick={noop}
+        onLocationClick={noop}
+        onTagSportClick={noop}
+      />
       <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[1.6fr_1fr]">
         <div className="min-w-0">
           <Feed

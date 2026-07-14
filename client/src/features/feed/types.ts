@@ -152,6 +152,10 @@ export interface CreateCommentPayload {
 // type past what the backend will actually accept.
 export const MAX_COMMENT_LENGTH = 1000;
 
+// CreatePostRequest.content's real server-side @Size(max = 5000), same
+// reasoning as MAX_COMMENT_LENGTH above (FEED-3).
+export const MAX_POST_LENGTH = 5000;
+
 // Matches Spring Data's Page<T> JSON serialization exactly (confirmed
 // against the real controllers — every paginated feed/group/hashtag
 // endpoint returns this shape wrapped in ApiResponse<T>).

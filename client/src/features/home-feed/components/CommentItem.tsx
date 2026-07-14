@@ -4,7 +4,7 @@ import { MAX_COMMENT_LENGTH, type Comment } from '@/features/feed/types';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
 import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
-import { Button } from '@/shared/ui/button';
+import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 
 interface CommentItemProps {
   comment: Comment;
@@ -127,7 +127,7 @@ export function CommentItem({
                 size="sm"
                 onClick={submitReply}
                 disabled={replyContent.trim().length === 0 || isSubmittingReply}
-                className="cursor-pointer text-2xs disabled:cursor-default disabled:bg-border disabled:text-text-muted disabled:opacity-100"
+                className={cn('cursor-pointer text-2xs disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
               >
                 Post
               </Button>

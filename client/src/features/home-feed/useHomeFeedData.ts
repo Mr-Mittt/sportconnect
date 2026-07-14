@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useAuthStore } from '@/app/authStore';
+import { useCreatePost } from '@/features/feed/hooks/useCreatePost';
 import { useDeletePost } from '@/features/feed/hooks/useDeletePost';
 import { useLikePost } from '@/features/feed/hooks/useLikePost';
 import { usePersonalFeed } from '@/features/feed/hooks/usePersonalFeed';
@@ -47,6 +48,8 @@ export function useHomeFeedData(): {
   isError: boolean;
   toggleLike: (postId: number) => void;
   deletePost: (postId: number) => void;
+  createPost: (content: string) => void;
+  isCreatingPost: boolean;
   currentUserId: string | undefined;
   hasMorePosts: boolean;
   isFetchingMorePosts: boolean;
@@ -60,6 +63,7 @@ export function useHomeFeedData(): {
   const likeMutation = useLikePost();
   const unlikeMutation = useUnlikePost();
   const deleteMutation = useDeletePost();
+  const createMutation = useCreatePost();
 
   const posts = useMemo(
     () => feedQuery.data?.pages.flatMap((page) => page.content) ?? [],
@@ -84,6 +88,11 @@ export function useHomeFeedData(): {
     [deleteMutation],
   );
 
+  const createPost = useCallback(
+    (content: string) => createMutation.mutate({ content }),
+    [createMutation],
+  );
+
   const data = useMemo<HomeFeedData>(
     () => ({
       sportProfiles: mockSportProfiles,
@@ -101,6 +110,8 @@ export function useHomeFeedData(): {
     isError: feedQuery.isError,
     toggleLike,
     deletePost,
+    createPost,
+    isCreatingPost: createMutation.isPending,
     currentUserId,
     hasMorePosts: feedQuery.hasNextPage ?? false,
     isFetchingMorePosts: feedQuery.isFetchingNextPage,

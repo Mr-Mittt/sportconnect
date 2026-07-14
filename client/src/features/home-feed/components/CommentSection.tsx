@@ -7,7 +7,7 @@ import { getSportIcon } from '@/shared/lib/sportIcons';
 import { cn } from '@/shared/lib/utils';
 import type { SportProfile } from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
-import { Button } from '@/shared/ui/button';
+import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
 import { CommentItem } from './CommentItem';
 
@@ -45,16 +45,6 @@ function initialsFor(fullName: string): string {
     .slice(0, 2)
     .toUpperCase();
 }
-
-/**
- * `Button`'s disabled treatment is opacity-fade (client/CLAUDE.md's
- * default), but the composer/reply "Post" buttons here use a distinct
- * muted-gray-to-solid-blue swap per the design reference — overriding just
- * the `disabled:` classes keeps this on the shared primitive rather than
- * hand-rolling a second button.
- */
-const POST_BUTTON_DISABLED_OVERRIDE =
-  'disabled:bg-border disabled:text-text-muted disabled:opacity-100';
 
 /**
  * FEED-2's real comment thread — a modal dialog (user decision; no

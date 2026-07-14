@@ -92,7 +92,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 25 | FEED-0 | Types + TanStack Query hooks scaffold | `DONE` |
 | 26 | FEED-1 | Feed + PostCard (real — absorbs post-impl's old F1) | `DONE` |
 | 27 | FEED-2 | CommentSection (real) | `DONE` |
-| 28 | FEED-3 | CreatePostForm (real) | `TODO` |
+| 28 | FEED-3 | CreatePostForm (real) | `DONE` |
 | 29 | FEED-4 | Group switching (real groups list) | `TODO` |
 | 30 | FEED-5 | CreateGroupModal + JoinGroupModal (real) | `TODO` |
 | 31 | FEED-6 | TrendingHashtags (real) — de-mocks HF-5 | `TODO` |
@@ -882,8 +882,9 @@ before implementation (recorded as deltas below).
   lower-level `DialogTitle`/`DialogClose` exports, since `CommentSection` now builds a custom header.
 
 ### FEED-3 · CreatePostForm (real)
-**Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0 (also practically wants FEED-1
-merged first — see delta below) · **Spec:** AUTH/FEED epic § FEED-3
+**Status:** `DONE` (2026-07-14) · **Type:** Integration · **Dependency:** FEED-0 (also practically
+wants FEED-1 merged first — see delta below) · **Spec:** AUTH/FEED epic § FEED-3 ·
+**Summary:** `client/docs/FEED-3_CREATEPOSTFORM_REAL.md`
 
 Maps to `CreatePostRequest`; 5000-char limit enforced client-side; broadcast creation belongs to
 FEED-7, not this composer.
@@ -911,6 +912,38 @@ FEED-7, not this composer.
   "prepend the new post to the current feed view without a full refetch" acceptance criterion needs
   to hook into. Building against `master`'s still-mock `Feed` would be throwaway work. Rebase onto
   `master` once FEED-1 actually merges.
+
+**Executed (2026-07-14):** by the time this ticket was picked up, FEED-1 and FEED-2 had already
+merged into `master` (PRs #28/#29 and #32), so the sequencing note above was moot — branched off
+`master` directly, which already had the real `Post` type/`usePersonalFeed()`/
+`optimisticFeedUpdates.ts` this ticket needed. `design-reference-home-feed-v2.html` renamed to
+canonical `design-reference-home-feed.html` (git mv) as specified; also fixed a stray CDN icon-font
+`<link>` the v2 file shipped with back to HF-10a's vendored `./assets/tabler/` path (the file's own
+header comment claimed the vendored path but the actual `href` still pointed at jsdelivr — the same
+404-risk class of bug HF-10a already fixed once elsewhere). `useCreatePost`'s `onSuccess` now
+prepends the real server-returned post directly into the owning feed cache (`personalFeed` or
+`groupFeed(groupId)`) instead of a blanket invalidate, satisfying the "without a full refetch"
+criterion; `onSettled` still invalidates in the background. Live-verified end-to-end against the
+real running backend (registered a test user, Playwright-driven browser walkthrough) — composer
+renders, Post button's enabled/disabled states render correctly, posting prepends the real post and
+clears the textarea, renders cleanly at 375px. Full details: `client/docs/FEED-3_CREATEPOSTFORM_REAL.md`.
+
+**Deltas for later tickets:**
+- **`POST_BUTTON_DISABLED_OVERRIDE` now lives in `shared/ui/button.tsx`** (named export), not
+  locally defined in `CommentSection.tsx` — this ticket was the 3rd call site FEED-2's own summary
+  anticipated, so it's hoisted now. While hoisting, also consolidated `CommentItem.tsx`'s reply
+  button, which had its own unhoisted inline copy of the same classes. Any future "Post"-style
+  composer button should import this constant, not redefine the disabled-state classes again.
+- **Visual-regression baseline regen still pending as of this ticket's `DONE` mark** — the composer
+  is Home Feed's only structural change, so all 9 committed baselines are stale (same situation as
+  HF-13/14/15/16). Per user decision, this is being handled HF-15/16-style: regenerated and
+  committed into this same branch before merge (not filed as a separate follow-up ticket like
+  HF-13/14 were). If you're picking up the next ticket and this branch hasn't merged yet, the
+  baselines in `e2e/visual/__screenshots__/` on `master` still reflect the pre-composer layout.
+- **`useCreatePost`'s cache-targeting logic (personalFeed vs. groupFeed by `post.groupId`) is a
+  known gap for `GROUP_BROADCAST` posts** — they land in `groupFeed(groupId)` but not
+  `feedKeys.broadcasts()`. FEED-7 (broadcast creation) needs to either extend
+  `useCreatePost`'s onSuccess or add its own targeted cache write when it ships.
 
 ### FEED-4 · Group switching (real)
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0 · **Spec:** AUTH/FEED epic § FEED-4
