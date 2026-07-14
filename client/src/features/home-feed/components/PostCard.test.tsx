@@ -50,6 +50,7 @@ describe('PostCard', () => {
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
+        onOpenComments={noop}
       />,
     );
     expect(screen.getByText('Marcus Lee')).toBeInTheDocument();
@@ -68,6 +69,7 @@ describe('PostCard', () => {
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
+        onOpenComments={noop}
       />,
     );
     expect(screen.getByText('Unknown User')).toBeInTheDocument();
@@ -82,6 +84,7 @@ describe('PostCard', () => {
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
+        onOpenComments={noop}
       />,
     );
     expect(screen.queryByText('Football')).not.toBeInTheDocument();
@@ -98,6 +101,7 @@ describe('PostCard', () => {
         onToggleLike={onToggleLike}
         onHashtagClick={noop}
         onDeletePost={noop}
+        onOpenComments={noop}
       />,
     );
 
@@ -116,6 +120,7 @@ describe('PostCard', () => {
         onToggleLike={onToggleLike}
         onHashtagClick={noop}
         onDeletePost={noop}
+        onOpenComments={noop}
       />,
     );
     const unlikeButton = screen.getByRole('button', { name: 'Unlike' });
@@ -134,6 +139,7 @@ describe('PostCard', () => {
         onToggleLike={noop}
         onHashtagClick={onHashtagClick}
         onDeletePost={noop}
+        onOpenComments={noop}
       />,
     );
     const tag = screen.getByRole('button', { name: '#fridayrun' });
@@ -142,7 +148,9 @@ describe('PostCard', () => {
     expect(onHashtagClick).toHaveBeenCalledWith('#fridayrun');
   });
 
-  it('comment count is display-only (not a button)', () => {
+  it('comment button reports the post id (FEED-2 opens the comment dialog)', async () => {
+    const user = userEvent.setup();
+    const onOpenComments = vi.fn();
     render(
       <PostCard
         post={post}
@@ -151,10 +159,13 @@ describe('PostCard', () => {
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
+        onOpenComments={onOpenComments}
       />,
     );
-    const buttons = screen.getAllByRole('button').map((b) => b.textContent);
-    expect(buttons).not.toContain('3');
+    const commentButton = screen.getByRole('button', { name: 'View comments' });
+    expect(commentButton).toHaveTextContent('3');
+    await user.click(commentButton);
+    expect(onOpenComments).toHaveBeenCalledWith(1);
   });
 
   it('shows no delete menu for another user’s post', () => {
@@ -166,6 +177,7 @@ describe('PostCard', () => {
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
+        onOpenComments={noop}
       />,
     );
     expect(screen.queryByRole('button', { name: 'Post options' })).not.toBeInTheDocument();
@@ -182,6 +194,7 @@ describe('PostCard', () => {
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={onDeletePost}
+        onOpenComments={noop}
       />,
     );
 
@@ -202,6 +215,7 @@ describe('PostCard', () => {
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
+        onOpenComments={noop}
       />,
     );
     expect(screen.queryByRole('button', { name: 'Post options' })).not.toBeInTheDocument();

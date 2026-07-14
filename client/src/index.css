@@ -37,6 +37,11 @@
   --color-border-strong: rgba(44, 44, 42, 0.24);
   --color-border-accent: #378add;
 
+  /* Modal backdrop scrim (FEED-2's CommentSection dialog) — same near-black
+     family as the border tokens above, opaque enough to focus attention on
+     the dialog without going full black. */
+  --color-overlay: rgba(26, 26, 24, 0.5);
+
   /*
    * Sport color ramps. Each sport uses one ramp everywhere it appears
    * (badges, pills, avatars). Tailwind's default teal/purple scales are

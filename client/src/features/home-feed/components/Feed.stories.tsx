@@ -74,6 +74,7 @@ const meta = {
     onToggleLike: () => {},
     onHashtagClick: () => {},
     onDeletePost: () => {},
+    onOpenComments: () => {},
     onLoadMore: () => {},
     hasMorePosts: false,
     isFetchingMorePosts: false,

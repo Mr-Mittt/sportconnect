@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import type { User } from '../../src/features/auth/types.ts';
-import type { Group, Hashtag, PageResponse, Post } from '../../src/features/feed/types.ts';
+import type { Comment, Group, Hashtag, PageResponse, Post } from '../../src/features/feed/types.ts';
 
 // Reused across AUTH-8 and FEED-10 rather than each test inventing its own
 // ad-hoc response shapes (per MSW-0's acceptance criteria).
@@ -121,6 +121,25 @@ export const mockHashtag: Hashtag = {
   id: 1,
   tag: 'fridayrun', // no leading '#' — see mockPost.hashtags' note above
   usageCount: 12,
+};
+
+// FEED-2 comment fixtures. mockComment is mockPost's one existing comment
+// (mockPost.commentCount is 1) so the two stay consistent for any test
+// asserting on both.
+export const mockComment: Comment = {
+  id: 1,
+  postId: mockPost.id,
+  userId: 'priya-shah',
+  userFullName: 'Priya Shah',
+  userAvatarUrl: null,
+  content: 'Nice one, count me in for next week!',
+  parentCommentId: null,
+  likeCount: 1,
+  replyCount: 0,
+  isLikedByCurrentUser: false,
+  replies: [],
+  createdAt: '2026-07-13T09:30:00',
+  updatedAt: '2026-07-13T09:30:00',
 };
 
 /** Builds a Spring Data `Page<T>`-shaped response from a full content array. */

@@ -12,6 +12,7 @@ interface FeedProps {
   onToggleLike: (postId: number) => void;
   onHashtagClick: (tag: string) => void;
   onDeletePost: (postId: number) => void;
+  onOpenComments: (postId: number) => void;
   hasMorePosts: boolean;
   isFetchingMorePosts: boolean;
   onLoadMore: () => void;
@@ -37,6 +38,7 @@ export function Feed({
   onToggleLike,
   onHashtagClick,
   onDeletePost,
+  onOpenComments,
   hasMorePosts,
   isFetchingMorePosts,
   onLoadMore,
@@ -78,6 +80,7 @@ export function Feed({
             onToggleLike={onToggleLike}
             onHashtagClick={onHashtagClick}
             onDeletePost={onDeletePost}
+            onOpenComments={onOpenComments}
           />
         );
       })}

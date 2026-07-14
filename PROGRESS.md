@@ -652,6 +652,42 @@ Linux-rendered; local Windows runs diverge on font rendering; CI is authoritativ
 direct diff-image inspection that the residual local diff is sub-pixel text-position/anti-aliasing
 noise, not a content mismatch — same text, same layout in both images.
 
+**FEED-2 DONE** (2026-07-14, `client/docs/FEED-2_COMMENTSECTION_REAL.md`): built a new real comment
+thread (`CommentSection`, opened as a modal from `PostCard`'s comment icon) — no
+`CommentSection` existed anywhere before this ticket, and no `design-reference-*.html` covered it,
+so 3 scope questions (modal vs. inline, reply-to-comment in/out of scope, pagination style) were
+confirmed with the user before implementation. Wired `GET`/`POST /posts/{postId}/comments`, delete,
+and like/unlike, with FEED-1-style optimistic mutations (only a **root** comment's create/delete
+touches the parent post's `commentCount` — verified directly against
+`CommentServiceImpl`'s Redis counter keys, not assumed). New shared `Dialog` primitive
+(`src/shared/ui/dialog.tsx`) and `--color-overlay` token. Mid-implementation design correction:
+`CommentSection` initially owned its own data hook, breaking the established
+presentational/controlled convention every other Home Feed component follows (and the reason none of
+them need a `QueryClientProvider` to run in Storybook) — refactored so `HomeFeedPage` owns
+`useCommentsData()` instead. **Found and fixed a real cache-rollback bug** in `useDeleteComment`:
+two overlapping snapshots (one comments-only, one broader `feedKeys.all`) meant the broader one,
+captured *after* the comment was already spliced out, silently clobbered the correct rollback on
+error — caught by a dedicated test, fixed by taking one snapshot before either mutation runs.
+Verified live against the actually running backend (register → create post → create root comment →
+`commentCount` 0→1 → create reply → `commentCount` unchanged → like/unlike → delete reply → delete
+root → `commentCount` 1→0, all matching the client's optimistic assumptions) and via a real browser
+walkthrough (open dialog → post → like → close → confirm count updated → reopen → delete → empty
+state). `pnpm vitest run` 198/198, `playwright --project=e2e` 29/29 (single-worker — 4 a11y specs
+flake under this machine's default parallel workers, confirmed as timeout flakiness not a real
+violation), `pnpm build` clean, Storybook stories visually confirmed. All 9 Home Feed
+visual-regression baselines diff again (`PostCard`'s comment `<span>` → `<button>`) — filed
+follow-up **HF-16** (`TODO`), same HF-13/14/15 precedent.
+
+**FEED-2 addendum** (2026-07-14, same day, `client/docs/FEED-2_COMMENTSECTION_REAL.md`): a
+retroactive `design-reference-post-modal.html` was extracted from the shipped dialog, then hand-
+revised by the user into a richer design and the implementation brought in line with it —
+`CommentSection`'s header now shows the commented-on post (author/time/sport badge, close button
+stacked above the badge) instead of a generic "Comments" title, with the post's content repeated
+above the comment list; the composer/reply "Post" buttons now swap muted-gray→solid-blue on
+disabled/enabled (a scoped `Button` `className` override, not a new variant). `pnpm test` 200/200,
+typecheck/lint/build clean, re-verified live against the running backend (confirmed the button's
+actual computed background-color changes, not just a class name).
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow
