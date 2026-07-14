@@ -76,7 +76,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14c | HF-13 | Regenerate visual-regression baselines (follow-up from AUTH-1's cn() border-hairline fix) | `DONE` |
 | 14d | HF-14 | Regenerate visual-regression baselines (follow-up from AUTH-4's TopBar avatar-menu change) | `DONE` |
 | 14e | HF-15 | Regenerate visual-regression baselines (follow-up from FEED-1's real feed + delete menu) | `DONE` |
-| 14f | HF-16 | Regenerate visual-regression baselines (follow-up from FEED-2's comment button + dialog) | `TODO` |
+| 14f | HF-16 | Regenerate visual-regression baselines (follow-up from FEED-2's comment button + dialog) | `DONE` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -482,7 +482,7 @@ FEED-1's changes, so there's no "baselines vs. shipped code" mismatch window to 
 HF-13/HF-14 case where the triggering change had already merged.
 
 ### HF-16 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
-**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-2's comment button + dialog ·
+**Status:** `DONE` (2026-07-14) · **Type:** Infrastructure (Testing) · **Dependency:** FEED-2's comment button + dialog ·
 **Summary:** `client/docs/FEED-2_COMMENTSECTION_REAL.md`
 
 **Found during FEED-2:** `PostCard`'s comment icon changed from a static `<span>` to a clickable
@@ -499,6 +499,21 @@ the drift.
 `client/e2e/visual/__screenshots__/` with its contents, commit. Worth a human visual check that the
 comment button renders correctly (no dialog-open state leaking into a static capture) and nothing
 else drifted unexpectedly.
+
+**Executed:** `update-baselines` dispatch run, `visual-baselines.zip` downloaded and extracted over
+`client/e2e/visual/__screenshots__/` (same 9 filenames, confirmed via byte comparison before
+overwriting). **Only 6 of the 9 actually changed** (`default`/`basketball` at all 3 breakpoints) —
+the 3 `empty`-state baselines came back byte-identical to what was already committed, which makes
+sense: the empty state renders zero posts, so `PostCard`'s comment button never appears in that
+capture at all, nothing to shift. Human visual check of the `default`/`basketball` captures at all 3
+breakpoints confirmed content, layout, sport badges, and like/comment counts all render exactly as
+expected — no visible difference at normal viewing, consistent with the diff being a sub-pixel
+padding nudge. `pnpm exec playwright test --project=visual-regression` still shows all 9 as
+"different" when run **locally on Windows** — expected per HF-12's own note (baselines are
+Linux-rendered; CI is the authoritative visual environment). Confirmed via direct diff-image
+inspection of the `empty` state (byte-identical to the prior baseline, so any local diff there is
+*purely* Windows-vs-Linux font-rendering noise) that the same characteristic anti-aliasing pattern —
+not a content mismatch — accounts for the `default`/`basketball` diffs too.
 
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·
@@ -845,9 +860,10 @@ before implementation (recorded as deltas below).
   snapshots, one silently clobbering the other) — see the summary doc; the fix pattern (one snapshot
   scoped to `feedKeys.all`, since `feedKeys.comments(postId)` nests under it by design) is the
   reference for any future hook needing to roll back more than one cache scope at once.
-- **HF-16 filed** (visual-regression baselines stale — comment `<span>` became a `<button>`). Any
-  ticket touching `PostCard` again before HF-16 lands should expect the same staleness and roll it
-  into the same regen, per the HF-13/14/15 precedent.
+- **HF-16 filed and now `DONE`** (visual-regression baselines stale — comment `<span>` became a
+  `<button>` — regenerated via the `client-ci` `update-baselines` dispatch). Any ticket touching
+  `PostCard` again should expect the same staleness and roll a baseline regen into itself, per the
+  HF-13/14/15/16 precedent.
 - **`design-reference-post-modal.html` added retroactively** (`client/design-reference/`),
   extracted from the shipped implementation rather than pre-implementation (no mockup existed for
   this ticket). Static, interactive (like/reply/delete/add-comment all wired in vanilla JS,
