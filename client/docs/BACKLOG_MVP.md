@@ -934,12 +934,18 @@ clears the textarea, renders cleanly at 375px. Full details: `client/docs/FEED-3
   anticipated, so it's hoisted now. While hoisting, also consolidated `CommentItem.tsx`'s reply
   button, which had its own unhoisted inline copy of the same classes. Any future "Post"-style
   composer button should import this constant, not redefine the disabled-state classes again.
-- **Visual-regression baseline regen still pending as of this ticket's `DONE` mark** — the composer
-  is Home Feed's only structural change, so all 9 committed baselines are stale (same situation as
-  HF-13/14/15/16). Per user decision, this is being handled HF-15/16-style: regenerated and
-  committed into this same branch before merge (not filed as a separate follow-up ticket like
-  HF-13/14 were). If you're picking up the next ticket and this branch hasn't merged yet, the
-  baselines in `e2e/visual/__screenshots__/` on `master` still reflect the pre-composer layout.
+- **Visual-regression baseline regen (2026-07-15):** the plan was to do this HF-15/16-style
+  (committed into the FEED-3 branch before merge), but the PR merged first — same situation as
+  HF-13/14 in the end. Regenerated via the `client-ci` `update-baselines` dispatch on a separate
+  branch (`docs/feed-3-regenerate-visual-baselines`) after merge. All 9 baselines changed
+  byte-for-byte this time (unlike HF-16's 6-of-9) — the composer renders on every state including
+  `empty`, unlike HF-16's comment button which only appeared on rendered posts. Human-verified
+  `default`/`empty`/`basketball` at all 3 breakpoints: composer placeholder/action row/Post button,
+  correct sport badges, correct like/comment counts, nothing else drifted.
+  `pnpm exec playwright test --project=visual-regression` still reports all 9 as "different" locally
+  on Windows — expected per HF-12's note (CI is the authoritative Linux-rendered environment);
+  confirmed via diff-image inspection the local diff is pure sub-pixel font-rendering ghosting
+  (same layout/content/structure), not a content mismatch.
 - **`useCreatePost`'s cache-targeting logic (personalFeed vs. groupFeed by `post.groupId`) is a
   known gap for `GROUP_BROADCAST` posts** — they land in `groupFeed(groupId)` but not
   `feedKeys.broadcasts()`. FEED-7 (broadcast creation) needs to either extend

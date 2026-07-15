@@ -730,9 +730,19 @@ zoomed screenshot after the full-page screenshot looked ambiguous), posting prep
 with correct author/timestamp and clears the textarea, renders cleanly at 375px. `pnpm exec vitest
 run` 213/213, `pnpm exec tsc -b` clean, `pnpm lint` clean, `pnpm exec playwright test --project=e2e`
 29/29 (confirms the new composer doesn't break `home-feed-journey`/`a11y`/`smoke`). Visual-regression
-baseline regen (composer shifts Home Feed's 9 committed baselines, same as HF-13/14/15/16) is
-pending — user will trigger the `update-baselines` CI dispatch and commit the artifact into this
-branch before merge, HF-15/16-style, rather than filing a separate follow-up ticket.
+baseline regen (composer shifts Home Feed's 9 committed baselines, same as HF-13/14/15/16) was
+planned HF-15/16-style (same branch, before merge) but the PR merged first — done as a same-day
+follow-up instead, see below.
+
+**FEED-3 baseline regen DONE** (2026-07-15, `client/docs/BACKLOG_MVP.md` · FEED-3 entry): regenerated
+Home Feed's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
+FEED-3's composer landing. All 9 changed byte-for-byte this time (unlike HF-16's 6-of-9) — the
+composer renders on every state including `empty`, unlike HF-16's comment button which only appeared
+on rendered posts. Human-verified `default`/`empty`/`basketball` at all 3 breakpoints — composer,
+sport badges, and like/comment counts all correct, nothing else drifted. `pnpm exec playwright test
+--project=visual-regression` still reports all 9 as "different" locally on Windows — expected per
+HF-12's note (CI is the authoritative Linux-rendered environment); confirmed via diff-image
+inspection the local diff is pure sub-pixel font-rendering ghosting, not a content mismatch.
 
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
