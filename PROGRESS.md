@@ -885,6 +885,15 @@ module-level regex's `lastIndex` inside the component) — fixed by switching to
 already-filed **HF-17** rather than a new ticket, since it's the same "regenerate later, don't fix
 now" situation.
 
+**HF-17 DONE** (2026-07-15, `client/docs/BACKLOG_MVP.md`): executed the `update-baselines` dispatch,
+downloaded `visual-baselines.zip`, and replaced all 9 `client/e2e/visual/__screenshots__/` PNGs
+(confirmed via SHA-256 comparison before overwriting — all 9 changed, covering both FEED-6 causes:
+the Trending card's real single row and the removed hashtag pill row). Human visual check across
+`default`/`basketball`/`empty` at a spread of breakpoints confirmed correct rendering, nothing else
+drifted. Local `pnpm exec playwright test --project=visual-regression` still reports all 9 as
+"different" on Windows — expected per HF-12's own note — but diff ratios dropped back to the
+established ~0.01–0.02 sub-pixel noise floor, consistent with font-rendering divergence only.
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow

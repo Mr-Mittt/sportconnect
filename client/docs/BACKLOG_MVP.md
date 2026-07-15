@@ -77,7 +77,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14d | HF-14 | Regenerate visual-regression baselines (follow-up from AUTH-4's TopBar avatar-menu change) | `DONE` |
 | 14e | HF-15 | Regenerate visual-regression baselines (follow-up from FEED-1's real feed + delete menu) | `DONE` |
 | 14f | HF-16 | Regenerate visual-regression baselines (follow-up from FEED-2's comment button + dialog) | `DONE` |
-| 14g | HF-17 | Regenerate visual-regression baselines (follow-up from FEED-6's real trending hashtags) | `TODO` |
+| 14g | HF-17 | Regenerate visual-regression baselines (follow-up from FEED-6's real trending hashtags) | `DONE` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -517,7 +517,7 @@ inspection of the `empty` state (byte-identical to the prior baseline, so any lo
 not a content mismatch — accounts for the `default`/`basketball` diffs too.
 
 ### HF-17 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
-**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-6's real trending hashtags ·
+**Status:** `DONE` (2026-07-15) · **Type:** Infrastructure (Testing) · **Dependency:** FEED-6's real trending hashtags ·
 **Summary:** `client/docs/FEED-6_TRENDINGHASHTAGS_REAL.md`
 
 **Found during FEED-6:** `shared/hooks/useTrendingHashtags.ts` swapped its hardcoded 4-hashtag mock
@@ -544,6 +544,17 @@ the trending-card cause above.
 `client/e2e/visual/__screenshots__/` with its contents, commit. Worth a human visual check that the
 Trending card's single real row renders correctly, hashtags render inline within post content (not
 as a separate row), and nothing else drifted unexpectedly.
+
+**Executed:** `update-baselines` dispatch run, `visual-baselines.zip` downloaded and extracted over
+`client/e2e/visual/__screenshots__/` (same 9 filenames, confirmed via SHA-256 comparison before
+overwriting — all 9 changed). Human visual check of `default`/`basketball`/`empty` at a spread of
+breakpoints confirmed: hashtags render inline within post content (no separate row), correct sport
+badges/like/comment counts, Trending card's single real `#fridayrun` row, and the empty state all
+render exactly as expected — nothing else drifted. `pnpm exec playwright test
+--project=visual-regression` still shows all 9 as "different" when run **locally on Windows** —
+expected per HF-12's own note (baselines are Linux-rendered; CI is the authoritative visual
+environment); diff ratios dropped back to the established ~0.01–0.02 sub-pixel noise floor,
+consistent with font-rendering divergence rather than a content mismatch.
 
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·
