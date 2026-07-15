@@ -49,6 +49,40 @@ export function removePostFromFeedCaches(queryClient: QueryClient, postId: numbe
   });
 }
 
+/**
+ * Prepends `post` to the first cached page of one specific feed-shaped query
+ * (unlike updatePostInFeedCaches/removePostFromFeedCaches, which touch every
+ * mounted feed query — a newly created post belongs to exactly one feed:
+ * personalFeed for a USER_FEED post, groupFeed(groupId) for a GROUP_POST).
+ * No-ops if that query has no cached data yet (nothing mounted to update).
+ * Used by useCreatePost's onSuccess so the acceptance criterion ("prepend
+ * without a full refetch") holds even though — unlike the like/delete
+ * mutations — there's nothing to do optimistically in onMutate: the real
+ * post (id, createdAt, etc.) only exists once the server responds.
+ */
+export function prependPostToFeedCache(
+  queryClient: QueryClient,
+  queryKey: readonly unknown[],
+  post: Post,
+): void {
+  queryClient.setQueryData<FeedInfiniteData>(queryKey, (data) => {
+    if (!data) return data;
+    const [firstPage, ...restPages] = data.pages;
+    return {
+      ...data,
+      pages: [
+        {
+          ...firstPage,
+          content: [post, ...firstPage.content],
+          numberOfElements: firstPage.numberOfElements + 1,
+          totalElements: firstPage.totalElements + 1,
+        },
+        ...restPages,
+      ],
+    };
+  });
+}
+
 /** Snapshot of every feed-shaped query's cached data, for rollback on mutation error. */
 export function snapshotFeedCaches(queryClient: QueryClient): [readonly unknown[], unknown][] {
   return queryClient.getQueriesData({ queryKey: feedKeys.all });

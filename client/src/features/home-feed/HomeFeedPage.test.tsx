@@ -170,6 +170,41 @@ describe('HomeFeedPage', () => {
     expect(reverted[0]).toHaveTextContent('14');
   });
 
+  it('creating a post via the composer prepends it to the feed and clears the textarea', async () => {
+    const user = userEvent.setup();
+    // Same reasoning as the like-toggle test above: onSettled invalidates
+    // feedKeys.all in the background, which refetches the mounted feed query
+    // — a static GET fixture would revert the optimistic prepend right back,
+    // so this needs a tiny stateful fake server instead.
+    let currentPosts = feedPosts;
+    vi.spyOn(apiClient, 'get').mockImplementation(async () => ({
+      data: { success: true, message: '', data: feedPage(currentPosts), timestamp: '' },
+    }));
+    vi.spyOn(apiClient, 'post').mockImplementation(async (_url: string, body?: unknown) => {
+      const { content } = body as { content: string };
+      const created = post({
+        id: 99,
+        userFullName: 'Jordan Lee',
+        userId: 'user-1',
+        sportId: null,
+        content,
+      });
+      currentPosts = [created, ...currentPosts];
+      return { data: { success: true, message: '', data: created, timestamp: '' } };
+    });
+
+    render(<HomeFeedPage />, { wrapper });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
+
+    const composer = screen.getByLabelText('Create a post');
+    await user.type(composer, 'Fresh off the pitch!');
+    await user.click(screen.getByRole('button', { name: 'Post' }));
+
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(5));
+    expect(screen.getAllByRole('article')[0]).toHaveTextContent('Fresh off the pitch!');
+    expect(composer).toHaveValue('');
+  });
+
   it('"Add sport" is at the 3-profile cap with mock sport profiles (aria-disabled, per HF-2)', async () => {
     render(<HomeFeedPage />, { wrapper });
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));

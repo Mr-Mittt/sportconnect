@@ -149,6 +149,26 @@ describe('useHomeFeedData', () => {
     await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith('/posts/5'));
   });
 
+  it('createPost calls POST /posts with just the content and prepends the result', async () => {
+    vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: { success: true, message: '', data: page([post({ id: 1 })]), timestamp: '' },
+    });
+    const created = post({ id: 2, content: 'New post!', userId: 'user-1' });
+    const postSpy = vi
+      .spyOn(apiClient, 'post')
+      .mockResolvedValueOnce({ data: { success: true, message: '', data: created, timestamp: '' } });
+
+    const { result } = renderHook(() => useHomeFeedData(), { wrapper });
+    await waitFor(() => expect(result.current.data.posts).toHaveLength(1));
+
+    act(() => result.current.createPost('New post!'));
+
+    await waitFor(() => expect(postSpy).toHaveBeenCalledWith('/posts', { content: 'New post!' }));
+    await waitFor(() => expect(result.current.data.posts).toHaveLength(2));
+    expect(result.current.data.posts[0]).toEqual(created);
+    expect(result.current.isCreatingPost).toBe(false);
+  });
+
   it('exposes pagination state from the underlying infinite query', async () => {
     vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
       data: {

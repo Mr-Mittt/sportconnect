@@ -50,4 +50,15 @@ function Button({ className, variant, size, asChild = false, type, ...props }: B
   );
 }
 
+/**
+ * `Button`'s disabled treatment is opacity-fade by default (client/CLAUDE.md),
+ * but any "Post"-style composer button (FEED-2's comment composer/reply,
+ * FEED-3's post composer) uses a distinct muted-gray-to-solid-blue swap per
+ * the design references — overriding just the `disabled:` classes keeps this
+ * on the shared primitive rather than hand-rolling a second button. Hoisted
+ * here once a second call site needed it (FEED-2's own note on FEED-3).
+ */
+export const POST_BUTTON_DISABLED_OVERRIDE =
+  'disabled:bg-border disabled:text-text-muted disabled:opacity-100';
+
 export { Button };

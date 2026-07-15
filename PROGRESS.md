@@ -712,6 +712,28 @@ Linux-rendered environment); confirmed via direct diff-image inspection of the b
 `empty` state that the local diff is purely Windows/Linux font-rendering noise, not a content
 mismatch.
 
+**FEED-3 DONE** (2026-07-14, `client/docs/FEED-3_CREATEPOSTFORM_REAL.md`): built the real post
+composer (`CreatePostForm`, `src/features/home-feed/components/`) wired to `useCreatePost()` —
+content-only (5000-char limit), Photo/Location/Tag-sport stay inert per the ticket's design delta;
+only USER_FEED posts from this composer (group posting waits on FEED-4/5). `useCreatePost`'s
+onSuccess now prepends the real server-returned post directly into the one feed cache it belongs to
+(`optimisticFeedUpdates.ts`'s new `prependPostToFeedCache`) instead of a blanket invalidate, meeting
+the "prepend without a full refetch" acceptance criterion; `onSettled` still invalidates in the
+background for eventual consistency. Hoisted `POST_BUTTON_DISABLED_OVERRIDE` (the muted-gray→
+solid-blue disabled swap) from `CommentSection` into `shared/ui/button.tsx` since this ticket made
+it a 3rd call site (also consolidated `CommentItem`'s inlined copy). Renamed
+`design-reference-home-feed-v2.html` → canonical `design-reference-home-feed.html` per the backlog
+delta (also fixed a stray CDN icon-font link the v2 file shipped with, back to HF-10a's vendored
+path). Live-verified against the real running backend (registered a test user, browser walkthrough):
+composer renders, Post button enables/disables correctly (blue/white when enabled, confirmed via a
+zoomed screenshot after the full-page screenshot looked ambiguous), posting prepends the real post
+with correct author/timestamp and clears the textarea, renders cleanly at 375px. `pnpm exec vitest
+run` 213/213, `pnpm exec tsc -b` clean, `pnpm lint` clean, `pnpm exec playwright test --project=e2e`
+29/29 (confirms the new composer doesn't break `home-feed-journey`/`a11y`/`smoke`). Visual-regression
+baseline regen (composer shifts Home Feed's 9 committed baselines, same as HF-13/14/15/16) is
+pending — user will trigger the `update-baselines` CI dispatch and commit the artifact into this
+branch before merge, HF-15/16-style, rather than filing a separate follow-up ticket.
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow

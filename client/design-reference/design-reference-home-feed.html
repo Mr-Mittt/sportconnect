@@ -75,6 +75,21 @@
 
 <div id="sport-switcher" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;"></div>
 
+<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
+  <div style="display:flex;gap:10px;">
+    <div style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:var(--bg-accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--text-accent);">BN</div>
+    <textarea id="composer-input" rows="1" placeholder="What's on your mind, Ben?" style="flex:1;min-width:0;resize:none;border:none;outline:none;background:none;font-family:inherit;font-size:14px;color:var(--text-primary);padding:8px 0;line-height:1.4;"></textarea>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;border-top:0.5px solid var(--border);padding-top:10px;margin-top:4px;">
+    <div style="display:flex;gap:14px;">
+      <button data-composer-action="photo" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer;padding:2px;"><i class="ti ti-photo" style="font-size:16px;" aria-hidden="true"></i>Photo</button>
+      <button data-composer-action="location" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer;padding:2px;"><i class="ti ti-map-pin" style="font-size:16px;" aria-hidden="true"></i>Location</button>
+      <button data-composer-action="sport" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer;padding:2px;"><i class="ti ti-ball-football" style="font-size:16px;" aria-hidden="true"></i>Tag sport</button>
+    </div>
+    <button id="composer-post" disabled style="border:none;background:var(--border);color:var(--text-muted);font-size:13px;font-weight:500;padding:7px 16px;border-radius:20px;cursor:not-allowed;">Post</button>
+  </div>
+</div>
+
 <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;">
   <div id="feed" style="min-width:0;display:flex;flex-direction:column;gap:10px;"></div>
   <div style="min-width:0;display:flex;flex-direction:column;gap:14px;">
@@ -249,6 +264,45 @@ function renderBroadcasts() {
       '</div></div>';
   }).join('');
 }
+
+var composerInput = document.getElementById('composer-input');
+var composerPost = document.getElementById('composer-post');
+
+function autosize() {
+  composerInput.style.height = 'auto';
+  composerInput.style.height = composerInput.scrollHeight + 'px';
+}
+
+function updateComposerButton() {
+  var hasText = composerInput.value.trim().length > 0;
+  composerPost.disabled = !hasText;
+  composerPost.style.background = hasText ? 'var(--border-accent)' : 'var(--border)';
+  composerPost.style.color = hasText ? '#fff' : 'var(--text-muted)';
+  composerPost.style.cursor = hasText ? 'pointer' : 'not-allowed';
+}
+
+composerInput.addEventListener('input', function() { autosize(); updateComposerButton(); });
+
+document.querySelectorAll('[data-composer-action]').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var action = btn.getAttribute('data-composer-action');
+    var labels = { photo: 'attach a photo to my new post', location: 'add a location to my new post', sport: 'tag a sport on my new post' };
+    sendPrompt('Let me ' + labels[action]);
+  });
+});
+
+composerPost.addEventListener('click', function() {
+  var text = composerInput.value.trim();
+  if (!text) return;
+  var sportKey = activeSport === 'all' ? 'football' : activeSport;
+  posts.unshift({ sport: sportKey, name: 'Ben Nyx', init: 'BN', time: 'now', text: text, tags: [], likes: 0, comments: 0 });
+  Object.keys(likeState).forEach(function(k) { likeState[Number(k) + 1] = likeState[k]; });
+  likeState[0] = { liked: false, count: 0 };
+  composerInput.value = '';
+  autosize();
+  updateComposerButton();
+  renderFeed();
+});
 
 document.querySelectorAll('.nav-btn, [data-nav-inline]').forEach(function(btn) {
   btn.addEventListener('click', function() {
