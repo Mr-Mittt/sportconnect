@@ -121,7 +121,11 @@ export function useGroupsPageData(): {
   const createPost = useCallback(
     (content: string) => {
       if (selectedGroupId === null) return;
-      createMutation.mutate({ content, groupId: selectedGroupId });
+      // postType must be explicit: the backend defaults an omitted postType
+      // to USER_FEED, then rejects it for carrying a groupId at all
+      // (PostServiceImpl.createPost) — every group post needs GROUP_POST
+      // stated outright, not left to infer from groupId alone.
+      createMutation.mutate({ content, groupId: selectedGroupId, postType: 'GROUP_POST' });
     },
     [createMutation, selectedGroupId],
   );

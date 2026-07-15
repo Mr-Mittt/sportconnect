@@ -790,6 +790,53 @@ and requested to join a group (row flipped to "Pending" in place). Caught and fi
 during that verification: `usePublicGroups` had no `enabled` gate, so the join modal's hook kept
 fetching in the background even while closed.
 
+**SPORT-1 DONE** (2026-07-15, `client/docs/SPORT-1_SPORT_SWITCHER_REAL.md`): de-mocked
+`useSportProfiles()` against the real `GET /api/sports/profiles/user/{userId}`, closing out the last
+mock-backed piece of HF-2's SportSwitcher. Mapping reuses `sportIdMap.ts`'s existing
+`sportKeyForId()` (the same bridge FEED-1/FEED-4 already use for posts/groups) rather than a second
+id↔key table; `label`/`icon`/`colorRamp` come from a new static `SPORT_PROFILE_CONFIG`, per the
+ticket's own instruction to reuse sport-impl's A3 static-config approach instead of a
+backend-driven mapping. Inactive profiles and any `sportId` outside the client's known `SportKey`s
+are silently dropped rather than surfaced as an error. Found and fixed a latent bug along the way:
+`UpcomingMatches.tsx` indexed `sportsByKey[match.sport]` unconditionally, safe only under the old
+always-3-sport mock — now falls back to rendering without the sport badge (same pattern
+`PostCard`/`Feed.tsx` already use), required by the ticket's own "zero sport profiles doesn't break
+the page" acceptance criterion. **Scope addition mid-ticket:** "Add sport" was upgraded from a
+callback-only no-op to a real flow — `AddSportModal` (sport + skill level required, years of
+experience optional; same presentational/controlled shape as `CreateGroupModal`) and a new
+`useAddSportProfile()` mutation wrapping `POST /api/sports/profiles`, cache-writing into
+`useSportProfiles`' query via a shared `sportProfilesQueryKey` helper so the switcher updates without
+a refetch round trip. Wired identically into HomeFeedPage and GroupsPage. New MSW `sport.ts` handler
+file, stateful for all three endpoints (GET profiles, GET catalog, POST profiles) so a created
+profile actually appears on refetch, same reasoning as `groups.ts`'s stateful group-creation handler.
+`tsc -b`/`eslint` clean, `pnpm vitest run` 62/62 files (282/282 tests), `playwright --project=e2e`
+29/29 passing. Live-verified against the real running backend and dev server (not MSW) in two passes:
+registered a fresh user and confirmed the zero-profile state renders cleanly, then created 3 real
+sport profiles via the API and confirmed all 3 pills render with the correct ramp/icon and "Add
+sport" goes `aria-disabled` at the cap; separately, registered a second user and drove the actual
+`AddSportModal` UI three times in a row (not the API) — submit gated on skill level, the pill appears
+immediately without a reload, the picker correctly excludes already-added sports, and the real
+backend's own cap makes "Add sport" unreachable after the third. Screenshots reviewed directly both
+passes; verification scripts were temporary, uncommitted scratch files.
+
+**Bug fix — Groups page composer 400s on every real group post** (2026-07-15, found while discussing
+what to call FEED-3's composer area, not a backlog ticket): `useGroupsPageData.ts`'s `createPost`
+called `createMutation.mutate({ content, groupId })` with no `postType`. `PostServiceImpl.createPost`
+defaults an omitted `postType` to `USER_FEED`, then rejects `USER_FEED` + a non-null `groupId`
+outright ("USER_FEED posts cannot be associated with a group") — so every group post was a guaranteed
+400 against the real backend. FEED-4/FEED-5's own test suites never caught this because
+`e2e/mocks/handlers/feed.ts`'s `POST /api/posts` handler didn't replicate that cross-field rule (it
+happily accepted any `postType`/`groupId` combination) — exactly the gap `client/CLAUDE.md`'s testing
+convention already calls out ("MSW passing does not prove the real backend still matches its
+documented contract"). Fixed by sending `postType: 'GROUP_POST'` explicitly; also tightened the MSW
+handler to enforce the same rule, so this exact bug class can't silently reappear and pass CI again.
+`tsc -b`/`eslint` clean, full suite still 62/62 files (282/282 tests) — one existing test's expected
+payload updated to include `postType: 'GROUP_POST'`. Live-verified against the real backend (not
+MSW): registered a user, created a sport profile and a group via the API, then drove the actual
+Groups page composer in a browser — confirmed `POST /api/posts` now returns `201` with
+`postType: GROUP_POST` (previously would have been `400`), and the post renders in the group feed
+immediately. Verification script was a temporary, uncommitted scratch file.
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow

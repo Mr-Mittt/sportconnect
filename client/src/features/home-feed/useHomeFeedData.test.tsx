@@ -67,6 +67,50 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
 
+const apiResponse = <T,>(data: T) => ({ data: { success: true, message: '', data, timestamp: '' } });
+
+// SPORT-1: one real sport profile, so sportProfiles is populated the same
+// way it always was here (previously via the mock hook) without every test
+// needing its own fixture.
+const sportProfiles = [
+  {
+    id: 1,
+    userId: 'user-1',
+    sportId: 5,
+    sportName: 'Soccer',
+    skillLevel: null,
+    yearsOfExperience: null,
+    preferredPosition: null,
+    bio: null,
+    attributes: null,
+    isActive: true,
+    createdAt: '2026-06-01T10:00:00',
+    updatedAt: '2026-06-01T10:00:00',
+  },
+];
+
+/**
+ * Mocks GET /posts/feed with `feedPage`; GET /sports/profiles/user/{id} is
+ * stubbed for every test (SPORT-1's hook fires alongside the feed query).
+ * `/posts/feed` only resolves once, like the old bare `mockResolvedValueOnce`
+ * did — several tests below rely on a mutation's background onSettled
+ * invalidate *failing* to refetch so it doesn't clobber an optimistic cache
+ * update (same reasoning as HomeFeedPage.test.tsx's stateful-fake-server
+ * tests, just via "second call fails" instead of a stateful fixture here).
+ */
+function mockFeedAndSportProfiles(feedPage: PageResponse<Post>) {
+  let feedCallCount = 0;
+  return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+    if (url === '/posts/feed') {
+      feedCallCount += 1;
+      if (feedCallCount > 1) throw new Error('simulated network failure on refetch');
+      return apiResponse(feedPage);
+    }
+    if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+    throw new Error(`unexpected GET ${url}`);
+  });
+}
+
 describe('useHomeFeedData', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -78,9 +122,7 @@ describe('useHomeFeedData', () => {
   });
 
   it('returns the convention shape with all datasets populated, and the real current user id', async () => {
-    vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
-      data: { success: true, message: '', data: page([post({ id: 1 })]), timestamp: '' },
-    });
+    mockFeedAndSportProfiles(page([post({ id: 1 })]));
 
     const { result } = renderHook(() => useHomeFeedData(), { wrapper });
 
@@ -95,14 +137,7 @@ describe('useHomeFeedData', () => {
   });
 
   it('toggleLike calls the like mutation when the post is not yet liked', async () => {
-    vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
-      data: {
-        success: true,
-        message: '',
-        data: page([post({ id: 1, isLikedByCurrentUser: false })]),
-        timestamp: '',
-      },
-    });
+    mockFeedAndSportProfiles(page([post({ id: 1, isLikedByCurrentUser: false })]));
     const postSpy = vi
       .spyOn(apiClient, 'post')
       .mockResolvedValueOnce({ data: { success: true, message: '', data: null, timestamp: '' } });
@@ -115,14 +150,7 @@ describe('useHomeFeedData', () => {
   });
 
   it('toggleLike calls the unlike mutation when the post is already liked', async () => {
-    vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
-      data: {
-        success: true,
-        message: '',
-        data: page([post({ id: 1, isLikedByCurrentUser: true })]),
-        timestamp: '',
-      },
-    });
+    mockFeedAndSportProfiles(page([post({ id: 1, isLikedByCurrentUser: true })]));
     const deleteSpy = vi
       .spyOn(apiClient, 'delete')
       .mockResolvedValueOnce({ data: { success: true, message: '', data: null, timestamp: '' } });
@@ -135,9 +163,7 @@ describe('useHomeFeedData', () => {
   });
 
   it('deletePost calls DELETE /posts/{postId}', async () => {
-    vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
-      data: { success: true, message: '', data: page([post({ id: 5 })]), timestamp: '' },
-    });
+    mockFeedAndSportProfiles(page([post({ id: 5 })]));
     const deleteSpy = vi
       .spyOn(apiClient, 'delete')
       .mockResolvedValueOnce({ data: { success: true, message: '', data: null, timestamp: '' } });
@@ -150,9 +176,7 @@ describe('useHomeFeedData', () => {
   });
 
   it('createPost calls POST /posts with just the content and prepends the result', async () => {
-    vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
-      data: { success: true, message: '', data: page([post({ id: 1 })]), timestamp: '' },
-    });
+    mockFeedAndSportProfiles(page([post({ id: 1 })]));
     const created = post({ id: 2, content: 'New post!', userId: 'user-1' });
     const postSpy = vi
       .spyOn(apiClient, 'post')
@@ -170,14 +194,7 @@ describe('useHomeFeedData', () => {
   });
 
   it('exposes pagination state from the underlying infinite query', async () => {
-    vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
-      data: {
-        success: true,
-        message: '',
-        data: page([post({ id: 1 })], { last: false }),
-        timestamp: '',
-      },
-    });
+    mockFeedAndSportProfiles(page([post({ id: 1 })], { last: false }));
 
     const { result } = renderHook(() => useHomeFeedData(), { wrapper });
     await waitFor(() => expect(result.current.hasMorePosts).toBe(true));
@@ -189,9 +206,7 @@ describe('useHomeFeedData', () => {
     const originalLocation = window.location.href;
     window.history.pushState({}, '', '/?visual-state=empty');
 
-    vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
-      data: { success: true, message: '', data: page([post({ id: 1 })]), timestamp: '' },
-    });
+    mockFeedAndSportProfiles(page([post({ id: 1 })]));
 
     const { result } = renderHook(() => useHomeFeedData(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));

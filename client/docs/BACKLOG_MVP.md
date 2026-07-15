@@ -97,7 +97,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 30 | FEED-5 | CreateGroupModal + JoinGroupModal (real) | `DONE` |
 | 31 | FEED-6 | TrendingHashtags (real) — de-mocks HF-5 | `TODO` |
 | 32 | FEED-7 | GroupBroadcasts (real) — de-mocks HF-6 | `TODO` |
-| 33 | SPORT-1 | Sport switcher (real) — de-mocks HF-2, **new ticket, not in the epics** | `TODO` |
+| 33 | SPORT-1 | Sport switcher (real) — de-mocks HF-2, **new ticket, not in the epics** | `DONE` |
 | 34 | FEED-8 | Integration hardening (loading/error/empty states, pagination edges) | `TODO` |
 | 35 | FEED-10 | E2E functional test — feed/groups journey | `TODO` |
 | 36 | FEED-9 | QA / acceptance checklist (integration) | `TODO` |
@@ -995,6 +995,15 @@ pill (search/plus icons); the same icons were added to the "..." dropdown's menu
 deleted (everything in it had moved out, across FEED-4 and this ticket). Swap the internals of these
 shared hooks; neither Home Feed nor the Groups page needs to change as a consumer.
 
+**Bug fix (2026-07-15, found post-ship, not a ticket):** `useGroupsPageData.ts`'s `createPost`
+(built here in FEED-4, unchanged by FEED-5) never sent `postType`, so every group post 400'd against
+the real backend (`PostServiceImpl.createPost` defaults an omitted `postType` to `USER_FEED`, which
+then can't carry a `groupId`) — see `PROGRESS.md`'s 2026-07-15 entry for the full writeup. Fixed to
+send `postType: 'GROUP_POST'` explicitly; `e2e/mocks/handlers/feed.ts`'s `POST /api/posts` handler
+also tightened to enforce the same rule so MSW can't mask this bug class again. **FEED-7 note:**
+GROUP_BROADCAST creation (below) must do the same — send `postType: 'GROUP_BROADCAST'` explicitly,
+never rely on the backend inferring it.
+
 ### FEED-6 · TrendingHashtags (real)
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0, HF-5 · **Spec:** AUTH/FEED epic § FEED-6
 
@@ -1009,7 +1018,8 @@ De-mocks HF-6 via `useActiveBroadcasts()`; adds owner/admin-only "create broadca
 to build the reviewer-side UI — not needed by FEED-5's requester-side scope.
 
 ### SPORT-1 · Sport switcher (real) — new ticket, not in either epic
-**Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0 (hook conventions), HF-2, AUTH phase
+**Status:** `DONE` (2026-07-15) · **Type:** Integration · **Dependency:** FEED-0 (hook conventions), HF-2, AUTH phase ·
+**Summary:** `client/docs/SPORT-1_SPORT_SWITCHER_REAL.md`
 
 De-mocks HF-2 now that `SportController` exists (shipped after the epics were written — see
 Reality check). Full spec lives here since no epic covers it:
@@ -1030,6 +1040,12 @@ Reality check). Full spec lives here since no epic covers it:
 - "Add sport" stays a callback-only entry point in this MVP (the add-sport flow is its own future
   screen), but note `POST /api/sports/profiles` already exists for when that screen is scoped.
 
+**Delta (2026-07-15, scope addition):** the "Add sport" bullet above was superseded mid-ticket —
+requested for real, not left a no-op, since `POST /api/sports/profiles` already existed and had
+no other ticket scoped to consume it. Built `AddSportModal` (sport + skill level, required; years of
+experience, optional — preferred position/bio deferred to a future profile-editing screen) and
+`useAddSportProfile()`, wired into both HomeFeedPage and GroupsPage. See the summary doc for detail.
+
 **Acceptance criteria:**
 - SportSwitcher renders the real profiles for the logged-in user; a user with 3 profiles sees no
   "Add sport" pill (backend enforces the same cap of 3 active profiles).
@@ -1037,6 +1053,13 @@ Reality check). Full spec lives here since no epic covers it:
   filter still works.
 - Sport keys used for feed filtering stay consistent with the `sportId`/`sportName` the posts API
   returns, so HF-3's filter keeps working after both are de-mocked.
+
+**Delta (2026-07-15):** the first bullet above says a user at the cap "sees no 'Add sport' pill" —
+superseded by HF-2's own already-approved delta (`aria-disabled` + no-op at the cap, always rendered,
+mockup parity). Implemented against HF-2's actual behavior, not this ticket's literal wording, same
+resolution as HF-2's delta note itself. Also found and fixed a latent bug in `UpcomingMatches.tsx`
+(unconditional `sportsByKey[match.sport]` lookup, safe only under the old always-3-sport mock) —
+see the summary doc for detail; directly required by the second acceptance bullet above.
 
 ### FEED-8 · Integration hardening
 **Status:** `TODO` · **Type:** Hardening · **Dependency:** FEED-1..FEED-7, SPORT-1 · **Spec:** AUTH/FEED epic § FEED-8

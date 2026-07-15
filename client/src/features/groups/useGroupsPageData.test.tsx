@@ -91,6 +91,33 @@ function wrapper({ children }: { children: ReactNode }) {
 
 const apiResponse = <T,>(data: T) => ({ data: { success: true, message: '', data, timestamp: '' } });
 
+// SPORT-1: useGroupsPageData also mounts useSportProfiles now — stub its
+// GET so every test's mockImplementation can handle it without special-casing.
+const sportProfiles = [
+  {
+    id: 1,
+    userId: 'user-1',
+    sportId: 5,
+    sportName: 'Soccer',
+    skillLevel: null,
+    yearsOfExperience: null,
+    preferredPosition: null,
+    bio: null,
+    attributes: null,
+    isActive: true,
+    createdAt: '2026-06-01T10:00:00',
+    updatedAt: '2026-06-01T10:00:00',
+  },
+];
+
+function mockGet(handlers: Record<string, unknown>) {
+  return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+    if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+    if (url in handlers) return apiResponse(handlers[url]);
+    throw new Error(`unexpected GET ${url}`);
+  });
+}
+
 describe('useGroupsPageData', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -105,11 +132,7 @@ describe('useGroupsPageData', () => {
   it('filters groups to the active sport (football=5)', async () => {
     useFeedSpaceStore.setState({ activeSport: 'football', selectedGroupId: null });
     const groups = [group({ id: 1, sportId: 5 }), group({ id: 2, sportId: 6, groupName: 'Hoops Crew' })];
-    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-      if (url === '/groups/user/user-1') return apiResponse(page(groups));
-      if (url === '/posts/feed') return apiResponse(page([]));
-      throw new Error(`unexpected GET ${url}`);
-    });
+    mockGet({ '/groups/user/user-1': page(groups), '/posts/feed': page([]) });
 
     const { result } = renderHook(() => useGroupsPageData(), { wrapper });
 
@@ -119,11 +142,7 @@ describe('useGroupsPageData', () => {
 
   it('"All" shows every joined group across sports', async () => {
     const groups = [group({ id: 1, sportId: 5 }), group({ id: 2, sportId: 6 })];
-    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-      if (url === '/groups/user/user-1') return apiResponse(page(groups));
-      if (url === '/posts/feed') return apiResponse(page([]));
-      throw new Error(`unexpected GET ${url}`);
-    });
+    mockGet({ '/groups/user/user-1': page(groups), '/posts/feed': page([]) });
 
     const { result } = renderHook(() => useGroupsPageData(), { wrapper });
 
@@ -135,11 +154,7 @@ describe('useGroupsPageData', () => {
       post({ id: 1, postType: 'GROUP_POST', groupId: 1, sportId: 5 }),
       post({ id: 2, postType: 'USER_FEED', groupId: null }),
     ];
-    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-      if (url === '/groups/user/user-1') return apiResponse(page([]));
-      if (url === '/posts/feed') return apiResponse(page(posts));
-      throw new Error(`unexpected GET ${url}`);
-    });
+    mockGet({ '/groups/user/user-1': page([]), '/posts/feed': page(posts) });
 
     const { result } = renderHook(() => useGroupsPageData(), { wrapper });
 
@@ -151,11 +166,7 @@ describe('useGroupsPageData', () => {
   it('selecting a group switches the feed source to GET /posts/group/{id}', async () => {
     useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
     const groupPosts = [post({ id: 9, postType: 'GROUP_POST', groupId: 7 })];
-    const getSpy = vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-      if (url === '/groups/user/user-1') return apiResponse(page([]));
-      if (url === '/posts/group/7') return apiResponse(page(groupPosts));
-      throw new Error(`unexpected GET ${url}`);
-    });
+    const getSpy = mockGet({ '/groups/user/user-1': page([]), '/posts/group/7': page(groupPosts) });
 
     const { result } = renderHook(() => useGroupsPageData(), { wrapper });
 
@@ -166,11 +177,7 @@ describe('useGroupsPageData', () => {
   });
 
   it('createPost is a no-op on "All" (no group to attribute the post to)', async () => {
-    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-      if (url === '/groups/user/user-1') return apiResponse(page([]));
-      if (url === '/posts/feed') return apiResponse(page([]));
-      throw new Error(`unexpected GET ${url}`);
-    });
+    mockGet({ '/groups/user/user-1': page([]), '/posts/feed': page([]) });
     const postSpy = vi.spyOn(apiClient, 'post');
 
     const { result } = renderHook(() => useGroupsPageData(), { wrapper });
@@ -181,13 +188,9 @@ describe('useGroupsPageData', () => {
     expect(postSpy).not.toHaveBeenCalled();
   });
 
-  it('createPost sends the selected groupId when a group is selected', async () => {
+  it('createPost sends the selected groupId and postType: GROUP_POST when a group is selected', async () => {
     useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
-    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-      if (url === '/groups/user/user-1') return apiResponse(page([]));
-      if (url === '/posts/group/7') return apiResponse(page([]));
-      throw new Error(`unexpected GET ${url}`);
-    });
+    mockGet({ '/groups/user/user-1': page([]), '/posts/group/7': page([]) });
     const postSpy = vi
       .spyOn(apiClient, 'post')
       .mockResolvedValueOnce(apiResponse(post({ id: 99, groupId: 7 })));
@@ -198,7 +201,11 @@ describe('useGroupsPageData', () => {
     act(() => result.current.createPost('hello group'));
 
     await waitFor(() =>
-      expect(postSpy).toHaveBeenCalledWith('/posts', { content: 'hello group', groupId: 7 }),
+      expect(postSpy).toHaveBeenCalledWith('/posts', {
+        content: 'hello group',
+        groupId: 7,
+        postType: 'GROUP_POST',
+      }),
     );
   });
 });

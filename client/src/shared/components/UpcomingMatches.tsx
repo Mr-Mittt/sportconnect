@@ -60,7 +60,11 @@ export function UpcomingMatches({
       ) : (
         <div className="flex flex-col gap-2.5">
           {visible.map((match) => {
-            const sport = sportsByKey[match.sport];
+            // Real sportProfiles (SPORT-1) doesn't guarantee coverage of every
+            // mock match's sport the way the old always-3-sport mock did — same
+            // "render without a badge rather than crash" fallback PostCard uses
+            // for an unresolved SportProfile.
+            const sport = sportsByKey[match.sport] as SportProfile | undefined;
             const isFull = match.spotsLeft === 0;
             const ctaText = isFull
               ? 'Full, view details'
@@ -68,19 +72,21 @@ export function UpcomingMatches({
             return (
               <div key={match.id} className="border-hairline rounded-lg border-border p-2.5">
                 <div className="mb-1 flex items-center gap-1.5">
-                  <span
-                    className={cn(
-                      'flex size-5.5 shrink-0 items-center justify-center rounded-full',
-                      getRampBadgeClasses(sport.colorRamp),
-                    )}
-                  >
-                    {/* createElement keeps the lookup out of a capitalized render-local,
-                        which react-hooks/static-components would flag as a new component */}
-                    {createElement(getSportIcon(sport.icon), {
-                      className: 'size-3',
-                      'aria-hidden': true,
-                    })}
-                  </span>
+                  {sport !== undefined && (
+                    <span
+                      className={cn(
+                        'flex size-5.5 shrink-0 items-center justify-center rounded-full',
+                        getRampBadgeClasses(sport.colorRamp),
+                      )}
+                    >
+                      {/* createElement keeps the lookup out of a capitalized render-local,
+                          which react-hooks/static-components would flag as a new component */}
+                      {createElement(getSportIcon(sport.icon), {
+                        className: 'size-3',
+                        'aria-hidden': true,
+                      })}
+                    </span>
+                  )}
                   <div className="text-xs font-medium leading-snug text-text-primary">
                     {match.title}
                   </div>

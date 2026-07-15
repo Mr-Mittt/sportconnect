@@ -4,6 +4,7 @@ import { useFeedSpaceStore } from '@/app/feedSpaceStore';
 import { useCreateGroup } from '@/features/feed/hooks/useCreateGroup';
 import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
+import { AddSportModal } from '@/shared/components/AddSportModal';
 import { CommentSection } from '@/shared/components/CommentSection';
 import { CreatePostForm } from '@/shared/components/CreatePostForm';
 import { Feed } from '@/shared/components/Feed';
@@ -11,6 +12,8 @@ import { GroupBroadcasts } from '@/shared/components/GroupBroadcasts';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
+import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
+import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CreateGroupModal } from './components/CreateGroupModal';
 import { GroupSpaceSwitcher } from './components/GroupSpaceSwitcher';
@@ -46,11 +49,13 @@ export function GroupsPage() {
   const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [isJoinGroupOpen, setIsJoinGroupOpen] = useState(false);
-  // Bumped on every open (not close) — remounts CreateGroupModal so its
-  // internal form field state starts fresh each time, without an effect
-  // calling setState. JoinGroupModal doesn't need this — its search state
-  // lives in useJoinGroupModalData below, not in the component itself.
+  const [isAddSportOpen, setIsAddSportOpen] = useState(false);
+  // Bumped on every open (not close) — remounts CreateGroupModal/AddSportModal
+  // so their internal form field state starts fresh each time, without an
+  // effect calling setState. JoinGroupModal doesn't need this — its search
+  // state lives in useJoinGroupModalData below, not in the component itself.
   const [createGroupOpenCount, setCreateGroupOpenCount] = useState(0);
+  const [addSportOpenCount, setAddSportOpenCount] = useState(0);
   // GroupsPage renders behind ProtectedRoute (AUTH-4), so user is guaranteed
   // non-null here — same guarantee HomeFeedPage already relies on.
   const user = useAuthStore((state) => state.user)!;
@@ -74,6 +79,7 @@ export function GroupsPage() {
     activeCommentsPostId !== null,
   );
   const createGroupMutation = useCreateGroup(currentUserId);
+  const addSportMutation = useAddSportProfile(currentUserId);
   const lockedSport = activeSport !== 'all' ? activeSport : null;
   const joinGroupModalData = useJoinGroupModalData(
     currentUserId,
@@ -87,6 +93,10 @@ export function GroupsPage() {
         SportKey,
         SportProfile
       >,
+    [data.sportProfiles],
+  );
+  const availableSports = useMemo(
+    () => ALL_SPORT_KEYS.filter((key) => !data.sportProfiles.some((sport) => sport.key === key)),
     [data.sportProfiles],
   );
 
@@ -104,7 +114,10 @@ export function GroupsPage() {
           sports={data.sportProfiles}
           active={activeSport}
           onChange={setActiveSport}
-          onAddSport={noop}
+          onAddSport={() => {
+            setAddSportOpenCount((count) => count + 1);
+            setIsAddSportOpen(true);
+          }}
         />
       </div>
       <div className="mb-4">
@@ -209,6 +222,17 @@ export function GroupsPage() {
         onRequestToJoin={joinGroupModalData.requestToJoin}
         isRequesting={joinGroupModalData.isRequesting}
         isRequestError={joinGroupModalData.isRequestError}
+      />
+      <AddSportModal
+        key={addSportOpenCount}
+        isOpen={isAddSportOpen}
+        onClose={() => setIsAddSportOpen(false)}
+        availableSports={availableSports}
+        isSubmitting={addSportMutation.isPending}
+        isError={addSportMutation.isError}
+        onSubmit={(payload) =>
+          addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
+        }
       />
     </main>
   );
