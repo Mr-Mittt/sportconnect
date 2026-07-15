@@ -53,7 +53,7 @@ const post: Post = {
 const football: SportProfile = { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' };
 
 const meta = {
-  title: 'HomeFeed/CommentSection',
+  title: 'Shared/CommentSection',
   component: CommentSection,
   args: {
     isOpen: true,

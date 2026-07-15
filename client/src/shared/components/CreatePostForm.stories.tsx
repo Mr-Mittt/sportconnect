@@ -4,7 +4,7 @@ import { CreatePostForm } from './CreatePostForm';
 const currentUser = { firstName: 'Jordan', fullName: 'Jordan Lee', avatarUrl: null };
 
 const meta = {
-  title: 'HomeFeed/CreatePostForm',
+  title: 'Shared/CreatePostForm',
   component: CreatePostForm,
   args: {
     currentUser,

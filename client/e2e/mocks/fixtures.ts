@@ -28,7 +28,13 @@ export const mockRefreshToken = 'mock-refresh-token';
 // fixtures above.
 export const mockGroup: Group = {
   id: 1,
-  sportId: 1,
+  // 5, not 1 — matches mockPost/mockGroupPost's sportId (the real `sports`
+  // table's Soccer row; see mockPost's own note on the football<->soccer
+  // naming gap). Was 1 (Badminton) before FEED-4, which is the first ticket
+  // to filter groups by sportId — that value never lined up with this
+  // group's own "Friday Night Football" theming or its posts' sportId, so a
+  // sport-filtered group switcher would never have shown it under Football.
+  sportId: 5,
   groupName: 'Friday Night Football',
   description: 'Weekly 5-a-side, all skill levels welcome.',
   avatarUrl: null,

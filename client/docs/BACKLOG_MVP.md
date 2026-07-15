@@ -93,7 +93,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 26 | FEED-1 | Feed + PostCard (real — absorbs post-impl's old F1) | `DONE` |
 | 27 | FEED-2 | CommentSection (real) | `DONE` |
 | 28 | FEED-3 | CreatePostForm (real) | `DONE` |
-| 29 | FEED-4 | Group switching (real groups list) | `TODO` |
+| 29 | FEED-4 | Group switching (real groups list) | `DONE` |
 | 30 | FEED-5 | CreateGroupModal + JoinGroupModal (real) | `TODO` |
 | 31 | FEED-6 | TrendingHashtags (real) — de-mocks HF-5 | `TODO` |
 | 32 | FEED-7 | GroupBroadcasts (real) — de-mocks HF-6 | `TODO` |
@@ -952,9 +952,31 @@ clears the textarea, renders cleanly at 375px. Full details: `client/docs/FEED-3
   `useCreatePost`'s onSuccess or add its own targeted cache write when it ships.
 
 ### FEED-4 · Group switching (real)
-**Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0 · **Spec:** AUTH/FEED epic § FEED-4
+**Status:** `DONE` (2026-07-15) · **Type:** Integration · **Dependency:** FEED-0 · **Spec:** AUTH/FEED
+epic § FEED-4 · **Summary:** `client/docs/FEED-4_GROUP_SWITCHING_REAL.md`
 
 `useUserGroups(currentUser.id)`; selected space is UI state in Zustand, not in TanStack Query.
+
+**Delta (2026-07-15, UI shape — user decision, not in the epic):** the switcher is a new **Groups
+page** (`/groups`, replacing the `ComingSoonPage` stub), not an inline control on Home Feed. A group
+is 1:1 with a sport (`Group.sportId`), so filtering the switcher by the shared `activeSport` (now
+promoted to a new `feedSpaceStore.ts` Zustand store, inherited/switchable from both Home Feed and
+Groups) bounds it to a handful of pills instead of an unbounded list. Sport switch always resets the
+group selection to "All". Zero joined groups for the active sport → "Join Group"/"Create Group"
+render as two buttons; one or more → both collapse into a right-aligned "..." menu instead. No post
+composer on "All". `Feed`/`PostCard`/`CreatePostForm`/`CommentSection`/`CommentItem` promoted from
+`features/home-feed/components/` to `shared/components/` so the Groups page can reuse them —
+**FEED-5/6/7 and any future page needing these should import from `shared/components/`, not
+`features/home-feed/`.**
+
+**Deltas for later tickets:**
+- FEED-5 wires `GroupSpaceSwitcher`'s `onCreateGroup`/`onJoinGroup` (currently no-ops on both the
+  button and the "..." menu-item code paths).
+- No E2E or visual-regression coverage exists yet for the Groups page (deliberately out of scope —
+  FEED-10 covers the feed/groups E2E journey; visual-regression for the new page is its own future
+  ticket, same pattern as FEED-11 for the comment modal).
+- `useGroupsPageData`'s "All" posts are a client-side filter of `usePersonalFeed()`'s already-blended
+  `GROUP_POST`s (no aggregate "all my groups" backend endpoint exists) — swap this if one ever ships.
 
 ### FEED-5 · CreateGroupModal + JoinGroupModal (real)
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-4 · **Spec:** AUTH/FEED epic § FEED-5
