@@ -105,6 +105,40 @@ describe('useCreateComment', () => {
     expect(readCommentCount(queryClient)).toBe(3);
   });
 
+  it('still creates a root comment when a non-infinite feedKeys query is cached (e.g. userGroups after visiting Groups)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    seedPersonalFeedCache(queryClient, fixturePost);
+    // Page<T>-shaped, not InfiniteData — same shape useUserGroups caches under
+    // the same feedKeys.all prefix updatePostInFeedCaches used to match blindly.
+    queryClient.setQueryData(feedKeys.userGroups('user-1'), {
+      content: [],
+      totalPages: 0,
+      totalElements: 0,
+      number: 0,
+      size: 20,
+      first: true,
+      last: true,
+      numberOfElements: 0,
+      empty: true,
+    });
+    function wrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    }
+
+    vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
+      data: { success: true, message: '', data: null, timestamp: '' },
+    });
+
+    const { result } = renderHook(() => useCreateComment(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ postId: 7, payload: { content: 'Nice!' } });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(apiClient.post).toHaveBeenCalledWith('/posts/7/comments', { content: 'Nice!' });
+  });
+
   it('rolls back the optimistic commentCount bump if the request fails', async () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     seedPersonalFeedCache(queryClient, fixturePost);
