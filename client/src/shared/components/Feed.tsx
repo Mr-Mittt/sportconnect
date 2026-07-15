@@ -18,6 +18,10 @@ interface FeedProps {
   onLoadMore: () => void;
   isLoading: boolean;
   isError: boolean;
+  /** Shown when `visiblePosts` is empty. Defaults to Home Feed/Groups'
+   * per-sport wording — `HashtagPostsModal` (FEED-6) overrides it for its
+   * per-tag empty state. */
+  emptyMessage?: string;
 }
 
 /**
@@ -44,6 +48,7 @@ export function Feed({
   onLoadMore,
   isLoading,
   isError,
+  emptyMessage = 'No posts yet for this sport.',
 }: FeedProps) {
   const canLoadMore = hasMorePosts && !isFetchingMorePosts;
   const sentinelRef = useInfiniteScrollSentinel(onLoadMore, canLoadMore);
@@ -61,9 +66,7 @@ export function Feed({
       : posts.filter((post) => post.sportId === SPORT_ID_BY_KEY[activeSport]);
 
   if (visiblePosts.length === 0) {
-    return (
-      <div className="py-6 text-center text-2sm text-text-muted">No posts yet for this sport.</div>
-    );
+    return <div className="py-6 text-center text-2sm text-text-muted">{emptyMessage}</div>;
   }
 
   return (

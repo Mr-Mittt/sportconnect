@@ -27,14 +27,16 @@ const PAGE_SIZE = 20;
  * "lastInteractionAt")` makes Spring Data JPA also append a *second*,
  * dynamically-generated `ORDER BY ph.lastInteractionAt` directly against the
  * query's root entity (`PostHashtag`), which has no such field — every call
- * throws `UnknownPathException` before returning. Filed as a blocking
- * backend bug: `modules/social/post-impl/docs/BACKLOG_MVP.md`. This hook is
- * typed and wired correctly against the documented contract, but cannot be
- * exercised end-to-end until that bug is fixed — FEED-6 (which wires
- * hashtag click-through into the UI) must confirm the fix has shipped
- * before relying on this hook actually returning data.
+ * throws `UnknownPathException` before returning. **Fixed 2026-07-14** —
+ * see `modules/social/post-impl/docs/A10_FIX_HASHTAG_ENDPOINT_500.md` — no
+ * longer blocking.
+ *
+ * `enabled` (default `true`) gates the fetch, same reasoning as
+ * `useComments(postId, enabled)`: FEED-6's `useHashtagResultsData` calls this
+ * hook unconditionally (React's rules of hooks), so it must not fetch until
+ * a tag is actually selected (the hashtag-results modal is open).
  */
-export function usePostsByHashtag(tag: string) {
+export function usePostsByHashtag(tag: string, enabled = true) {
   const normalizedTag = tag.replace(/^#/, '');
   return useInfiniteQuery({
     queryKey: feedKeys.hashtagPosts(normalizedTag),
@@ -47,5 +49,6 @@ export function usePostsByHashtag(tag: string) {
     },
     initialPageParam: 0,
     getNextPageParam,
+    enabled,
   });
 }

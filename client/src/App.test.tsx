@@ -99,6 +99,28 @@ describe('App routing', () => {
       if (url === '/sports/profiles/user/1') {
         return { data: { success: true, message: '', data: [], timestamp: '' } };
       }
+      // FEED-6: real GET /hashtags/trending — an empty page here since this
+      // test only asserts the shell/feed render, not the trending card.
+      if (url === '/hashtags/trending') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: {
+              content: [],
+              totalPages: 1,
+              totalElements: 0,
+              number: 0,
+              size: 10,
+              first: true,
+              last: true,
+              numberOfElements: 0,
+              empty: true,
+            },
+            timestamp: '',
+          },
+        };
+      }
       return {
         data: {
           success: true,

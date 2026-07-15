@@ -1,3 +1,4 @@
+import { IconHeart, IconHeartFilled } from '@tabler/icons-react';
 import { createElement, useState } from 'react';
 import type { Comment, Post } from '@/features/feed/types';
 import { MAX_COMMENT_LENGTH } from '@/features/feed/types';
@@ -10,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
 import { CommentItem } from './CommentItem';
+import { HashtagText } from './HashtagText';
 
 interface CommentSectionProps {
   isOpen: boolean;
@@ -34,6 +36,15 @@ interface CommentSectionProps {
   isPosting: boolean;
   onDeleteComment: (comment: Comment) => void;
   onToggleCommentLike: (comment: Comment) => void;
+  /** Hashtags in the repeated post content and in comment bodies are
+   * clickable here too (FEED-6 follow-up), same convention as PostCard's
+   * `onHashtagClick('#tag')`. */
+  onHashtagClick: (tag: string) => void;
+  /** Liking the post itself from inside the dialog (found missing during
+   * FEED-6's follow-up work — the repeated post content had no like
+   * affordance at all, unlike PostCard in the feed). Same
+   * `onToggleLike(postId)` convention as PostCard/Feed. */
+  onTogglePostLike: (postId: number) => void;
 }
 
 function initialsFor(fullName: string): string {
@@ -54,7 +65,9 @@ function initialsFor(fullName: string): string {
  * every other Home Feed component (client/CLAUDE.md) — all data/mutations
  * come from the parent's `useCommentsData(postId, isOpen)` hook, not
  * fetched here, so this stays Storybook-testable without a TanStack Query
- * provider.
+ * provider. The repeated post content also gets its own like button
+ * (`onTogglePostLike`) — the dialog previously had no way to like the post
+ * itself, only view/add comments.
  */
 export function CommentSection({
   isOpen,
@@ -74,6 +87,8 @@ export function CommentSection({
   isPosting,
   onDeleteComment,
   onToggleCommentLike,
+  onHashtagClick,
+  onTogglePostLike,
 }: CommentSectionProps) {
   const [content, setContent] = useState('');
 
@@ -124,9 +139,30 @@ export function CommentSection({
 
         <div className="flex-1 overflow-y-auto px-4 py-3">
           {post !== null && (
-            <p className="border-hairline-b mb-3 border-border pb-3 text-sm text-text-primary">
-              {post.content}
-            </p>
+            <div className="border-hairline-b mb-3 border-border pb-3">
+              <HashtagText
+                text={post.content}
+                onHashtagClick={onHashtagClick}
+                className="text-sm text-text-primary"
+              />
+              <button
+                type="button"
+                aria-pressed={post.isLikedByCurrentUser}
+                aria-label={post.isLikedByCurrentUser ? 'Unlike' : 'Like'}
+                onClick={() => onTogglePostLike(post.id)}
+                className={cn(
+                  'mt-2 flex cursor-pointer items-center gap-1 rounded p-0.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
+                  post.isLikedByCurrentUser ? 'text-text-danger' : 'text-text-secondary',
+                )}
+              >
+                {post.isLikedByCurrentUser ? (
+                  <IconHeartFilled className="size-4" aria-hidden="true" />
+                ) : (
+                  <IconHeart className="size-4" aria-hidden="true" />
+                )}
+                {post.likeCount}
+              </button>
+            </div>
           )}
           {isLoading && <p className="text-2sm text-text-muted">Loading comments…</p>}
           {isError && <p className="text-2sm text-text-danger">Couldn't load comments.</p>}
@@ -144,6 +180,7 @@ export function CommentSection({
                   onDelete={onDeleteComment}
                   onReply={onAddReply}
                   isSubmittingReply={isPosting}
+                  onHashtagClick={onHashtagClick}
                 />
               ))}
               {hasMore && (

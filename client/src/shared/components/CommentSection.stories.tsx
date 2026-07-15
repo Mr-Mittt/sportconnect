@@ -73,6 +73,8 @@ const meta = {
     isPosting: false,
     onDeleteComment: () => {},
     onToggleCommentLike: () => {},
+    onHashtagClick: () => {},
+    onTogglePostLike: () => {},
   },
 } satisfies Meta<typeof CommentSection>;
 
@@ -100,6 +102,20 @@ export const WithComments: Story = {
 
 export const NoSportBadge: Story = {
   args: { comments: [makeComment()], sport: null },
+};
+
+export const PostLiked: Story = {
+  args: {
+    post: { ...post, isLikedByCurrentUser: true, likeCount: 15 },
+    comments: [makeComment()],
+  },
+};
+
+export const WithHashtag: Story = {
+  args: {
+    post: { ...post, content: 'Great 5-a-side session tonight, 3 wins in a row! #fridayrun' },
+    comments: [makeComment({ content: 'Count me in for #fridayrun' })],
+  },
 };
 
 export const Empty: Story = {

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { Post } from '@/features/feed/types';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import { Feed } from './Feed';
+import { HashtagPostsModal } from './HashtagPostsModal';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
   football: { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' },
@@ -48,8 +48,8 @@ const posts: Post[] = [
     id: 1,
     userFullName: 'Marcus Lee',
     sportId: 5,
-    content: 'Great 5-a-side session tonight, 3 wins in a row for the squad. #5aside #fridayrun',
-    hashtags: ['5aside', 'fridayrun'],
+    content: 'Great 5-a-side session tonight! #fridayrun',
+    hashtags: ['fridayrun'],
     likeCount: 14,
     commentCount: 3,
   }),
@@ -57,18 +57,20 @@ const posts: Post[] = [
     id: 2,
     userFullName: 'Priya Shah',
     sportId: 6,
-    content: 'Looking for 2 more players for Sunday pickup at Riverside courts. #pickup #riverside',
-    hashtags: ['pickup', 'riverside'],
+    content: "Who's in for Friday? #fridayrun",
+    hashtags: ['fridayrun'],
     likeCount: 9,
-    commentCount: 6,
-    isLikedByCurrentUser: true,
+    commentCount: 0,
   }),
 ];
 
 const meta = {
-  title: 'Shared/Feed',
-  component: Feed,
+  title: 'Shared/HashtagPostsModal',
+  component: HashtagPostsModal,
   args: {
+    isOpen: true,
+    onClose: () => {},
+    tag: '#fridayrun',
     sportsByKey,
     currentUserId: 'someone-else',
     onToggleLike: () => {},
@@ -81,27 +83,27 @@ const meta = {
     isLoading: false,
     isError: false,
   },
-} satisfies Meta<typeof Feed>;
+} satisfies Meta<typeof HashtagPostsModal>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const AllSports: Story = {
-  args: { posts, activeSport: 'all' },
+export const Populated: Story = {
+  args: { posts },
 };
 
-export const FilteredBasketball: Story = {
-  args: { posts, activeSport: 'basketball' },
+export const WithMoreToLoad: Story = {
+  args: { posts, hasMorePosts: true },
 };
 
-export const EmptyForSport: Story = {
-  args: { posts, activeSport: 'tennis' },
+export const Empty: Story = {
+  args: { posts: [] },
 };
 
-export const HasMorePosts: Story = {
-  args: { posts, activeSport: 'all', hasMorePosts: true },
+export const Loading: Story = {
+  args: { posts: [], isLoading: true },
 };
 
-export const LoadingNextPage: Story = {
-  args: { posts, activeSport: 'all', hasMorePosts: true, isFetchingMorePosts: true },
+export const ErrorState: Story = {
+  args: { posts: [], isError: true },
 };

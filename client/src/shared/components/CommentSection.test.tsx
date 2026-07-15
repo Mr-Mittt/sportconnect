@@ -72,6 +72,8 @@ const baseProps = {
   isPosting: false,
   onDeleteComment: noop,
   onToggleCommentLike: noop,
+  onHashtagClick: noop,
+  onTogglePostLike: noop,
 };
 
 describe('CommentSection', () => {
@@ -180,5 +182,63 @@ describe('CommentSection', () => {
     render(<CommentSection {...baseProps} onClose={onClose} />);
     await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('renders a like button for the post itself, reflecting props and reporting the post id on click', async () => {
+    const user = userEvent.setup();
+    const onTogglePostLike = vi.fn();
+    const { rerender } = render(
+      <CommentSection {...baseProps} onTogglePostLike={onTogglePostLike} />,
+    );
+
+    const likeButton = screen.getByRole('button', { name: 'Like' });
+    expect(likeButton).toHaveTextContent('2');
+    await user.click(likeButton);
+    expect(onTogglePostLike).toHaveBeenCalledWith(1);
+
+    // Controlled: rendering follows props, same convention as PostCard.
+    rerender(
+      <CommentSection
+        {...baseProps}
+        post={{ ...post, isLikedByCurrentUser: true, likeCount: 3 }}
+        onTogglePostLike={onTogglePostLike}
+      />,
+    );
+    const unlikeButton = screen.getByRole('button', { name: 'Unlike' });
+    expect(unlikeButton).toHaveAttribute('aria-pressed', 'true');
+    expect(unlikeButton).toHaveTextContent('3');
+  });
+
+  it('renders no post like button when post is null', () => {
+    render(<CommentSection {...baseProps} post={null} />);
+    expect(screen.queryByRole('button', { name: /^(Like|Unlike)$/ })).not.toBeInTheDocument();
+  });
+
+  it('renders a hashtag inline within the repeated post content as a clickable button', async () => {
+    const user = userEvent.setup();
+    const onHashtagClick = vi.fn();
+    render(
+      <CommentSection
+        {...baseProps}
+        post={{ ...post, content: 'Great 5-a-side session tonight! #fridayrun' }}
+        onHashtagClick={onHashtagClick}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '#fridayrun' }));
+    expect(onHashtagClick).toHaveBeenCalledWith('#fridayrun');
+  });
+
+  it('renders a hashtag inside a comment as a clickable button too', async () => {
+    const user = userEvent.setup();
+    const onHashtagClick = vi.fn();
+    render(
+      <CommentSection
+        {...baseProps}
+        comments={[makeComment({ content: 'Count me in for #fridayrun' })]}
+        onHashtagClick={onHashtagClick}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '#fridayrun' }));
+    expect(onHashtagClick).toHaveBeenCalledWith('#fridayrun');
   });
 });

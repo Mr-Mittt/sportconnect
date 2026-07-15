@@ -5,6 +5,7 @@ import { formatRelativeTime } from '@/shared/lib/relativeTime';
 import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
+import { HashtagText } from './HashtagText';
 
 interface CommentItemProps {
   comment: Comment;
@@ -13,6 +14,9 @@ interface CommentItemProps {
   onDelete: (comment: Comment) => void;
   onReply: (parentCommentId: number, content: string) => void;
   isSubmittingReply: boolean;
+  /** A hashtag inside a comment's own text is clickable too (FEED-6
+   * follow-up) — same convention as PostCard's `onHashtagClick('#tag')`. */
+  onHashtagClick: (tag: string) => void;
 }
 
 function initialsFor(fullName: string): string {
@@ -40,6 +44,7 @@ export function CommentItem({
   onDelete,
   onReply,
   isSubmittingReply,
+  onHashtagClick,
 }: CommentItemProps) {
   const [showReplyBox, setShowReplyBox] = useState(false);
   const [replyContent, setReplyContent] = useState('');
@@ -70,7 +75,11 @@ export function CommentItem({
               <span className="text-2sm font-medium text-text-primary">{comment.userFullName}</span>
               <span className="text-2xs text-text-muted">{formatRelativeTime(comment.createdAt)}</span>
             </div>
-            <p className="text-2sm text-text-primary">{comment.content}</p>
+            <HashtagText
+              text={comment.content}
+              onHashtagClick={onHashtagClick}
+              className="text-2sm text-text-primary"
+            />
           </div>
           <div className="mt-1 flex items-center gap-3 px-1">
             <button
@@ -145,6 +154,7 @@ export function CommentItem({
                   onDelete={onDelete}
                   onReply={onReply}
                   isSubmittingReply={isSubmittingReply}
+                  onHashtagClick={onHashtagClick}
                 />
               ))}
             </div>

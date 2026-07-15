@@ -77,6 +77,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14d | HF-14 | Regenerate visual-regression baselines (follow-up from AUTH-4's TopBar avatar-menu change) | `DONE` |
 | 14e | HF-15 | Regenerate visual-regression baselines (follow-up from FEED-1's real feed + delete menu) | `DONE` |
 | 14f | HF-16 | Regenerate visual-regression baselines (follow-up from FEED-2's comment button + dialog) | `DONE` |
+| 14g | HF-17 | Regenerate visual-regression baselines (follow-up from FEED-6's real trending hashtags) | `TODO` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -95,7 +96,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 28 | FEED-3 | CreatePostForm (real) | `DONE` |
 | 29 | FEED-4 | Group switching (real groups list) | `DONE` |
 | 30 | FEED-5 | CreateGroupModal + JoinGroupModal (real) | `DONE` |
-| 31 | FEED-6 | TrendingHashtags (real) — de-mocks HF-5 | `TODO` |
+| 31 | FEED-6 | TrendingHashtags (real) — de-mocks HF-5 | `DONE` |
 | 32 | FEED-7 | GroupBroadcasts (real) — de-mocks HF-6 | `TODO` |
 | 33 | SPORT-1 | Sport switcher (real) — de-mocks HF-2, **new ticket, not in the epics** | `DONE` |
 | 34 | FEED-8 | Integration hardening (loading/error/empty states, pagination edges) | `TODO` |
@@ -514,6 +515,35 @@ Linux-rendered; CI is the authoritative visual environment). Confirmed via direc
 inspection of the `empty` state (byte-identical to the prior baseline, so any local diff there is
 *purely* Windows-vs-Linux font-rendering noise) that the same characteristic anti-aliasing pattern —
 not a content mismatch — accounts for the `default`/`basketball` diffs too.
+
+### HF-17 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
+**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-6's real trending hashtags ·
+**Summary:** `client/docs/FEED-6_TRENDINGHASHTAGS_REAL.md`
+
+**Found during FEED-6:** `shared/hooks/useTrendingHashtags.ts` swapped its hardcoded 4-hashtag mock
+array for the real `GET /api/hashtags/trending` hook. Confirmed via
+`pnpm exec playwright test --project=visual-regression`: all 9 committed Home Feed baselines
+legitimately diff (0.02–0.03 pixel-ratio, and a genuine image-height reduction — the Trending card
+now renders 1 row instead of 4, shortening the page) — MSW's `mockHashtag` fixture is the only
+trending row today, replacing the old mock data's `fridayrun`/`tournament`/`pickup`/`tennislife`
+set. Direct image inspection of the actual vs. expected screenshots confirmed this is the correct
+new rendering (real content, correctly shortened layout, nothing else shifted), not a regression.
+Same reasoning as HF-13/14/15/16 for why this is its own ticket: the feature change is correct and
+shouldn't be reverted, but regenerating baselines is a separate concern from the feature that
+caused the drift.
+
+**Second cause added (same ticket, follow-up UX request before merge):** `PostCard` no longer
+renders a separate row of hashtag pill buttons below the content — hashtags are now inline within
+the content text itself (`HashtagText`, see the ticket's summary doc). Every post whose content
+contains a hashtag (all 3 Home Feed e2e fixtures do) is now one row shorter. Confirmed via the same
+`visual-regression` run — no new/different failures, just a slightly larger diff ratio on top of
+the trending-card cause above.
+
+**To execute:** identical process to HF-12/13/14/15/16 — trigger the `client-ci` workflow's
+`update-baselines` manual dispatch on GitHub, download the `visual-baselines` artifact, replace
+`client/e2e/visual/__screenshots__/` with its contents, commit. Worth a human visual check that the
+Trending card's single real row renders correctly, hashtags render inline within post content (not
+as a separate row), and nothing else drifted unexpectedly.
 
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·
@@ -1005,9 +1035,27 @@ GROUP_BROADCAST creation (below) must do the same — send `postType: 'GROUP_BRO
 never rely on the backend inferring it.
 
 ### FEED-6 · TrendingHashtags (real)
-**Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0, HF-5 · **Spec:** AUTH/FEED epic § FEED-6
+**Status:** `DONE` (2026-07-15) · **Type:** Integration · **Dependency:** FEED-0, HF-5 · **Spec:** AUTH/FEED epic § FEED-6 ·
+**Summary:** `client/docs/FEED-6_TRENDINGHASHTAGS_REAL.md`
 
 Pure data-source swap behind HF-5's component; hashtag click routes to `usePostsByHashtag(tag)`.
+
+**Delta (2026-07-15, click-through destination — user decision, no epic/mockup coverage):**
+hashtag results render in a **modal** (`HashtagPostsModal`, new shared component, same
+`shared/ui/dialog.tsx` pattern FEED-2 used for comments), not a route — no `/hashtag/:tag` page
+exists. Fully interactive (real like/unlike/delete/comment via `useHashtagResultsData`, reusing
+`Feed` directly). Opening comments from inside the hashtag modal closes it first, then opens
+`CommentSection` (not stacked dialogs).
+
+**Deltas for later tickets:**
+- **HF-17 filed** (visual-regression baselines stale — Trending card now renders 1 real row
+  instead of the old mock's 4, shortening the page). Any ticket touching `TrendingHashtags`'/the
+  Home Feed rail's rendered content again before HF-17 lands should expect the same staleness.
+- **`activeCommentsPost`'s lookup (HomeFeedPage/GroupsPage) now also falls back to the
+  hashtag-results cache** — a post opened from `HashtagPostsModal` may not be in the main feed's
+  already-loaded pages. Doesn't solve the general "any post, any source" case — that's **FEED-12**.
+- No visual-regression coverage exists for `HashtagPostsModal` itself yet — same "own future
+  ticket" precedent as FEED-11 (comment modal).
 
 ### FEED-7 · GroupBroadcasts (real)
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0, HF-6 · **Spec:** AUTH/FEED epic § FEED-7

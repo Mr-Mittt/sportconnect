@@ -3,11 +3,13 @@ import { useAuthStore } from '@/app/authStore';
 import { useFeedSpaceStore } from '@/app/feedSpaceStore';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
+import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { AddSportModal } from '@/shared/components/AddSportModal';
 import { CommentSection } from '@/shared/components/CommentSection';
 import { CreatePostForm } from '@/shared/components/CreatePostForm';
 import { Feed } from '@/shared/components/Feed';
 import { GroupBroadcasts } from '@/shared/components/GroupBroadcasts';
+import { HashtagPostsModal } from '@/shared/components/HashtagPostsModal';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
@@ -16,8 +18,9 @@ import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { useHomeFeedData } from './useHomeFeedData';
 
-// Callback-only entry points in this epic — the destinations (hashtag results,
-// Matches screen, broadcast detail) are future tickets. "Add sport" is real now (SPORT-1).
+// Callback-only entry points in this epic — the destinations (Matches screen,
+// broadcast detail) are future tickets. "Add sport" is real (SPORT-1);
+// hashtag click-through is real now too (FEED-6, via HashtagPostsModal).
 const noop = () => {};
 
 /**
@@ -29,12 +32,18 @@ const noop = () => {};
  * client/CLAUDE.md's cross-page state rule.
  *
  * Feed's posts are real (FEED-1, `usePersonalFeed()` behind
- * `useHomeFeedData()`) — sportProfiles/upcomingMatches/hashtags/broadcasts
- * stay mock until SPORT-1/FEED-6/FEED-7 land. isLoading/isError now come
- * from the real feed query; Feed itself renders nothing for either today
- * (FEED-8 owns the actual loading/error UI). Home Feed always shows the
+ * `useHomeFeedData()`); sportProfiles (SPORT-1) and hashtags (FEED-6) are
+ * real too — upcomingMatches/broadcasts stay mock until FEED-7 lands (matches
+ * stay mock for the whole MVP, no backend module exists). isLoading/isError
+ * now come from the real feed query; Feed itself renders nothing for either
+ * today (FEED-8 owns the actual loading/error UI). Home Feed always shows the
  * personal feed — group-feed switching lives entirely on the Groups page
  * (FEED-4); selectedGroupId is irrelevant here.
+ *
+ * Hashtag click-through (FEED-6) opens `HashtagPostsModal` via page-local
+ * `activeHashtag` state — clicking a post's comment icon while that modal is
+ * open closes it first and opens `CommentSection` instead (user decision:
+ * simpler than stacking two dialogs).
  */
 export function HomeFeedPage() {
   const activeSport = useFeedSpaceStore((state) => state.activeSport);
@@ -42,6 +51,17 @@ export function HomeFeedPage() {
   // Which post's comment dialog is open — page-local UI state (client/CLAUDE.md),
   // not Zustand, since it's ephemeral and scoped to this one page.
   const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
+  // Which hashtag's results modal is open — same page-local UI-state
+  // reasoning as activeCommentsPostId (FEED-6). Split into two pieces
+  // deliberately: `activeHashtag` also drives useHashtagResultsData's query
+  // and must stay set (so its cached posts survive) even while the modal is
+  // visually hidden mid-transition to CommentSection — only `isHashtagModalOpen`
+  // controls the Dialog's actual visibility. Clearing `activeHashtag` too
+  // (i.e. tearing down the query) at the same time as opening comments would
+  // make activeCommentsPost's hashtag-cache fallback below see an empty list
+  // in that same render (a real bug this shape avoids).
+  const [activeHashtag, setActiveHashtag] = useState<string | null>(null);
+  const [isHashtagModalOpen, setIsHashtagModalOpen] = useState(false);
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
   // Bumped on every open (not close) — remounts AddSportModal so its internal
   // form field state starts fresh each time, same reasoning as
@@ -67,6 +87,7 @@ export function HomeFeedPage() {
     activeCommentsPostId ?? -1,
     activeCommentsPostId !== null,
   );
+  const hashtagResultsData = useHashtagResultsData(activeHashtag, activeHashtag !== null);
   const addSportMutation = useAddSportProfile(currentUserId);
   const availableSports = useMemo(
     () => ALL_SPORT_KEYS.filter((key) => !data.sportProfiles.some((sport) => sport.key === key)),
@@ -85,7 +106,12 @@ export function HomeFeedPage() {
   // The post whose comment thread is open, plus its resolved sport badge —
   // CommentSection shows both in its header/body (design-reference-post-modal.html),
   // same sportId->SportProfile resolution Feed.tsx already does per post.
-  const activeCommentsPost = data.posts.find((post) => post.id === activeCommentsPostId) ?? null;
+  // Falls back to the hashtag-results cache (FEED-6) since a post opened from
+  // there may not be in the main feed's already-loaded pages.
+  const activeCommentsPost =
+    data.posts.find((post) => post.id === activeCommentsPostId) ??
+    hashtagResultsData.data.posts.find((post) => post.id === activeCommentsPostId) ??
+    null;
   const activeCommentsPostSportKey =
     activeCommentsPost !== null ? sportKeyForId(activeCommentsPost.sportId) : undefined;
   const activeCommentsPostSport =
@@ -122,7 +148,10 @@ export function HomeFeedPage() {
             sportsByKey={sportsByKey}
             currentUserId={currentUserId}
             onToggleLike={toggleLike}
-            onHashtagClick={noop}
+            onHashtagClick={(tag) => {
+              setActiveHashtag(tag);
+              setIsHashtagModalOpen(true);
+            }}
             onDeletePost={deletePost}
             onOpenComments={setActiveCommentsPostId}
             hasMorePosts={hasMorePosts}
@@ -140,7 +169,13 @@ export function HomeFeedPage() {
             onSeeAll={noop}
             onSelectMatch={noop}
           />
-          <TrendingHashtags hashtags={data.hashtags} onHashtagClick={noop} />
+          <TrendingHashtags
+            hashtags={data.hashtags}
+            onHashtagClick={(tag) => {
+              setActiveHashtag(tag);
+              setIsHashtagModalOpen(true);
+            }}
+          />
           <GroupBroadcasts broadcasts={data.broadcasts} onBroadcastClick={noop} />
         </div>
       </div>
@@ -162,6 +197,25 @@ export function HomeFeedPage() {
         isPosting={commentsData.isPosting}
         onDeleteComment={commentsData.deleteComment}
         onToggleCommentLike={commentsData.toggleCommentLike}
+        onTogglePostLike={(postId) => {
+          // The active post may have come from the main feed cache or the
+          // hashtag-results cache (see activeCommentsPost's fallback above)
+          // — route the like to whichever hook's `posts` array actually
+          // contains it, so exactly one like/unlike mutation fires.
+          if (data.posts.some((candidate) => candidate.id === postId)) {
+            toggleLike(postId);
+          } else {
+            hashtagResultsData.toggleLike(postId);
+          }
+        }}
+        onHashtagClick={(tag) => {
+          // Symmetric with HashtagPostsModal's own "close first" behavior —
+          // close the comment dialog before opening the hashtag modal,
+          // rather than stacking two dialogs.
+          setActiveCommentsPostId(null);
+          setActiveHashtag(tag);
+          setIsHashtagModalOpen(true);
+        }}
       />
       <AddSportModal
         key={addSportOpenCount}
@@ -173,6 +227,32 @@ export function HomeFeedPage() {
         onSubmit={(payload) =>
           addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
         }
+      />
+      <HashtagPostsModal
+        isOpen={isHashtagModalOpen}
+        onClose={() => {
+          setIsHashtagModalOpen(false);
+          setActiveHashtag(null);
+        }}
+        tag={activeHashtag}
+        posts={hashtagResultsData.data.posts}
+        sportsByKey={sportsByKey}
+        currentUserId={hashtagResultsData.currentUserId}
+        onToggleLike={hashtagResultsData.toggleLike}
+        onHashtagClick={(tag) => setActiveHashtag(tag)}
+        onDeletePost={hashtagResultsData.deletePost}
+        onOpenComments={(postId) => {
+          // Hide the modal but keep `activeHashtag` set — see the state
+          // declaration's comment for why clearing it here would break
+          // activeCommentsPost's fallback lookup below.
+          setIsHashtagModalOpen(false);
+          setActiveCommentsPostId(postId);
+        }}
+        hasMorePosts={hashtagResultsData.hasMorePosts}
+        isFetchingMorePosts={hashtagResultsData.isFetchingMorePosts}
+        onLoadMore={hashtagResultsData.fetchMorePosts}
+        isLoading={hashtagResultsData.isLoading}
+        isError={hashtagResultsData.isError}
       />
     </main>
   );
