@@ -47,7 +47,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
                 LEFT JOIN GroupMember gm ON gm.groupId = g.id
                 WHERE g.isActive = true AND g.isPrivate = false
                 AND (:sportId IS NULL OR g.sportId = :sportId)
-                AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
                 GROUP BY g
                 """,
         countQuery = """
@@ -55,7 +55,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
                 LEFT JOIN GroupMember gm ON gm.groupId = g.id
                 WHERE g.isActive = true AND g.isPrivate = false
                 AND (:sportId IS NULL OR g.sportId = :sportId)
-                AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
                 """
     )
     Page<Object[]> searchPublicGroupsWithCounts(
@@ -72,7 +72,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
                 LEFT JOIN GroupMember gm ON gm.groupId = g.id
                 WHERE g.isActive = true AND g.isPrivate = false
                 AND (:sportId IS NULL OR g.sportId = :sportId)
-                AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
                 GROUP BY g
                 """,
         countQuery = """
@@ -80,7 +80,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
                 LEFT JOIN GroupMember gm ON gm.groupId = g.id
                 WHERE g.isActive = true AND g.isPrivate = false
                 AND (:sportId IS NULL OR g.sportId = :sportId)
-                AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
                 """
     )
     Page<Object[]> searchPublicGroupsAnon(

@@ -1,4 +1,4 @@
-import type { TrendingHashtag } from '../types';
+import type { TrendingHashtag } from '@/shared/types/rail';
 
 interface TrendingHashtagsProps {
   hashtags: TrendingHashtag[];

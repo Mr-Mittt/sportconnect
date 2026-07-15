@@ -10,7 +10,6 @@ import {
   mockBasketballPost,
   mockBroadcastPost,
   mockComment,
-  mockGroup,
   mockGroupPost,
   mockHashtag,
   mockPageResponse,
@@ -126,12 +125,6 @@ export const feedHandlers: HttpHandler[] = [
   http.get('/api/hashtags/trending', () =>
     HttpResponse.json(apiResponse(mockPageResponse([mockHashtag]), 'Trending hashtags retrieved')),
   ),
-
-  http.get('/api/groups/user/:userId', ({ request }) => {
-    const unauthorized = requireAuth(request);
-    if (unauthorized) return unauthorized;
-    return HttpResponse.json(apiResponse(mockPageResponse([mockGroup])));
-  }),
 
   http.post('/api/posts/:postId/like', ({ request, params }) => {
     const unauthorized = requireAuth(request);

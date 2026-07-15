@@ -6,11 +6,11 @@ import { useCommentsData } from '@/features/feed/useCommentsData';
 import { CommentSection } from '@/shared/components/CommentSection';
 import { CreatePostForm } from '@/shared/components/CreatePostForm';
 import { Feed } from '@/shared/components/Feed';
+import { GroupBroadcasts } from '@/shared/components/GroupBroadcasts';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
+import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
+import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import { GroupBroadcasts } from './components/GroupBroadcasts';
-import { TrendingHashtags } from './components/TrendingHashtags';
-import { UpcomingMatches } from './components/UpcomingMatches';
 import { useHomeFeedData } from './useHomeFeedData';
 
 // Callback-only entry points in this epic — the destinations (hashtag results,
