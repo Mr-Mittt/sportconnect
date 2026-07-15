@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import type { UpcomingMatch } from '../types';
+import type { UpcomingMatch } from '@/shared/types/rail';
 import { UpcomingMatches } from './UpcomingMatches';
 
 const sportsByKey: Record<SportKey, SportProfile> = {

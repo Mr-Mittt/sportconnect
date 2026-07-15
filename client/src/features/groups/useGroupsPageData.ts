@@ -10,13 +10,20 @@ import { useUnlikePost } from '@/features/feed/hooks/useUnlikePost';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { SPORT_ID_BY_KEY } from '@/features/feed/sportIdMap';
 import type { Group, Post } from '@/features/feed/types';
+import { useGroupBroadcasts } from '@/shared/hooks/useGroupBroadcasts';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
+import { useTrendingHashtags } from '@/shared/hooks/useTrendingHashtags';
+import { useUpcomingMatches } from '@/shared/hooks/useUpcomingMatches';
 import type { SportProfile } from '@/shared/types/sport';
+import type { GroupBroadcast, TrendingHashtag, UpcomingMatch } from '@/shared/types/rail';
 
 export interface GroupsPageData {
   sportProfiles: SportProfile[];
   groups: Group[];
   posts: Post[];
+  upcomingMatches: UpcomingMatch[];
+  hashtags: TrendingHashtag[];
+  broadcasts: GroupBroadcast[];
 }
 
 /**
@@ -38,6 +45,10 @@ export interface GroupsPageData {
  * createPost is a no-op on "All" (selectedGroupId null) — there is no
  * single group to attribute a new post to there; GroupsPage hides the
  * composer in that state so this is a safety net, not the primary guard.
+ *
+ * `upcomingMatches`/`hashtags`/`broadcasts` (FEED-5) mirror Home Feed's right
+ * rail exactly, same mock-backed hooks — the Groups page reuses the same
+ * rail content, not a group-scoped variant.
  */
 export function useGroupsPageData(): {
   data: GroupsPageData;
@@ -60,6 +71,9 @@ export function useGroupsPageData(): {
   const selectGroup = useFeedSpaceStore((state) => state.selectGroup);
 
   const sportProfilesQuery = useSportProfiles();
+  const upcomingMatchesQuery = useUpcomingMatches();
+  const trendingHashtagsQuery = useTrendingHashtags();
+  const groupBroadcastsQuery = useGroupBroadcasts();
   const groupsQuery = useUserGroups(currentUserId);
   const groups = useMemo(() => {
     const allGroups = groupsQuery.data?.content ?? [];
@@ -113,7 +127,14 @@ export function useGroupsPageData(): {
   );
 
   return {
-    data: { sportProfiles: sportProfilesQuery.data, groups, posts },
+    data: {
+      sportProfiles: sportProfilesQuery.data,
+      groups,
+      posts,
+      upcomingMatches: upcomingMatchesQuery.data,
+      hashtags: trendingHashtagsQuery.data,
+      broadcasts: groupBroadcastsQuery.data,
+    },
     selectedGroupId,
     selectGroup,
     isLoading: activeFeedQuery.isLoading,

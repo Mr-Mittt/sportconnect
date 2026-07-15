@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { GroupBroadcast } from '../types';
+import type { GroupBroadcast } from '@/shared/types/rail';
 import { GroupBroadcasts } from './GroupBroadcasts';
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000).toISOString();
@@ -26,7 +26,7 @@ const broadcasts: GroupBroadcast[] = [
 ];
 
 const meta = {
-  title: 'HomeFeed/GroupBroadcasts',
+  title: 'Shared/GroupBroadcasts',
   component: GroupBroadcasts,
   args: { onBroadcastClick: () => {} },
   // Constrain to the right rail's width so stories match the page context

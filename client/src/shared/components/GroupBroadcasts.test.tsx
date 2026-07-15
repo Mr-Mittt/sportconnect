@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { GroupBroadcast } from '../types';
+import type { GroupBroadcast } from '@/shared/types/rail';
 import { GroupBroadcasts } from './GroupBroadcasts';
 
 const makeBroadcast = (id: string, groupName: string, text: string): GroupBroadcast => ({

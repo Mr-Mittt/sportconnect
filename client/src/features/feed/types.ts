@@ -129,6 +129,68 @@ export interface GroupMember {
   joinedAt: string; // ISO timestamp
 }
 
+// GroupSearchResponse (GET /api/groups/public) — a lighter projection than
+// Group/GroupResponse, purpose-built for browsing/searching public groups
+// before joining. isMember lets the UI skip a "Request to join" action for
+// a group the user already belongs to.
+export interface GroupSearchResult {
+  id: number;
+  sportId: number;
+  groupName: string;
+  description: string | null;
+  avatarUrl: string | null;
+  memberCount: number;
+  createdByFullName: string;
+  isMember: boolean;
+}
+
+// JoinRequestResponse. status is a plain string on the wire (verified
+// against GroupServiceImpl), not a Java enum — exactly these 3 lowercase
+// literals.
+export type JoinRequestStatus = 'pending' | 'accepted' | 'declined';
+
+export interface JoinRequest {
+  id: number;
+  groupId: number;
+  groupName: string;
+  userId: string;
+  userFullName: string;
+  userAvatarUrl: string | null;
+  status: JoinRequestStatus;
+  message: string | null;
+  reviewedBy: string | null;
+  reviewedByFullName: string | null;
+  reviewedAt: string | null; // ISO timestamp
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+}
+
+// CreateGroupRequest. sportId/groupName are the only server-required
+// fields (@NotNull/@NotBlank) — isPrivate has no required-validation
+// annotation but is still sent explicitly (defaults to false client-side)
+// since the DTO gives no visible server-default guarantee.
+export interface CreateGroupPayload {
+  sportId: number;
+  groupName: string;
+  description?: string;
+  isPrivate: boolean;
+}
+
+// CreateJoinRequestRequest — looked up by group NAME server-side
+// (GroupServiceImpl.findByGroupName), not id; there is no groupId field on
+// this request at all.
+export interface JoinRequestPayload {
+  groupName: string;
+  message?: string;
+}
+
+// CreateGroupRequest.groupName's real server-side @Size(3, 100).
+export const MIN_GROUP_NAME_LENGTH = 3;
+export const MAX_GROUP_NAME_LENGTH = 100;
+
+// CreateGroupRequest.description's real server-side @Size(max = 5000).
+export const MAX_GROUP_DESCRIPTION_LENGTH = 5000;
+
 export interface CreatePostPayload {
   content: string;
   latitude?: number;

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { TrendingHashtag } from '../types';
+import type { TrendingHashtag } from '@/shared/types/rail';
 import { TrendingHashtags } from './TrendingHashtags';
 
 const hashtags: TrendingHashtag[] = [
@@ -10,7 +10,7 @@ const hashtags: TrendingHashtag[] = [
 ];
 
 const meta = {
-  title: 'HomeFeed/TrendingHashtags',
+  title: 'Shared/TrendingHashtags',
   component: TrendingHashtags,
   args: { onHashtagClick: () => {} },
   // Constrain to the right rail's width so stories match the page context

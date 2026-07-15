@@ -1,7 +1,7 @@
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
 import { cn } from '@/shared/lib/utils';
-import type { GroupBroadcast } from '../types';
+import type { GroupBroadcast } from '@/shared/types/rail';
 
 interface GroupBroadcastsProps {
   broadcasts: GroupBroadcast[];

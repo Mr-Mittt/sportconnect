@@ -5,7 +5,7 @@ import { getSportIcon } from '@/shared/lib/sportIcons';
 import { formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import type { UpcomingMatch } from '../types';
+import type { UpcomingMatch } from '@/shared/types/rail';
 
 interface UpcomingMatchesProps {
   matches: UpcomingMatch[];

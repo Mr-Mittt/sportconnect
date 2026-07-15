@@ -1,6 +1,14 @@
 import type { Page } from '@playwright/test';
 import type { User } from '../../src/features/auth/types.ts';
-import type { Comment, Group, Hashtag, PageResponse, Post } from '../../src/features/feed/types.ts';
+import type {
+  Comment,
+  Group,
+  GroupSearchResult,
+  Hashtag,
+  JoinRequest,
+  PageResponse,
+  Post,
+} from '../../src/features/feed/types.ts';
 
 // Reused across AUTH-8 and FEED-10 rather than each test inventing its own
 // ad-hoc response shapes (per MSW-0's acceptance criteria).
@@ -127,6 +135,36 @@ export const mockHashtag: Hashtag = {
   id: 1,
   tag: 'fridayrun', // no leading '#' — see mockPost.hashtags' note above
   usageCount: 12,
+};
+
+// FEED-5 fixtures: a public group the test user has NOT joined yet
+// (distinct sportId from mockGroup so sport-filtered search has something
+// real to filter), for exercising the "Request to join" flow.
+export const mockPublicGroup: GroupSearchResult = {
+  id: 2,
+  sportId: 6, // Basketball, same id as mockBasketballPost
+  groupName: 'Riverside Hoopers',
+  description: 'Pickup games every weekend.',
+  avatarUrl: null,
+  memberCount: 8,
+  createdByFullName: 'Priya Shah',
+  isMember: false,
+};
+
+export const mockJoinRequest: JoinRequest = {
+  id: 1,
+  groupId: mockPublicGroup.id,
+  groupName: mockPublicGroup.groupName,
+  userId: mockUser.id,
+  userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  userAvatarUrl: null,
+  status: 'pending',
+  message: null,
+  reviewedBy: null,
+  reviewedByFullName: null,
+  reviewedAt: null,
+  createdAt: '2026-07-15T00:00:00',
+  updatedAt: '2026-07-15T00:00:00',
 };
 
 // FEED-2 comment fixtures. mockComment is mockPost's one existing comment

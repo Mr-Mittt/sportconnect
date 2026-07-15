@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import type { UpcomingMatch } from '../types';
+import type { UpcomingMatch } from '@/shared/types/rail';
 import { UpcomingMatches } from './UpcomingMatches';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
@@ -53,7 +53,7 @@ const manyFootballMatches: UpcomingMatch[] = Array.from({ length: 6 }, (_, i) =>
 }));
 
 const meta = {
-  title: 'HomeFeed/UpcomingMatches',
+  title: 'Shared/UpcomingMatches',
   component: UpcomingMatches,
   args: { sportsByKey, onSeeAll: () => {}, onSelectMatch: () => {} },
   // Constrain to the right rail's width so stories match the page context

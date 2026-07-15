@@ -94,7 +94,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 27 | FEED-2 | CommentSection (real) | `DONE` |
 | 28 | FEED-3 | CreatePostForm (real) | `DONE` |
 | 29 | FEED-4 | Group switching (real groups list) | `DONE` |
-| 30 | FEED-5 | CreateGroupModal + JoinGroupModal (real) | `TODO` |
+| 30 | FEED-5 | CreateGroupModal + JoinGroupModal (real) | `DONE` |
 | 31 | FEED-6 | TrendingHashtags (real) — de-mocks HF-5 | `TODO` |
 | 32 | FEED-7 | GroupBroadcasts (real) — de-mocks HF-6 | `TODO` |
 | 33 | SPORT-1 | Sport switcher (real) — de-mocks HF-2, **new ticket, not in the epics** | `TODO` |
@@ -979,7 +979,21 @@ composer on "All". `Feed`/`PostCard`/`CreatePostForm`/`CommentSection`/`CommentI
   `GROUP_POST`s (no aggregate "all my groups" backend endpoint exists) — swap this if one ever ships.
 
 ### FEED-5 · CreateGroupModal + JoinGroupModal (real)
-**Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-4 · **Spec:** AUTH/FEED epic § FEED-5
+**Status:** `DONE` (2026-07-15) · **Type:** Integration · **Dependency:** FEED-4 · **Spec:** AUTH/FEED
+epic § FEED-5 · **Summary:** `client/docs/FEED-5_GROUP_CREATE_JOIN_MODALS.md`
+
+Joining is by group **name**, not id (`CreateJoinRequestRequest` has no `groupId` field) —
+`JoinGroupModal` searches `GET /api/groups/public` rather than taking a raw name.
+
+**Delta (2026-07-15, mid-ticket scope addition — user decision):** the Groups page's right rail
+(UpcomingMatches → TrendingHashtags → GroupBroadcasts) now matches Home Feed's exactly.
+`GroupSpaceSwitcher`'s zero-groups buttons restyled to match `SportSwitcher`'s dashed "Add sport"
+pill (search/plus icons); the same icons were added to the "..." dropdown's menu items too.
+
+**Delta for FEED-6/FEED-7:** the rail hooks you're de-mocking now live in `shared/hooks/`
+(`useTrendingHashtags.ts`, `useGroupBroadcasts.ts`), not `home-feed/` — `home-feed/mockData.ts` was
+deleted (everything in it had moved out, across FEED-4 and this ticket). Swap the internals of these
+shared hooks; neither Home Feed nor the Groups page needs to change as a consumer.
 
 ### FEED-6 · TrendingHashtags (real)
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0, HF-5 · **Spec:** AUTH/FEED epic § FEED-6
@@ -990,7 +1004,9 @@ Pure data-source swap behind HF-5's component; hashtag click routes to `usePosts
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0, HF-6 · **Spec:** AUTH/FEED epic § FEED-7
 
 De-mocks HF-6 via `useActiveBroadcasts()`; adds owner/admin-only "create broadcast" action
-(`postType: GROUP_BROADCAST`, server defaults expiry to +24h).
+(`postType: GROUP_BROADCAST`, server defaults expiry to +24h). The backend also has
+`PUT /groups/join-requests/{id}/accept|decline` (owner/admin) available if a future ticket wants
+to build the reviewer-side UI — not needed by FEED-5's requester-side scope.
 
 ### SPORT-1 · Sport switcher (real) — new ticket, not in either epic
 **Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0 (hook conventions), HF-2, AUTH phase

@@ -157,7 +157,7 @@ describe('App routing', () => {
                 {
                   id: 1,
                   sportId: 5,
-                  groupName: 'Riverside Ballers',
+                  groupName: 'Downtown Strikers',
                   description: null,
                   avatarUrl: null,
                   coverUrl: null,
@@ -209,7 +209,7 @@ describe('App routing', () => {
 
     await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole('group', { name: 'Group filter' })).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /Riverside Ballers/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Downtown Strikers/ })).toBeInTheDocument();
     // "All" is selected by default — no single group to post into yet.
     expect(screen.queryByLabelText('Create a post')).not.toBeInTheDocument();
   });
@@ -227,7 +227,7 @@ describe('App routing', () => {
                 {
                   id: 1,
                   sportId: 5,
-                  groupName: 'Riverside Ballers',
+                  groupName: 'Downtown Strikers',
                   description: null,
                   avatarUrl: null,
                   coverUrl: null,
@@ -279,9 +279,9 @@ describe('App routing', () => {
     renderApp(['/groups']);
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Riverside Ballers/ })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /Downtown Strikers/ })).toBeInTheDocument(),
     );
-    await user.click(screen.getByRole('button', { name: /Riverside Ballers/ }));
+    await user.click(screen.getByRole('button', { name: /Downtown Strikers/ }));
 
     await waitFor(() => expect(screen.getByLabelText('Create a post')).toBeInTheDocument());
   });

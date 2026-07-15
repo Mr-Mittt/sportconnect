@@ -1,8 +1,7 @@
-import { IconDots } from '@tabler/icons-react';
+import { IconDots, IconPlus, IconSearch } from '@tabler/icons-react';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import { Button } from '@/shared/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,6 +68,28 @@ function Pill({ label, isActive, onClick, badgeClassName, badgeContent }: PillPr
   );
 }
 
+interface DashedPillButtonProps {
+  label: string;
+  Icon: typeof IconPlus;
+  onClick: () => void;
+}
+
+/** Same dashed "Add sport" pill style (SportSwitcher) — reused here (user
+ * decision, FEED-5) so the zero-groups Join/Create actions read as the same
+ * kind of affordance as adding a sport, not a generic button pair. */
+function DashedPillButton({ label, Icon, onClick }: DashedPillButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="border-hairline flex cursor-pointer items-center gap-1.5 rounded-full border-dashed border-border-strong px-3 py-1.75 text-2sm text-text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
+    >
+      <Icon className="size-4" aria-hidden="true" />
+      {label}
+    </button>
+  );
+}
+
 /**
  * Groups page's space switcher (FEED-4) — "All" plus one pill per joined
  * group for the active sport (groups are 1:1 with a sport, so this list is
@@ -79,10 +100,12 @@ function Pill({ label, isActive, onClick, badgeClassName, badgeContent }: PillPr
  *
  * Join/Create are always available, but collapse based on membership (user
  * decision): zero joined groups for this sport renders them as prominent
- * buttons (there's nothing else to show); one or more renders the pill row
- * and tucks both actions into a right-aligned "..." menu instead, since
- * they're secondary once the user already has groups to switch between.
- * Both remain no-ops until FEED-5 wires the real modals.
+ * dashed pills — same style as SportSwitcher's "Add sport" pill (FEED-5 user
+ * decision), search/plus icons matching the modal each one opens; one or
+ * more renders the pill row and tucks both actions into a right-aligned
+ * "..." menu instead (same icons, plain menu-item styling), since they're
+ * secondary once the user already has groups to switch between. Both open
+ * the real CreateGroupModal/JoinGroupModal (FEED-5) via the callbacks below.
  */
 export function GroupSpaceSwitcher({
   groups,
@@ -114,14 +137,10 @@ export function GroupSpaceSwitcher({
       })}
 
       {!hasGroups && (
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onJoinGroup}>
-            Join Group
-          </Button>
-          <Button variant="outline" size="sm" onClick={onCreateGroup}>
-            Create Group
-          </Button>
-        </div>
+        <>
+          <DashedPillButton label="Join Group" Icon={IconSearch} onClick={onJoinGroup} />
+          <DashedPillButton label="Create Group" Icon={IconPlus} onClick={onCreateGroup} />
+        </>
       )}
 
       {hasGroups && (
@@ -136,8 +155,14 @@ export function GroupSpaceSwitcher({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem onSelect={onJoinGroup}>Join Group</DropdownMenuItem>
-            <DropdownMenuItem onSelect={onCreateGroup}>Create Group</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onJoinGroup}>
+              <IconSearch className="size-4" aria-hidden="true" />
+              Join Group
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onCreateGroup}>
+              <IconPlus className="size-4" aria-hidden="true" />
+              Create Group
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}

@@ -765,6 +765,31 @@ Playwright script (not committed): confirmed all 5 requested states — both swi
 nonzero-groups button/menu collapse, composer show/hide on group selection, and sport-switch reset —
 via screenshots and `aria-pressed` assertions.
 
+**FEED-5 DONE** (2026-07-15, `client/docs/FEED-5_GROUP_CREATE_JOIN_MODALS.md`): wired real group
+creation (`POST /api/groups`) and join requests (`POST /api/groups/join-requests`) into FEED-4's
+`GroupSpaceSwitcher` entry points. Joining is by group **name**, not id (`CreateJoinRequestRequest`
+has no `groupId` field), so `JoinGroupModal` searches/browses `GET /api/groups/public` rather than
+taking a raw name. Mid-ticket scope addition (user decision): the Groups page's right rail now
+matches Home Feed's exactly — required relocating `UpcomingMatch`/`TrendingHashtag`/`GroupBroadcast`
+(types, mock hooks, and their components) from `home-feed/` to `shared/` the same way FEED-4 already
+relocated `sportProfiles`, and deleting the now-empty `home-feed/mockData.ts`. `GroupSpaceSwitcher`'s
+zero-groups buttons restyled to match `SportSwitcher`'s dashed "Add sport" pill, with search/plus
+icons also added to the "..." dropdown's menu items. Mid-implementation refactor: the modals
+initially called their data hooks directly, which broke Storybook testability and this project's
+"presentational and controlled" component convention — refactored to presentational components fed
+by `GroupsPage` (new `useJoinGroupModalData.ts` mirrors `useCommentsData`'s role for the join
+search/mutation state); both modals reset their fields via a changing `key` prop on open rather than
+an effect calling `setState` (React's own `react-hooks/set-state-in-effect` guidance). New MSW
+`groups.ts` handler file (first ticket needing new group endpoints) is stateful, and moved
+`GET /groups/user/:userId` out of `feed.ts` into it — that handler was static before, which would
+have clobbered `useCreateGroup`'s optimistic cache write on the mutation's background refetch.
+`tsc -b`/`eslint` clean, `pnpm test` 60/60 files (268/268 tests, up from 51/232 at FEED-4). Live-
+verified in a real browser (temporary Playwright script, not committed): rail parity, menu/button
+icons, created a group (appeared instantly, ramp-colored, auto-selected, composer shown), searched
+and requested to join a group (row flipped to "Pending" in place). Caught and fixed one real bug
+during that verification: `usePublicGroups` had no `enabled` gate, so the join modal's hook kept
+fetching in the background even while closed.
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow
