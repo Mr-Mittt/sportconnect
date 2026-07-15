@@ -35,6 +35,7 @@ describe('CommentItem', () => {
         onDelete={noop}
         onReply={noop}
         isSubmittingReply={false}
+        onHashtagClick={noop}
       />,
     );
     expect(screen.getByText('Marcus Lee')).toBeInTheDocument();
@@ -55,6 +56,7 @@ describe('CommentItem', () => {
         onDelete={noop}
         onReply={noop}
         isSubmittingReply={false}
+        onHashtagClick={noop}
       />,
     );
     const likeButton = screen.getByRole('button', { name: 'Like comment' });
@@ -72,6 +74,7 @@ describe('CommentItem', () => {
         onDelete={noop}
         onReply={noop}
         isSubmittingReply={false}
+        onHashtagClick={noop}
       />,
     );
     expect(screen.queryByRole('button', { name: 'Delete comment' })).not.toBeInTheDocument();
@@ -84,6 +87,7 @@ describe('CommentItem', () => {
         onDelete={noop}
         onReply={noop}
         isSubmittingReply={false}
+        onHashtagClick={noop}
       />,
     );
     expect(screen.getByRole('button', { name: 'Delete comment' })).toBeInTheDocument();
@@ -101,6 +105,7 @@ describe('CommentItem', () => {
         onDelete={onDelete}
         onReply={noop}
         isSubmittingReply={false}
+        onHashtagClick={noop}
       />,
     );
     await user.click(screen.getByRole('button', { name: 'Delete comment' }));
@@ -118,6 +123,7 @@ describe('CommentItem', () => {
         onDelete={noop}
         onReply={onReply}
         isSubmittingReply={false}
+        onHashtagClick={noop}
       />,
     );
     await user.click(screen.getByRole('button', { name: 'Reply' }));
@@ -136,6 +142,7 @@ describe('CommentItem', () => {
         onDelete={noop}
         onReply={noop}
         isSubmittingReply={false}
+        onHashtagClick={noop}
       />,
     );
     expect(screen.queryByRole('button', { name: 'Reply' })).not.toBeInTheDocument();
@@ -156,11 +163,59 @@ describe('CommentItem', () => {
         onDelete={noop}
         onReply={noop}
         isSubmittingReply={false}
+        onHashtagClick={noop}
       />,
     );
     expect(screen.getByText('Priya Shah')).toBeInTheDocument();
     expect(screen.getByText('Agreed!')).toBeInTheDocument();
     // Only the root comment gets a Reply button, not its nested reply.
     expect(screen.getAllByRole('button', { name: 'Reply' })).toHaveLength(1);
+  });
+
+  it('renders a hashtag inside comment content as a clickable button', async () => {
+    const user = userEvent.setup();
+    const onHashtagClick = vi.fn();
+    render(
+      <CommentItem
+        comment={makeComment({ content: 'Same time next week? #fridayrun' })}
+        currentUserId="someone-else"
+        onToggleLike={noop}
+        onDelete={noop}
+        onReply={noop}
+        isSubmittingReply={false}
+        onHashtagClick={onHashtagClick}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '#fridayrun' }));
+    expect(onHashtagClick).toHaveBeenCalledWith('#fridayrun');
+  });
+
+  it('passes onHashtagClick down to nested replies too', async () => {
+    const user = userEvent.setup();
+    const onHashtagClick = vi.fn();
+    const comment = makeComment({
+      id: 1,
+      replies: [
+        makeComment({
+          id: 2,
+          userFullName: 'Priya Shah',
+          parentCommentId: 1,
+          content: 'Same tag: #fridayrun',
+        }),
+      ],
+    });
+    render(
+      <CommentItem
+        comment={comment}
+        currentUserId="someone-else"
+        onToggleLike={noop}
+        onDelete={noop}
+        onReply={noop}
+        isSubmittingReply={false}
+        onHashtagClick={onHashtagClick}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '#fridayrun' }));
+    expect(onHashtagClick).toHaveBeenCalledWith('#fridayrun');
   });
 });

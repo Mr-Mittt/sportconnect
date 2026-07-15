@@ -110,9 +110,24 @@ const sportProfiles = [
   },
 ];
 
+// FEED-6: one trending hashtag, so every test's mockGet can handle it
+// without special-casing (useGroupsPageData mounts useTrendingHashtags too).
+const trendingHashtagsPage = {
+  content: [{ id: 1, tag: 'fridayrun', usageCount: 128 }],
+  totalPages: 1,
+  totalElements: 1,
+  number: 0,
+  size: 10,
+  first: true,
+  last: true,
+  numberOfElements: 1,
+  empty: false,
+};
+
 function mockGet(handlers: Record<string, unknown>) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
     if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+    if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
     if (url in handlers) return apiResponse(handlers[url]);
     throw new Error(`unexpected GET ${url}`);
   });

@@ -4,11 +4,13 @@ import { useFeedSpaceStore } from '@/app/feedSpaceStore';
 import { useCreateGroup } from '@/features/feed/hooks/useCreateGroup';
 import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
+import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { AddSportModal } from '@/shared/components/AddSportModal';
 import { CommentSection } from '@/shared/components/CommentSection';
 import { CreatePostForm } from '@/shared/components/CreatePostForm';
 import { Feed } from '@/shared/components/Feed';
 import { GroupBroadcasts } from '@/shared/components/GroupBroadcasts';
+import { HashtagPostsModal } from '@/shared/components/HashtagPostsModal';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
@@ -23,6 +25,7 @@ import { useJoinGroupModalData } from './useJoinGroupModalData';
 
 // Callback-only entry points with no destination yet — same "affordance
 // exists, destination doesn't yet" pattern as HF-3/HF-4/HF-7's other no-ops.
+// Hashtag click-through is real now (FEED-6, via HashtagPostsModal).
 const noop = () => {};
 
 /**
@@ -40,13 +43,29 @@ const noop = () => {};
  * specific group is selected — "All" has no single group to post into.
  *
  * The right rail (UpcomingMatches → TrendingHashtags → GroupBroadcasts, FEED-5
- * user decision) is identical to Home Feed's — same shared components, same
- * mock-backed hooks, not a group-scoped variant.
+ * user decision) is identical to Home Feed's — same shared components and
+ * hooks, not a group-scoped variant. Hashtags are real now (FEED-6);
+ * upcomingMatches/broadcasts stay mock until a matches backend/FEED-7 lands.
+ *
+ * Hashtag click-through opens `HashtagPostsModal` via page-local
+ * `activeHashtag` state, same pattern as `HomeFeedPage` — clicking a post's
+ * comment icon while it's open closes it first and opens `CommentSection`.
  */
 export function GroupsPage() {
   const activeSport = useFeedSpaceStore((state) => state.activeSport);
   const setActiveSport = useFeedSpaceStore((state) => state.setActiveSport);
   const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
+  // Which hashtag's results modal is open — same page-local UI-state
+  // reasoning as activeCommentsPostId (FEED-6). Split into two pieces
+  // deliberately: `activeHashtag` also drives useHashtagResultsData's query
+  // and must stay set (so its cached posts survive) even while the modal is
+  // visually hidden mid-transition to CommentSection — only `isHashtagModalOpen`
+  // controls the Dialog's actual visibility. Clearing `activeHashtag` too
+  // (i.e. tearing down the query) at the same time as opening comments would
+  // make activeCommentsPost's hashtag-cache fallback below see an empty list
+  // in that same render (a real bug this shape avoids).
+  const [activeHashtag, setActiveHashtag] = useState<string | null>(null);
+  const [isHashtagModalOpen, setIsHashtagModalOpen] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [isJoinGroupOpen, setIsJoinGroupOpen] = useState(false);
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
@@ -78,6 +97,7 @@ export function GroupsPage() {
     activeCommentsPostId ?? -1,
     activeCommentsPostId !== null,
   );
+  const hashtagResultsData = useHashtagResultsData(activeHashtag, activeHashtag !== null);
   const createGroupMutation = useCreateGroup(currentUserId);
   const addSportMutation = useAddSportProfile(currentUserId);
   const lockedSport = activeSport !== 'all' ? activeSport : null;
@@ -100,7 +120,12 @@ export function GroupsPage() {
     [data.sportProfiles],
   );
 
-  const activeCommentsPost = data.posts.find((post) => post.id === activeCommentsPostId) ?? null;
+  // Falls back to the hashtag-results cache (FEED-6) since a post opened from
+  // there may not be in the main feed's already-loaded pages.
+  const activeCommentsPost =
+    data.posts.find((post) => post.id === activeCommentsPostId) ??
+    hashtagResultsData.data.posts.find((post) => post.id === activeCommentsPostId) ??
+    null;
   const activeCommentsPostSportKey =
     activeCommentsPost !== null ? sportKeyForId(activeCommentsPost.sportId) : undefined;
   const activeCommentsPostSport =
@@ -151,7 +176,10 @@ export function GroupsPage() {
             sportsByKey={sportsByKey}
             currentUserId={currentUserId}
             onToggleLike={toggleLike}
-            onHashtagClick={noop}
+            onHashtagClick={(tag) => {
+              setActiveHashtag(tag);
+              setIsHashtagModalOpen(true);
+            }}
             onDeletePost={deletePost}
             onOpenComments={setActiveCommentsPostId}
             hasMorePosts={hasMorePosts}
@@ -169,7 +197,13 @@ export function GroupsPage() {
             onSeeAll={noop}
             onSelectMatch={noop}
           />
-          <TrendingHashtags hashtags={data.hashtags} onHashtagClick={noop} />
+          <TrendingHashtags
+            hashtags={data.hashtags}
+            onHashtagClick={(tag) => {
+              setActiveHashtag(tag);
+              setIsHashtagModalOpen(true);
+            }}
+          />
           <GroupBroadcasts broadcasts={data.broadcasts} onBroadcastClick={noop} />
         </div>
       </div>
@@ -191,6 +225,25 @@ export function GroupsPage() {
         isPosting={commentsData.isPosting}
         onDeleteComment={commentsData.deleteComment}
         onToggleCommentLike={commentsData.toggleCommentLike}
+        onTogglePostLike={(postId) => {
+          // The active post may have come from the main feed/group cache or
+          // the hashtag-results cache (see activeCommentsPost's fallback
+          // above) — route the like to whichever hook's `posts` array
+          // actually contains it, so exactly one like/unlike mutation fires.
+          if (data.posts.some((candidate) => candidate.id === postId)) {
+            toggleLike(postId);
+          } else {
+            hashtagResultsData.toggleLike(postId);
+          }
+        }}
+        onHashtagClick={(tag) => {
+          // Symmetric with HashtagPostsModal's own "close first" behavior —
+          // close the comment dialog before opening the hashtag modal,
+          // rather than stacking two dialogs.
+          setActiveCommentsPostId(null);
+          setActiveHashtag(tag);
+          setIsHashtagModalOpen(true);
+        }}
       />
       <CreateGroupModal
         key={createGroupOpenCount}
@@ -233,6 +286,32 @@ export function GroupsPage() {
         onSubmit={(payload) =>
           addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
         }
+      />
+      <HashtagPostsModal
+        isOpen={isHashtagModalOpen}
+        onClose={() => {
+          setIsHashtagModalOpen(false);
+          setActiveHashtag(null);
+        }}
+        tag={activeHashtag}
+        posts={hashtagResultsData.data.posts}
+        sportsByKey={sportsByKey}
+        currentUserId={hashtagResultsData.currentUserId}
+        onToggleLike={hashtagResultsData.toggleLike}
+        onHashtagClick={(tag) => setActiveHashtag(tag)}
+        onDeletePost={hashtagResultsData.deletePost}
+        onOpenComments={(postId) => {
+          // Hide the modal but keep `activeHashtag` set — see the state
+          // declaration's comment for why clearing it here would break
+          // activeCommentsPost's fallback lookup above.
+          setIsHashtagModalOpen(false);
+          setActiveCommentsPostId(postId);
+        }}
+        hasMorePosts={hashtagResultsData.hasMorePosts}
+        isFetchingMorePosts={hashtagResultsData.isFetchingMorePosts}
+        onLoadMore={hashtagResultsData.fetchMorePosts}
+        isLoading={hashtagResultsData.isLoading}
+        isError={hashtagResultsData.isError}
       />
     </main>
   );

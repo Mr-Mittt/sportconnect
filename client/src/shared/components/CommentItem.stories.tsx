@@ -29,6 +29,7 @@ const meta = {
     onReply: () => {},
     isSubmittingReply: false,
     currentUserId: 'someone-else',
+    onHashtagClick: () => {},
   },
 } satisfies Meta<typeof CommentItem>;
 
@@ -49,6 +50,10 @@ export const WithAvatarImage: Story = {
 
 export const OwnCommentShowsDelete: Story = {
   args: { comment: baseComment, currentUserId: 'user-marcus' },
+};
+
+export const WithHashtag: Story = {
+  args: { comment: { ...baseComment, content: 'Same time next week? #fridayrun' } },
 };
 
 export const ReplyRow: Story = {

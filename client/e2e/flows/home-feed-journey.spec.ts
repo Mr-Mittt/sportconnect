@@ -9,14 +9,16 @@ import { expect, test } from '../mocks/test.ts';
  * owned by a friend "Priya Shah" (basketball, sportId 6)). SportSwitcher is
  * real now too (SPORT-1, via e2e/mocks/handlers/sport.ts's mockSportProfiles
  * fixture — Jordan Lee at the 3-sport cap: football/basketball/tennis).
- * Trending/broadcasts stay mock-driven (FEED-6/FEED-7 haven't shipped) —
- * unaffected by this rewrite. Auto-waiting assertions only; no sleeps.
+ * Trending hashtags are real now too (FEED-6, via feed.ts's
+ * `GET /api/hashtags/trending` handler — a single `mockHashtag`, `fridayrun`).
+ * Broadcasts stay mock-driven (FEED-7 hasn't shipped) — unaffected by this
+ * rewrite. Auto-waiting assertions only; no sleeps.
  *
  * Premise corrections vs the epic's literal steps (user-approved; see the
- * backlog entry's deltas): hashtag and match-CTA callbacks are deliberate
- * no-ops until FEED-6/FEED-1 land, so steps 5–6 assert reachability and
- * distinct states rather than a fabricated side effect; the fixture user is
- * AT the 3-sport cap, so step 7 asserts HF-2's at-cap behavior (aria-disabled).
+ * backlog entry's deltas): the match-CTA callback is still a deliberate no-op
+ * until a matches backend exists, so step 6 asserts reachability and distinct
+ * states rather than a fabricated side effect; the fixture user is AT the
+ * 3-sport cap, so step 7 asserts HF-2's at-cap behavior (aria-disabled).
  *
  * AUTH-4 update: Home Feed now sits behind ProtectedRoute — step 1 seeds an
  * authenticated session (MSW-backed) instead of a bare page.goto('/').
@@ -25,12 +27,15 @@ import { expect, test } from '../mocks/test.ts';
  * handlers (previously mock-internal, per this file's own former note).
  * Step 8 is new — the delete menu FEED-1 added (no equivalent in the
  * original HF-11 spec, which predates PostCard having any ownership
- * concept). Step 5 (hashtag click) and step 6 (match CTA) are still no-ops;
- * step 5's fixture hashtag needs updating (was FEED-6's job in the original
- * MSW upgrade map for hashtag-filtered *results*, but the hashtag rendered
- * on the first post is still real content, just from a different fixture
- * now) — step 5 needs FEED-6 for the *destination*, not for rendering the
- * clickable tag itself, which already works.
+ * concept).
+ *
+ * FEED-6 update: step 5 (hashtag click) now asserts the real destination — a
+ * modal (`HashtagPostsModal`, user decision — no route) listing the real
+ * MSW-backed posts tagged `fridayrun` (mockPost + mockGroupPost, both real
+ * fixtures), reachable from both a post's inline tag and the trending card's
+ * row. Trending now has exactly 1 row (the real `mockHashtag` fixture),
+ * replacing the old mock array's 4 — step 1/2's trending-count assertions
+ * are updated accordingly.
  */
 
 test('Home Feed journey', async ({ page }) => {
@@ -46,7 +51,7 @@ test('Home Feed journey', async ({ page }) => {
     await expect(page.getByRole('group', { name: 'Sport filter' })).toBeVisible();
     await expect(page.getByRole('article')).toHaveCount(3);
     await expect(matchCtas).toHaveCount(3);
-    await expect(trending.getByRole('button')).toHaveCount(4);
+    await expect(trending.getByRole('button')).toHaveCount(1);
     await expect(broadcasts.getByRole('button')).toHaveCount(2);
   });
 
@@ -56,7 +61,7 @@ test('Home Feed journey', async ({ page }) => {
     await expect(page.getByRole('article')).toContainText('Priya Shah');
     await expect(matchCtas).toHaveCount(1);
     await expect(upcoming).toContainText('Sunday pickup run');
-    await expect(trending.getByRole('button')).toHaveCount(4);
+    await expect(trending.getByRole('button')).toHaveCount(1);
     await expect(broadcasts.getByRole('button')).toHaveCount(2);
   });
 
@@ -81,18 +86,30 @@ test('Home Feed journey', async ({ page }) => {
     await expect(reverted).toContainText('3');
   });
 
-  await test.step('5. hashtags — clickable in feed and trending, page stays intact (no-op today)', async () => {
+  await test.step('5. hashtags — clicking opens a modal with the real filtered posts', async () => {
     const postTag = page.getByRole('article').first().getByRole('button', { name: '#fridayrun' });
     await expect(postTag).toBeEnabled();
     await postTag.click();
 
-    const trendingTag = trending.getByRole('button', { name: /#tournament/ });
-    await expect(trendingTag).toBeEnabled();
-    await trendingTag.click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: '#fridayrun' })).toBeVisible();
+    // mockPost + mockGroupPost are both tagged 'fridayrun'; mockBasketballPost isn't.
+    await expect(dialog.getByRole('article')).toHaveCount(2);
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await expect(dialog).not.toBeVisible();
 
-    // No destination exists yet — the click must neither navigate nor break the page
+    // No navigation — the modal doesn't change the URL.
     await expect(page).toHaveURL('/');
     await expect(page.getByRole('article')).toHaveCount(3);
+
+    // Same destination, reached from the trending card's row instead.
+    const trendingTag = trending.getByRole('button', { name: /^#fridayrun/ });
+    await expect(trendingTag).toBeEnabled();
+    await trendingTag.click();
+    await expect(dialog.getByRole('heading', { name: '#fridayrun' })).toBeVisible();
+    await expect(dialog.getByRole('article')).toHaveCount(2);
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
   });
 
   await test.step('6. match CTAs — open and full variants both reachable and distinct', async () => {

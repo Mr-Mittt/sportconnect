@@ -53,4 +53,12 @@ describe('usePostsByHashtag', () => {
       params: { page: 0, size: 20 },
     });
   });
+
+  it('does not fetch while enabled is false (FEED-6: modal not open yet)', () => {
+    const spy = vi.spyOn(apiClient, 'get');
+
+    renderHook(() => usePostsByHashtag('fridayrun', false), { wrapper });
+
+    expect(spy).not.toHaveBeenCalled();
+  });
 });

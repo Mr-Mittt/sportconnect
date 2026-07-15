@@ -128,12 +128,12 @@ describe('PostCard', () => {
     expect(unlikeButton).toHaveTextContent('15');
   });
 
-  it('hashtags render with a # prefix and report the tag with # on click', async () => {
+  it('renders a hashtag inline within the content as a clickable button (not a separate row)', async () => {
     const user = userEvent.setup();
     const onHashtagClick = vi.fn();
     render(
       <PostCard
-        post={post}
+        post={{ ...post, content: 'Great 5-a-side session tonight. #fridayrun' }}
         sport={football}
         currentUserId="someone-else"
         onToggleLike={noop}
@@ -146,6 +146,21 @@ describe('PostCard', () => {
     expect(tag).toBeInTheDocument();
     await user.click(tag);
     expect(onHashtagClick).toHaveBeenCalledWith('#fridayrun');
+  });
+
+  it('renders content with no hashtags as plain text and no button', () => {
+    render(
+      <PostCard
+        post={post}
+        sport={football}
+        currentUserId="someone-else"
+        onToggleLike={noop}
+        onHashtagClick={noop}
+        onDeletePost={noop}
+        onOpenComments={noop}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /^#/ })).not.toBeInTheDocument();
   });
 
   it('comment button reports the post id (FEED-2 opens the comment dialog)', async () => {

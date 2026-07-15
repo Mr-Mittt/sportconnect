@@ -17,7 +17,7 @@ const basePost: Post = {
   userAvatarUrl: null,
   postType: 'USER_FEED',
   groupId: null,
-  content: 'Great 5-a-side session tonight, 3 wins in a row for the squad.',
+  content: 'Great 5-a-side session tonight, 3 wins in a row for the squad. #5aside #fridayrun',
   latitude: null,
   longitude: null,
   locationName: null,
@@ -79,7 +79,7 @@ export const LongTextManyTags: Story = {
     post: {
       ...basePost,
       content:
-        'Post-season wrap-up: we played fourteen matches, won nine, drew three, and only dropped two — a huge step up from last year. Massive thanks to everyone who showed up to trainings in the rain and organized the logistics week after week.',
+        'Post-season wrap-up: we played fourteen matches, won nine, drew three, and only dropped two — a huge step up from last year. #wrapup #season2026 #5aside #squadgoals Massive thanks to everyone who showed up to trainings in the rain and organized the logistics week after week. #training #thanks',
       hashtags: ['wrapup', 'season2026', '5aside', 'squadgoals', 'training', 'thanks'],
     },
     sport: football,

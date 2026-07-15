@@ -18,6 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
+import { HashtagText } from './HashtagText';
 
 interface PostCardProps {
   post: Post;
@@ -55,9 +56,13 @@ function initialsFor(fullName: string): string {
  * back to "Unknown User", same convention CommentServiceImpl already uses
  * server-side for a comparable gap.
  *
- * Hashtags are stored/received without a leading '#' (real backend
- * behavior, confirmed via HashtagServiceImpl's extraction regex) but
- * rendered/emitted WITH one, matching the existing HF-5/HF-6 hashtag-click
+ * Hashtags render inline within `post.content` itself (`HashtagText`) rather
+ * than as a separate row of chips repeating the same tags below the text —
+ * `post.hashtags` (the backend's structured extraction) isn't read here at
+ * all; `HashtagText` re-derives clickable spans directly from the content
+ * string via the same `#(\w+)` pattern the backend used to populate that
+ * array in the first place, so the two always agree for real data. Emitted
+ * WITH a leading '#', matching the existing HF-5/HF-6 hashtag-click
  * convention (`onHashtagClick('#tag')`).
  */
 export function PostCard({
@@ -121,22 +126,11 @@ export function PostCard({
         )}
       </div>
 
-      <p className="mb-2 text-sm leading-normal text-text-primary">{post.content}</p>
-
-      {post.hashtags.length > 0 && (
-        <div className="mb-2.5 flex flex-wrap gap-1.5">
-          {post.hashtags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => onHashtagClick(`#${tag}`)}
-              className="cursor-pointer rounded text-xs text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-            >
-              #{tag}
-            </button>
-          ))}
-        </div>
-      )}
+      <HashtagText
+        text={post.content}
+        onHashtagClick={onHashtagClick}
+        className="mb-2 text-sm leading-normal text-text-primary"
+      />
 
       <div className="border-hairline-t flex items-center gap-4 border-border pt-2">
         <button

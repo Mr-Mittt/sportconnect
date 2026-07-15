@@ -89,14 +89,29 @@ const sportProfiles = [
   },
 ];
 
+// FEED-6: one trending hashtag, so tests asserting
+// `data.hashtags.length` unchanged from before the real hook keep passing.
+const trendingHashtagsPage = {
+  content: [{ id: 1, tag: 'fridayrun', usageCount: 128 }],
+  totalPages: 1,
+  totalElements: 1,
+  number: 0,
+  size: 10,
+  first: true,
+  last: true,
+  numberOfElements: 1,
+  empty: false,
+};
+
 /**
- * Mocks GET /posts/feed with `feedPage`; GET /sports/profiles/user/{id} is
- * stubbed for every test (SPORT-1's hook fires alongside the feed query).
- * `/posts/feed` only resolves once, like the old bare `mockResolvedValueOnce`
- * did — several tests below rely on a mutation's background onSettled
- * invalidate *failing* to refetch so it doesn't clobber an optimistic cache
- * update (same reasoning as HomeFeedPage.test.tsx's stateful-fake-server
- * tests, just via "second call fails" instead of a stateful fixture here).
+ * Mocks GET /posts/feed with `feedPage`; GET /sports/profiles/user/{id} and
+ * GET /hashtags/trending are stubbed for every test (SPORT-1/FEED-6's real
+ * hooks fire alongside the feed query). `/posts/feed` only resolves once,
+ * like the old bare `mockResolvedValueOnce` did — several tests below rely
+ * on a mutation's background onSettled invalidate *failing* to refetch so it
+ * doesn't clobber an optimistic cache update (same reasoning as
+ * HomeFeedPage.test.tsx's stateful-fake-server tests, just via "second call
+ * fails" instead of a stateful fixture here).
  */
 function mockFeedAndSportProfiles(feedPage: PageResponse<Post>) {
   let feedCallCount = 0;
@@ -107,6 +122,7 @@ function mockFeedAndSportProfiles(feedPage: PageResponse<Post>) {
       return apiResponse(feedPage);
     }
     if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+    if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
     throw new Error(`unexpected GET ${url}`);
   });
 }

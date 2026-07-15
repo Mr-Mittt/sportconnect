@@ -101,8 +101,25 @@ const sportProfileFixtures = [5, 6, 2].map((sportId, index) => ({
   updatedAt: '2026-06-01T10:00:00',
 }));
 
-/** GET mock covering both queries HomeFeedPage mounts: /posts/feed (variable
- * per test) and /sports/profiles/user/user-1 (fixed — SPORT-1's real hook). */
+/** One trending hashtag (FEED-6's real GET /hashtags/trending), matching the
+ * old mock data's top row so existing `#fridayrun` assertions keep passing. */
+function trendingHashtagsPage() {
+  return {
+    content: [{ id: 1, tag: 'fridayrun', usageCount: 128 }],
+    totalPages: 1,
+    totalElements: 1,
+    number: 0,
+    size: 10,
+    first: true,
+    last: true,
+    numberOfElements: 1,
+    empty: false,
+  };
+}
+
+/** GET mock covering the queries HomeFeedPage mounts: /posts/feed (variable
+ * per test), /sports/profiles/user/user-1 (fixed — SPORT-1's real hook), and
+ * /hashtags/trending (fixed — FEED-6's real hook). */
 function mockFeedGet(posts: Post[]) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
     if (url === '/posts/feed') {
@@ -110,6 +127,9 @@ function mockFeedGet(posts: Post[]) {
     }
     if (url === '/sports/profiles/user/user-1') {
       return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
+    }
+    if (url === '/hashtags/trending') {
+      return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
     }
     throw new Error(`unexpected GET ${url}`);
   });
@@ -174,6 +194,9 @@ describe('HomeFeedPage', () => {
       if (url === '/sports/profiles/user/user-1') {
         return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
       }
+      if (url === '/hashtags/trending') {
+        return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
+      }
       throw new Error(`unexpected GET ${url}`);
     });
     vi.spyOn(apiClient, 'post').mockImplementation(async (url: string) => {
@@ -220,6 +243,9 @@ describe('HomeFeedPage', () => {
       if (url === '/sports/profiles/user/user-1') {
         return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
       }
+      if (url === '/hashtags/trending') {
+        return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
+      }
       throw new Error(`unexpected GET ${url}`);
     });
     vi.spyOn(apiClient, 'post').mockImplementation(async (_url: string, body?: unknown) => {
@@ -254,5 +280,101 @@ describe('HomeFeedPage', () => {
       'aria-disabled',
       'true',
     );
+  });
+
+  it('clicking a hashtag opens a modal with the real filtered results (FEED-6)', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/posts/feed') {
+        return { data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' } };
+      }
+      if (url === '/sports/profiles/user/user-1') {
+        return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
+      }
+      if (url === '/hashtags/trending') {
+        return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
+      }
+      if (url === '/posts/hashtag/fridayrun') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: feedPage([feedPosts[0]]),
+            timestamp: '',
+          },
+        };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    render(<HomeFeedPage />, { wrapper });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
+
+    await user.click(trendingCard().getByRole('button', { name: /^#fridayrun/ }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('heading', { name: '#fridayrun' })).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getAllByRole('article')).toHaveLength(1));
+    expect(within(dialog).getByText("Marcus Lee's post")).toBeInTheDocument();
+  });
+
+  it('opening comments from inside the hashtag modal closes it and opens CommentSection instead', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/posts/feed') {
+        return { data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' } };
+      }
+      if (url === '/sports/profiles/user/user-1') {
+        return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
+      }
+      if (url === '/hashtags/trending') {
+        return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
+      }
+      if (url === '/posts/hashtag/fridayrun') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: feedPage([feedPosts[0]]),
+            timestamp: '',
+          },
+        };
+      }
+      if (url.startsWith('/posts/') && url.endsWith('/comments')) {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: feedPage([]),
+            timestamp: '',
+          },
+        };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    render(<HomeFeedPage />, { wrapper });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
+
+    await user.click(trendingCard().getByRole('button', { name: /^#fridayrun/ }));
+    const hashtagDialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(within(hashtagDialog).getAllByRole('article')).toHaveLength(1));
+
+    await user.click(within(hashtagDialog).getByRole('button', { name: /view comments/i }));
+
+    // Same dialog role, different content — the hashtag modal closed and
+    // CommentSection opened in its place (user decision, not stacked).
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: '#fridayrun' })).not.toBeInTheDocument();
+    });
+    const commentsDialog = screen.getByRole('dialog');
+    // Regression check: CommentSection's post header/content only render
+    // when its `post` prop resolves to a real Post, not null — a post opened
+    // from the hashtag modal isn't necessarily in the main feed's cache, so
+    // this asserts the fallback lookup into hashtagResultsData actually
+    // found it (previously it didn't, because activeHashtag/its query was
+    // cleared in the same batched update that opened this dialog).
+    expect(within(commentsDialog).getByText('Marcus Lee')).toBeInTheDocument();
+    expect(within(commentsDialog).getByText("Marcus Lee's post")).toBeInTheDocument();
   });
 });

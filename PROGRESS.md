@@ -837,6 +837,54 @@ Groups page composer in a browser — confirmed `POST /api/posts` now returns `2
 `postType: GROUP_POST` (previously would have been `400`), and the post renders in the group feed
 immediately. Verification script was a temporary, uncommitted scratch file.
 
+**FEED-6 DONE** (2026-07-15, `client/docs/FEED-6_TRENDINGHASHTAGS_REAL.md`): de-mocked
+`shared/hooks/useTrendingHashtags.ts` against the real `GET /api/hashtags/trending`
+(FEED-0's `useTrendingHashtags`), mapping the backend's no-leading-`#` `Hashtag` shape to the
+client's `#`-prefixed `TrendingHashtag` convention. The click-through destination (unscoped by the
+epic — no mockup covers it, same gap FEED-2 hit for comments) was resolved via a design
+conversation: a **modal** (`HashtagPostsModal`, reusing `shared/ui/dialog.tsx` and `Feed` directly),
+not a route — fully interactive (real like/unlike/delete/comment via a new
+`useHashtagResultsData(tag, isOpen)` hook), wired identically into Home Feed and the Groups page.
+Opening a post's comments from inside the hashtag modal closes it first, then opens
+`CommentSection`, rather than stacking two dialogs. `usePostsByHashtag` gained an `enabled` param
+(same reasoning as `useComments`) since the new hook is called unconditionally from the page.
+**Bug found and fixed post-implementation (manual testing, before merge):** the first cut cleared
+`activeHashtag` in the same handler that opened comments, which — because React batches both
+state updates into one render — immediately swapped `useHashtagResultsData` to a different, empty
+query before `activeCommentsPost`'s fallback lookup could read it, so `CommentSection` opened with
+a null `post` (header/repeated content silently missing, comments themselves still worked). Fixed
+by splitting "which tag to keep fetching" (`activeHashtag`) from "is the modal visually open"
+(new `isHashtagModalOpen`) — opening comments now only hides the modal, leaving the tag's query
+alive for the fallback; `activeHashtag` clears only on a real dismissal. Strengthened the existing
+transition test to assert the post's name/content actually render, not just that a dialog exists.
+`tsc -b`/`eslint` clean, `pnpm test` 64/64 files (298/298 tests, up from 62/282), `playwright
+--project=e2e` 29/29 (rewrote `home-feed-journey.spec.ts` step 5, which previously asserted
+hashtag clicks were inert no-ops, to assert the real modal + filtered content). Visual-regression
+now shows all 9 Home Feed baselines legitimately stale — the Trending card renders 1 real row
+instead of the old mock's 4, shortening the page; confirmed via image inspection this is the only
+diff. Filed as **HF-17** (`client/docs/BACKLOG_MVP.md`, `TODO`), same HF-13/14/15/16 pattern rather
+than regenerating locally (baselines are Linux-rendered via CI's `update-baselines` dispatch).
+
+**FEED-6 follow-up — hashtags inline, post-like button in comment modal** (2026-07-15, same
+ticket/branch, requested directly before merge): `PostCard` used to show a post's hashtags twice —
+once inline in `post.content`'s plain text, and again as a separate row of pill buttons built from
+the structured `post.hashtags` array. Replaced with a new shared `HashtagText` component that
+parses any text for `#(\w+)` (the same pattern the backend's `HashtagServiceImpl` uses, so it
+always matches what the backend actually indexed) and renders matches as inline clickable buttons
+— `PostCard` no longer reads `post.hashtags` at all. Applied consistently to the comment modal's
+repeated post content and to `CommentItem`'s comment bodies too (comments have no structured
+hashtags field, but the same text-based approach works identically). Also found and fixed a real
+gap while verifying this: the comment modal had no way to like the post itself — added a like
+button (`onTogglePostLike`), wired to check the main feed cache first and only fall back to the
+hashtag-results cache, so a post present in both never double-fires the like mutation. Caught one
+`react-hooks/immutability` lint violation along the way (an early version mutated a shared
+module-level regex's `lastIndex` inside the component) — fixed by switching to
+`String.prototype.matchAll`, which clones the regex internally and never touches shared state.
+`tsc -b`/`eslint` clean, `pnpm test` 65/65 files (310/310, up from 298), `playwright --project=e2e`
+29/29. Visual-regression baselines gain a second (still-uncommitted) cause of drift — noted on the
+already-filed **HF-17** rather than a new ticket, since it's the same "regenerate later, don't fix
+now" situation.
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow
