@@ -165,11 +165,24 @@ export const feedHandlers: HttpHandler[] = [
     if (!body.content) {
       return HttpResponse.json(apiError('Validation failed'), { status: 400 });
     }
+    // Mirrors PostServiceImpl.createPost's own cross-field validation: an
+    // omitted postType defaults to USER_FEED, which then can't carry a
+    // groupId. Without this check here, a client bug that forgets to send
+    // postType: 'GROUP_POST' for a group post silently "succeeds" against
+    // MSW while 400ing against the real backend (found once, for the Groups
+    // page's composer — see useGroupsPageData.ts's createPost).
+    const postType = body.postType ?? 'USER_FEED';
+    if (postType === 'USER_FEED' && body.groupId != null) {
+      return HttpResponse.json(
+        apiError('USER_FEED posts cannot be associated with a group'),
+        { status: 400 },
+      );
+    }
     const created: Post = {
       ...mockPost,
       id: Date.now(),
       content: body.content,
-      postType: body.postType ?? 'USER_FEED',
+      postType,
       groupId: body.groupId ?? null,
       visibility: body.visibility ?? 'public',
       hashtags: [],

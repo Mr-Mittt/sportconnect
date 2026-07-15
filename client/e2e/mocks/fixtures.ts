@@ -9,6 +9,7 @@ import type {
   PageResponse,
   Post,
 } from '../../src/features/feed/types.ts';
+import type { UserSportProfileResponse } from '../../src/shared/types/sport.ts';
 
 // Reused across AUTH-8 and FEED-10 rather than each test inventing its own
 // ad-hoc response shapes (per MSW-0's acceptance criteria).
@@ -30,6 +31,55 @@ export const mockAccessToken = 'mock-access-token';
 // round-trip (set on login/register/refresh, checked on refresh/logout).
 // Real tests never read this directly — the browser handles the cookie.
 export const mockRefreshToken = 'mock-refresh-token';
+
+// SPORT-1 fixtures: mockUser at the 3-sport cap (sportIds match mockPost's
+// Soccer=5, mockBasketballPost's Basketball=6, plus Tennis=2 — see
+// sportIdMap.ts's INSERT-order note) — keeps HF-11's step 7 "Add sport is
+// aria-disabled at cap" assertion true now that SportSwitcher's data is real.
+export const mockSportProfiles: UserSportProfileResponse[] = [
+  {
+    id: 1,
+    userId: mockUser.id,
+    sportId: 5,
+    sportName: 'Soccer',
+    skillLevel: 'intermediate',
+    yearsOfExperience: 4,
+    preferredPosition: null,
+    bio: null,
+    attributes: null,
+    isActive: true,
+    createdAt: '2026-06-01T10:00:00',
+    updatedAt: '2026-06-01T10:00:00',
+  },
+  {
+    id: 2,
+    userId: mockUser.id,
+    sportId: 6,
+    sportName: 'Basketball',
+    skillLevel: 'beginner',
+    yearsOfExperience: 1,
+    preferredPosition: null,
+    bio: null,
+    attributes: null,
+    isActive: true,
+    createdAt: '2026-06-01T10:00:00',
+    updatedAt: '2026-06-01T10:00:00',
+  },
+  {
+    id: 3,
+    userId: mockUser.id,
+    sportId: 2,
+    sportName: 'Tennis',
+    skillLevel: 'advanced',
+    yearsOfExperience: 8,
+    preferredPosition: null,
+    bio: null,
+    attributes: null,
+    isActive: true,
+    createdAt: '2026-06-01T10:00:00',
+    updatedAt: '2026-06-01T10:00:00',
+  },
+];
 
 // Feed/groups/hashtags fixtures (FEED-0) — reused by feed.ts's handlers and
 // by any future FEED-1..FEED-10 e2e spec, same reasoning as the auth

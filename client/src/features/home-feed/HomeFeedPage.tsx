@@ -3,6 +3,7 @@ import { useAuthStore } from '@/app/authStore';
 import { useFeedSpaceStore } from '@/app/feedSpaceStore';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
+import { AddSportModal } from '@/shared/components/AddSportModal';
 import { CommentSection } from '@/shared/components/CommentSection';
 import { CreatePostForm } from '@/shared/components/CreatePostForm';
 import { Feed } from '@/shared/components/Feed';
@@ -10,11 +11,13 @@ import { GroupBroadcasts } from '@/shared/components/GroupBroadcasts';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
+import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
+import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { useHomeFeedData } from './useHomeFeedData';
 
 // Callback-only entry points in this epic — the destinations (hashtag results,
-// Matches screen, broadcast detail, add-sport flow) are future tickets.
+// Matches screen, broadcast detail) are future tickets. "Add sport" is real now (SPORT-1).
 const noop = () => {};
 
 /**
@@ -39,6 +42,11 @@ export function HomeFeedPage() {
   // Which post's comment dialog is open — page-local UI state (client/CLAUDE.md),
   // not Zustand, since it's ephemeral and scoped to this one page.
   const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
+  const [isAddSportOpen, setIsAddSportOpen] = useState(false);
+  // Bumped on every open (not close) — remounts AddSportModal so its internal
+  // form field state starts fresh each time, same reasoning as
+  // GroupsPage's createGroupOpenCount for CreateGroupModal.
+  const [addSportOpenCount, setAddSportOpenCount] = useState(0);
   // HomeFeedPage renders behind ProtectedRoute (AUTH-4), so user is guaranteed
   // non-null here — same guarantee AppShell already relies on.
   const user = useAuthStore((state) => state.user)!;
@@ -58,6 +66,11 @@ export function HomeFeedPage() {
   const commentsData = useCommentsData(
     activeCommentsPostId ?? -1,
     activeCommentsPostId !== null,
+  );
+  const addSportMutation = useAddSportProfile(currentUserId);
+  const availableSports = useMemo(
+    () => ALL_SPORT_KEYS.filter((key) => !data.sportProfiles.some((sport) => sport.key === key)),
+    [data.sportProfiles],
   );
 
   const sportsByKey = useMemo(
@@ -87,7 +100,10 @@ export function HomeFeedPage() {
           sports={data.sportProfiles}
           active={activeSport}
           onChange={setActiveSport}
-          onAddSport={noop}
+          onAddSport={() => {
+            setAddSportOpenCount((count) => count + 1);
+            setIsAddSportOpen(true);
+          }}
         />
       </div>
       <CreatePostForm
@@ -146,6 +162,17 @@ export function HomeFeedPage() {
         isPosting={commentsData.isPosting}
         onDeleteComment={commentsData.deleteComment}
         onToggleCommentLike={commentsData.toggleCommentLike}
+      />
+      <AddSportModal
+        key={addSportOpenCount}
+        isOpen={isAddSportOpen}
+        onClose={() => setIsAddSportOpen(false)}
+        availableSports={availableSports}
+        isSubmitting={addSportMutation.isPending}
+        isError={addSportMutation.isError}
+        onSubmit={(payload) =>
+          addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
+        }
       />
     </main>
   );

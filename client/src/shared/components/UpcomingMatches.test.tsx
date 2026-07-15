@@ -115,4 +115,13 @@ describe('UpcomingMatches', () => {
     renderMatches({ matches: six, maxVisible: 2 });
     expect(getCtas()).toHaveLength(2);
   });
+
+  // SPORT-1: sportsByKey is real now, so a match's sport isn't guaranteed to
+  // have a resolved profile the way the old always-3-sport mock guaranteed —
+  // same "render without a badge, not crash" fallback PostCard already uses.
+  it('renders without a sport badge, not crashing, when sportsByKey has no entry for the match', () => {
+    renderMatches({ sportsByKey: {} as Record<SportKey, SportProfile> });
+    expect(getCtas()).toHaveLength(3);
+    expect(screen.getByText('Warriors vs Riverside')).toBeInTheDocument();
+  });
 });

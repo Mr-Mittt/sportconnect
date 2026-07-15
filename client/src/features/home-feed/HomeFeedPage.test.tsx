@@ -83,13 +83,43 @@ const getMatchCtas = () => screen.getAllByRole('button', { name: /join|view deta
 const trendingCard = () => within(screen.getByRole('region', { name: 'Trending hashtags' }));
 const broadcastsCard = () => within(screen.getByRole('region', { name: 'Group broadcasts' }));
 
+// SPORT-1: 3 real sport profiles (football/basketball/tennis, sportIds
+// 5/6/2 — see sportIdMap.ts), at the 3-sport cap so the existing "Add
+// sport is aria-disabled" test still holds now that sportProfiles is real.
+const sportProfileFixtures = [5, 6, 2].map((sportId, index) => ({
+  id: index + 1,
+  userId: 'user-1',
+  sportId,
+  sportName: ['Soccer', 'Basketball', 'Tennis'][index],
+  skillLevel: null,
+  yearsOfExperience: null,
+  preferredPosition: null,
+  bio: null,
+  attributes: null,
+  isActive: true,
+  createdAt: '2026-06-01T10:00:00',
+  updatedAt: '2026-06-01T10:00:00',
+}));
+
+/** GET mock covering both queries HomeFeedPage mounts: /posts/feed (variable
+ * per test) and /sports/profiles/user/user-1 (fixed — SPORT-1's real hook). */
+function mockFeedGet(posts: Post[]) {
+  return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+    if (url === '/posts/feed') {
+      return { data: { success: true, message: '', data: feedPage(posts), timestamp: '' } };
+    }
+    if (url === '/sports/profiles/user/user-1') {
+      return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
+    }
+    throw new Error(`unexpected GET ${url}`);
+  });
+}
+
 describe('HomeFeedPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useAuthStore.getState().setSession(testUser, 'access-token');
-    vi.spyOn(apiClient, 'get').mockResolvedValue({
-      data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' },
-    });
+    mockFeedGet(feedPosts);
   });
 
   afterEach(() => {
@@ -137,9 +167,15 @@ describe('HomeFeedPage', () => {
     // confirm the new liked state, so the fixture needs to behave the same
     // way: a tiny stateful fake server, not a fixed response.
     let currentPosts = feedPosts;
-    vi.spyOn(apiClient, 'get').mockImplementation(async () => ({
-      data: { success: true, message: '', data: feedPage(currentPosts), timestamp: '' },
-    }));
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/posts/feed') {
+        return { data: { success: true, message: '', data: feedPage(currentPosts), timestamp: '' } };
+      }
+      if (url === '/sports/profiles/user/user-1') {
+        return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
     vi.spyOn(apiClient, 'post').mockImplementation(async (url: string) => {
       const postId = Number(url.match(/\/posts\/(\d+)\/like/)?.[1]);
       currentPosts = currentPosts.map((p) =>
@@ -177,9 +213,15 @@ describe('HomeFeedPage', () => {
     // — a static GET fixture would revert the optimistic prepend right back,
     // so this needs a tiny stateful fake server instead.
     let currentPosts = feedPosts;
-    vi.spyOn(apiClient, 'get').mockImplementation(async () => ({
-      data: { success: true, message: '', data: feedPage(currentPosts), timestamp: '' },
-    }));
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/posts/feed') {
+        return { data: { success: true, message: '', data: feedPage(currentPosts), timestamp: '' } };
+      }
+      if (url === '/sports/profiles/user/user-1') {
+        return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
     vi.spyOn(apiClient, 'post').mockImplementation(async (_url: string, body?: unknown) => {
       const { content } = body as { content: string };
       const created = post({
@@ -205,7 +247,7 @@ describe('HomeFeedPage', () => {
     expect(composer).toHaveValue('');
   });
 
-  it('"Add sport" is at the 3-profile cap with mock sport profiles (aria-disabled, per HF-2)', async () => {
+  it('"Add sport" is at the 3-profile cap with real sport profiles (aria-disabled, per HF-2)', async () => {
     render(<HomeFeedPage />, { wrapper });
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
     expect(screen.getByRole('button', { name: 'Add sport' })).toHaveAttribute(

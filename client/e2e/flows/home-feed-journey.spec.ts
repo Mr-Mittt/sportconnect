@@ -6,15 +6,17 @@ import { expect, test } from '../mocks/test.ts';
  * are real now (FEED-1, usePersonalFeed via e2e/mocks/handlers/feed.ts's
  * stateful fixture — 3 posts: mockPost/mockGroupPost owned by the logged-in
  * test user "Jordan Lee" (football/Soccer, sportId 5), mockBasketballPost
- * owned by a friend "Priya Shah" (basketball, sportId 6)). Matches/trending/
- * broadcasts stay mock-driven (SPORT-1/FEED-6/FEED-7 haven't shipped) —
+ * owned by a friend "Priya Shah" (basketball, sportId 6)). SportSwitcher is
+ * real now too (SPORT-1, via e2e/mocks/handlers/sport.ts's mockSportProfiles
+ * fixture — Jordan Lee at the 3-sport cap: football/basketball/tennis).
+ * Trending/broadcasts stay mock-driven (FEED-6/FEED-7 haven't shipped) —
  * unaffected by this rewrite. Auto-waiting assertions only; no sleeps.
  *
  * Premise corrections vs the epic's literal steps (user-approved; see the
  * backlog entry's deltas): hashtag and match-CTA callbacks are deliberate
  * no-ops until FEED-6/FEED-1 land, so steps 5–6 assert reachability and
- * distinct states rather than a fabricated side effect; the mock user is AT
- * the 3-sport cap, so step 7 asserts HF-2's at-cap behavior (aria-disabled).
+ * distinct states rather than a fabricated side effect; the fixture user is
+ * AT the 3-sport cap, so step 7 asserts HF-2's at-cap behavior (aria-disabled).
  *
  * AUTH-4 update: Home Feed now sits behind ProtectedRoute — step 1 seeds an
  * authenticated session (MSW-backed) instead of a bare page.goto('/').
@@ -103,7 +105,7 @@ test('Home Feed journey', async ({ page }) => {
     await expect(page).toHaveURL('/'); // no destination screen yet
   });
 
-  await test.step('7. "Add sport" — at the 3-sport cap it renders aria-disabled (HF-2 behavior)', async () => {
+  await test.step('7. "Add sport" — at the 3-sport cap (real SPORT-1 profiles) it renders aria-disabled (HF-2 behavior)', async () => {
     const addSport = page.getByRole('button', { name: 'Add sport' });
     await expect(addSport).toBeVisible();
     await expect(addSport).toHaveAttribute('aria-disabled', 'true');
