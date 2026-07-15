@@ -744,6 +744,27 @@ sport badges, and like/comment counts all correct, nothing else drifted. `pnpm e
 HF-12's note (CI is the authoritative Linux-rendered environment); confirmed via diff-image
 inspection the local diff is pure sub-pixel font-rendering ghosting, not a content mismatch.
 
+**FEED-4 DONE** (2026-07-15, `client/docs/FEED-4_GROUP_SWITCHING_REAL.md`): built group switching as
+a new **Groups page** (`/groups`, replacing the `ComingSoonPage` stub), not an inline control on Home
+Feed as the epic implicitly assumed — user decision after a design discussion, since a group's own
+sport (`Group.sportId`) naturally bounds the switcher to a handful of pills per sport instead of an
+unbounded dropdown. `activeSport` promoted from `HomeFeedPage`'s local state into a new shared
+`feedSpaceStore.ts` (Zustand) alongside `selectedGroupId`, so the Groups page inherits and can change
+the same sport filter Home Feed uses; switching sport always resets the group selection back to "All"
+(groups are 1:1 with a sport). Zero joined groups for the active sport renders "Join Group"/"Create
+Group" as two buttons (no-ops until FEED-5); one or more collapses both into a right-aligned "..."
+menu instead. No post composer on "All" (no single group to attribute a post to) — reusing
+`Feed`/`PostCard`/`CreatePostForm`/`CommentSection`/`CommentItem` on the new page required promoting
+them from `features/home-feed/components/` to `shared/components/` (git mv, no logic changes).
+"All" on the Groups page has no aggregate backend endpoint, so it derives from `usePersonalFeed()`
+(which already blends in sport-matched `GROUP_POST`s) filtered client-side. Fixed a latent e2e fixture
+bug along the way: `mockGroup.sportId` was `1` (Badminton), never matching the app's 3 known sports
+despite the group's own football theming — the first ticket to actually filter by it. `tsc -b`/`eslint`
+clean, `pnpm test` 51/51 files (232/232 tests). Live-verified in a real browser via a temporary
+Playwright script (not committed): confirmed all 5 requested states — both switchers render, zero-vs-
+nonzero-groups button/menu collapse, composer show/hide on group selection, and sport-switch reset —
+via screenshots and `aria-pressed` assertions.
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow

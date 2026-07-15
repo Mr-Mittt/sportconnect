@@ -1,11 +1,12 @@
-import type { GroupBroadcast, SportProfile, TrendingHashtag, UpcomingMatch } from './types';
+import type { GroupBroadcast, TrendingHashtag, UpcomingMatch } from './types';
 
 /*
  * Mock data ported from the approved mockup (design-reference/design-reference-home-feed.html).
- * Temporary stand-in: sport profiles, hashtags, and broadcasts get swapped for real
- * API data in the integration phase (SPORT-1, FEED-6, FEED-7); matches stay mock
- * until a matches backend exists. Components must never import these arrays
- * directly — access goes through the useHomeFeedData() hook (HF-7).
+ * Temporary stand-in: hashtags and broadcasts get swapped for real API data in
+ * the integration phase (FEED-6, FEED-7); matches stay mock until a matches
+ * backend exists. Components must never import these arrays directly — access
+ * goes through the useHomeFeedData() hook (HF-7). Sport profiles moved to
+ * `@/shared/hooks/useSportProfiles` (FEED-4) — the Groups page needs them too.
  */
 
 // The mockup shows relative times ('2h ago', 'Tomorrow'). Timestamps are computed
@@ -19,13 +20,6 @@ function hoursAgo(hours: number): string {
 function hoursFromNow(hours: number): string {
   return new Date(Date.now() + hours * HOUR_MS).toISOString();
 }
-
-export const mockSportProfiles: SportProfile[] = [
-  // No synthetic 'All' entry here — SportSwitcher (HF-2) adds it itself.
-  { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' },
-  { key: 'basketball', label: 'Basketball', icon: 'ball-basketball', colorRamp: 'coral' },
-  { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' },
-];
 
 // mockPosts (FEED-1) removed — Feed is real now, backed by usePersonalFeed().
 // See e2e/mocks/handlers/feed.ts for the MSW fixture that mirrors this same

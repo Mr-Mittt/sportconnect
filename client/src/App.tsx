@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import { LoginPage } from './features/auth/LoginPage';
 import { RegisterPage } from './features/auth/RegisterPage';
 import { useSessionBootstrap } from './features/auth/useSessionBootstrap';
+import { GroupsPage } from './features/groups/GroupsPage';
 import { HomeFeedPage } from './features/home-feed/HomeFeedPage';
 import { AppShell } from './shared/components/AppShell';
 import { ComingSoonPage } from './shared/components/ComingSoonPage';
@@ -43,7 +44,7 @@ function App() {
       >
         <Route path="/" element={<HomeFeedPage />} />
         <Route path="/friends" element={<ComingSoonPage title="Friends" />} />
-        <Route path="/groups" element={<ComingSoonPage title="Groups" />} />
+        <Route path="/groups" element={<GroupsPage />} />
         <Route path="/matches" element={<ComingSoonPage title="Matches" />} />
         <Route path="/profile" element={<ComingSoonPage title="Profile" />} />
       </Route>

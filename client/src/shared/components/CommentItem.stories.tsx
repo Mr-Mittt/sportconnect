@@ -21,7 +21,7 @@ const baseComment: Comment = {
 };
 
 const meta = {
-  title: 'HomeFeed/CommentItem',
+  title: 'Shared/CommentItem',
   component: CommentItem,
   args: {
     onToggleLike: () => {},

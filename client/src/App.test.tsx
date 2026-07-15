@@ -144,6 +144,148 @@ describe('App routing', () => {
     expect(screen.getByRole('region', { name: 'Upcoming matches' })).toBeInTheDocument();
   });
 
+  it('renders the assembled Groups page on /groups for an authenticated user (FEED-4)', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/groups/user/1') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: {
+              content: [
+                {
+                  id: 1,
+                  sportId: 5,
+                  groupName: 'Riverside Ballers',
+                  description: null,
+                  avatarUrl: null,
+                  coverUrl: null,
+                  isPrivate: false,
+                  isActive: true,
+                  createdBy: '1',
+                  createdByFullName: 'Jordan Lee',
+                  memberCount: 5,
+                  currentUserRole: 'MEMBER',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  pinnedPosts: null,
+                },
+              ],
+              totalPages: 1,
+              totalElements: 1,
+              number: 0,
+              size: 20,
+              first: true,
+              last: true,
+              numberOfElements: 1,
+              empty: false,
+            },
+            timestamp: '',
+          },
+        };
+      }
+      return {
+        data: {
+          success: true,
+          message: '',
+          data: {
+            content: [],
+            totalPages: 1,
+            totalElements: 0,
+            number: 0,
+            size: 20,
+            first: true,
+            last: true,
+            numberOfElements: 0,
+            empty: true,
+          },
+          timestamp: '',
+        },
+      };
+    });
+
+    renderApp(['/groups']);
+
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Group filter' })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /Riverside Ballers/ })).toBeInTheDocument();
+    // "All" is selected by default — no single group to post into yet.
+    expect(screen.queryByLabelText('Create a post')).not.toBeInTheDocument();
+  });
+
+  it('selecting a group on /groups reveals the post composer', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/groups/user/1') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: {
+              content: [
+                {
+                  id: 1,
+                  sportId: 5,
+                  groupName: 'Riverside Ballers',
+                  description: null,
+                  avatarUrl: null,
+                  coverUrl: null,
+                  isPrivate: false,
+                  isActive: true,
+                  createdBy: '1',
+                  createdByFullName: 'Jordan Lee',
+                  memberCount: 5,
+                  currentUserRole: 'MEMBER',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  pinnedPosts: null,
+                },
+              ],
+              totalPages: 1,
+              totalElements: 1,
+              number: 0,
+              size: 20,
+              first: true,
+              last: true,
+              numberOfElements: 1,
+              empty: false,
+            },
+            timestamp: '',
+          },
+        };
+      }
+      return {
+        data: {
+          success: true,
+          message: '',
+          data: {
+            content: [],
+            totalPages: 1,
+            totalElements: 0,
+            number: 0,
+            size: 20,
+            first: true,
+            last: true,
+            numberOfElements: 0,
+            empty: true,
+          },
+          timestamp: '',
+        },
+      };
+    });
+
+    const user = userEvent.setup();
+    renderApp(['/groups']);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Riverside Ballers/ })).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole('button', { name: /Riverside Ballers/ }));
+
+    await waitFor(() => expect(screen.getByLabelText('Create a post')).toBeInTheDocument());
+  });
+
   it('renders a stub route (Friends) on /friends for an authenticated user', async () => {
     vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
     renderApp(['/friends']);

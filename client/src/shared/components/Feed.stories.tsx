@@ -66,7 +66,7 @@ const posts: Post[] = [
 ];
 
 const meta = {
-  title: 'HomeFeed/Feed',
+  title: 'Shared/Feed',
   component: Feed,
   args: {
     sportsByKey,

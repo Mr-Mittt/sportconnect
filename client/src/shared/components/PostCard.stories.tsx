@@ -37,7 +37,7 @@ const basePost: Post = {
 };
 
 const meta = {
-  title: 'HomeFeed/PostCard',
+  title: 'Shared/PostCard',
   component: PostCard,
   args: {
     onToggleLike: () => {},

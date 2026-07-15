@@ -14,8 +14,13 @@ const PAGE_SIZE = 20;
  * hasNextPage, ... } directly. Pages advance by Spring page number, derived
  * from the previous page's own `last`/`number` fields, not a client-side
  * counter.
+ *
+ * `enabled` (default true) lets a caller pause this query without an
+ * `enabled` guard of their own — the Groups page (FEED-4) disables it while
+ * a specific group's feed is showing, mirroring `useGroupFeed`'s own
+ * `groupId`-driven `enabled`.
  */
-export function usePersonalFeed() {
+export function usePersonalFeed(enabled = true) {
   return useInfiniteQuery({
     queryKey: feedKeys.personalFeed(),
     queryFn: async ({ pageParam }) => {
@@ -26,5 +31,6 @@ export function usePersonalFeed() {
     },
     initialPageParam: 0,
     getNextPageParam,
+    enabled,
   });
 }

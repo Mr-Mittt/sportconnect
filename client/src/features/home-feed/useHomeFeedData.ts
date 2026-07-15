@@ -6,12 +6,8 @@ import { useLikePost } from '@/features/feed/hooks/useLikePost';
 import { usePersonalFeed } from '@/features/feed/hooks/usePersonalFeed';
 import { useUnlikePost } from '@/features/feed/hooks/useUnlikePost';
 import type { Post } from '@/features/feed/types';
-import {
-  mockGroupBroadcasts,
-  mockSportProfiles,
-  mockTrendingHashtags,
-  mockUpcomingMatches,
-} from './mockData';
+import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
+import { mockGroupBroadcasts, mockTrendingHashtags, mockUpcomingMatches } from './mockData';
 import type { GroupBroadcast, SportProfile, TrendingHashtag, UpcomingMatch } from './types';
 
 export interface HomeFeedData {
@@ -60,6 +56,7 @@ export function useHomeFeedData(): {
 
   const currentUserId = useAuthStore((state) => state.user?.id);
   const feedQuery = usePersonalFeed();
+  const sportProfilesQuery = useSportProfiles();
   const likeMutation = useLikePost();
   const unlikeMutation = useUnlikePost();
   const deleteMutation = useDeletePost();
@@ -95,13 +92,13 @@ export function useHomeFeedData(): {
 
   const data = useMemo<HomeFeedData>(
     () => ({
-      sportProfiles: mockSportProfiles,
+      sportProfiles: sportProfilesQuery.data,
       posts,
       upcomingMatches: isVisualEmpty ? [] : mockUpcomingMatches,
       hashtags: mockTrendingHashtags,
       broadcasts: mockGroupBroadcasts,
     }),
-    [posts, isVisualEmpty],
+    [sportProfilesQuery.data, posts, isVisualEmpty],
   );
 
   return {

@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
+import { useFeedSpaceStore } from '@/app/feedSpaceStore';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
+import { useCommentsData } from '@/features/feed/useCommentsData';
+import { CommentSection } from '@/shared/components/CommentSection';
+import { CreatePostForm } from '@/shared/components/CreatePostForm';
+import { Feed } from '@/shared/components/Feed';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import { CommentSection } from './components/CommentSection';
-import { CreatePostForm } from './components/CreatePostForm';
-import { Feed } from './components/Feed';
 import { GroupBroadcasts } from './components/GroupBroadcasts';
 import { TrendingHashtags } from './components/TrendingHashtags';
 import { UpcomingMatches } from './components/UpcomingMatches';
-import { useCommentsData } from './useCommentsData';
 import { useHomeFeedData } from './useHomeFeedData';
 
 // Callback-only entry points in this epic — the destinations (hashtag results,
@@ -20,17 +21,21 @@ const noop = () => {};
  * Assembles the Home Feed (HF-7): SportSwitcher above a two-column grid —
  * feed left, rail (Upcoming → Trending → Broadcasts) right, stacking below md
  * (768px; HF-8 hardens responsiveness). TopBar/NavTabs come from AppShell, not
- * here. activeSport is page-local by design — move it to the Zustand store
- * when a second page needs it (client/CLAUDE.md).
+ * here. activeSport now lives in the shared `feedSpaceStore` (FEED-4) — the
+ * Groups page needs it too, so it was promoted out of page-local state per
+ * client/CLAUDE.md's cross-page state rule.
  *
  * Feed's posts are real (FEED-1, `usePersonalFeed()` behind
  * `useHomeFeedData()`) — sportProfiles/upcomingMatches/hashtags/broadcasts
  * stay mock until SPORT-1/FEED-6/FEED-7 land. isLoading/isError now come
  * from the real feed query; Feed itself renders nothing for either today
- * (FEED-8 owns the actual loading/error UI).
+ * (FEED-8 owns the actual loading/error UI). Home Feed always shows the
+ * personal feed — group-feed switching lives entirely on the Groups page
+ * (FEED-4); selectedGroupId is irrelevant here.
  */
 export function HomeFeedPage() {
-  const [activeSport, setActiveSport] = useState<SportKey | 'all'>('all');
+  const activeSport = useFeedSpaceStore((state) => state.activeSport);
+  const setActiveSport = useFeedSpaceStore((state) => state.setActiveSport);
   // Which post's comment dialog is open — page-local UI state (client/CLAUDE.md),
   // not Zustand, since it's ephemeral and scoped to this one page.
   const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
