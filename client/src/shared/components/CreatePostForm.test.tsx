@@ -43,7 +43,7 @@ describe('CreatePostForm', () => {
     expect(screen.getByRole('button', { name: 'Post' })).toBeDisabled();
   });
 
-  it('calls onSubmit with trimmed content and clears the textarea', async () => {
+  it('calls onSubmit with trimmed content, asBroadcast false, and clears the textarea', async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
     render(<CreatePostForm {...baseProps} onSubmit={onSubmit} />);
@@ -52,7 +52,7 @@ describe('CreatePostForm', () => {
     await user.type(textarea, '  Great match today!  ');
     await user.click(screen.getByRole('button', { name: 'Post' }));
 
-    expect(onSubmit).toHaveBeenCalledWith('Great match today!');
+    expect(onSubmit).toHaveBeenCalledWith('Great match today!', { asBroadcast: false });
     expect(textarea).toHaveValue('');
   });
 
@@ -90,5 +90,27 @@ describe('CreatePostForm', () => {
     expect(onPhotoClick).toHaveBeenCalledTimes(1);
     expect(onLocationClick).toHaveBeenCalledTimes(1);
     expect(onTagSportClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render the Broadcast toggle when canBroadcast is false (default)', () => {
+    render(<CreatePostForm {...baseProps} />);
+    expect(screen.queryByRole('button', { name: /Broadcast/ })).not.toBeInTheDocument();
+  });
+
+  it('toggling Broadcast on reports asBroadcast: true on submit, then resets', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<CreatePostForm {...baseProps} onSubmit={onSubmit} canBroadcast />);
+
+    const broadcastToggle = screen.getByRole('button', { name: /Broadcast/ });
+    expect(broadcastToggle).toHaveAttribute('aria-pressed', 'false');
+    await user.click(broadcastToggle);
+    expect(broadcastToggle).toHaveAttribute('aria-pressed', 'true');
+
+    await user.type(screen.getByLabelText('Create a post'), 'Court booking confirmed!');
+    await user.click(screen.getByRole('button', { name: 'Post' }));
+
+    expect(onSubmit).toHaveBeenCalledWith('Court booking confirmed!', { asBroadcast: true });
+    expect(broadcastToggle).toHaveAttribute('aria-pressed', 'false');
   });
 });

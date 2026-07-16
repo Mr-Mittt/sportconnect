@@ -6,8 +6,8 @@ const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000).toISOS
 
 const broadcasts: GroupBroadcast[] = [
   {
-    id: 'broadcast-1',
-    groupId: 'group-1',
+    id: 1,
+    groupId: 101,
     groupName: 'Riverside Ballers',
     groupInitials: 'RB',
     colorRamp: 'coral',
@@ -15,8 +15,8 @@ const broadcasts: GroupBroadcast[] = [
     createdAt: hoursAgo(1),
   },
   {
-    id: 'broadcast-2',
-    groupId: 'group-2',
+    id: 2,
+    groupId: 102,
     groupName: 'FC Weekend Warriors',
     groupInitials: 'FW',
     colorRamp: 'teal',
@@ -46,8 +46,8 @@ export const LongTextClamped: Story = {
   args: {
     broadcasts: [
       {
-        id: 'broadcast-long',
-        groupId: 'group-3',
+        id: 3,
+        groupId: 103,
         groupName: 'Greenwood Tennis Club',
         groupInitials: 'GT',
         colorRamp: 'purple',

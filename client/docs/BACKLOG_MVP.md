@@ -78,6 +78,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14e | HF-15 | Regenerate visual-regression baselines (follow-up from FEED-1's real feed + delete menu) | `DONE` |
 | 14f | HF-16 | Regenerate visual-regression baselines (follow-up from FEED-2's comment button + dialog) | `DONE` |
 | 14g | HF-17 | Regenerate visual-regression baselines (follow-up from FEED-6's real trending hashtags) | `DONE` |
+| 14h | HF-18 | Regenerate visual-regression baselines (follow-up from FEED-7's real group broadcasts) | `TODO` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -97,7 +98,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 29 | FEED-4 | Group switching (real groups list) | `DONE` |
 | 30 | FEED-5 | CreateGroupModal + JoinGroupModal (real) | `DONE` |
 | 31 | FEED-6 | TrendingHashtags (real) — de-mocks HF-5 | `DONE` |
-| 32 | FEED-7 | GroupBroadcasts (real) — de-mocks HF-6 | `TODO` |
+| 32 | FEED-7 | GroupBroadcasts (real) — de-mocks HF-6 | `DONE` |
 | 33 | SPORT-1 | Sport switcher (real) — de-mocks HF-2, **new ticket, not in the epics** | `DONE` |
 | 34 | FEED-8 | Integration hardening (loading/error/empty states, pagination edges) | `TODO` |
 | 35 | FEED-10 | E2E functional test — feed/groups journey | `TODO` |
@@ -555,6 +556,25 @@ render exactly as expected — nothing else drifted. `pnpm exec playwright test
 expected per HF-12's own note (baselines are Linux-rendered; CI is the authoritative visual
 environment); diff ratios dropped back to the established ~0.01–0.02 sub-pixel noise floor,
 consistent with font-rendering divergence rather than a content mismatch.
+
+### HF-18 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
+**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-7's real group broadcasts ·
+**Summary:** `client/docs/FEED-7_GROUPBROADCASTS_REAL.md`
+
+**Found during FEED-7:** `shared/hooks/useGroupBroadcasts.ts` swapped its hardcoded 2-broadcast mock
+array for the real `GET /api/posts/broadcast` hook. Confirmed via
+`pnpm exec playwright test --project=visual-regression`: all 9 committed Home Feed baselines
+legitimately diff further — the Group broadcasts card now renders 1 real row (MSW's single
+`mockBroadcastPost`/`mockGroup` fixture pair, "Friday Night Football") instead of the old mock
+data's 2 rows ("Riverside Ballers"/"FC Weekend Warriors"), shortening the page further on top of
+HF-17's already-executed causes. Confirmed via direct image inspection this is the correct new
+rendering (real group name/initials/content, correctly shortened layout, nothing else shifted), not
+a regression. Same reasoning as HF-13..HF-17 for why this is its own ticket.
+
+**To execute:** identical process to HF-12..HF-17 — trigger the `client-ci` workflow's
+`update-baselines` manual dispatch on GitHub, download the `visual-baselines` artifact, replace
+`client/e2e/visual/__screenshots__/` with its contents, commit. Worth a human visual check that the
+Group broadcasts card's single real row renders correctly and nothing else drifted unexpectedly.
 
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·
@@ -1069,12 +1089,44 @@ exists. Fully interactive (real like/unlike/delete/comment via `useHashtagResult
   ticket" precedent as FEED-11 (comment modal).
 
 ### FEED-7 · GroupBroadcasts (real)
-**Status:** `TODO` · **Type:** Integration · **Dependency:** FEED-0, HF-6 · **Spec:** AUTH/FEED epic § FEED-7
+**Status:** `DONE` (2026-07-16) · **Type:** Integration · **Dependency:** FEED-0, HF-6 · **Spec:** AUTH/FEED epic § FEED-7 ·
+**Summary:** `client/docs/FEED-7_GROUPBROADCASTS_REAL.md`
 
 De-mocks HF-6 via `useActiveBroadcasts()`; adds owner/admin-only "create broadcast" action
 (`postType: GROUP_BROADCAST`, server defaults expiry to +24h). The backend also has
 `PUT /groups/join-requests/{id}/accept|decline` (owner/admin) available if a future ticket wants
 to build the reviewer-side UI — not needed by FEED-5's requester-side scope.
+
+**Deltas (all user decisions, no design-reference-*.html covered this surface):**
+- **"Create broadcast" is a switcher inside `CreatePostForm`**, next to Tag sport — not a separate
+  button/modal. Visible only when `canBroadcast` (the selected group's `currentUserRole` is
+  `group_owner`/`group_admin` — already on the `Group` object from `useUserGroups`, no new
+  permission-check call needed). Defaults off; resets to off on every submit, same as the
+  composer's `content`.
+- **The backend caps each group at one active broadcast** (`existsActiveGroupBroadcast`, 400 on a
+  second attempt). Rather than hide/disable the switcher, submitting with it on while the group
+  already has one active opens `UpdateBroadcastConfirmDialog` (new component) showing the existing
+  message; confirming calls a new `useUpdatePost()` (`PUT /api/posts/{postId}`) against the
+  existing broadcast instead of creating a second one.
+- **`PostCard`'s comment button renders disabled for a `GROUP_BROADCAST` post**, "for now" — like
+  stays fully functional. Applies everywhere `PostCard` renders (only a group's own feed actually
+  surfaces broadcasts inline — `findByGroupIdAndIsActiveTrue` has no postType filter — the personal
+  feed's `GROUP_POST`-only filter excludes them).
+- **The right rail's broadcast rows stay unwired** (`onBroadcastClick` still a no-op) — the real
+  interaction point is the broadcast post itself inside its group's feed.
+- **`GroupBroadcast.id`/`.groupId` changed from `string` to `number`** to match the real `Post`
+  they're built from (same class of fix FEED-1/SPORT-1 made for their own mock→real transitions).
+
+**Found during live verification (not a FEED-7 bug — a pre-existing, already-documented gap):**
+composer-created posts never get a `sportId` (FEED-3's "Tag sport" is inert everywhere), so `Feed`'s
+own sport filter hides them under any pill except "All". Only reachable in practice by selecting a
+specific group whose sport pill isn't "All" — worked around in verification by choosing the group's
+sport inside `CreateGroupModal` instead of pre-selecting a sport pill (which would have reset
+`selectedGroupId` back to null anyway, per `feedSpaceStore`'s own coupling). Not fixed here — it's
+FEED-3's documented scope, not new.
+
+**HF-18 filed** (visual-regression baselines stale — the broadcast card now renders 1 real row
+instead of the old mock's 2). Same HF-13..HF-17 pattern.
 
 ### SPORT-1 · Sport switcher (real) — new ticket, not in either epic
 **Status:** `DONE` (2026-07-15) · **Type:** Integration · **Dependency:** FEED-0 (hook conventions), HF-2, AUTH phase ·

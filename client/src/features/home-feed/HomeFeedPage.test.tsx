@@ -59,17 +59,20 @@ const feedPosts: Post[] = [
   post({ id: 4, userFullName: 'Hana Kim', sportId: 5, likeCount: 32 }),
 ];
 
-function feedPage(posts: Post[]): PageResponse<Post> {
+// Generic despite the name (kept to minimize churn across existing call
+// sites) — used for the /posts/feed Post[] shape and, since FEED-7, the
+// /groups/user Group[] shape too. Both are Spring Data Page<T>-shaped.
+function feedPage<T>(content: T[]): PageResponse<T> {
   return {
-    content: posts,
+    content,
     totalPages: 1,
-    totalElements: posts.length,
+    totalElements: content.length,
     number: 0,
     size: 20,
     first: true,
     last: true,
-    numberOfElements: posts.length,
-    empty: posts.length === 0,
+    numberOfElements: content.length,
+    empty: content.length === 0,
   };
 }
 
@@ -117,19 +120,71 @@ function trendingHashtagsPage() {
   };
 }
 
+// FEED-7: one joined group + one active broadcast for it, matching the old
+// mock data's "Riverside Ballers" row so existing broadcastsCard assertions
+// keep passing. sportId 5 (football) so it's consistent with the feed
+// fixtures above, though useGroupBroadcasts doesn't filter by activeSport.
+const fixtureGroup = {
+  id: 10,
+  sportId: 5,
+  groupName: 'Riverside Ballers',
+  description: null,
+  avatarUrl: null,
+  coverUrl: null,
+  isPrivate: false,
+  isActive: true,
+  createdBy: 'user-1',
+  createdByFullName: 'Jordan Lee',
+  memberCount: 5,
+  currentUserRole: 'group_owner',
+  createdAt: '2026-06-01T10:00:00',
+  updatedAt: '2026-06-01T10:00:00',
+  pinnedPosts: null,
+};
+
+function fixtureBroadcastPost(overrides: Partial<Post> = {}): Post {
+  return post({
+    id: 50,
+    userFullName: 'Jordan Lee',
+    userId: 'user-1',
+    sportId: null,
+    postType: 'GROUP_BROADCAST',
+    groupId: fixtureGroup.id,
+    content: 'Court booking confirmed for Sunday.',
+    broadcastEndTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    ...overrides,
+  });
+}
+
+/** Static (test-invariant) GET responses shared by every mock below —
+ * /sports/profiles, /hashtags/trending, /posts/broadcast, /groups/user all
+ * return the same fixtures regardless of which test/scenario is running.
+ * Returns undefined for anything else so the caller can layer its own
+ * per-test logic (e.g. a stateful /posts/feed) on top. */
+function staticGetResponse(url: string): { data: unknown } | undefined {
+  if (url === '/sports/profiles/user/user-1') {
+    return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
+  }
+  if (url === '/hashtags/trending') {
+    return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
+  }
+  if (url === '/posts/broadcast') {
+    return { data: { success: true, message: '', data: feedPage([fixtureBroadcastPost()]), timestamp: '' } };
+  }
+  if (url === '/groups/user/user-1') {
+    return { data: { success: true, message: '', data: feedPage([fixtureGroup]), timestamp: '' } };
+  }
+  return undefined;
+}
+
 /** GET mock covering the queries HomeFeedPage mounts: /posts/feed (variable
- * per test), /sports/profiles/user/user-1 (fixed — SPORT-1's real hook), and
- * /hashtags/trending (fixed — FEED-6's real hook). */
+ * per test) plus every static fixture above. */
 function mockFeedGet(posts: Post[]) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+    const staticResponse = staticGetResponse(url);
+    if (staticResponse) return staticResponse;
     if (url === '/posts/feed') {
       return { data: { success: true, message: '', data: feedPage(posts), timestamp: '' } };
-    }
-    if (url === '/sports/profiles/user/user-1') {
-      return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
-    }
-    if (url === '/hashtags/trending') {
-      return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
     }
     throw new Error(`unexpected GET ${url}`);
   });
@@ -188,14 +243,10 @@ describe('HomeFeedPage', () => {
     // way: a tiny stateful fake server, not a fixed response.
     let currentPosts = feedPosts;
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      const staticResponse = staticGetResponse(url);
+      if (staticResponse) return staticResponse;
       if (url === '/posts/feed') {
         return { data: { success: true, message: '', data: feedPage(currentPosts), timestamp: '' } };
-      }
-      if (url === '/sports/profiles/user/user-1') {
-        return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
-      }
-      if (url === '/hashtags/trending') {
-        return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
       }
       throw new Error(`unexpected GET ${url}`);
     });
@@ -237,14 +288,10 @@ describe('HomeFeedPage', () => {
     // so this needs a tiny stateful fake server instead.
     let currentPosts = feedPosts;
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      const staticResponse = staticGetResponse(url);
+      if (staticResponse) return staticResponse;
       if (url === '/posts/feed') {
         return { data: { success: true, message: '', data: feedPage(currentPosts), timestamp: '' } };
-      }
-      if (url === '/sports/profiles/user/user-1') {
-        return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
-      }
-      if (url === '/hashtags/trending') {
-        return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
       }
       throw new Error(`unexpected GET ${url}`);
     });
@@ -285,14 +332,10 @@ describe('HomeFeedPage', () => {
   it('clicking a hashtag opens a modal with the real filtered results (FEED-6)', async () => {
     const user = userEvent.setup();
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      const staticResponse = staticGetResponse(url);
+      if (staticResponse) return staticResponse;
       if (url === '/posts/feed') {
         return { data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' } };
-      }
-      if (url === '/sports/profiles/user/user-1') {
-        return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
-      }
-      if (url === '/hashtags/trending') {
-        return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
       }
       if (url === '/posts/hashtag/fridayrun') {
         return {
@@ -321,14 +364,10 @@ describe('HomeFeedPage', () => {
   it('opening comments from inside the hashtag modal closes it and opens CommentSection instead', async () => {
     const user = userEvent.setup();
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      const staticResponse = staticGetResponse(url);
+      if (staticResponse) return staticResponse;
       if (url === '/posts/feed') {
         return { data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' } };
-      }
-      if (url === '/sports/profiles/user/user-1') {
-        return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
-      }
-      if (url === '/hashtags/trending') {
-        return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
       }
       if (url === '/posts/hashtag/fridayrun') {
         return {

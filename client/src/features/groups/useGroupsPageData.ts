@@ -1,12 +1,14 @@
 import { useCallback, useMemo } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useFeedSpaceStore } from '@/app/feedSpaceStore';
+import { useActiveBroadcasts } from '@/features/feed/hooks/useActiveBroadcasts';
 import { useCreatePost } from '@/features/feed/hooks/useCreatePost';
 import { useDeletePost } from '@/features/feed/hooks/useDeletePost';
 import { useGroupFeed } from '@/features/feed/hooks/useGroupFeed';
 import { useLikePost } from '@/features/feed/hooks/useLikePost';
 import { usePersonalFeed } from '@/features/feed/hooks/usePersonalFeed';
 import { useUnlikePost } from '@/features/feed/hooks/useUnlikePost';
+import { useUpdatePost } from '@/features/feed/hooks/useUpdatePost';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { SPORT_ID_BY_KEY } from '@/features/feed/sportIdMap';
 import type { Group, Post } from '@/features/feed/types';
@@ -46,9 +48,20 @@ export interface GroupsPageData {
  * single group to attribute a new post to there; GroupsPage hides the
  * composer in that state so this is a safety net, not the primary guard.
  *
- * `upcomingMatches`/`hashtags`/`broadcasts` (FEED-5) mirror Home Feed's right
- * rail exactly, same mock-backed hooks — the Groups page reuses the same
- * rail content, not a group-scoped variant.
+ * `upcomingMatches`/`hashtags` stay mock/real per FEED-6; `broadcasts` is
+ * real now too (FEED-7). Same shared hooks as Home Feed's right rail — the
+ * Groups page reuses the same rail content, not a group-scoped variant.
+ *
+ * FEED-7: `canBroadcast` and `activeBroadcastForSelectedGroup` are exposed so
+ * `GroupsPage` can gate `CreatePostForm`'s "Broadcast" toggle and detect the
+ * backend's one-active-broadcast-per-group cap *before* submitting (the
+ * confirm-and-update-instead flow lives in `GroupsPage`, not here — this hook
+ * only supplies the data/mutations, per the same "page owns UI state" split
+ * every other modal on this page already follows). `activeBroadcastForSelectedGroup`
+ * reads the RAW `useActiveBroadcasts()` list (not `data.broadcasts`, which is
+ * the rail-display-mapped shape without `locationName`/`sportId`/`visibility` —
+ * `updateBroadcast` needs those to avoid the update endpoint's
+ * omitted-field-nulls-it-out quirk, see `useUpdatePost`'s doc comment).
  */
 export function useGroupsPageData(): {
   data: GroupsPageData;
@@ -58,8 +71,13 @@ export function useGroupsPageData(): {
   isError: boolean;
   toggleLike: (postId: number) => void;
   deletePost: (postId: number) => void;
-  createPost: (content: string) => void;
+  createPost: (content: string, options?: { asBroadcast: boolean }) => void;
   isCreatingPost: boolean;
+  canBroadcast: boolean;
+  activeBroadcastForSelectedGroup: Post | null;
+  updateBroadcast: (content: string, options?: { onSuccess?: () => void }) => void;
+  isUpdatingBroadcast: boolean;
+  isBroadcastUpdateError: boolean;
   currentUserId: string | undefined;
   hasMorePosts: boolean;
   isFetchingMorePosts: boolean;
@@ -74,6 +92,9 @@ export function useGroupsPageData(): {
   const upcomingMatchesQuery = useUpcomingMatches();
   const trendingHashtagsQuery = useTrendingHashtags();
   const groupBroadcastsQuery = useGroupBroadcasts();
+  // Raw Post[] (not the rail-mapped GroupBroadcast[] above) — shares
+  // useGroupBroadcasts' query cache (same key), no extra network call.
+  const activeBroadcastsQuery = useActiveBroadcasts();
   const groupsQuery = useUserGroups(currentUserId);
   const groups = useMemo(() => {
     const allGroups = groupsQuery.data?.content ?? [];
@@ -81,6 +102,21 @@ export function useGroupsPageData(): {
       ? allGroups
       : allGroups.filter((group) => group.sportId === SPORT_ID_BY_KEY[activeSport]);
   }, [groupsQuery.data, activeSport]);
+
+  const canBroadcast = useMemo(() => {
+    const selectedGroup = groups.find((group) => group.id === selectedGroupId);
+    return (
+      selectedGroup !== undefined &&
+      (selectedGroup.currentUserRole === 'group_owner' ||
+        selectedGroup.currentUserRole === 'group_admin')
+    );
+  }, [groups, selectedGroupId]);
+
+  const activeBroadcastForSelectedGroup = useMemo(() => {
+    if (selectedGroupId === null) return null;
+    const posts = activeBroadcastsQuery.data?.content ?? [];
+    return posts.find((post) => post.groupId === selectedGroupId) ?? null;
+  }, [activeBroadcastsQuery.data, selectedGroupId]);
 
   const groupFeedQuery = useGroupFeed(selectedGroupId ?? undefined);
   const personalFeedQuery = usePersonalFeed(selectedGroupId === null);
@@ -99,6 +135,7 @@ export function useGroupsPageData(): {
   const unlikeMutation = useUnlikePost();
   const deleteMutation = useDeletePost();
   const createMutation = useCreatePost();
+  const updateMutation = useUpdatePost();
 
   const toggleLike = useCallback(
     (postId: number) => {
@@ -119,15 +156,40 @@ export function useGroupsPageData(): {
   );
 
   const createPost = useCallback(
-    (content: string) => {
+    (content: string, options?: { asBroadcast: boolean }) => {
       if (selectedGroupId === null) return;
       // postType must be explicit: the backend defaults an omitted postType
       // to USER_FEED, then rejects it for carrying a groupId at all
-      // (PostServiceImpl.createPost) — every group post needs GROUP_POST
-      // stated outright, not left to infer from groupId alone.
-      createMutation.mutate({ content, groupId: selectedGroupId, postType: 'GROUP_POST' });
+      // (PostServiceImpl.createPost) — every group post needs GROUP_POST (or
+      // GROUP_BROADCAST, FEED-7) stated outright, not left to infer from
+      // groupId alone.
+      const postType = options?.asBroadcast ? 'GROUP_BROADCAST' : 'GROUP_POST';
+      createMutation.mutate({ content, groupId: selectedGroupId, postType });
     },
     [createMutation, selectedGroupId],
+  );
+
+  const updateBroadcast = useCallback(
+    (content: string, options?: { onSuccess?: () => void }) => {
+      if (activeBroadcastForSelectedGroup === null) return;
+      // Echo back the existing broadcast's locationName/sportId/visibility —
+      // the update endpoint sets these unconditionally from the request body
+      // (not a partial patch), so omitting them would null them out. See
+      // useUpdatePost's doc comment for the full explanation.
+      updateMutation.mutate(
+        {
+          postId: activeBroadcastForSelectedGroup.id,
+          payload: {
+            content,
+            locationName: activeBroadcastForSelectedGroup.locationName ?? undefined,
+            sportId: activeBroadcastForSelectedGroup.sportId ?? undefined,
+            visibility: activeBroadcastForSelectedGroup.visibility,
+          },
+        },
+        options,
+      );
+    },
+    [updateMutation, activeBroadcastForSelectedGroup],
   );
 
   return {
@@ -147,6 +209,11 @@ export function useGroupsPageData(): {
     deletePost,
     createPost,
     isCreatingPost: createMutation.isPending,
+    canBroadcast,
+    activeBroadcastForSelectedGroup,
+    updateBroadcast,
+    isUpdatingBroadcast: updateMutation.isPending,
+    isBroadcastUpdateError: updateMutation.isError,
     currentUserId,
     hasMorePosts: activeFeedQuery.hasNextPage ?? false,
     isFetchingMorePosts: activeFeedQuery.isFetchingNextPage,

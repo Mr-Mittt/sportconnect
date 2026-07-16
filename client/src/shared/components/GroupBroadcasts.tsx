@@ -5,7 +5,7 @@ import type { GroupBroadcast } from '@/shared/types/rail';
 
 interface GroupBroadcastsProps {
   broadcasts: GroupBroadcast[];
-  onBroadcastClick: (broadcastId: string) => void;
+  onBroadcastClick: (broadcastId: number) => void;
 }
 
 /**

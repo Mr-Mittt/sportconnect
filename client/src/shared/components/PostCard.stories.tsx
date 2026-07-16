@@ -74,6 +74,13 @@ export const OwnPostShowsDeleteMenu: Story = {
   args: { post: basePost, sport: football, currentUserId: 'user-marcus' },
 };
 
+export const GroupBroadcast: Story = {
+  args: {
+    post: { ...basePost, postType: 'GROUP_BROADCAST', groupId: 1, content: 'Court booking confirmed for Sunday 9am, see you there!' },
+    sport: football,
+  },
+};
+
 export const LongTextManyTags: Story = {
   args: {
     post: {

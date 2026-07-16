@@ -163,6 +163,26 @@ describe('PostCard', () => {
     expect(screen.queryByRole('button', { name: /^#/ })).not.toBeInTheDocument();
   });
 
+  it('disables the comment button for a GROUP_BROADCAST post; like stays functional (FEED-7)', async () => {
+    const user = userEvent.setup();
+    const onOpenComments = vi.fn();
+    const onToggleLike = vi.fn();
+    render(
+      <PostCard
+        post={{ ...post, postType: 'GROUP_BROADCAST', groupId: 5 }}
+        sport={football}
+        currentUserId="someone-else"
+        onToggleLike={onToggleLike}
+        onHashtagClick={noop}
+        onDeletePost={noop}
+        onOpenComments={onOpenComments}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'View comments' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Like' }));
+    expect(onToggleLike).toHaveBeenCalledWith(1);
+  });
+
   it('comment button reports the post id (FEED-2 opens the comment dialog)', async () => {
     const user = userEvent.setup();
     const onOpenComments = vi.fn();

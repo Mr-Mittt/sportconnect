@@ -894,6 +894,34 @@ drifted. Local `pnpm exec playwright test --project=visual-regression` still rep
 "different" on Windows — expected per HF-12's own note — but diff ratios dropped back to the
 established ~0.01–0.02 sub-pixel noise floor, consistent with font-rendering divergence only.
 
+**FEED-7 DONE** (2026-07-16, `client/docs/FEED-7_GROUPBROADCASTS_REAL.md`): de-mocked
+`shared/hooks/useGroupBroadcasts.ts` against the real `GET /api/posts/broadcast`
+(FEED-0's `useActiveBroadcasts`), resolving each broadcast's group name/initials/sport-ramp via
+`useUserGroups` (already mounted elsewhere, no extra network call). The "create broadcast" UI
+(unscoped by the epic) was resolved via a design conversation: a **switcher inside
+`CreatePostForm`** next to Tag sport, visible only for the selected group's owner/admin — not a
+separate button or modal. The backend caps each group at one active broadcast at a time; rather
+than block the switcher, submitting into a group that already has one open opens a new
+`UpdateBroadcastConfirmDialog` instead, and confirming updates the existing broadcast's content via
+a new `useUpdatePost()` mutation (echoing back its `locationName`/`sportId`/`visibility` — the
+update endpoint isn't a partial patch, a real quirk documented but not fixed here).
+`PostCard`'s comment button now renders disabled for `GROUP_BROADCAST` posts ("for now" — like
+stays functional). `GroupBroadcast.id`/`.groupId` flipped from `string` to `number` to match the
+real `Post` fields. `tsc -b`/`eslint` clean, `pnpm test` 67/67 files (326/326, up from 310),
+`playwright --project=e2e` 29/29 (rewrote `home-feed-journey.spec.ts`'s broadcast-count assertions
+from 2 to 1, matching the real MSW fixture). Live-verified end-to-end against the real running
+backend (not MSW): registered a user, added a sport profile, created a group, and drove the actual
+composer — broadcast creation, the confirm-update flow (second submission while one was active
+correctly offered to replace it, verified in both the feed article and the rail card), disabled
+comments, and working likes all confirmed. Found (but didn't need to fix — already FEED-3's
+documented scope) a real, pre-existing gap during that verification: composer-created posts never
+get a `sportId` (Tag sport is inert everywhere), so `Feed`'s own sport filter hides them under any
+pill except "All" — only reachable in practice via a specific-group feed, worked around by picking
+the group's sport inside `CreateGroupModal` instead of a sport pill (which resets group selection
+per `feedSpaceStore`'s own coupling). Visual-regression baselines gain a third cause of drift (the
+broadcasts card's real single row vs. the old mock's 2) — filed as **HF-18**
+(`client/docs/BACKLOG_MVP.md`, `TODO`), same HF-13..HF-17 pattern.
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow
