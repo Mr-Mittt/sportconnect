@@ -121,6 +121,30 @@ describe('App routing', () => {
           },
         };
       }
+      // FEED-7: real GET /posts/broadcast and GET /groups/user/{id} — both
+      // empty; without these, they'd fall through to the post-shaped
+      // fallback below and useGroupBroadcasts would crash trying to read
+      // groupName off a Post it mistook for a Group.
+      if (url === '/posts/broadcast' || url === '/groups/user/1') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: {
+              content: [],
+              totalPages: 1,
+              totalElements: 0,
+              number: 0,
+              size: 20,
+              first: true,
+              last: true,
+              numberOfElements: 0,
+              empty: true,
+            },
+            timestamp: '',
+          },
+        };
+      }
       return {
         data: {
           success: true,

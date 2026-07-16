@@ -64,6 +64,10 @@ function initialsFor(fullName: string): string {
  * array in the first place, so the two always agree for real data. Emitted
  * WITH a leading '#', matching the existing HF-5/HF-6 hashtag-click
  * convention (`onHashtagClick('#tag')`).
+ *
+ * FEED-7: the comment button renders disabled for a `GROUP_BROADCAST` post
+ * (user decision — commenting on broadcasts isn't wired up yet, "for now").
+ * Like stays fully functional either way.
  */
 export function PostCard({
   post,
@@ -153,8 +157,9 @@ export function PostCard({
         <button
           type="button"
           aria-label="View comments"
+          disabled={post.postType === 'GROUP_BROADCAST'}
           onClick={() => onOpenComments(post.id)}
-          className="flex cursor-pointer items-center gap-1 rounded p-0.5 text-xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+          className="flex cursor-pointer items-center gap-1 rounded p-0.5 text-xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-50"
         >
           <IconMessageCircle className="size-4" aria-hidden="true" />
           {post.commentCount}

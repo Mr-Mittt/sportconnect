@@ -124,11 +124,16 @@ const trendingHashtagsPage = {
   empty: false,
 };
 
+// FEED-7: empty by default (most tests don't care about broadcasts) —
+// pass '/posts/broadcast' in a test's own `handlers` to override.
+const emptyBroadcastsPage = page<Post>([]);
+
 function mockGet(handlers: Record<string, unknown>) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+    if (url in handlers) return apiResponse(handlers[url]);
     if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
     if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
-    if (url in handlers) return apiResponse(handlers[url]);
+    if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
     throw new Error(`unexpected GET ${url}`);
   });
 }
@@ -220,6 +225,106 @@ describe('useGroupsPageData', () => {
         content: 'hello group',
         groupId: 7,
         postType: 'GROUP_POST',
+      }),
+    );
+  });
+
+  it('createPost sends postType: GROUP_BROADCAST when { asBroadcast: true }', async () => {
+    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    mockGet({ '/groups/user/user-1': page([]), '/posts/group/7': page([]) });
+    const postSpy = vi
+      .spyOn(apiClient, 'post')
+      .mockResolvedValueOnce(apiResponse(post({ id: 99, groupId: 7, postType: 'GROUP_BROADCAST' })));
+
+    const { result } = renderHook(() => useGroupsPageData(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    act(() => result.current.createPost('court booked', { asBroadcast: true }));
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/posts', {
+        content: 'court booked',
+        groupId: 7,
+        postType: 'GROUP_BROADCAST',
+      }),
+    );
+  });
+
+  it('canBroadcast is true only when the selected group\'s currentUserRole is owner/admin', async () => {
+    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    const groups = [
+      group({ id: 7, currentUserRole: 'group_admin' }),
+      group({ id: 8, currentUserRole: 'group_member' }),
+    ];
+    mockGet({ '/groups/user/user-1': page(groups), '/posts/group/7': page([]) });
+
+    const { result } = renderHook(() => useGroupsPageData(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.canBroadcast).toBe(true);
+
+    useFeedSpaceStore.setState({ selectedGroupId: 8 });
+    await waitFor(() => expect(result.current.canBroadcast).toBe(false));
+  });
+
+  it('canBroadcast is false when no group is selected ("All")', async () => {
+    mockGet({ '/groups/user/user-1': page([group({ id: 7, currentUserRole: 'group_owner' })]) });
+    const { result } = renderHook(() => useGroupsPageData(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.canBroadcast).toBe(false);
+  });
+
+  it('activeBroadcastForSelectedGroup finds the raw active broadcast Post for the selected group', async () => {
+    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    const activeBroadcast = post({
+      id: 30,
+      postType: 'GROUP_BROADCAST',
+      groupId: 7,
+      content: 'Court booked for Sunday',
+    });
+    mockGet({
+      '/groups/user/user-1': page([group({ id: 7 })]),
+      '/posts/group/7': page([]),
+      '/posts/broadcast': page([activeBroadcast]),
+    });
+
+    const { result } = renderHook(() => useGroupsPageData(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() =>
+      expect(result.current.activeBroadcastForSelectedGroup?.id).toBe(30),
+    );
+  });
+
+  it('updateBroadcast PUTs the existing broadcast, echoing back its locationName/sportId/visibility', async () => {
+    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    const activeBroadcast = post({
+      id: 30,
+      postType: 'GROUP_BROADCAST',
+      groupId: 7,
+      content: 'Old message',
+      locationName: 'Riverside Courts',
+      sportId: 5,
+      visibility: 'public',
+    });
+    mockGet({
+      '/groups/user/user-1': page([group({ id: 7 })]),
+      '/posts/group/7': page([]),
+      '/posts/broadcast': page([activeBroadcast]),
+    });
+    const putSpy = vi.spyOn(apiClient, 'put').mockResolvedValueOnce(apiResponse(activeBroadcast));
+
+    const { result } = renderHook(() => useGroupsPageData(), { wrapper });
+    await waitFor(() =>
+      expect(result.current.activeBroadcastForSelectedGroup?.id).toBe(30),
+    );
+
+    act(() => result.current.updateBroadcast('New message'));
+
+    await waitFor(() =>
+      expect(putSpy).toHaveBeenCalledWith('/posts/30', {
+        content: 'New message',
+        locationName: 'Riverside Courts',
+        sportId: 5,
+        visibility: 'public',
       }),
     );
   });

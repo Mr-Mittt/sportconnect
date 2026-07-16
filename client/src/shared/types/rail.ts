@@ -20,8 +20,10 @@ export interface TrendingHashtag {
 }
 
 export interface GroupBroadcast {
-  id: string;
-  groupId: string;
+  // number, not string — matches the real backend Post.id/groupId this is
+  // built from (FEED-7), same convention as Post/Comment/Group ids.
+  id: number;
+  groupId: number;
   groupName: string;
   groupInitials: string;
   colorRamp: string;

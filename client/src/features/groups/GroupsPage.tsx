@@ -14,6 +14,7 @@ import { HashtagPostsModal } from '@/shared/components/HashtagPostsModal';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
+import { UpdateBroadcastConfirmDialog } from '@/shared/components/UpdateBroadcastConfirmDialog';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
 import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -44,12 +45,21 @@ const noop = () => {};
  *
  * The right rail (UpcomingMatches → TrendingHashtags → GroupBroadcasts, FEED-5
  * user decision) is identical to Home Feed's — same shared components and
- * hooks, not a group-scoped variant. Hashtags are real now (FEED-6);
- * upcomingMatches/broadcasts stay mock until a matches backend/FEED-7 lands.
+ * hooks, not a group-scoped variant. Hashtags (FEED-6) and broadcasts
+ * (FEED-7) are real now; upcomingMatches stays mock (no matches backend).
  *
  * Hashtag click-through opens `HashtagPostsModal` via page-local
  * `activeHashtag` state, same pattern as `HomeFeedPage` — clicking a post's
  * comment icon while it's open closes it first and opens `CommentSection`.
+ *
+ * FEED-7: `CreatePostForm`'s "Broadcast" toggle only appears when
+ * `canBroadcast` (the selected group's owner/admin). Submitting with it on
+ * either creates a new `GROUP_BROADCAST` post, or — if the group already has
+ * one active (the backend caps at one per group) — opens
+ * `UpdateBroadcastConfirmDialog` instead of letting the create call 400;
+ * confirming updates the existing broadcast's content in place (user
+ * decision). `pendingBroadcastContent !== null` doubles as that dialog's
+ * open state, same `activeCommentsPostId`-style convention already used here.
  */
 export function GroupsPage() {
   const activeSport = useFeedSpaceStore((state) => state.activeSport);
@@ -66,6 +76,11 @@ export function GroupsPage() {
   // in that same render (a real bug this shape avoids).
   const [activeHashtag, setActiveHashtag] = useState<string | null>(null);
   const [isHashtagModalOpen, setIsHashtagModalOpen] = useState(false);
+  // Holds the composer's content while UpdateBroadcastConfirmDialog is open
+  // (the group already has an active broadcast) — null both before and
+  // after (doubles as the dialog's isOpen), same convention as
+  // activeCommentsPostId (FEED-7).
+  const [pendingBroadcastContent, setPendingBroadcastContent] = useState<string | null>(null);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [isJoinGroupOpen, setIsJoinGroupOpen] = useState(false);
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
@@ -88,6 +103,11 @@ export function GroupsPage() {
     deletePost,
     createPost,
     isCreatingPost,
+    canBroadcast,
+    activeBroadcastForSelectedGroup,
+    updateBroadcast,
+    isUpdatingBroadcast,
+    isBroadcastUpdateError,
     currentUserId,
     hasMorePosts,
     isFetchingMorePosts,
@@ -131,6 +151,22 @@ export function GroupsPage() {
   const activeCommentsPostSport =
     activeCommentsPostSportKey !== undefined ? (sportsByKey[activeCommentsPostSportKey] ?? null) : null;
 
+  // Broadcasting into a group that already has one active would 400 —
+  // detect it client-side and open the confirm-update dialog instead of
+  // calling create (FEED-7 user decision).
+  const handleSubmitPost = (content: string, options: { asBroadcast: boolean }) => {
+    if (options.asBroadcast && activeBroadcastForSelectedGroup !== null) {
+      setPendingBroadcastContent(content);
+      return;
+    }
+    createPost(content, options);
+  };
+
+  const confirmUpdateBroadcast = () => {
+    if (pendingBroadcastContent === null) return;
+    updateBroadcast(pendingBroadcastContent, { onSuccess: () => setPendingBroadcastContent(null) });
+  };
+
   return (
     <main className="py-4">
       <h1 className="sr-only">Groups</h1>
@@ -161,11 +197,12 @@ export function GroupsPage() {
       {selectedGroupId !== null && (
         <CreatePostForm
           currentUser={{ firstName: user.firstName, fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
-          onSubmit={createPost}
+          onSubmit={handleSubmitPost}
           isSubmitting={isCreatingPost}
           onPhotoClick={noop}
           onLocationClick={noop}
           onTagSportClick={noop}
+          canBroadcast={canBroadcast}
         />
       )}
       <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[1.6fr_1fr]">
@@ -312,6 +349,14 @@ export function GroupsPage() {
         onLoadMore={hashtagResultsData.fetchMorePosts}
         isLoading={hashtagResultsData.isLoading}
         isError={hashtagResultsData.isError}
+      />
+      <UpdateBroadcastConfirmDialog
+        isOpen={pendingBroadcastContent !== null}
+        onClose={() => setPendingBroadcastContent(null)}
+        onConfirm={confirmUpdateBroadcast}
+        isSubmitting={isUpdatingBroadcast}
+        isError={isBroadcastUpdateError}
+        existingText={activeBroadcastForSelectedGroup?.content ?? ''}
       />
     </main>
   );

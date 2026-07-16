@@ -1,4 +1,4 @@
-import { IconMapPin, IconPhoto } from '@tabler/icons-react';
+import { IconMapPin, IconPhoto, IconSpeakerphone } from '@tabler/icons-react';
 import { createElement, useLayoutEffect, useRef, useState } from 'react';
 import { MAX_POST_LENGTH } from '@/features/feed/types';
 import { getSportIcon } from '@/shared/lib/sportIcons';
@@ -8,13 +8,20 @@ import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 
 interface CreatePostFormProps {
   currentUser: { firstName: string; fullName: string; avatarUrl: string | null } | undefined;
-  onSubmit: (content: string) => void;
+  /** `asBroadcast` is only ever true if `canBroadcast` was also true — the
+   * toggle itself doesn't render otherwise (FEED-7). */
+  onSubmit: (content: string, options: { asBroadcast: boolean }) => void;
   isSubmitting: boolean;
   /** Inert for this ticket (FEED-3 delta) — same "affordance exists,
    * destination doesn't yet" pattern as HF-3/HF-4's no-op callbacks. */
   onPhotoClick: () => void;
   onLocationClick: () => void;
   onTagSportClick: () => void;
+  /** Shows the "Broadcast" switcher next to Tag sport (FEED-7) — true only
+   * on the Groups page, for a selected group's owner/admin. Home Feed never
+   * passes true (broadcasts require a specific group). Defaults to false so
+   * every other existing call site doesn't need updating. */
+  canBroadcast?: boolean;
 }
 
 function initialsFor(fullName: string): string {
@@ -39,6 +46,13 @@ function initialsFor(fullName: string): string {
  * Photo/Location/Tag-sport stay inert mockup buttons per the ticket's scope
  * delta; only content is sent to the backend (postType/groupId/sportId all
  * omitted, so the server defaults to a public USER_FEED post).
+ *
+ * FEED-7: `canBroadcast` (owner/admin of the selected group, gated by the
+ * caller) shows a "Broadcast" toggle next to Tag sport. `isBroadcastOn` is
+ * ephemeral, composer-local UI state — same reasoning as `content` — reset
+ * to off on every submit, not lifted to the page. The caller decides what
+ * `asBroadcast: true` actually means (create vs. update-the-existing-one);
+ * this component only reports intent.
  */
 export function CreatePostForm({
   currentUser,
@@ -47,8 +61,10 @@ export function CreatePostForm({
   onPhotoClick,
   onLocationClick,
   onTagSportClick,
+  canBroadcast = false,
 }: CreatePostFormProps) {
   const [content, setContent] = useState('');
+  const [isBroadcastOn, setIsBroadcastOn] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Mirrors the design reference's autosize() — grow the textarea to fit its
@@ -66,8 +82,9 @@ export function CreatePostForm({
   const submitPost = () => {
     const trimmed = content.trim();
     if (trimmed.length === 0) return;
-    onSubmit(trimmed);
+    onSubmit(trimmed, { asBroadcast: canBroadcast && isBroadcastOn });
     setContent('');
+    setIsBroadcastOn(false);
   };
 
   const TagSportIcon = getSportIcon('ball-football');
@@ -118,6 +135,20 @@ export function CreatePostForm({
             {createElement(TagSportIcon, { className: 'size-4', 'aria-hidden': true })}
             Tag sport
           </button>
+          {canBroadcast && (
+            <button
+              type="button"
+              aria-pressed={isBroadcastOn}
+              onClick={() => setIsBroadcastOn((on) => !on)}
+              className={cn(
+                'flex cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
+                isBroadcastOn ? 'font-medium text-text-accent' : 'text-text-secondary',
+              )}
+            >
+              {createElement(IconSpeakerphone, { className: 'size-4', 'aria-hidden': true })}
+              Broadcast
+            </button>
+          )}
         </div>
         <Button
           variant="primary"

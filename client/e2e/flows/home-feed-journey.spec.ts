@@ -11,8 +11,10 @@ import { expect, test } from '../mocks/test.ts';
  * fixture — Jordan Lee at the 3-sport cap: football/basketball/tennis).
  * Trending hashtags are real now too (FEED-6, via feed.ts's
  * `GET /api/hashtags/trending` handler — a single `mockHashtag`, `fridayrun`).
- * Broadcasts stay mock-driven (FEED-7 hasn't shipped) — unaffected by this
- * rewrite. Auto-waiting assertions only; no sleeps.
+ * Group broadcasts are real now too (FEED-7, via groups.ts's single
+ * `mockGroup`/feed.ts's single `mockBroadcastPost` — "Friday Night Football",
+ * replacing the old mock array's 2 rows). Auto-waiting assertions only; no
+ * sleeps.
  *
  * Premise corrections vs the epic's literal steps (user-approved; see the
  * backlog entry's deltas): the match-CTA callback is still a deliberate no-op
@@ -36,6 +38,14 @@ import { expect, test } from '../mocks/test.ts';
  * row. Trending now has exactly 1 row (the real `mockHashtag` fixture),
  * replacing the old mock array's 4 — step 1/2's trending-count assertions
  * are updated accordingly.
+ *
+ * FEED-7 update: step 1/2's broadcast-count assertions drop from 2 (the old
+ * mock array) to 1 (the real `mockBroadcastPost`/`mockGroup` fixture pair) —
+ * same reasoning as the FEED-6 trending-count update above. The fixture user
+ * is only a `group_member` of `mockGroup`, not owner/admin, so the
+ * composer's "Broadcast" toggle never renders in this journey — creating/
+ * updating a broadcast isn't covered here (would need an owner/admin
+ * fixture, a future ticket's concern if that flow needs its own e2e spec).
  */
 
 test('Home Feed journey', async ({ page }) => {
@@ -52,7 +62,7 @@ test('Home Feed journey', async ({ page }) => {
     await expect(page.getByRole('article')).toHaveCount(3);
     await expect(matchCtas).toHaveCount(3);
     await expect(trending.getByRole('button')).toHaveCount(1);
-    await expect(broadcasts.getByRole('button')).toHaveCount(2);
+    await expect(broadcasts.getByRole('button')).toHaveCount(1);
   });
 
   await test.step('2. basketball pill — feed and matches filter; trending/broadcasts unchanged', async () => {
@@ -62,7 +72,7 @@ test('Home Feed journey', async ({ page }) => {
     await expect(matchCtas).toHaveCount(1);
     await expect(upcoming).toContainText('Sunday pickup run');
     await expect(trending.getByRole('button')).toHaveCount(1);
-    await expect(broadcasts.getByRole('button')).toHaveCount(2);
+    await expect(broadcasts.getByRole('button')).toHaveCount(1);
   });
 
   await test.step('3. "All" — filters clear', async () => {

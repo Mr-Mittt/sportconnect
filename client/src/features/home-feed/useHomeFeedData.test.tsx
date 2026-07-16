@@ -103,12 +103,55 @@ const trendingHashtagsPage = {
   empty: false,
 };
 
+// FEED-7: one joined group + one active broadcast for it, so tests asserting
+// `data.broadcasts.length` unchanged from before the real hook keep passing.
+const fixtureGroup = {
+  id: 10,
+  sportId: 5,
+  groupName: 'Riverside Ballers',
+  description: null,
+  avatarUrl: null,
+  coverUrl: null,
+  isPrivate: false,
+  isActive: true,
+  createdBy: 'user-1',
+  createdByFullName: 'Jordan Lee',
+  memberCount: 5,
+  currentUserRole: 'group_owner',
+  createdAt: '2026-06-01T10:00:00',
+  updatedAt: '2026-06-01T10:00:00',
+  pinnedPosts: null,
+};
+const userGroupsPage = {
+  content: [fixtureGroup],
+  totalPages: 1,
+  totalElements: 1,
+  number: 0,
+  size: 20,
+  first: true,
+  last: true,
+  numberOfElements: 1,
+  empty: false,
+};
+const broadcastsPage = {
+  content: [post({ id: 50, postType: 'GROUP_BROADCAST', groupId: fixtureGroup.id })],
+  totalPages: 1,
+  totalElements: 1,
+  number: 0,
+  size: 20,
+  first: true,
+  last: true,
+  numberOfElements: 1,
+  empty: false,
+};
+
 /**
- * Mocks GET /posts/feed with `feedPage`; GET /sports/profiles/user/{id} and
- * GET /hashtags/trending are stubbed for every test (SPORT-1/FEED-6's real
- * hooks fire alongside the feed query). `/posts/feed` only resolves once,
- * like the old bare `mockResolvedValueOnce` did — several tests below rely
- * on a mutation's background onSettled invalidate *failing* to refetch so it
+ * Mocks GET /posts/feed with `feedPage`; GET /sports/profiles/user/{id},
+ * GET /hashtags/trending, GET /posts/broadcast, and GET /groups/user/{id}
+ * are stubbed for every test (SPORT-1/FEED-6/FEED-7's real hooks fire
+ * alongside the feed query). `/posts/feed` only resolves once, like the old
+ * bare `mockResolvedValueOnce` did — several tests below rely on a
+ * mutation's background onSettled invalidate *failing* to refetch so it
  * doesn't clobber an optimistic cache update (same reasoning as
  * HomeFeedPage.test.tsx's stateful-fake-server tests, just via "second call
  * fails" instead of a stateful fixture here).
@@ -123,6 +166,8 @@ function mockFeedAndSportProfiles(feedPage: PageResponse<Post>) {
     }
     if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
     if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
+    if (url === '/posts/broadcast') return apiResponse(broadcastsPage);
+    if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
     throw new Error(`unexpected GET ${url}`);
   });
 }

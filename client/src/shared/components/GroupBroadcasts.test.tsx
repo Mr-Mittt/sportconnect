@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GroupBroadcast } from '@/shared/types/rail';
 import { GroupBroadcasts } from './GroupBroadcasts';
 
-const makeBroadcast = (id: string, groupName: string, text: string): GroupBroadcast => ({
+const makeBroadcast = (id: number, groupName: string, text: string): GroupBroadcast => ({
   id,
-  groupId: `group-${id}`,
+  groupId: id + 100,
   groupName,
   groupInitials: 'XX',
   colorRamp: 'teal',
@@ -15,8 +15,8 @@ const makeBroadcast = (id: string, groupName: string, text: string): GroupBroadc
 });
 
 const broadcasts = [
-  makeBroadcast('broadcast-1', 'Riverside Ballers', 'Court booking confirmed for Sunday.'),
-  makeBroadcast('broadcast-2', 'FC Weekend Warriors', 'Tournament bracket is posted.'),
+  makeBroadcast(1, 'Riverside Ballers', 'Court booking confirmed for Sunday.'),
+  makeBroadcast(2, 'FC Weekend Warriors', 'Tournament bracket is posted.'),
 ];
 
 describe('GroupBroadcasts', () => {
@@ -37,7 +37,7 @@ describe('GroupBroadcasts', () => {
     const onBroadcastClick = vi.fn();
     render(<GroupBroadcasts broadcasts={broadcasts} onBroadcastClick={onBroadcastClick} />);
     await user.click(screen.getByRole('button', { name: /FC Weekend Warriors/ }));
-    expect(onBroadcastClick).toHaveBeenCalledWith('broadcast-2');
+    expect(onBroadcastClick).toHaveBeenCalledWith(2);
   });
 
   it('renders the empty state with the header intact', () => {

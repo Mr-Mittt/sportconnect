@@ -28,3 +28,7 @@ export const Submitting: Story = {
 export const NoCurrentUser: Story = {
   args: { currentUser: undefined },
 };
+
+export const CanBroadcast: Story = {
+  args: { canBroadcast: true },
+};
