@@ -113,4 +113,12 @@ describe('CreatePostForm', () => {
     expect(onSubmit).toHaveBeenCalledWith('Court booking confirmed!', { asBroadcast: true });
     expect(broadcastToggle).toHaveAttribute('aria-pressed', 'false');
   });
+
+  it('shows an error message when isError is true, and hides it otherwise', () => {
+    const { rerender } = render(<CreatePostForm {...baseProps} />);
+    expect(screen.queryByText("Couldn't create post. Try again.")).not.toBeInTheDocument();
+
+    rerender(<CreatePostForm {...baseProps} isError />);
+    expect(screen.getByText("Couldn't create post. Try again.")).toBeInTheDocument();
+  });
 });

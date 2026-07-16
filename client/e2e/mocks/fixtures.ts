@@ -9,6 +9,7 @@ import type {
   PageResponse,
   Post,
 } from '../../src/features/feed/types.ts';
+import { hoursAgo, hoursFromNow } from '../../src/shared/lib/mockClock.ts';
 import type { UserSportProfileResponse } from '../../src/shared/types/sport.ts';
 
 // Reused across AUTH-8 and FEED-10 rather than each test inventing its own
@@ -108,6 +109,30 @@ export const mockGroup: Group = {
   pinnedPosts: null,
 };
 
+// FEED-10: a second pre-seeded group where the test user is the owner (not
+// just a member, like mockGroup) — the dedicated fixture for asserting
+// CreatePostForm's "Broadcast" toggle appears for an owner/admin and doesn't
+// for a plain member. sportId 2 (Tennis, one of mockSportProfiles' 3 sports)
+// deliberately differs from mockGroup's Soccer (5), so both are reachable
+// under distinct sport pills rather than colliding under the same filter.
+export const mockOwnedGroup: Group = {
+  id: 3,
+  sportId: 2,
+  groupName: 'Weekend Tennis Ladder',
+  description: 'Casual ladder, singles and doubles.',
+  avatarUrl: null,
+  coverUrl: null,
+  isPrivate: false,
+  isActive: true,
+  createdBy: mockUser.id,
+  createdByFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  memberCount: 6,
+  currentUserRole: 'group_owner',
+  createdAt: '2026-06-05T10:00:00',
+  updatedAt: '2026-06-05T10:00:00',
+  pinnedPosts: null,
+};
+
 export const mockPost: Post = {
   id: 1,
   userId: mockUser.id,
@@ -178,7 +203,29 @@ export const mockBroadcastPost: Post = {
   hashtags: [],
   createdAt: '2026-07-13T07:00:00',
   updatedAt: '2026-07-13T07:00:00',
-  broadcastEndTime: '2026-07-14T07:00:00',
+  // Computed relative to load time, not hardcoded (FEED-10 fix) — the
+  // previous hardcoded '2026-07-14T07:00:00' had silently drifted into the
+  // past relative to "today" by the time this was found, so a genuine expiry
+  // filter (added in FEED-10 for the /posts/broadcast handler) would have
+  // wrongly excluded this "active" fixture. Never hardcode a broadcast expiry
+  // date for the same reason mockClock.ts's matches don't.
+  broadcastEndTime: hoursFromNow(24),
+};
+
+// FEED-10: a second broadcast, genuinely expired, for the
+// `/posts/broadcast` handler's expiry filter to exclude — proves the
+// exclusion is a real filter over multiple candidates, not just "we didn't
+// put it in the array."
+export const mockExpiredBroadcastPost: Post = {
+  ...mockPost,
+  id: 5,
+  postType: 'GROUP_BROADCAST',
+  groupId: mockGroup.id,
+  content: 'Last week: pitch was booked for 7pm.',
+  hashtags: [],
+  createdAt: '2026-07-06T07:00:00',
+  updatedAt: '2026-07-06T07:00:00',
+  broadcastEndTime: hoursAgo(24),
 };
 
 export const mockHashtag: Hashtag = {
@@ -398,6 +445,31 @@ export async function seedEmptyFeedOnNextLoad(page: Page): Promise<void> {
   await page.addInitScript(
     "window.__mswReady.then(() => import('/e2e/mocks/emptyFeed.ts')" +
       '.then(({ overrideFeedToEmpty }) => overrideFeedToEmpty(window.__mswWorker)));',
+  );
+}
+
+/**
+ * FEED-10 step 1: same mechanism as seedEmptyFeedOnNextLoad, for a genuinely
+ * paginated `GET /posts/feed` (21 posts, real `page`/`size` handling) — lets
+ * the "Load more" journey step fetch a real second page instead of a
+ * single-page fixture that always fits.
+ */
+export async function seedPaginatedFeedOnNextLoad(page: Page): Promise<void> {
+  await page.addInitScript(
+    "window.__mswReady.then(() => import('/e2e/mocks/paginatedFeed.ts')" +
+      '.then(({ seedPaginatedFeed }) => seedPaginatedFeed()));',
+  );
+}
+
+/**
+ * FEED-10's SPORT-1 delta step — same mechanism as seedEmptyFeedOnNextLoad,
+ * for a user with zero sport profiles (rather than the primary fixture
+ * user's 3-sport cap, needed elsewhere in the same journey).
+ */
+export async function seedZeroSportProfilesOnNextLoad(page: Page): Promise<void> {
+  await page.addInitScript(
+    "window.__mswReady.then(() => import('/e2e/mocks/emptySportProfiles.ts')" +
+      '.then(({ overrideSportProfilesToEmpty }) => overrideSportProfilesToEmpty(window.__mswWorker)));',
   );
 }
 

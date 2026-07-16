@@ -82,6 +82,7 @@ export function useGroupsPageData(): {
   deletePost: (postId: number) => void;
   createPost: (content: string, options?: { asBroadcast: boolean }) => void;
   isCreatingPost: boolean;
+  isCreatePostError: boolean;
   canBroadcast: boolean;
   activeBroadcastForSelectedGroup: Post | null;
   updateBroadcast: (content: string, options?: { onSuccess?: () => void }) => void;
@@ -229,6 +230,7 @@ export function useGroupsPageData(): {
     deletePost,
     createPost,
     isCreatingPost: createMutation.isPending,
+    isCreatePostError: createMutation.isError,
     canBroadcast,
     activeBroadcastForSelectedGroup,
     updateBroadcast,

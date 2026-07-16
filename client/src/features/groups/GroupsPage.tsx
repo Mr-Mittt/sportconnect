@@ -103,6 +103,7 @@ export function GroupsPage() {
     deletePost,
     createPost,
     isCreatingPost,
+    isCreatePostError,
     canBroadcast,
     activeBroadcastForSelectedGroup,
     updateBroadcast,
@@ -213,6 +214,7 @@ export function GroupsPage() {
           currentUser={{ firstName: user.firstName, fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
           onSubmit={handleSubmitPost}
           isSubmitting={isCreatingPost}
+          isError={isCreatePostError}
           onPhotoClick={noop}
           onLocationClick={noop}
           onTagSportClick={noop}

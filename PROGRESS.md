@@ -946,6 +946,21 @@ components. Live-verified against the real running backend: Home Feed/Groups ren
 golden path, no stuck loading or false error states. `SportSwitcher`'s equivalent loading gap and
 `CommentSection`'s missing retry button were both flagged as out-of-scope follow-ups, not fixed here.
 
+**FEED-10 DONE** (2026-07-16, `client/docs/FEED-10_E2E_FEED_GROUPS_JOURNEY.md`): new
+`e2e/flows/feed-groups-journey.spec.ts` — the 8-step epic journey (pagination, like/comment/create,
+group switching, group creation, trending/broadcasts incl. expiry exclusion, admin-vs-non-admin
+broadcast toggle) plus the SPORT-1 delta (sport filtering + an isolated zero-profiles test). Found and
+fixed a real latent bug along the way: `mockBroadcastPost`'s hardcoded `broadcastEndTime` had already
+drifted into the past relative to "today," masked only because the old handler ignored dates entirely
+— fixed to a relative `hoursFromNow(24)` and backed by a genuine expiry filter over a new
+`mockExpiredBroadcastPost` fixture. Also wired up `CreatePostForm`'s previously-missing `isError` UI
+(a small product fix, needed to make the epic's required "MSW-simulated error response" acceptance
+criterion actually prove something). `GET /posts/feed` is now genuinely page-aware (harmless for every
+existing spec's small fixture). `tsc -b`/`eslint` clean, `pnpm test` 341/341, `playwright --project=e2e`
+31/31 (29 existing + 2 new, repeated 3× with no flakiness), `--project=visual-regression` unchanged
+from before this ticket. Live-verified the real posting flow against the running backend shows no
+false error state.
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow

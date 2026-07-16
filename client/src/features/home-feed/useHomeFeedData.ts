@@ -48,6 +48,10 @@ export interface HomeFeedData {
  * `retryBroadcasts` so `Feed`/`TrendingHashtags`/`GroupBroadcasts` can each
  * render their own loading skeleton or error+retry state independently —
  * one section failing doesn't block the others.
+ *
+ * FEED-10 adds `isCreatePostError` — surfaces a failed `createPost` to
+ * `CreatePostForm` (the composer already clears its content on submit, so
+ * this is a visibility fix, not a content-preserving retry).
  */
 export function useHomeFeedData(): {
   data: HomeFeedData;
@@ -57,6 +61,7 @@ export function useHomeFeedData(): {
   deletePost: (postId: number) => void;
   createPost: (content: string) => void;
   isCreatingPost: boolean;
+  isCreatePostError: boolean;
   currentUserId: string | undefined;
   hasMorePosts: boolean;
   isFetchingMorePosts: boolean;
@@ -138,6 +143,7 @@ export function useHomeFeedData(): {
     deletePost,
     createPost,
     isCreatingPost: createMutation.isPending,
+    isCreatePostError: createMutation.isError,
     currentUserId,
     hasMorePosts: feedQuery.hasNextPage ?? false,
     isFetchingMorePosts: feedQuery.isFetchingNextPage,

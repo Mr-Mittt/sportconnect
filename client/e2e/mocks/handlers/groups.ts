@@ -7,7 +7,7 @@ import type {
   JoinRequest,
   JoinRequestPayload,
 } from '../../../src/features/feed/types.ts';
-import { mockGroup, mockPageResponse, mockPublicGroup, mockUser } from '../fixtures.ts';
+import { mockGroup, mockOwnedGroup, mockPageResponse, mockPublicGroup, mockUser } from '../fixtures.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
@@ -29,7 +29,7 @@ function requireAuth(request: Request): Response | null {
 // in a later GET /groups/user/:userId (useCreateGroup's onSuccess cache
 // write already handles this client-side, but useUserGroups' background
 // invalidate+refetch would otherwise clobber it if this were static).
-let userGroupsState: Group[] = [mockGroup];
+let userGroupsState: Group[] = [mockGroup, mockOwnedGroup];
 let publicGroupsState: GroupSearchResult[] = [
   { ...mockGroup, description: mockGroup.description, isMember: true } as unknown as GroupSearchResult,
   mockPublicGroup,

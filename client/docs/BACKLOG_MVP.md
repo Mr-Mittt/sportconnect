@@ -101,7 +101,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 32 | FEED-7 | GroupBroadcasts (real) — de-mocks HF-6 | `DONE` |
 | 33 | SPORT-1 | Sport switcher (real) — de-mocks HF-2, **new ticket, not in the epics** | `DONE` |
 | 34 | FEED-8 | Integration hardening (loading/error/empty states, pagination edges) | `DONE` |
-| 35 | FEED-10 | E2E functional test — feed/groups journey | `TODO` |
+| 35 | FEED-10 | E2E functional test — feed/groups journey | `DONE` |
 | 36 | FEED-9 | QA / acceptance checklist (integration) | `TODO` |
 | 37 | MSW-1 | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `TODO` |
 | 38 | FEED-12 | Comment modal fetches its own post + URL-addressable deep link — **new ticket, not in either epic** | `TODO` |
@@ -1212,10 +1212,28 @@ the mock versions'.
   than hand-rolling `animate-pulse` divs per component.
 
 ### FEED-10 · E2E functional test — feed/groups journey
-**Status:** `TODO` · **Type:** Testing · **Dependency:** MSW-0, FEED-8 · **Spec:** AUTH/FEED epic § FEED-10
+**Status:** `DONE` (2026-07-16) · **Type:** Testing · **Dependency:** MSW-0, FEED-8 · **Spec:** AUTH/FEED epic § FEED-10 ·
+**Summary:** `client/docs/FEED-10_E2E_FEED_GROUPS_JOURNEY.md`
 
 **Delta:** add a step for SPORT-1 — switching to a real sport profile filters the feed, and the
 zero-profiles fixture renders without error.
+
+**Deltas for later tickets:**
+- **Error-simulation target changed from FEED-8's own delta note (user decision):** wired up
+  `CreatePostForm`'s previously-missing `isError` UI and simulated a failed post creation (the epic's
+  literal example), rather than reusing FEED-8's `apiErrors.ts` overrides — those prove a different
+  surface's error state, not create-post's, and `CreatePostForm` had no error UI at all until this
+  ticket. `apiErrors.ts`'s overrides remain unused by any spec so far; still available if a future
+  ticket wants to cover Feed/Trending/Broadcasts/Groups load-failure specifically.
+- **`mockBroadcastPost.broadcastEndTime` fixed** — was hardcoded and had drifted into the past;
+  now computed via `hoursFromNow(24)`. **Any future ticket adding a broadcast fixture must use
+  `hoursFromNow`/`hoursAgo`, never a hardcoded date** — this exact bug will recur otherwise.
+- **`GET /posts/feed`'s MSW handler is now genuinely page-aware** (`pagedFeedResponse` in
+  `handlers/feed.ts`) — any future spec needing more than 20 personal-feed posts should use
+  `feed.ts`'s exported `seedPostsState(posts)` rather than adding another parallel override.
+- **`mockOwnedGroup` fixture added** (`group_owner`, sportId 2/Tennis) — reuse this for any future
+  spec needing an owner/admin-role group, rather than adding a third one.
+- FEED-9's checklist can now check off "FEED-10's E2E suite passes."
 
 ### FEED-9 · QA / acceptance checklist (integration)
 **Status:** `TODO` · **Type:** QA · **Dependency:** FEED-10 · **Spec:** AUTH/FEED epic § FEED-9

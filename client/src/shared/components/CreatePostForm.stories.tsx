@@ -32,3 +32,7 @@ export const NoCurrentUser: Story = {
 export const CanBroadcast: Story = {
   args: { canBroadcast: true },
 };
+
+export const ErrorState: Story = {
+  args: { isError: true },
+};
