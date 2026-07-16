@@ -78,7 +78,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14e | HF-15 | Regenerate visual-regression baselines (follow-up from FEED-1's real feed + delete menu) | `DONE` |
 | 14f | HF-16 | Regenerate visual-regression baselines (follow-up from FEED-2's comment button + dialog) | `DONE` |
 | 14g | HF-17 | Regenerate visual-regression baselines (follow-up from FEED-6's real trending hashtags) | `DONE` |
-| 14h | HF-18 | Regenerate visual-regression baselines (follow-up from FEED-7's real group broadcasts) | `IN PROGRESS` |
+| 14h | HF-18 | Regenerate visual-regression baselines (follow-up from FEED-7's real group broadcasts) | `DONE` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -558,7 +558,7 @@ environment); diff ratios dropped back to the established ~0.01–0.02 sub-pixel
 consistent with font-rendering divergence rather than a content mismatch.
 
 ### HF-18 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
-**Status:** `IN PROGRESS` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-7's real group broadcasts ·
+**Status:** `DONE` (2026-07-16) · **Type:** Infrastructure (Testing) · **Dependency:** FEED-7's real group broadcasts ·
 **Summary:** `client/docs/FEED-7_GROUPBROADCASTS_REAL.md`
 
 **Found during FEED-7:** `shared/hooks/useGroupBroadcasts.ts` swapped its hardcoded 2-broadcast mock
@@ -575,6 +575,20 @@ a regression. Same reasoning as HF-13..HF-17 for why this is its own ticket.
 `update-baselines` manual dispatch on GitHub, download the `visual-baselines` artifact, replace
 `client/e2e/visual/__screenshots__/` with its contents, commit. Worth a human visual check that the
 Group broadcasts card's single real row renders correctly and nothing else drifted unexpectedly.
+
+**Executed:** `update-baselines` dispatch run on `docs/hf-18-regenerate-visual-baselines`,
+`visual-baselines.zip` downloaded and extracted over `client/e2e/visual/__screenshots__/` (same 9
+filenames, confirmed via SHA-256 comparison before overwriting — all 9 changed, consistent with the
+broadcasts card being a global rail element present in every state, same reasoning as HF-17's
+Trending-card change touching all 9). Human visual check of `default`/`basketball`/`empty` at
+1280px confirmed: the Group broadcasts card's single real "Friday Night Football" row (correct
+group name, initials, message text), correct Trending row, correct posts/sport badges, and the
+empty state all render exactly as expected — nothing else drifted. `pnpm exec playwright test
+--project=visual-regression` still shows all 9 as "different" when run **locally on Windows** —
+expected per HF-12's own note (baselines are Linux-rendered; CI is the authoritative visual
+environment). Diff ratios (0.01–0.04) are consistent with the established sub-pixel font-rendering
+noise floor; one case (`empty-768`) showed an 11px height difference from font-metric line-wrapping
+divergence, confirmed via direct image inspection to be identical content/layout, not a mismatch.
 
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·

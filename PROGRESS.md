@@ -922,6 +922,16 @@ per `feedSpaceStore`'s own coupling). Visual-regression baselines gain a third c
 broadcasts card's real single row vs. the old mock's 2) — filed as **HF-18**
 (`client/docs/BACKLOG_MVP.md`, `TODO`), same HF-13..HF-17 pattern.
 
+**HF-18 DONE** (2026-07-16, `client/docs/BACKLOG_MVP.md`): executed the `update-baselines`
+dispatch, downloaded `visual-baselines.zip`, and replaced all 9 `client/e2e/visual/__screenshots__/`
+PNGs (confirmed via SHA-256 comparison before overwriting — all 9 changed, since the broadcasts
+card is a global rail element present in every state). Human visual check across
+`default`/`basketball`/`empty` at 1280px confirmed the single real "Friday Night Football" broadcast
+row, correct group name/initials/message, correct posts/badges, and nothing else drifted. Local
+`pnpm exec playwright test --project=visual-regression` still reports all 9 as "different" on
+Windows — expected per HF-12's own note — diff ratios (0.01–0.04) consistent with the established
+sub-pixel font-rendering noise floor.
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow
