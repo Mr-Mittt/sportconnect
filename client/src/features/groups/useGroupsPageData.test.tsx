@@ -328,4 +328,79 @@ describe('useGroupsPageData', () => {
       }),
     );
   });
+
+  it('isGroupsError is true when the groups endpoint fails, and retryGroups refetches it', async () => {
+    let groupsCallCount = 0;
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/groups/user/user-1') {
+        groupsCallCount += 1;
+        if (groupsCallCount === 1) throw new Error('simulated groups failure');
+        return apiResponse(page([group({ id: 1 })]));
+      }
+      if (url === '/posts/feed') return apiResponse(page([]));
+      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
+      if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    const { result } = renderHook(() => useGroupsPageData(), { wrapper });
+    await waitFor(() => expect(result.current.isGroupsError).toBe(true));
+    expect(result.current.data.groups).toHaveLength(0);
+
+    await act(() => result.current.retryGroups());
+    await waitFor(() => expect(result.current.isGroupsError).toBe(false));
+    expect(result.current.data.groups).toHaveLength(1);
+  });
+
+  it('isHashtagsError is true when the trending endpoint fails, and retryHashtags refetches it', async () => {
+    let trendingCallCount = 0;
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/hashtags/trending') {
+        trendingCallCount += 1;
+        if (trendingCallCount === 1) throw new Error('simulated trending failure');
+        return apiResponse(trendingHashtagsPage);
+      }
+      if (url === '/groups/user/user-1') return apiResponse(page([]));
+      if (url === '/posts/feed') return apiResponse(page([]));
+      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    const { result } = renderHook(() => useGroupsPageData(), { wrapper });
+    await waitFor(() => expect(result.current.isHashtagsError).toBe(true));
+
+    await act(() => result.current.retryHashtags());
+    await waitFor(() => expect(result.current.isHashtagsError).toBe(false));
+    expect(result.current.data.hashtags.length).toBeGreaterThan(0);
+  });
+
+  it('isLoadMorePostsError is true when fetchMorePosts fails on a selected group\'s feed, leaving already-loaded posts intact', async () => {
+    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    let groupFeedCallCount = 0;
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/posts/group/7') {
+        groupFeedCallCount += 1;
+        if (groupFeedCallCount === 1) {
+          return apiResponse(page([post({ id: 9, groupId: 7 })], { last: false }));
+        }
+        throw new Error('simulated load-more failure');
+      }
+      if (url === '/groups/user/user-1') return apiResponse(page([group({ id: 7 })]));
+      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
+      if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    const { result } = renderHook(() => useGroupsPageData(), { wrapper });
+    await waitFor(() => expect(result.current.hasMorePosts).toBe(true));
+
+    await act(async () => {
+      await result.current.fetchMorePosts();
+    });
+    await waitFor(() => expect(result.current.isLoadMorePostsError).toBe(true));
+    expect(result.current.data.posts).toHaveLength(1);
+  });
 });

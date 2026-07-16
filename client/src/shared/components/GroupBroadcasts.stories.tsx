@@ -28,7 +28,7 @@ const broadcasts: GroupBroadcast[] = [
 const meta = {
   title: 'Shared/GroupBroadcasts',
   component: GroupBroadcasts,
-  args: { onBroadcastClick: () => {} },
+  args: { onBroadcastClick: () => {}, isLoading: false, isError: false, onRetry: () => {} },
   // Constrain to the right rail's width so stories match the page context
   decorators: [(Story) => <div style={{ maxWidth: 360 }}>{Story()}</div>],
 } satisfies Meta<typeof GroupBroadcasts>;
@@ -61,4 +61,12 @@ export const LongTextClamped: Story = {
 
 export const Empty: Story = {
   args: { broadcasts: [] },
+};
+
+export const Loading: Story = {
+  args: { broadcasts: [], isLoading: true },
+};
+
+export const ErrorState: Story = {
+  args: { broadcasts: [], isError: true },
 };

@@ -39,6 +39,15 @@ export interface HomeFeedData {
  * state. `posts`' empty state now comes from a real (MSW-backed in tests)
  * empty feed response, not this seam (HF-10b's own delta said to make this
  * exact swap once FEED-1 de-mocked the hook).
+ *
+ * FEED-8 adds per-section loading/error/retry: `isLoadMorePostsError` (from
+ * `feedQuery.isFetchNextPageError` — a failed "load more" keeps the
+ * already-loaded posts visible, distinct from the initial-load `isError`
+ * above) plus `retryPosts`/`isHashtagsLoading`/`isHashtagsError`/
+ * `retryHashtags`/`isBroadcastsLoading`/`isBroadcastsError`/
+ * `retryBroadcasts` so `Feed`/`TrendingHashtags`/`GroupBroadcasts` can each
+ * render their own loading skeleton or error+retry state independently —
+ * one section failing doesn't block the others.
  */
 export function useHomeFeedData(): {
   data: HomeFeedData;
@@ -52,6 +61,14 @@ export function useHomeFeedData(): {
   hasMorePosts: boolean;
   isFetchingMorePosts: boolean;
   fetchMorePosts: () => void;
+  isLoadMorePostsError: boolean;
+  retryPosts: () => void;
+  isHashtagsLoading: boolean;
+  isHashtagsError: boolean;
+  retryHashtags: () => void;
+  isBroadcastsLoading: boolean;
+  isBroadcastsError: boolean;
+  retryBroadcasts: () => void;
 } {
   const isVisualEmpty =
     new URLSearchParams(window.location.search).get('visual-state') === 'empty';
@@ -125,5 +142,13 @@ export function useHomeFeedData(): {
     hasMorePosts: feedQuery.hasNextPage ?? false,
     isFetchingMorePosts: feedQuery.isFetchingNextPage,
     fetchMorePosts: () => feedQuery.fetchNextPage(),
+    isLoadMorePostsError: feedQuery.isFetchNextPageError,
+    retryPosts: () => feedQuery.refetch(),
+    isHashtagsLoading: trendingHashtagsQuery.isLoading,
+    isHashtagsError: trendingHashtagsQuery.isError,
+    retryHashtags: trendingHashtagsQuery.refetch,
+    isBroadcastsLoading: groupBroadcastsQuery.isLoading,
+    isBroadcastsError: groupBroadcastsQuery.isError,
+    retryBroadcasts: groupBroadcastsQuery.refetch,
   };
 }

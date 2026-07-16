@@ -62,6 +62,15 @@ export interface GroupsPageData {
  * the rail-display-mapped shape without `locationName`/`sportId`/`visibility` —
  * `updateBroadcast` needs those to avoid the update endpoint's
  * omitted-field-nulls-it-out quirk, see `useUpdatePost`'s doc comment).
+ *
+ * FEED-8 adds per-section loading/error/retry, same reasoning as
+ * `useHomeFeedData`: `isLoadMorePostsError`/`retryPosts` for the feed's
+ * pagination edge, `isHashtagsLoading`/`isHashtagsError`/`retryHashtags`,
+ * `isBroadcastsLoading`/`isBroadcastsError`/`retryBroadcasts`, and
+ * `isGroupsLoading`/`isGroupsError`/`retryGroups` (new here — `GroupSpaceSwitcher`
+ * has no Home Feed equivalent) so `GroupSpaceSwitcher` doesn't render its
+ * "0 groups, join/create" fallback while the groups list is still loading or
+ * has failed to load.
  */
 export function useGroupsPageData(): {
   data: GroupsPageData;
@@ -82,6 +91,17 @@ export function useGroupsPageData(): {
   hasMorePosts: boolean;
   isFetchingMorePosts: boolean;
   fetchMorePosts: () => void;
+  isLoadMorePostsError: boolean;
+  retryPosts: () => void;
+  isHashtagsLoading: boolean;
+  isHashtagsError: boolean;
+  retryHashtags: () => void;
+  isBroadcastsLoading: boolean;
+  isBroadcastsError: boolean;
+  retryBroadcasts: () => void;
+  isGroupsLoading: boolean;
+  isGroupsError: boolean;
+  retryGroups: () => void;
 } {
   const currentUserId = useAuthStore((state) => state.user?.id);
   const activeSport = useFeedSpaceStore((state) => state.activeSport);
@@ -218,5 +238,16 @@ export function useGroupsPageData(): {
     hasMorePosts: activeFeedQuery.hasNextPage ?? false,
     isFetchingMorePosts: activeFeedQuery.isFetchingNextPage,
     fetchMorePosts: () => activeFeedQuery.fetchNextPage(),
+    isLoadMorePostsError: activeFeedQuery.isFetchNextPageError,
+    retryPosts: () => activeFeedQuery.refetch(),
+    isHashtagsLoading: trendingHashtagsQuery.isLoading,
+    isHashtagsError: trendingHashtagsQuery.isError,
+    retryHashtags: trendingHashtagsQuery.refetch,
+    isBroadcastsLoading: groupBroadcastsQuery.isLoading,
+    isBroadcastsError: groupBroadcastsQuery.isError,
+    retryBroadcasts: groupBroadcastsQuery.refetch,
+    isGroupsLoading: groupsQuery.isLoading,
+    isGroupsError: groupsQuery.isError,
+    retryGroups: () => groupsQuery.refetch(),
   };
 }

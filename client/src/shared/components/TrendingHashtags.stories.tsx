@@ -12,7 +12,7 @@ const hashtags: TrendingHashtag[] = [
 const meta = {
   title: 'Shared/TrendingHashtags',
   component: TrendingHashtags,
-  args: { onHashtagClick: () => {} },
+  args: { onHashtagClick: () => {}, isLoading: false, isError: false, onRetry: () => {} },
   // Constrain to the right rail's width so stories match the page context
   decorators: [(Story) => <div style={{ maxWidth: 360 }}>{Story()}</div>],
 } satisfies Meta<typeof TrendingHashtags>;
@@ -27,6 +27,14 @@ export const Default: Story = {
 
 export const Empty: Story = {
   args: { hashtags: [] },
+};
+
+export const Loading: Story = {
+  args: { hashtags: [], isLoading: true },
+};
+
+export const ErrorState: Story = {
+  args: { hashtags: [], isError: true },
 };
 
 /** A tag longer than the rail truncates instead of pushing the count out. */

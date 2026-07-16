@@ -932,6 +932,20 @@ row, correct group name/initials/message, correct posts/badges, and nothing else
 Windows — expected per HF-12's own note — diff ratios (0.01–0.04) consistent with the established
 sub-pixel font-rendering noise floor.
 
+**FEED-8 DONE** (2026-07-16, `client/docs/FEED-8_INTEGRATION_HARDENING.md`): loading skeletons +
+error/retry states for every real-data rail surface on Home Feed and Groups (`Feed`,
+`TrendingHashtags`, `GroupBroadcasts`, plus Groups-only `GroupSpaceSwitcher`), each retrying just its
+own failed query rather than a page-level banner. `Feed` also handles the "pagination edge" case —
+`isFetchNextPageError` swaps only the "Load more" control for a retry affordance, leaving
+already-loaded posts on screen. Added MSW error-simulation plumbing (`e2e/mocks/apiErrors.ts` + 4
+`simulate*ErrorOnNextLoad` fixtures) for FEED-10 to reuse. `tsc -b`/`eslint` clean, `pnpm test`
+340/340 (up from 326), `playwright --project=e2e` 29/29, `--project=visual-regression` shows the same
+pre-existing Windows/Linux noise as before this ticket (no new baseline-regen ticket needed).
+Storybook `Loading`/`ErrorState`/`LoadMoreError` stories added and screenshotted for all 4 changed
+components. Live-verified against the real running backend: Home Feed/Groups render correctly on the
+golden path, no stuck loading or false error states. `SportSwitcher`'s equivalent loading gap and
+`CommentSection`'s missing retry button were both flagged as out-of-scope follow-ups, not fixed here.
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow

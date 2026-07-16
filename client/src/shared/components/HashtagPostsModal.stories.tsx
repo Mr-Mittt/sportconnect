@@ -82,6 +82,8 @@ const meta = {
     isFetchingMorePosts: false,
     isLoading: false,
     isError: false,
+    onRetry: () => {},
+    isLoadMoreError: false,
   },
 } satisfies Meta<typeof HashtagPostsModal>;
 

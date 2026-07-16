@@ -66,6 +66,8 @@ const baseProps = {
   isFetchingMorePosts: false,
   isLoading: false,
   isError: false,
+  onRetry: noop,
+  isLoadMoreError: false,
 };
 
 describe('HashtagPostsModal', () => {

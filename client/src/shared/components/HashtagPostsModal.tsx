@@ -23,6 +23,8 @@ interface HashtagPostsModalProps {
   onLoadMore: () => void;
   isLoading: boolean;
   isError: boolean;
+  onRetry: () => void;
+  isLoadMoreError: boolean;
 }
 
 /**
@@ -33,8 +35,8 @@ interface HashtagPostsModalProps {
  * `useHashtagResultsData(tag, isOpen)` hook, not fetched here, so this stays
  * Storybook-testable without a TanStack Query provider.
  *
- * Reuses `Feed` directly for the post list — pagination, loading/error
- * null-render, and empty state are already solved there; this only supplies
+ * Reuses `Feed` directly for the post list — pagination, loading/error/retry
+ * (FEED-8), and empty state are already solved there; this only supplies
  * `activeSport="all"` (hashtag results aren't sport-scoped) and a tag-specific
  * `emptyMessage`.
  */
@@ -54,6 +56,8 @@ export function HashtagPostsModal({
   onLoadMore,
   isLoading,
   isError,
+  onRetry,
+  isLoadMoreError,
 }: HashtagPostsModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -78,6 +82,8 @@ export function HashtagPostsModal({
             onLoadMore={onLoadMore}
             isLoading={isLoading}
             isError={isError}
+            onRetry={onRetry}
+            isLoadMoreError={isLoadMoreError}
             emptyMessage={`No posts found for ${tag ?? 'this hashtag'}.`}
           />
         </div>

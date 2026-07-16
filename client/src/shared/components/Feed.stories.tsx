@@ -80,6 +80,8 @@ const meta = {
     isFetchingMorePosts: false,
     isLoading: false,
     isError: false,
+    onRetry: () => {},
+    isLoadMoreError: false,
   },
 } satisfies Meta<typeof Feed>;
 
@@ -104,4 +106,16 @@ export const HasMorePosts: Story = {
 
 export const LoadingNextPage: Story = {
   args: { posts, activeSport: 'all', hasMorePosts: true, isFetchingMorePosts: true },
+};
+
+export const Loading: Story = {
+  args: { posts: [], activeSport: 'all', isLoading: true },
+};
+
+export const ErrorState: Story = {
+  args: { posts: [], activeSport: 'all', isError: true },
+};
+
+export const LoadMoreError: Story = {
+  args: { posts, activeSport: 'all', hasMorePosts: true, isLoadMoreError: true },
 };

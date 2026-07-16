@@ -32,18 +32,26 @@ function group(overrides: Partial<Group>): Group {
   };
 }
 
+function renderSwitcher(overrides: Partial<React.ComponentProps<typeof GroupSpaceSwitcher>> = {}) {
+  return render(
+    <GroupSpaceSwitcher
+      groups={[]}
+      selectedGroupId={null}
+      onSelect={() => {}}
+      onCreateGroup={() => {}}
+      onJoinGroup={() => {}}
+      sportsByKey={sportsByKey}
+      isLoading={false}
+      isError={false}
+      onRetry={() => {}}
+      {...overrides}
+    />,
+  );
+}
+
 describe('GroupSpaceSwitcher', () => {
   it('always renders the All pill', () => {
-    render(
-      <GroupSpaceSwitcher
-        groups={[]}
-        selectedGroupId={null}
-        onSelect={() => {}}
-        onCreateGroup={() => {}}
-        onJoinGroup={() => {}}
-        sportsByKey={sportsByKey}
-      />,
-    );
+    renderSwitcher();
 
     expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
   });
@@ -51,16 +59,7 @@ describe('GroupSpaceSwitcher', () => {
   it('renders a pill per group and marks the selected one active', () => {
     const groups = [group({ id: 1, groupName: 'Riverside Ballers' }), group({ id: 2, groupName: 'FC Weekend Warriors' })];
 
-    render(
-      <GroupSpaceSwitcher
-        groups={groups}
-        selectedGroupId={2}
-        onSelect={() => {}}
-        onCreateGroup={() => {}}
-        onJoinGroup={() => {}}
-        sportsByKey={sportsByKey}
-      />,
-    );
+    renderSwitcher({ groups, selectedGroupId: 2 });
 
     expect(screen.getByRole('button', { name: /FC Weekend Warriors/ })).toHaveAttribute(
       'aria-pressed',
@@ -77,16 +76,7 @@ describe('GroupSpaceSwitcher', () => {
     const onSelect = vi.fn();
     const groups = [group({ id: 1, groupName: 'Riverside Ballers' })];
 
-    render(
-      <GroupSpaceSwitcher
-        groups={groups}
-        selectedGroupId={null}
-        onSelect={onSelect}
-        onCreateGroup={() => {}}
-        onJoinGroup={() => {}}
-        sportsByKey={sportsByKey}
-      />,
-    );
+    renderSwitcher({ groups, onSelect });
 
     await user.click(screen.getByRole('button', { name: /Riverside Ballers/ }));
     expect(onSelect).toHaveBeenCalledWith(1);
@@ -96,32 +86,14 @@ describe('GroupSpaceSwitcher', () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
 
-    render(
-      <GroupSpaceSwitcher
-        groups={[group({ id: 1 })]}
-        selectedGroupId={1}
-        onSelect={onSelect}
-        onCreateGroup={() => {}}
-        onJoinGroup={() => {}}
-        sportsByKey={sportsByKey}
-      />,
-    );
+    renderSwitcher({ groups: [group({ id: 1 })], selectedGroupId: 1, onSelect });
 
     await user.click(screen.getByRole('button', { name: 'All' }));
     expect(onSelect).toHaveBeenCalledWith(null);
   });
 
   it('shows Join/Create as buttons (no menu) when there are no groups for this sport', () => {
-    render(
-      <GroupSpaceSwitcher
-        groups={[]}
-        selectedGroupId={null}
-        onSelect={() => {}}
-        onCreateGroup={() => {}}
-        onJoinGroup={() => {}}
-        sportsByKey={sportsByKey}
-      />,
-    );
+    renderSwitcher();
 
     expect(screen.getByRole('button', { name: 'Join Group' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create Group' })).toBeInTheDocument();
@@ -133,16 +105,7 @@ describe('GroupSpaceSwitcher', () => {
     const onJoinGroup = vi.fn();
     const onCreateGroup = vi.fn();
 
-    render(
-      <GroupSpaceSwitcher
-        groups={[group({ id: 1 })]}
-        selectedGroupId={null}
-        onSelect={() => {}}
-        onCreateGroup={onCreateGroup}
-        onJoinGroup={onJoinGroup}
-        sportsByKey={sportsByKey}
-      />,
-    );
+    renderSwitcher({ groups: [group({ id: 1 })], onCreateGroup, onJoinGroup });
 
     expect(screen.queryByRole('button', { name: 'Join Group' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create Group' })).not.toBeInTheDocument();
@@ -154,5 +117,25 @@ describe('GroupSpaceSwitcher', () => {
     await user.click(screen.getByRole('button', { name: 'Group options' }));
     await user.click(await screen.findByText('Create Group'));
     expect(onCreateGroup).toHaveBeenCalled();
+  });
+
+  it('renders a skeleton, not the "0 groups, join/create" fallback, while loading', () => {
+    renderSwitcher({ isLoading: true });
+
+    expect(screen.queryByRole('button', { name: 'Join Group' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create Group' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument();
+  });
+
+  it('renders an error+retry state, not the "0 groups, join/create" fallback, on error', async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    renderSwitcher({ isError: true, onRetry });
+
+    expect(screen.getByText("Couldn't load your groups.")).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Join Group' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create Group' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRetry).toHaveBeenCalled();
   });
 });
