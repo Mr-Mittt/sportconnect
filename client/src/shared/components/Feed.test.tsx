@@ -67,6 +67,8 @@ const baseProps = {
   isFetchingMorePosts: false,
   isLoading: false,
   isError: false,
+  onRetry: noop,
+  isLoadMoreError: false,
 };
 
 describe('Feed', () => {
@@ -91,15 +93,40 @@ describe('Feed', () => {
     expect(screen.queryAllByRole('article')).toHaveLength(0);
   });
 
-  it('renders nothing while isLoading (not the empty-state message)', () => {
+  it('renders loading skeletons while isLoading (not the empty-state message)', () => {
     render(<Feed {...baseProps} posts={[]} activeSport="all" isLoading />);
     expect(screen.queryByText('No posts yet for this sport.')).not.toBeInTheDocument();
     expect(screen.queryAllByRole('article')).toHaveLength(0);
   });
 
-  it('renders nothing while isError', () => {
-    render(<Feed {...baseProps} posts={[]} activeSport="all" isError />);
+  it('renders an error state with a retry action while isError, not the empty-state message', async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    render(<Feed {...baseProps} posts={[]} activeSport="all" isError onRetry={onRetry} />);
     expect(screen.queryByText('No posts yet for this sport.')).not.toBeInTheDocument();
+    expect(screen.getByText("Couldn't load posts.")).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  it('shows a retry affordance in place of the load-more button when isLoadMoreError, keeping already-loaded posts visible', async () => {
+    const user = userEvent.setup();
+    const onLoadMore = vi.fn();
+    render(
+      <Feed
+        {...baseProps}
+        posts={posts}
+        activeSport="all"
+        hasMorePosts
+        isLoadMoreError
+        onLoadMore={onLoadMore}
+      />,
+    );
+    expect(screen.getAllByRole('article')).toHaveLength(3);
+    expect(screen.getByText("Couldn't load more posts.")).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
   });
 
   it('shows a "Load more" button when hasMorePosts, calling onLoadMore on click', async () => {

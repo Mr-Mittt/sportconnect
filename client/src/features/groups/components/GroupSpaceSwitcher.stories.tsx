@@ -38,6 +38,7 @@ const twoGroups: Group[] = [
 const meta = {
   title: 'Groups/GroupSpaceSwitcher',
   component: GroupSpaceSwitcher,
+  args: { isLoading: false, isError: false, onRetry: () => {} },
 } satisfies Meta<typeof GroupSpaceSwitcher>;
 
 export default meta;
@@ -74,5 +75,29 @@ export const NoGroupsForSport: Story = {
     onCreateGroup: () => {},
     onJoinGroup: () => {},
     sportsByKey,
+  },
+};
+
+export const Loading: Story = {
+  args: {
+    groups: [],
+    selectedGroupId: null,
+    onSelect: () => {},
+    onCreateGroup: () => {},
+    onJoinGroup: () => {},
+    sportsByKey,
+    isLoading: true,
+  },
+};
+
+export const ErrorState: Story = {
+  args: {
+    groups: [],
+    selectedGroupId: null,
+    onSelect: () => {},
+    onCreateGroup: () => {},
+    onJoinGroup: () => {},
+    sportsByKey,
+    isError: true,
   },
 };

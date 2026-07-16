@@ -263,6 +263,78 @@ describe('useHomeFeedData', () => {
     expect(typeof result.current.fetchMorePosts).toBe('function');
   });
 
+  it('isHashtagsError is true when the trending endpoint fails, and retryHashtags refetches it', async () => {
+    let trendingCallCount = 0;
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/posts/feed') return apiResponse(page([post({ id: 1 })]));
+      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/hashtags/trending') {
+        trendingCallCount += 1;
+        if (trendingCallCount === 1) throw new Error('simulated trending failure');
+        return apiResponse(trendingHashtagsPage);
+      }
+      if (url === '/posts/broadcast') return apiResponse(broadcastsPage);
+      if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    const { result } = renderHook(() => useHomeFeedData(), { wrapper });
+    await waitFor(() => expect(result.current.isHashtagsError).toBe(true));
+    expect(result.current.data.hashtags).toHaveLength(0);
+
+    await act(() => result.current.retryHashtags());
+    await waitFor(() => expect(result.current.isHashtagsError).toBe(false));
+    expect(result.current.data.hashtags.length).toBeGreaterThan(0);
+  });
+
+  it('isBroadcastsError is true when either underlying broadcasts query fails, and retryBroadcasts refetches both', async () => {
+    let broadcastCallCount = 0;
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/posts/feed') return apiResponse(page([post({ id: 1 })]));
+      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
+      if (url === '/posts/broadcast') {
+        broadcastCallCount += 1;
+        if (broadcastCallCount === 1) throw new Error('simulated broadcasts failure');
+        return apiResponse(broadcastsPage);
+      }
+      if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    const { result } = renderHook(() => useHomeFeedData(), { wrapper });
+    await waitFor(() => expect(result.current.isBroadcastsError).toBe(true));
+
+    await act(() => result.current.retryBroadcasts());
+    await waitFor(() => expect(result.current.isBroadcastsError).toBe(false));
+    expect(result.current.data.broadcasts.length).toBeGreaterThan(0);
+  });
+
+  it('isLoadMorePostsError is true when fetchMorePosts fails, leaving already-loaded posts intact', async () => {
+    let feedCallCount = 0;
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/posts/feed') {
+        feedCallCount += 1;
+        if (feedCallCount === 1) return apiResponse(page([post({ id: 1 })], { last: false }));
+        throw new Error('simulated load-more failure');
+      }
+      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
+      if (url === '/posts/broadcast') return apiResponse(broadcastsPage);
+      if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    const { result } = renderHook(() => useHomeFeedData(), { wrapper });
+    await waitFor(() => expect(result.current.hasMorePosts).toBe(true));
+
+    await act(async () => {
+      await result.current.fetchMorePosts();
+    });
+    await waitFor(() => expect(result.current.isLoadMorePostsError).toBe(true));
+    expect(result.current.data.posts).toHaveLength(1);
+  });
+
   it('?visual-state=empty still empties upcomingMatches (matches stay mock this whole MVP)', async () => {
     const originalLocation = window.location.href;
     window.history.pushState({}, '', '/?visual-state=empty');

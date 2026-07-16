@@ -82,6 +82,14 @@ export function HomeFeedPage() {
     hasMorePosts,
     isFetchingMorePosts,
     fetchMorePosts,
+    isLoadMorePostsError,
+    retryPosts,
+    isHashtagsLoading,
+    isHashtagsError,
+    retryHashtags,
+    isBroadcastsLoading,
+    isBroadcastsError,
+    retryBroadcasts,
   } = useHomeFeedData();
   const commentsData = useCommentsData(
     activeCommentsPostId ?? -1,
@@ -159,6 +167,8 @@ export function HomeFeedPage() {
             onLoadMore={fetchMorePosts}
             isLoading={isLoading}
             isError={isError}
+            onRetry={retryPosts}
+            isLoadMoreError={isLoadMorePostsError}
           />
         </div>
         <div className="flex min-w-0 flex-col gap-3.5">
@@ -175,8 +185,17 @@ export function HomeFeedPage() {
               setActiveHashtag(tag);
               setIsHashtagModalOpen(true);
             }}
+            isLoading={isHashtagsLoading}
+            isError={isHashtagsError}
+            onRetry={retryHashtags}
           />
-          <GroupBroadcasts broadcasts={data.broadcasts} onBroadcastClick={noop} />
+          <GroupBroadcasts
+            broadcasts={data.broadcasts}
+            onBroadcastClick={noop}
+            isLoading={isBroadcastsLoading}
+            isError={isBroadcastsError}
+            onRetry={retryBroadcasts}
+          />
         </div>
       </div>
       <CommentSection
@@ -253,6 +272,8 @@ export function HomeFeedPage() {
         onLoadMore={hashtagResultsData.fetchMorePosts}
         isLoading={hashtagResultsData.isLoading}
         isError={hashtagResultsData.isError}
+        onRetry={hashtagResultsData.retryPosts}
+        isLoadMoreError={hashtagResultsData.isLoadMorePostsError}
       />
     </main>
   );

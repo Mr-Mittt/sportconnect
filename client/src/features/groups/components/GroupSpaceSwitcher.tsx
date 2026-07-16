@@ -1,6 +1,7 @@
 import { IconDots, IconPlus, IconSearch } from '@tabler/icons-react';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { cn } from '@/shared/lib/utils';
+import { Skeleton } from '@/shared/ui/skeleton';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import {
   DropdownMenu,
@@ -22,6 +23,9 @@ interface GroupSpaceSwitcherProps {
   onCreateGroup: () => void;
   onJoinGroup: () => void;
   sportsByKey: Record<SportKey, SportProfile>;
+  isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
 }
 
 function initialsFor(groupName: string): string {
@@ -106,6 +110,12 @@ function DashedPillButton({ label, Icon, onClick }: DashedPillButtonProps) {
  * "..." menu instead (same icons, plain menu-item styling), since they're
  * secondary once the user already has groups to switch between. Both open
  * the real CreateGroupModal/JoinGroupModal (FEED-5) via the callbacks below.
+ *
+ * FEED-8: `isLoading`/`isError` gate the "zero groups" fallback above — a
+ * still-loading or failed fetch must not render the same dashed
+ * Join/Create pills a genuinely empty group list would (that would read as
+ * "you have no groups" when the real state is "we don't know yet"/"couldn't
+ * check").
  */
 export function GroupSpaceSwitcher({
   groups,
@@ -114,8 +124,36 @@ export function GroupSpaceSwitcher({
   onCreateGroup,
   onJoinGroup,
   sportsByKey,
+  isLoading,
+  isError,
+  onRetry,
 }: GroupSpaceSwitcherProps) {
   const hasGroups = groups.length > 0;
+
+  if (isLoading) {
+    return (
+      <div role="group" aria-label="Group filter" className="flex flex-wrap items-center gap-2">
+        <Skeleton className="h-7.5 w-16 rounded-full" />
+        <Skeleton className="h-7.5 w-28 rounded-full" />
+        <Skeleton className="h-7.5 w-24 rounded-full" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div role="group" aria-label="Group filter" className="flex items-center gap-2">
+        <p className="text-2sm text-text-danger">Couldn't load your groups.</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="cursor-pointer rounded-lg border-hairline border-border px-2.5 py-1 text-2sm font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div role="group" aria-label="Group filter" className="flex flex-wrap items-center gap-2">

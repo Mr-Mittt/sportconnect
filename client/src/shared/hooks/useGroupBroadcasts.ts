@@ -31,11 +31,16 @@ function initialsFor(groupName: string): string {
  * any of the caller's groups (shouldn't happen — the endpoint is scoped to
  * the caller's own groups) is dropped rather than crashing, same defensive
  * convention SPORT-1 used for unknown sportIds.
+ *
+ * FEED-8 adds `refetch` — the retry action behind `GroupBroadcasts`' error
+ * state. Refetches both underlying queries, since either one failing sets
+ * `isError` above.
  */
 export function useGroupBroadcasts(): {
   data: GroupBroadcast[];
   isLoading: boolean;
   isError: boolean;
+  refetch: () => Promise<unknown>;
 } {
   const userId = useAuthStore((state) => state.user?.id);
   const broadcastsQuery = useActiveBroadcasts();
@@ -69,5 +74,6 @@ export function useGroupBroadcasts(): {
     data,
     isLoading: broadcastsQuery.isLoading || groupsQuery.isLoading,
     isError: broadcastsQuery.isError || groupsQuery.isError,
+    refetch: () => Promise.all([broadcastsQuery.refetch(), groupsQuery.refetch()]),
   };
 }

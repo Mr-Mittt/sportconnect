@@ -12,11 +12,15 @@ import type { TrendingHashtag } from '@/shared/types/rail';
  * Mapping: the real `Hashtag { tag (no leading '#'), usageCount }` becomes
  * `TrendingHashtag { tag (with '#'), postCount }` — same '#'-prefixing
  * bridge FEED-1 already established for `Post.hashtags`.
+ *
+ * FEED-8 adds `refetch` — the retry action behind `TrendingHashtags`' error
+ * state, unrelated to the data mapping above.
  */
 export function useTrendingHashtags(): {
   data: TrendingHashtag[];
   isLoading: boolean;
   isError: boolean;
+  refetch: () => void;
 } {
   const query = useTrendingHashtagsQuery();
 
@@ -29,5 +33,10 @@ export function useTrendingHashtags(): {
     [query.data],
   );
 
-  return { data, isLoading: query.isLoading, isError: query.isError };
+  return {
+    data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    refetch: () => query.refetch(),
+  };
 }

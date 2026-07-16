@@ -100,7 +100,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 31 | FEED-6 | TrendingHashtags (real) — de-mocks HF-5 | `DONE` |
 | 32 | FEED-7 | GroupBroadcasts (real) — de-mocks HF-6 | `DONE` |
 | 33 | SPORT-1 | Sport switcher (real) — de-mocks HF-2, **new ticket, not in the epics** | `DONE` |
-| 34 | FEED-8 | Integration hardening (loading/error/empty states, pagination edges) | `TODO` |
+| 34 | FEED-8 | Integration hardening (loading/error/empty states, pagination edges) | `DONE` |
 | 35 | FEED-10 | E2E functional test — feed/groups journey | `TODO` |
 | 36 | FEED-9 | QA / acceptance checklist (integration) | `TODO` |
 | 37 | MSW-1 | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `TODO` |
@@ -1187,10 +1187,29 @@ resolution as HF-2's delta note itself. Also found and fixed a latent bug in `Up
 see the summary doc for detail; directly required by the second acceptance bullet above.
 
 ### FEED-8 · Integration hardening
-**Status:** `TODO` · **Type:** Hardening · **Dependency:** FEED-1..FEED-7, SPORT-1 · **Spec:** AUTH/FEED epic § FEED-8
+**Status:** `DONE` (2026-07-16) · **Type:** Hardening · **Dependency:** FEED-1..FEED-7, SPORT-1 · **Spec:** AUTH/FEED epic § FEED-8 ·
+**Summary:** `client/docs/FEED-8_INTEGRATION_HARDENING.md`
 
 Skeletons while loading, retry affordance on error (failed fetch ≠ empty feed), empty states match
 the mock versions'.
+
+**Deltas for later tickets:**
+- **Scope, as user-approved:** all real-data surfaces on both pages (`Feed`/`TrendingHashtags`/
+  `GroupBroadcasts` on Home Feed + Groups, plus Groups-only `GroupSpaceSwitcher`). `UpcomingMatches`
+  stays out (still mock-only). `SportSwitcher`/sport-profiles loading was **not** in scope — has the
+  same latent "loading looks like empty" gap `GroupSpaceSwitcher` had, left unfixed, flagged for a
+  future ticket if it's ever noticed. `CommentSection`'s error state still has no retry button
+  (FEED-2's plain-text version) — also left as-is.
+- **"Pagination edge" resolved as**: a failed "load more" (via TanStack Query v5's
+  `isFetchNextPageError`, distinct from the initial-load `isError`) keeps already-loaded posts
+  visible and only swaps the load-more control for its own retry affordance.
+- **MSW error-simulation plumbing added now, not deferred**: `e2e/mocks/apiErrors.ts` +
+  `fixtures.ts`'s `simulateFeedErrorOnNextLoad`/`simulateTrendingErrorOnNextLoad`/
+  `simulateBroadcastsErrorOnNextLoad`/`simulateGroupsErrorOnNextLoad` — **FEED-10 should reuse these**
+  for its "at least one MSW-simulated error response" acceptance criterion rather than re-deriving the
+  same runtime-override plumbing.
+- New shared `src/shared/ui/skeleton.tsx` primitive — reuse for any future loading-state UI rather
+  than hand-rolling `animate-pulse` divs per component.
 
 ### FEED-10 · E2E functional test — feed/groups journey
 **Status:** `TODO` · **Type:** Testing · **Dependency:** MSW-0, FEED-8 · **Spec:** AUTH/FEED epic § FEED-10

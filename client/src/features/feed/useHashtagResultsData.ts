@@ -18,6 +18,10 @@ import type { Post } from './types';
  * mounted Post-feed query, hashtag-filtered included
  * (`optimisticFeedUpdates.ts`'s `POST_FEED_TAGS` already lists `'hashtag'`),
  * so no hashtag-specific cache-write logic is needed here.
+ *
+ * FEED-8 adds `retryPosts`/`isLoadMorePostsError`, same shape as
+ * `useHomeFeedData`'s — `HashtagPostsModal` reuses `Feed` directly, so it
+ * needs the same two fields to satisfy `Feed`'s props.
  */
 export function useHashtagResultsData(
   tag: string | null,
@@ -32,6 +36,8 @@ export function useHashtagResultsData(
   hasMorePosts: boolean;
   isFetchingMorePosts: boolean;
   fetchMorePosts: () => void;
+  isLoadMorePostsError: boolean;
+  retryPosts: () => void;
 } {
   const currentUserId = useAuthStore((state) => state.user?.id);
   const postsQuery = usePostsByHashtag(tag ?? '', isOpen && tag !== null);
@@ -72,5 +78,7 @@ export function useHashtagResultsData(
     hasMorePosts: postsQuery.hasNextPage ?? false,
     isFetchingMorePosts: postsQuery.isFetchingNextPage,
     fetchMorePosts: () => postsQuery.fetchNextPage(),
+    isLoadMorePostsError: postsQuery.isFetchNextPageError,
+    retryPosts: () => postsQuery.refetch(),
   };
 }

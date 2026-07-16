@@ -400,3 +400,40 @@ export async function seedEmptyFeedOnNextLoad(page: Page): Promise<void> {
       '.then(({ overrideFeedToEmpty }) => overrideFeedToEmpty(window.__mswWorker)));',
   );
 }
+
+/**
+ * FEED-8 error-simulation helpers — same mechanism as
+ * simulateExpiredSessionOnNextLoad/seedEmptyFeedOnNextLoad, one per real-data
+ * surface FEED-8 hardened. Call before `page.goto()`; the next matching
+ * request on that page returns a 500, so the real query's `isError` (or, for
+ * the feed's pagination-edge case, `isFetchNextPageError` once a first
+ * successful page is already loaded) flips and the corresponding error+retry
+ * UI renders. FEED-10's E2E journey is the intended consumer.
+ */
+export async function simulateFeedErrorOnNextLoad(page: Page): Promise<void> {
+  await page.addInitScript(
+    "window.__mswReady.then(() => import('/e2e/mocks/apiErrors.ts')" +
+      '.then(({ overrideFeedToError }) => overrideFeedToError(window.__mswWorker)));',
+  );
+}
+
+export async function simulateTrendingErrorOnNextLoad(page: Page): Promise<void> {
+  await page.addInitScript(
+    "window.__mswReady.then(() => import('/e2e/mocks/apiErrors.ts')" +
+      '.then(({ overrideTrendingToError }) => overrideTrendingToError(window.__mswWorker)));',
+  );
+}
+
+export async function simulateBroadcastsErrorOnNextLoad(page: Page): Promise<void> {
+  await page.addInitScript(
+    "window.__mswReady.then(() => import('/e2e/mocks/apiErrors.ts')" +
+      '.then(({ overrideBroadcastsToError }) => overrideBroadcastsToError(window.__mswWorker)));',
+  );
+}
+
+export async function simulateGroupsErrorOnNextLoad(page: Page): Promise<void> {
+  await page.addInitScript(
+    "window.__mswReady.then(() => import('/e2e/mocks/apiErrors.ts')" +
+      '.then(({ overrideGroupsToError }) => overrideGroupsToError(window.__mswWorker)));',
+  );
+}

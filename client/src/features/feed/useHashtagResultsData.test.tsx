@@ -134,4 +134,24 @@ describe('useHashtagResultsData', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.data.posts).toEqual([]);
   });
+
+  it('isLoadMorePostsError is true when fetchMorePosts fails, leaving already-loaded posts intact', async () => {
+    let callCount = 0;
+    vi.spyOn(apiClient, 'get').mockImplementation(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return apiResponse({ ...page([post({ id: 1 })]), last: false });
+      }
+      throw new Error('simulated load-more failure');
+    });
+
+    const { result } = renderHook(() => useHashtagResultsData('#fridayrun', true), { wrapper });
+    await waitFor(() => expect(result.current.hasMorePosts).toBe(true));
+
+    await act(async () => {
+      await result.current.fetchMorePosts();
+    });
+    await waitFor(() => expect(result.current.isLoadMorePostsError).toBe(true));
+    expect(result.current.data.posts).toHaveLength(1);
+  });
 });

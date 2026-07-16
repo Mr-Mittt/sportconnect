@@ -112,6 +112,17 @@ export function GroupsPage() {
     hasMorePosts,
     isFetchingMorePosts,
     fetchMorePosts,
+    isLoadMorePostsError,
+    retryPosts,
+    isHashtagsLoading,
+    isHashtagsError,
+    retryHashtags,
+    isBroadcastsLoading,
+    isBroadcastsError,
+    retryBroadcasts,
+    isGroupsLoading,
+    isGroupsError,
+    retryGroups,
   } = useGroupsPageData();
   const commentsData = useCommentsData(
     activeCommentsPostId ?? -1,
@@ -192,6 +203,9 @@ export function GroupsPage() {
           }}
           onJoinGroup={() => setIsJoinGroupOpen(true)}
           sportsByKey={sportsByKey}
+          isLoading={isGroupsLoading}
+          isError={isGroupsError}
+          onRetry={retryGroups}
         />
       </div>
       {selectedGroupId !== null && (
@@ -224,6 +238,8 @@ export function GroupsPage() {
             onLoadMore={fetchMorePosts}
             isLoading={isLoading}
             isError={isError}
+            onRetry={retryPosts}
+            isLoadMoreError={isLoadMorePostsError}
           />
         </div>
         <div className="flex min-w-0 flex-col gap-3.5">
@@ -240,8 +256,17 @@ export function GroupsPage() {
               setActiveHashtag(tag);
               setIsHashtagModalOpen(true);
             }}
+            isLoading={isHashtagsLoading}
+            isError={isHashtagsError}
+            onRetry={retryHashtags}
           />
-          <GroupBroadcasts broadcasts={data.broadcasts} onBroadcastClick={noop} />
+          <GroupBroadcasts
+            broadcasts={data.broadcasts}
+            onBroadcastClick={noop}
+            isLoading={isBroadcastsLoading}
+            isError={isBroadcastsError}
+            onRetry={retryBroadcasts}
+          />
         </div>
       </div>
       <CommentSection
@@ -349,6 +374,8 @@ export function GroupsPage() {
         onLoadMore={hashtagResultsData.fetchMorePosts}
         isLoading={hashtagResultsData.isLoading}
         isError={hashtagResultsData.isError}
+        onRetry={hashtagResultsData.retryPosts}
+        isLoadMoreError={hashtagResultsData.isLoadMorePostsError}
       />
       <UpdateBroadcastConfirmDialog
         isOpen={pendingBroadcastContent !== null}
