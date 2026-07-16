@@ -78,7 +78,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14e | HF-15 | Regenerate visual-regression baselines (follow-up from FEED-1's real feed + delete menu) | `DONE` |
 | 14f | HF-16 | Regenerate visual-regression baselines (follow-up from FEED-2's comment button + dialog) | `DONE` |
 | 14g | HF-17 | Regenerate visual-regression baselines (follow-up from FEED-6's real trending hashtags) | `DONE` |
-| 14h | HF-18 | Regenerate visual-regression baselines (follow-up from FEED-7's real group broadcasts) | `TODO` |
+| 14h | HF-18 | Regenerate visual-regression baselines (follow-up from FEED-7's real group broadcasts) | `IN PROGRESS` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -558,7 +558,7 @@ environment); diff ratios dropped back to the established ~0.01–0.02 sub-pixel
 consistent with font-rendering divergence rather than a content mismatch.
 
 ### HF-18 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
-**Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-7's real group broadcasts ·
+**Status:** `IN PROGRESS` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-7's real group broadcasts ·
 **Summary:** `client/docs/FEED-7_GROUPBROADCASTS_REAL.md`
 
 **Found during FEED-7:** `shared/hooks/useGroupBroadcasts.ts` swapped its hardcoded 2-broadcast mock
