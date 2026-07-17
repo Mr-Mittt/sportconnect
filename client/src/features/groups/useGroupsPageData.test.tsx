@@ -208,12 +208,19 @@ describe('useGroupsPageData', () => {
     expect(postSpy).not.toHaveBeenCalled();
   });
 
-  it('createPost sends the selected groupId and postType: GROUP_POST when a group is selected', async () => {
+  it('createPost sends the selected groupId, postType: GROUP_POST, and the group\'s own sportId when a group is selected', async () => {
     useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
-    mockGet({ '/groups/user/user-1': page([]), '/posts/group/7': page([]) });
+    // sportId 6 (basketball) — real bug found live: this used to be omitted
+    // entirely (-> null server-side) even though the selected group has a
+    // definite, known sport. Feed's own sport filter silently hid these
+    // posts under any pill except "All" as a result.
+    mockGet({
+      '/groups/user/user-1': page([group({ id: 7, sportId: 6 })]),
+      '/posts/group/7': page([]),
+    });
     const postSpy = vi
       .spyOn(apiClient, 'post')
-      .mockResolvedValueOnce(apiResponse(post({ id: 99, groupId: 7 })));
+      .mockResolvedValueOnce(apiResponse(post({ id: 99, groupId: 7, sportId: 6 })));
 
     const { result } = renderHook(() => useGroupsPageData(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -225,16 +232,20 @@ describe('useGroupsPageData', () => {
         content: 'hello group',
         groupId: 7,
         postType: 'GROUP_POST',
+        sportId: 6,
       }),
     );
   });
 
-  it('createPost sends postType: GROUP_BROADCAST when { asBroadcast: true }', async () => {
+  it('createPost sends postType: GROUP_BROADCAST and the group\'s sportId when { asBroadcast: true }', async () => {
     useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
-    mockGet({ '/groups/user/user-1': page([]), '/posts/group/7': page([]) });
+    mockGet({
+      '/groups/user/user-1': page([group({ id: 7, sportId: 6 })]),
+      '/posts/group/7': page([]),
+    });
     const postSpy = vi
       .spyOn(apiClient, 'post')
-      .mockResolvedValueOnce(apiResponse(post({ id: 99, groupId: 7, postType: 'GROUP_BROADCAST' })));
+      .mockResolvedValueOnce(apiResponse(post({ id: 99, groupId: 7, sportId: 6, postType: 'GROUP_BROADCAST' })));
 
     const { result } = renderHook(() => useGroupsPageData(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -246,6 +257,7 @@ describe('useGroupsPageData', () => {
         content: 'court booked',
         groupId: 7,
         postType: 'GROUP_BROADCAST',
+        sportId: 6,
       }),
     );
   });

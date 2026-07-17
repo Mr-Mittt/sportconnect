@@ -19,7 +19,10 @@ interface GroupSpaceSwitcherProps {
   groups: Group[];
   /** null = "All" (the aggregate view — no single group to post into). */
   selectedGroupId: number | null;
-  onSelect: (groupId: number | null) => void;
+  /** `groupSportId` (the selected group's own sport) lets the shared
+   * feedSpaceStore decide whether this selection is still valid the next
+   * time the sport filter changes — omit/undefined when selecting "All". */
+  onSelect: (groupId: number | null, groupSportId?: number) => void;
   onCreateGroup: () => void;
   onJoinGroup: () => void;
   sportsByKey: Record<SportKey, SportProfile>;
@@ -167,7 +170,7 @@ export function GroupSpaceSwitcher({
             key={group.id}
             label={group.groupName}
             isActive={selectedGroupId === group.id}
-            onClick={() => onSelect(group.id)}
+            onClick={() => onSelect(group.id, group.sportId)}
             badgeClassName={getRampBadgeClasses(ramp ?? '')}
             badgeContent={initialsFor(group.groupName)}
           />

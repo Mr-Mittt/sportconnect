@@ -322,7 +322,7 @@ export function GroupsPage() {
         onSubmit={(payload) =>
           createGroupMutation.mutate(payload, {
             onSuccess: (group) => {
-              selectGroup(group.id);
+              selectGroup(group.id, group.sportId);
               setIsCreateGroupOpen(false);
             },
           })
