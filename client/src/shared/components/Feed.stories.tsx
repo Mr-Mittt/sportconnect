@@ -119,3 +119,27 @@ export const ErrorState: Story = {
 export const LoadMoreError: Story = {
   args: { posts, activeSport: 'all', hasMorePosts: true, isLoadMoreError: true },
 };
+
+// Groups page with one sport selected — every visible post already shares
+// it, so the per-card badge is redundant noise there (unlike Home Feed,
+// which blends multiple sports and needs the badge to disambiguate).
+export const NoSportBadge: Story = {
+  args: { posts, activeSport: 'football', showSportBadge: false },
+};
+
+// Home Feed / Groups "All" view — group posts render "username > groupname"
+// to disambiguate which group each post belongs to, clickable via onGroupClick.
+export const WithGroupNames: Story = {
+  args: {
+    posts: [
+      { ...posts[0], postType: 'GROUP_POST', groupId: 1 },
+      { ...posts[1], postType: 'GROUP_POST', groupId: 2 },
+    ],
+    activeSport: 'all',
+    groupsById: {
+      1: { groupName: '1st Football', sportId: 5 },
+      2: { groupName: 'Riverside Ballers', sportId: 6 },
+    },
+    onGroupClick: () => {},
+  },
+};

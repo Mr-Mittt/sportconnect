@@ -45,6 +45,7 @@ const meta = {
     onDeletePost: () => {},
     onOpenComments: () => {},
     currentUserId: 'someone-else',
+    groupName: null,
   },
 } satisfies Meta<typeof PostCard>;
 
@@ -78,6 +79,27 @@ export const GroupBroadcast: Story = {
   args: {
     post: { ...basePost, postType: 'GROUP_BROADCAST', groupId: 1, content: 'Court booking confirmed for Sunday 9am, see you there!' },
     sport: football,
+  },
+};
+
+// Home Feed / Groups page "All" view — disambiguates which group a
+// GROUP_POST/GROUP_BROADCAST belongs to since posts from many groups blend
+// together there (unlike a specific group's own feed, which passes null).
+// Static text here (no onGroupClick) — see WithClickableGroupName below.
+export const WithGroupName: Story = {
+  args: {
+    post: { ...basePost, postType: 'GROUP_POST', groupId: 1 },
+    sport: football,
+    groupName: '1st Football',
+  },
+};
+
+export const WithClickableGroupName: Story = {
+  args: {
+    post: { ...basePost, postType: 'GROUP_POST', groupId: 1 },
+    sport: football,
+    groupName: '1st Football',
+    onGroupClick: () => {},
   },
 };
 

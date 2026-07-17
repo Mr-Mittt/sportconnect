@@ -47,6 +47,7 @@ describe('PostCard', () => {
         post={post}
         sport={football}
         currentUserId="someone-else"
+        groupName={null}
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
@@ -66,6 +67,7 @@ describe('PostCard', () => {
         post={{ ...post, userFullName: null }}
         sport={football}
         currentUserId="someone-else"
+        groupName={null}
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
@@ -81,6 +83,7 @@ describe('PostCard', () => {
         post={post}
         sport={null}
         currentUserId="someone-else"
+        groupName={null}
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
@@ -88,6 +91,76 @@ describe('PostCard', () => {
       />,
     );
     expect(screen.queryByText('Football')).not.toBeInTheDocument();
+  });
+
+  it('renders "username > groupname" when groupName is resolved (Home Feed / Groups "All")', () => {
+    render(
+      <PostCard
+        post={{ ...post, postType: 'GROUP_POST', groupId: 7 }}
+        sport={football}
+        currentUserId="someone-else"
+        groupName="1st Football"
+        onToggleLike={noop}
+        onHashtagClick={noop}
+        onDeletePost={noop}
+        onOpenComments={noop}
+      />,
+    );
+    expect(screen.getByText('Marcus Lee')).toBeInTheDocument();
+    expect(screen.getByText('1st Football')).toBeInTheDocument();
+  });
+
+  it('renders groupName as static text (no button) when onGroupClick is not provided', () => {
+    render(
+      <PostCard
+        post={{ ...post, postType: 'GROUP_POST', groupId: 7 }}
+        sport={football}
+        currentUserId="someone-else"
+        groupName="1st Football"
+        onToggleLike={noop}
+        onHashtagClick={noop}
+        onDeletePost={noop}
+        onOpenComments={noop}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: '1st Football' })).not.toBeInTheDocument();
+  });
+
+  it('renders groupName as a clickable link and reports the click when onGroupClick is provided', async () => {
+    const user = userEvent.setup();
+    const onGroupClick = vi.fn();
+    render(
+      <PostCard
+        post={{ ...post, postType: 'GROUP_POST', groupId: 7 }}
+        sport={football}
+        currentUserId="someone-else"
+        groupName="1st Football"
+        onGroupClick={onGroupClick}
+        onToggleLike={noop}
+        onHashtagClick={noop}
+        onDeletePost={noop}
+        onOpenComments={noop}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '1st Football' }));
+    expect(onGroupClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders just the username when groupName is null (a specific group\'s own feed)', () => {
+    render(
+      <PostCard
+        post={{ ...post, postType: 'GROUP_POST', groupId: 7 }}
+        sport={football}
+        currentUserId="someone-else"
+        groupName={null}
+        onToggleLike={noop}
+        onHashtagClick={noop}
+        onDeletePost={noop}
+        onOpenComments={noop}
+      />,
+    );
+    expect(screen.getByText('Marcus Lee')).toBeInTheDocument();
+    expect(screen.queryByText(/>/)).not.toBeInTheDocument();
   });
 
   it('like button reports the post id and reflects the liked state from props', async () => {
@@ -98,6 +171,7 @@ describe('PostCard', () => {
         post={post}
         sport={football}
         currentUserId="someone-else"
+        groupName={null}
         onToggleLike={onToggleLike}
         onHashtagClick={noop}
         onDeletePost={noop}
@@ -117,6 +191,7 @@ describe('PostCard', () => {
         post={{ ...post, isLikedByCurrentUser: true, likeCount: 15 }}
         sport={football}
         currentUserId="someone-else"
+        groupName={null}
         onToggleLike={onToggleLike}
         onHashtagClick={noop}
         onDeletePost={noop}
@@ -136,6 +211,7 @@ describe('PostCard', () => {
         post={{ ...post, content: 'Great 5-a-side session tonight. #fridayrun' }}
         sport={football}
         currentUserId="someone-else"
+        groupName={null}
         onToggleLike={noop}
         onHashtagClick={onHashtagClick}
         onDeletePost={noop}
@@ -154,6 +230,7 @@ describe('PostCard', () => {
         post={post}
         sport={football}
         currentUserId="someone-else"
+        groupName={null}
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
@@ -172,6 +249,7 @@ describe('PostCard', () => {
         post={{ ...post, postType: 'GROUP_BROADCAST', groupId: 5 }}
         sport={football}
         currentUserId="someone-else"
+        groupName={null}
         onToggleLike={onToggleLike}
         onHashtagClick={noop}
         onDeletePost={noop}
@@ -191,6 +269,7 @@ describe('PostCard', () => {
         post={post}
         sport={football}
         currentUserId="someone-else"
+        groupName={null}
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
@@ -209,6 +288,7 @@ describe('PostCard', () => {
         post={post}
         sport={football}
         currentUserId="someone-else"
+        groupName={null}
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}
@@ -226,6 +306,7 @@ describe('PostCard', () => {
         post={post}
         sport={football}
         currentUserId="user-marcus"
+        groupName={null}
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={onDeletePost}
@@ -247,6 +328,7 @@ describe('PostCard', () => {
         post={post}
         sport={football}
         currentUserId={undefined}
+        groupName={null}
         onToggleLike={noop}
         onHashtagClick={noop}
         onDeletePost={noop}

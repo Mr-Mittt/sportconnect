@@ -71,15 +71,15 @@ describe('GroupSpaceSwitcher', () => {
     );
   });
 
-  it('clicking a group pill calls onSelect with that group id', async () => {
+  it('clicking a group pill calls onSelect with that group id and its sportId', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
-    const groups = [group({ id: 1, groupName: 'Riverside Ballers' })];
+    const groups = [group({ id: 1, groupName: 'Riverside Ballers', sportId: 5 })];
 
     renderSwitcher({ groups, onSelect });
 
     await user.click(screen.getByRole('button', { name: /Riverside Ballers/ }));
-    expect(onSelect).toHaveBeenCalledWith(1);
+    expect(onSelect).toHaveBeenCalledWith(1, 5);
   });
 
   it('clicking All calls onSelect with null', async () => {

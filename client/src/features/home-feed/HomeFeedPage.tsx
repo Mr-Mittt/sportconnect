@@ -61,6 +61,7 @@ const noop = () => {};
 export function HomeFeedPage() {
   const activeSport = useFeedSpaceStore((state) => state.activeSport);
   const setActiveSport = useFeedSpaceStore((state) => state.setActiveSport);
+  const selectGroup = useFeedSpaceStore((state) => state.selectGroup);
   const navigate = useNavigate();
   // Source of truth for which post's comment dialog is open — the URL, not
   // local state (FEED-12). `useParams` re-runs on every route match, so this
@@ -70,6 +71,15 @@ export function HomeFeedPage() {
   const activeCommentsPostId = postIdParam !== undefined ? Number(postIdParam) : null;
   const openComments = (postId: number) => navigate(`/posts/${postId}`);
   const closeComments = () => navigate('/', { replace: true });
+  // Clicking a group post's "> groupname" link — switches the Groups page to
+  // that group's sport (a group is 1:1 with exactly one sport) before
+  // selecting it, then navigates there. Mirrors GroupSpaceSwitcher's own
+  // click behavior so the destination looks identical either way.
+  const goToGroup = (groupId: number, sportId: number) => {
+    setActiveSport(sportKeyForId(sportId) ?? 'all');
+    selectGroup(groupId, sportId);
+    navigate('/groups');
+  };
   // Which hashtag's results modal is open — still page-local state (unlike
   // activeCommentsPostId above, this one has no URL representation — FEED-6
   // never scoped it that way, and this ticket doesn't expand it). Split into
@@ -193,6 +203,8 @@ export function HomeFeedPage() {
             isError={isError}
             onRetry={retryPosts}
             isLoadMoreError={isLoadMorePostsError}
+            groupsById={data.groupsById}
+            onGroupClick={goToGroup}
           />
         </div>
         <div className="flex min-w-0 flex-col gap-3.5">

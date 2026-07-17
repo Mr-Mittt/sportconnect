@@ -11,7 +11,7 @@ import { useUnlikePost } from '@/features/feed/hooks/useUnlikePost';
 import { useUpdatePost } from '@/features/feed/hooks/useUpdatePost';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { SPORT_ID_BY_KEY } from '@/features/feed/sportIdMap';
-import type { Group, Post } from '@/features/feed/types';
+import type { Group, GroupRef, Post } from '@/features/feed/types';
 import { useGroupBroadcasts } from '@/shared/hooks/useGroupBroadcasts';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useTrendingHashtags } from '@/shared/hooks/useTrendingHashtags';
@@ -26,6 +26,14 @@ export interface GroupsPageData {
   upcomingMatches: UpcomingMatch[];
   hashtags: TrendingHashtag[];
   broadcasts: GroupBroadcast[];
+  /** post.groupId -> { groupName, sportId }, for each GROUP_POST/
+   * GROUP_BROADCAST's "username > groupname" author line — built from the
+   * unfiltered groups list (not `groups` above, which is narrowed by
+   * `activeSport`), same reasoning as `selectedGroupSportId` below. Only
+   * rendered when `GroupsPage` is showing "All" groups (see `Feed`'s
+   * `showGroupName`); sportId lets clicking the link switch to that group's
+   * sport before selecting it. */
+  groupsById: Record<number, GroupRef>;
 }
 
 /**
@@ -75,7 +83,7 @@ export interface GroupsPageData {
 export function useGroupsPageData(): {
   data: GroupsPageData;
   selectedGroupId: number | null;
-  selectGroup: (groupId: number | null) => void;
+  selectGroup: (groupId: number | null, groupSportId?: number | null) => void;
   isLoading: boolean;
   isError: boolean;
   toggleLike: (postId: number) => void;
@@ -133,6 +141,29 @@ export function useGroupsPageData(): {
         selectedGroup.currentUserRole === 'group_admin')
     );
   }, [groups, selectedGroupId]);
+
+  // Looked up from the unfiltered list (not `groups`, which is narrowed by
+  // `activeSport`) so this stays correct even in the brief window where
+  // `activeSport` and `selectedGroupId` are momentarily out of sync during a
+  // sport switch. A group is always 1:1 with exactly one sport — this is the
+  // one genuinely correct sportId source for a GROUP_POST/GROUP_BROADCAST,
+  // unlike a personal USER_FEED post, which has no equivalent (FEED-3's "Tag
+  // sport" stays inert/deferred; that's a different, unscoped gap).
+  const selectedGroupSportId = useMemo(
+    () => (groupsQuery.data?.content ?? []).find((group) => group.id === selectedGroupId)?.sportId ?? null,
+    [groupsQuery.data, selectedGroupId],
+  );
+
+  const groupsById = useMemo(
+    () =>
+      Object.fromEntries(
+        (groupsQuery.data?.content ?? []).map((group) => [
+          group.id,
+          { groupName: group.groupName, sportId: group.sportId },
+        ]),
+      ),
+    [groupsQuery.data],
+  );
 
   const activeBroadcastForSelectedGroup = useMemo(() => {
     if (selectedGroupId === null) return null;
@@ -200,9 +231,14 @@ export function useGroupsPageData(): {
       // GROUP_BROADCAST, FEED-7) stated outright, not left to infer from
       // groupId alone.
       const postType = options?.asBroadcast ? 'GROUP_BROADCAST' : 'GROUP_POST';
-      createMutation.mutate({ content, groupId: selectedGroupId, postType });
+      // sportId: real bug found live — every group post/broadcast was being
+      // created with sportId omitted (-> null server-side), even though the
+      // group it belongs to has a definite, known sport. That silently broke
+      // Feed's own sport-filter for these posts (they'd only ever show under
+      // "All"). The group's sportId is the one genuinely correct source here.
+      createMutation.mutate({ content, groupId: selectedGroupId, postType, sportId: selectedGroupSportId ?? undefined });
     },
-    [createMutation, selectedGroupId],
+    [createMutation, selectedGroupId, selectedGroupSportId],
   );
 
   const updateBroadcast = useCallback(
@@ -236,6 +272,7 @@ export function useGroupsPageData(): {
       upcomingMatches: upcomingMatchesQuery.data,
       hashtags: trendingHashtagsQuery.data,
       broadcasts: groupBroadcastsQuery.data,
+      groupsById,
     },
     selectedGroupId,
     selectGroup,

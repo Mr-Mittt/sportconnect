@@ -1,4 +1,4 @@
-import type { Post } from '@/features/feed/types';
+import type { GroupRef, Post } from '@/features/feed/types';
 import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useInfiniteScrollSentinel } from '@/shared/lib/useInfiniteScrollSentinel';
 import { Skeleton } from '@/shared/ui/skeleton';
@@ -30,6 +30,28 @@ interface FeedProps {
    * per-sport wording — `HashtagPostsModal` (FEED-6) overrides it for its
    * per-tag empty state. */
   emptyMessage?: string;
+  /** Default `true` (Home Feed/HashtagPostsModal, which blend posts from
+   * multiple sports — the badge disambiguates which sport a post is about).
+   * The Groups page passes `activeSport === 'all'`: with a specific sport
+   * selected, every visible post already shares it (Feed's own filter below
+   * guarantees that), so the badge is redundant. With "All" sports, posts
+   * can span multiple groups/sports again, so the badge stays useful. */
+  showSportBadge?: boolean;
+  /** post.groupId -> { groupName, sportId }, for resolving each GROUP_POST/
+   * GROUP_BROADCAST's "username > groupname" author line. Missing/unmapped
+   * ids render just the username — see PostCard's own doc comment. */
+  groupsById?: Record<number, GroupRef>;
+  /** Default `true` (Home Feed, which always blends posts from multiple
+   * groups). The Groups page passes `selectedGroupId === null`: inside one
+   * specific group's own feed every post already shares that one group, so
+   * repeating its name on every card is redundant, same reasoning as
+   * `showSportBadge`. */
+  showGroupName?: boolean;
+  /** Called with (groupId, sportId) when a post's group name is clicked.
+   * Optional — `HashtagPostsModal` doesn't wire this up (it has no
+   * group-scoped destination to send the user to), so the group name there
+   * just renders as static text via PostCard's own no-op fallback. */
+  onGroupClick?: (groupId: number, sportId: number) => void;
 }
 
 function PostCardSkeleton() {
@@ -82,6 +104,10 @@ export function Feed({
   onRetry,
   isLoadMoreError,
   emptyMessage = 'No posts yet for this sport.',
+  showSportBadge = true,
+  groupsById = {},
+  showGroupName = true,
+  onGroupClick,
 }: FeedProps) {
   const canLoadMore = hasMorePosts && !isFetchingMorePosts;
   const sentinelRef = useInfiniteScrollSentinel(onLoadMore, canLoadMore);
@@ -125,12 +151,20 @@ export function Feed({
       {visiblePosts.map((post) => {
         const sportKey = sportKeyForId(post.sportId);
         const sport = sportKey !== undefined ? sportsByKey[sportKey] : null;
+        const groupId = post.groupId;
+        const group = showGroupName && groupId !== null ? (groupsById[groupId] ?? null) : null;
         return (
           <PostCard
             key={post.id}
             post={post}
-            sport={sport ?? null}
+            sport={showSportBadge ? (sport ?? null) : null}
             currentUserId={currentUserId}
+            groupName={group?.groupName ?? null}
+            onGroupClick={
+              group !== null && groupId !== null && onGroupClick !== undefined
+                ? () => onGroupClick(groupId, group.sportId)
+                : undefined
+            }
             onToggleLike={onToggleLike}
             onHashtagClick={onHashtagClick}
             onDeletePost={onDeletePost}

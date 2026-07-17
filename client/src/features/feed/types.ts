@@ -96,6 +96,15 @@ export interface Hashtag {
   usageCount: number;
 }
 
+// Minimal per-group projection Feed/PostCard need for a GROUP_POST/
+// GROUP_BROADCAST's "username > groupname" link: the display name, plus
+// sportId so clicking it can switch the Groups page to that group's sport
+// before selecting it (a group is 1:1 with exactly one sport).
+export interface GroupRef {
+  groupName: string;
+  sportId: number;
+}
+
 // pinnedPosts is only populated by GET /api/groups/{groupId} (getGroup) —
 // null on every other endpoint that returns a GroupResponse (e.g. the
 // user-groups list this feature's useUserGroups() hook calls).
