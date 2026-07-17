@@ -41,11 +41,11 @@ const states = [
 
 for (const width of breakpoints) {
   for (const state of states) {
-    test(`home feed — ${state.name} @ ${width}px`, async ({ page }) => {
+    test(`home feed — ${state.name} @ ${width}px`, async ({ page, mockSessionId }) => {
       await page.clock.setFixedTime(FROZEN_TIME);
       await page.setViewportSize({ width, height: 900 });
       if (state.name === 'empty') {
-        await seedEmptyFeedOnNextLoad(page);
+        await seedEmptyFeedOnNextLoad(mockSessionId);
       }
       await seedAuthenticatedSession(page, `/${state.query}`);
 

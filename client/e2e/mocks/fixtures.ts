@@ -11,6 +11,7 @@ import type {
 } from '../../src/features/feed/types.ts';
 import { hoursAgo, hoursFromNow } from '../../src/shared/lib/mockClock.ts';
 import type { UserSportProfileResponse } from '../../src/shared/types/sport.ts';
+import { MOCK_SERVER_URL } from './mockServerConfig.ts';
 
 // Reused across AUTH-8 and FEED-10 rather than each test inventing its own
 // ad-hoc response shapes (per MSW-0's acceptance criteria).
@@ -304,52 +305,28 @@ export function mockPageResponse<T>(content: T[]): PageResponse<T> {
  * AUTH-3's useSessionBootstrap fires POST /auth/refresh on every app mount,
  * so any protected route needs a valid session established first.
  *
- * Deliberately drives the real LoginForm rather than a raw `fetch()` or
- * `context.addCookies()`. Two things ruled those out:
- *  - `context.addCookies({ httpOnly: true, ... })` is invisible to MSW's
- *    `cookies` resolver arg (confirmed empirically). **Correction (AUTH-8):**
- *    the original note here attributed this to a localStorage-backed shadow
- *    store, which is inaccurate — `msw/lib/browser/` never references that
- *    module (grepped the installed package). The real behavior, re-verified
- *    for AUTH-8 with four targeted tests: within a single page's lifetime,
- *    login → refresh genuinely works (some in-page state does track the
- *    cookie correctly — a raw `fetch('/api/auth/login')` followed
- *    immediately by `fetch('/api/auth/refresh')`, no navigation in between,
- *    returns 200). But nothing survives an actual reload or fresh
- *    navigation: a `Set-Cookie` response header is never applied to the real
- *    browser cookie jar for a Service-Worker-mocked (or Playwright
- *    `route.fulfill()`-mocked) response at all, httpOnly or not, and
- *    `document.cookie` — which IS what `cookies` reads, not a shadow store —
- *    is consequently never populated either. MSW-0's doc claim that
- *    Set-Cookie "is processed by the browser exactly as if a real server had
- *    sent it" is wrong specifically for the across-reload case. See
- *    `seedRefreshCookieMirror` below for the one mechanism that does survive
- *    a reload, needed only when a spec must actually test that (this
- *    function doesn't need to — see next bullet).
- *  - A raw `fetch('/api/auth/login')` does work within the same page (see
- *    above), but a *subsequent* `page.goto()` still races AUTH-3's automatic
- *    bootstrap effect against MSW's per-navigation worker-ready handshake
- *    (`addInitScript` re-runs `worker.start()` on every navigation) — flaky
- *    under parallel workers (confirmed empirically: reliable alone, ~80%
- *    failure rate run in parallel).
+ * Drives the real LoginForm rather than a raw `fetch()` or
+ * `context.addCookies()` — go to `targetPath` directly while logged out.
+ * ProtectedRoute redirects to /login carrying `targetPath` as the
+ * redirect-back target. Then log in through the UI: `useLogin`'s
+ * `onSuccess` calls `authStore.setSession()` directly in memory and
+ * navigates back to `targetPath` via React Router's `navigate()` — an
+ * in-app transition, not a reload.
  *
- * Instead: go to `targetPath` directly while logged out. ProtectedRoute
- * redirects to /login carrying `targetPath` as the redirect-back target —
- * this works deterministically regardless of whether THIS FIRST
- * navigation's own (expected-to-fail) bootstrap call actually got
- * intercepted by MSW or fell through entirely, since both outcomes are
- * "not logged in" and get handled identically. Then log in through the UI:
- * `useLogin`'s `onSuccess` calls `authStore.setSession()` directly in
- * memory and navigates back to `targetPath` via React Router's `navigate()`
- * — an in-app transition, not a reload, so there's no second bootstrap
- * fetch and no second race on the way back.
+ * MSW-1: the mock server is a real listening process (no per-navigation
+ * setup handshake), so there's no readiness race left to work around here —
+ * this function no longer needs `page.evaluate('window.__mswReady')` before
+ * interacting with the login form, unlike the old Service-Worker version.
+ * `Set-Cookie` on a successful login is now a genuine response header the
+ * browser's own cookie jar applies, so the session also survives a reload
+ * from this point on (see the new reload-persistence test in
+ * auth-journey.spec.ts) — no separate cookie-mirroring step needed.
  *
- * Must be called with a page from the MSW-wired `test` in `test.ts`.
+ * Must be called with a page from the mock-server-wired `test` in `test.ts`.
  */
 export async function seedAuthenticatedSession(page: Page, targetPath = '/'): Promise<void> {
   await page.goto(targetPath);
   await page.waitForURL(/\/login/, { timeout: 10000 });
-  await page.evaluate('window.__mswReady');
   await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
   await page.getByLabel('Password', { exact: true }).fill(mockPassword);
   await page.getByRole('button', { name: 'Log in' }).click();
@@ -360,152 +337,100 @@ export async function seedAuthenticatedSession(page: Page, targetPath = '/'): Pr
 }
 
 /**
- * Seeds a JS-readable mirror of the refresh-token cookie so MSW's
- * `cookies` resolver arg (which reads `document.cookie` — see
- * seedAuthenticatedSession's corrected note above) can see it across a
- * `page.reload()`. This is the one mechanism that actually survives a
- * reload, because it's a genuine Playwright-managed browser cookie (not a
- * Set-Cookie response header, which is never honored for a mocked response
- * regardless of this flag).
- *
- * `httpOnly: false` is a deliberate test-only compromise: production code
- * never reads `document.cookie` either way (AUTH-0's own test asserts no
- * storage API is touched), so this doesn't weaken what's actually being
- * verified about the real httpOnly cookie contract — it only gives MSW's
- * mock visibility into what a real browser's actual (JS-invisible) cookie
- * jar would already hold at this point in a real session.
- *
- * Call after an authenticated session is established (e.g. after
- * seedAuthenticatedSession), before any navigation that needs the session to
- * survive.
- *
- * **Not currently exercised by any spec (AUTH-8).** A reload-persistence
- * test needs this cookie *and* a way to guarantee MSW's Service Worker
- * setup wins its race against the app's own bootstrap fetch on that same
- * reload — the second part isn't solved yet (see
- * `client/docs/BACKLOG_MVP.md` · **MSW-1**, filed to replace the
- * per-navigation Service Worker setup with a standalone mock server, which
- * would make this cookie unnecessary in the first place — a real server can
- * set real cookies a reload genuinely persists). This function is correct
- * and kept for when that lands, or for any other spec that needs a
- * reload-surviving session.
+ * MSW-1: posts to the mock server's admin API (`/__mock/sessions/:id/...`)
+ * — replaces the old `page.addInitScript` + dynamic-import +
+ * `worker.use()` mechanism every `simulate*OnNextLoad`/`seed*OnNextLoad`
+ * helper below used. Plain Node-side HTTP calls now, no browser JS
+ * injection: call before `page.goto()`/`page.reload()` (or mid-test, for
+ * `simulateCreatePostFailOnce`, which fires on the *next* matching request
+ * regardless of navigation) with the test's `mockSessionId` (from `test.ts`'s
+ * fixture) — the header that same id travels on is what ties a page's
+ * requests back to this override.
  */
-export async function seedRefreshCookieMirror(page: Page): Promise<void> {
-  await page.context().addCookies([
-    {
-      name: 'refreshToken',
-      value: mockRefreshToken,
-      domain: 'localhost',
-      path: '/api/auth',
-      httpOnly: false,
-    },
-  ]);
+async function postAdmin(sessionId: string, path: string): Promise<void> {
+  const response = await fetch(
+    `${MOCK_SERVER_URL}/__mock/sessions/${encodeURIComponent(sessionId)}/${path}`,
+    { method: 'POST' },
+  );
+  if (!response.ok) {
+    throw new Error(`Mock server admin call failed: POST ${path} -> ${response.status}`);
+  }
 }
 
 /**
- * Registers a second init script (runs after test.ts's own, per Playwright's
- * addInitScript registration-order guarantee) that re-applies a "refresh
- * token expired" override to the MSW worker on the *next* navigation.
- *
- * A one-off `worker.use()` call made directly from the Node-side test
- * wouldn't survive a `page.reload()` — the worker instance itself is
- * recreated fresh on every navigation (see test.ts's own addInitScript
- * comment), so the override has to be re-applied via another init script
- * chained onto the same `window.__mswReady` promise, not a one-time runtime
- * call (AUTH-8).
- *
- * Call this, then trigger any navigation, to simulate a session that was
- * valid until this point and then expired/was revoked server-side.
- *
- * **Not currently exercised by any spec (AUTH-8).** A reload-triggered
- * version of AUTH-8's step 6 used this and turned out unreliable even in
- * normal, non-repeated suite runs — not just the per-navigation MSW-vs-app
- * race every reload risks (see `client/docs/BACKLOG_MVP.md` · **MSW-1**),
- * but a harder stuck state past that. AUTH-8's step 6 was rewritten to
- * simulate the same scenario via AUTH-5's 401-retry interceptor instead
- * (no reload needed at all — see `auth-journey.spec.ts`), which is what
- * ships today. This function is correct and kept for when MSW-1 lands and
- * a reload-based version becomes reliable.
+ * Simulates a refresh token that was valid at login but revoked/expired
+ * server-side sometime after (AUTH-8's step 6 scenario). Call this, then
+ * trigger the request that should hit the expired session (a navigation, or
+ * an already-mounted page's own retry), to simulate the scenario.
  */
-export async function simulateExpiredSessionOnNextLoad(page: Page): Promise<void> {
-  await page.addInitScript(
-    "window.__mswReady.then(() => import('/e2e/mocks/expireSession.ts')" +
-      '.then(({ overrideRefreshToExpired }) => overrideRefreshToExpired(window.__mswWorker)));',
-  );
+export async function simulateExpiredSessionOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/refreshExpired');
 }
 
 /**
- * Same mechanism as simulateExpiredSessionOnNextLoad, for FEED-1's visual-
- * regression empty state — HF-10b's own delta said to replace the old
- * `?visual-state=empty` seam (removed from useHomeFeedData) with an MSW
- * override once the feed went real. Call this, then navigate; the next
- * `GET /posts/feed` on that page returns zero posts.
+ * For FEED-1's visual-regression empty state — HF-10b's own delta said to
+ * replace the old `?visual-state=empty` seam (removed from
+ * useHomeFeedData) with an MSW override once the feed went real. Call this,
+ * then navigate; the next `GET /posts/feed` for this session returns zero
+ * posts.
  */
-export async function seedEmptyFeedOnNextLoad(page: Page): Promise<void> {
-  await page.addInitScript(
-    "window.__mswReady.then(() => import('/e2e/mocks/emptyFeed.ts')" +
-      '.then(({ overrideFeedToEmpty }) => overrideFeedToEmpty(window.__mswWorker)));',
-  );
+export async function seedEmptyFeedOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/feedEmpty');
 }
 
 /**
- * FEED-10 step 1: same mechanism as seedEmptyFeedOnNextLoad, for a genuinely
- * paginated `GET /posts/feed` (21 posts, real `page`/`size` handling) — lets
- * the "Load more" journey step fetch a real second page instead of a
- * single-page fixture that always fits.
+ * FEED-10 step 1: seeds a genuinely paginated `GET /posts/feed` (21 posts,
+ * real `page`/`size` handling) — lets the "Load more" journey step fetch a
+ * real second page instead of a single-page fixture that always fits.
  */
-export async function seedPaginatedFeedOnNextLoad(page: Page): Promise<void> {
-  await page.addInitScript(
-    "window.__mswReady.then(() => import('/e2e/mocks/paginatedFeed.ts')" +
-      '.then(({ seedPaginatedFeed }) => seedPaginatedFeed()));',
-  );
+export async function seedPaginatedFeedOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'seed-paginated-feed');
 }
 
 /**
- * FEED-10's SPORT-1 delta step — same mechanism as seedEmptyFeedOnNextLoad,
- * for a user with zero sport profiles (rather than the primary fixture
- * user's 3-sport cap, needed elsewhere in the same journey).
+ * FEED-10's SPORT-1 delta step — for a user with zero sport profiles
+ * (rather than the primary fixture user's 3-sport cap, needed elsewhere in
+ * the same journey).
  */
-export async function seedZeroSportProfilesOnNextLoad(page: Page): Promise<void> {
-  await page.addInitScript(
-    "window.__mswReady.then(() => import('/e2e/mocks/emptySportProfiles.ts')" +
-      '.then(({ overrideSportProfilesToEmpty }) => overrideSportProfilesToEmpty(window.__mswWorker)));',
-  );
+export async function seedZeroSportProfilesOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/sportProfilesEmpty');
 }
 
 /**
- * FEED-8 error-simulation helpers — same mechanism as
- * simulateExpiredSessionOnNextLoad/seedEmptyFeedOnNextLoad, one per real-data
- * surface FEED-8 hardened. Call before `page.goto()`; the next matching
- * request on that page returns a 500, so the real query's `isError` (or, for
- * the feed's pagination-edge case, `isFetchNextPageError` once a first
- * successful page is already loaded) flips and the corresponding error+retry
- * UI renders. FEED-10's E2E journey is the intended consumer.
+ * FEED-8 error-simulation helpers — one per real-data surface FEED-8
+ * hardened. Call before `page.goto()`; the next matching request for this
+ * session returns a 500, so the real query's `isError` (or, for the feed's
+ * pagination-edge case, `isFetchNextPageError` once a first successful page
+ * is already loaded) flips and the corresponding error+retry UI renders.
+ * FEED-10's E2E journey is the intended consumer.
  */
-export async function simulateFeedErrorOnNextLoad(page: Page): Promise<void> {
-  await page.addInitScript(
-    "window.__mswReady.then(() => import('/e2e/mocks/apiErrors.ts')" +
-      '.then(({ overrideFeedToError }) => overrideFeedToError(window.__mswWorker)));',
-  );
+export async function simulateFeedErrorOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/feedError');
 }
 
-export async function simulateTrendingErrorOnNextLoad(page: Page): Promise<void> {
-  await page.addInitScript(
-    "window.__mswReady.then(() => import('/e2e/mocks/apiErrors.ts')" +
-      '.then(({ overrideTrendingToError }) => overrideTrendingToError(window.__mswWorker)));',
-  );
+export async function simulateTrendingErrorOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/trendingError');
 }
 
-export async function simulateBroadcastsErrorOnNextLoad(page: Page): Promise<void> {
-  await page.addInitScript(
-    "window.__mswReady.then(() => import('/e2e/mocks/apiErrors.ts')" +
-      '.then(({ overrideBroadcastsToError }) => overrideBroadcastsToError(window.__mswWorker)));',
-  );
+export async function simulateBroadcastsErrorOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/broadcastsError');
 }
 
-export async function simulateGroupsErrorOnNextLoad(page: Page): Promise<void> {
-  await page.addInitScript(
-    "window.__mswReady.then(() => import('/e2e/mocks/apiErrors.ts')" +
-      '.then(({ overrideGroupsToError }) => overrideGroupsToError(window.__mswWorker)));',
-  );
+export async function simulateGroupsErrorOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/groupsError');
+}
+
+/**
+ * FEED-10's required "at least one MSW-simulated error response" — a
+ * one-time failure on the next `POST /posts` for this session (consumed on
+ * read, see overrides.ts's `consumeCreatePostFailOnce`): a retry with the
+ * same content succeeds normally. MSW-1: replaces failCreatePostOnce.ts's
+ * `overrideCreatePostToFailOnce`, previously invoked via
+ * `page.evaluate` against `window.__mswWorker` directly since the failure
+ * needed to apply mid-test, not on next navigation — now a plain admin call,
+ * which works identically whether called before or mid-test since it
+ * doesn't depend on a navigation at all.
+ */
+export async function simulateCreatePostFailOnce(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/createPostFailOnce');
 }

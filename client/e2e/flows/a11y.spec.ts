@@ -19,8 +19,7 @@ const breakpoints = [375, 768, 1280] as const;
 async function loadHomeFeed(page: import('@playwright/test').Page, width: number) {
   await page.setViewportSize({ width, height: 900 });
   // Lands on / after login (SPA navigate, no reload) — no separate
-  // page.goto('/') needed, and adding one would reintroduce AUTH-3's
-  // bootstrap-vs-MSW-worker-ready race on a fresh navigation.
+  // page.goto('/') needed.
   await seedAuthenticatedSession(page);
   // Rail content present = page fully assembled. Feed is real now (FEED-1) —
   // also wait for it to actually finish loading, so the overflow/axe checks
@@ -83,7 +82,6 @@ async function loadAuthPage(
 ) {
   await page.setViewportSize({ width, height: 900 });
   await page.goto(path);
-  await page.evaluate('window.__mswReady');
   await expect(page.getByRole('heading', { name: heading })).toBeVisible();
 }
 
@@ -110,7 +108,6 @@ for (const { path, heading } of authPages) {
 // order) and asserts the sequence explicitly, once per form.
 test('/login: Tab reaches every control in order', async ({ page }) => {
   await page.goto('/login');
-  await page.evaluate('window.__mswReady');
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
 
   await page.keyboard.press('Tab');
@@ -133,7 +130,6 @@ test('/login: Tab reaches every control in order', async ({ page }) => {
 
 test('/register: Tab reaches every control in order', async ({ page }) => {
   await page.goto('/register');
-  await page.evaluate('window.__mswReady');
   await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible();
 
   await page.keyboard.press('Tab');

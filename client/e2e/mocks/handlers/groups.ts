@@ -8,6 +8,8 @@ import type {
   JoinRequestPayload,
 } from '../../../src/features/feed/types.ts';
 import { mockGroup, mockOwnedGroup, mockPageResponse, mockPublicGroup, mockUser } from '../fixtures.ts';
+import { getOverrides } from '../overrides.ts';
+import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
@@ -24,19 +26,34 @@ function requireAuth(request: Request): Response | null {
   return null;
 }
 
+interface GroupsSession {
+  userGroupsState: Group[];
+  publicGroupsState: GroupSearchResult[];
+  joinRequestsState: JoinRequest[];
+  nextGroupId: number;
+  nextJoinRequestId: number;
+}
+
 // FEED-5's own small stateful fake backend, same "not a fixed responder"
 // reasoning as feed.ts's postsState — a created group must actually appear
 // in a later GET /groups/user/:userId (useCreateGroup's onSuccess cache
 // write already handles this client-side, but useUserGroups' background
 // invalidate+refetch would otherwise clobber it if this were static).
-let userGroupsState: Group[] = [mockGroup, mockOwnedGroup];
-let publicGroupsState: GroupSearchResult[] = [
-  { ...mockGroup, description: mockGroup.description, isMember: true } as unknown as GroupSearchResult,
-  mockPublicGroup,
-];
-let joinRequestsState: JoinRequest[] = [];
-let nextGroupId = 100;
-let nextJoinRequestId = 100;
+function defaultGroupsSession(): GroupsSession {
+  return {
+    userGroupsState: [mockGroup, mockOwnedGroup],
+    publicGroupsState: [
+      { ...mockGroup, description: mockGroup.description, isMember: true } as unknown as GroupSearchResult,
+      mockPublicGroup,
+    ],
+    joinRequestsState: [],
+    nextGroupId: 100,
+    nextJoinRequestId: 100,
+  };
+}
+
+// MSW-1: session-keyed, same reasoning as feed.ts's feedSessions.
+const groupsSessions = createSessionStore(defaultGroupsSession);
 
 export const groupHandlers: HttpHandler[] = [
   // Moved from feed.ts (FEED-5) — now stateful (userGroupsState) so a group
@@ -46,8 +63,13 @@ export const groupHandlers: HttpHandler[] = [
   http.get('/api/groups/user/:userId', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
+    const sessionId = sessionIdFromRequest(request);
+    // MSW-1: replaces apiErrors.ts's overrideGroupsToError.
+    if (getOverrides(sessionId).groupsError) {
+      return HttpResponse.json(apiError('Simulated groups failure'), { status: 500 });
+    }
     return HttpResponse.json(
-      apiResponse(mockPageResponse(userGroupsState), 'Groups retrieved successfully'),
+      apiResponse(mockPageResponse(groupsSessions.get(sessionId).userGroupsState), 'Groups retrieved successfully'),
     );
   }),
 
@@ -58,8 +80,9 @@ export const groupHandlers: HttpHandler[] = [
     if (!body.groupName || body.sportId === undefined) {
       return HttpResponse.json(apiError('Validation failed'), { status: 400 });
     }
+    const session = groupsSessions.get(sessionIdFromRequest(request));
     const created: Group = {
-      id: nextGroupId++,
+      id: session.nextGroupId++,
       sportId: body.sportId,
       groupName: body.groupName,
       description: body.description ?? null,
@@ -75,10 +98,10 @@ export const groupHandlers: HttpHandler[] = [
       updatedAt: new Date().toISOString(),
       pinnedPosts: null,
     };
-    userGroupsState = [created, ...userGroupsState];
-    publicGroupsState = [
+    session.userGroupsState = [created, ...session.userGroupsState];
+    session.publicGroupsState = [
       { ...created, isMember: true } as unknown as GroupSearchResult,
-      ...publicGroupsState,
+      ...session.publicGroupsState,
     ];
     return HttpResponse.json(apiResponse(created, 'Group created successfully'), { status: 201 });
   }),
@@ -89,7 +112,7 @@ export const groupHandlers: HttpHandler[] = [
     const url = new URL(request.url);
     const sportId = url.searchParams.get('sportId');
     const keyword = url.searchParams.get('keyword');
-    let results = publicGroupsState;
+    let results = groupsSessions.get(sessionIdFromRequest(request)).publicGroupsState;
     if (sportId !== null) {
       results = results.filter((group) => group.sportId === Number(sportId));
     }
@@ -105,18 +128,19 @@ export const groupHandlers: HttpHandler[] = [
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const body = (await request.json()) as JoinRequestPayload;
-    const targetGroup = publicGroupsState.find((group) => group.groupName === body.groupName);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    const targetGroup = session.publicGroupsState.find((group) => group.groupName === body.groupName);
     if (!targetGroup) {
       return HttpResponse.json(apiError('Group not found'), { status: 404 });
     }
-    const alreadyPending = joinRequestsState.some(
+    const alreadyPending = session.joinRequestsState.some(
       (request_) => request_.groupId === targetGroup.id && request_.status === 'pending',
     );
     if (alreadyPending) {
       return HttpResponse.json(apiError('A pending request already exists'), { status: 400 });
     }
     const created: JoinRequest = {
-      id: nextJoinRequestId++,
+      id: session.nextJoinRequestId++,
       groupId: targetGroup.id,
       groupName: targetGroup.groupName,
       userId: mockUser.id,
@@ -130,7 +154,7 @@ export const groupHandlers: HttpHandler[] = [
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    joinRequestsState = [created, ...joinRequestsState];
+    session.joinRequestsState = [created, ...session.joinRequestsState];
     return HttpResponse.json(apiResponse(created, 'Join request created successfully'), {
       status: 201,
     });
@@ -139,21 +163,16 @@ export const groupHandlers: HttpHandler[] = [
   http.get('/api/groups/join-requests/user/:userId', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
-    const pending = joinRequestsState.filter((request_) => request_.status === 'pending');
+    const pending = groupsSessions
+      .get(sessionIdFromRequest(request))
+      .joinRequestsState.filter((request_) => request_.status === 'pending');
     return HttpResponse.json(
       apiResponse(mockPageResponse(pending), 'Join requests retrieved successfully'),
     );
   }),
 ];
 
-/** Test-only reset — mirrors feed.ts's implicit per-module-load reset (no
- * explicit reset export there since its state doesn't need cross-test
- * isolation the way join-request "already pending" business logic does). */
-export function resetGroupHandlersState(): void {
-  userGroupsState = [mockGroup];
-  publicGroupsState = [
-    { ...mockGroup, description: mockGroup.description, isMember: true } as unknown as GroupSearchResult,
-    mockPublicGroup,
-  ];
-  joinRequestsState = [];
+/** Test-only reset — used by the mock server's `/__mock/sessions/:id/reset`. */
+export function resetGroupHandlersState(sessionId: string): void {
+  groupsSessions.reset(sessionId);
 }
