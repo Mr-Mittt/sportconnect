@@ -5,6 +5,7 @@ import { useDeletePost } from '@/features/feed/hooks/useDeletePost';
 import { useLikePost } from '@/features/feed/hooks/useLikePost';
 import { usePersonalFeed } from '@/features/feed/hooks/usePersonalFeed';
 import { useUnlikePost } from '@/features/feed/hooks/useUnlikePost';
+import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import type { Post } from '@/features/feed/types';
 import { useGroupBroadcasts } from '@/shared/hooks/useGroupBroadcasts';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
@@ -18,6 +19,11 @@ export interface HomeFeedData {
   upcomingMatches: UpcomingMatch[];
   hashtags: TrendingHashtag[];
   broadcasts: GroupBroadcast[];
+  /** post.groupId -> group name, for each GROUP_POST/GROUP_BROADCAST's
+   * "username > groupname" author line — Home Feed blends posts from every
+   * group the user is in, so the group needs disambiguating (unlike a
+   * specific group's own feed on the Groups page). */
+  groupNamesById: Record<number, string>;
 }
 
 /**
@@ -85,6 +91,7 @@ export function useHomeFeedData(): {
   const upcomingMatchesQuery = useUpcomingMatches();
   const trendingHashtagsQuery = useTrendingHashtags();
   const groupBroadcastsQuery = useGroupBroadcasts();
+  const groupsQuery = useUserGroups(currentUserId);
   const likeMutation = useLikePost();
   const unlikeMutation = useUnlikePost();
   const deleteMutation = useDeletePost();
@@ -93,6 +100,14 @@ export function useHomeFeedData(): {
   const posts = useMemo(
     () => feedQuery.data?.pages.flatMap((page) => page.content) ?? [],
     [feedQuery.data],
+  );
+
+  const groupNamesById = useMemo(
+    () =>
+      Object.fromEntries(
+        (groupsQuery.data?.content ?? []).map((group) => [group.id, group.groupName]),
+      ),
+    [groupsQuery.data],
   );
 
   const toggleLike = useCallback(
@@ -143,6 +158,7 @@ export function useHomeFeedData(): {
       upcomingMatches: isVisualEmpty ? [] : upcomingMatchesQuery.data,
       hashtags: trendingHashtagsQuery.data,
       broadcasts: groupBroadcastsQuery.data,
+      groupNamesById,
     }),
     [
       sportProfilesQuery.data,
@@ -151,6 +167,7 @@ export function useHomeFeedData(): {
       upcomingMatchesQuery.data,
       trendingHashtagsQuery.data,
       groupBroadcastsQuery.data,
+      groupNamesById,
     ],
   );
 

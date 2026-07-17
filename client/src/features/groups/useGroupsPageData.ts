@@ -26,6 +26,12 @@ export interface GroupsPageData {
   upcomingMatches: UpcomingMatch[];
   hashtags: TrendingHashtag[];
   broadcasts: GroupBroadcast[];
+  /** post.groupId -> group name, for each GROUP_POST/GROUP_BROADCAST's
+   * "username > groupname" author line — built from the unfiltered groups
+   * list (not `groups` above, which is narrowed by `activeSport`), same
+   * reasoning as `selectedGroupSportId` below. Only rendered when
+   * `GroupsPage` is showing "All" groups (see `Feed`'s `showGroupName`). */
+  groupNamesById: Record<number, string>;
 }
 
 /**
@@ -146,6 +152,14 @@ export function useGroupsPageData(): {
     [groupsQuery.data, selectedGroupId],
   );
 
+  const groupNamesById = useMemo(
+    () =>
+      Object.fromEntries(
+        (groupsQuery.data?.content ?? []).map((group) => [group.id, group.groupName]),
+      ),
+    [groupsQuery.data],
+  );
+
   const activeBroadcastForSelectedGroup = useMemo(() => {
     if (selectedGroupId === null) return null;
     const posts = activeBroadcastsQuery.data?.content ?? [];
@@ -253,6 +267,7 @@ export function useGroupsPageData(): {
       upcomingMatches: upcomingMatchesQuery.data,
       hashtags: trendingHashtagsQuery.data,
       broadcasts: groupBroadcastsQuery.data,
+      groupNamesById,
     },
     selectedGroupId,
     selectGroup,

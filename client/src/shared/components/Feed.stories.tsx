@@ -126,3 +126,16 @@ export const LoadMoreError: Story = {
 export const NoSportBadge: Story = {
   args: { posts, activeSport: 'football', showSportBadge: false },
 };
+
+// Home Feed / Groups "All" view — group posts render "username > groupname"
+// to disambiguate which group each post belongs to.
+export const WithGroupNames: Story = {
+  args: {
+    posts: [
+      { ...posts[0], postType: 'GROUP_POST', groupId: 1 },
+      { ...posts[1], postType: 'GROUP_POST', groupId: 2 },
+    ],
+    activeSport: 'all',
+    groupNamesById: { 1: '1st Football', 2: 'Riverside Ballers' },
+  },
+};

@@ -247,6 +247,8 @@ export function GroupsPage() {
             isLoading={isLoading}
             isError={isError}
             showSportBadge={activeSport === 'all'}
+            groupNamesById={data.groupNamesById}
+            showGroupName={selectedGroupId === null}
             onRetry={retryPosts}
             isLoadMoreError={isLoadMorePostsError}
           />

@@ -162,4 +162,31 @@ describe('Feed', () => {
     expect(screen.queryByText('Football')).not.toBeInTheDocument();
     expect(screen.queryByText('Basketball')).not.toBeInTheDocument();
   });
+
+  it('resolves each group post\'s "username > groupname" via groupNamesById (Home Feed / Groups "All")', () => {
+    const groupPost: Post = { ...posts[0], postType: 'GROUP_POST', groupId: 42 };
+    render(
+      <Feed
+        {...baseProps}
+        posts={[groupPost]}
+        activeSport="all"
+        groupNamesById={{ 42: '1st Football' }}
+      />,
+    );
+    expect(screen.getByText('1st Football')).toBeInTheDocument();
+  });
+
+  it('omits the group name when showGroupName is false (a specific group\'s own feed)', () => {
+    const groupPost: Post = { ...posts[0], postType: 'GROUP_POST', groupId: 42 };
+    render(
+      <Feed
+        {...baseProps}
+        posts={[groupPost]}
+        activeSport="all"
+        groupNamesById={{ 42: '1st Football' }}
+        showGroupName={false}
+      />,
+    );
+    expect(screen.queryByText('1st Football')).not.toBeInTheDocument();
+  });
 });

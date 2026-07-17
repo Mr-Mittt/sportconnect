@@ -193,6 +193,7 @@ export function HomeFeedPage() {
             isError={isError}
             onRetry={retryPosts}
             isLoadMoreError={isLoadMorePostsError}
+            groupNamesById={data.groupNamesById}
           />
         </div>
         <div className="flex min-w-0 flex-col gap-3.5">

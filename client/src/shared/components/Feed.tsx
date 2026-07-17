@@ -37,6 +37,16 @@ interface FeedProps {
    * guarantees that), so the badge is redundant. With "All" sports, posts
    * can span multiple groups/sports again, so the badge stays useful. */
   showSportBadge?: boolean;
+  /** post.groupId -> group name, for resolving each GROUP_POST/
+   * GROUP_BROADCAST's "username > groupname" author line. Missing/unmapped
+   * ids render just the username — see PostCard's own doc comment. */
+  groupNamesById?: Record<number, string>;
+  /** Default `true` (Home Feed, which always blends posts from multiple
+   * groups). The Groups page passes `selectedGroupId === null`: inside one
+   * specific group's own feed every post already shares that one group, so
+   * repeating its name on every card is redundant, same reasoning as
+   * `showSportBadge`. */
+  showGroupName?: boolean;
 }
 
 function PostCardSkeleton() {
@@ -90,6 +100,8 @@ export function Feed({
   isLoadMoreError,
   emptyMessage = 'No posts yet for this sport.',
   showSportBadge = true,
+  groupNamesById = {},
+  showGroupName = true,
 }: FeedProps) {
   const canLoadMore = hasMorePosts && !isFetchingMorePosts;
   const sentinelRef = useInfiniteScrollSentinel(onLoadMore, canLoadMore);
@@ -133,12 +145,15 @@ export function Feed({
       {visiblePosts.map((post) => {
         const sportKey = sportKeyForId(post.sportId);
         const sport = sportKey !== undefined ? sportsByKey[sportKey] : null;
+        const groupName =
+          showGroupName && post.groupId !== null ? (groupNamesById[post.groupId] ?? null) : null;
         return (
           <PostCard
             key={post.id}
             post={post}
             sport={showSportBadge ? (sport ?? null) : null}
             currentUserId={currentUserId}
+            groupName={groupName}
             onToggleLike={onToggleLike}
             onHashtagClick={onHashtagClick}
             onDeletePost={onDeletePost}

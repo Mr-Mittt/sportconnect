@@ -29,6 +29,13 @@ interface PostCardProps {
   /** The logged-in user's id — the "..." delete menu only renders when this
    * matches post.userId. undefined (session not yet resolved) hides it. */
   currentUserId: string | undefined;
+  /** Resolved name of post.groupId, or null to render just the author name.
+   * Feed decides null vs. resolved: contexts that blend posts from multiple
+   * groups (Home Feed, Groups page's "All" view) pass the resolved name so
+   * "username > groupname" disambiguates which group a post belongs to;
+   * a specific group's own feed passes null since every post there already
+   * shares that one group. */
+  groupName: string | null;
   onToggleLike: (postId: number) => void;
   onHashtagClick: (tag: string) => void;
   onDeletePost: (postId: number) => void;
@@ -73,6 +80,7 @@ export function PostCard({
   post,
   sport,
   currentUserId,
+  groupName,
   onToggleLike,
   onHashtagClick,
   onDeletePost,
@@ -91,7 +99,15 @@ export function PostCard({
           </AvatarFallback>
         </Avatar>
         <div className="flex-1">
-          <div className="text-sm font-medium text-text-primary">{displayName}</div>
+          <div className="text-sm font-medium text-text-primary">
+            {displayName}
+            {groupName !== null && (
+              <>
+                <span className="text-text-muted"> &gt; </span>
+                <span className="text-text-secondary">{groupName}</span>
+              </>
+            )}
+          </div>
           <div className="text-xs text-text-muted">{formatRelativeTime(post.createdAt)}</div>
         </div>
         {sport !== null && (
