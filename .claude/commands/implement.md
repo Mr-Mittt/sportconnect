@@ -77,6 +77,11 @@ After implementation:
    ```
    cd client && npm start
    ```
+6. If any `client/e2e/**` spec file was added, removed, or had a test added/removed/materially
+   changed, run the relevant Playwright project (`pnpm e2e` and/or `pnpm test:visual`) and **update
+   `client/docs/E2E_OVERVIEW.md`'s catalog to match** (directory listing in §3, per-file test table in
+   §6) before calling this done — that doc is the living reference for every e2e test case and easily
+   goes stale silently otherwise.
 
 Report what was tested and whether it passed. Flag any failures before moving on.
 

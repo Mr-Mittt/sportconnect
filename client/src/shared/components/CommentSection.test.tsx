@@ -61,6 +61,8 @@ const baseProps = {
   currentUser,
   post,
   sport: football,
+  isPostLoading: false,
+  isPostError: false,
   comments: [] as Comment[],
   isLoading: false,
   isError: false,
@@ -93,6 +95,19 @@ describe('CommentSection', () => {
     rerender(<CommentSection {...baseProps} post={null} sport={null} />);
     expect(screen.queryByText('Marcus Lee')).not.toBeInTheDocument();
     expect(screen.queryByText('Great 5-a-side session tonight!')).not.toBeInTheDocument();
+  });
+
+  it('shows a loading placeholder header while the post itself is loading (post null, isPostLoading)', () => {
+    render(<CommentSection {...baseProps} post={null} isPostLoading />);
+    expect(screen.queryByText('Marcus Lee')).not.toBeInTheDocument();
+    // Close is still reachable even though the real header hasn't rendered.
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  it("shows a couldn't-load message when the post itself failed (post null, isPostError)", () => {
+    render(<CommentSection {...baseProps} post={null} isPostError />);
+    expect(screen.getByText("Couldn't load this post.")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
 
   it('renders comments, including nested replies', () => {

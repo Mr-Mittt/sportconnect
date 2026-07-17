@@ -988,6 +988,21 @@ response is now genuinely honored by the browser, which a Service-Worker-mocked 
 `pnpm test:visual` shows only the same pre-existing Windows/Linux font-rendering noise documented
 since HF-12 (confirmed via direct diff-image inspection, not a regression).
 
+**FEED-12 DONE** (2026-07-17, `client/docs/FEED-12_COMMENT_MODAL_DEEP_LINK.md`): `/posts/:postId` is
+now a real, URL-addressable route (Option A: renders `HomeFeedPage` underneath, dialog pre-opened) —
+`CommentSection` gets its post from a new `usePost` hook instead of a feed-cache lookup, so a shared
+link works even for a post the viewer's feed never fetched. New `toggleLikeForPost(post)` on
+`useHomeFeedData`/`useGroupsPageData` fixes a real gap where liking a post from outside the owning
+hook's own feed array silently no-op'd. Groups page adopts `usePost` too but stays local-state-only
+(no route) — routing its opens through `/posts/:postId` would unmount Groups' own selected-group state
+on close. Filed **ANON-1** in a new `client/docs/BACKLOG_V1.md` for the "should a shared link be
+viewable while logged out" product decision, deliberately not answered here — MVP behavior is the
+existing generic `ProtectedRoute` redirect-then-bounce-back. Live-verification against the real running
+backend found and fixed a real bug: neither `usePost` nor the pre-existing `useComments` skipped
+TanStack Query's default retry on a 404, so a deleted/bad-link post took ~7s to show "Couldn't load
+this post." — fixed both, verified down to ~400ms. `pnpm e2e` 34/34 (new `post-deep-link.spec.ts`),
+`pnpm test` 351/351, `tsc -b`/`eslint` clean. `client/docs/E2E_OVERVIEW.md` updated with the new spec.
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow

@@ -10,6 +10,7 @@ import type { SportProfile } from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { Skeleton } from '@/shared/ui/skeleton';
 import { CommentItem } from './CommentItem';
 import { HashtagText } from './HashtagText';
 
@@ -18,13 +19,21 @@ interface CommentSectionProps {
   onClose: () => void;
   currentUserId: string | undefined;
   currentUser: { fullName: string; avatarUrl: string | null } | undefined;
-  /** The post this thread belongs to — null only transiently (e.g. mid
-   * close-animation after HomeFeedPage clears `activeCommentsPostId`).
-   * Renders the header/repeated post content shown here, per the design
-   * reference (design-reference-post-modal.html) — the post is always
+  /** The post this thread belongs to — null while still loading/erroring
+   * (FEED-12: `usePost` may genuinely be mid-fetch or have failed, not just
+   * mid close-animation as before — see `isPostLoading`/`isPostError`), or
+   * transiently mid close-animation after the owning page clears its active
+   * post id. Renders the header/repeated post content shown here, per the
+   * design reference (design-reference-post-modal.html) — the post is always
    * visible in-dialog, not left to the dimmed page behind the overlay. */
   post: Post | null;
   sport: SportProfile | null;
+  /** FEED-12: `usePost`'s own loading/error state — distinct from
+   * `isLoading`/`isError` above, which are the comment thread's. A cold
+   * `/posts/:id` load can have the post itself still fetching (or 404ing)
+   * independent of whether comments have loaded. */
+  isPostLoading: boolean;
+  isPostError: boolean;
   comments: Comment[];
   isLoading: boolean;
   isError: boolean;
@@ -76,6 +85,8 @@ export function CommentSection({
   currentUser,
   post,
   sport,
+  isPostLoading,
+  isPostError,
   comments,
   isLoading,
   isError,
@@ -105,6 +116,32 @@ export function CommentSection({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogTitle className="sr-only">Comments on {displayName}'s post</DialogTitle>
+
+        {/* FEED-12: the post header (below) only ever renders once `post` is
+         * resolved. A cold `/posts/:id` load can spend real time (or fail)
+         * before that — this block covers that window; the normal
+         * close-animation case is a single render tick, over before either
+         * `isPostLoading`/`isPostError` would be true, so it never flashes
+         * here in practice. Its own DialogClose is needed since the real
+         * header (which normally carries one) doesn't render yet either. */}
+        {post === null && isPostLoading && (
+          <div className="border-hairline-b flex items-center justify-between gap-2 border-border px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Skeleton className="size-9 shrink-0 rounded-full" />
+              <div className="flex flex-col gap-1.5">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-2.5 w-16" />
+              </div>
+            </div>
+            <DialogClose aria-label="Close" />
+          </div>
+        )}
+        {post === null && isPostError && (
+          <div className="border-hairline-b flex items-center justify-between gap-2 border-border px-4 py-3">
+            <p className="text-2sm text-text-danger">Couldn't load this post.</p>
+            <DialogClose aria-label="Close" />
+          </div>
+        )}
 
         {post !== null && (
           <div className="border-hairline-b flex items-center justify-between gap-2 border-border px-4 py-3">

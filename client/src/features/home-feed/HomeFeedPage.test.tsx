@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
@@ -76,10 +77,27 @@ function feedPage<T>(content: T[]): PageResponse<T> {
   };
 }
 
-function wrapper({ children }: { children: ReactNode }) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+// FEED-12: HomeFeedPage now calls useParams/useNavigate (the comment
+// dialog's open state lives in the URL), so it needs a real Router context
+// to render at all — a bare QueryClientProvider isn't enough anymore.
+// `wrapperFor` lets a test choose which path it's mounted at; `wrapper`
+// (the default, `/`) covers every pre-existing test unchanged.
+function wrapperFor(initialPath: string) {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return (
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[initialPath]}>
+          <Routes>
+            <Route path="/" element={children} />
+            <Route path="/posts/:postId" element={children} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+  };
 }
+const wrapper = wrapperFor('/');
 
 const getMatchCtas = () => screen.getAllByRole('button', { name: /join|view details/ });
 // #fridayrun exists both as a post hashtag and a trending row — scope to the rail cards
@@ -410,10 +428,83 @@ describe('HomeFeedPage', () => {
     // Regression check: CommentSection's post header/content only render
     // when its `post` prop resolves to a real Post, not null — a post opened
     // from the hashtag modal isn't necessarily in the main feed's cache, so
-    // this asserts the fallback lookup into hashtagResultsData actually
-    // found it (previously it didn't, because activeHashtag/its query was
-    // cleared in the same batched update that opened this dialog).
+    // this asserts usePost's own findPostInFeedCaches seed (which scans the
+    // hashtag-results query too) actually found it without a real fetch
+    // (previously it didn't, because activeHashtag/its query was cleared in
+    // the same batched update that opened this dialog).
     expect(within(commentsDialog).getByText('Marcus Lee')).toBeInTheDocument();
     expect(within(commentsDialog).getByText("Marcus Lee's post")).toBeInTheDocument();
+  });
+
+  it('FEED-12: loading /posts/:id directly renders the correct post + comments, even for a post outside the feed', async () => {
+    // The shared post (id 500) is deliberately NOT in feedPosts — proves the
+    // dialog works from a cold load with no prior feed fetch at all, not
+    // just for a post the feed happened to already have.
+    const sharedPost = post({ id: 500, userFullName: 'Someone Else', sportId: 5, content: 'Shared post content' });
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      const staticResponse = staticGetResponse(url);
+      if (staticResponse) return staticResponse;
+      if (url === '/posts/feed') {
+        return { data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' } };
+      }
+      if (url === '/posts/500') {
+        return { data: { success: true, message: '', data: sharedPost, timestamp: '' } };
+      }
+      if (url === '/posts/500/comments') {
+        return { data: { success: true, message: '', data: feedPage([]), timestamp: '' } };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    render(<HomeFeedPage />, { wrapper: wrapperFor('/posts/500') });
+
+    // findByRole resolves as soon as the dialog *shell* exists — it renders
+    // open immediately (the URL param is present from the first render),
+    // while usePost's fetch is still in flight. findByText (not getByText)
+    // is what actually waits for that fetch to resolve.
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('Someone Else')).toBeInTheDocument();
+    expect(within(dialog).getByText('Shared post content')).toBeInTheDocument();
+    // The page underneath is still the normal Home Feed (Option A) — its
+    // markup exists (not a lighter dedicated shell), just correctly hidden
+    // from the accessibility tree while the modal has focus (Radix sets
+    // aria-hidden on the rest of the page), so this checks raw text content
+    // rather than getByRole('article'), which aria-hidden intentionally
+    // excludes at this point — the next test covers the post-close state
+    // where the feed is genuinely focusable/queryable again.
+    expect(document.body.textContent).toContain("Marcus Lee's post");
+  });
+
+  it('FEED-12: closing a dialog opened via direct URL returns to a sane page state, not a bare backdrop', async () => {
+    const sharedPost = post({ id: 500, userFullName: 'Someone Else', sportId: 5, content: 'Shared post content' });
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      const staticResponse = staticGetResponse(url);
+      if (staticResponse) return staticResponse;
+      if (url === '/posts/feed') {
+        return { data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' } };
+      }
+      if (url === '/posts/500') {
+        return { data: { success: true, message: '', data: sharedPost, timestamp: '' } };
+      }
+      if (url === '/posts/500/comments') {
+        return { data: { success: true, message: '', data: feedPage([]), timestamp: '' } };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+    const user = userEvent.setup();
+
+    render(<HomeFeedPage />, { wrapper: wrapperFor('/posts/500') });
+    const dialog = await screen.findByRole('dialog');
+    // Let the post actually resolve before interacting — closing mid-fetch
+    // isn't this test's concern, and doing so kept the dialog's loading-state
+    // Close button mounted through the async gap in a way that made the
+    // subsequent click unreliable.
+    await within(dialog).findByText('Someone Else');
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    // Not a bare backdrop — the normal Home Feed content is there.
+    expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument();
   });
 });

@@ -21,6 +21,21 @@ spring:
 server:
   port: 8080
 
+# Actuator — dev-only: full health breakdown (never expose show-details:
+# always in a real environment, it can leak internal component details to
+# an unauthenticated caller). Mail is excluded from the aggregate health
+# status — no real SMTP credentials are configured for local dev, so that
+# check always fails regardless of whether the app itself is healthy; DB/
+# Redis/disk (the dependencies dev actually relies on) still drive the
+# overall status.
+management:
+  endpoint:
+    health:
+      show-details: always
+  health:
+    mail:
+      enabled: false
+
 # Development Logging
 logging:
   level:

@@ -201,6 +201,22 @@ export const feedHandlers: HttpHandler[] = [
     );
   }),
 
+  // FEED-12: must stay after every literal-segment /api/posts/* GET handler
+  // above (feed, group/:groupId, hashtag/:tag, broadcast) — msw matches
+  // handlers in array order, and `:postId` would otherwise shadow those
+  // literal routes (e.g. a request to /api/posts/feed would match `:postId`
+  // first if this handler came before it).
+  http.get('/api/posts/:postId', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const postId = Number(params.postId);
+    const post = feedSessions.get(sessionIdFromRequest(request)).postsState.find(
+      (candidate) => candidate.id === postId,
+    );
+    if (!post) return HttpResponse.json(apiError('Post not found'), { status: 404 });
+    return HttpResponse.json(apiResponse(post, 'Post retrieved successfully'));
+  }),
+
   http.get('/api/hashtags/trending', ({ request }) => {
     // MSW-1: replaces apiErrors.ts's overrideTrendingToError.
     if (getOverrides(sessionIdFromRequest(request)).trendingError) {

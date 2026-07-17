@@ -7,8 +7,8 @@ fixtures exist, and a full catalog of every test case with anything non-obvious 
 
 **Related docs:** `MSW-1_STANDALONE_MOCK_SERVER.md` (the mock server's design/build history — this doc
 is the living reference, that one is the point-in-time implementation record), `AUTH-8_E2E_AUTH_JOURNEY.md`,
-`FEED-10_E2E_FEED_GROUPS_JOURNEY.md`, `HF-11_E2E_HOME_FEED_JOURNEY.md`, `HF-10a/b` (visual-regression
-harness).
+`FEED-10_E2E_FEED_GROUPS_JOURNEY.md`, `FEED-12_COMMENT_MODAL_DEEP_LINK.md` (the `/posts/:postId` route),
+`HF-11_E2E_HOME_FEED_JOURNEY.md`, `HF-10a/b` (visual-regression harness).
 
 ---
 
@@ -142,6 +142,7 @@ e2e/
     auth-journey.spec.ts
     feed-groups-journey.spec.ts
     msw-setup.spec.ts
+    post-deep-link.spec.ts
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
@@ -311,6 +312,17 @@ This spec destructures `mockSessionId` directly (needed by the seed/override adm
 
 This file exists specifically to prove the mocking layer works in isolation, before any real UI
 consumer exercises it — no login form is used, just raw `fetch()` calls.
+
+### `e2e/flows/post-deep-link.spec.ts` (FEED-12, 2 independent `test()`s)
+
+`/posts/:postId` is a real, URL-addressable route (Option A: renders `HomeFeedPage` underneath, dialog
+pre-opened) — this file is the dedicated coverage for that, separate from the in-feed click-to-open
+path other specs already exercise incidentally.
+
+| Test | What it checks | Notes |
+|---|---|---|
+| `loading a shared post link directly renders the post + comments, even outside the feed's first page` | `seedPaginatedFeedOnNextLoad(mockSessionId)` (21-post fixture) → direct `seedAuthenticatedSession(page, '/posts/1020')` (post **1020**, index 20 — only reachable via "Load more" on page 0) → dialog renders the right post/comments on a cold load; closing returns to `/` with the normal Home Feed visible | Drives the real "shared link, not logged in yet" flow end-to-end (redirect to `/login`, bounce back) — the same generic mechanism AUTH-8's step 7 already covers, not something FEED-12 built itself. Proves the dialog doesn't depend on the feed having paginated the post into view first. |
+| `opening comments from the feed updates the URL, and closing returns to it` | Click a post's "View comments" from `/` → URL becomes `/posts/{id}` → Close → URL back to `/` | Confirms the in-feed path is also URL-addressable now (`navigate` push on open, `replace` on close), not just the direct-load path above |
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 

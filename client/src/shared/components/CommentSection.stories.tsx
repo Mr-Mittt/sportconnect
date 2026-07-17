@@ -62,6 +62,8 @@ const meta = {
     currentUser: { fullName: 'Jordan Lee', avatarUrl: null },
     post,
     sport: football,
+    isPostLoading: false,
+    isPostError: false,
     comments: [],
     isLoading: false,
     isError: false,
@@ -132,4 +134,15 @@ export const ErrorState: Story = {
 
 export const WithMoreToLoad: Story = {
   args: { comments: [makeComment()], hasMore: true },
+};
+
+// FEED-12: usePost's own loading/error state — distinct from the comment
+// thread's Loading/ErrorState stories above. Reachable on a cold /posts/:id
+// load, before the post itself resolves.
+export const PostLoading: Story = {
+  args: { post: null, isPostLoading: true, comments: [] },
+};
+
+export const PostNotFound: Story = {
+  args: { post: null, isPostError: true, comments: [] },
 };

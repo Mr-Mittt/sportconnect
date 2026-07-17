@@ -104,7 +104,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 35 | FEED-10 | E2E functional test — feed/groups journey | `DONE` |
 | 36 | FEED-9 | QA / acceptance checklist (integration) | `DONE` |
 | 37 | MSW-1 | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `DONE` |
-| 38 | FEED-12 | Comment modal fetches its own post + URL-addressable deep link — **new ticket, not in either epic** | `TODO` |
+| 38 | FEED-12 | Comment modal fetches its own post + URL-addressable deep link — **new ticket, not in either epic** | `DONE` |
 | 39 | FEED-11 | Visual regression harness for the post comment modal — **new ticket, not in either epic** | `TODO` |
 
 **Dependencies:**
@@ -1381,7 +1381,8 @@ Full write-up, including the admin API shape (`/__mock/sessions/:id/...`) and ve
 `client/docs/MSW-1_STANDALONE_MOCK_SERVER.md`.
 
 ### FEED-12 · Comment modal fetches its own post + URL-addressable deep link — new ticket, not in either epic
-**Status:** `TODO` · **Type:** Feature · **Dependency:** FEED-2 (`DONE`) ·
+**Status:** `DONE` (2026-07-17) · **Summary:** `client/docs/FEED-12_COMMENT_MODAL_DEEP_LINK.md` ·
+**Type:** Feature · **Dependency:** FEED-2 (`DONE`) ·
 **Origin:** raised by the user right after FEED-2 merged (PR #32) — today `CommentSection`'s `post`/
 `sport` props are resolved by `HomeFeedPage` purely by looking up `data.posts.find(post => post.id
 === activeCommentsPostId)` against `usePersonalFeed()`'s already-loaded cache
@@ -1422,6 +1423,12 @@ Full write-up, including the admin API shape (`/__mock/sessions/:id/...`) and ve
    (only list/feed endpoints and `DELETE /api/posts/:postId` exist today) — add it, reusing
    `postsState`.
 
+**Filed (2026-07-17):** whether an anonymous (logged-out) visitor should be able to view a shared
+`/posts/:postId` link **without** logging in at all is a real product question this ticket doesn't
+answer — MVP behavior is the same `ProtectedRoute` redirect-then-bounce-back every other deep link
+already gets (AUTH-8 step 7), which is correct and sufficient for this ticket. Filed as **ANON-1** in
+the new `client/docs/BACKLOG_V1.md` for a future decision + scoping pass, not built here.
+
 **Sequencing note:** this simplifies **FEED-11** (below) — once the modal is reachable by URL,
 FEED-11's visual-regression spec can `page.goto('/posts/123')` directly instead of navigating to `/`
 and clicking through a real post card to open the dialog. Recommended to pick this up before FEED-11,
@@ -1437,6 +1444,20 @@ pass afterward).
 - Closing the dialog when it was opened via direct URL returns to a sane page state (not a bare
   backdrop with nothing behind it).
 - `usePost`/MSW handler covered by Vitest, same pattern as `useComments`'s own test file.
+
+**Delta (2026-07-17, executed):** the plan's "does `/posts/:id` render the full HomeFeedPage underneath
+with the dialog pre-opened, or a lighter dedicated single-post shell?" open question resolved to the
+former (Option A), with a caveat confirmed at pickup: on a cold direct-URL load, the page behind the
+dialog is the viewer's own generic Home Feed, not anything contextual to the shared post — accepted
+since the modal has focus regardless. **New scoping decision, not in the original ticket text:**
+Groups page (which also opens `CommentSection`) stays local-state-only, no `/posts/:postId` routing —
+only Home Feed's comment dialog is URL-addressable, since routing Groups' opens through that URL would
+unmount Groups' own selected-group state on close. **Filed ANON-1** in a new `client/docs/BACKLOG_V1.md`
+for the "should a shared link be viewable while logged out" question — MVP behavior is the existing
+generic `ProtectedRoute` redirect-then-bounce-back, not a new mechanism. Live-backend verification
+found and fixed a real bug outside the original plan: neither `usePost` nor the pre-existing
+`useComments` skipped TanStack Query's default retry on a 404, so a bad link took ~7s to show its error
+state — both fixed. Full write-up: `client/docs/FEED-12_COMMENT_MODAL_DEEP_LINK.md`.
 
 ### FEED-11 · Visual regression harness for the post comment modal — new ticket, not in either epic
 **Status:** `TODO` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-2 (`DONE`) ·

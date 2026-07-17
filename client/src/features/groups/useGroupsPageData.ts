@@ -79,6 +79,7 @@ export function useGroupsPageData(): {
   isLoading: boolean;
   isError: boolean;
   toggleLike: (postId: number) => void;
+  toggleLikeForPost: (post: Post) => void;
   deletePost: (postId: number) => void;
   createPost: (content: string, options?: { asBroadcast: boolean }) => void;
   isCreatingPost: boolean;
@@ -171,6 +172,20 @@ export function useGroupsPageData(): {
     [posts, likeMutation, unlikeMutation],
   );
 
+  // FEED-12: for the comment dialog's own like button, whose post may come
+  // from `usePost` rather than this hook's own `posts` array — same
+  // reasoning as `useHomeFeedData`'s sibling function.
+  const toggleLikeForPost = useCallback(
+    (post: Post) => {
+      if (post.isLikedByCurrentUser) {
+        unlikeMutation.mutate(post.id);
+      } else {
+        likeMutation.mutate(post.id);
+      }
+    },
+    [likeMutation, unlikeMutation],
+  );
+
   const deletePost = useCallback(
     (postId: number) => deleteMutation.mutate(postId),
     [deleteMutation],
@@ -227,6 +242,7 @@ export function useGroupsPageData(): {
     isLoading: activeFeedQuery.isLoading,
     isError: activeFeedQuery.isError,
     toggleLike,
+    toggleLikeForPost,
     deletePost,
     createPost,
     isCreatingPost: createMutation.isPending,

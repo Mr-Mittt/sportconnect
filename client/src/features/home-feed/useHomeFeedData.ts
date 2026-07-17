@@ -58,6 +58,7 @@ export function useHomeFeedData(): {
   isLoading: boolean;
   isError: boolean;
   toggleLike: (postId: number) => void;
+  toggleLikeForPost: (post: Post) => void;
   deletePost: (postId: number) => void;
   createPost: (content: string) => void;
   isCreatingPost: boolean;
@@ -107,6 +108,24 @@ export function useHomeFeedData(): {
     [posts, likeMutation, unlikeMutation],
   );
 
+  // FEED-12: for the comment dialog's own like button, whose post may come
+  // from `usePost` rather than this hook's own `posts` array (e.g. a post
+  // reached via a direct `/posts/:id` link that isn't in the caller's
+  // personal feed at all) — `toggleLike` above would silently no-op in that
+  // case, since its internal lookup wouldn't find it. Takes the already-
+  // resolved `Post` directly instead of re-deriving it, sharing the same
+  // mutations (so cache updates/optimistic behavior stay identical).
+  const toggleLikeForPost = useCallback(
+    (post: Post) => {
+      if (post.isLikedByCurrentUser) {
+        unlikeMutation.mutate(post.id);
+      } else {
+        likeMutation.mutate(post.id);
+      }
+    },
+    [likeMutation, unlikeMutation],
+  );
+
   const deletePost = useCallback(
     (postId: number) => deleteMutation.mutate(postId),
     [deleteMutation],
@@ -140,6 +159,7 @@ export function useHomeFeedData(): {
     isLoading: feedQuery.isLoading,
     isError: feedQuery.isError,
     toggleLike,
+    toggleLikeForPost,
     deletePost,
     createPost,
     isCreatingPost: createMutation.isPending,

@@ -41,6 +41,11 @@ function isPost(item: { id: number }): item is Post {
  * currently have this post rendered, without needing to know which specific
  * feed is mounted. Deliberately narrower than `feedKeys.all` — see
  * `isPostFeedQueryKey`'s comment for why matching that whole prefix is unsafe.
+ *
+ * FEED-12: also patches `feedKeys.post(postId)` directly — that query holds
+ * a single `Post`, not `InfiniteData`, so it can't go through the
+ * `setQueriesData` call above; without this, liking a post from a cold
+ * `/posts/:id` load wouldn't flip until the next background invalidate.
  */
 export function updatePostInFeedCaches(
   queryClient: QueryClient,
@@ -62,6 +67,31 @@ export function updatePostInFeedCaches(
       };
     },
   );
+  queryClient.setQueryData<Post>(feedKeys.post(postId), (post) =>
+    post !== undefined ? transformPost(post) : post,
+  );
+}
+
+/**
+ * Scans every currently-mounted Post-feed query (personalFeed, groupFeed,
+ * hashtagPosts) for a post with this id. Used as `usePost`'s `initialData`
+ * (FEED-12) so opening the comment dialog for a post the feed has already
+ * loaded seeds the dedicated single-post query instantly instead of always
+ * re-fetching — only a post outside every mounted cache (paginated further
+ * than scrolled, or a cold direct `/posts/:id` load) triggers a real fetch.
+ */
+export function findPostInFeedCaches(queryClient: QueryClient, postId: number): Post | undefined {
+  const queries = queryClient.getQueriesData<FeedInfiniteData>({
+    predicate: (query) => isPostFeedQueryKey(query.queryKey),
+  });
+  for (const [, data] of queries) {
+    if (!data) continue;
+    for (const page of data.pages) {
+      const found = page.content.find((post) => post.id === postId && isPost(post));
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
 }
 
 /**
