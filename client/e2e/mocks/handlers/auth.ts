@@ -2,6 +2,8 @@ import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { AuthResult, LoginPayload, RegisterPayload } from '../../../src/features/auth/types.ts';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import { mockAccessToken, mockPassword, mockRefreshToken, mockUser } from '../fixtures.ts';
+import { getOverrides } from '../overrides.ts';
+import { sessionIdFromRequest } from '../sessionStore.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
@@ -49,10 +51,18 @@ export const authHandlers: HttpHandler[] = [
   }),
 
   // Reads the real browser cookie jar (via the `cookies` resolver arg) — the
-  // handler only sees it because the service worker sits above the cookie
-  // layer, same as production. A missing/stale cookie mirrors the real
-  // AuthController's 401 (never Spring's default 400 for a missing cookie).
-  http.post('/api/auth/refresh', ({ cookies }) => {
+  // mock server sits above the cookie layer as a genuine HTTP endpoint, same
+  // as production (MSW-1: no longer a Service Worker synthesizing this, a
+  // real response the browser's own cookie jar processes). A missing/stale
+  // cookie mirrors the real AuthController's 401 (never Spring's default 400
+  // for a missing cookie).
+  http.post('/api/auth/refresh', ({ request, cookies }) => {
+    // MSW-1: replaces expireSession.ts's overrideRefreshToExpired — simulates
+    // a refresh token that was valid at login but revoked/expired server-side
+    // sometime after (AUTH-8's step 6 scenario).
+    if (getOverrides(sessionIdFromRequest(request)).refreshExpired) {
+      return HttpResponse.json(apiError('Refresh token expired'), { status: 401 });
+    }
     if (cookies.refreshToken !== mockRefreshToken) {
       return HttpResponse.json(apiError('Refresh token missing'), { status: 401 });
     }

@@ -18,6 +18,8 @@ import {
   mockUser,
 } from '../fixtures.ts';
 import { hoursFromNow } from '../../../src/shared/lib/mockClock.ts';
+import { consumeCreatePostFailOnce, getOverrides } from '../overrides.ts';
+import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
@@ -27,27 +29,42 @@ function apiError(message: string): ApiResponse<null> {
   return { success: false, message, data: null, timestamp: new Date().toISOString() };
 }
 
-// A small in-memory fake backend, not a fixed responder — FEED-1's optimistic
-// like/unlike/delete mutations always reconcile via a background
-// invalidate+refetch of GET /posts/feed (onSettled). A stateless GET handler
-// would clobber the optimistic UI state the instant that refetch lands
-// (confirmed: this exact bug was caught in useHomeFeedData's own Vitest
-// suite before this handler was made stateful). A real backend would show
-// the like as persisted on refetch, so this fixture needs to too.
-let postsState: Post[] = [mockPost, mockGroupPost, mockBasketballPost];
+interface FeedSession {
+  // A small in-memory fake backend, not a fixed responder — FEED-1's
+  // optimistic like/unlike/delete mutations always reconcile via a
+  // background invalidate+refetch of GET /posts/feed (onSettled). A
+  // stateless GET handler would clobber the optimistic UI state the instant
+  // that refetch lands (confirmed: this exact bug was caught in
+  // useHomeFeedData's own Vitest suite before this handler was made
+  // stateful). A real backend would show the like as persisted on refetch,
+  // so this fixture needs to too.
+  postsState: Post[];
+  // FEED-10: kept separate from postsState — the real personal feed never
+  // blends in GROUP_BROADCAST posts (see usePersonalFeed's own doc comment),
+  // so mixing these into postsState would inflate every existing spec's
+  // article-count assertions. `mockExpiredBroadcastPost` exists here so the
+  // /posts/broadcast handler below has a genuine second candidate to exclude
+  // by expiry, not just a hardcoded single-item response.
+  broadcastsState: Post[];
+  // FEED-2's comment threads, keyed by postId — same "small stateful fake
+  // backend, not a fixed responder" reasoning as postsState above (comment
+  // mutations reconcile via invalidate+refetch too).
+  commentsState: Record<number, Comment[]>;
+}
 
-// FEED-10: kept separate from postsState — the real personal feed never
-// blends in GROUP_BROADCAST posts (see usePersonalFeed's own doc comment),
-// so mixing these into postsState would inflate every existing spec's
-// article-count assertions. `mockExpiredBroadcastPost` exists here so the
-// /posts/broadcast handler below has a genuine second candidate to exclude
-// by expiry, not just a hardcoded single-item response.
-let broadcastsState: Post[] = [mockBroadcastPost, mockExpiredBroadcastPost];
+function defaultFeedSession(): FeedSession {
+  return {
+    postsState: [mockPost, mockGroupPost, mockBasketballPost],
+    broadcastsState: [mockBroadcastPost, mockExpiredBroadcastPost],
+    commentsState: { [mockPost.id]: [mockComment] },
+  };
+}
 
-// FEED-2's comment threads, keyed by postId — same "small stateful fake
-// backend, not a fixed responder" reasoning as postsState above (comment
-// mutations reconcile via invalidate+refetch too).
-let commentsState: Record<number, Comment[]> = { [mockPost.id]: [mockComment] };
+// MSW-1: one Node process serves every Playwright test concurrently, so this
+// state is keyed per-session (see sessionStore.ts) instead of the plain
+// module-level `let` it used to be — otherwise two tests running at the same
+// time would corrupt each other's posts/comments.
+const feedSessions = createSessionStore(defaultFeedSession);
 
 function requireAuth(request: Request): Response | null {
   if (!request.headers.get('Authorization')) {
@@ -56,17 +73,18 @@ function requireAuth(request: Request): Response | null {
   return null;
 }
 
-function bumpPostCommentCount(postId: number, delta: number): void {
-  postsState = postsState.map((post) =>
+function bumpPostCommentCount(session: FeedSession, postId: number, delta: number): void {
+  session.postsState = session.postsState.map((post) =>
     post.id === postId ? { ...post, commentCount: Math.max(0, post.commentCount + delta) } : post,
   );
 }
 
 /** Locates a comment (root or one-level reply) across every post's thread. */
 function locateComment(
+  session: FeedSession,
   commentId: number,
 ): { postId: number; parentCommentId: number | null } | null {
-  for (const [postIdKey, comments] of Object.entries(commentsState)) {
+  for (const [postIdKey, comments] of Object.entries(session.commentsState)) {
     for (const comment of comments) {
       if (comment.id === commentId) return { postId: Number(postIdKey), parentCommentId: null };
       if (comment.replies.some((reply) => reply.id === commentId)) {
@@ -78,13 +96,14 @@ function locateComment(
 }
 
 function transformComment(
+  session: FeedSession,
   postId: number,
   commentId: number,
   transform: (comment: Comment) => Comment,
 ): void {
-  commentsState = {
-    ...commentsState,
-    [postId]: (commentsState[postId] ?? []).map((comment) => {
+  session.commentsState = {
+    ...session.commentsState,
+    [postId]: (session.commentsState[postId] ?? []).map((comment) => {
       if (comment.id === commentId) return transform(comment);
       if (comment.replies.some((reply) => reply.id === commentId)) {
         return {
@@ -127,17 +146,25 @@ export const feedHandlers: HttpHandler[] = [
   http.get('/api/posts/feed', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
+    const sessionId = sessionIdFromRequest(request);
+    // MSW-1: replaces apiErrors.ts's overrideFeedToError / emptyFeed.ts's
+    // overrideFeedToEmpty — checked first, same precedence a worker.use()
+    // override used to have over the base handler.
+    if (getOverrides(sessionId).feedError) {
+      return HttpResponse.json(apiError('Simulated feed failure'), { status: 500 });
+    }
     const page = Number(new URL(request.url).searchParams.get('page') ?? 0);
-    return HttpResponse.json(
-      apiResponse(pagedFeedResponse(postsState, page), 'Feed retrieved successfully'),
-    );
+    const posts = getOverrides(sessionId).feedEmpty ? [] : feedSessions.get(sessionId).postsState;
+    return HttpResponse.json(apiResponse(pagedFeedResponse(posts, page), 'Feed retrieved successfully'));
   }),
 
   http.get('/api/posts/group/:groupId', ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const groupId = Number(params.groupId);
-    const posts = postsState.filter((post) => post.groupId === groupId);
+    const posts = feedSessions
+      .get(sessionIdFromRequest(request))
+      .postsState.filter((post) => post.groupId === groupId);
     return HttpResponse.json(apiResponse(mockPageResponse(posts), 'Group posts retrieved successfully'));
   }),
 
@@ -145,35 +172,49 @@ export const feedHandlers: HttpHandler[] = [
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const tag = decodeURIComponent(params.tag as string);
-    const posts = postsState.filter((post) => post.hashtags.includes(tag));
+    const posts = feedSessions
+      .get(sessionIdFromRequest(request))
+      .postsState.filter((post) => post.hashtags.includes(tag));
     return HttpResponse.json(apiResponse(mockPageResponse(posts), 'Posts retrieved successfully'));
   }),
 
   http.get('/api/posts/broadcast', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
+    const sessionId = sessionIdFromRequest(request);
+    // MSW-1: replaces apiErrors.ts's overrideBroadcastsToError.
+    if (getOverrides(sessionId).broadcastsError) {
+      return HttpResponse.json(apiError('Simulated broadcasts failure'), { status: 500 });
+    }
     // FEED-10: a genuine expiry filter (mirroring the real backend's
     // endpoint name/contract), not a hardcoded single-item array — proves
     // mockExpiredBroadcastPost's exclusion is real filtering, not just an
     // absent fixture.
     const now = new Date();
-    const activeBroadcasts = broadcastsState.filter(
-      (post) => post.broadcastEndTime === null || new Date(post.broadcastEndTime) > now,
-    );
+    const activeBroadcasts = feedSessions
+      .get(sessionId)
+      .broadcastsState.filter(
+        (post) => post.broadcastEndTime === null || new Date(post.broadcastEndTime) > now,
+      );
     return HttpResponse.json(
       apiResponse(mockPageResponse(activeBroadcasts), 'Active broadcasts retrieved successfully'),
     );
   }),
 
-  http.get('/api/hashtags/trending', () =>
-    HttpResponse.json(apiResponse(mockPageResponse([mockHashtag]), 'Trending hashtags retrieved')),
-  ),
+  http.get('/api/hashtags/trending', ({ request }) => {
+    // MSW-1: replaces apiErrors.ts's overrideTrendingToError.
+    if (getOverrides(sessionIdFromRequest(request)).trendingError) {
+      return HttpResponse.json(apiError('Simulated trending failure'), { status: 500 });
+    }
+    return HttpResponse.json(apiResponse(mockPageResponse([mockHashtag]), 'Trending hashtags retrieved'));
+  }),
 
   http.post('/api/posts/:postId/like', ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const postId = Number(params.postId);
-    postsState = postsState.map((post) =>
+    const session = feedSessions.get(sessionIdFromRequest(request));
+    session.postsState = session.postsState.map((post) =>
       post.id === postId
         ? { ...post, isLikedByCurrentUser: true, likeCount: post.likeCount + 1 }
         : post,
@@ -185,7 +226,8 @@ export const feedHandlers: HttpHandler[] = [
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const postId = Number(params.postId);
-    postsState = postsState.map((post) =>
+    const session = feedSessions.get(sessionIdFromRequest(request));
+    session.postsState = session.postsState.map((post) =>
       post.id === postId
         ? { ...post, isLikedByCurrentUser: false, likeCount: Math.max(0, post.likeCount - 1) }
         : post,
@@ -197,13 +239,20 @@ export const feedHandlers: HttpHandler[] = [
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const postId = Number(params.postId);
-    postsState = postsState.filter((post) => post.id !== postId);
+    const session = feedSessions.get(sessionIdFromRequest(request));
+    session.postsState = session.postsState.filter((post) => post.id !== postId);
     return HttpResponse.json(apiResponse(null, 'Post deleted successfully'));
   }),
 
   http.post('/api/posts', async ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
+    const sessionId = sessionIdFromRequest(request);
+    // MSW-1: replaces failCreatePostOnce.ts's overrideCreatePostToFailOnce —
+    // consumed on read, so only the next create-post call is affected.
+    if (consumeCreatePostFailOnce(sessionId)) {
+      return HttpResponse.json(apiError('Simulated post-creation failure'), { status: 500 });
+    }
     const body = (await request.json()) as CreatePostPayload;
     if (!body.content) {
       return HttpResponse.json(apiError('Validation failed'), { status: 400 });
@@ -235,13 +284,14 @@ export const feedHandlers: HttpHandler[] = [
       // Real backend default (FEED-7): omitted broadcastEndTime -> now+24h.
       broadcastEndTime: postType === 'GROUP_BROADCAST' ? hoursFromNow(24) : null,
     };
-    postsState = [created, ...postsState];
+    const session = feedSessions.get(sessionId);
+    session.postsState = [created, ...session.postsState];
     // A GROUP_BROADCAST is still a regular post in its group's own feed
     // (postsState above) AND surfaces on the broadcasts rail — mirrors the
     // real backend's dual visibility, same reasoning broadcastsState was
     // split out for (FEED-10).
     if (postType === 'GROUP_BROADCAST') {
-      broadcastsState = [created, ...broadcastsState];
+      session.broadcastsState = [created, ...session.broadcastsState];
     }
     return HttpResponse.json(apiResponse(created, 'Post created successfully'), { status: 201 });
   }),
@@ -250,8 +300,9 @@ export const feedHandlers: HttpHandler[] = [
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const postId = Number(params.postId);
+    const session = feedSessions.get(sessionIdFromRequest(request));
     return HttpResponse.json(
-      apiResponse(mockPageResponse(commentsState[postId] ?? []), 'Comments retrieved successfully'),
+      apiResponse(mockPageResponse(session.commentsState[postId] ?? []), 'Comments retrieved successfully'),
     );
   }),
 
@@ -279,13 +330,17 @@ export const feedHandlers: HttpHandler[] = [
       updatedAt: new Date().toISOString(),
     };
 
+    const session = feedSessions.get(sessionIdFromRequest(request));
     if (body.parentCommentId === undefined) {
-      commentsState = { ...commentsState, [postId]: [created, ...(commentsState[postId] ?? [])] };
-      bumpPostCommentCount(postId, 1);
+      session.commentsState = {
+        ...session.commentsState,
+        [postId]: [created, ...(session.commentsState[postId] ?? [])],
+      };
+      bumpPostCommentCount(session, postId, 1);
     } else {
-      commentsState = {
-        ...commentsState,
-        [postId]: (commentsState[postId] ?? []).map((comment) =>
+      session.commentsState = {
+        ...session.commentsState,
+        [postId]: (session.commentsState[postId] ?? []).map((comment) =>
           comment.id === body.parentCommentId
             ? { ...comment, replyCount: comment.replyCount + 1, replies: [...comment.replies, created] }
             : comment,
@@ -299,21 +354,22 @@ export const feedHandlers: HttpHandler[] = [
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const commentId = Number(params.commentId);
-    const located = locateComment(commentId);
+    const session = feedSessions.get(sessionIdFromRequest(request));
+    const located = locateComment(session, commentId);
     if (!located) return HttpResponse.json(apiError('Comment not found'), { status: 404 });
 
     if (located.parentCommentId === null) {
-      commentsState = {
-        ...commentsState,
-        [located.postId]: (commentsState[located.postId] ?? []).filter(
+      session.commentsState = {
+        ...session.commentsState,
+        [located.postId]: (session.commentsState[located.postId] ?? []).filter(
           (comment) => comment.id !== commentId,
         ),
       };
-      bumpPostCommentCount(located.postId, -1);
+      bumpPostCommentCount(session, located.postId, -1);
     } else {
-      commentsState = {
-        ...commentsState,
-        [located.postId]: (commentsState[located.postId] ?? []).map((comment) =>
+      session.commentsState = {
+        ...session.commentsState,
+        [located.postId]: (session.commentsState[located.postId] ?? []).map((comment) =>
           comment.id === located.parentCommentId
             ? {
                 ...comment,
@@ -331,9 +387,10 @@ export const feedHandlers: HttpHandler[] = [
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const commentId = Number(params.commentId);
-    const located = locateComment(commentId);
+    const session = feedSessions.get(sessionIdFromRequest(request));
+    const located = locateComment(session, commentId);
     if (!located) return HttpResponse.json(apiError('Comment not found'), { status: 404 });
-    transformComment(located.postId, commentId, (comment) => ({
+    transformComment(session, located.postId, commentId, (comment) => ({
       ...comment,
       isLikedByCurrentUser: true,
       likeCount: comment.likeCount + 1,
@@ -345,9 +402,10 @@ export const feedHandlers: HttpHandler[] = [
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const commentId = Number(params.commentId);
-    const located = locateComment(commentId);
+    const session = feedSessions.get(sessionIdFromRequest(request));
+    const located = locateComment(session, commentId);
     if (!located) return HttpResponse.json(apiError('Comment not found'), { status: 404 });
-    transformComment(located.postId, commentId, (comment) => ({
+    transformComment(session, located.postId, commentId, (comment) => ({
       ...comment,
       isLikedByCurrentUser: false,
       likeCount: Math.max(0, comment.likeCount - 1),
@@ -357,14 +415,18 @@ export const feedHandlers: HttpHandler[] = [
 ];
 
 /**
- * Test-only seed — lets a spec replace postsState wholesale (e.g. FEED-10's
- * large paginated fixture) before it starts, while every other handler above
- * (like/unlike/comment/create/delete) keeps operating on the same shared
- * array unchanged. Reached via e2e/mocks/paginatedFeed.ts, same
- * addInitScript + dynamic-import mechanism as emptyFeed.ts's
- * overrideFeedToEmpty — not a `worker.use()` override, since this needs to
- * change the shared state itself, not just one handler's response.
+ * Test-only seed — lets a spec replace one session's postsState wholesale
+ * (e.g. FEED-10's large paginated fixture) before it starts, while every
+ * other handler above (like/unlike/comment/create/delete) keeps operating on
+ * the same session's array unchanged. MSW-1: reached via the mock server's
+ * `/__mock/sessions/:id/seed-paginated-feed` admin route (overrides.ts),
+ * replacing the old addInitScript + dynamic-import + worker.use() mechanism.
  */
-export function seedPostsState(posts: Post[]): void {
-  postsState = posts;
+export function seedPostsState(sessionId: string, posts: Post[]): void {
+  feedSessions.get(sessionId).postsState = posts;
+}
+
+/** Test-only reset — used by the mock server's `/__mock/sessions/:id/reset`. */
+export function resetFeedSession(sessionId: string): void {
+  feedSessions.reset(sessionId);
 }

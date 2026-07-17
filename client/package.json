@@ -70,10 +70,5 @@
       "esbuild",
       "@tailwindcss/oxide"
     ]
-  },
-  "msw": {
-    "workerDirectory": [
-      "public"
-    ]
   }
 }

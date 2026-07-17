@@ -2,6 +2,7 @@ import {
   seedAuthenticatedSession,
   seedPaginatedFeedOnNextLoad,
   seedZeroSportProfilesOnNextLoad,
+  simulateCreatePostFailOnce,
 } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
@@ -12,15 +13,16 @@ import { expect, test } from '../mocks/test.ts';
  * Groups page.
  *
  * Fixture setup, distinct from HF-11's 3-post default:
- * - `seedPaginatedFeedOnNextLoad` (e2e/mocks/paginatedFeed.ts) replaces the
- *   shared postsState with 21 posts before the app's first fetch — one more
- *   than usePersonalFeed's page size, so "Load more" fetches a real second
- *   page. Two posts are special-cased: index 19 (last on page 0) is a
- *   GROUP_POST for `mockGroup`, reused by step 5; index 20 (only reachable
- *   via "Load more") is Basketball rather than Soccer, reused by step 9's
- *   sport-filter check. Since this replaces postsState wholesale, none of
- *   HF-11's usual fixtures (mockPost/mockGroupPost/mockBasketballPost) are
- *   present in this spec — every assertion below targets the paginated set.
+ * - `seedPaginatedFeedOnNextLoad` (MSW-1: e2e/mocks/paginatedFeedFixture.ts,
+ *   seeded via the mock server's admin API) replaces this session's posts
+ *   with 21 posts before the app's first fetch — one more than
+ *   usePersonalFeed's page size, so "Load more" fetches a real second page.
+ *   Two posts are special-cased: index 19 (last on page 0) is a GROUP_POST
+ *   for `mockGroup`, reused by step 5; index 20 (only reachable via "Load
+ *   more") is Basketball rather than Soccer, reused by step 9's sport-filter
+ *   check. Since this replaces postsState wholesale, none of HF-11's usual
+ *   fixtures (mockPost/mockGroupPost/mockBasketballPost) are present in this
+ *   spec — every assertion below targets the paginated set.
  * - `mockOwnedGroup` (fixtures.ts) is a second pre-seeded group where the
  *   test user is `group_owner` (vs. `mockGroup`'s `group_member`) — the
  *   dedicated fixture for step 8's admin/non-admin broadcast-toggle check.
@@ -28,14 +30,15 @@ import { expect, test } from '../mocks/test.ts';
  *   come from separate handler state — mockBroadcastPost/mockHashtag) — step
  *   7 exercises those exactly as HF-11 already established.
  * - Step 4's "MSW-simulated error response" (FEED-10's acceptance
- *   criterion) uses `overrideCreatePostToFailOnce` (mid-test, not on next
- *   load — see failCreatePostOnce.ts) against the newly-wired
- *   CreatePostForm `isError` state (FEED-10 product fix, since FEED-8 never
- *   surfaced create-post failures anywhere).
+ *   criterion) uses `simulateCreatePostFailOnce` (mid-test, not on next
+ *   load — MSW-1: a plain admin-API call, same as every other override
+ *   helper now) against the newly-wired CreatePostForm `isError` state
+ *   (FEED-10 product fix, since FEED-8 never surfaced create-post failures
+ *   anywhere).
  */
 
-test('Feed/groups journey', async ({ page }) => {
-  await seedPaginatedFeedOnNextLoad(page);
+test('Feed/groups journey', async ({ page, mockSessionId }) => {
+  await seedPaginatedFeedOnNextLoad(mockSessionId);
   await seedAuthenticatedSession(page);
   // Scoped to GroupSpaceSwitcher specifically — "Friday Night Football" also
   // appears as a Group Broadcasts rail row, an ambiguous unscoped match.
@@ -81,10 +84,7 @@ test('Feed/groups journey', async ({ page }) => {
   });
 
   await test.step('4. create a post — a simulated failure surfaces an error, then a retry succeeds', async () => {
-    await page.evaluate(
-      "import('/e2e/mocks/failCreatePostOnce.ts')" +
-        '.then(({ overrideCreatePostToFailOnce }) => overrideCreatePostToFailOnce(window.__mswWorker))',
-    );
+    await simulateCreatePostFailOnce(mockSessionId);
 
     const composer = page.getByLabel('Create a post');
     await composer.fill('First attempt — should fail');
@@ -170,8 +170,8 @@ test('Feed/groups journey', async ({ page }) => {
  * "separate small test()" precedent as a11y.spec.ts's multiple independent
  * tests in one file.
  */
-test('zero sport profiles renders without error', async ({ page }) => {
-  await seedZeroSportProfilesOnNextLoad(page);
+test('zero sport profiles renders without error', async ({ page, mockSessionId }) => {
+  await seedZeroSportProfilesOnNextLoad(mockSessionId);
   await seedAuthenticatedSession(page);
 
   await expect(page.getByRole('group', { name: 'Sport filter' })).toBeVisible();

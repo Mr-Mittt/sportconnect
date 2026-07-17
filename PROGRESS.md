@@ -974,6 +974,20 @@ create-broadcast flow's `+24h` default margin masks the ~7h skew; would bite a f
 broadcast feature. `pnpm e2e` 31/31, `pnpm test` 341/341, `tsc -b` clean, all local (CI run itself
 unverified — no GitHub access this session, same caveat as AUTH-7).
 
+**MSW-1 DONE** (2026-07-17, `client/docs/MSW-1_STANDALONE_MOCK_SERVER.md`): replaced MSW's
+per-navigation browser Service Worker (a genuine race against the app's own bootstrap fetch, root-caused
+during AUTH-8) with a standalone Node HTTP server, reusing the existing `e2e/mocks/handlers/*.ts` array
+via `msw`'s own exported `getResponse()` — no new dependency. Surfaced and resolved a real design gap
+the backlog entry didn't account for: `feed.ts`/`groups.ts`/`sport.ts`'s module-level mutable state
+would corrupt across concurrently-running tests under one shared server process
+(`fullyParallel: true`) — fixed via per-test session ids carried on a request header, with every
+stateful handler now keyed through a new `sessionStore.ts`. AUTH-8's previously-skipped step 5
+(reload-persistence) is restored and verified flake-free at `--repeat-each=10`; a real `Set-Cookie`
+response is now genuinely honored by the browser, which a Service-Worker-mocked response never was.
+`pnpm e2e` 32/32 (96/96 at `--repeat-each=3`), `pnpm test` 341/341, `tsc -b`/`eslint` clean,
+`pnpm test:visual` shows only the same pre-existing Windows/Linux font-rendering noise documented
+since HF-12 (confirmed via direct diff-image inspection, not a regression).
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow

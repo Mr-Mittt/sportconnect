@@ -5,63 +5,41 @@ import { expect, test } from '../mocks/test.ts';
  * AUTH-8: the auth journey (AUTH/FEED epic § AUTH-8). Auto-waiting
  * assertions only; no sleeps, per the epic's acceptance criteria.
  *
- * Two things differ from the epic's literal spec, both tracing to the same
- * root cause, investigated for AUTH-8 and written up in
- * `client/docs/BACKLOG_MVP.md` · **MSW-1**:
+ * Originally two things differed from the epic's literal spec, both tracing
+ * to the same root cause: MSW's old Service Worker setup re-triggered on
+ * every real navigation and could lose a race against the app's own
+ * bootstrap fetch (`useSessionBootstrap`) — see `client/docs/BACKLOG_MVP.md`
+ * · **MSW-1** for the full investigation. **MSW-1 has since landed**: the
+ * mock server is a real, already-running process with no per-navigation
+ * setup handshake, so that race no longer exists.
  *
- * MSW's Service Worker setup (re-triggered on every real navigation — a
- * `page.goto()` or `page.reload()`, not a client-side route change — not
- * just the page's first) races the app's own bootstrap fetch
- * (`useSessionBootstrap`, which fires unconditionally on every mount,
- * regardless of route). That race gets *worse*, not better, the more real
- * navigations a single test accumulates: Vite's dev-server module cache
- * makes the app mount faster on each repeat navigation, while Service
- * Worker registration doesn't get the same speedup, so the gap widens in
- * the app's favor. By the 5th–7th real navigation in one test this isn't
- * just "MSW sometimes loses" — confirmed empirically, the whole page can
- * end up in a broken, neither-heading-renders state.
+ * 1. **Still split into shorter tests** (register/logout/login, the restored
+ *    reload-persistence step, and expired session/deep link) rather than one
+ *    continuous 7-step journey — kept this way since it's a harmless,
+ *    already-working organization, not because it's still working around
+ *    anything.
+ * 2. **Step 6 still doesn't reload.** MSW-1 fixes the setup-handshake race,
+ *    not the separate stuck-state issue an earlier reload-based version of
+ *    step 6 hit even under normal, non-repeated runs (see the step's own
+ *    comment) — simulating the expired session via AUTH-5's 401-retry
+ *    interceptor remains the reliable approach for that specific scenario.
+ * 3. **Step 5 (reload while logged in — still authenticated) is back.** A
+ *    real `Set-Cookie` response from the mock server is now genuinely
+ *    honored by the browser's own cookie jar (unlike the old
+ *    Service-Worker-synthesized response, or a Playwright
+ *    `route.fulfill()`-mocked one — see AUTH-8's original investigation),
+ *    so a reload-persistence assertion is finally meaningful, not just
+ *    finally race-free. Verified flake-free via a repeated local run
+ *    (`--repeat-each=10`) — see MSW-1's summary doc for the results.
  *
- * 1. **Split into two shorter tests** (register/logout/login vs. expired
- *    session/deep link) instead of the epic's one continuous journey, so
- *    each test's own navigation count stays low enough to be reliable.
- * 2. **Step 6 doesn't reload at all.** An earlier reload-based version
- *    ("reload with no cookie → refresh fails → redirected to /login") was
- *    still unreliable even in normal, non-repeated suite runs — not just
- *    under artificial repeated-parallel load — confirmed by raising its
- *    timeout to 15s and still seeing it hang past that, meaning the failure
- *    mode isn't "needs more time," it's a genuine stuck state past some
- *    point. Rewritten to simulate the expired session via AUTH-5's existing
- *    401-retry interceptor instead (force one 401 on `/auth/logout` via
- *    `page.route()`, the same reliable technique used to verify AUTH-5
- *    itself against the real backend) — this never leaves the one, already-
- *    stable page load from login, so there's no second real navigation to
- *    race MSW's setup against. See that step's own comment for the full
- *    reasoning.
- * 3. **No "zero real network calls" assertion.** The epic's own acceptance
- *    criterion — verified elsewhere via `response.fromServiceWorker()`, the
- *    same technique `msw-setup.spec.ts` uses — turned out not to be
- *    achievable for *any* multi-navigation journey under the current
- *    architecture: even the plain `goto()`-only steps below fire a
- *    bootstrap fetch on every navigation, and by the 4th one it can just as
- *    easily lose the race. Asserting it here would mean asserting something
- *    this investigation proved false. `msw-setup.spec.ts` already proves
- *    MSW *can* intercept these exact endpoints, in isolation, where the
- *    race reliably resolves in MSW's favor — that's the right place for
- *    that property, not a long journey spec. What this file verifies
- *    instead is purely functional: the right heading/state after each step,
- *    regardless of whether any individual bootstrap call happened to hit
- *    MSW or fall through.
- *
- * Step numbers below keep the epic's original numbering (skipping 5, which
- * specifically needs MSW to *win* the race, not just fail safely, and has
- * no such workaround — deferred to MSW-1) rather than renumbering 6→5,
- * 7→6, so this file stays traceable against the epic spec.
+ * Step numbers below keep the epic's original numbering, including gaps
+ * where a step lives in a different test than its neighbors, so this file
+ * stays traceable against the epic spec.
  */
 
 test('Auth journey — register, logout, login', async ({ page }) => {
   await test.step('1. register with valid details — lands authenticated (AUTH-2: auto-login)', async () => {
     await page.goto('/register');
-    await page.evaluate('window.__mswReady');
     await page.getByLabel('Email', { exact: true }).fill('new-player@example.com');
     await page.getByLabel('Password', { exact: true }).fill(mockPassword);
     await page.getByLabel('Full name').fill('New Player');
@@ -115,9 +93,31 @@ test('Auth journey — register, logout, login', async ({ page }) => {
   });
 });
 
-// Step 5 (reload while logged in — still authenticated) intentionally not
-// implemented — see the file-level comment above and MSW-1 in
-// client/docs/BACKLOG_MVP.md.
+test('Auth journey — reload while logged in stays authenticated', async ({ page }) => {
+  await test.step('5. reload while logged in — still authenticated', async () => {
+    // MSW-1: this step could not be implemented before — see the file-level
+    // comment. A dedicated test (own fresh session) rather than continuing
+    // from test 1's steps, since Playwright already gives every test its
+    // own isolated context/session (test.ts's mockSessionId) — no reuse
+    // benefit from chaining it onto steps 1-4, and keeping it isolated means
+    // a failure here can't be masked by (or itself mask) the register/logout
+    // journey's own assertions.
+    await page.goto('/login');
+    await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
+    await page.getByLabel('Password', { exact: true }).fill(mockPassword);
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.waitForURL('/');
+    await expect(page.getByRole('heading', { name: 'Home Feed' })).toBeVisible();
+
+    await page.reload();
+
+    // Still authenticated: no redirect to /login, Home Feed renders again
+    // straight from the reload (AUTH-3's useSessionBootstrap refreshing
+    // successfully against the real, browser-held refresh-token cookie).
+    await expect(page.getByRole('heading', { name: 'Home Feed' })).toBeVisible();
+    await expect(page).toHaveURL('/');
+  });
+});
 
 test('Auth journey — expired session, then protected deep link', async ({ page }) => {
   await test.step('6. simulated expired session — redirected to /login, session cleared', async () => {
@@ -136,7 +136,6 @@ test('Auth journey — expired session, then protected deep link', async ({ page
     // without ever needing a second real navigation to race MSW's setup
     // against.
     await page.goto('/login');
-    await page.evaluate('window.__mswReady');
     await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
     await page.getByLabel('Password', { exact: true }).fill(mockPassword);
     await page.getByRole('button', { name: 'Log in' }).click();

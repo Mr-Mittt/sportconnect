@@ -2,6 +2,8 @@ import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import type { UserSportProfileResponse } from '../../../src/shared/types/sport.ts';
 import { mockSportProfiles, mockUser } from '../fixtures.ts';
+import { getOverrides } from '../overrides.ts';
+import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
@@ -30,20 +32,34 @@ const mockSportCatalog = [
   { id: 6, name: 'Basketball', category: null, iconUrl: '/images/sports/basketball.png', isActive: true },
 ];
 
+interface SportSession {
+  userSportProfilesState: UserSportProfileResponse[];
+  nextProfileId: number;
+}
+
 // Stateful, same reasoning as groups.ts's userGroupsState — a profile
 // created via POST /sports/profiles must actually appear on the next GET
 // /sports/profiles/user/:userId, since useAddSportProfile's own optimistic
 // cache write would otherwise be clobbered by the mutation's background
 // invalidate+refetch if this were a fixed responder.
-let userSportProfilesState: UserSportProfileResponse[] = mockSportProfiles;
-let nextProfileId = 100;
+function defaultSportSession(): SportSession {
+  return { userSportProfilesState: mockSportProfiles, nextProfileId: 100 };
+}
+
+// MSW-1: session-keyed, same reasoning as feed.ts's feedSessions.
+const sportSessions = createSessionStore(defaultSportSession);
 
 export const sportHandlers: HttpHandler[] = [
   // Public GET — no auth required (SportController's @Operation(security = {})).
-  http.get('/api/sports/profiles/user/:userId', () => {
+  http.get('/api/sports/profiles/user/:userId', ({ request }) => {
+    const sessionId = sessionIdFromRequest(request);
+    // MSW-1: replaces emptySportProfiles.ts's overrideSportProfilesToEmpty.
+    if (getOverrides(sessionId).sportProfilesEmpty) {
+      return HttpResponse.json(apiResponse([], 'User profiles retrieved successfully'));
+    }
     return HttpResponse.json(
       apiResponse<UserSportProfileResponse[]>(
-        userSportProfilesState,
+        sportSessions.get(sessionId).userSportProfilesState,
         'User profiles retrieved successfully',
       ),
     );
@@ -61,16 +77,17 @@ export const sportHandlers: HttpHandler[] = [
       skillLevel: string;
       yearsOfExperience?: number;
     };
-    if (userSportProfilesState.some((profile) => profile.sportId === body.sportId)) {
+    const session = sportSessions.get(sessionIdFromRequest(request));
+    if (session.userSportProfilesState.some((profile) => profile.sportId === body.sportId)) {
       return HttpResponse.json(apiError('Already has a profile for this sport'), { status: 400 });
     }
-    if (userSportProfilesState.length >= 3) {
+    if (session.userSportProfilesState.length >= 3) {
       return HttpResponse.json(apiError('Maximum number of sport profiles reached'), {
         status: 400,
       });
     }
     const created: UserSportProfileResponse = {
-      id: nextProfileId++,
+      id: session.nextProfileId++,
       userId: mockUser.id,
       sportId: body.sportId,
       sportName: mockSportCatalog.find((sport) => sport.id === body.sportId)?.name ?? 'Unknown',
@@ -83,15 +100,14 @@ export const sportHandlers: HttpHandler[] = [
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    userSportProfilesState = [...userSportProfilesState, created];
+    session.userSportProfilesState = [...session.userSportProfilesState, created];
     return HttpResponse.json(apiResponse(created, 'Sport profile created successfully'), {
       status: 201,
     });
   }),
 ];
 
-/** Test-only reset — same pattern as groups.ts's resetGroupHandlersState. */
-export function resetSportHandlersState(): void {
-  userSportProfilesState = mockSportProfiles;
-  nextProfileId = 100;
+/** Test-only reset — used by the mock server's `/__mock/sessions/:id/reset`. */
+export function resetSportHandlersState(sessionId: string): void {
+  sportSessions.reset(sessionId);
 }

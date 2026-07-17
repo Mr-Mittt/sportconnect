@@ -103,7 +103,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 34 | FEED-8 | Integration hardening (loading/error/empty states, pagination edges) | `DONE` |
 | 35 | FEED-10 | E2E functional test — feed/groups journey | `DONE` |
 | 36 | FEED-9 | QA / acceptance checklist (integration) | `DONE` |
-| 37 | MSW-1 | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `TODO` |
+| 37 | MSW-1 | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `DONE` |
 | 38 | FEED-12 | Comment modal fetches its own post + URL-addressable deep link — **new ticket, not in either epic** | `TODO` |
 | 39 | FEED-11 | Visual regression harness for the post comment modal — **new ticket, not in either epic** | `TODO` |
 
@@ -1261,7 +1261,7 @@ broadcast feature. Item 4 ("passes in CI") verified via a local `pnpm e2e` run (
   a small follow-up ticket if a future dialog change touches this file anyway.
 
 ### MSW-1 · Standalone mock server for e2e
-**Status:** `TODO`
+**Status:** `DONE` (2026-07-17) · **Summary:** `client/docs/MSW-1_STANDALONE_MOCK_SERVER.md`
 **Type:** Infrastructure (Testing)
 **Origin:** discovered during AUTH-8 — a genuine, reproducible race between MSW's per-navigation
 Service Worker setup and the app's own bootstrap fetch, root-caused with instrumented timing data.
@@ -1361,6 +1361,24 @@ recommendation despite touching more files.
 - All existing e2e specs still pass under the new mock topology.
 - `AUTH-8`'s auth-journey spec gains its step 5 back (or a note explaining why not, if Version A
   turns up a new blocker).
+
+**Delta (2026-07-17, executed as Version A):** the plan above didn't account for
+`feed.ts`/`groups.ts`/`sport.ts`'s module-level mutable state (`postsState` etc.) — safe under the old
+per-navigation Service Worker only because each page got a fresh module instance, a side effect of the
+exact mechanism this ticket removes. One shared server process (`fullyParallel: true`) would otherwise
+let concurrently-running tests corrupt each other's state. **Resolved (user-approved): per-test session
+ids carried on an `x-e2e-session-id` header**, with every stateful handler keyed through a new
+`sessionStore.ts` instead of a bare `let` — see the summary doc for the full design and rejected
+alternatives (per-worker server processes, forcing `workers: 1`). Any future ticket adding new stateful
+mock handler logic must use `createSessionStore`, not a module-level `let`, or it will silently
+reintroduce cross-test corruption under parallel workers.
+
+**Delta:** `seedRefreshCookieMirror` (fixtures.ts) is removed — it existed only to work around Set-Cookie
+never being honored by a Service-Worker-mocked response, which a real server response no longer has.
+Any future ticket referencing it should use the real cookie flow directly instead.
+
+Full write-up, including the admin API shape (`/__mock/sessions/:id/...`) and verification results:
+`client/docs/MSW-1_STANDALONE_MOCK_SERVER.md`.
 
 ### FEED-12 · Comment modal fetches its own post + URL-addressable deep link — new ticket, not in either epic
 **Status:** `TODO` · **Type:** Feature · **Dependency:** FEED-2 (`DONE`) ·
