@@ -13,6 +13,10 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
+    // Headed locally (visible browser window) for easier debugging; headless
+    // in CI, which has no display server — same CI-conditional pattern as
+    // retries/reuseExistingServer above.
+    headless: !!process.env.CI,
   },
   projects: [
     {
