@@ -156,4 +156,10 @@ describe('Feed', () => {
     expect(screen.getAllByText('Football')).toHaveLength(2);
     expect(screen.getAllByText('Basketball')).toHaveLength(1);
   });
+
+  it('hides every post\'s sport badge when showSportBadge is false (Groups page)', () => {
+    render(<Feed {...baseProps} posts={posts} activeSport="all" showSportBadge={false} />);
+    expect(screen.queryByText('Football')).not.toBeInTheDocument();
+    expect(screen.queryByText('Basketball')).not.toBeInTheDocument();
+  });
 });

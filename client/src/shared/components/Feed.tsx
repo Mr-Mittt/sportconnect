@@ -30,6 +30,12 @@ interface FeedProps {
    * per-sport wording — `HashtagPostsModal` (FEED-6) overrides it for its
    * per-tag empty state. */
   emptyMessage?: string;
+  /** Default `true` (Home Feed/HashtagPostsModal, which blend posts from
+   * multiple sports — the badge disambiguates which sport a post is about).
+   * The Groups page passes `false`: every post in a specific group's feed
+   * already shares that group's one sport, so repeating it on every card is
+   * redundant noise, not useful disambiguation. */
+  showSportBadge?: boolean;
 }
 
 function PostCardSkeleton() {
@@ -82,6 +88,7 @@ export function Feed({
   onRetry,
   isLoadMoreError,
   emptyMessage = 'No posts yet for this sport.',
+  showSportBadge = true,
 }: FeedProps) {
   const canLoadMore = hasMorePosts && !isFetchingMorePosts;
   const sentinelRef = useInfiniteScrollSentinel(onLoadMore, canLoadMore);
@@ -129,7 +136,7 @@ export function Feed({
           <PostCard
             key={post.id}
             post={post}
-            sport={sport ?? null}
+            sport={showSportBadge ? (sport ?? null) : null}
             currentUserId={currentUserId}
             onToggleLike={onToggleLike}
             onHashtagClick={onHashtagClick}

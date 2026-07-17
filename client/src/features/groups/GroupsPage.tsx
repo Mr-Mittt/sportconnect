@@ -246,6 +246,7 @@ export function GroupsPage() {
             onLoadMore={fetchMorePosts}
             isLoading={isLoading}
             isError={isError}
+            showSportBadge={false}
             onRetry={retryPosts}
             isLoadMoreError={isLoadMorePostsError}
           />
