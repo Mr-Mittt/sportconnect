@@ -32,9 +32,10 @@ interface FeedProps {
   emptyMessage?: string;
   /** Default `true` (Home Feed/HashtagPostsModal, which blend posts from
    * multiple sports — the badge disambiguates which sport a post is about).
-   * The Groups page passes `false`: every post in a specific group's feed
-   * already shares that group's one sport, so repeating it on every card is
-   * redundant noise, not useful disambiguation. */
+   * The Groups page passes `activeSport === 'all'`: with a specific sport
+   * selected, every visible post already shares it (Feed's own filter below
+   * guarantees that), so the badge is redundant. With "All" sports, posts
+   * can span multiple groups/sports again, so the badge stays useful. */
   showSportBadge?: boolean;
 }
 

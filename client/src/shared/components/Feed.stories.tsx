@@ -120,9 +120,9 @@ export const LoadMoreError: Story = {
   args: { posts, activeSport: 'all', hasMorePosts: true, isLoadMoreError: true },
 };
 
-// Groups page state — every post already shares the selected group's one
-// sport, so the per-card badge is redundant noise there (unlike Home Feed,
+// Groups page with one sport selected — every visible post already shares
+// it, so the per-card badge is redundant noise there (unlike Home Feed,
 // which blends multiple sports and needs the badge to disambiguate).
 export const NoSportBadge: Story = {
-  args: { posts, activeSport: 'all', showSportBadge: false },
+  args: { posts, activeSport: 'football', showSportBadge: false },
 };

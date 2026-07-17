@@ -157,7 +157,7 @@ describe('Feed', () => {
     expect(screen.getAllByText('Basketball')).toHaveLength(1);
   });
 
-  it('hides every post\'s sport badge when showSportBadge is false (Groups page)', () => {
+  it('hides every post\'s sport badge when showSportBadge is false (Groups page, one sport selected)', () => {
     render(<Feed {...baseProps} posts={posts} activeSport="all" showSportBadge={false} />);
     expect(screen.queryByText('Football')).not.toBeInTheDocument();
     expect(screen.queryByText('Basketball')).not.toBeInTheDocument();
