@@ -22,6 +22,12 @@ interface CreatePostFormProps {
    * passes true (broadcasts require a specific group). Defaults to false so
    * every other existing call site doesn't need updating. */
   canBroadcast?: boolean;
+  /** FEED-10: shows "Couldn't create post. Try again." when the last submit
+   * failed. The textarea already clears on submit (see submitPost below),
+   * so this is a visibility fix, not a content-preserving retry — the user
+   * retypes and submits again. Defaults to false so every other existing
+   * call site doesn't need updating. */
+  isError?: boolean;
 }
 
 function initialsFor(fullName: string): string {
@@ -62,6 +68,7 @@ export function CreatePostForm({
   onLocationClick,
   onTagSportClick,
   canBroadcast = false,
+  isError = false,
 }: CreatePostFormProps) {
   const [content, setContent] = useState('');
   const [isBroadcastOn, setIsBroadcastOn] = useState(false);
@@ -160,6 +167,9 @@ export function CreatePostForm({
           Post
         </Button>
       </div>
+      {isError && (
+        <p className="mt-2 text-2xs text-text-danger">Couldn't create post. Try again.</p>
+      )}
     </div>
   );
 }

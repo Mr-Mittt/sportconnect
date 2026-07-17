@@ -10,12 +10,14 @@ import {
   mockBasketballPost,
   mockBroadcastPost,
   mockComment,
+  mockExpiredBroadcastPost,
   mockGroupPost,
   mockHashtag,
   mockPageResponse,
   mockPost,
   mockUser,
 } from '../fixtures.ts';
+import { hoursFromNow } from '../../../src/shared/lib/mockClock.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
@@ -33,6 +35,14 @@ function apiError(message: string): ApiResponse<null> {
 // suite before this handler was made stateful). A real backend would show
 // the like as persisted on refetch, so this fixture needs to too.
 let postsState: Post[] = [mockPost, mockGroupPost, mockBasketballPost];
+
+// FEED-10: kept separate from postsState — the real personal feed never
+// blends in GROUP_BROADCAST posts (see usePersonalFeed's own doc comment),
+// so mixing these into postsState would inflate every existing spec's
+// article-count assertions. `mockExpiredBroadcastPost` exists here so the
+// /posts/broadcast handler below has a genuine second candidate to exclude
+// by expiry, not just a hardcoded single-item response.
+let broadcastsState: Post[] = [mockBroadcastPost, mockExpiredBroadcastPost];
 
 // FEED-2's comment threads, keyed by postId — same "small stateful fake
 // backend, not a fixed responder" reasoning as postsState above (comment
@@ -89,12 +99,37 @@ function transformComment(
   };
 }
 
+// FEED-10: genuinely pages over postsState (real page/size from the
+// request), rather than mockPageResponse's "always one page" shortcut —
+// needed so a large seeded feed (seedPostsState below) can exercise a real
+// second page. Harmless for every existing spec's small (<20-post) fixture:
+// fewer posts than PAGE_SIZE always still fits entirely on page 0 with
+// last:true, identical to mockPageResponse's previous behavior.
+const FEED_PAGE_SIZE = 20;
+function pagedFeedResponse(all: Post[], page: number) {
+  const start = page * FEED_PAGE_SIZE;
+  const content = all.slice(start, start + FEED_PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(all.length / FEED_PAGE_SIZE));
+  return {
+    content,
+    totalPages,
+    totalElements: all.length,
+    number: page,
+    size: FEED_PAGE_SIZE,
+    first: page === 0,
+    last: page >= totalPages - 1,
+    numberOfElements: content.length,
+    empty: content.length === 0,
+  };
+}
+
 export const feedHandlers: HttpHandler[] = [
   http.get('/api/posts/feed', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
+    const page = Number(new URL(request.url).searchParams.get('page') ?? 0);
     return HttpResponse.json(
-      apiResponse(mockPageResponse(postsState), 'Feed retrieved successfully'),
+      apiResponse(pagedFeedResponse(postsState, page), 'Feed retrieved successfully'),
     );
   }),
 
@@ -117,8 +152,16 @@ export const feedHandlers: HttpHandler[] = [
   http.get('/api/posts/broadcast', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
+    // FEED-10: a genuine expiry filter (mirroring the real backend's
+    // endpoint name/contract), not a hardcoded single-item array — proves
+    // mockExpiredBroadcastPost's exclusion is real filtering, not just an
+    // absent fixture.
+    const now = new Date();
+    const activeBroadcasts = broadcastsState.filter(
+      (post) => post.broadcastEndTime === null || new Date(post.broadcastEndTime) > now,
+    );
     return HttpResponse.json(
-      apiResponse(mockPageResponse([mockBroadcastPost]), 'Active broadcasts retrieved successfully'),
+      apiResponse(mockPageResponse(activeBroadcasts), 'Active broadcasts retrieved successfully'),
     );
   }),
 
@@ -189,8 +232,17 @@ export const feedHandlers: HttpHandler[] = [
       likeCount: 0,
       commentCount: 0,
       isLikedByCurrentUser: false,
+      // Real backend default (FEED-7): omitted broadcastEndTime -> now+24h.
+      broadcastEndTime: postType === 'GROUP_BROADCAST' ? hoursFromNow(24) : null,
     };
     postsState = [created, ...postsState];
+    // A GROUP_BROADCAST is still a regular post in its group's own feed
+    // (postsState above) AND surfaces on the broadcasts rail — mirrors the
+    // real backend's dual visibility, same reasoning broadcastsState was
+    // split out for (FEED-10).
+    if (postType === 'GROUP_BROADCAST') {
+      broadcastsState = [created, ...broadcastsState];
+    }
     return HttpResponse.json(apiResponse(created, 'Post created successfully'), { status: 201 });
   }),
 
@@ -303,3 +355,16 @@ export const feedHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(null, 'Comment unliked successfully'));
   }),
 ];
+
+/**
+ * Test-only seed — lets a spec replace postsState wholesale (e.g. FEED-10's
+ * large paginated fixture) before it starts, while every other handler above
+ * (like/unlike/comment/create/delete) keeps operating on the same shared
+ * array unchanged. Reached via e2e/mocks/paginatedFeed.ts, same
+ * addInitScript + dynamic-import mechanism as emptyFeed.ts's
+ * overrideFeedToEmpty — not a `worker.use()` override, since this needs to
+ * change the shared state itself, not just one handler's response.
+ */
+export function seedPostsState(posts: Post[]): void {
+  postsState = posts;
+}

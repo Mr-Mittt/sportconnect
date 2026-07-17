@@ -78,6 +78,7 @@ export function HomeFeedPage() {
     deletePost,
     createPost,
     isCreatingPost,
+    isCreatePostError,
     currentUserId,
     hasMorePosts,
     isFetchingMorePosts,
@@ -144,6 +145,7 @@ export function HomeFeedPage() {
         currentUser={{ firstName: user.firstName, fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
         onSubmit={createPost}
         isSubmitting={isCreatingPost}
+        isError={isCreatePostError}
         onPhotoClick={noop}
         onLocationClick={noop}
         onTagSportClick={noop}
