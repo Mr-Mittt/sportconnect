@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useFeedSpaceStore } from '@/app/feedSpaceStore';
+import { usePost } from '@/features/feed/hooks/usePost';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
@@ -44,22 +46,41 @@ const noop = () => {};
  * `activeHashtag` state — clicking a post's comment icon while that modal is
  * open closes it first and opens `CommentSection` instead (user decision:
  * simpler than stacking two dialogs).
+ *
+ * FEED-12: the comment dialog's open state now lives in the URL
+ * (`/posts/:postId`, matched here via `useParams`), not page-local state —
+ * this is what makes a shared link work (App.tsx routes `/posts/:postId` to
+ * this same page) and gives Back/Forward the dialog's open/close for free.
+ * Opening pushes a history entry (`navigate(`/posts/${id}`)`); closing
+ * always lands deterministically on `/` (`replace: true`) regardless of
+ * whether there's a meaningful "back" target in this session (there isn't,
+ * on a cold direct load of a shared link). The post itself comes from
+ * `usePost`, not a feed-cache lookup — decoupling the dialog from feed
+ * pagination and making it work from a cold load with no prior fetch at all.
  */
 export function HomeFeedPage() {
   const activeSport = useFeedSpaceStore((state) => state.activeSport);
   const setActiveSport = useFeedSpaceStore((state) => state.setActiveSport);
-  // Which post's comment dialog is open — page-local UI state (client/CLAUDE.md),
-  // not Zustand, since it's ephemeral and scoped to this one page.
-  const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
-  // Which hashtag's results modal is open — same page-local UI-state
-  // reasoning as activeCommentsPostId (FEED-6). Split into two pieces
-  // deliberately: `activeHashtag` also drives useHashtagResultsData's query
-  // and must stay set (so its cached posts survive) even while the modal is
-  // visually hidden mid-transition to CommentSection — only `isHashtagModalOpen`
-  // controls the Dialog's actual visibility. Clearing `activeHashtag` too
-  // (i.e. tearing down the query) at the same time as opening comments would
-  // make activeCommentsPost's hashtag-cache fallback below see an empty list
-  // in that same render (a real bug this shape avoids).
+  const navigate = useNavigate();
+  // Source of truth for which post's comment dialog is open — the URL, not
+  // local state (FEED-12). `useParams` re-runs on every route match, so this
+  // stays in sync with in-app navigation, browser Back/Forward, and a cold
+  // direct load alike.
+  const { postId: postIdParam } = useParams<{ postId: string }>();
+  const activeCommentsPostId = postIdParam !== undefined ? Number(postIdParam) : null;
+  const openComments = (postId: number) => navigate(`/posts/${postId}`);
+  const closeComments = () => navigate('/', { replace: true });
+  // Which hashtag's results modal is open — still page-local state (unlike
+  // activeCommentsPostId above, this one has no URL representation — FEED-6
+  // never scoped it that way, and this ticket doesn't expand it). Split into
+  // two pieces deliberately: `activeHashtag` also drives
+  // useHashtagResultsData's query and must stay set (so its cached posts
+  // survive) even while the modal is visually hidden mid-transition to
+  // CommentSection — only `isHashtagModalOpen` controls the Dialog's actual
+  // visibility. Clearing `activeHashtag` too (i.e. tearing down the query) at
+  // the same time as opening comments would make usePost's own
+  // findPostInFeedCaches initialData seed (which scans this same query) see
+  // an empty list in that same render (a real bug this shape avoids).
   const [activeHashtag, setActiveHashtag] = useState<string | null>(null);
   const [isHashtagModalOpen, setIsHashtagModalOpen] = useState(false);
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
@@ -75,6 +96,7 @@ export function HomeFeedPage() {
     isLoading,
     isError,
     toggleLike,
+    toggleLikeForPost,
     deletePost,
     createPost,
     isCreatingPost,
@@ -96,6 +118,7 @@ export function HomeFeedPage() {
     activeCommentsPostId ?? -1,
     activeCommentsPostId !== null,
   );
+  const activeCommentsPostQuery = usePost(activeCommentsPostId ?? -1, activeCommentsPostId !== null);
   const hashtagResultsData = useHashtagResultsData(activeHashtag, activeHashtag !== null);
   const addSportMutation = useAddSportProfile(currentUserId);
   const availableSports = useMemo(
@@ -115,12 +138,11 @@ export function HomeFeedPage() {
   // The post whose comment thread is open, plus its resolved sport badge —
   // CommentSection shows both in its header/body (design-reference-post-modal.html),
   // same sportId->SportProfile resolution Feed.tsx already does per post.
-  // Falls back to the hashtag-results cache (FEED-6) since a post opened from
-  // there may not be in the main feed's already-loaded pages.
-  const activeCommentsPost =
-    data.posts.find((post) => post.id === activeCommentsPostId) ??
-    hashtagResultsData.data.posts.find((post) => post.id === activeCommentsPostId) ??
-    null;
+  // FEED-12: comes from usePost, not a feed-cache lookup — its own
+  // `initialData` already seeds from any mounted feed/hashtag-results cache
+  // that has this post, and falls through to a real fetch otherwise (a post
+  // outside every loaded cache, or a cold `/posts/:id` load).
+  const activeCommentsPost = activeCommentsPostQuery.data ?? null;
   const activeCommentsPostSportKey =
     activeCommentsPost !== null ? sportKeyForId(activeCommentsPost.sportId) : undefined;
   const activeCommentsPostSport =
@@ -163,7 +185,7 @@ export function HomeFeedPage() {
               setIsHashtagModalOpen(true);
             }}
             onDeletePost={deletePost}
-            onOpenComments={setActiveCommentsPostId}
+            onOpenComments={openComments}
             hasMorePosts={hasMorePosts}
             isFetchingMorePosts={isFetchingMorePosts}
             onLoadMore={fetchMorePosts}
@@ -202,11 +224,13 @@ export function HomeFeedPage() {
       </div>
       <CommentSection
         isOpen={activeCommentsPostId !== null}
-        onClose={() => setActiveCommentsPostId(null)}
+        onClose={closeComments}
         currentUserId={currentUserId}
         currentUser={{ fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
         post={activeCommentsPost}
         sport={activeCommentsPostSport}
+        isPostLoading={activeCommentsPostQuery.isLoading}
+        isPostError={activeCommentsPostQuery.isError}
         comments={commentsData.data}
         isLoading={commentsData.isLoading}
         isError={commentsData.isError}
@@ -218,22 +242,18 @@ export function HomeFeedPage() {
         isPosting={commentsData.isPosting}
         onDeleteComment={commentsData.deleteComment}
         onToggleCommentLike={commentsData.toggleCommentLike}
-        onTogglePostLike={(postId) => {
-          // The active post may have come from the main feed cache or the
-          // hashtag-results cache (see activeCommentsPost's fallback above)
-          // — route the like to whichever hook's `posts` array actually
-          // contains it, so exactly one like/unlike mutation fires.
-          if (data.posts.some((candidate) => candidate.id === postId)) {
-            toggleLike(postId);
-          } else {
-            hashtagResultsData.toggleLike(postId);
-          }
+        onTogglePostLike={() => {
+          // FEED-12: toggleLikeForPost takes the already-resolved post
+          // directly (from usePost above) rather than re-deriving it from
+          // useHomeFeedData's own feed array, which wouldn't find a post
+          // reached via a direct link outside the caller's personal feed.
+          if (activeCommentsPost !== null) toggleLikeForPost(activeCommentsPost);
         }}
         onHashtagClick={(tag) => {
           // Symmetric with HashtagPostsModal's own "close first" behavior —
           // close the comment dialog before opening the hashtag modal,
           // rather than stacking two dialogs.
-          setActiveCommentsPostId(null);
+          closeComments();
           setActiveHashtag(tag);
           setIsHashtagModalOpen(true);
         }}
@@ -265,9 +285,9 @@ export function HomeFeedPage() {
         onOpenComments={(postId) => {
           // Hide the modal but keep `activeHashtag` set — see the state
           // declaration's comment for why clearing it here would break
-          // activeCommentsPost's fallback lookup below.
+          // usePost's own cache-seeding above.
           setIsHashtagModalOpen(false);
-          setActiveCommentsPostId(postId);
+          openComments(postId);
         }}
         hasMorePosts={hashtagResultsData.hasMorePosts}
         isFetchingMorePosts={hashtagResultsData.isFetchingMorePosts}

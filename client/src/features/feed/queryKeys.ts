@@ -13,6 +13,7 @@ export const feedKeys = {
   broadcasts: () => [...feedKeys.all, 'broadcasts'] as const,
   userGroups: (userId: string) => [...feedKeys.all, 'user-groups', userId] as const,
   comments: (postId: number) => [...feedKeys.all, 'comments', postId] as const,
+  post: (postId: number) => [...feedKeys.all, 'post', postId] as const,
   publicGroups: (sportId: number | undefined, keyword: string) =>
     [...feedKeys.all, 'public-groups', sportId ?? 'any', keyword] as const,
   joinRequests: (userId: string) => [...feedKeys.all, 'join-requests', userId] as const,

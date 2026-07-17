@@ -223,6 +223,23 @@ describe('useHomeFeedData', () => {
     await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith('/posts/1/like'));
   });
 
+  it('toggleLikeForPost decides like-vs-unlike from the passed post, not an internal lookup', async () => {
+    // FEED-12: the post isn't in this hook's own feed at all (e.g. reached
+    // via a direct /posts/:id link) — toggleLike(id) would silently no-op
+    // here, which is exactly the gap toggleLikeForPost exists to close.
+    mockFeedAndSportProfiles(page([]));
+    const postSpy = vi
+      .spyOn(apiClient, 'post')
+      .mockResolvedValueOnce({ data: { success: true, message: '', data: null, timestamp: '' } });
+
+    const { result } = renderHook(() => useHomeFeedData(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const notInFeed = post({ id: 99, isLikedByCurrentUser: false });
+    act(() => result.current.toggleLikeForPost(notInFeed));
+    await waitFor(() => expect(postSpy).toHaveBeenCalledWith('/posts/99/like'));
+  });
+
   it('deletePost calls DELETE /posts/{postId}', async () => {
     mockFeedAndSportProfiles(page([post({ id: 5 })]));
     const deleteSpy = vi

@@ -186,7 +186,7 @@ The exact script names are defined by HF-00 and documented in the client `README
 
 1. Typecheck + unit/component tests (Vitest) — must pass
 2. If components changed: open Storybook and confirm every new/changed visual state has a story and looks right against the reference HTML
-3. If the ticket has E2E or visual-regression scope: run the relevant Playwright project (`e2e` and/or `visual-regression`)
+3. If the ticket has E2E or visual-regression scope: run the relevant Playwright project (`e2e` and/or `visual-regression`). **If any spec file was added, removed, or had a test added/removed/materially changed, update `client/docs/E2E_OVERVIEW.md`'s catalog to match before calling this ticket done** — this doc is the living reference for every e2e test case, and it silently rotting out of date defeats its purpose. This includes the directory listing (§3) and the per-file test table (§6); cross-reference the ticket's own summary doc from the "Related docs" line if it's the origin of a new spec file.
 4. Start the Vite dev server and walk the ticket's happy path in a browser
 5. If the hook hits a real backend endpoint, verify once against the actually running backend (`./gradlew :server:bootRun`) — MSW passing is not proof the real contract matches
 

@@ -43,6 +43,13 @@ function App() {
         }
       >
         <Route path="/" element={<HomeFeedPage />} />
+        {/* FEED-12: same page, reused as-is (Option A) — HomeFeedPage reads
+            :postId via useParams and pre-opens the comment dialog for it.
+            Anonymous visitors get the same ProtectedRoute redirect-then-
+            bounce-back every other deep link already gets (see ANON-1,
+            client/docs/BACKLOG_V1.md, for the future "should this be
+            publicly viewable" decision — not answered here). */}
+        <Route path="/posts/:postId" element={<HomeFeedPage />} />
         <Route path="/friends" element={<ComingSoonPage title="Friends" />} />
         <Route path="/groups" element={<GroupsPage />} />
         <Route path="/matches" element={<ComingSoonPage title="Matches" />} />
