@@ -36,6 +36,11 @@ interface PostCardProps {
    * a specific group's own feed passes null since every post there already
    * shares that one group. */
   groupName: string | null;
+  /** Clicking the resolved group name (only rendered when groupName isn't
+   * null) — undefined renders groupName as static text instead of a link,
+   * for a caller (e.g. HashtagPostsModal) with no group-scoped destination
+   * to send the user to. */
+  onGroupClick?: () => void;
   onToggleLike: (postId: number) => void;
   onHashtagClick: (tag: string) => void;
   onDeletePost: (postId: number) => void;
@@ -81,6 +86,7 @@ export function PostCard({
   sport,
   currentUserId,
   groupName,
+  onGroupClick,
   onToggleLike,
   onHashtagClick,
   onDeletePost,
@@ -104,7 +110,17 @@ export function PostCard({
             {groupName !== null && (
               <>
                 <span className="text-text-muted"> &gt; </span>
-                <span className="text-text-secondary">{groupName}</span>
+                {onGroupClick !== undefined ? (
+                  <button
+                    type="button"
+                    onClick={onGroupClick}
+                    className="cursor-pointer text-text-secondary underline-offset-2 hover:text-text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                  >
+                    {groupName}
+                  </button>
+                ) : (
+                  <span className="text-text-secondary">{groupName}</span>
+                )}
               </>
             )}
           </div>

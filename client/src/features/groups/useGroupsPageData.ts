@@ -11,7 +11,7 @@ import { useUnlikePost } from '@/features/feed/hooks/useUnlikePost';
 import { useUpdatePost } from '@/features/feed/hooks/useUpdatePost';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { SPORT_ID_BY_KEY } from '@/features/feed/sportIdMap';
-import type { Group, Post } from '@/features/feed/types';
+import type { Group, GroupRef, Post } from '@/features/feed/types';
 import { useGroupBroadcasts } from '@/shared/hooks/useGroupBroadcasts';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useTrendingHashtags } from '@/shared/hooks/useTrendingHashtags';
@@ -26,12 +26,14 @@ export interface GroupsPageData {
   upcomingMatches: UpcomingMatch[];
   hashtags: TrendingHashtag[];
   broadcasts: GroupBroadcast[];
-  /** post.groupId -> group name, for each GROUP_POST/GROUP_BROADCAST's
-   * "username > groupname" author line — built from the unfiltered groups
-   * list (not `groups` above, which is narrowed by `activeSport`), same
-   * reasoning as `selectedGroupSportId` below. Only rendered when
-   * `GroupsPage` is showing "All" groups (see `Feed`'s `showGroupName`). */
-  groupNamesById: Record<number, string>;
+  /** post.groupId -> { groupName, sportId }, for each GROUP_POST/
+   * GROUP_BROADCAST's "username > groupname" author line — built from the
+   * unfiltered groups list (not `groups` above, which is narrowed by
+   * `activeSport`), same reasoning as `selectedGroupSportId` below. Only
+   * rendered when `GroupsPage` is showing "All" groups (see `Feed`'s
+   * `showGroupName`); sportId lets clicking the link switch to that group's
+   * sport before selecting it. */
+  groupsById: Record<number, GroupRef>;
 }
 
 /**
@@ -152,10 +154,13 @@ export function useGroupsPageData(): {
     [groupsQuery.data, selectedGroupId],
   );
 
-  const groupNamesById = useMemo(
+  const groupsById = useMemo(
     () =>
       Object.fromEntries(
-        (groupsQuery.data?.content ?? []).map((group) => [group.id, group.groupName]),
+        (groupsQuery.data?.content ?? []).map((group) => [
+          group.id,
+          { groupName: group.groupName, sportId: group.sportId },
+        ]),
       ),
     [groupsQuery.data],
   );
@@ -267,7 +272,7 @@ export function useGroupsPageData(): {
       upcomingMatches: upcomingMatchesQuery.data,
       hashtags: trendingHashtagsQuery.data,
       broadcasts: groupBroadcastsQuery.data,
-      groupNamesById,
+      groupsById,
     },
     selectedGroupId,
     selectGroup,

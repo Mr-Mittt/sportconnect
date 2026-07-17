@@ -128,7 +128,7 @@ export const NoSportBadge: Story = {
 };
 
 // Home Feed / Groups "All" view — group posts render "username > groupname"
-// to disambiguate which group each post belongs to.
+// to disambiguate which group each post belongs to, clickable via onGroupClick.
 export const WithGroupNames: Story = {
   args: {
     posts: [
@@ -136,6 +136,10 @@ export const WithGroupNames: Story = {
       { ...posts[1], postType: 'GROUP_POST', groupId: 2 },
     ],
     activeSport: 'all',
-    groupNamesById: { 1: '1st Football', 2: 'Riverside Ballers' },
+    groupsById: {
+      1: { groupName: '1st Football', sportId: 5 },
+      2: { groupName: 'Riverside Ballers', sportId: 6 },
+    },
+    onGroupClick: () => {},
   },
 };

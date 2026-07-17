@@ -163,17 +163,34 @@ describe('Feed', () => {
     expect(screen.queryByText('Basketball')).not.toBeInTheDocument();
   });
 
-  it('resolves each group post\'s "username > groupname" via groupNamesById (Home Feed / Groups "All")', () => {
+  it('resolves each group post\'s "username > groupname" via groupsById (Home Feed / Groups "All")', () => {
     const groupPost: Post = { ...posts[0], postType: 'GROUP_POST', groupId: 42 };
     render(
       <Feed
         {...baseProps}
         posts={[groupPost]}
         activeSport="all"
-        groupNamesById={{ 42: '1st Football' }}
+        groupsById={{ 42: { groupName: '1st Football', sportId: 5 } }}
       />,
     );
     expect(screen.getByText('1st Football')).toBeInTheDocument();
+  });
+
+  it('calls onGroupClick with (groupId, sportId) when the group name link is clicked', async () => {
+    const user = userEvent.setup();
+    const onGroupClick = vi.fn();
+    const groupPost: Post = { ...posts[0], postType: 'GROUP_POST', groupId: 42 };
+    render(
+      <Feed
+        {...baseProps}
+        posts={[groupPost]}
+        activeSport="all"
+        groupsById={{ 42: { groupName: '1st Football', sportId: 5 } }}
+        onGroupClick={onGroupClick}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '1st Football' }));
+    expect(onGroupClick).toHaveBeenCalledWith(42, 5);
   });
 
   it('omits the group name when showGroupName is false (a specific group\'s own feed)', () => {
@@ -183,7 +200,7 @@ describe('Feed', () => {
         {...baseProps}
         posts={[groupPost]}
         activeSport="all"
-        groupNamesById={{ 42: '1st Football' }}
+        groupsById={{ 42: { groupName: '1st Football', sportId: 5 } }}
         showGroupName={false}
       />,
     );

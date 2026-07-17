@@ -133,6 +133,14 @@ export function GroupsPage() {
     isGroupsError,
     retryGroups,
   } = useGroupsPageData();
+  // Clicking a group post's "> groupname" link (only rendered in the "All"
+  // groups view) — switches to that group's sport (a group is 1:1 with
+  // exactly one sport) and selects it, same as clicking its GroupSpaceSwitcher
+  // chip would. No navigation needed — already on this page.
+  const goToGroup = (groupId: number, sportId: number) => {
+    setActiveSport(sportKeyForId(sportId) ?? 'all');
+    selectGroup(groupId, sportId);
+  };
   const commentsData = useCommentsData(
     activeCommentsPostId ?? -1,
     activeCommentsPostId !== null,
@@ -247,8 +255,9 @@ export function GroupsPage() {
             isLoading={isLoading}
             isError={isError}
             showSportBadge={activeSport === 'all'}
-            groupNamesById={data.groupNamesById}
+            groupsById={data.groupsById}
             showGroupName={selectedGroupId === null}
+            onGroupClick={goToGroup}
             onRetry={retryPosts}
             isLoadMoreError={isLoadMorePostsError}
           />

@@ -110,6 +110,42 @@ describe('PostCard', () => {
     expect(screen.getByText('1st Football')).toBeInTheDocument();
   });
 
+  it('renders groupName as static text (no button) when onGroupClick is not provided', () => {
+    render(
+      <PostCard
+        post={{ ...post, postType: 'GROUP_POST', groupId: 7 }}
+        sport={football}
+        currentUserId="someone-else"
+        groupName="1st Football"
+        onToggleLike={noop}
+        onHashtagClick={noop}
+        onDeletePost={noop}
+        onOpenComments={noop}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: '1st Football' })).not.toBeInTheDocument();
+  });
+
+  it('renders groupName as a clickable link and reports the click when onGroupClick is provided', async () => {
+    const user = userEvent.setup();
+    const onGroupClick = vi.fn();
+    render(
+      <PostCard
+        post={{ ...post, postType: 'GROUP_POST', groupId: 7 }}
+        sport={football}
+        currentUserId="someone-else"
+        groupName="1st Football"
+        onGroupClick={onGroupClick}
+        onToggleLike={noop}
+        onHashtagClick={noop}
+        onDeletePost={noop}
+        onOpenComments={noop}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '1st Football' }));
+    expect(onGroupClick).toHaveBeenCalledTimes(1);
+  });
+
   it('renders just the username when groupName is null (a specific group\'s own feed)', () => {
     render(
       <PostCard
