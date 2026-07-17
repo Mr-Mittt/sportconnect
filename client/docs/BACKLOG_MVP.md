@@ -102,7 +102,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 33 | SPORT-1 | Sport switcher (real) — de-mocks HF-2, **new ticket, not in the epics** | `DONE` |
 | 34 | FEED-8 | Integration hardening (loading/error/empty states, pagination edges) | `DONE` |
 | 35 | FEED-10 | E2E functional test — feed/groups journey | `DONE` |
-| 36 | FEED-9 | QA / acceptance checklist (integration) | `TODO` |
+| 36 | FEED-9 | QA / acceptance checklist (integration) | `DONE` |
 | 37 | MSW-1 | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `TODO` |
 | 38 | FEED-12 | Comment modal fetches its own post + URL-addressable deep link — **new ticket, not in either epic** | `TODO` |
 | 39 | FEED-11 | Visual regression harness for the post comment modal — **new ticket, not in either epic** | `TODO` |
@@ -1236,10 +1236,29 @@ zero-profiles fixture renders without error.
 - FEED-9's checklist can now check off "FEED-10's E2E suite passes."
 
 ### FEED-9 · QA / acceptance checklist (integration)
-**Status:** `TODO` · **Type:** QA · **Dependency:** FEED-10 · **Spec:** AUTH/FEED epic § FEED-9
+**Status:** `DONE` (2026-07-17) · **Type:** QA · **Dependency:** FEED-10 · **Spec:** AUTH/FEED epic § FEED-9 ·
+**Summary:** `client/docs/FEED-9_QA_ACCEPTANCE_CHECKLIST.md`
 
 **Delta:** add a checklist line — HF-2's mock swapped for SPORT-1's real hook with no visible UI
 regression (same bar as HF-3/HF-5/HF-6).
+
+All 5 items pass (manual pass against a real running backend, not MSW — real test accounts/group,
+21 seeded posts to force a genuine second feed page). Found and fixed a trivial real bug along the
+way (`GroupsPage.tsx`'s `CreateGroupModal`/`AddSportModal` both keyed from a counter starting at `0`
+— React duplicate-key warning, functionally harmless, fixed). Found and filed a real backend bug, not
+fixed here: broadcast-expiry checks compare against the wrong clock (JVM-local vs. DB-UTC) — filed as
+**A11** in `modules/social/post-impl/docs/BACKLOG_MVP.md`, `TODO`. Latent only — the real
+create-broadcast flow's `+24h` default margin fully masks it today; would bite a future short-duration
+broadcast feature. Item 4 ("passes in CI") verified via a local `pnpm e2e` run (31/31) only, same
+"local ≠ CI" caveat AUTH-7/HF-12 already established — no GitHub access this session.
+
+**Deltas for later tickets:**
+- **`A11` (backend, `TODO`):** don't build a "custom broadcast duration" feature or expose
+  `updateBroadcastEndTime` to a real endpoint/client call until this timezone fix lands — it would hit
+  the bug directly instead of being masked by the `+24h` default margin.
+- **`DialogOverlay` (`src/shared/ui/dialog.tsx`) ref-forwarding console warning** — flagged, not
+  fixed (out of this ticket's checklist scope, pre-existing since FEED-2, no functional impact). Worth
+  a small follow-up ticket if a future dialog change touches this file anyway.
 
 ### MSW-1 · Standalone mock server for e2e
 **Status:** `TODO`

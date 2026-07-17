@@ -310,7 +310,7 @@ export function GroupsPage() {
         }}
       />
       <CreateGroupModal
-        key={createGroupOpenCount}
+        key={`create-group-${createGroupOpenCount}`}
         isOpen={isCreateGroupOpen}
         onClose={() => setIsCreateGroupOpen(false)}
         sportsByKey={sportsByKey}
@@ -341,7 +341,7 @@ export function GroupsPage() {
         isRequestError={joinGroupModalData.isRequestError}
       />
       <AddSportModal
-        key={addSportOpenCount}
+        key={`add-sport-${addSportOpenCount}`}
         isOpen={isAddSportOpen}
         onClose={() => setIsAddSportOpen(false)}
         availableSports={availableSports}

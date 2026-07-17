@@ -961,6 +961,19 @@ existing spec's small fixture). `tsc -b`/`eslint` clean, `pnpm test` 341/341, `p
 from before this ticket. Live-verified the real posting flow against the running backend shows no
 false error state.
 
+**FEED-9 DONE** (2026-07-17, `client/docs/FEED-9_QA_ACCEPTANCE_CHECKLIST.md`): manual QA pass against
+a real running backend (not MSW) — registered real test accounts/group, seeded 21 posts to force a
+genuine second feed page. All 5 checklist items pass: HF-3/5/6/2 real-data swaps show no visible
+regression, pagination/optimistic-likes/comment-counts verified live, owner-vs-member broadcast
+permission gating confirmed correct, SPORT-1's zero-profile and at-cap edge cases both verified live.
+Found and fixed a real (if functionally harmless) React duplicate-key bug in `GroupsPage.tsx`
+(`CreateGroupModal`/`AddSportModal` both keyed from a counter starting at `0`). Found and filed a real
+backend bug, not fixed here: broadcast-expiry checks compare a JVM-local timestamp against the DB's
+UTC clock (`A11`, `modules/social/post-impl/docs/BACKLOG_MVP.md`) — latent only, since the real
+create-broadcast flow's `+24h` default margin masks the ~7h skew; would bite a future short-duration
+broadcast feature. `pnpm e2e` 31/31, `pnpm test` 341/341, `tsc -b` clean, all local (CI run itself
+unverified — no GitHub access this session, same caveat as AUTH-7).
+
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):
 replaced Swagger UI's plain `bearerAuth` scheme with an OAuth2 "password" flow
