@@ -1003,15 +1003,15 @@ TanStack Query's default retry on a 404, so a deleted/bad-link post took ~7s to 
 this post." — fixed both, verified down to ~400ms. `pnpm e2e` 34/34 (new `post-deep-link.spec.ts`),
 `pnpm test` 351/351, `tsc -b`/`eslint` clean. `client/docs/E2E_OVERVIEW.md` updated with the new spec.
 
-**FEED-11 harness built, baselines pending CI** (2026-07-18,
-`client/docs/FEED-11_POST_MODAL_VISUAL_REGRESSION.md`): new `e2e/visual/app-post-modal.spec.ts` —
-9 baselines (empty/populated/draft × 3 breakpoints), dialog-element-only screenshots (not full page),
-reusing `mockPost`/`mockComment` (a reply is added live through the real "Reply" UI, no second
-fixture set). Directly inspected all 9 "actual" captures — dialog opens correctly, nested reply
-indents correctly, Post button's disabled→enabled treatment renders correctly. `tsc -b`/`eslint`
-clean, `pnpm e2e` still 34/34 (separate project, unaffected). Baselines themselves need the
-`client-ci` `update-baselines` dispatch (Linux-rendered), same as every HF-12–HF-18 precedent — not
-generated from this local Windows run; ticket stays `IN PROGRESS` until that lands.
+**FEED-11 DONE** (2026-07-18, `client/docs/FEED-11_POST_MODAL_VISUAL_REGRESSION.md`): new
+`e2e/visual/app-post-modal.spec.ts` — 9 baselines (empty/populated/draft × 3 breakpoints),
+dialog-element-only screenshots (not full page), reusing `mockPost`/`mockComment` (a reply is added
+live through the real "Reply" UI, no second fixture set). `tsc -b`/`eslint` clean, `pnpm e2e` still
+34/34 (separate project, unaffected). Baselines generated via the `client-ci` `update-baselines`
+dispatch (Linux-rendered, same as every HF-12–HF-18 precedent) and committed; human visual check of
+`populated`/`draft`/`empty` confirmed correct nested-reply indentation, Post button disabled/enabled
+treatment, and empty-state message. Local Windows `pnpm test:visual` shows the same established
+~0.02–0.03 font-rendering noise floor as every other baseline set, not a content mismatch.
 
 **Swagger — authorize with email + password** (2026-07-14,
 `modules/auth/docs/SWAGGER_OAUTH2_PASSWORD_AUTH.md`, requested directly, not a backlog ticket):

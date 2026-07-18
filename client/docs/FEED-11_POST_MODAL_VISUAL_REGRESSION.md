@@ -1,6 +1,6 @@
 # FEED-11 · Visual regression harness for the post comment modal
 
-**Status:** Harness implemented; baselines pending CI generation (see "Remaining step" below).
+**Status:** `DONE` (2026-07-18) — harness implemented, baselines generated via CI and committed.
 **Dependency:** FEED-2 (`DONE`), FEED-12 (`DONE`) — picked up after FEED-12 shipped, so the simpler
 `/posts/:postId` navigation path applied instead of the click-through-the-feed fallback the ticket
 described for the case where FEED-12 hadn't landed yet.
@@ -68,12 +68,20 @@ three files. Nothing to fix.
   (solid) treatment. All three match the intended design.
 - `pnpm e2e` (functional suite, unaffected — separate `testDir`/project) — all 34 tests still pass.
 
-## Remaining step (not done locally, by design)
+## Baselines (executed 2026-07-18)
 
-Per every prior baseline ticket (HF-12 through HF-18)'s established precedent, baselines are
-generated via the `client-ci` workflow's `update-baselines` manual dispatch (ubuntu-latest — the
-environment CI actually diffs against), not captured from this local Windows machine. Once
-generated: download the `visual-baselines` artifact, extract the 9 `post-modal-*.png` files into
-`e2e/visual/__screenshots__/`, do a quick human visual check against the captures described above,
-and commit. Until then, `pnpm exec playwright test --project=visual-regression app-post-modal.spec.ts`
-will keep failing locally with "no baseline exists" — that's expected, not a regression.
+Generated via the `client-ci` workflow's `update-baselines` manual dispatch (ubuntu-latest — the
+environment CI actually diffs against), same process as every prior baseline ticket (HF-12 through
+HF-18). The `visual-baselines` artifact's 9 `post-modal-*.png` files were extracted into
+`e2e/visual/__screenshots__/` and committed (the artifact also included the 9 `home-feed-*.png`
+files — confirmed byte-identical to what was already committed, so only the new 9 needed staging).
+
+Human visual check of `populated`/`draft`/`empty` at 1280px confirmed: the nested reply indents
+correctly under its root comment (both timestamped "just now", confirming the negative-diff clock
+behavior documented above holds in practice), the composer's Post button shows the correct
+disabled/enabled treatment in each state, and the empty-state message renders correctly.
+
+`pnpm exec playwright test --project=visual-regression app-post-modal.spec.ts` run locally on
+Windows against these new baselines still shows all 9 as "different" (~0.02–0.03 pixel-ratio) —
+expected per HF-12's own precedent (baselines are Linux-rendered; CI is the authoritative visual
+environment; local Windows runs diverge on font rendering, not content).

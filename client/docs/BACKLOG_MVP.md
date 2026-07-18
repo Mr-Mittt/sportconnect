@@ -105,7 +105,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 36 | FEED-9 | QA / acceptance checklist (integration) | `DONE` |
 | 37 | MSW-1 | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `DONE` |
 | 38 | FEED-12 | Comment modal fetches its own post + URL-addressable deep link — **new ticket, not in either epic** | `DONE` |
-| 39 | FEED-11 | Visual regression harness for the post comment modal — **new ticket, not in either epic** | `IN PROGRESS` |
+| 39 | FEED-11 | Visual regression harness for the post comment modal — **new ticket, not in either epic** | `DONE` |
 
 **Dependencies:**
 ```
@@ -1460,7 +1460,7 @@ found and fixed a real bug outside the original plan: neither `usePost` nor the 
 state — both fixed. Full write-up: `client/docs/FEED-12_COMMENT_MODAL_DEEP_LINK.md`.
 
 ### FEED-11 · Visual regression harness for the post comment modal — new ticket, not in either epic
-**Status:** `IN PROGRESS` · **Type:** Infrastructure (Testing) · **Dependency:** FEED-2 (`DONE`) ·
+**Status:** `DONE` (2026-07-18) · **Type:** Infrastructure (Testing) · **Dependency:** FEED-2 (`DONE`) ·
 **Origin:** raised during FEED-2's implementation — the modal has no visual-regression coverage
 today, unlike Home Feed (HF-10a/b) or the auth pages (their own `a11y.spec.ts`/visual specs).
 
@@ -1518,8 +1518,13 @@ wrote "actual" images since no baseline exists yet) — confirmed correct render
 finding about MSW-1's standalone mock server not sharing the page's frozen clock (turned out not to
 matter — `formatRelativeTime`'s `minutes < 1` branch also catches negative diffs, so a live-created
 reply still renders deterministic "just now" text regardless of the real run date).
-**Remaining, blocking `DONE`:** baselines still need the `client-ci` `update-baselines` dispatch
-(Linux-rendered) — same as every HF-12–HF-18 baseline ticket, not generated from a local Windows run.
+**Baselines landed (2026-07-18):** `update-baselines` dispatch run, all 9 `post-modal-*.png` extracted
+into `e2e/visual/__screenshots__/` and committed. Human visual check of `populated`/`draft`/`empty`
+at 1280px confirmed: nested reply indents correctly under its root comment, both timestamped "just
+now"; composer's Post button shows the correct enabled/disabled treatment in each state; empty-state
+message renders correctly. `pnpm exec playwright test --project=visual-regression app-post-modal.spec.ts`
+locally on Windows shows all 9 at ~0.02–0.03 pixel-ratio diffs — consistent with the established
+Windows/Linux font-rendering noise floor documented since HF-12, not a content mismatch.
 
 | Item | Decision |
 |---|---|
