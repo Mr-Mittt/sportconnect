@@ -1085,6 +1085,13 @@ public class GroupServiceImpl implements GroupService {
         });
     }
 
+    private static final List<String> SENT_INVITATION_IN_FLIGHT_STATUSES = List.of("pending_owner", "pending_user");
+
+    /**
+     * Returns both {@code pending_owner} and {@code pending_user} rows for {@code inviterId} in one
+     * page — the caller (or {@code GroupInvitationResponse#getStatus()} on each row) tells them
+     * apart, so this doesn't need a separate call per status.
+     */
     @Override
     @Transactional(readOnly = true)
     public Page<GroupInvitationResponse> getMemberSentInvitations(Long groupId, UUID inviterId, Pageable pageable) {
@@ -1095,8 +1102,8 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Only group members can view their sent invitations");
         }
         String groupName = groupRepository.findById(groupId).map(Group::getGroupName).orElse("Unknown Group");
-        Page<GroupInvitation> invitationsPage =
-                invitationRepository.findByGroupIdAndInviterIdAndStatus(groupId, inviterId, "pending_owner", pageable);
+        Page<GroupInvitation> invitationsPage = invitationRepository.findByGroupIdAndInviterIdAndStatusIn(
+                groupId, inviterId, SENT_INVITATION_IN_FLIGHT_STATUSES, pageable);
         Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(invitationsPage.getContent());
         return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, groupName, usersById));
     }

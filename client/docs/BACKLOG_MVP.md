@@ -109,6 +109,8 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | **Phase 7 — Groups page epic (new, not in either epic — see deferred-items table below)** | | | |
 | 40 | GRP-1 | Group page restructure — cover banner, Posts/Chat/Settings tabs, inline discovery panel | `DONE` |
 | 41 | GRP-2 | Adapt Settings tab to the full group settings data set — blocked on B7 (group-impl) | `TODO` |
+| 42 | GRP-3 | Members tab — group member management (search, invite, 5 status-grouped lists) | `TODO` |
+| 43 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3 | `TODO` |
 
 **Dependencies:**
 ```
@@ -129,6 +131,8 @@ FEED-2 → FEED-12 → FEED-11 (FEED-12 decouples the comment modal from the fee
 HF-4 (matches) is NOT de-mocked in this MVP — no backend module exists.
 FEED-4, FEED-5 → GRP-1 (Groups page epic; independent of Phase 6's other tickets).
 GRP-1, B7 (modules/social/group-impl/docs/BACKLOG_MVP.md) → GRP-2.
+GRP-1 → GRP-3 → GRP-4. GRP-3's "Waiting for user accept" section was blocked on B8
+  (modules/social/group-impl/docs/BACKLOG_MVP.md) — B8 shipped 2026-07-20, no longer blocking.
 ```
 
 **Backend blockers (tracked outside this backlog):**
@@ -1679,6 +1683,108 @@ is picked up.
 
 ---
 
+### GRP-3 · Members tab — group member management
+**Status:** `TODO` · **Type:** Feature · **Dependency:** GRP-1 (`DONE`)
+**Design reference:** none — no Members-tab markup exists in `design-reference-group-feed.html`
+today; this ticket is scoped directly from the user's spec, not a mockup. Flag if a reference gets
+added before pickup.
+
+**Origin:** requested directly by the user (2026-07-20) — a new "Members" tab in `GroupTabs`,
+positioned between Chat and Settings, for group member management.
+
+**What ships:**
+- New `GroupTabs` entry `'members'`, ordered **Posts → Chat → Members → Settings**.
+- New `GroupMembersTab` component, two parts:
+  1. **Header row** — a shared "find member" text input that filters all five lists below on
+     `onChange` (case-insensitive substring match on name, no debounce — matches the literal spec)
+     + an "Invite friend" button.
+  2. **Five status-grouped lists**, all loaded together when the tab becomes active:
+     - **Waiting for group approve** — pending join requests for this group. Visible to
+       owner/admin only (hidden entirely for a `group_member`). Backed by the existing
+       `GET/PUT /api/groups/{groupId}/join-requests*` (already owner/admin-gated server-side,
+       `modules/social/group-impl`). Each row keeps the existing accept/decline actions.
+     - **Waiting for user accept** — **scope broadened 2026-07-20 (delta from the original spec at
+       the top of this ticket):** now shows *every* invitation the *current user* sent for this
+       group that's still in flight — both `pending_owner` (awaiting owner/admin approval) and
+       `pending_user` (owner/admin already approved, awaiting the invitee's reply), not just
+       `pending_user` as originally scoped. User's reasoning: as the inviter, they want visibility
+       into invitations they sent regardless of which stage they're stuck at, not only the
+       approved-and-waiting-on-my-friend subset. Scoped to invitations sent by the viewer; **the
+       whole section is hidden when empty**, not shown with an empty-state message. Backed by
+       **B8, shipped 2026-07-20** (`modules/social/group-impl/docs/BACKLOG_MVP.md`,
+       `modules/social/group-impl/docs/B8_INVITATION_STATUS_FILTER.md`): `GET
+       /api/groups/{groupId}/invitations/sent` takes **no query param** and always returns both
+       statuses in one page — **one request covers this whole section**, not two. Use each row's
+       `status` to render a per-row label distinguishing the two in-flight states (e.g. "awaiting
+       owner approval" vs. "awaiting {inviteeFirstName}'s response") rather than two separate
+       sub-lists, unless a visual split reads better at implementation time.
+     - **Group administrator** — members with `roleName` `group_owner` or `group_admin` (owner
+       listed first — see open decision #1). Backed by `GET /api/groups/{groupId}/members`.
+     - **Members** — members with `roleName` `group_member`. Same fetch as above, split
+       client-side by role.
+     - **Blacklist** — **no backend concept exists at all** (confirmed: no banned/blocked field,
+       repository query, or endpoint anywhere in `group-impl`). Ships as a header + a permanent
+       "Coming soon" empty state — no data, no actions. Real ban/block needs its own backend design
+       pass (schema, ban/unban action, re-join blocking) before a follow-up client ticket can wire
+       it — same treatment this backlog already gives the Matches/tournaments backend gap.
+- **Invite friend modal** — opens on "Invite friend" click, search input pre-filled with whatever
+  text is currently in the "find member" input (the spec's "preset search key"). Search results are
+  **mocked** — a static "Search coming soon" state regardless of what's typed, no network call, no
+  invite action wired. Real search + invite is **GRP-4** below.
+
+**Open decisions made at scoping time (confirm before/at pickup if this feels wrong — same pattern
+GRP-1 used):**
+1. Owner is folded into "Group administrator" rather than a separate 6th section — the user's spec
+   named exactly 5 sections.
+2. None of the three backend endpoints involved (`getGroupMembers`, `getGroupJoinRequests`,
+   `getMemberSentInvitations`) support a keyword filter — adding one to all three is out of
+   proportion to this ticket. Each section fetches a single larger page (e.g. `size=100`) and
+   filters client-side against "find member". Caps correct filtering at ~100 rows/section for MVP —
+   a known scaling limit (same spirit as this backlog's A7/A8 N+1 notes), not silently swept under
+   the rug.
+
+**Backend mapping:**
+
+| Section | Backend today | Notes |
+|---|---|---|
+| Waiting for group approve | Real — `GET/PUT /api/groups/{groupId}/join-requests*` | Already owner/admin-gated |
+| Waiting for user accept | Real — B8 (`DONE`) | One call, no query param, returns both `pending_owner` and `pending_user` rows — split by `row.status` |
+| Group administrator / Members | Real — `GET /api/groups/{groupId}/members` | No keyword filter — see open decision #2 |
+| Blacklist | **No backend concept at all** | Ships as a permanent empty state; needs its own design pass |
+| Invite friend modal | N/A — mocked on purpose in this ticket | Real wiring is GRP-4 |
+
+**Acceptance criteria:**
+- Members tab appears between Chat and Settings in `GroupTabs`, keyboard-navigable like the
+  existing three.
+- All five section headers render for an active group; "Waiting for group approve" hidden for
+  non-owner/admin; "Waiting for user accept" hidden when empty.
+- Typing in "find member" filters all visible lists in place, no navigation/reload.
+- "Invite friend" opens a modal pre-filled with the current search text and a static "coming soon"
+  result state — confirmed no network call.
+- Storybook coverage: owner/admin/member role states × populated/empty variants for the five
+  sections.
+- No new axe violations (extends `a11y.spec.ts`).
+
+---
+
+### GRP-4 · Wire invite-friend search to the real backend
+**Status:** `TODO` · **Type:** Feature · **Dependency:** GRP-3 (`TODO`)
+**Origin:** filed alongside GRP-3 — the invite-friend modal ships with mocked "coming soon" results
+in GRP-3 on purpose, so the modal's UI/UX lands independently of the real search+invite call chain.
+
+**What ships:** replace the modal's mock result state with a real, debounced query against `GET
+/api/users/search?q=&page=&size=` (`U6`, `DONE` —
+`modules/user/user-impl/docs/U6_USER_DISCOVERY.md`), and wire each result's "Invite" action to the
+existing `POST /api/groups/{groupId}/invitations` (B1, `DONE`) — which already 400s server-side if
+the inviter/invitee aren't friends (`A6`'s `UserFriendService.areFriends` gate) or if
+`allowMemberInvites` is off for the group. Surface that 400 as an inline per-result error, not a
+modal-wide failure. Confirm at pickup whether `U6`'s response already excludes existing
+members/already-invited users from results — don't assume either way.
+
+**Not yet scoped in detail** — full acceptance criteria to be written when picked up.
+
+---
+
 | Item | Decision |
 |---|---|
 | De-mock HF-4 (UpcomingMatches) | Deferred — no matches/tournaments backend module exists; needs its own backend design pass first. HF-4 ships mock-backed in this MVP. |
@@ -1686,3 +1792,4 @@ is picked up.
 | OAuth2 social login (Google/Facebook) | Deferred — scaffolded server-side but unverified; own ticket if prioritized. |
 | Group invitations / pinned posts / ownership transfer UI | Deferred — real endpoints exist; **GRP-1 is the Groups-page epic's first ticket, but does not itself cover invitations, pinned posts, or ownership transfer** — those remain deferred beyond GRP-1. |
 | Add-sport flow screen | Deferred — only the entry-point callback is wired (HF-2/SPORT-1); `POST /api/sports/profiles` is ready when this gets scoped. |
+| Group member blacklist/ban | Deferred — no schema, repository query, or endpoint exists for banning/blocking a group member. GRP-3 ships its Blacklist section as a permanent "coming soon" empty state; real functionality needs a backend design pass before a follow-up client ticket. |
