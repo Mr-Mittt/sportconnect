@@ -25,6 +25,10 @@ interface CreateGroupModalProps {
   onSubmit: (payload: CreateGroupPayload) => void;
   isSubmitting: boolean;
   isError: boolean;
+  /** GRP-1: pre-fills the name field when opened from GroupDiscoveryPanel's
+   * shared "Group name or invite code" input. Only read once, on mount —
+   * same remount-on-open convention as the rest of this form's state. */
+  initialGroupName?: string;
 }
 
 /**
@@ -52,8 +56,9 @@ export function CreateGroupModal({
   onSubmit,
   isSubmitting,
   isError,
+  initialGroupName = '',
 }: CreateGroupModalProps) {
-  const [groupName, setGroupName] = useState('');
+  const [groupName, setGroupName] = useState(initialGroupName);
   const [selectedSport, setSelectedSport] = useState<SportKey | ''>(lockedSport ?? '');
   const [description, setDescription] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);

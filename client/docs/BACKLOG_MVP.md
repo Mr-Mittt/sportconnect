@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-07-06
+**Last updated:** 2026-07-20
 
 ---
 
@@ -106,6 +106,9 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 37 | MSW-1 | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `DONE` |
 | 38 | FEED-12 | Comment modal fetches its own post + URL-addressable deep link — **new ticket, not in either epic** | `DONE` |
 | 39 | FEED-11 | Visual regression harness for the post comment modal — **new ticket, not in either epic** | `DONE` |
+| **Phase 7 — Groups page epic (new, not in either epic — see deferred-items table below)** | | | |
+| 40 | GRP-1 | Group page restructure — cover banner, Posts/Chat/Settings tabs, inline discovery panel | `DONE` |
+| 41 | GRP-2 | Adapt Settings tab to the full group settings data set — blocked on B7 (group-impl) | `TODO` |
 
 **Dependencies:**
 ```
@@ -124,6 +127,8 @@ FEED-2 → FEED-12 → FEED-11 (FEED-12 decouples the comment modal from the fee
   page.goto() a post URL instead of clicking through the feed — sequence FEED-12 before FEED-11,
   though FEED-11 doesn't hard-block on it if picked up first).
 HF-4 (matches) is NOT de-mocked in this MVP — no backend module exists.
+FEED-4, FEED-5 → GRP-1 (Groups page epic; independent of Phase 6's other tickets).
+GRP-1, B7 (modules/social/group-impl/docs/BACKLOG_MVP.md) → GRP-2.
 ```
 
 **Backend blockers (tracked outside this backlog):**
@@ -1526,10 +1531,158 @@ message renders correctly. `pnpm exec playwright test --project=visual-regressio
 locally on Windows shows all 9 at ~0.02–0.03 pixel-ratio diffs — consistent with the established
 Windows/Linux font-rendering noise floor documented since HF-12, not a content mismatch.
 
+### GRP-1 · Group page restructure — cover banner, Posts/Chat/Settings tabs, inline discovery panel
+**Status:** `DONE` (2026-07-20) · **Summary:** `client/docs/GRP-1_GROUP_PAGE_RESTRUCTURE.md` ·
+**Type:** Feature · **Dependency:** FEED-4, FEED-5 (`DONE`) ·
+**Design reference:** `client/design-reference/design-reference-group-feed.html` — `#groups-view`
+section (already reflects the target design; no update needed before starting, unlike a from-scratch
+page)
+
+**Origin:** flagged in this file's own deferred-items table (below) — "Group invitations / pinned
+posts / ownership transfer UI — belong to a future Groups-page epic." This is that epic's first
+ticket.
+
+**Delta (2026-07-20, executed):** `GroupDiscoveryPanel`'s group-card grid (below the Join/Create
+buttons, matching the design reference) was briefly dropped mid-implementation after
+`App.test.tsx`'s pre-existing FEED-4 integration test caught it duplicating `GroupSpaceSwitcher`'s
+pill row exactly (same accessible name, `getByRole` found two ambiguous "Downtown Strikers"
+buttons) — then **restored** per explicit correction, since the reference genuinely shows both
+controls. Fixed properly instead: each card's accessible name is `Open {groupName}`, distinct from
+the switcher pill's bare name. `App.test.tsx` updated to target the specific control each assertion
+means to test. Full writeup: `client/docs/GRP-1_GROUP_PAGE_RESTRUCTURE.md`. Also note for **GRP-2**:
+no visual-regression harness exists yet for `#groups-view` (unlike Home Feed's HF-10a/b) — out of
+scope here, flagged as a follow-up, not silently dropped.
+
+**Decisions (resolved 2026-07-20, at pickup):**
+1. **Chat tab: build the reference's interactive UI now**, local state only (matches the reference
+   exactly — message bubbles, input, Send). No persistence, since no chat backend exists — show a
+   small disclaimer that messages aren't saved. Real chat is a separate future ticket once a
+   conversations/messages backend is scoped.
+2. **Settings tab is gated, not hidden:**
+   - **Member:** can open Settings, **read-only** (all fields displayed, no inputs enabled).
+   - **Owner + Admin:** can edit group properties (Privacy toggle) — matches the real
+     `PUT /api/groups/{groupId}` owner/admin rule.
+   - **Owner only:** a **Delete Group** button, placed at the very bottom of the Settings tab
+     content, below everything else (danger-styled, separate from Leave Group). Matches the real
+     `DELETE /api/groups/{groupId}` owner-only rule — not in the original design reference, added
+     per this decision.
+   - Leave Group stays available to any member (owner must transfer ownership first — existing
+     backend rule, surface that constraint in the UI if the owner tries to leave).
+3. **Notifications toggle: dropped from this ticket.** No backend field exists for a per-user group
+   notification preference — not scoped here.
+4. **New ticket filed for the settings data gap**: the four `GroupSettings` toggle fields
+   (`allowMemberPosts`/`requirePostApproval`/`allowMemberInvites`/`maxMembers`) are real but split
+   across a second endpoint (`PUT /api/groups/{groupId}/settings`, owner-only) from the properties
+   endpoint the Privacy toggle uses. Rather than wire both endpoints into one tab without confirming
+   the contract first, filed **B7** (`modules/social/group-impl/docs/BACKLOG_MVP.md`) to audit/
+   confirm the full settings data set and permission enforcement, and **GRP-2** (below, `TODO`,
+   blocked on B7) to adapt this Settings tab to include those four fields once B7 lands. **GRP-1
+   itself ships Settings with only Privacy + Leave Group + Delete Group** — the unambiguous, already-
+   audited real endpoints.
+
+**What the design reference specifies** (`#groups-view`):
+- `sport-switcher-groups` + `group-switcher` — horizontal pill rows (sport filter, then "All" +
+  each joined group by name), same pattern as Home Feed's `SportSwitcher`.
+- `group-cover` — a banner header shown only when a specific group is selected: colored band (sport
+  ramp), group icon, name, member count, "All groups" back button. New component — nothing like it
+  exists in the current `GroupsPage.tsx`.
+- Two-column body (`2.1fr 0.9fr`): `group-main` (left) + a **persistent right rail** (Upcoming
+  matches / Trending hashtags / Group broadcasts — unaffected by anything happening in `group-main`,
+  same widgets as Home Feed's rail).
+- `group-main` when "All" is selected — a discovery panel: search input + "Join Group"/"Create
+  Group" buttons + a list of group cards (avatar, name, member count) to open. **Replaces** today's
+  modal-based `CreateGroupModal`/`JoinGroupModal` flow with an inline panel — a real restructure,
+  not just an addition.
+- `group-main` when a specific group is selected — an internal vertical tab list (narrow, ~150px,
+  icon + label, 3 items) + content pane, nested inside `group-main` itself (the persistent right
+  rail above stays outside this tabbed area):
+  - **Posts** (default/first tab) — composer + group feed, reusing the same comment-dialog pattern
+    (`openDialog`) as Home Feed. Already exists in production (`CreatePostForm` + `Feed`, real
+    backend) — the work here is nesting it under a tab, not building it new.
+  - **Chat** (second tab) — message bubbles (own messages right-aligned/accent background, others
+    left-aligned/neutral background with sender name), input + Send. Fully interactive in the
+    reference's vanilla-JS mock, but **there is no chat backend at all** (no `conversations`/
+    `messages` tables, no real-time delivery — "designed, not implemented" per `PROGRESS.md`).
+    Shipping this as if it works would be misleading (messages wouldn't persist past a refresh) —
+    see open decision #1.
+  - **Settings** — group name + description, a Privacy toggle (Public/Private pills), and a "Leave
+    Group" danger-styled button in the reference. **This ticket adds gating and a Delete Group
+    action not shown in the reference** — see decisions #2 and #4 above. Notifications toggle from
+    the reference is dropped (decision #3).
+
+**Backend mapping — what's real vs. what needs scoping:**
+
+| Reference element | Backend today | Notes |
+|---|---|---|
+| Posts tab (composer + feed) | Real, already shipped | Just needs to move under the new tab |
+| Group cover banner | Real data (`Group` name/avatar/sportId/member count already fetched) | New component only |
+| "All groups" discovery panel | Real (`GET /api/groups/public`, join-request/create endpoints) | New component; replaces the two existing modals |
+| Settings → Privacy (Public/Private) | Real — `Group.isPrivate`, settable via `PUT /api/groups/{groupId}` (owner/admin) | Member sees read-only |
+| Settings → Leave Group | Real — `DELETE /api/groups/{groupId}/leave` | No client UI exists for this today; owner must transfer ownership first (existing rule) |
+| Settings → Delete Group | Real — `DELETE /api/groups/{groupId}` (owner only) | Not in the reference; added per decision #2, bottom of Settings tab |
+| Settings → Notifications toggle | **No backend found** — dropped from scope | Decision #3 |
+| Settings → `allowMemberPosts`/`requirePostApproval`/`allowMemberInvites`/`maxMembers` | Real but not wired in this ticket | Deferred to **GRP-2**, blocked on **B7**'s audit — decision #4 |
+| Chat tab | **No backend at all** | Built as interactive local-state UI per decision #1, with a "not saved" disclaimer |
+
+**What ships:**
+- `group-cover` banner component.
+- Restructure `group-main` into two states: "All groups" discovery panel and a per-group tabbed
+  view.
+- Vertical tab control (Posts / Chat / Settings) nested inside `group-main`, narrow (~150px), icon +
+  label, following this codebase's existing hand-rolled controlled-component pattern
+  (`NavTabs.tsx`/`GroupSpaceSwitcher.tsx` — parent owns active tab, `role="tablist"`/`role="tab"`; no
+  Radix Tabs primitive exists yet in `client/src/shared/ui/`).
+- **Posts tab**: relocate the existing composer + feed here (real, already shipped — a move, not
+  new backend work).
+- **Settings tab**: Privacy toggle (owner/admin edit, member read-only), Leave Group (any member),
+  Delete Group (owner only, bottom of the tab, danger-styled, separate from Leave Group). No
+  Notifications toggle (dropped) and no `GroupSettings` toggle fields (deferred to GRP-2).
+- **Chat tab**: interactive local-state UI matching the reference, with a "messages aren't saved"
+  disclaimer — no backend.
+- **Persistent right rail** stays outside the tabbed area, visible regardless of which tab or
+  discovery-panel state is active — matches the reference exactly.
+
+**Acceptance criteria:**
+- Layout matches `design-reference-group-feed.html`'s `#groups-view` at 375/768/1280px (extend the
+  existing visual-regression harness, same pattern as Home Feed's HF-10a/b).
+- "All groups" discovery panel's search/join/create actions call the real endpoints already used by
+  the modals being replaced — confirm no functional regression versus today's modal flow.
+- Posts tab behaves identically to today's group feed (no regression in like/comment/create-post).
+- Settings tab's Privacy toggle, Leave Group, and Delete Group all actually persist/execute via the
+  real backend.
+- Settings tab gating verified for all three roles: Member (read-only, no Delete button), Admin
+  (can edit Privacy, no Delete button), Owner (can edit Privacy, Delete button visible and
+  functional, confirms before deleting).
+- Chat tab is clearly labeled as not persisting messages (disclaimer visible, not just implied).
+- Keyboard-navigable tabs, visible focus states, no new axe violations (extends `a11y.spec.ts`).
+- Storybook coverage for the new tab control, cover banner, and discovery panel, including all
+  three Settings-tab role states.
+
+---
+
+### GRP-2 · Adapt Settings tab to the full group settings data set
+**Status:** `TODO` · **Type:** Feature · **Dependency:** B7 (`modules/social/group-impl/docs/BACKLOG_MVP.md`, `TODO`) ·
+**Origin:** filed alongside GRP-1 — GRP-1 ships the Settings tab with only Privacy/Leave/Delete
+(unambiguous real endpoints). The four `GroupSettings` fields (`allowMemberPosts`/
+`requirePostApproval`/`allowMemberInvites`/`maxMembers`) are also real but were deliberately left
+out of GRP-1 pending B7's audit of the split-contract permission model.
+
+**What ships:** once B7 confirms the contract and permission enforcement, extend the Settings tab
+(built in GRP-1) with toggles for `allowMemberPosts`/`requirePostApproval`/`allowMemberInvites` and
+a number field for `maxMembers`, calling `GET`/`PUT /api/groups/{groupId}/settings`. Same gating
+shape as GRP-1's Privacy toggle unless B7 finds a reason to differ (owner-only per the current
+`CLAUDE.md` role table — confirm against B7's findings, don't assume GRP-1's owner/admin split
+carries over unchanged).
+
+**Not yet scoped in detail** — full acceptance criteria to be written when B7 lands and this ticket
+is picked up.
+
+---
+
 | Item | Decision |
 |---|---|
 | De-mock HF-4 (UpcomingMatches) | Deferred — no matches/tournaments backend module exists; needs its own backend design pass first. HF-4 ships mock-backed in this MVP. |
 | Forgot/reset password screens | Deferred — `POST /api/auth/forgot-password` is a non-functional server-side placeholder; building UI against it now would do nothing. |
 | OAuth2 social login (Google/Facebook) | Deferred — scaffolded server-side but unverified; own ticket if prioritized. |
-| Group invitations / pinned posts / ownership transfer UI | Deferred — real endpoints exist but belong to a future Groups-page epic, not Home Feed MVP. |
+| Group invitations / pinned posts / ownership transfer UI | Deferred — real endpoints exist; **GRP-1 is the Groups-page epic's first ticket, but does not itself cover invitations, pinned posts, or ownership transfer** — those remain deferred beyond GRP-1. |
 | Add-sport flow screen | Deferred — only the entry-point callback is wired (HF-2/SPORT-1); `POST /api/sports/profiles` is ready when this gets scoped. |

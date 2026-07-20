@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useFeedSpaceStore } from '@/app/feedSpaceStore';
 import { useCreateGroup } from '@/features/feed/hooks/useCreateGroup';
+import { useDeleteGroup } from '@/features/feed/hooks/useDeleteGroup';
+import { useLeaveGroup } from '@/features/feed/hooks/useLeaveGroup';
 import { usePost } from '@/features/feed/hooks/usePost';
+import { useUpdateGroup } from '@/features/feed/hooks/useUpdateGroup';
 import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
@@ -20,7 +23,13 @@ import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
 import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CreateGroupModal } from './components/CreateGroupModal';
+import { DeleteGroupConfirmDialog } from './components/DeleteGroupConfirmDialog';
+import { GroupChatTab } from './components/GroupChatTab';
+import { GroupCoverBanner } from './components/GroupCoverBanner';
+import { GroupDiscoveryPanel } from './components/GroupDiscoveryPanel';
+import { GroupSettingsTab } from './components/GroupSettingsTab';
 import { GroupSpaceSwitcher } from './components/GroupSpaceSwitcher';
+import { GroupTabs, type GroupTabKey } from './components/GroupTabs';
 import { JoinGroupModal } from './components/JoinGroupModal';
 import { useGroupsPageData } from './useGroupsPageData';
 import { useJoinGroupModalData } from './useJoinGroupModalData';
@@ -89,8 +98,17 @@ export function GroupsPage() {
   // activeCommentsPostId (FEED-7).
   const [pendingBroadcastContent, setPendingBroadcastContent] = useState<string | null>(null);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  // GRP-1: whatever was typed into GroupDiscoveryPanel's shared input when
+  // "Create Group" was clicked — pre-fills CreateGroupModal's name field.
+  const [pendingCreateGroupName, setPendingCreateGroupName] = useState('');
   const [isJoinGroupOpen, setIsJoinGroupOpen] = useState(false);
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
+  // GRP-1: which of the per-group tabs is showing. Reset to 'posts' at every
+  // point that changes `selectedGroupId` (see `selectGroupAndShowPosts`
+  // below) rather than via an effect, per React's own guidance to avoid
+  // synchronous setState-in-effect.
+  const [activeGroupTab, setActiveGroupTab] = useState<GroupTabKey>('posts');
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   // Bumped on every open (not close) — remounts CreateGroupModal/AddSportModal
   // so their internal form field state starts fresh each time, without an
   // effect calling setState. JoinGroupModal doesn't need this — its search
@@ -133,13 +151,12 @@ export function GroupsPage() {
     isGroupsError,
     retryGroups,
   } = useGroupsPageData();
-  // Clicking a group post's "> groupname" link (only rendered in the "All"
-  // groups view) — switches to that group's sport (a group is 1:1 with
-  // exactly one sport) and selects it, same as clicking its GroupSpaceSwitcher
-  // chip would. No navigation needed — already on this page.
-  const goToGroup = (groupId: number, sportId: number) => {
-    setActiveSport(sportKeyForId(sportId) ?? 'all');
-    selectGroup(groupId, sportId);
+  // GRP-1: every place that changes which group is selected also resets the
+  // per-group tab back to Posts — a stale Settings/Chat selection from a
+  // previously viewed group would be confusing to land on.
+  const selectGroupAndShowPosts = (groupId: number | null, groupSportId?: number | null) => {
+    selectGroup(groupId, groupSportId ?? undefined);
+    setActiveGroupTab('posts');
   };
   const commentsData = useCommentsData(
     activeCommentsPostId ?? -1,
@@ -168,6 +185,44 @@ export function GroupsPage() {
     () => ALL_SPORT_KEYS.filter((key) => !data.sportProfiles.some((sport) => sport.key === key)),
     [data.sportProfiles],
   );
+
+  // GRP-1: the full selected Group (cover banner, Settings tab) — found in
+  // `data.groups`, which is sport-filtered but always contains the
+  // selection, since `feedSpaceStore` only ever lets a selected group's
+  // sport and `activeSport` diverge instantaneously, never settle mismatched.
+  const selectedGroup = data.groups.find((group) => group.id === selectedGroupId) ?? null;
+  const selectedGroupSportKey = selectedGroup !== null ? sportKeyForId(selectedGroup.sportId) : undefined;
+  const selectedGroupSport =
+    selectedGroupSportKey !== undefined ? sportsByKey[selectedGroupSportKey] : undefined;
+
+  const updateGroupMutation = useUpdateGroup(currentUserId);
+  const leaveGroupMutation = useLeaveGroup(currentUserId);
+  const deleteGroupMutation = useDeleteGroup(currentUserId);
+
+  const handleUpdatePrivacy = (isPrivate: boolean) => {
+    if (selectedGroupId === null) return;
+    updateGroupMutation.mutate({ groupId: selectedGroupId, payload: { isPrivate } });
+  };
+  const handleLeaveGroup = () => {
+    if (selectedGroupId === null) return;
+    leaveGroupMutation.mutate(selectedGroupId);
+  };
+  const handleConfirmDeleteGroup = () => {
+    if (selectedGroupId === null) return;
+    deleteGroupMutation.mutate(selectedGroupId, { onSuccess: () => setIsDeleteConfirmOpen(false) });
+  };
+  const openCreateGroup = (name: string = '') => {
+    setPendingCreateGroupName(name);
+    setCreateGroupOpenCount((count) => count + 1);
+    setIsCreateGroupOpen(true);
+  };
+  // GRP-1: opening JoinGroupModal from GroupDiscoveryPanel's shared input —
+  // pre-fills and, if non-empty, kicks off a search immediately rather than
+  // requiring a second "Search" click.
+  const openJoinGroupWithQuery = (query: string) => {
+    joinGroupModalData.openSearch(query);
+    setIsJoinGroupOpen(true);
+  };
 
   // FEED-12: comes from usePost, not a feed-cache lookup — see
   // HomeFeedPage's own equivalent comment for the full reasoning.
@@ -211,56 +266,96 @@ export function GroupsPage() {
         <GroupSpaceSwitcher
           groups={data.groups}
           selectedGroupId={selectedGroupId}
-          onSelect={selectGroup}
-          onCreateGroup={() => {
-            setCreateGroupOpenCount((count) => count + 1);
-            setIsCreateGroupOpen(true);
-          }}
-          onJoinGroup={() => setIsJoinGroupOpen(true)}
+          onSelect={selectGroupAndShowPosts}
           sportsByKey={sportsByKey}
           isLoading={isGroupsLoading}
           isError={isGroupsError}
           onRetry={retryGroups}
         />
       </div>
-      {selectedGroupId !== null && (
-        <CreatePostForm
-          currentUser={{ firstName: user.firstName, fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
-          onSubmit={handleSubmitPost}
-          isSubmitting={isCreatingPost}
-          isError={isCreatePostError}
-          onPhotoClick={noop}
-          onLocationClick={noop}
-          onTagSportClick={noop}
-          canBroadcast={canBroadcast}
+      {selectedGroup !== null && (
+        <GroupCoverBanner
+          group={selectedGroup}
+          sport={selectedGroupSport}
+          onBack={() => selectGroupAndShowPosts(null)}
         />
       )}
-      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[1.6fr_1fr]">
+      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[2.1fr_0.9fr]">
         <div className="min-w-0">
-          <Feed
-            posts={data.posts}
-            activeSport={activeSport}
-            sportsByKey={sportsByKey}
-            currentUserId={currentUserId}
-            onToggleLike={toggleLike}
-            onHashtagClick={(tag) => {
-              setActiveHashtag(tag);
-              setIsHashtagModalOpen(true);
-            }}
-            onDeletePost={deletePost}
-            onOpenComments={setActiveCommentsPostId}
-            hasMorePosts={hasMorePosts}
-            isFetchingMorePosts={isFetchingMorePosts}
-            onLoadMore={fetchMorePosts}
-            isLoading={isLoading}
-            isError={isError}
-            showSportBadge={activeSport === 'all'}
-            groupsById={data.groupsById}
-            showGroupName={selectedGroupId === null}
-            onGroupClick={goToGroup}
-            onRetry={retryPosts}
-            isLoadMoreError={isLoadMorePostsError}
-          />
+          {selectedGroup === null ? (
+            <GroupDiscoveryPanel
+              groups={data.groups}
+              sportsByKey={sportsByKey}
+              onOpenGroup={selectGroupAndShowPosts}
+              onCreateGroup={openCreateGroup}
+              onJoinGroup={openJoinGroupWithQuery}
+              isLoading={isGroupsLoading}
+              isError={isGroupsError}
+              onRetry={retryGroups}
+            />
+          ) : (
+            <div className="border-hairline flex gap-3.5 rounded-xl border-border bg-surface-2 p-3.5">
+              <GroupTabs activeTab={activeGroupTab} onChange={setActiveGroupTab} />
+              <div className="min-w-0 flex-1">
+                {activeGroupTab === 'posts' && (
+                  <div className="flex flex-col gap-3.5">
+                    <CreatePostForm
+                      currentUser={{
+                        firstName: user.firstName,
+                        fullName: `${user.firstName} ${user.lastName}`,
+                        avatarUrl: user.avatarUrl,
+                      }}
+                      onSubmit={handleSubmitPost}
+                      isSubmitting={isCreatingPost}
+                      isError={isCreatePostError}
+                      onPhotoClick={noop}
+                      onLocationClick={noop}
+                      onTagSportClick={noop}
+                      canBroadcast={canBroadcast}
+                    />
+                    <Feed
+                      posts={data.posts}
+                      activeSport={activeSport}
+                      sportsByKey={sportsByKey}
+                      currentUserId={currentUserId}
+                      onToggleLike={toggleLike}
+                      onHashtagClick={(tag) => {
+                        setActiveHashtag(tag);
+                        setIsHashtagModalOpen(true);
+                      }}
+                      onDeletePost={deletePost}
+                      onOpenComments={setActiveCommentsPostId}
+                      hasMorePosts={hasMorePosts}
+                      isFetchingMorePosts={isFetchingMorePosts}
+                      onLoadMore={fetchMorePosts}
+                      isLoading={isLoading}
+                      isError={isError}
+                      showSportBadge={activeSport === 'all'}
+                      showGroupName={false}
+                      onRetry={retryPosts}
+                      isLoadMoreError={isLoadMorePostsError}
+                    />
+                  </div>
+                )}
+                {activeGroupTab === 'chat' && (
+                  <GroupChatTab key={selectedGroup.id} currentUserFirstName={user.firstName} />
+                )}
+                {activeGroupTab === 'settings' && (
+                  <GroupSettingsTab
+                    group={selectedGroup}
+                    currentUserRole={selectedGroup.currentUserRole}
+                    onUpdatePrivacy={handleUpdatePrivacy}
+                    isUpdatingPrivacy={updateGroupMutation.isPending}
+                    isUpdatePrivacyError={updateGroupMutation.isError}
+                    onLeave={handleLeaveGroup}
+                    isLeaving={leaveGroupMutation.isPending}
+                    isLeaveError={leaveGroupMutation.isError}
+                    onRequestDelete={() => setIsDeleteConfirmOpen(true)}
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex min-w-0 flex-col gap-3.5">
           <UpcomingMatches
@@ -329,12 +424,13 @@ export function GroupsPage() {
         onClose={() => setIsCreateGroupOpen(false)}
         sportsByKey={sportsByKey}
         lockedSport={lockedSport}
+        initialGroupName={pendingCreateGroupName}
         isSubmitting={createGroupMutation.isPending}
         isError={createGroupMutation.isError}
         onSubmit={(payload) =>
           createGroupMutation.mutate(payload, {
             onSuccess: (group) => {
-              selectGroup(group.id, group.sportId);
+              selectGroupAndShowPosts(group.id, group.sportId);
               setIsCreateGroupOpen(false);
             },
           })
@@ -401,6 +497,16 @@ export function GroupsPage() {
         isError={isBroadcastUpdateError}
         existingText={activeBroadcastForSelectedGroup?.content ?? ''}
       />
+      {selectedGroup !== null && (
+        <DeleteGroupConfirmDialog
+          isOpen={isDeleteConfirmOpen}
+          onClose={() => setIsDeleteConfirmOpen(false)}
+          onConfirm={handleConfirmDeleteGroup}
+          isSubmitting={deleteGroupMutation.isPending}
+          isError={deleteGroupMutation.isError}
+          groupName={selectedGroup.groupName}
+        />
+      )}
     </main>
   );
 }

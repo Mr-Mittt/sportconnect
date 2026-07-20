@@ -113,8 +113,11 @@ test('Feed/groups journey', async ({ page, mockSessionId }) => {
   });
 
   await test.step('6. create a group — appears in the switcher and is selectable immediately', async () => {
-    await groupSwitcher.getByRole('button', { name: 'Group options' }).click();
-    await page.getByRole('menuitem', { name: 'Create Group' }).click();
+    // GRP-1: GroupSpaceSwitcher's own "Group options" dropdown was removed
+    // (redundant with GroupDiscoveryPanel's Join/Create entry points) — back
+    // to "All" first, since the panel only renders in that state.
+    await groupSwitcher.getByRole('button', { name: 'All', exact: true }).click();
+    await page.getByRole('button', { name: 'Create Group' }).click();
 
     const dialog = page.getByRole('dialog');
     await dialog.locator('#create-group-name').fill('Sunday Runners');

@@ -49,8 +49,6 @@ export const AllActiveWithGroups: Story = {
     groups: twoGroups,
     selectedGroupId: null,
     onSelect: () => {},
-    onCreateGroup: () => {},
-    onJoinGroup: () => {},
     sportsByKey,
   },
 };
@@ -60,20 +58,16 @@ export const SpecificGroupActive: Story = {
     groups: twoGroups,
     selectedGroupId: 2,
     onSelect: () => {},
-    onCreateGroup: () => {},
-    onJoinGroup: () => {},
     sportsByKey,
   },
 };
 
-/** No joined group for the active sport — Join/Create render as prominent buttons instead of the "..." menu. */
+/** No joined group for the active sport — just the bare "All" pill; Join/Create live in GroupDiscoveryPanel. */
 export const NoGroupsForSport: Story = {
   args: {
     groups: [],
     selectedGroupId: null,
     onSelect: () => {},
-    onCreateGroup: () => {},
-    onJoinGroup: () => {},
     sportsByKey,
   },
 };
@@ -83,8 +77,6 @@ export const Loading: Story = {
     groups: [],
     selectedGroupId: null,
     onSelect: () => {},
-    onCreateGroup: () => {},
-    onJoinGroup: () => {},
     sportsByKey,
     isLoading: true,
   },
@@ -95,8 +87,6 @@ export const ErrorState: Story = {
     groups: [],
     selectedGroupId: null,
     onSelect: () => {},
-    onCreateGroup: () => {},
-    onJoinGroup: () => {},
     sportsByKey,
     isError: true,
   },

@@ -1,14 +1,7 @@
-import { IconDots, IconPlus, IconSearch } from '@tabler/icons-react';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { cn } from '@/shared/lib/utils';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import type { Group } from '@/features/feed/types';
 
@@ -23,8 +16,6 @@ interface GroupSpaceSwitcherProps {
    * feedSpaceStore decide whether this selection is still valid the next
    * time the sport filter changes — omit/undefined when selecting "All". */
   onSelect: (groupId: number | null, groupSportId?: number) => void;
-  onCreateGroup: () => void;
-  onJoinGroup: () => void;
   sportsByKey: Record<SportKey, SportProfile>;
   isLoading: boolean;
   isError: boolean;
@@ -75,28 +66,6 @@ function Pill({ label, isActive, onClick, badgeClassName, badgeContent }: PillPr
   );
 }
 
-interface DashedPillButtonProps {
-  label: string;
-  Icon: typeof IconPlus;
-  onClick: () => void;
-}
-
-/** Same dashed "Add sport" pill style (SportSwitcher) — reused here (user
- * decision, FEED-5) so the zero-groups Join/Create actions read as the same
- * kind of affordance as adding a sport, not a generic button pair. */
-function DashedPillButton({ label, Icon, onClick }: DashedPillButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="border-hairline flex cursor-pointer items-center gap-1.5 rounded-full border-dashed border-border-strong px-3 py-1.75 text-2sm text-text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
-    >
-      <Icon className="size-4" aria-hidden="true" />
-      {label}
-    </button>
-  );
-}
-
 /**
  * Groups page's space switcher (FEED-4) — "All" plus one pill per joined
  * group for the active sport (groups are 1:1 with a sport, so this list is
@@ -105,34 +74,31 @@ function DashedPillButton({ label, Icon, onClick }: DashedPillButtonProps) {
  * badge is colored via its own sport's ramp (`sportsByKey`), not a
  * group-specific color — groups don't carry one.
  *
- * Join/Create are always available, but collapse based on membership (user
- * decision): zero joined groups for this sport renders them as prominent
- * dashed pills — same style as SportSwitcher's "Add sport" pill (FEED-5 user
- * decision), search/plus icons matching the modal each one opens; one or
- * more renders the pill row and tucks both actions into a right-aligned
- * "..." menu instead (same icons, plain menu-item styling), since they're
- * secondary once the user already has groups to switch between. Both open
- * the real CreateGroupModal/JoinGroupModal (FEED-5) via the callbacks below.
+ * Pure group selector — no Join/Create affordance of its own. FEED-5
+ * originally added dashed "Join Group"/"Create Group" pills here (empty
+ * state) collapsing into a "..." dropdown once populated; **removed in
+ * GRP-1** once `GroupDiscoveryPanel` shipped with its own Join/Create entry
+ * points (a shared "Group name or invite code" input plus both buttons,
+ * matching `design-reference-group-feed.html`'s `group-switcher`, which
+ * never had Join/Create built into it either). Keeping both would put two
+ * identically-labeled "Join Group"/"Create Group" buttons on screen at
+ * once whenever "All" is selected — confirmed as a real, confusing
+ * duplication during live verification, not just a naming nit.
  *
- * FEED-8: `isLoading`/`isError` gate the "zero groups" fallback above — a
- * still-loading or failed fetch must not render the same dashed
- * Join/Create pills a genuinely empty group list would (that would read as
- * "you have no groups" when the real state is "we don't know yet"/"couldn't
- * check").
+ * FEED-8: `isLoading`/`isError` gate the "0 groups" pill-only fallback — a
+ * still-loading or failed fetch must not render the same bare "All" pill a
+ * genuinely empty group list would (that would read as "you have no
+ * groups" when the real state is "we don't know yet"/"couldn't check").
  */
 export function GroupSpaceSwitcher({
   groups,
   selectedGroupId,
   onSelect,
-  onCreateGroup,
-  onJoinGroup,
   sportsByKey,
   isLoading,
   isError,
   onRetry,
 }: GroupSpaceSwitcherProps) {
-  const hasGroups = groups.length > 0;
-
   if (isLoading) {
     return (
       <div role="group" aria-label="Group filter" className="flex flex-wrap items-center gap-2">
@@ -176,37 +142,6 @@ export function GroupSpaceSwitcher({
           />
         );
       })}
-
-      {!hasGroups && (
-        <>
-          <DashedPillButton label="Join Group" Icon={IconSearch} onClick={onJoinGroup} />
-          <DashedPillButton label="Create Group" Icon={IconPlus} onClick={onCreateGroup} />
-        </>
-      )}
-
-      {hasGroups && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label="Group options"
-              className="ml-auto cursor-pointer rounded p-1.5 text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-            >
-              <IconDots className="size-4" aria-hidden="true" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onSelect={onJoinGroup}>
-              <IconSearch className="size-4" aria-hidden="true" />
-              Join Group
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onCreateGroup}>
-              <IconPlus className="size-4" aria-hidden="true" />
-              Create Group
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
     </div>
   );
 }

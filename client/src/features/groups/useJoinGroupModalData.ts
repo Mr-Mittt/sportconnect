@@ -38,6 +38,14 @@ export function useJoinGroupModalData(
   );
 
   const submitSearch = useCallback(() => setSubmittedKeyword(inputValue.trim()), [inputValue]);
+  // GRP-1: opening the modal from GroupDiscoveryPanel's shared "Group name or
+  // invite code" input — sets both pieces of state directly from the typed
+  // value rather than `setInputValue` + `submitSearch()`, which would read
+  // the stale pre-update `inputValue` from this render's closure.
+  const openSearch = useCallback((query: string) => {
+    setInputValue(query);
+    setSubmittedKeyword(query.trim());
+  }, []);
   const requestToJoin = useCallback(
     (groupName: string) => joinMutation.mutate({ groupName }),
     [joinMutation],
@@ -47,6 +55,7 @@ export function useJoinGroupModalData(
     inputValue,
     setInputValue,
     submitSearch,
+    openSearch,
     results: searchQuery.data?.content ?? [],
     isSearching: searchQuery.isLoading,
     isSearchError: searchQuery.isError,
