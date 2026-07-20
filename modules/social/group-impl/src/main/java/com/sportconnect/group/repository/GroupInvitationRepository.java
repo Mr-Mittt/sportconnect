@@ -21,5 +21,5 @@ public interface GroupInvitationRepository extends JpaRepository<GroupInvitation
 
     Page<GroupInvitation> findByInviteeIdAndStatus(UUID inviteeId, String status, Pageable pageable);
 
-    Page<GroupInvitation> findByGroupIdAndInviterIdAndStatus(Long groupId, UUID inviterId, String status, Pageable pageable);
+    Page<GroupInvitation> findByGroupIdAndInviterIdAndStatusIn(Long groupId, UUID inviterId, List<String> statuses, Pageable pageable);
 }

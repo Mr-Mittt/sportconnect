@@ -1408,6 +1408,33 @@ class GroupServiceImplSpec extends Specification {
         thrown(BadRequestException)
     }
 
+    def "getMemberSentInvitations should return both pending_owner and pending_user rows in one page"() {
+        given:
+        def pageable = PageRequest.of(0, 10)
+        def inviteeId1 = UUID.randomUUID()
+        def inviteeId2 = UUID.randomUUID()
+        def pendingOwnerInvitation = GroupInvitation.builder()
+                .id(1L).groupId(testGroup.id).inviterId(userId).inviteeId(inviteeId1)
+                .status("pending_owner").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def pendingUserInvitation = GroupInvitation.builder()
+                .id(2L).groupId(testGroup.id).inviterId(userId).inviteeId(inviteeId2)
+                .status("pending_user").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def page = new PageImpl<GroupInvitation>([pendingOwnerInvitation, pendingUserInvitation], pageable, 2)
+
+        when:
+        def response = groupService.getMemberSentInvitations(testGroup.id, userId, pageable)
+
+        then:
+        1 * groupRepository.existsById(testGroup.id) >> true
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
+        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
+        1 * invitationRepository.findByGroupIdAndInviterIdAndStatusIn(
+                testGroup.id, userId, ["pending_owner", "pending_user"], pageable) >> page
+        1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId1): testUser, (inviteeId2): testUser]
+        response.content.size() == 2
+        response.content*.status as Set == ["pending_owner", "pending_user"] as Set
+    }
+
     // ─── removeMember ─────────────────────────────────────────────────────────
 
     def "removeMember should delete membership when caller is admin"() {

@@ -32,7 +32,9 @@
 | 11 | A7 | Fix N+1 queries in paginated list mappers | `DONE` |
 | 12 | A8 | Fix N+1 in getUserGroups | `DONE` |
 | 13 | A9 | Add privacy/membership check to `getGroup` | `DONE` |
-| 14 | B7 | Settings data set audit for client Settings tab | `TODO` |
+| 14 | B8 | Extend member-sent invitations to include owner-approved status | `DONE` |
+| 15 | B7 | Settings data set audit for client Settings tab | `TODO` |
+| 16 | B9 | Group system posts — welcome post on member join | `TODO` |
 
 ---
 
@@ -339,6 +341,44 @@ product before scheduling; this is a real (if narrow) information-disclosure gap
 
 ---
 
+### B8 · Extend member-sent invitations to include owner-approved status
+**Status:** `DONE` (2026-07-20) · **Summary:** `modules/social/group-impl/docs/B8_INVITATION_STATUS_FILTER.md`  
+**Type:** Enhancement  
+**Origin:** filed for the client's **GRP-3** (`client/docs/BACKLOG_MVP.md`) — its Members tab needs
+a "waiting for user accept" list: invitations the caller sent for a group that an owner/admin has
+already approved (status `pending_user`) and the invitee hasn't responded to yet.
+
+**Found while scoping GRP-3:** `GroupServiceImpl.getMemberSentInvitations()` (line ~1098) hardcodes
+its status filter to `pending_owner` only —
+`invitationRepository.findByGroupIdAndInviterIdAndStatus(groupId, inviterId, "pending_owner",
+pageable)`. `GET /api/groups/{groupId}/invitations/sent` therefore can never return a `pending_user`
+row today, which is the exact status GRP-3's new section needs.
+
+**Delta (2026-07-20, executed):** at pickup, user first chose an explicit **`status` query param**
+(one call per status). Later the same day, while comparing GRP-3's request count against the 5
+Members-tab sections, user reversed that: they want **both `pending_owner` and `pending_user` in
+one request** (a group member/owner/admin should see everything they've invited that's still in
+flight, not just the `pending_user` subset), distinguishable via each row's `status` field. That's
+what actually shipped: `GET /api/groups/{groupId}/invitations/sent` takes **no query param** and
+always returns both statuses in one page. `GroupService.getMemberSentInvitations` is `(groupId,
+inviterId, pageable)` — no `status` arg. New
+`GroupInvitationRepository.findByGroupIdAndInviterIdAndStatusIn(groupId, inviterId,
+List.of("pending_owner", "pending_user"), pageable)` — the single-status query param variant
+(and its now-dead single-status repository method) was removed, not just deprecated. **GRP-3
+should build its Members tab against one call to this endpoint**, splitting locally by
+`row.status` for whichever of its sections need which status. Full writeup, including the
+mid-session revision: `modules/social/group-impl/docs/B8_INVITATION_STATUS_FILTER.md`.
+
+**Out of scope:** no change to `getGroupInvitations` (owner/admin's incoming-approval view) or
+`getUserPendingInvitations` (invitee-facing view) — both already return the correct status set for
+their own purpose.
+
+**Tests:** `GroupServiceImplSpec` — updated the existing not-a-member throw test to the 3-arg
+signature; replaced the per-status happy-path tests with one asserting a single call returns both
+`pending_owner` and `pending_user` rows together.
+
+---
+
 ### B7 · Settings data set audit for client Settings tab
 **Status:** `TODO`  
 **Type:** Enhancement (Audit / Contract)  
@@ -371,6 +411,74 @@ is an audit-and-confirm ticket, not new-feature work, done **before** the client
 
 **Out of scope:** no new settings fields, no UI work (that's the client follow-up ticket, tracked as
 **GRP-2** in `client/docs/BACKLOG_MVP.md`, blocked on this ticket).
+
+---
+
+### B9 · Group system posts — welcome post on member join
+**Status:** `TODO` · **Type:** New Feature (cross-module — touches post module, same shape as B3)
+
+**Origin:** raised directly by the user while discussing B8/GRP-3 — should `GroupMemberResponse`
+expose who invited a member and who approved them, so the group can "say hello" to a new member?
+Conclusion from that discussion: exposing `invitedBy` as a **permanent field on every member row**
+is a social-graph disclosure with no expiry (invitations require `UserFriendService.areFriends`,
+so it would broadcast a friendship fact to the entire membership indefinitely, not just at
+join-time). A **transient, feed-visible system post** gets the same icebreaker value — it's
+naturally scoped to "the group members active around join time," not permanently queryable by
+anyone who opens the member list months later — without adding a durable social-graph field to
+the API surface. This ticket is that: a `GROUP_SYSTEM` post, auto-created in the group's feed the
+moment a `GroupMember` row is inserted, mentioning the inviter by name when the join came through
+an invitation.
+
+**Trigger points (all three insert a `GroupMember` row today, `GroupServiceImpl.java`):**
+- `acceptJoinRequest` (~line 561) — self-requested, owner/admin approved. No inviter to mention.
+- `acceptInvitation` (~line 1005) — invitee accepting an owner-approved invite. Mention the
+  inviter (`GroupInvitation.inviterId`, already loaded in this method to validate the caller).
+- `addMember` (~line 349) — owner/admin directly adds someone. No inviter to mention (direct add
+  isn't the friend-gated invitation flow).
+
+**Content (server-templated, not free text):**
+- Join-request / direct-add path: `"{fullName} joined the group 👋"`
+- Invitation path: `"{fullName} joined the group — invited by {inviterFullName} 👋"`
+
+**Design decisions to make at pickup (flagging now, not assumed):**
+1. **New `PostType.GROUP_SYSTEM`** (`post-api`) — requires a migration (next available `V026__...`)
+   altering `chk_post_type` (`V016__add_post_type_to_posts.sql`'s `CHECK (post_type IN
+   ('USER_FEED','GROUP_POST','GROUP_BROADCAST'))`) to add the new value, same shape as B3's own
+   migration.
+2. **Post authorship — real security consideration, not just a modeling detail.** `Post.userId` is
+   `NOT NULL` (`Post.java`) — there's no "no author" option without a schema change bigger than
+   this ticket needs. Recommend authoring the welcome post as **the new member**
+   (`userId = <joining user>`), since that's who every trigger path already has on hand, and
+   changing `userId` to nullable would ripple into every ownership check across `post-impl`.
+   **Consequence that must be closed, not left open:** `PostServiceImpl.createPost` is reachable
+   directly via the public `POST /api/posts` endpoint (`ROLE_USER`, any authenticated caller,
+   `CreatePostRequest.postType` is a caller-supplied field). If `GROUP_SYSTEM` is just another enum
+   value `createPost` accepts, **any user could self-author a fake "invited by X" system post**,
+   impersonating the system and potentially fabricating a friendship claim about someone else. This
+   ticket must add an explicit guard — `createPost` rejects `postType == GROUP_SYSTEM` with a
+   `BadRequestException` regardless of caller — and expose a **separate, non-REST-reachable**
+   interface method (e.g. `PostService.createSystemPost(Long groupId, UUID subjectUserId, String
+   content)`) that only `GroupServiceImpl` calls. This is the same "service interface as contract"
+   principle the root `CLAUDE.md` already requires for cross-domain calls, applied to close a
+   spoofing hole rather than just a domain-boundary concern.
+3. **Edit/delete guard.** Since the post is nominally "authored" by the new member,
+   `PostServiceImpl.updatePost`/`deletePost`'s existing `userId == caller` ownership check would
+   let that member edit or delete their own welcome post like normal content. Recommend: block
+   `updatePost` entirely for `GROUP_SYSTEM` posts (no caller should be able to rewrite a system
+   message), and scope `deletePost` to group owner/admin only (moderation cleanup) instead of the
+   nominal author — needs a `groupService.isGroupOwner`/`isGroupAdmin` check added to that one
+   `postType` branch.
+4. **Feed placement — no new endpoint needed.** `getGroupPosts`/`PostRepository.
+   findByGroupIdAndIsActiveTrue` already returns every post type for a `groupId`, so a
+   `GROUP_SYSTEM` post shows up in the existing group feed (`GET /api/posts/group/{groupId}`,
+   already consumed by the client's Posts tab, GRP-1) with no backend change beyond the type
+   itself existing. Client-side rendering (distinct system-message styling, no like/comment/edit
+   affordances for regular members) is **out of scope here** — file as a follow-up client ticket
+   once this backend piece lands, scoped against GRP-1's existing Posts tab, not GRP-3's Members
+   tab (this is feed content, not member-list content).
+
+**Out of scope:** system posts for leave/remove/role-change events (future, if wanted); a
+per-user/per-group opt-out toggle; any push-notification tie-in.
 
 ---
 

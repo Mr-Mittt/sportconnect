@@ -120,5 +120,13 @@ public interface GroupService {
 
     Page<GroupInvitationResponse> getUserPendingInvitations(UUID userId, Pageable pageable);
 
+    /**
+     * Returns invitations {@code inviterId} sent for this group that are still in flight —
+     * {@code "pending_owner"} (awaiting owner/admin approval) or {@code "pending_user"} (approved,
+     * awaiting the invitee's response) — both statuses in a single page, distinguishable via each
+     * row's {@link GroupInvitationResponse#getStatus()}. Terminal statuses (accepted/declined_*)
+     * are never included, since a caller paging through their own "still waiting on" list has no
+     * use for them here.
+     */
     Page<GroupInvitationResponse> getMemberSentInvitations(Long groupId, UUID inviterId, Pageable pageable);
 }

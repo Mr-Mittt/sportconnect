@@ -573,7 +573,7 @@ public class GroupController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @Operation(summary = "List invitations the caller sent for this group (paginated)", description = "Group members only.")
+    @Operation(summary = "List invitations the caller sent for this group (paginated)", description = "Group members only. Returns both pending_owner (awaiting owner/admin approval) and pending_user (owner/admin already approved, awaiting the invitee's response) rows in one page — each row's `status` tells them apart.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sent invitations (possibly empty)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not a group member"),
