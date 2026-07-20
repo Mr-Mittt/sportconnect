@@ -78,6 +78,21 @@ grepped `server/src/test` for `getMemberSentInvitations`/`invitations/sent`, no 
 scope to add one here since it wasn't part of B8's suggested scope and no existing precedent for this
 specific endpoint needed updating.
 
+**Superseded (2026-07-20, later same session):** the above "no integration test" gap was flagged
+back to the user (in response to "is there any it test create/update?") and closed. Two new
+`GroupControllerTest` cases added, `server/src/test/java/com/sportconnect/integration/
+GroupControllerTest.java`:
+- `getMemberSentInvitations_Success` — real `MockMvc` request against `GET
+  /api/groups/1/invitations/sent`, `GroupService` mocked to return one `pending_owner` +
+  one `pending_user` row; asserts the real `ApiResponse<Page<GroupInvitationResponse>>` JSON shape
+  and that both statuses come through a single call (the thing `GroupServiceImplSpec` can't prove,
+  since it mocks the service itself rather than exercising the controller/JSON layer).
+- `getMemberSentInvitations_NotAMember_ReturnsBadRequest` — confirms the
+  `BadRequestException` → 400 `ApiResponse.error` wiring for this endpoint's one error path, same
+  precedent as `getGroup_PrivateGroupNonMember_ReturnsBadRequest` (A9).
+
+Both pass; full `:server:test` re-run green (28/28, including the two new cases).
+
 ## Verification
 
 - `./gradlew :modules:social:group-impl:test --tests GroupServiceImplSpec` — green (new + existing

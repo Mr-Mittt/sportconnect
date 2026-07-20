@@ -3,6 +3,7 @@ package com.sportconnect.integration;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.group.api.dto.CreateGroupRequest;
 import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
+import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.dto.GroupSettingsResponse;
@@ -483,6 +484,65 @@ class GroupControllerTest extends BaseIT {
                 .andExpect(jsonPath("$.success").value(true));
 
         verify(groupService).getUserJoinRequests(eq(userId), any());
+    }
+
+    @Test
+    void getMemberSentInvitations_Success() throws Exception {
+        // B8 — confirms the controller/JSON wiring for the real, revised contract: no `status`
+        // query param, both pending_owner and pending_user rows returned together in one page
+        // (GroupServiceImplSpec exercises the service-level branching; GroupService is mocked
+        // here, so this is purely about what the HTTP layer actually serializes).
+        GroupInvitationResponse pendingOwner = GroupInvitationResponse.builder()
+                .id(1L)
+                .groupId(1L)
+                .groupName("Test Group")
+                .inviterId(userId)
+                .inviterFullName("Test User")
+                .inviteeId(UUID.randomUUID())
+                .inviteeFullName("Friend One")
+                .status("pending_owner")
+                .build();
+        GroupInvitationResponse pendingUser = GroupInvitationResponse.builder()
+                .id(2L)
+                .groupId(1L)
+                .groupName("Test Group")
+                .inviterId(userId)
+                .inviterFullName("Test User")
+                .inviteeId(UUID.randomUUID())
+                .inviteeFullName("Friend Two")
+                .status("pending_user")
+                .build();
+
+        Page<GroupInvitationResponse> page = new PageImpl<>(List.of(pendingOwner, pendingUser),
+                org.springframework.data.domain.PageRequest.of(0, 10), 2);
+        when(groupService.getMemberSentInvitations(eq(1L), eq(userId), any())).thenReturn(page);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/groups/1/invitations/sent")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content.length()").value(2))
+                .andExpect(jsonPath("$.data.content[0].status").value("pending_owner"))
+                .andExpect(jsonPath("$.data.content[1].status").value("pending_user"));
+
+        verify(groupService).getMemberSentInvitations(eq(1L), eq(userId), any());
+    }
+
+    @Test
+    void getMemberSentInvitations_NotAMember_ReturnsBadRequest() throws Exception {
+        // Confirms the controller/GlobalExceptionHandler wiring for this endpoint's one error
+        // path, same precedent as getGroup_PrivateGroupNonMember_ReturnsBadRequest (A9).
+        when(groupService.getMemberSentInvitations(eq(1L), eq(userId), any()))
+                .thenThrow(new BadRequestException("Only group members can view their sent invitations"));
+
+        mockMvc.perform(get("/api/groups/1/invitations/sent"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Only group members can view their sent invitations"));
+
+        verify(groupService).getMemberSentInvitations(eq(1L), eq(userId), any());
     }
 
     @Test
