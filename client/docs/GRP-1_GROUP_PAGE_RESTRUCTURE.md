@@ -128,8 +128,15 @@ rather than writing a unit test that would just assert the permanent fallback st
 - No visual-regression harness added yet for this page (`design-reference-group-feed.html` has no
   frozen-baseline Playwright spec the way Home Feed's HF-10a/b or the post modal's FEED-11 do) — that
   acceptance-criterion item from the original ticket text is **not done**; flagged as a follow-up,
-  not silently dropped. `client/docs/E2E_OVERVIEW.md` was not updated since no `e2e/` spec files were
-  added or changed in this ticket.
+  not silently dropped.
+- **`pnpm e2e` run in full** (`--project=e2e`, real MSW-backed Playwright server, not the earlier
+  live-backend check): caught a real, expected breakage in the pre-existing
+  `feed-groups-journey.spec.ts` — step 6 relied on `GroupSpaceSwitcher`'s now-removed "Group options"
+  dropdown to reach Create Group. Fixed by clicking "All" first (so `GroupDiscoveryPanel` renders),
+  then its "Create Group" button. All 34 e2e specs pass (one transient failure on a full parallel run
+  reproduced as pre-existing flakiness in an unrelated Home Feed pagination step — passed cleanly on
+  two subsequent full reruns and in isolation, not a regression from this ticket).
+  `client/docs/E2E_OVERVIEW.md` updated to describe the new entry point for that step.
 
 ## Known follow-ups (not this ticket)
 

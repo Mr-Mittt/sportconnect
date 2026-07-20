@@ -290,7 +290,7 @@ This spec destructures `mockSessionId` directly (needed by the seed/override adm
 | 3. add comment | Comment count `1→2`, appears in dialog | |
 | 4. create post (simulated failure) | `simulateCreatePostFailOnce(mockSessionId)` first → first submit fails with error text, composer clears anyway → retry succeeds, count → 22 | FEED-10's required "at least one MSW-simulated error response" acceptance criterion |
 | 5. switch to group feed | Click "Friday Night Football" (`mockGroup`) in `GroupSpaceSwitcher` → 1 article (the seeded GROUP_POST) | Scoped query — "Friday Night Football" also appears as a broadcast-rail row, an ambiguous unscoped match |
-| 6. create a group | "Sunday Runners" / Football → appears selected in switcher, "No posts yet for this sport." | |
+| 6. create a group | Back to "All" → `GroupDiscoveryPanel`'s "Create Group" button → "Sunday Runners" / Football → appears selected in switcher, "No posts yet for this sport." | GRP-1: `GroupSpaceSwitcher`'s own "Group options" dropdown was removed (redundant with the panel's Join/Create entry points) — the panel only renders in the "All" state, hence the extra click back |
 | 7. Trending + Broadcasts | 1 trending row, 1 broadcast row (expired one excluded) | Unaffected by the postsState replacement — separate handler state |
 | 8. Broadcast toggle permission | Absent for `mockGroup` (member), present for `mockOwnedGroup` (owner) | |
 | 9. SPORT-1 sport filter | Basketball pill → 1 article (the seeded index-20 post); back to All → 22 | |
