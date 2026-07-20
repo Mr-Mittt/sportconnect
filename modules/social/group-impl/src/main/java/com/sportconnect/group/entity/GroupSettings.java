@@ -44,8 +44,8 @@ public class GroupSettings {
     @Builder.Default
     private Boolean allowMemberInvites = false;
 
-    @Column(name = "max_members")
-    private Integer maxMembers;
+    @Column(name = "group_type_id", nullable = false)
+    private Long groupTypeId;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

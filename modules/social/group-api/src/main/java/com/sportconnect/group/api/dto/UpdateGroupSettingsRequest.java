@@ -13,5 +13,4 @@ public class UpdateGroupSettingsRequest {
     private Boolean allowMemberPosts;
     private Boolean requirePostApproval;
     private Boolean allowMemberInvites;
-    private Integer maxMembers;
 }

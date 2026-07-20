@@ -23,6 +23,7 @@ import com.sportconnect.group.entity.GroupMember;
 import com.sportconnect.group.entity.GroupPinnedPost;
 import com.sportconnect.group.entity.GroupRole;
 import com.sportconnect.group.entity.GroupSettings;
+import com.sportconnect.group.entity.GroupType;
 import com.sportconnect.group.repository.GroupInvitationRepository;
 import com.sportconnect.group.repository.GroupJoinRequestRepository;
 import com.sportconnect.group.repository.GroupMemberRepository;
@@ -30,6 +31,7 @@ import com.sportconnect.group.repository.GroupPinnedPostRepository;
 import com.sportconnect.group.repository.GroupRepository;
 import com.sportconnect.group.repository.GroupRoleRepository;
 import com.sportconnect.group.repository.GroupSettingsRepository;
+import com.sportconnect.group.repository.GroupTypeRepository;
 import com.sportconnect.social.post.api.dto.PostResponse;
 import com.sportconnect.social.post.api.dto.PostType;
 import com.sportconnect.social.post.api.service.PostService;
@@ -40,6 +42,7 @@ import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.api.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -63,6 +66,7 @@ public class GroupServiceImpl implements GroupService {
     private final GroupJoinRequestRepository joinRequestRepository;
     private final GroupSettingsRepository groupSettingsRepository;
     private final GroupRoleRepository groupRoleRepository;
+    private final GroupTypeRepository groupTypeRepository;
     private final UserService userService;
     private final UserFriendService userFriendService;
     private final UserSportProfileService userSportProfileService;
@@ -86,6 +90,7 @@ public class GroupServiceImpl implements GroupService {
             GroupJoinRequestRepository joinRequestRepository,
             GroupSettingsRepository groupSettingsRepository,
             GroupRoleRepository groupRoleRepository,
+            GroupTypeRepository groupTypeRepository,
             UserService userService,
             UserFriendService userFriendService,
             UserSportProfileService userSportProfileService,
@@ -97,6 +102,7 @@ public class GroupServiceImpl implements GroupService {
         this.joinRequestRepository = joinRequestRepository;
         this.groupSettingsRepository = groupSettingsRepository;
         this.groupRoleRepository = groupRoleRepository;
+        this.groupTypeRepository = groupTypeRepository;
         this.userService = userService;
         this.userFriendService = userFriendService;
         this.userSportProfileService = userSportProfileService;
@@ -145,12 +151,16 @@ public class GroupServiceImpl implements GroupService {
                 .build();
         groupMemberRepository.save(ownerMember);
 
-        // Create default settings
+        // Create default settings — every group is silently created as the DEFAULT type;
+        // changing type is a separate, not-yet-built ticket (see BACKLOG_MVP.md).
+        GroupType defaultType = groupTypeRepository.findByTypeName("DEFAULT")
+                .orElseThrow(() -> new NotFoundException("Default group type not found"));
         GroupSettings settings = GroupSettings.builder()
                 .groupId(group.getId())
                 .allowMemberPosts(true)
                 .requirePostApproval(false)
                 .allowMemberInvites(false)
+                .groupTypeId(defaultType.getId())
                 .build();
         groupSettingsRepository.save(settings);
 
@@ -322,7 +332,15 @@ public class GroupServiceImpl implements GroupService {
             group.setSchedule(request.getSchedule());
         }
 
-        group = groupRepository.save(group);
+        // groupName is the only unique constraint on `groups` — the pre-check above (line ~304) has
+        // a narrow TOCTOU window against a concurrent rename to the same name; the DB constraint is
+        // the real backstop, this just translates its violation into the same friendly error
+        // instead of a generic 500 (B7 addendum).
+        try {
+            group = groupRepository.save(group);
+        } catch (DataIntegrityViolationException e) {
+            throw new BadRequestException("Group name already exists");
+        }
         log.info("Updated group {} by user {}", groupId, userId);
 
         return mapToGroupResponse(group, userId);
@@ -361,6 +379,8 @@ public class GroupServiceImpl implements GroupService {
         if (groupMemberRepository.existsByGroupIdAndUserId(groupId, targetUserId)) {
             throw new BadRequestException("User is already a member");
         }
+
+        enforceMemberCapacity(groupId);
 
         // Get role
         GroupRole role = groupRoleRepository.findByRoleName(roleName)
@@ -537,6 +557,8 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("You already have a pending request for this group");
         }
 
+        checkMemberCapacityNotExceeded(group.getId());
+
         // Create join request
         GroupJoinRequest joinRequest = GroupJoinRequest.builder()
                 .groupId(group.getId())
@@ -571,6 +593,8 @@ public class GroupServiceImpl implements GroupService {
         if (!"pending".equals(request.getStatus())) {
             throw new BadRequestException("Request is not pending");
         }
+
+        enforceMemberCapacity(request.getGroupId());
 
         // Get member role
         GroupRole memberRole = groupRoleRepository.findByRoleName("group_member")
@@ -725,9 +749,6 @@ public class GroupServiceImpl implements GroupService {
         }
         if (request.getAllowMemberInvites() != null) {
             settings.setAllowMemberInvites(request.getAllowMemberInvites());
-        }
-        if (request.getMaxMembers() != null) {
-            settings.setMaxMembers(request.getMaxMembers());
         }
 
         settings = groupSettingsRepository.save(settings);
@@ -941,6 +962,8 @@ public class GroupServiceImpl implements GroupService {
                     userService.getUsersByIds(List.of(existing.getInviterId(), existing.getInviteeId())));
         }
 
+        checkMemberCapacityNotExceeded(groupId);
+
         GroupInvitation invitation = GroupInvitation.builder()
                 .groupId(groupId)
                 .inviterId(inviterId)
@@ -1010,6 +1033,8 @@ public class GroupServiceImpl implements GroupService {
         if (!"pending_user".equals(invitation.getStatus())) {
             throw new BadRequestException("Invitation is not pending your response");
         }
+
+        enforceMemberCapacity(invitation.getGroupId());
 
         GroupRole memberRole = groupRoleRepository.findByRoleName("group_member")
                 .orElseThrow(() -> new NotFoundException("Group member role not found"));
@@ -1282,15 +1307,56 @@ public class GroupServiceImpl implements GroupService {
     }
 
     private GroupSettingsResponse mapToGroupSettingsResponse(GroupSettings settings) {
+        GroupType groupType = groupTypeRepository.findById(settings.getGroupTypeId())
+                .orElseThrow(() -> new NotFoundException("Group type not found"));
         return GroupSettingsResponse.builder()
                 .id(settings.getId())
                 .groupId(settings.getGroupId())
                 .allowMemberPosts(settings.getAllowMemberPosts())
                 .requirePostApproval(settings.getRequirePostApproval())
                 .allowMemberInvites(settings.getAllowMemberInvites())
-                .maxMembers(settings.getMaxMembers())
+                .groupTypeName(groupType.getTypeName())
+                .maxMembers(groupType.getMaxMembers())
                 .createdAt(settings.getCreatedAt())
                 .updatedAt(settings.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * Rejects joins/adds once a group is at its type's member cap. Called from every path that
+     * inserts a {@code GroupMember} row (B7): addMember, acceptJoinRequest, acceptInvitation.
+     *
+     * <p>Row-locks the group's settings ({@code findByGroupIdForUpdate}, {@code SELECT ... FOR
+     * UPDATE}) for the rest of the caller's transaction so two concurrent calls for the same group
+     * — across instances or threads — can't both read the same pre-insert count and both pass: the
+     * second caller blocks here until the first commits (or rolls back) its insert, then re-reads
+     * the now-current count.
+     */
+    private void enforceMemberCapacity(Long groupId) {
+        GroupSettings settings = groupSettingsRepository.findByGroupIdForUpdate(groupId)
+                .orElseThrow(() -> new NotFoundException("Group settings not found"));
+        checkMemberCapacity(groupId, settings);
+    }
+
+    /**
+     * Early, unlocked capacity check for {@code createJoinRequest}/{@code createInvitation}: fails
+     * fast with a clear "group is full" error instead of letting a request/invitation sit around
+     * only to be rejected later at accept-time by {@link #enforceMemberCapacity}, which remains the
+     * authoritative, lock-protected guard against the group actually going over capacity.
+     */
+    private void checkMemberCapacityNotExceeded(Long groupId) {
+        GroupSettings settings = groupSettingsRepository.findByGroupId(groupId)
+                .orElseThrow(() -> new NotFoundException("Group settings not found"));
+        checkMemberCapacity(groupId, settings);
+    }
+
+    private void checkMemberCapacity(Long groupId, GroupSettings settings) {
+        GroupType groupType = groupTypeRepository.findById(settings.getGroupTypeId())
+                .orElseThrow(() -> new NotFoundException("Group type not found"));
+        long currentMembers = groupMemberRepository.countByGroupId(groupId);
+        if (currentMembers >= groupType.getMaxMembers()) {
+            throw new BadRequestException("Group has reached its maximum member capacity of "
+                    + groupType.getMaxMembers());
+        }
     }
 }

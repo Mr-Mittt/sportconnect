@@ -61,4 +61,7 @@
     <!-- A3: Flexible per-sport attributes -->
     <include file="db/changelog/changes/V025__add_attributes_to_user_sport_profiles.sql" relativeToChangelogFile="false"/>
 
+    <!-- B7: Fixed group-type membership-cap tiers -->
+    <include file="db/changelog/changes/V026__create_group_types_table.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
