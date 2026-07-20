@@ -185,6 +185,19 @@ export interface CreateGroupPayload {
   isPrivate: boolean;
 }
 
+// UpdateGroupRequest — partial update, only non-null fields are applied
+// server-side (GroupController.updateGroup's own @Operation description).
+// Owner or admin only; GRP-1 only ever sends `isPrivate`.
+export interface UpdateGroupPayload {
+  groupName?: string;
+  description?: string;
+  avatarUrl?: string;
+  coverUrl?: string;
+  isPrivate?: boolean;
+  rules?: string;
+  schedule?: string;
+}
+
 // CreateJoinRequestRequest — looked up by group NAME server-side
 // (GroupServiceImpl.findByGroupName), not id; there is no groupId field on
 // this request at all.

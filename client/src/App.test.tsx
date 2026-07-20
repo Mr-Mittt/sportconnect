@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -265,7 +265,11 @@ describe('App routing', () => {
 
     await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole('group', { name: 'Group filter' })).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /Downtown Strikers/ })).toBeInTheDocument();
+    // GRP-1: "Downtown Strikers" now appears twice (GroupSpaceSwitcher's pill
+    // and GroupDiscoveryPanel's card, by design — see design-reference-
+    // group-feed.html) — scope to the switcher specifically.
+    const groupFilter = screen.getByRole('group', { name: 'Group filter' });
+    expect(within(groupFilter).getByRole('button', { name: /Downtown Strikers/ })).toBeInTheDocument();
     // "All" is selected by default — no single group to post into yet.
     expect(screen.queryByLabelText('Create a post')).not.toBeInTheDocument();
   });
@@ -337,10 +341,13 @@ describe('App routing', () => {
     const user = userEvent.setup();
     renderApp(['/groups']);
 
+    // GRP-1: use the discovery panel's card (its accessible name is "Open
+    // Downtown Strikers", distinct from the switcher pill's bare group
+    // name) — exercises the panel's onOpenGroup path, not just the switcher.
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Downtown Strikers/ })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: 'Open Downtown Strikers' })).toBeInTheDocument(),
     );
-    await user.click(screen.getByRole('button', { name: /Downtown Strikers/ }));
+    await user.click(screen.getByRole('button', { name: 'Open Downtown Strikers' }));
 
     await waitFor(() => expect(screen.getByLabelText('Create a post')).toBeInTheDocument());
   });

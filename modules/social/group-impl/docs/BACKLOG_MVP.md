@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/social/group-impl`  
-**Last updated:** 2026-07-02
+**Last updated:** 2026-07-20
 
 ---
 
@@ -32,6 +32,7 @@
 | 11 | A7 | Fix N+1 queries in paginated list mappers | `DONE` |
 | 12 | A8 | Fix N+1 in getUserGroups | `DONE` |
 | 13 | A9 | Add privacy/membership check to `getGroup` | `DONE` |
+| 14 | B7 | Settings data set audit for client Settings tab | `TODO` |
 
 ---
 
@@ -335,6 +336,41 @@ groups unchanged. Add Spock coverage for both the private-member and private-non
 
 **Not urgent for MVP unless private groups are already relied on for genuine privacy** — flag with
 product before scheduling; this is a real (if narrow) information-disclosure gap, not cosmetic.
+
+---
+
+### B7 · Settings data set audit for client Settings tab
+**Status:** `TODO`  
+**Type:** Enhancement (Audit / Contract)  
+**Origin:** raised while scoping the client's GRP-1 ticket (`client/docs/BACKLOG_MVP.md`) — the new
+Groups page Settings tab needs privacy, member-post permissions, invite permissions, member cap, and
+group deletion all in one coherent surface, but that data is currently split across two endpoints
+(`PUT /api/groups/{groupId}` for name/description/rules/schedule/**isPrivate**, `PUT
+/api/groups/{groupId}/settings` for `allowMemberPosts`/`requirePostApproval`/`allowMemberInvites`/
+`maxMembers`) plus `DELETE /api/groups/{groupId}` for deletion. Nothing here needs new schema — this
+is an audit-and-confirm ticket, not new-feature work, done **before** the client fully wires the tab.
+
+**Scope:**
+1. Confirm `isPrivate` is actually present and settable on `UpdateGroupRequest` (verify against the
+   real DTO, don't assume from the entity field existing) — this is the "Privacy" toggle GRP-1 needs.
+2. Verify actual `@PreAuthorize`/service-layer enforcement matches the permission model GRP-1 is
+   building against, with Spock coverage for each:
+   - `PUT /api/groups/{groupId}` (properties incl. `isPrivate`) — owner **and** admin can write;
+     member gets `BadRequestException`/403.
+   - `PUT /api/groups/{groupId}/settings` (`allowMemberPosts`/`requirePostApproval`/
+     `allowMemberInvites`/`maxMembers`) — **owner only**; admin and member both rejected.
+   - `DELETE /api/groups/{groupId}` — **owner only**.
+   - `GET /api/groups/{groupId}/settings` — any member can read (confirm this still holds; it's the
+     read side of the member-read-only requirement).
+3. Decide (and document for the follow-up client ticket): keep the two-endpoint split as-is — client
+   calls both and composes one Settings tab — or consolidate into a single response/update contract.
+   Recommend keeping the split (matches existing domain boundaries, no schema change) unless the
+   audit finds a concrete reason not to.
+4. Confirm `maxMembers` has sane validation (e.g. can't be set below current member count) — not
+   currently known to be checked.
+
+**Out of scope:** no new settings fields, no UI work (that's the client follow-up ticket, tracked as
+**GRP-2** in `client/docs/BACKLOG_MVP.md`, blocked on this ticket).
 
 ---
 

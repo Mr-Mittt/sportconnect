@@ -102,6 +102,41 @@ describe('useJoinGroupModalData', () => {
     );
   });
 
+  it('openSearch sets both inputValue and the query keyword directly (GRP-1)', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/groups/public') return apiResponse(page([]));
+      if (url === '/groups/join-requests/user/user-1') return apiResponse(page([]));
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    const { result } = renderHook(() => useJoinGroupModalData('user-1', undefined, true), { wrapper });
+    await waitFor(() => expect(result.current.isSearching).toBe(false));
+
+    act(() => result.current.openSearch('  Riverside Ballers  '));
+
+    expect(result.current.inputValue).toBe('  Riverside Ballers  ');
+    await waitFor(() =>
+      expect(getSpy).toHaveBeenCalledWith('/groups/public', {
+        params: { keyword: 'Riverside Ballers' },
+      }),
+    );
+  });
+
+  it('openSearch with an empty string still sets inputValue but issues an unfiltered search', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/groups/public') return apiResponse(page([]));
+      if (url === '/groups/join-requests/user/user-1') return apiResponse(page([]));
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    const { result } = renderHook(() => useJoinGroupModalData('user-1', undefined, true), { wrapper });
+    await waitFor(() => expect(result.current.isSearching).toBe(false));
+
+    act(() => result.current.openSearch(''));
+
+    expect(result.current.inputValue).toBe('');
+  });
+
   it('pendingGroupIds reflects the user\'s pending join requests', async () => {
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
       if (url === '/groups/public') return apiResponse(page([]));

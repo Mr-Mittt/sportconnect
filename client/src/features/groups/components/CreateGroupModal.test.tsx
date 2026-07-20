@@ -98,4 +98,10 @@ describe('CreateGroupModal', () => {
     render(<CreateGroupModal {...baseProps} isError />);
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't create the group");
   });
+
+  it('pre-fills the name field from initialGroupName (GRP-1)', () => {
+    render(<CreateGroupModal {...baseProps} lockedSport="football" initialGroupName="Riverside Ballers" />);
+    expect(screen.getByLabelText('Group name')).toHaveValue('Riverside Ballers');
+    expect(screen.getByRole('button', { name: 'Create group' })).toBeEnabled();
+  });
 });

@@ -38,8 +38,6 @@ function renderSwitcher(overrides: Partial<React.ComponentProps<typeof GroupSpac
       groups={[]}
       selectedGroupId={null}
       onSelect={() => {}}
-      onCreateGroup={() => {}}
-      onJoinGroup={() => {}}
       sportsByKey={sportsByKey}
       isLoading={false}
       isError={false}
@@ -92,49 +90,27 @@ describe('GroupSpaceSwitcher', () => {
     expect(onSelect).toHaveBeenCalledWith(null);
   });
 
-  it('shows Join/Create as buttons (no menu) when there are no groups for this sport', () => {
+  it('renders only the "All" pill when there are no groups for this sport (no Join/Create — see GroupDiscoveryPanel)', () => {
     renderSwitcher();
 
-    expect(screen.getByRole('button', { name: 'Join Group' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create Group' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Join Group' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create Group' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Group options' })).not.toBeInTheDocument();
   });
 
-  it('collapses Join/Create into a "..." menu when groups exist', async () => {
-    const user = userEvent.setup();
-    const onJoinGroup = vi.fn();
-    const onCreateGroup = vi.fn();
-
-    renderSwitcher({ groups: [group({ id: 1 })], onCreateGroup, onJoinGroup });
-
-    expect(screen.queryByRole('button', { name: 'Join Group' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Create Group' })).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Group options' }));
-    await user.click(await screen.findByText('Join Group'));
-    expect(onJoinGroup).toHaveBeenCalled();
-
-    await user.click(screen.getByRole('button', { name: 'Group options' }));
-    await user.click(await screen.findByText('Create Group'));
-    expect(onCreateGroup).toHaveBeenCalled();
-  });
-
-  it('renders a skeleton, not the "0 groups, join/create" fallback, while loading', () => {
+  it('renders a skeleton while loading', () => {
     renderSwitcher({ isLoading: true });
 
-    expect(screen.queryByRole('button', { name: 'Join Group' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Create Group' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument();
   });
 
-  it('renders an error+retry state, not the "0 groups, join/create" fallback, on error', async () => {
+  it('renders an error+retry state on error', async () => {
     const user = userEvent.setup();
     const onRetry = vi.fn();
     renderSwitcher({ isError: true, onRetry });
 
     expect(screen.getByText("Couldn't load your groups.")).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Join Group' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Create Group' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(onRetry).toHaveBeenCalled();
   });

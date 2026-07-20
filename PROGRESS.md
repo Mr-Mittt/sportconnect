@@ -1028,6 +1028,20 @@ rendered paths while `/api/auth/login` still appears, and a real browser walkthr
 confirmed the Authorize dialog now takes email + password and reaches "Authorized." `:modules:
 auth:auth-impl:test` and `:server:test` both green.
 
+**GRP-1 DONE** (2026-07-20, `client/docs/GRP-1_GROUP_PAGE_RESTRUCTURE.md`): first ticket of the
+Groups-page epic flagged in `client/docs/BACKLOG_MVP.md`'s deferred-items table. Restructured
+`GroupsPage.tsx` to match `design-reference-group-feed.html`: new `GroupCoverBanner`, a per-group
+vertical tab nav (`GroupTabs`: Posts/Chat/Settings) replacing the always-visible composer+feed, and
+`GroupDiscoveryPanel` for the "All groups" state. Settings tab ships gated to the real backend
+(Privacy editable owner/admin, read-only member; Delete Group owner-only at the bottom; Leave Group
+disabled for the owner) — three new mutations (`useUpdateGroup`/`useLeaveGroup`/`useDeleteGroup`).
+Chat tab is a local-state-only UI (no backend exists) with a visible "not saved" disclaimer. Filed
+**B7** (`modules/social/group-impl/docs/BACKLOG_MVP.md`) to audit the split settings-data contract
+and **GRP-2** (client, blocked on B7) to extend Settings with the remaining `GroupSettings` fields.
+67 new/updated tests, `tsc -b`/`eslint` clean, live-verified end to end against the real running
+backend (register → add sport → create group → Posts/Chat/Settings tabs, owner-role Settings gating
+confirmed with real API responses).
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and
