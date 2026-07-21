@@ -46,7 +46,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
                 FROM Group g
                 LEFT JOIN GroupMember gm ON gm.groupId = g.id
                 WHERE g.isActive = true AND g.isPrivate = false
-                AND (:sportId IS NULL OR g.sportId = :sportId)
+                AND (:sportIds IS NULL OR g.sportId IN :sportIds)
                 AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
                 GROUP BY g
                 """,
@@ -54,13 +54,13 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
                 SELECT COUNT(DISTINCT g.id) FROM Group g
                 LEFT JOIN GroupMember gm ON gm.groupId = g.id
                 WHERE g.isActive = true AND g.isPrivate = false
-                AND (:sportId IS NULL OR g.sportId = :sportId)
+                AND (:sportIds IS NULL OR g.sportId IN :sportIds)
                 AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
                 """
     )
     Page<Object[]> searchPublicGroupsWithCounts(
             @Param("userId") UUID userId,
-            @Param("sportId") Long sportId,
+            @Param("sportIds") List<Long> sportIds,
             @Param("keyword") String keyword,
             Pageable pageable);
 
@@ -71,7 +71,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
                 FROM Group g
                 LEFT JOIN GroupMember gm ON gm.groupId = g.id
                 WHERE g.isActive = true AND g.isPrivate = false
-                AND (:sportId IS NULL OR g.sportId = :sportId)
+                AND (:sportIds IS NULL OR g.sportId IN :sportIds)
                 AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
                 GROUP BY g
                 """,
@@ -79,12 +79,12 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
                 SELECT COUNT(DISTINCT g.id) FROM Group g
                 LEFT JOIN GroupMember gm ON gm.groupId = g.id
                 WHERE g.isActive = true AND g.isPrivate = false
-                AND (:sportId IS NULL OR g.sportId = :sportId)
+                AND (:sportIds IS NULL OR g.sportId IN :sportIds)
                 AND (:keyword IS NULL OR LOWER(g.groupName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
                 """
     )
     Page<Object[]> searchPublicGroupsAnon(
-            @Param("sportId") Long sportId,
+            @Param("sportIds") List<Long> sportIds,
             @Param("keyword") String keyword,
             Pageable pageable);
 }

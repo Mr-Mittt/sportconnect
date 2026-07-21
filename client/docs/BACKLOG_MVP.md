@@ -110,11 +110,12 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 40 | GRP-1 | Group page restructure — cover banner, Posts/Chat/Settings tabs, inline discovery panel | `DONE` |
 | 41 | GRP-2 | Adapt Settings tab to the full group settings data set — blocked on B7 (group-impl) | `DONE` |
 | 42 | GRP-3 | Members tab — group member management (search, invite, 5 status-grouped lists) | `DONE` |
-| 43 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3 | `TODO` |
-| 44 | GRP-5 | Join Group modal — show the active sport filter — **new ticket, not in either epic** | `TODO` |
+| 43 | GRP-6 | Join Group modal — multi-select sport filter + grouped results — A10 shipped, no longer blocked — **new ticket, not in either epic, supersedes GRP-5** | `TODO` |
+| 44 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3 | `TODO` |
+| 45 | GRP-5 | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
 | **Phase 8 — Chat (new, not in either epic — see `documentation/md/CHAT_SERVICE_INTEGRATION.md`)** | | | |
-| 45 | CHAT-2 | Wire GroupChatTab to real-time PubNub delivery — blocked on CHAT-1 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) | `TODO` |
-| 46 | CHAT-4 | Persisted chat history + hardening — blocked on CHAT-3 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) and CHAT-2 | `TODO` |
+| 46 | CHAT-2 | Wire GroupChatTab to real-time PubNub delivery — blocked on CHAT-1 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) | `TODO` |
+| 47 | CHAT-4 | Persisted chat history + hardening — blocked on CHAT-3 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) and CHAT-2 | `TODO` |
 
 **Dependencies:**
 ```
@@ -137,6 +138,14 @@ FEED-4, FEED-5 → GRP-1 (Groups page epic; independent of Phase 6's other ticke
 GRP-1, B7 (modules/social/group-impl/docs/BACKLOG_MVP.md) → GRP-2.
 GRP-1 → GRP-3 → GRP-4. GRP-3's "Waiting for user accept" section was blocked on B8
   (modules/social/group-impl/docs/BACKLOG_MVP.md) — B8 shipped 2026-07-20, no longer blocking.
+GRP-6 (new, filed 2026-07-21) is independent of GRP-4 — inserted ahead of it in queue order (user
+  decision) since it's a self-contained JoinGroupModal enhancement, not because of a code
+  dependency. Supersedes GRP-5 (see GRP-5's entry) — GRP-5 is not picked up.
+GRP-6 → was blocked on A10 (modules/social/group-impl/docs/BACKLOG_MVP.md — adds a multi-value
+  sportIds filter to GET /api/groups/public). Discovered mid-pickup (2026-07-21): the client's
+  original plan (fan out one request per selected sport) was reversed by user decision in favor of
+  a real backend multi-sportIds filter — simpler client state (one query, one loading/error pair)
+  at the cost of a small additive backend change. A10 shipped 2026-07-21 — GRP-6 is unblocked.
 CHAT-1 (modules/social/chat-impl/docs/BACKLOG_MVP.md, backend — module scaffold + token endpoint)
   → CHAT-2 (client, real-time wiring) → CHAT-3 (backend, persistence) → CHAT-4 (client, swaps to
   persisted history + hardening). Independent of every other Phase 5–8 ticket — GroupChatTab
@@ -1820,9 +1829,88 @@ members/already-invited users from results — don't assume either way.
 
 ---
 
+### GRP-6 · Join Group modal — multi-select sport filter + grouped results
+**Status:** `TODO` · **Type:** Enhancement · **Dependency:** A10
+(`modules/social/group-impl/docs/BACKLOG_MVP.md` — backend, adds `sportIds` multi-value filter to
+`GET /api/groups/public`) · **Filed:** 2026-07-21 (user-specified UX enhancement, picked up ahead of
+GRP-4 by user decision) · **Supersedes:** GRP-5 (below) — GRP-5's static single-sport indicator is
+subsumed by this ticket's interactive multi-select filter; GRP-5 is not built.
+
+**Origin:** same underlying gap GRP-5 found (`JoinGroupModal`'s sport scoping is invisible to the
+user), but the user specified a materially richer fix instead of a static indicator: an interactive,
+multi-select sport filter — pre-seeded from page context — with results grouped by sport.
+
+**Blocked on A10 (discovered mid-pickup, 2026-07-21):** the first design pass planned a client-side
+fan-out (one `usePublicGroups` request per selected sport, each section resolving independently).
+User decision reversed this in favor of a real backend multi-sport filter instead — simpler client
+state (a single query, one `isLoading`/`isError` pair) at the cost of a small additive backend
+change. **Do not start client implementation until A10 ships.**
+
+**What ships:**
+- **Header:** center-align `JoinGroupModal`'s header row (currently `flex items-center
+  justify-between` in `JoinGroupModal.tsx:52` — title left, close button right). Restructure to a
+  3-column layout (e.g. `grid grid-cols-[1fr_auto_1fr]`: empty spacer sized to match the close
+  button — center title — close button) so `DialogTitle` visually centers in the header regardless
+  of the close button's width, rather than just adding `justify-center` (which would look centered
+  only by accident, since the close button isn't mirrored on the left).
+- **Sport filter pills:** new multi-select pill row below the header, listing the current user's own
+  sport profiles — same data source as `SportSwitcher` (`src/shared/components/SportSwitcher.tsx`)
+  for the sport list itself, reusing `getSportIcon()` (`@/shared/lib/sportIcons`) for icon+label
+  consistency, but **a separate local pill component** (user decision) — do not extract/reuse
+  `SportSwitcher`'s `Pill` sub-component, since that one is single-select
+  (`aria-pressed`/exclusive-active semantics) and this needs independent multi-select toggle state
+  (`Set<SportKey>`), not a shared implementation. No "All" pill as a distinct filter option here —
+  instead:
+  - **Pre-selection on open:** if `JoinGroupModal` opens with a `lockedSport` context (page's active
+    sport tab is a specific sport, e.g. Basketball), only that sport's pill is pre-selected.
+  - If the page's active sport context is "All" (`lockedSport === null`), **all of the user's sport
+    pills are pre-selected** by default.
+  - The user can freely change the selection after opening (toggle pills on/off) before searching.
+- **Search gating:** do NOT run any query — including on modal open — while the search input is
+  empty. This changes `usePublicGroups.ts:10-13`'s current documented behavior ("an empty keyword
+  still returns a browsable list … doesn't gate on a non-empty search term") — flagging this as an
+  intentional behavior change per the user's explicit instruction, not an oversight. Confirm at
+  pickup this doesn't break `FEED-5`'s original "browse with no query" acceptance criteria the old
+  behavior satisfied; if it does, that's an explicit, accepted regression per this ticket, not a bug.
+- **Multi-sport search execution (revised per A10):** `usePublicGroups` takes a `sportIds:
+  number[] | undefined` param instead of singular `sportId`, sent as the new multi-value query param
+  A10 adds to `GET /api/groups/public`. **One request total**, not one per sport — the flat
+  `Page<GroupSearchResponse>` result already carries `sportId` per row (confirmed,
+  `GroupSearchResponse.java:14`), so the client groups the single response by `sportId` client-side
+  for section rendering. No per-section loading/error state needed — one `isLoading`/`isError` pair
+  for the whole modal, same shape every other hook in this codebase already returns.
+- **Selecting zero sport pills:** allowed (user decision) — Search stays enabled; if the user
+  searches with no sport selected, render the results area's empty state (no sections), same
+  visual treatment as a real zero-result search rather than a distinct "select a sport" message,
+  unless that reads confusingly at pickup.
+- **Grouped results:** render results grouped under one section per sport **present in the
+  response** (i.e., per distinct `sportId` actually returned, not necessarily every selected pill —
+  a selected sport with zero matches produces no rows and thus no section, since there's only one
+  combined query/response now, not an independent per-sport call to hang an explicit empty section
+  off of). Section order follows the filter pills' order. Each section's header matches its filter
+  pill's styling — icon (via `getSportIcon()`) + sport name.
+
+**Design questions to resolve at pickup:**
+- Exact pill toggle visual/interaction design for the new local multi-select pill component (can
+  mirror `SportSwitcher`'s `Pill` styling visually without sharing its implementation).
+- Confirm A10's exact param shape (`sportIds` as repeated `?sportIds=1&sportIds=2` vs. comma-joined
+  `?sportIds=1,2`) against however Spring resolves a `List<Long> @RequestParam` by default, and
+  match `apiClient`'s param-serialization behavior to it (don't assume without checking).
+- Given zero-selected-sports now returns a genuine empty *combined* response rather than N
+  independently-resolved sections, confirm the empty-state copy still reads sensibly (e.g. "No
+  groups found" vs. something sport-selection-aware).
+
+**Out of scope:**
+- Changing `CreateGroupModal`'s existing single-sport locked behavior — untouched by this ticket.
+- Sports outside the current user's own profiles (e.g. a 4th sport they don't have a profile for) —
+  the filter only ever lists the user's own sports, never the full system sport list.
+
+---
+
 ### GRP-5 · Join Group modal — show the active sport filter
-**Status:** `TODO` · **Type:** Enhancement · **Filed:** 2026-07-21, found while explaining existing
-behavior (not a bug report — the filter itself works correctly, only its visibility doesn't)
+**Status:** `SUPERSEDED` by GRP-6 (above), 2026-07-21 · **Type:** Enhancement · **Filed:** 2026-07-21,
+found while explaining existing behavior (not a bug report — the filter itself works correctly, only
+its visibility doesn't)
 
 **Origin:** confirmed via code read (`GroupsPage.tsx`/`useJoinGroupModalData.ts`/`usePublicGroups.ts`)
 that `JoinGroupModal`'s search **does** apply the Groups page's active sport filter server-side —

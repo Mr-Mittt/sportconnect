@@ -104,7 +104,7 @@ public class GroupController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @Operation(summary = "Search public groups", description = "Optional sportId/keyword filters. Member groups sort first when authenticated.")
+    @Operation(summary = "Search public groups", description = "Optional sportId/sportIds/keyword filters (sportIds, when non-empty, takes priority over the legacy single sportId). Member groups sort first when authenticated.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Matching groups (possibly empty)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
@@ -113,10 +113,11 @@ public class GroupController {
     public ResponseEntity<ApiResponse<Page<GroupSearchResponse>>> getPublicGroups(
             @AuthenticationPrincipal String userIdStr,
             @RequestParam(required = false) Long sportId,
+            @RequestParam(required = false) List<Long> sportIds,
             @RequestParam(required = false) String keyword,
             Pageable pageable) {
         UUID currentUserId = userIdStr != null ? UUID.fromString(userIdStr) : null;
-        Page<GroupSearchResponse> response = groupService.getPublicGroups(currentUserId, sportId, keyword, pageable);
+        Page<GroupSearchResponse> response = groupService.getPublicGroups(currentUserId, sportId, sportIds, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

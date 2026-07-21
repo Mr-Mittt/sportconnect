@@ -956,7 +956,7 @@ class GroupServiceImplSpec extends Specification {
         def rawPage = new PageImpl<Object[]>([[testGroup, 3L] as Object[]])
 
         when: "getting public groups without any filter, unauthenticated"
-        def result = groupService.getPublicGroups(null, null, null, pageable)
+        def result = groupService.getPublicGroups(null, null, null, null, pageable)
 
         then: "anonymous query is used"
         1 * groupRepository.searchPublicGroupsAnon(null, null, pageable) >> rawPage
@@ -976,10 +976,10 @@ class GroupServiceImplSpec extends Specification {
         def rawPage = new PageImpl<Object[]>([[testGroup, 2L] as Object[]])
 
         when: "getting public groups with sport filter, unauthenticated"
-        def result = groupService.getPublicGroups(null, 1L, null, pageable)
+        def result = groupService.getPublicGroups(null, 1L, null, null, pageable)
 
         then: "anonymous query is called with sportId"
-        1 * groupRepository.searchPublicGroupsAnon(1L, null, pageable) >> rawPage
+        1 * groupRepository.searchPublicGroupsAnon([1L], null, pageable) >> rawPage
         1 * userService.getUsersByIds(_) >> [(userId): testUser]
 
         and: "results are returned with correct sportId"
@@ -1000,7 +1000,7 @@ class GroupServiceImplSpec extends Specification {
         def rawPage = new PageImpl<Object[]>([[matchingGroup, 5L] as Object[]])
 
         when: "anonymous search with keyword 'warrior'"
-        def result = groupService.getPublicGroups(null, null, "warrior", pageable)
+        def result = groupService.getPublicGroups(null, null, null, "warrior", pageable)
 
         then: "anonymous query is called with keyword"
         1 * groupRepository.searchPublicGroupsAnon(null, "warrior", pageable) >> rawPage
@@ -1018,10 +1018,10 @@ class GroupServiceImplSpec extends Specification {
         def rawPage = new PageImpl<Object[]>([[testGroup, 3L] as Object[]])
 
         when: "anonymous search with keyword and sportId"
-        def result = groupService.getPublicGroups(null, 1L, "test", pageable)
+        def result = groupService.getPublicGroups(null, 1L, null, "test", pageable)
 
         then: "anonymous query is called with both filters"
-        1 * groupRepository.searchPublicGroupsAnon(1L, "test", pageable) >> rawPage
+        1 * groupRepository.searchPublicGroupsAnon([1L], "test", pageable) >> rawPage
         1 * userService.getUsersByIds(_) >> [(userId): testUser]
 
         and: "result is returned"
@@ -1035,7 +1035,7 @@ class GroupServiceImplSpec extends Specification {
         def rawPage = new PageImpl<Object[]>([[testGroup, 4L, 1L] as Object[]])
 
         when: "authenticated user searches"
-        def result = groupService.getPublicGroups(userId, null, null, pageable)
+        def result = groupService.getPublicGroups(userId, null, null, null, pageable)
 
         then: "authenticated query is called with userId"
         1 * groupRepository.searchPublicGroupsWithCounts(userId, null, null, pageable) >> rawPage
@@ -1063,7 +1063,7 @@ class GroupServiceImplSpec extends Specification {
         ])
 
         when: "authenticated user searches"
-        def result = groupService.getPublicGroups(userId, null, null, pageable)
+        def result = groupService.getPublicGroups(userId, null, null, null, pageable)
 
         then:
         1 * groupRepository.searchPublicGroupsWithCounts(userId, null, null, pageable) >> rawPage
@@ -1082,7 +1082,7 @@ class GroupServiceImplSpec extends Specification {
         def rawPage = new PageImpl<Object[]>([])
 
         when: "searching with a keyword that matches nothing"
-        def result = groupService.getPublicGroups(null, null, "xyznonexistent", pageable)
+        def result = groupService.getPublicGroups(null, null, null, "xyznonexistent", pageable)
 
         then:
         1 * groupRepository.searchPublicGroupsAnon(null, "xyznonexistent", pageable) >> rawPage
@@ -1091,6 +1091,72 @@ class GroupServiceImplSpec extends Specification {
         and: "empty page is returned"
         result.totalElements == 0
         result.content.isEmpty()
+    }
+
+    // A10 — multi-value sportIds filter
+
+    def "getPublicGroups should filter by multiple sportIds when provided (anonymous)"() {
+        given: "public groups across multiple sports"
+        def pageable = PageRequest.of(0, 10)
+        def rawPage = new PageImpl<Object[]>([[testGroup, 2L] as Object[]])
+
+        when: "getting public groups with a multi-sport filter, unauthenticated"
+        def result = groupService.getPublicGroups(null, null, [1L, 2L], null, pageable)
+
+        then: "anonymous query is called with the sportIds list"
+        1 * groupRepository.searchPublicGroupsAnon([1L, 2L], null, pageable) >> rawPage
+        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+
+        and: "results are returned"
+        result.totalElements == 1
+    }
+
+    def "getPublicGroups should treat an empty sportIds list as no sport filter when sportId is also absent"() {
+        given: "public groups exist"
+        def pageable = PageRequest.of(0, 10)
+        def rawPage = new PageImpl<Object[]>([[testGroup, 3L] as Object[]])
+
+        when: "searching with an explicitly empty sportIds list and no legacy sportId"
+        def result = groupService.getPublicGroups(null, null, [], null, pageable)
+
+        then: "the anonymous query receives no sport filter, same as omitting both params"
+        1 * groupRepository.searchPublicGroupsAnon(null, null, pageable) >> rawPage
+        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+
+        and: "results are returned"
+        result.totalElements == 1
+    }
+
+    def "getPublicGroups should fall back to the legacy sportId when sportIds is empty"() {
+        given: "public groups for a specific sport"
+        def pageable = PageRequest.of(0, 10)
+        def rawPage = new PageImpl<Object[]>([[testGroup, 2L] as Object[]])
+
+        when: "searching with an empty sportIds list but a legacy sportId present"
+        def result = groupService.getPublicGroups(null, 1L, [], null, pageable)
+
+        then: "the legacy sportId is used, wrapped as a single-element list"
+        1 * groupRepository.searchPublicGroupsAnon([1L], null, pageable) >> rawPage
+        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+
+        and: "results are returned"
+        result.totalElements == 1
+    }
+
+    def "getPublicGroups should prioritize sportIds over the legacy sportId when both are provided"() {
+        given: "public groups across multiple sports"
+        def pageable = PageRequest.of(0, 10)
+        def rawPage = new PageImpl<Object[]>([[testGroup, 2L] as Object[]])
+
+        when: "both sportId and sportIds are provided"
+        def result = groupService.getPublicGroups(null, 99L, [1L, 2L], null, pageable)
+
+        then: "sportIds wins — the legacy sportId is ignored, not combined/ORed"
+        1 * groupRepository.searchPublicGroupsAnon([1L, 2L], null, pageable) >> rawPage
+        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+
+        and: "results are returned"
+        result.totalElements == 1
     }
 
     def "updateGroupSettings should update settings when user is owner"() {
