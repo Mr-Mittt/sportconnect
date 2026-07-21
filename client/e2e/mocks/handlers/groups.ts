@@ -4,6 +4,8 @@ import type {
   CreateGroupPayload,
   Group,
   GroupInfo,
+  GroupInvitation,
+  GroupMember,
   GroupSearchResult,
   GroupSettings,
   JoinRequest,
@@ -14,10 +16,13 @@ import type {
 import {
   mockGroup,
   mockGroupInfo,
+  mockGroupJoinRequest,
+  mockGroupMembers,
   mockGroupSettings,
   mockOwnedGroup,
   mockPageResponse,
   mockPublicGroup,
+  mockSentInvitation,
   mockUser,
 } from '../fixtures.ts';
 import { getOverrides } from '../overrides.ts';
@@ -48,8 +53,14 @@ interface GroupsSession {
   groupSettingsState: Record<number, GroupSettings>;
   // GRP-2: rules/schedule, same keying reasoning as groupSettingsState.
   groupInfoState: Record<number, GroupInfo>;
+  // GRP-3: the group-scoped roster/queues Members tab reads — same
+  // "only mockOwnedGroup has fixture rows" keying as groupSettingsState.
+  groupMembersState: Record<number, GroupMember[]>;
+  groupJoinRequestsState: Record<number, JoinRequest[]>;
+  sentInvitationsState: Record<number, GroupInvitation[]>;
   nextGroupId: number;
   nextJoinRequestId: number;
+  nextMemberId: number;
 }
 
 // FEED-5's own small stateful fake backend, same "not a fixed responder"
@@ -67,8 +78,12 @@ function defaultGroupsSession(): GroupsSession {
     joinRequestsState: [],
     groupSettingsState: { [mockOwnedGroup.id]: { ...mockGroupSettings } },
     groupInfoState: { [mockOwnedGroup.id]: { ...mockGroupInfo } },
+    groupMembersState: { [mockOwnedGroup.id]: mockGroupMembers.map((member) => ({ ...member })) },
+    groupJoinRequestsState: { [mockOwnedGroup.id]: [{ ...mockGroupJoinRequest }] },
+    sentInvitationsState: { [mockOwnedGroup.id]: [{ ...mockSentInvitation }] },
     nextGroupId: 100,
     nextJoinRequestId: 100,
+    nextMemberId: 100,
   };
 }
 
@@ -271,6 +286,86 @@ export const groupHandlers: HttpHandler[] = [
     };
     session.groupSettingsState[groupId] = updated;
     return HttpResponse.json(apiResponse(updated, 'Settings updated successfully'));
+  }),
+
+  // GRP-3
+  http.get('/api/groups/:groupId/members', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const members = groupsSessions.get(sessionIdFromRequest(request)).groupMembersState[groupId] ?? [];
+    return HttpResponse.json(apiResponse(mockPageResponse(members), 'Members retrieved successfully'));
+  }),
+
+  http.get('/api/groups/:groupId/join-requests', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const requests =
+      groupsSessions.get(sessionIdFromRequest(request)).groupJoinRequestsState[groupId] ?? [];
+    return HttpResponse.json(
+      apiResponse(mockPageResponse(requests), 'Join requests retrieved successfully'),
+    );
+  }),
+
+  http.get('/api/groups/:groupId/invitations/sent', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const invitations =
+      groupsSessions.get(sessionIdFromRequest(request)).sentInvitationsState[groupId] ?? [];
+    return HttpResponse.json(
+      apiResponse(mockPageResponse(invitations), 'Sent invitations retrieved successfully'),
+    );
+  }),
+
+  // GRP-3: accept moves the request out of its group's pending queue and
+  // appends a new group_member row (matching the real backend's
+  // addMember-on-accept behavior) — searches every group's queue for the
+  // requestId rather than taking a groupId, same as the real
+  // /join-requests/{requestId}/accept endpoint (requestId alone identifies
+  // the group).
+  http.put('/api/groups/join-requests/:requestId/accept', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const requestId = Number(params.requestId);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    const groupId = Object.keys(session.groupJoinRequestsState)
+      .map(Number)
+      .find((id) => session.groupJoinRequestsState[id].some((req) => req.id === requestId));
+    if (groupId === undefined) {
+      return HttpResponse.json(apiError('Request not found'), { status: 404 });
+    }
+    const acceptedRequest = session.groupJoinRequestsState[groupId].find((req) => req.id === requestId)!;
+    session.groupJoinRequestsState[groupId] = session.groupJoinRequestsState[groupId].filter(
+      (req) => req.id !== requestId,
+    );
+    const newMember: GroupMember = {
+      id: session.nextMemberId++,
+      groupId,
+      userId: acceptedRequest.userId,
+      userFullName: acceptedRequest.userFullName,
+      userAvatarUrl: acceptedRequest.userAvatarUrl,
+      roleId: 3,
+      roleName: 'group_member',
+      roleLevel: 1,
+      joinedAt: new Date().toISOString(),
+    };
+    session.groupMembersState[groupId] = [...(session.groupMembersState[groupId] ?? []), newMember];
+    return HttpResponse.json(apiResponse(null, 'Join request accepted'));
+  }),
+
+  http.put('/api/groups/join-requests/:requestId/decline', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const requestId = Number(params.requestId);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    for (const groupId of Object.keys(session.groupJoinRequestsState).map(Number)) {
+      session.groupJoinRequestsState[groupId] = session.groupJoinRequestsState[groupId].filter(
+        (req) => req.id !== requestId,
+      );
+    }
+    return HttpResponse.json(apiResponse(null, 'Join request declined'));
   }),
 ];
 

@@ -109,7 +109,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | **Phase 7 — Groups page epic (new, not in either epic — see deferred-items table below)** | | | |
 | 40 | GRP-1 | Group page restructure — cover banner, Posts/Chat/Settings tabs, inline discovery panel | `DONE` |
 | 41 | GRP-2 | Adapt Settings tab to the full group settings data set — blocked on B7 (group-impl) | `DONE` |
-| 42 | GRP-3 | Members tab — group member management (search, invite, 5 status-grouped lists) | `TODO` |
+| 42 | GRP-3 | Members tab — group member management (search, invite, 5 status-grouped lists) | `DONE` |
 | 43 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3 | `TODO` |
 | 44 | GRP-5 | Join Group modal — show the active sport filter — **new ticket, not in either epic** | `TODO` |
 
@@ -1694,7 +1694,8 @@ user decision, rather than a second independent save flow. Full writeup: the sum
 ---
 
 ### GRP-3 · Members tab — group member management
-**Status:** `TODO` · **Type:** Feature · **Dependency:** GRP-1 (`DONE`)
+**Status:** `DONE` (2026-07-21) · **Summary:** `client/docs/GRP-3_MEMBERS_TAB.md`
+**Type:** Feature · **Dependency:** GRP-1 (`DONE`)
 **Design reference:** none — no Members-tab markup exists in `design-reference-group-feed.html`
 today; this ticket is scoped directly from the user's spec, not a mockup. Flag if a reference gets
 added before pickup.
@@ -1774,6 +1775,21 @@ GRP-1 used):**
 - Storybook coverage: owner/admin/member role states × populated/empty variants for the five
   sections.
 - No new axe violations (extends `a11y.spec.ts`).
+
+**Executed:** shipped exactly as scoped above — new `GroupMembersTab`/`InviteFriendModal` components,
+5 new API hooks (`useGroupMembers`/`useGroupJoinRequests`/`useSentInvitations`/
+`useAcceptJoinRequest`/`useDeclineJoinRequest`), orchestration hook `useGroupMembersTabData`, all
+wired into `GroupsPage`/`GroupTabs`. **Delta found and closed while satisfying this ticket's own "no
+new axe violations (extends `a11y.spec.ts`)" AC**: `a11y.spec.ts` had zero Groups-page coverage at
+all — both GRP-1 and GRP-2 claimed to extend it in their own acceptance criteria but neither actually
+did (confirmed by reading the file directly). Added one baseline check (owner role, Members tab,
+1280px) rather than silently carrying the gap forward a third time; not a full breakpoint/tab
+backfill for Posts/Chat/Settings, which stays a known gap for a future ticket if it matters. New
+`e2e/flows/group-members.spec.ts`, `client/docs/E2E_OVERVIEW.md` updated to match (§3 directory
+listing, new spec's test table, `a11y.spec.ts`'s table extended). Verified live against a real
+running backend beyond MSW (register → sport profile → create group → join-request → accept →
+re-fetch members, via curl) — every new endpoint's response shape matched the client types exactly.
+Full writeup: `client/docs/GRP-3_MEMBERS_TAB.md`.
 
 ---
 

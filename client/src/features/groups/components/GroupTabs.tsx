@@ -1,8 +1,8 @@
-import { IconMessage2, IconMessages, IconSettings } from '@tabler/icons-react';
+import { IconMessage2, IconMessages, IconSettings, IconUsers } from '@tabler/icons-react';
 import { useRef } from 'react';
 import { cn } from '@/shared/lib/utils';
 
-export type GroupTabKey = 'posts' | 'chat' | 'settings';
+export type GroupTabKey = 'posts' | 'chat' | 'members' | 'settings';
 
 interface GroupTabsProps {
   activeTab: GroupTabKey;
@@ -12,6 +12,8 @@ interface GroupTabsProps {
 const TABS: { key: GroupTabKey; label: string; Icon: typeof IconMessage2 }[] = [
   { key: 'posts', label: 'Posts', Icon: IconMessage2 },
   { key: 'chat', label: 'Chat', Icon: IconMessages },
+  // GRP-3
+  { key: 'members', label: 'Members', Icon: IconUsers },
   { key: 'settings', label: 'Settings', Icon: IconSettings },
 ];
 

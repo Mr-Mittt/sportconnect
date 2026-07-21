@@ -8,7 +8,8 @@ fixtures exist, and a full catalog of every test case with anything non-obvious 
 **Related docs:** `MSW-1_STANDALONE_MOCK_SERVER.md` (the mock server's design/build history — this doc
 is the living reference, that one is the point-in-time implementation record), `AUTH-8_E2E_AUTH_JOURNEY.md`,
 `FEED-10_E2E_FEED_GROUPS_JOURNEY.md`, `FEED-12_COMMENT_MODAL_DEEP_LINK.md` (the `/posts/:postId` route),
-`HF-11_E2E_HOME_FEED_JOURNEY.md`, `HF-10a/b` (visual-regression harness).
+`HF-11_E2E_HOME_FEED_JOURNEY.md`, `HF-10a/b` (visual-regression harness), `GRP-3_MEMBERS_TAB.md`
+(new `group-members.spec.ts` + the first Groups-page block in `a11y.spec.ts`).
 
 ---
 
@@ -142,6 +143,7 @@ e2e/
     auth-journey.spec.ts
     feed-groups-journey.spec.ts
     group-settings.spec.ts
+    group-members.spec.ts
     msw-setup.spec.ts
     post-deep-link.spec.ts
   visual/                    # `visual-regression` project specs
@@ -246,13 +248,14 @@ helpers called.
 | 7. "Add sport" | `aria-disabled="true"` | Relies on the fixture user being **at** the 3-sport cap |
 | 8. delete | "..." menu only on the caller's own post (not Priya Shah's); delete removes it, count 3→2 | |
 
-### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6, several independent `test()`s)
+### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + GRP-3, several independent `test()`s)
 
 | Test(s) | What it checks | Notes |
 |---|---|---|
 | `home feed @ {375,768,1280}px — no horizontal overflow` (×3) | `scrollWidth - clientWidth <= 0` | String-form `page.evaluate` — e2e tsconfig has no DOM lib |
 | `home feed @ {375,768,1280}px — axe reports no critical/serious violations` (×3) | `axe-core` scan, filtered to `impact === 'critical' \| 'serious'` | Moderate/minor violations don't fail the gate |
 | `sport-filtered state — axe reports no critical/serious violations` | Same axe gate after clicking Basketball (1 article) | |
+| `groups page — Members tab (owner) — axe reports no critical/serious violations` | Same axe gate on the Groups page, `mockOwnedGroup` selected, Members tab active | GRP-3: the first Groups-page a11y coverage in this file — GRP-1/GRP-2 both claimed to extend this file but never actually added a Groups-page block. One check (owner role, 1280px, Members tab — the richest per-group tab) establishes a baseline rather than backfilling every tab/breakpoint retroactively |
 | `/login`/`/register` @ {375,768,1280}px — no horizontal overflow (×6) | Same overflow check, logged-out pages | No `seedAuthenticatedSession` — these routes aren't behind `ProtectedRoute` |
 | `/login`/`/register` @ {375,768,1280}px — axe violations (×6) | Same axe gate | |
 | `/login: Tab reaches every control in order` | Explicit Tab sequence: Email → Password → "Show password" toggle → Log in → "Create an account" link | `getByLabel('Password', { exact: true })` — substring matching would collide with the toggle's `aria-label="Show password"` |
@@ -327,6 +330,26 @@ show the browser's own native prompt, nothing a Playwright assertion can meaning
 member read-only rendering of the three toggles and rules/schedule (pure component-level concern, no
 real navigation involved); independent single-section saves (rules-only, toggle-only) — covered at the
 hook level in `useSettingsUnsavedGuard.test.tsx` instead of duplicating here.
+
+### `e2e/flows/group-members.spec.ts` (GRP-3, 2 `test()`s)
+
+Uses `mockOwnedGroup` ("Weekend Tennis Ladder", test user is `group_owner`) for the owner-only
+section and the accept flow, and `mockGroup` ("Friday Night Football", test user is a plain
+`group_member`) to confirm the role-gated section stays hidden for a non-manager.
+
+**Test 1 — owner sees all 5 sections, accept/decline, filtering, and Invite friend** (4 steps):
+
+| Step | What it checks | Notes |
+|---|---|---|
+| 1. all 5 sections render with real fixture data | "Waiting for group approve" (Priya Shah), "Waiting for user accept" (Robin Park, "Awaiting owner approval"), "Group administrator" (Jordan Lee owner-first, then Sam Ito), "Members" (Alex Chen), "Blacklist" ("Coming soon.") | `mockGroupJoinRequest`/`mockSentInvitation`/`mockGroupMembers` fixtures, all scoped to `mockOwnedGroup.id` |
+| 2. "find member" filters all visible lists in place | Typing "sam" narrows Group administrator to Sam Ito, empties Members to "No matches.", URL unchanged | No debounce, case-insensitive substring — matches the literal spec |
+| 3. Invite friend opens pre-filled, mocked results | Click "Invite friend" with "robin" typed → dialog's search input pre-filled "robin", shows "Search coming soon." | Confirms GRP-3 ships this modal mocked on purpose — real search/invite is GRP-4 |
+| 4. Accept moves the request into Members | Click Accept in "Waiting for group approve" → Priya Shah disappears from that section, appears in Members | Exercises the stateful MSW accept handler (removes from the group's join-request queue, appends a `group_member` row) |
+
+**Test 2 — a plain member never sees "Waiting for group approve":** selects `mockGroup` (test user is
+`group_member` there), opens Members tab, confirms "Group administrator" renders but "Waiting for
+group approve" does not — the parent hook never even fires that request for a non-manager (the real
+endpoint 400s for one).
 
 ### `e2e/flows/msw-setup.spec.ts` (proves the mock server itself works)
 

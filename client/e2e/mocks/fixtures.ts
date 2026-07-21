@@ -4,6 +4,8 @@ import type {
   Comment,
   Group,
   GroupInfo,
+  GroupInvitation,
+  GroupMember,
   GroupSearchResult,
   GroupSettings,
   Hashtag,
@@ -157,6 +159,87 @@ export const mockGroupInfo: GroupInfo = {
   rules: null,
   schedule: null,
   updatedAt: '2026-06-05T10:00:00',
+};
+
+// GRP-3: GET /api/groups/:groupId/members roster for mockOwnedGroup — the
+// only fixture group where the test user is group_owner, needed for the
+// Members tab's owner-only "Waiting for group approve" section and the
+// "Group administrator"/"Members" split. mockUser first (owner), then one
+// admin and one plain member.
+export const mockGroupMembers: GroupMember[] = [
+  {
+    id: 1,
+    groupId: mockOwnedGroup.id,
+    userId: mockUser.id,
+    userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+    userAvatarUrl: null,
+    roleId: 1,
+    roleName: 'group_owner',
+    roleLevel: 3,
+    joinedAt: '2026-06-05T10:00:00',
+  },
+  {
+    id: 2,
+    groupId: mockOwnedGroup.id,
+    userId: '33333333-3333-4333-8333-333333333333',
+    userFullName: 'Sam Ito',
+    userAvatarUrl: null,
+    roleId: 2,
+    roleName: 'group_admin',
+    roleLevel: 2,
+    joinedAt: '2026-06-06T10:00:00',
+  },
+  {
+    id: 3,
+    groupId: mockOwnedGroup.id,
+    userId: '44444444-4444-4444-8444-444444444444',
+    userFullName: 'Alex Chen',
+    userAvatarUrl: null,
+    roleId: 3,
+    roleName: 'group_member',
+    roleLevel: 1,
+    joinedAt: '2026-06-07T10:00:00',
+  },
+];
+
+// GRP-3: GET /api/groups/:groupId/join-requests — a pending request against
+// mockOwnedGroup (distinct from mockJoinRequest, which is the test user's
+// OWN outgoing request against mockPublicGroup) for the "Waiting for group
+// approve" section's accept/decline flow.
+export const mockGroupJoinRequest: JoinRequest = {
+  id: 2,
+  groupId: mockOwnedGroup.id,
+  groupName: mockOwnedGroup.groupName,
+  userId: '22222222-2222-4222-8222-222222222222',
+  userFullName: 'Priya Shah',
+  userAvatarUrl: null,
+  status: 'pending',
+  message: null,
+  reviewedBy: null,
+  reviewedByFullName: null,
+  reviewedAt: null,
+  createdAt: '2026-07-16T00:00:00',
+  updatedAt: '2026-07-16T00:00:00',
+};
+
+// GRP-3: GET /api/groups/:groupId/invitations/sent — an invitation the test
+// user sent for mockOwnedGroup, still pending owner approval (the test user
+// is the owner here, but a plain member can send one too in the real
+// backend; this fixture only needs to exercise the "Waiting for user
+// accept" section rendering, not that permission nuance).
+export const mockSentInvitation: GroupInvitation = {
+  id: 1,
+  groupId: mockOwnedGroup.id,
+  groupName: mockOwnedGroup.groupName,
+  inviterId: mockUser.id,
+  inviterFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  inviteeId: '55555555-5555-4555-8555-555555555555',
+  inviteeFullName: 'Robin Park',
+  status: 'pending_owner',
+  reviewedBy: null,
+  reviewedAt: null,
+  createdAt: '2026-07-17T00:00:00',
+  updatedAt: '2026-07-17T00:00:00',
 };
 
 export const mockPost: Post = {

@@ -27,11 +27,14 @@ import { DeleteGroupConfirmDialog } from './components/DeleteGroupConfirmDialog'
 import { GroupChatTab } from './components/GroupChatTab';
 import { GroupCoverBanner } from './components/GroupCoverBanner';
 import { GroupDiscoveryPanel } from './components/GroupDiscoveryPanel';
+import { GroupMembersTab } from './components/GroupMembersTab';
 import { GroupSettingsTab } from './components/GroupSettingsTab';
 import { GroupSpaceSwitcher } from './components/GroupSpaceSwitcher';
 import { GroupTabs, type GroupTabKey } from './components/GroupTabs';
+import { InviteFriendModal } from './components/InviteFriendModal';
 import { JoinGroupModal } from './components/JoinGroupModal';
 import { SettingsUnsavedChangesDialog } from './components/SettingsUnsavedChangesDialog';
+import { useGroupMembersTabData } from './useGroupMembersTabData';
 import { useGroupsPageData } from './useGroupsPageData';
 import { useJoinGroupModalData } from './useJoinGroupModalData';
 import { useSettingsUnsavedGuard } from './useSettingsUnsavedGuard';
@@ -105,6 +108,11 @@ export function GroupsPage() {
   const [pendingCreateGroupName, setPendingCreateGroupName] = useState('');
   const [isJoinGroupOpen, setIsJoinGroupOpen] = useState(false);
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
+  // GRP-3: Members tab's "Invite friend" — same pre-fill/remount pattern as
+  // pendingCreateGroupName/createGroupOpenCount above.
+  const [isInviteFriendOpen, setIsInviteFriendOpen] = useState(false);
+  const [inviteFriendQuery, setInviteFriendQuery] = useState('');
+  const [inviteFriendOpenCount, setInviteFriendOpenCount] = useState(0);
   // GRP-1: which of the per-group tabs is showing. Reset to 'posts' at every
   // point that changes `selectedGroupId` (see `selectGroupAndShowPosts`
   // below) rather than via an effect, per React's own guidance to avoid
@@ -209,6 +217,13 @@ export function GroupsPage() {
   const selectedGroupSport =
     selectedGroupSportKey !== undefined ? sportsByKey[selectedGroupSportKey] : undefined;
 
+  // GRP-3
+  const membersTabData = useGroupMembersTabData(
+    selectedGroup?.id,
+    activeGroupTab === 'members',
+    selectedGroup?.currentUserRole ?? null,
+  );
+
   const updateGroupMutation = useUpdateGroup(currentUserId);
   const leaveGroupMutation = useLeaveGroup(currentUserId);
   const deleteGroupMutation = useDeleteGroup(currentUserId);
@@ -236,6 +251,13 @@ export function GroupsPage() {
   const openJoinGroupWithQuery = (query: string) => {
     joinGroupModalData.openSearch(query);
     setIsJoinGroupOpen(true);
+  };
+  // GRP-3: opening InviteFriendModal from GroupMembersTab's "find member"
+  // input — same pre-fill reasoning as openJoinGroupWithQuery above.
+  const openInviteFriend = (query: string) => {
+    setInviteFriendQuery(query);
+    setInviteFriendOpenCount((count) => count + 1);
+    setIsInviteFriendOpen(true);
   };
 
   // FEED-12: comes from usePost, not a feed-cache lookup — see
@@ -353,6 +375,30 @@ export function GroupsPage() {
                 )}
                 {activeGroupTab === 'chat' && (
                   <GroupChatTab key={selectedGroup.id} currentUserFirstName={user.firstName} />
+                )}
+                {activeGroupTab === 'members' && (
+                  <GroupMembersTab
+                    canManage={membersTabData.canManage}
+                    currentUserId={currentUserId}
+                    joinRequests={membersTabData.joinRequests}
+                    isJoinRequestsLoading={membersTabData.isJoinRequestsLoading}
+                    isJoinRequestsError={membersTabData.isJoinRequestsError}
+                    onRetryJoinRequests={membersTabData.retryJoinRequests}
+                    onAcceptJoinRequest={membersTabData.acceptJoinRequest}
+                    onDeclineJoinRequest={membersTabData.declineJoinRequest}
+                    isAcceptingJoinRequest={membersTabData.isAcceptingJoinRequest}
+                    isDecliningJoinRequest={membersTabData.isDecliningJoinRequest}
+                    sentInvitations={membersTabData.sentInvitations}
+                    isSentInvitationsLoading={membersTabData.isSentInvitationsLoading}
+                    isSentInvitationsError={membersTabData.isSentInvitationsError}
+                    onRetrySentInvitations={membersTabData.retrySentInvitations}
+                    administrators={membersTabData.administrators}
+                    members={membersTabData.members}
+                    isMembersLoading={membersTabData.isMembersLoading}
+                    isMembersError={membersTabData.isMembersError}
+                    onRetryMembers={membersTabData.retryMembers}
+                    onInviteFriend={openInviteFriend}
+                  />
                 )}
                 {activeGroupTab === 'settings' && (
                   <GroupSettingsTab
@@ -475,6 +521,12 @@ export function GroupsPage() {
         onRequestToJoin={joinGroupModalData.requestToJoin}
         isRequesting={joinGroupModalData.isRequesting}
         isRequestError={joinGroupModalData.isRequestError}
+      />
+      <InviteFriendModal
+        key={`invite-friend-${inviteFriendOpenCount}`}
+        isOpen={isInviteFriendOpen}
+        onClose={() => setIsInviteFriendOpen(false)}
+        initialQuery={inviteFriendQuery}
       />
       <AddSportModal
         key={`add-sport-${addSportOpenCount}`}
