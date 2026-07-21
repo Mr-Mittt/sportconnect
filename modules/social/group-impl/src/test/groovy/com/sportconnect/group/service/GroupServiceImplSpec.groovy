@@ -26,6 +26,7 @@ class GroupServiceImplSpec extends Specification {
     GroupJoinRequestRepository joinRequestRepository = Mock()
     GroupSettingsRepository groupSettingsRepository = Mock()
     GroupRoleRepository groupRoleRepository = Mock()
+    GroupTypeRepository groupTypeRepository = Mock()
     UserService userService = Mock()
     UserFriendService userFriendService = Mock()
     UserSportProfileService userSportProfileService = Mock()
@@ -40,6 +41,7 @@ class GroupServiceImplSpec extends Specification {
             joinRequestRepository,
             groupSettingsRepository,
             groupRoleRepository,
+            groupTypeRepository,
             userService,
             userFriendService,
             userSportProfileService,
@@ -54,6 +56,7 @@ class GroupServiceImplSpec extends Specification {
     GroupRole ownerRole
     GroupRole adminRole
     GroupRole memberRole
+    GroupType defaultGroupType
     UserResponse testUser
 
     def setup() {
@@ -93,6 +96,12 @@ class GroupServiceImplSpec extends Specification {
                 .roleName("group_member")
                 .level(1)
                 .build()
+
+        defaultGroupType = GroupType.builder()
+                .id(1L)
+                .typeName("DEFAULT")
+                .maxMembers(50)
+                .build()
     }
 
     def "createGroup should create group successfully"() {
@@ -113,7 +122,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.save(_ as Group) >> testGroup
         1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.save(_ as GroupMember) >> new GroupMember()
-        1 * groupSettingsRepository.save(_ as GroupSettings) >> new GroupSettings()
+        1 * groupTypeRepository.findByTypeName("DEFAULT") >> Optional.of(defaultGroupType)
+        1 * groupSettingsRepository.save({ GroupSettings s -> s.groupTypeId == defaultGroupType.id }) >> new GroupSettings()
         1 * userService.getUsersByIds(_) >> [(userId): testUser]
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >>
@@ -342,6 +352,120 @@ class GroupServiceImplSpec extends Specification {
         thrown(BadRequestException)
     }
 
+    def "updateGroup should update group when user is admin"() {
+        given: "an update request"
+        def request = UpdateGroupRequest.builder()
+                .description("Updated Description")
+                .build()
+
+        and: "user is admin"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(adminRole.id)
+                .build()
+
+        when: "updating group"
+        def response = groupService.updateGroup(testGroup.id, userId, request)
+
+        then: "group is updated"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        1 * groupRepository.save(_ as Group) >> testGroup
+        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
+
+        and: "response is returned"
+        response != null
+    }
+
+    def "updateGroup should persist isPrivate when provided"() {
+        given: "a request toggling privacy"
+        def request = UpdateGroupRequest.builder()
+                .isPrivate(true)
+                .build()
+
+        and: "user is owner"
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(ownerRole.id)
+                .build()
+
+        when: "updating group"
+        groupService.updateGroup(testGroup.id, userId, request)
+
+        then: "isPrivate is set on the saved group"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        1 * groupRepository.save({ Group g -> g.isPrivate == true }) >> testGroup
+        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
+        _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
+    }
+
+    def "updateGroup should throw BadRequestException when new group name already exists"() {
+        given: "a request renaming to a name already taken by another group"
+        def request = UpdateGroupRequest.builder()
+                .groupName("Taken Name")
+                .build()
+
+        and: "user is owner"
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(ownerRole.id)
+                .build()
+
+        when: "updating group"
+        groupService.updateGroup(testGroup.id, userId, request)
+
+        then: "the pre-check catches the conflict"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        1 * groupRepository.existsByGroupName("Taken Name") >> true
+        0 * groupRepository.save(_)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
+    }
+
+    def "updateGroup should translate a concurrent groupName conflict at save-time into BadRequestException"() {
+        given: "a rename that passes the pre-check but loses a race to a concurrent rename"
+        def request = UpdateGroupRequest.builder()
+                .groupName("Racing Name")
+                .build()
+
+        and: "user is owner"
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(ownerRole.id)
+                .build()
+
+        when: "updating group"
+        groupService.updateGroup(testGroup.id, userId, request)
+
+        then: "the pre-check passes, but the DB unique constraint catches the race at save time"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        1 * groupRepository.existsByGroupName("Racing Name") >> false
+        1 * groupRepository.save(_ as Group) >> { throw new org.springframework.dao.DataIntegrityViolationException("duplicate key") }
+
+        and: "translated into the same friendly error the pre-check would have thrown"
+        BadRequestException ex = thrown(BadRequestException)
+        ex.message == "Group name already exists"
+    }
+
     def "deleteGroup should soft delete group when user is owner"() {
         given: "user is owner"
         def ownerMember = GroupMember.builder()
@@ -397,6 +521,9 @@ class GroupServiceImplSpec extends Specification {
                 .createdAt(LocalDateTime.now())
                 .build()
 
+        and: "group has room under its type cap"
+        def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
+
         when: "creating join request"
         def response = groupService.createJoinRequest(userId, request)
 
@@ -404,6 +531,9 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.findByGroupName(request.groupName) >> Optional.of(testGroup)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> false
         1 * joinRequestRepository.existsByGroupIdAndUserIdAndStatus(testGroup.id, userId, "pending") >> false
+        1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         1 * joinRequestRepository.save(_ as GroupJoinRequest) >> savedRequest
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
         _ * userService.getUsersByIds(_) >> [(userId): testUser]
@@ -411,6 +541,30 @@ class GroupServiceImplSpec extends Specification {
         and: "response is correct"
         response != null
         response.status == "pending"
+    }
+
+    def "createJoinRequest should throw BadRequestException when group is at its member cap"() {
+        given: "a join request for a full group"
+        def request = CreateJoinRequestRequest.builder()
+                .groupName("Test Group")
+                .message("I want to join")
+                .build()
+        def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
+
+        when: "creating join request"
+        groupService.createJoinRequest(userId, request)
+
+        then: "request is rejected before it is ever persisted"
+        1 * groupRepository.findByGroupName(request.groupName) >> Optional.of(testGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> false
+        1 * joinRequestRepository.existsByGroupIdAndUserIdAndStatus(testGroup.id, userId, "pending") >> false
+        1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> defaultGroupType.maxMembers
+        0 * joinRequestRepository.save(_)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
     }
 
     def "createJoinRequest should throw BadRequestException when user is already member"() {
@@ -446,6 +600,9 @@ class GroupServiceImplSpec extends Specification {
                 .roleId(adminRole.id)
                 .build()
 
+        and: "group has room under its type cap"
+        def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
+
         when: "accepting join request"
         groupService.acceptJoinRequest(1L, userId)
 
@@ -454,9 +611,48 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
         1 * groupMemberRepository.save(_ as GroupMember)
         1 * joinRequestRepository.save({ GroupJoinRequest req -> req.status == "accepted" })
+    }
+
+    def "acceptJoinRequest should throw BadRequestException when group is at its member cap"() {
+        given: "a pending join request"
+        def joinRequest = GroupJoinRequest.builder()
+                .id(1L)
+                .groupId(testGroup.id)
+                .userId(otherUserId)
+                .status("pending")
+                .build()
+
+        and: "user is admin"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(adminRole.id)
+                .build()
+
+        and: "group is already at its DEFAULT-type cap"
+        def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
+
+        when: "accepting join request"
+        groupService.acceptJoinRequest(1L, userId)
+
+        then: "request is rejected before any membership row is created"
+        1 * joinRequestRepository.findById(1L) >> Optional.of(joinRequest)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> defaultGroupType.maxMembers
+        0 * groupMemberRepository.save(_)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
     }
 
     def "acceptJoinRequest should throw BadRequestException when user is not admin"() {
@@ -901,6 +1097,7 @@ class GroupServiceImplSpec extends Specification {
                 .groupId(testGroup.id)
                 .allowMemberPosts(true)
                 .requirePostApproval(false)
+                .groupTypeId(defaultGroupType.id)
                 .build()
 
         and: "user is owner"
@@ -921,9 +1118,64 @@ class GroupServiceImplSpec extends Specification {
         1 * groupSettingsRepository.save({ GroupSettings s ->
             !s.allowMemberPosts && s.requirePostApproval
         }) >> settings
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
 
         and: "response is returned"
         response != null
+        response.maxMembers == defaultGroupType.maxMembers
+        response.groupTypeName == "DEFAULT"
+    }
+
+    def "updateGroupSettings should throw BadRequestException when user is admin"() {
+        given: "an update request"
+        def request = UpdateGroupSettingsRequest.builder()
+                .allowMemberPosts(false)
+                .build()
+
+        and: "user is admin, not owner"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(adminRole.id)
+                .build()
+
+        when: "trying to update group settings"
+        groupService.updateGroupSettings(testGroup.id, userId, request)
+
+        then: "user is not authorized"
+        1 * groupRepository.existsById(testGroup.id) >> true
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        0 * groupSettingsRepository.save(_)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
+    }
+
+    def "updateGroupSettings should throw BadRequestException when user is member"() {
+        given: "an update request"
+        def request = UpdateGroupSettingsRequest.builder()
+                .allowMemberPosts(false)
+                .build()
+
+        and: "user is a regular member"
+        def regularMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(memberRole.id)
+                .build()
+
+        when: "trying to update group settings"
+        groupService.updateGroupSettings(testGroup.id, userId, request)
+
+        then: "user is not authorized"
+        1 * groupRepository.existsById(testGroup.id) >> true
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(regularMember)
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        0 * groupSettingsRepository.save(_)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
     }
 
     // B6a — Pinned posts
@@ -1142,7 +1394,8 @@ class GroupServiceImplSpec extends Specification {
         given:
         def inviteeId = UUID.randomUUID()
         def request = CreateInvitationRequest.builder().inviteeId(inviteeId).build()
-        def settings = GroupSettings.builder().groupId(testGroup.id).allowMemberInvites(true).build()
+        def settings = GroupSettings.builder()
+                .groupId(testGroup.id).allowMemberInvites(true).groupTypeId(defaultGroupType.id).build()
         def savedInvitation = GroupInvitation.builder()
                 .id(1L).groupId(testGroup.id).inviterId(userId).inviteeId(inviteeId)
                 .status("pending_owner").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
@@ -1153,14 +1406,41 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
-        1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
+        2 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, inviteeId) >> false
         1 * userFriendService.areFriends(userId, inviteeId) >> true
         1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, inviteeId, _) >> false
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         1 * invitationRepository.save(_ as GroupInvitation) >> savedInvitation
         1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId): testUser]
         response.status == "pending_owner"
         response.groupId == testGroup.id
+    }
+
+    def "createInvitation should throw BadRequestException when group is at its member cap"() {
+        given:
+        def inviteeId = UUID.randomUUID()
+        def request = CreateInvitationRequest.builder().inviteeId(inviteeId).build()
+        def settings = GroupSettings.builder()
+                .groupId(testGroup.id).allowMemberInvites(true).groupTypeId(defaultGroupType.id).build()
+
+        when:
+        groupService.createInvitation(testGroup.id, userId, request)
+
+        then:
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
+        2 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, inviteeId) >> false
+        1 * userFriendService.areFriends(userId, inviteeId) >> true
+        1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, inviteeId, _) >> false
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> defaultGroupType.maxMembers
+        0 * invitationRepository.save(_)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
     }
 
     def "createInvitation should throw when inviter is not a member"() {
@@ -1308,15 +1588,39 @@ class GroupServiceImplSpec extends Specification {
         def invitation = GroupInvitation.builder()
                 .id(1L).groupId(testGroup.id).inviterId(otherUserId).inviteeId(inviteeId)
                 .status("pending_user").build()
+        def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
 
         when:
         groupService.acceptInvitation(1L, inviteeId)
 
         then:
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
         1 * groupMemberRepository.save({ it.userId == inviteeId && it.roleId == memberRole.id })
         1 * invitationRepository.save({ it.status == "accepted" })
+    }
+
+    def "acceptInvitation should throw BadRequestException when group is at its member cap"() {
+        given:
+        def inviteeId = UUID.randomUUID()
+        def invitation = GroupInvitation.builder()
+                .id(1L).groupId(testGroup.id).inviterId(otherUserId).inviteeId(inviteeId)
+                .status("pending_user").build()
+        def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
+
+        when:
+        groupService.acceptInvitation(1L, inviteeId)
+
+        then:
+        1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> defaultGroupType.maxMembers
+        0 * groupMemberRepository.save(_)
+        thrown(BadRequestException)
     }
 
     def "acceptInvitation should throw when caller is not the invitee"() {
@@ -1622,6 +1926,7 @@ class GroupServiceImplSpec extends Specification {
         given: "admin adds a new user as group_member"
         def adminMember = GroupMember.builder()
                 .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
+        def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
 
         when:
         groupService.addMember(testGroup.id, userId, otherUserId, "group_member")
@@ -1632,10 +1937,35 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
+        1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
         1 * groupMemberRepository.save({
             GroupMember m -> m.userId == otherUserId && m.roleId == memberRole.id
         })
+    }
+
+    def "addMember should throw BadRequestException when group is at its member cap"() {
+        given: "admin tries to add a user to a full group"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
+        def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
+
+        when:
+        groupService.addMember(testGroup.id, userId, otherUserId, "group_member")
+
+        then:
+        1 * groupRepository.existsById(testGroup.id) >> true
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
+        1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> defaultGroupType.maxMembers
+        0 * groupMemberRepository.save(_)
+        thrown(BadRequestException)
     }
 
     def "addMember should throw NotFoundException when group does not exist"() {
@@ -1803,6 +2133,7 @@ class GroupServiceImplSpec extends Specification {
         def settings = GroupSettings.builder()
                 .id(1L).groupId(testGroup.id)
                 .allowMemberPosts(true).requirePostApproval(false).allowMemberInvites(false)
+                .groupTypeId(defaultGroupType.id)
                 .build()
 
         when:
@@ -1812,11 +2143,13 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
         1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
 
         and:
         result != null
         result.allowMemberPosts == true
         result.requirePostApproval == false
+        result.maxMembers == defaultGroupType.maxMembers
     }
 
     def "getGroupSettings should throw NotFoundException when group does not exist"() {

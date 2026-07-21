@@ -33,8 +33,9 @@
 | 12 | A8 | Fix N+1 in getUserGroups | `DONE` |
 | 13 | A9 | Add privacy/membership check to `getGroup` | `DONE` |
 | 14 | B8 | Extend member-sent invitations to include owner-approved status | `DONE` |
-| 15 | B7 | Settings data set audit for client Settings tab | `TODO` |
+| 15 | B7 | Settings data set audit → group-type membership-cap tiers | `DONE` |
 | 16 | B9 | Group system posts — welcome post on member join | `TODO` |
+| 17 | B10 | Group type change flow (upgrade/downgrade) | `TODO` |
 
 ---
 
@@ -379,38 +380,67 @@ signature; replaced the per-status happy-path tests with one asserting a single 
 
 ---
 
-### B7 · Settings data set audit for client Settings tab
-**Status:** `TODO`  
-**Type:** Enhancement (Audit / Contract)  
+### B7 · Settings data set audit → group-type membership-cap tiers
+**Status:** `DONE`  
+**Type:** Enhancement (Audit / Contract) → Enhancement (Schema + Enforcement)  
 **Origin:** raised while scoping the client's GRP-1 ticket (`client/docs/BACKLOG_MVP.md`) — the new
 Groups page Settings tab needs privacy, member-post permissions, invite permissions, member cap, and
 group deletion all in one coherent surface, but that data is currently split across two endpoints
 (`PUT /api/groups/{groupId}` for name/description/rules/schedule/**isPrivate**, `PUT
 /api/groups/{groupId}/settings` for `allowMemberPosts`/`requirePostApproval`/`allowMemberInvites`/
-`maxMembers`) plus `DELETE /api/groups/{groupId}` for deletion. Nothing here needs new schema — this
-is an audit-and-confirm ticket, not new-feature work, done **before** the client fully wires the tab.
+`maxMembers`) plus `DELETE /api/groups/{groupId}` for deletion.
 
-**Scope:**
-1. Confirm `isPrivate` is actually present and settable on `UpdateGroupRequest` (verify against the
-   real DTO, don't assume from the entity field existing) — this is the "Privacy" toggle GRP-1 needs.
-2. Verify actual `@PreAuthorize`/service-layer enforcement matches the permission model GRP-1 is
-   building against, with Spock coverage for each:
-   - `PUT /api/groups/{groupId}` (properties incl. `isPrivate`) — owner **and** admin can write;
-     member gets `BadRequestException`/403.
-   - `PUT /api/groups/{groupId}/settings` (`allowMemberPosts`/`requirePostApproval`/
-     `allowMemberInvites`/`maxMembers`) — **owner only**; admin and member both rejected.
-   - `DELETE /api/groups/{groupId}` — **owner only**.
-   - `GET /api/groups/{groupId}/settings` — any member can read (confirm this still holds; it's the
-     read side of the member-read-only requirement).
-3. Decide (and document for the follow-up client ticket): keep the two-endpoint split as-is — client
-   calls both and composes one Settings tab — or consolidate into a single response/update contract.
-   Recommend keeping the split (matches existing domain boundaries, no schema change) unless the
-   audit finds a concrete reason not to.
-4. Confirm `maxMembers` has sane validation (e.g. can't be set below current member count) — not
-   currently known to be checked.
+**Audit findings (original scope, items 1–3):**
+1. `isPrivate` **confirmed present and settable** on `UpdateGroupRequest` — real DTO, not just the
+   entity field.
+2. Permission model **confirmed already correct** going in (built in earlier tickets, not new work):
+   `updateGroup` — owner **and** admin write, member rejected; `updateGroupSettings` — **owner
+   only**; `deleteGroup` — **owner only**; `getGroupSettings` — any member can read. Spock coverage
+   was thinner than the model it verified — added missing admin-positive case for `updateGroup`,
+   `isPrivate`-persistence case, and owner/admin/member cases for `updateGroupSettings`.
+3. **Decision:** kept the two-endpoint split as-is (matches existing domain boundaries, no reason
+   found to consolidate).
 
-**Out of scope:** no new settings fields, no UI work (that's the client follow-up ticket, tracked as
-**GRP-2** in `client/docs/BACKLOG_MVP.md`, blocked on this ticket).
+**Scope change (item 4 — `maxMembers` validation):** the audit found `maxMembers` was stored on
+`group_settings` but **never validated or enforced anywhere** — not on write, not at join time. Fixing
+this by re-checking the raw value wasn't enough to make the cap meaningful, so it was replaced
+entirely with a fixed-tier system, decided directly with the user rather than left as a client
+follow-up:
+- New `group_types` table (`id`, `type_name`, `max_members`), seeded with **DEFAULT** (50),
+  **STANDARD** (100), **PREMIUM** (500) — migration `V026__create_group_types_table.sql`.
+- `group_settings.max_members` **dropped**; replaced with `group_settings.group_type_id` (FK, not
+  null). Existing rows backfilled to `DEFAULT` in the same migration. New groups are silently
+  created as `DEFAULT` in `GroupServiceImpl.createGroup`.
+- `UpdateGroupSettingsRequest.maxMembers` **removed** — no more manual cap setting. Changing a
+  group's type is out of scope here, tracked as **B10** below.
+- `GroupSettingsResponse` gains `groupTypeId`/`groupTypeName`; `maxMembers` is now a read-only value
+  resolved from the group's type, not a stored/settable field.
+- **Cap enforcement added** (explicit user decision — a cap nobody checks is pointless): new
+  `GroupServiceImpl.enforceMemberCapacity(groupId)` helper, called from every path that inserts a
+  `GroupMember` row — `addMember`, `acceptJoinRequest`, `acceptInvitation` — rejecting with
+  `BadRequestException` once the group is at its type's `max_members`.
+
+**Out of scope:** no UI work (client follow-up is **GRP-2**, `client/docs/BACKLOG_MVP.md`, blocked on
+this ticket); no way to change a group's type after creation (**B10**, below).
+
+---
+
+### B10 · Group type change flow (upgrade/downgrade)
+**Status:** `TODO`  
+**Type:** New Feature  
+**Origin:** filed directly out of B7 — every group is silently created as `DEFAULT` (50 members) with
+no way to move to `STANDARD` (100) or `PREMIUM` (500). `GroupType` entity/repository and the
+`group_types` table already exist (B7); this ticket is the actual change-type flow.
+
+**Design questions to resolve at pickup (flagging now, not assumed):**
+- Who can change a group's type — owner only (matches `updateGroupSettings`'s existing owner-only
+  precedent), or does this need an approval/payment gate (tiers read like a monetization surface —
+  confirm with the user before assuming it's free/self-serve)?
+- Downgrade path: what happens if `currentMemberCount > newType.maxMembers`? Reject the downgrade,
+  or allow it and let the group sit "over cap" (no further joins until it's back under, per B7's
+  `enforceMemberCapacity`)?
+- New endpoint shape: extend `PUT /api/groups/{groupId}/settings` with a `groupTypeId` field, or a
+  dedicated `PUT /api/groups/{groupId}/type` endpoint?
 
 ---
 

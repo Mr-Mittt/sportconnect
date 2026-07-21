@@ -17,6 +17,7 @@ public class GroupSettingsResponse {
     private Boolean allowMemberPosts;
     private Boolean requirePostApproval;
     private Boolean allowMemberInvites;
+    private String groupTypeName;
     private Integer maxMembers;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
