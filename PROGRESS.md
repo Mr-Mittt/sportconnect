@@ -1096,6 +1096,24 @@ registered two users, created a group, ran a full
 request→accept→re-fetch round trip via curl — every new endpoint's response shape matched the
 client types exactly, no divergence from the design.
 
+**Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
+chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
+self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime
+layer would compete for RAM with the app itself on the single free-tier EC2 box
+(`infra/documentation/INFRA-3_HOSTING_DECISION.md`), whereas a pub/sub SaaS offloads that entirely.
+Verified current free-tier terms live (not from training-data recollection, since vendor pricing
+shifts often): PubNub (200 MAU, permanent free, 7-day history) and Ably (similar, 1-day history) are
+both genuinely free indefinitely at this project's scale; Stream Chat's free tier is dev-only and
+jumps to $399+/mo, Sendbird's advertised free tier is mostly a 30-day trial — both rejected.
+Architecture: headless PubNub JS client under the already-built `GroupChatTab.tsx` (GRP-1) — no
+second UI system; short-lived (~1hr) membership-scoped backend-minted tokens, no active revocation
+for MVP (bounded exposure via the short TTL instead); our own Postgres persists messages as the
+source of truth, PubNub's own 7-day store bridges the gap until that ships. Scoped as 4 tickets
+across two backlogs — CHAT-1/CHAT-3 (backend, `modules/social/chat-impl/docs/BACKLOG_MVP.md`,
+new module) and CHAT-2/CHAT-4 (client, `client/docs/BACKLOG_MVP.md`) — sequenced
+CHAT-1 → CHAT-2 → CHAT-3 → CHAT-4. Decision + ticket scoping only this session, no code — pick up
+CHAT-1 in a future `/workon`.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and
@@ -1223,10 +1241,19 @@ explicit go-ahead at each step (full story in A3's summary doc):
 - Seller ratings and reviews
 
 ### Real-Time Chat (designed, not implemented)
-- WebSocket (Spring STOMP) — dependency already in `server/build.gradle`
-- 1-on-1 direct messages, group chats
-- Read receipts, typing indicators, message reactions
-- Tables needed: `conversations`, `conversation_participants`, `messages`, `message_reactions`
+- **Group chat transport superseded 2026-07-22** (`documentation/md/CHAT_SERVICE_INTEGRATION.md`):
+  the self-hosted WebSocket/Spring STOMP plan below is no longer the approach — cost/hosting
+  reasoning made a 3rd-party pub/sub vendor (**PubNub**) the chosen transport instead, scoped as
+  CHAT-1..4 across `modules/social/chat-impl/docs/BACKLOG_MVP.md` and `client/docs/BACKLOG_MVP.md`.
+  Left below for historical context, not as the active plan.
+- ~~WebSocket (Spring STOMP) — dependency already in `server/build.gradle`~~ (superseded, see above)
+- 1-on-1 direct messages — still unscoped, genuinely future work (PubNub decision only covers group
+  chat; see the decision doc's explicit scope boundary)
+- Group chats — **now scoped**, see CHAT-1..4 above
+- Read receipts, typing indicators, message reactions — still out of scope (matches
+  `GroupChatTab.tsx`'s current UI, which has none of these)
+- ~~Tables needed: `conversations`, `conversation_participants`, `messages`, `message_reactions`~~
+  — superseded by `chat_message` (CHAT-3), a single denormalized table, not this 4-table shape
 
 ### Group Advanced Features (not implemented)
 - System posts (auto-generated for admin actions)
