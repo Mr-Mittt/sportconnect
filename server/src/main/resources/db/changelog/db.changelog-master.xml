@@ -64,4 +64,7 @@
     <!-- B7: Fixed group-type membership-cap tiers -->
     <include file="db/changelog/changes/V026__create_group_types_table.sql" relativeToChangelogFile="false"/>
 
+    <!-- B9: Group welcome system posts -->
+    <include file="db/changelog/changes/V027__add_group_system_post_type.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

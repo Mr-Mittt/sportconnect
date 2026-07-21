@@ -364,7 +364,7 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     @Transactional
-    public void addMember(Long groupId, UUID adminUserId, UUID targetUserId, String roleName) {
+    public void addMember(Long groupId, UUID adminUserId, UUID targetUserId) {
         // Verify group exists
         if (!groupRepository.existsById(groupId)) {
             throw new NotFoundException("Group not found");
@@ -380,21 +380,32 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("User is already a member");
         }
 
-        enforceMemberCapacity(groupId);
+        // B9: owner/admin adds still go through the friends-only gate, same as a peer invite
+        if (!userFriendService.areFriends(adminUserId, targetUserId)) {
+            throw new BadRequestException("You can only add your friends");
+        }
 
-        // Get role
-        GroupRole role = groupRoleRepository.findByRoleName(roleName)
-                .orElseThrow(() -> new NotFoundException("Role not found"));
+        boolean alreadyInvited = invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(
+                groupId, targetUserId, List.of("pending_owner", "pending_user"));
+        if (alreadyInvited) {
+            throw new BadRequestException("User already has a pending invitation to this group");
+        }
 
-        // Create membership
-        GroupMember member = GroupMember.builder()
+        checkMemberCapacityNotExceeded(groupId);
+
+        // B9: self-approved invitation — owner/admin IS the approver, so it starts at
+        // pending_user rather than pending_owner. Target must still accept via acceptInvitation.
+        GroupInvitation invitation = GroupInvitation.builder()
                 .groupId(groupId)
-                .userId(targetUserId)
-                .roleId(role.getId())
+                .inviterId(adminUserId)
+                .inviteeId(targetUserId)
+                .status("pending_user")
+                .reviewedBy(adminUserId)
+                .reviewedAt(LocalDateTime.now())
                 .build();
-        groupMemberRepository.save(member);
+        invitationRepository.save(invitation);
 
-        log.info("Added user {} to group {} with role {} by admin {}", targetUserId, groupId, roleName, adminUserId);
+        log.info("Owner/admin {} invited user {} to group {} (self-approved)", adminUserId, targetUserId, groupId);
     }
 
     @Override
@@ -613,6 +624,8 @@ public class GroupServiceImpl implements GroupService {
         request.setReviewedBy(adminUserId);
         request.setReviewedAt(LocalDateTime.now());
         joinRequestRepository.save(request);
+
+        postWelcomeMessage(request.getGroupId(), request.getUserId(), null);
 
         log.info("Accepted join request {} by admin {}", requestId, adminUserId);
     }
@@ -1049,6 +1062,8 @@ public class GroupServiceImpl implements GroupService {
         invitation.setStatus("accepted");
         invitationRepository.save(invitation);
 
+        postWelcomeMessage(invitation.getGroupId(), inviteeId, invitation.getInviterId());
+
         log.info("Invitation {} accepted by user {}", invitationId, inviteeId);
     }
 
@@ -1358,5 +1373,42 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Group has reached its maximum member capacity of "
                     + groupType.getMaxMembers());
         }
+    }
+
+    /**
+     * Resolves the group's current owner's user id (B9) — queries the live {@code GroupMember}
+     * row holding the {@code group_owner} role rather than {@code Group.createdBy}, since
+     * ownership can move via {@link #transferOwnership}. Every group has exactly one owner by
+     * construction (business rule 1 in this module's CLAUDE.md), so a missing owner row indicates
+     * a data invariant violation rather than a normal "not found" case.
+     */
+    private UUID resolveGroupOwnerId(Long groupId) {
+        GroupRole ownerRole = groupRoleRepository.findByRoleName("group_owner")
+                .orElseThrow(() -> new NotFoundException("Group owner role not found"));
+        return groupMemberRepository.findByGroupIdAndRoleId(groupId, ownerRole.getId()).stream()
+                .findFirst()
+                .map(GroupMember::getUserId)
+                .orElseThrow(() -> new NotFoundException("Group owner not found"));
+    }
+
+    /**
+     * Creates the {@code GROUP_SYSTEM} welcome post (B9) for a newly inserted {@code GroupMember}
+     * row, authored by the group's current owner. Pass {@code inviterId = null} for a
+     * self-requested join (nothing to credit); pass the inviter's id when the join came through
+     * an invitation (including an owner/admin's {@code addMember}-initiated one) to mention them
+     * by name.
+     */
+    private void postWelcomeMessage(Long groupId, UUID newMemberId, UUID inviterId) {
+        List<UUID> idsToResolve = inviterId != null
+                ? List.of(newMemberId, inviterId)
+                : List.of(newMemberId);
+        Map<UUID, UserResponse> usersById = userService.getUsersByIds(idsToResolve);
+        String newMemberName = usersById.get(newMemberId).getFullName();
+
+        String content = inviterId != null
+                ? newMemberName + " joined the group — invited by " + usersById.get(inviterId).getFullName() + " 👋"
+                : newMemberName + " joined the group 👋";
+
+        postService.createSystemPost(groupId, resolveGroupOwnerId(groupId), content);
     }
 }

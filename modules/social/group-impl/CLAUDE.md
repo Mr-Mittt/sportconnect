@@ -81,6 +81,14 @@ GET    /api/groups/{groupId}/permissions/user-role
 4. `transferOwnership` — new owner must be an existing member; previous owner becomes `group_admin`
 5. Settings defaults on create: `allowMemberPosts=true`, `requirePostApproval=false`, `allowMemberInvites=false`
 6. `getGroupSettings` requires membership — non-members get `BadRequestException`
+7. Every path that inserts a `GroupMember` row must also trigger the `GROUP_SYSTEM` welcome post
+   (B9) via the private `postWelcomeMessage(groupId, newMemberId, inviterId)` helper — pass
+   `inviterId = null` for a self-requested join (no one to credit), or the actual inviter's id
+   when the join came through an invitation (including an owner/admin's `addMember`-initiated
+   one, B9). When adding a new member-join path in the future (e.g. a new invite mechanism),
+   check whether it needs this wired in too, the same way B7's `enforceMemberCapacity` had to be
+   added to every insertion path. The post is authored by `resolveGroupOwnerId(groupId)` (the
+   *current* owner, not `createdBy`) — there is no dedicated system user account.
 
 ## Gotchas
 

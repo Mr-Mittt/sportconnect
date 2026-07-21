@@ -34,7 +34,7 @@
 | 13 | A9 | Add privacy/membership check to `getGroup` | `DONE` |
 | 14 | B8 | Extend member-sent invitations to include owner-approved status | `DONE` |
 | 15 | B7 | Settings data set audit → group-type membership-cap tiers | `DONE` |
-| 16 | B9 | Group system posts — welcome post on member join | `TODO` |
+| 16 | B9 | Group system posts — welcome post on member join | `DONE` |
 | 17 | B10 | Group type change flow (upgrade/downgrade) | `TODO` |
 
 ---
@@ -445,7 +445,15 @@ no way to move to `STANDARD` (100) or `PREMIUM` (500). `GroupType` entity/reposi
 ---
 
 ### B9 · Group system posts — welcome post on member join
-**Status:** `TODO` · **Type:** New Feature (cross-module — touches post module, same shape as B3)
+**Status:** `DONE` (2026-07-21) · **Summary:** `modules/social/group-impl/docs/B9_GROUP_WELCOME_SYSTEM_POST.md`
+**Type:** New Feature (cross-module — touches post module, same shape as B3)
+
+**Delta from the draft below (resolved during scoping, see summary doc for full detail):** no
+dedicated system-user account — the group's *current* owner authors the welcome post instead.
+`addMember` was redesigned rather than just wired up: it no longer inserts a `GroupMember` row
+directly — it creates a self-approved (`pending_user`) `GroupInvitation` (still friends-gated),
+collapsing its trigger into the `acceptInvitation` path and dropping the `roleName` param (always
+`group_member` on accept; promote via `updateMemberRole` afterward).
 
 **Origin:** raised directly by the user while discussing B8/GRP-3 — should `GroupMemberResponse`
 expose who invited a member and who approved them, so the group can "say hello" to a new member?
