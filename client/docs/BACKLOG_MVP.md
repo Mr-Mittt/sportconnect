@@ -112,6 +112,9 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 42 | GRP-3 | Members tab — group member management (search, invite, 5 status-grouped lists) | `DONE` |
 | 43 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3 | `TODO` |
 | 44 | GRP-5 | Join Group modal — show the active sport filter — **new ticket, not in either epic** | `TODO` |
+| **Phase 8 — Chat (new, not in either epic — see `documentation/md/CHAT_SERVICE_INTEGRATION.md`)** | | | |
+| 45 | CHAT-2 | Wire GroupChatTab to real-time PubNub delivery — blocked on CHAT-1 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) | `TODO` |
+| 46 | CHAT-4 | Persisted chat history + hardening — blocked on CHAT-3 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) and CHAT-2 | `TODO` |
 
 **Dependencies:**
 ```
@@ -134,6 +137,11 @@ FEED-4, FEED-5 → GRP-1 (Groups page epic; independent of Phase 6's other ticke
 GRP-1, B7 (modules/social/group-impl/docs/BACKLOG_MVP.md) → GRP-2.
 GRP-1 → GRP-3 → GRP-4. GRP-3's "Waiting for user accept" section was blocked on B8
   (modules/social/group-impl/docs/BACKLOG_MVP.md) — B8 shipped 2026-07-20, no longer blocking.
+CHAT-1 (modules/social/chat-impl/docs/BACKLOG_MVP.md, backend — module scaffold + token endpoint)
+  → CHAT-2 (client, real-time wiring) → CHAT-3 (backend, persistence) → CHAT-4 (client, swaps to
+  persisted history + hardening). Independent of every other Phase 5–8 ticket — GroupChatTab
+  already exists (GRP-1), this just wires it to a real backend. See
+  documentation/md/CHAT_SERVICE_INTEGRATION.md for the full architecture.
 ```
 
 **Backend blockers (tracked outside this backlog):**
@@ -144,6 +152,7 @@ GRP-1 → GRP-3 → GRP-4. GRP-3's "Waiting for user accept" section was blocked
 | BE-2: logout derives user from principal | `modules/auth/docs/BACKLOG_MVP.md` · A3 | AUTH-4 (production) | `DONE` (2026-07-08) |
 | BE-3: login/registration rate limiting | `modules/auth/docs/BACKLOG_MVP.md` · A5 | a future client ticket (not yet filed) for rate-limit error surfacing, split out of AUTH-6 on 2026-07-12 | `TODO` |
 | Matches/tournaments module | Nowhere yet — needs its own design pass | de-mocking HF-4 |
+| Chat module (new `modules/social/chat-impl`, doesn't exist yet) | `modules/social/chat-impl/docs/BACKLOG_MVP.md` · CHAT-1, CHAT-3 | CHAT-2, CHAT-4 | `TODO` |
 
 ---
 
@@ -1845,6 +1854,105 @@ pattern.
 **Out of scope:**
 - Changing the filtering behavior itself — it already works correctly; this is a visibility-only fix.
 - Any change to `CreateGroupModal`'s existing locked-sport display.
+
+---
+
+### CHAT-2 · Wire GroupChatTab to real-time PubNub delivery
+**Status:** `TODO` · **Type:** Feature · **Dependency:** CHAT-1
+(`modules/social/chat-impl/docs/BACKLOG_MVP.md`, backend)
+**Spec:** `documentation/md/CHAT_SERVICE_INTEGRATION.md` — the decision doc, not an epic doc; this
+ticket (like GRP-3/GRP-5) has no pre-existing mockup spec beyond what `GroupChatTab.tsx` already is.
+
+**Origin:** `GroupChatTab.tsx` shipped in GRP-1 as a local-state-only UI matching
+`design-reference-group-feed.html`'s Chat tab exactly, with an explicit "not saved" disclaimer —
+GRP-1's decision #1 filed real chat as "a separate future ticket once a conversations/messages
+backend is scoped." `documentation/md/CHAT_SERVICE_INTEGRATION.md` is that scoping; this ticket is
+the client half of its first slice.
+
+**What ships:**
+- `pubnub` npm package added to `client/package.json` (the JS client SDK — headless, no bundled UI
+  component; `GroupChatTab.tsx`'s markup is unchanged).
+- New `useGroupChatData(groupId, isActive)` hook, `client/src/features/groups/` — same page-level
+  orchestration-hook shape as `useGroupMembersTabData`/`useSettingsUnsavedGuard` (data-fetching
+  concern lives in a hook, component stays presentational/controlled per `client/CLAUDE.md`).
+  Fetches a token from CHAT-1's `GET /api/groups/{groupId}/chat-token` when the Chat tab becomes
+  active, calls the PubNub SDK's `subscribe()` on `group-{groupId}-chat`, and `fetchMessages()` for
+  the vendor's own short-term (7-day) history to populate the tab on open. Exposes
+  `{ messages, sendMessage, isLoading, isError }`.
+- `GroupChatTab.tsx`: swap its local `useState` message list for the hook's real data — this is a
+  wiring change to an already-built component (it already renders a message list + has a `send()`
+  handler wired to a `Send` button), not a rewrite. `GroupsPage.tsx` already remounts this component
+  per selected group (`key={selectedGroup.id}`) — that already gives "switching groups resets the
+  subscription" for free, no new logic needed there.
+- Update the "Group chat isn't built yet" disclaimer copy — messages now persist in PubNub's
+  7-day store (not permanently — that's CHAT-4), so the exact wording needs revisiting at pickup
+  rather than just deleting it outright.
+- `VITE_PUBNUB_PUBLISH_KEY`/`VITE_PUBNUB_SUBSCRIBE_KEY` env vars (standard `VITE_`-prefixed
+  build-time config, same convention as `VITE_API_PROXY_TARGET` in `vite.config.ts`) — these are
+  meant to ship client-side (unlike the secret key, which stays backend-only and never appears here).
+
+**Open decisions to resolve at pickup:**
+1. E2E strategy — PubNub is a separate host, not `/api/**`, so MSW can't intercept it the way every
+   other real-data ticket in this backlog does. Either mock the `pubnub` module directly in
+   Playwright, or (simpler) defer E2E coverage to CHAT-4, once persisted history gives a stable,
+   non-realtime-dependent way to assert message state without needing two live subscribed browser
+   contexts.
+2. Exact disclaimer copy once messages persist in vendor history but not yet in our own Postgres.
+
+**Acceptance criteria:**
+- Sending a message in one browser session appears in a second session subscribed to the same
+  group's channel, without a page reload.
+- Reopening the Chat tab (or switching groups and back) shows the vendor's recent history, not an
+  empty list.
+- A non-member of the group (if reachable via the UI at all) never successfully mints a token —
+  covered by CHAT-1's backend test, not re-tested here, but the client's error state should render
+  sanely if it somehow gets a 400.
+- Storybook: extend `GroupChatTab.stories.tsx` with a "sending" state if the hook exposes a pending
+  flag.
+
+---
+
+### CHAT-4 · Persisted chat history + hardening
+**Status:** `TODO` · **Type:** Hardening · **Dependency:** CHAT-3
+(`modules/social/chat-impl/docs/BACKLOG_MVP.md`, backend), CHAT-2
+
+**Origin:** filed alongside CHAT-2 — CHAT-2 intentionally ships real-time delivery backed only by
+PubNub's own short-term history, so the real-time path lands and is verifiable before persistence is
+layered on top (same "smallest shippable slice" sequencing this backlog already uses throughout).
+
+**What ships:**
+- `useGroupChatData` swaps its history source from PubNub's `fetchMessages()` to CHAT-3's paginated
+  `GET /api/groups/{groupId}/chat/messages` — unlimited retention, our own data, same
+  `PageResponse<T>`/`PagedApiResponse<T>` shape every other paginated feature in this app already
+  uses (`feed/types.ts`).
+- On send: `useGroupChatData`'s `sendMessage` publishes to PubNub for real-time delivery **and**
+  calls CHAT-3's `POST /api/groups/{groupId}/chat/messages` to persist — the persistence call is a
+  side path, its failure must never block the message from appearing for the sender or from being
+  delivered live to other subscribers (matches the architecture doc's diagram exactly).
+- Loading/error states for both the token-fetch and history-fetch calls — same
+  `isLoading`/`isError`/retry convention FEED-8 established for every other real-data hook in this
+  app, applied here for the first time to chat.
+- Remove the "Group chat isn't built yet" disclaimer from `GroupChatTab.tsx` for real — messages
+  now persist permanently.
+- E2E: new `e2e/flows/group-chat.spec.ts` (mirrors `group-members.spec.ts`'s one-spec-per-feature
+  precedent) — send a message, reload, confirm it's still there via the real persisted-history
+  endpoint. Realtime cross-client delivery (two browser contexts both subscribed, actually exercising
+  PubNub's fan-out) is a stretch goal, not a hard requirement for this ticket — MSW can't simulate a
+  real vendor's realtime fan-out, so that would need a real (free-tier) PubNub sandbox key wired into
+  CI; a call to make at pickup, not assumed here.
+- `client/docs/E2E_OVERVIEW.md` updated to match (directory listing, new spec's test table) — same
+  convention GRP-3 already followed. `a11y.spec.ts` — confirm the Chat tab doesn't introduce new
+  violations at whatever breakpoint the existing Groups-page check already covers (GRP-3's baseline);
+  extend only if it does.
+
+**Acceptance criteria:**
+- Message history survives a full page reload (sourced from our Postgres, not the browser's live
+  subscription state).
+- A persistence-call failure (simulated) does not prevent the message from appearing for the sender
+  or being delivered live to another subscribed client.
+- `./gradlew :server:test` green (confirms CHAT-3's backend didn't regress), full Vitest +
+  `tsc -b`/`eslint` + Storybook build + Playwright `e2e` project green — same bar every ticket in
+  this backlog already holds itself to.
 
 ---
 
