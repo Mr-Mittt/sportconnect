@@ -1,34 +1,73 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useJoinGroup } from '@/features/feed/hooks/useJoinGroup';
 import { useJoinRequests } from '@/features/feed/hooks/useJoinRequests';
 import { usePublicGroups } from '@/features/feed/hooks/usePublicGroups';
+import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
+import type { GroupSearchResult } from '@/features/feed/types';
+import type { SportKey, SportProfile } from '@/shared/types/sport';
+
+export interface GroupedSearchResults {
+  sportKey: SportKey;
+  sportProfile: SportProfile;
+  results: GroupSearchResult[];
+}
 
 /**
- * JoinGroupModal's data boundary (FEED-5) — same role as useCommentsData:
- * owns the search text + composes the three real hooks it needs
+ * JoinGroupModal's data boundary (FEED-5; GRP-6 added the multi-select sport
+ * filter + grouped results). Same role as useCommentsData: owns the search
+ * text + sport-filter selection, composes the real hooks it needs
  * (usePublicGroups, useJoinRequests, useJoinGroup), so JoinGroupModal itself
  * stays presentational and controlled, matching client/CLAUDE.md's
- * component convention (and restoring Storybook testability with static
- * props, which calling these hooks directly inside the component would
- * break). `pendingGroupIds` cross-references the search results against the
- * user's already-pending-only join requests so a row's action state
- * ("Request to join" vs "Pending") derives from two independent sources
- * without JoinGroupModal needing to know either hook exists.
+ * component convention.
  *
  * `isOpen` gates both queries (same reasoning as useComments' `isOpen`
  * param) — the modal component stays mounted between opens (only its
  * `Dialog` toggles), so without this it would keep fetching in the
- * background even while visually closed.
+ * background even while visually closed. For the same reason, the
+ * multi-select sport filter can't just be `useState`'s initial value — it's
+ * re-seeded via `seededForOpenRef` exactly once per open (not on every
+ * render while already open, which would otherwise silently reset the
+ * user's in-progress pill choices if `sportProfiles`' reference changes):
+ * `lockedSport` (the page's active sport tab) pre-selects just that one
+ * pill, or every one of the user's sports if the page is on "All".
+ *
+ * GRP-6: the query only runs once a keyword has been submitted
+ * (`enabled: isOpen && submittedKeyword !== ''`) — a deliberate change from
+ * FEED-5's original "browse with no query" default. `sportIds` (plural) is
+ * sent to `usePublicGroups`; results come back as one flat page, which this
+ * hook groups by `sportId` into `groupedResults`, ordered to match the
+ * filter pills — no per-sport fan-out, per A10's single combined-filter
+ * endpoint.
  */
 export function useJoinGroupModalData(
   currentUserId: string | undefined,
-  sportId: number | undefined,
+  lockedSport: SportKey | null,
+  sportProfiles: SportProfile[],
   isOpen: boolean,
 ) {
   const [inputValue, setInputValue] = useState('');
   const [submittedKeyword, setSubmittedKeyword] = useState('');
+  const [selectedSports, setSelectedSports] = useState<Set<SportKey>>(new Set());
 
-  const searchQuery = usePublicGroups(sportId, submittedKeyword, isOpen);
+  const seededForOpenRef = useRef(false);
+  useEffect(() => {
+    if (!isOpen) {
+      seededForOpenRef.current = false;
+      return;
+    }
+    if (seededForOpenRef.current) return;
+    seededForOpenRef.current = true;
+    setSelectedSports(
+      lockedSport !== null ? new Set([lockedSport]) : new Set(sportProfiles.map((sport) => sport.key)),
+    );
+  }, [isOpen, lockedSport, sportProfiles]);
+
+  const sportIds = useMemo(
+    () => Array.from(selectedSports).map((key) => SPORT_ID_BY_KEY[key]),
+    [selectedSports],
+  );
+
+  const searchQuery = usePublicGroups(sportIds, submittedKeyword, isOpen && submittedKeyword !== '');
   const joinRequestsQuery = useJoinRequests(isOpen ? currentUserId : undefined);
   const joinMutation = useJoinGroup();
 
@@ -36,6 +75,42 @@ export function useJoinGroupModalData(
     () => new Set((joinRequestsQuery.data?.content ?? []).map((request) => request.groupId)),
     [joinRequestsQuery.data],
   );
+
+  const sportsByKey = useMemo(
+    () =>
+      Object.fromEntries(sportProfiles.map((sport) => [sport.key, sport])) as Record<
+        SportKey,
+        SportProfile
+      >,
+    [sportProfiles],
+  );
+
+  // A selected sport with zero matches produces no rows and thus no section —
+  // there's one combined query now, not an independent per-sport call to
+  // hang an explicit empty section off of.
+  const groupedResults = useMemo<GroupedSearchResults[]>(() => {
+    const results = searchQuery.data?.content ?? [];
+    const bySport = new Map<SportKey, GroupSearchResult[]>();
+    for (const result of results) {
+      const key = sportKeyForId(result.sportId);
+      if (key === undefined) continue;
+      const bucket = bySport.get(key);
+      if (bucket) bucket.push(result);
+      else bySport.set(key, [result]);
+    }
+    return Array.from(selectedSports)
+      .filter((key) => bySport.has(key))
+      .map((key) => ({ sportKey: key, sportProfile: sportsByKey[key], results: bySport.get(key)! }));
+  }, [searchQuery.data, selectedSports, sportsByKey]);
+
+  const toggleSport = useCallback((key: SportKey) => {
+    setSelectedSports((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   const submitSearch = useCallback(() => setSubmittedKeyword(inputValue.trim()), [inputValue]);
   // GRP-1: opening the modal from GroupDiscoveryPanel's shared "Group name or
@@ -56,7 +131,9 @@ export function useJoinGroupModalData(
     setInputValue,
     submitSearch,
     openSearch,
-    results: searchQuery.data?.content ?? [],
+    selectedSports,
+    toggleSport,
+    groupedResults,
     isSearching: searchQuery.isLoading,
     isSearchError: searchQuery.isError,
     pendingGroupIds,

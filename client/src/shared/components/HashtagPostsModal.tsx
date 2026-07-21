@@ -1,6 +1,6 @@
 import type { Post } from '@/features/feed/types';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Feed } from './Feed';
 
 interface HashtagPostsModalProps {
@@ -62,10 +62,10 @@ export function HashtagPostsModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg">
-        <div className="border-hairline-b flex items-center justify-between gap-2 border-border px-4 py-3">
-          <DialogTitle>{tag ?? 'Hashtag'}</DialogTitle>
-          <DialogClose aria-label="Close" />
-        </div>
+        <DialogHeader
+          title={tag ?? 'Hashtag'}
+          className="border-hairline-b border-border px-4 py-3"
+        />
 
         <div className="flex-1 overflow-y-auto px-4 py-3">
           <Feed

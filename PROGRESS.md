@@ -1097,6 +1097,49 @@ registered two users, created a group, ran a full
 request→accept→re-fetch round trip via curl — every new endpoint's response shape matched the
 client types exactly, no divergence from the design.
 
+**GRP-6 DONE** (2026-07-21, `client/docs/GRP-6_JOIN_GROUP_MODAL_MULTI_SPORT_FILTER.md`): supersedes
+the narrower GRP-5 (static single-sport indicator, never built). `JoinGroupModal` header
+center-aligned (3-column grid); new interactive multi-select sport-filter pill row seeded from page
+context (page's active sport tab → just that pill; "All" → every one of the user's sports),
+freely re-toggleable before searching. Search no longer runs on an empty input, including on modal
+open — a deliberate change from FEED-5's original "browse with no query" default (confirmed:
+`GroupDiscoveryPanel`'s "Join Group" button with an empty shared input now opens straight to "No
+groups found." instead of a browsable list — accepted, not a regression). Backend dependency **A10**
+(`modules/social/group-impl/docs/BACKLOG_MVP.md`) shipped first: `usePublicGroups` now sends
+`sportIds` (plural) in one combined request instead of the originally-planned per-sport client-side
+fan-out; results come back as a single flat page (already carrying `sportId` per row) and are
+grouped client-side into one section per sport, ordered to match the filter pills. Found and fixed a
+real bug while wiring this up: axios's default array-param serialization uses bracket notation
+(`?sportIds[]=1`), which Spring's `List<Long> @RequestParam` binding does not understand — confirmed
+via a quick Node/axios repro before writing any component code; fixed globally via
+`apiClient`'s new `paramsSerializer: { indexes: null }` (repeated bare keys,
+`?sportIds=1&sportIds=2`), not a per-call workaround. 455/455 Vitest passing, clean `tsc -b`/`eslint`,
+Storybook build clean. Verified live against a real running backend beyond MSW/mocks: registered a
+test user with Football+Tennis sport profiles, created matching public groups under a second user,
+and drove the actual browser UI (Playwright, ad hoc — not a committed spec, no existing e2e coverage
+touched `JoinGroupModal`) confirming all-pills-preselected-on-"All", pill deselection narrowing
+results, grouped section rendering, and the empty-search "No groups found." state — all four
+screenshotted and matched the intended design exactly.
+
+**GRP-6 addendum (2026-07-21, same doc, "Addendum" section)** — same-session follow-on that grew
+from "JoinGroupModal" into an app-wide `Dialog` primitive change, since every modal shares it: (1)
+new `src/shared/lib/modalAnchor.ts` (`ModalAnchorProvider`/`useAnchorBottom`) — modals on Home Feed
+now position below the sport pill row, modals on Groups below the group pill row ("All") or the
+group cover banner (a specific group selected), instead of viewport-centered; falls back to centered
+for any page without a provider. (2) Fixed height reversed from an initial "all modals get a flat
+`h-[85vh]`" pass (explicitly accepted tradeoff of tiny confirm dialogs rendering mostly empty) to a
+narrower final shape: only `JoinGroupModal`/`CommentSection` get a fixed `60vh` (`DialogContent`'s
+new `fixedHeight` prop) — everything else shrink-to-fits as before, capped by whatever ceiling
+applies. (3) New shared `DialogHeader` component, adopted by all 7 other title+close modals
+(`CreateGroupModal`, `DeleteGroupConfirmDialog`, `InviteFriendModal`,
+`SettingsUnsavedChangesDialog`, `AddSportModal`, `HashtagPostsModal`,
+`UpdateBroadcastConfirmDialog`) plus `JoinGroupModal` itself, replacing 8 duplicate hand-rolled
+header implementations — not applied to `CommentSection`, whose header shows post author context
+rather than a single title. jsdom has no `ResizeObserver`; added a no-op stub to `src/test/setup.ts`.
+455/455 Vitest, clean `tsc -b`/`eslint`/Storybook build after each round; live-verified all three
+anchor contexts (sport pill, group pill, cover banner) plus the fixed-60vh case in a real browser
+against the real backend.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

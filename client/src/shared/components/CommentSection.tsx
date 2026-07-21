@@ -114,7 +114,7 @@ export function CommentSection({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent fixedHeight>
         <DialogTitle className="sr-only">Comments on {displayName}'s post</DialogTitle>
 
         {/* FEED-12: the post header (below) only ever renders once `post` is

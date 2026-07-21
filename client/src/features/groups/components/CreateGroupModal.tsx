@@ -9,7 +9,7 @@ import type { CreateGroupPayload } from '@/features/feed/types';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
@@ -79,10 +79,7 @@ export function CreateGroupModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
-        <div className="border-hairline-b flex items-center justify-between border-border px-4 py-3">
-          <DialogTitle>Create a group</DialogTitle>
-          <DialogClose aria-label="Close" />
-        </div>
+        <DialogHeader title="Create a group" className="border-hairline-b border-border px-4 py-3" />
         <div className="flex flex-col gap-3.5 overflow-y-auto px-4 py-3.5">
           <div>
             <Label htmlFor="create-group-name">Group name</Label>

@@ -18,9 +18,14 @@ export function attachAuthHeader(config: InternalAxiosRequestConfig): InternalAx
 
 // `/api` is proxied to the Spring Boot backend at :8080 in dev (vite.config.ts).
 // withCredentials is required so the httpOnly refresh cookie is sent/received.
+// paramsSerializer.indexes: null makes an array-valued param (e.g. sportIds: [1, 2])
+// serialize as repeated bare keys (?sportIds=1&sportIds=2) instead of axios's default
+// bracket notation (?sportIds[]=1&sportIds[]=2) — Spring's List<Long> @RequestParam
+// binding only understands the bare-repeated-key form (verified live against A10).
 export const apiClient = axios.create({
   baseURL: '/api',
   withCredentials: true,
+  paramsSerializer: { indexes: null },
 });
 
 apiClient.interceptors.request.use(attachAuthHeader);

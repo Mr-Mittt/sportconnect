@@ -1,5 +1,5 @@
 import { Button } from '@/shared/ui/button';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 
 interface SettingsUnsavedChangesDialogProps {
   isOpen: boolean;
@@ -28,10 +28,7 @@ export function SettingsUnsavedChangesDialog({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="p-4">
-        <div className="mb-3 flex items-start justify-between gap-2">
-          <DialogTitle>Unsaved changes</DialogTitle>
-          <DialogClose aria-label="Close" onClick={onCancel} />
-        </div>
+        <DialogHeader title="Unsaved changes" className="mb-3" onCloseClick={onCancel} />
         <p className="mb-3 text-2sm text-text-secondary">
           You have unsaved changes to this group's settings. Discard them, or save before leaving?
         </p>

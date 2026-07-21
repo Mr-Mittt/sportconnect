@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useFeedSpaceStore } from '@/app/feedSpaceStore';
@@ -16,6 +16,7 @@ import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
+import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
 import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { useHomeFeedData } from './useHomeFeedData';
@@ -124,11 +125,11 @@ export function HomeFeedPage() {
     isBroadcastsError,
     retryBroadcasts,
   } = useHomeFeedData();
-  const commentsData = useCommentsData(
+  const commentsData = useCommentsData(activeCommentsPostId ?? -1, activeCommentsPostId !== null);
+  const activeCommentsPostQuery = usePost(
     activeCommentsPostId ?? -1,
     activeCommentsPostId !== null,
   );
-  const activeCommentsPostQuery = usePost(activeCommentsPostId ?? -1, activeCommentsPostId !== null);
   const hashtagResultsData = useHashtagResultsData(activeHashtag, activeHashtag !== null);
   const addSportMutation = useAddSportProfile(currentUserId);
   const availableSports = useMemo(
@@ -156,159 +157,175 @@ export function HomeFeedPage() {
   const activeCommentsPostSportKey =
     activeCommentsPost !== null ? sportKeyForId(activeCommentsPost.sportId) : undefined;
   const activeCommentsPostSport =
-    activeCommentsPostSportKey !== undefined ? (sportsByKey[activeCommentsPostSportKey] ?? null) : null;
+    activeCommentsPostSportKey !== undefined
+      ? (sportsByKey[activeCommentsPostSportKey] ?? null)
+      : null;
+
+  // Every modal on this page positions below the sport pill row (user
+  // decision) — measured live so it tracks pill wrapping at narrow widths.
+  const sportSwitcherRef = useRef<HTMLDivElement>(null);
+  const modalAnchorBottom = useAnchorBottom(sportSwitcherRef);
 
   return (
-    <main className="py-4">
-      {/* The rail cards introduce h2s; give the page its h1 for AT users (HF-8) */}
-      <h1 className="sr-only">Home Feed</h1>
-      <div className="mb-4">
-        <SportSwitcher
-          sports={data.sportProfiles}
-          active={activeSport}
-          onChange={setActiveSport}
-          onAddSport={() => {
-            setAddSportOpenCount((count) => count + 1);
-            setIsAddSportOpen(true);
+    <ModalAnchorProvider value={modalAnchorBottom}>
+      <main className="py-4">
+        {/* The rail cards introduce h2s; give the page its h1 for AT users (HF-8) */}
+        <h1 className="sr-only">Home Feed</h1>
+        <div className="mb-4" ref={sportSwitcherRef}>
+          <SportSwitcher
+            sports={data.sportProfiles}
+            active={activeSport}
+            onChange={setActiveSport}
+            onAddSport={() => {
+              setAddSportOpenCount((count) => count + 1);
+              setIsAddSportOpen(true);
+            }}
+          />
+        </div>
+        <CreatePostForm
+          currentUser={{
+            firstName: user.firstName,
+            fullName: `${user.firstName} ${user.lastName}`,
+            avatarUrl: user.avatarUrl,
+          }}
+          onSubmit={createPost}
+          isSubmitting={isCreatingPost}
+          isError={isCreatePostError}
+          onPhotoClick={noop}
+          onLocationClick={noop}
+          onTagSportClick={noop}
+        />
+        <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[1.6fr_1fr]">
+          <div className="min-w-0">
+            <Feed
+              posts={data.posts}
+              activeSport={activeSport}
+              sportsByKey={sportsByKey}
+              currentUserId={currentUserId}
+              onToggleLike={toggleLike}
+              onHashtagClick={(tag) => {
+                setActiveHashtag(tag);
+                setIsHashtagModalOpen(true);
+              }}
+              onDeletePost={deletePost}
+              onOpenComments={openComments}
+              hasMorePosts={hasMorePosts}
+              isFetchingMorePosts={isFetchingMorePosts}
+              onLoadMore={fetchMorePosts}
+              isLoading={isLoading}
+              isError={isError}
+              onRetry={retryPosts}
+              isLoadMoreError={isLoadMorePostsError}
+              groupsById={data.groupsById}
+              onGroupClick={goToGroup}
+            />
+          </div>
+          <div className="flex min-w-0 flex-col gap-3.5">
+            <UpcomingMatches
+              matches={data.upcomingMatches}
+              activeSport={activeSport}
+              sportsByKey={sportsByKey}
+              onSeeAll={noop}
+              onSelectMatch={noop}
+            />
+            <TrendingHashtags
+              hashtags={data.hashtags}
+              onHashtagClick={(tag) => {
+                setActiveHashtag(tag);
+                setIsHashtagModalOpen(true);
+              }}
+              isLoading={isHashtagsLoading}
+              isError={isHashtagsError}
+              onRetry={retryHashtags}
+            />
+            <GroupBroadcasts
+              broadcasts={data.broadcasts}
+              onBroadcastClick={noop}
+              isLoading={isBroadcastsLoading}
+              isError={isBroadcastsError}
+              onRetry={retryBroadcasts}
+            />
+          </div>
+        </div>
+        <CommentSection
+          isOpen={activeCommentsPostId !== null}
+          onClose={closeComments}
+          currentUserId={currentUserId}
+          currentUser={{
+            fullName: `${user.firstName} ${user.lastName}`,
+            avatarUrl: user.avatarUrl,
+          }}
+          post={activeCommentsPost}
+          sport={activeCommentsPostSport}
+          isPostLoading={activeCommentsPostQuery.isLoading}
+          isPostError={activeCommentsPostQuery.isError}
+          comments={commentsData.data}
+          isLoading={commentsData.isLoading}
+          isError={commentsData.isError}
+          hasMore={commentsData.hasMore}
+          isFetchingMore={commentsData.isFetchingMore}
+          onFetchMore={commentsData.fetchMore}
+          onAddComment={commentsData.addComment}
+          onAddReply={commentsData.addReply}
+          isPosting={commentsData.isPosting}
+          onDeleteComment={commentsData.deleteComment}
+          onToggleCommentLike={commentsData.toggleCommentLike}
+          onTogglePostLike={() => {
+            // FEED-12: toggleLikeForPost takes the already-resolved post
+            // directly (from usePost above) rather than re-deriving it from
+            // useHomeFeedData's own feed array, which wouldn't find a post
+            // reached via a direct link outside the caller's personal feed.
+            if (activeCommentsPost !== null) toggleLikeForPost(activeCommentsPost);
+          }}
+          onHashtagClick={(tag) => {
+            // Symmetric with HashtagPostsModal's own "close first" behavior —
+            // close the comment dialog before opening the hashtag modal,
+            // rather than stacking two dialogs.
+            closeComments();
+            setActiveHashtag(tag);
+            setIsHashtagModalOpen(true);
           }}
         />
-      </div>
-      <CreatePostForm
-        currentUser={{ firstName: user.firstName, fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
-        onSubmit={createPost}
-        isSubmitting={isCreatingPost}
-        isError={isCreatePostError}
-        onPhotoClick={noop}
-        onLocationClick={noop}
-        onTagSportClick={noop}
-      />
-      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[1.6fr_1fr]">
-        <div className="min-w-0">
-          <Feed
-            posts={data.posts}
-            activeSport={activeSport}
-            sportsByKey={sportsByKey}
-            currentUserId={currentUserId}
-            onToggleLike={toggleLike}
-            onHashtagClick={(tag) => {
-              setActiveHashtag(tag);
-              setIsHashtagModalOpen(true);
-            }}
-            onDeletePost={deletePost}
-            onOpenComments={openComments}
-            hasMorePosts={hasMorePosts}
-            isFetchingMorePosts={isFetchingMorePosts}
-            onLoadMore={fetchMorePosts}
-            isLoading={isLoading}
-            isError={isError}
-            onRetry={retryPosts}
-            isLoadMoreError={isLoadMorePostsError}
-            groupsById={data.groupsById}
-            onGroupClick={goToGroup}
-          />
-        </div>
-        <div className="flex min-w-0 flex-col gap-3.5">
-          <UpcomingMatches
-            matches={data.upcomingMatches}
-            activeSport={activeSport}
-            sportsByKey={sportsByKey}
-            onSeeAll={noop}
-            onSelectMatch={noop}
-          />
-          <TrendingHashtags
-            hashtags={data.hashtags}
-            onHashtagClick={(tag) => {
-              setActiveHashtag(tag);
-              setIsHashtagModalOpen(true);
-            }}
-            isLoading={isHashtagsLoading}
-            isError={isHashtagsError}
-            onRetry={retryHashtags}
-          />
-          <GroupBroadcasts
-            broadcasts={data.broadcasts}
-            onBroadcastClick={noop}
-            isLoading={isBroadcastsLoading}
-            isError={isBroadcastsError}
-            onRetry={retryBroadcasts}
-          />
-        </div>
-      </div>
-      <CommentSection
-        isOpen={activeCommentsPostId !== null}
-        onClose={closeComments}
-        currentUserId={currentUserId}
-        currentUser={{ fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
-        post={activeCommentsPost}
-        sport={activeCommentsPostSport}
-        isPostLoading={activeCommentsPostQuery.isLoading}
-        isPostError={activeCommentsPostQuery.isError}
-        comments={commentsData.data}
-        isLoading={commentsData.isLoading}
-        isError={commentsData.isError}
-        hasMore={commentsData.hasMore}
-        isFetchingMore={commentsData.isFetchingMore}
-        onFetchMore={commentsData.fetchMore}
-        onAddComment={commentsData.addComment}
-        onAddReply={commentsData.addReply}
-        isPosting={commentsData.isPosting}
-        onDeleteComment={commentsData.deleteComment}
-        onToggleCommentLike={commentsData.toggleCommentLike}
-        onTogglePostLike={() => {
-          // FEED-12: toggleLikeForPost takes the already-resolved post
-          // directly (from usePost above) rather than re-deriving it from
-          // useHomeFeedData's own feed array, which wouldn't find a post
-          // reached via a direct link outside the caller's personal feed.
-          if (activeCommentsPost !== null) toggleLikeForPost(activeCommentsPost);
-        }}
-        onHashtagClick={(tag) => {
-          // Symmetric with HashtagPostsModal's own "close first" behavior —
-          // close the comment dialog before opening the hashtag modal,
-          // rather than stacking two dialogs.
-          closeComments();
-          setActiveHashtag(tag);
-          setIsHashtagModalOpen(true);
-        }}
-      />
-      <AddSportModal
-        key={addSportOpenCount}
-        isOpen={isAddSportOpen}
-        onClose={() => setIsAddSportOpen(false)}
-        availableSports={availableSports}
-        isSubmitting={addSportMutation.isPending}
-        isError={addSportMutation.isError}
-        onSubmit={(payload) =>
-          addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
-        }
-      />
-      <HashtagPostsModal
-        isOpen={isHashtagModalOpen}
-        onClose={() => {
-          setIsHashtagModalOpen(false);
-          setActiveHashtag(null);
-        }}
-        tag={activeHashtag}
-        posts={hashtagResultsData.data.posts}
-        sportsByKey={sportsByKey}
-        currentUserId={hashtagResultsData.currentUserId}
-        onToggleLike={hashtagResultsData.toggleLike}
-        onHashtagClick={(tag) => setActiveHashtag(tag)}
-        onDeletePost={hashtagResultsData.deletePost}
-        onOpenComments={(postId) => {
-          // Hide the modal but keep `activeHashtag` set — see the state
-          // declaration's comment for why clearing it here would break
-          // usePost's own cache-seeding above.
-          setIsHashtagModalOpen(false);
-          openComments(postId);
-        }}
-        hasMorePosts={hashtagResultsData.hasMorePosts}
-        isFetchingMorePosts={hashtagResultsData.isFetchingMorePosts}
-        onLoadMore={hashtagResultsData.fetchMorePosts}
-        isLoading={hashtagResultsData.isLoading}
-        isError={hashtagResultsData.isError}
-        onRetry={hashtagResultsData.retryPosts}
-        isLoadMoreError={hashtagResultsData.isLoadMorePostsError}
-      />
-    </main>
+        <AddSportModal
+          key={addSportOpenCount}
+          isOpen={isAddSportOpen}
+          onClose={() => setIsAddSportOpen(false)}
+          availableSports={availableSports}
+          isSubmitting={addSportMutation.isPending}
+          isError={addSportMutation.isError}
+          onSubmit={(payload) =>
+            addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
+          }
+        />
+        <HashtagPostsModal
+          isOpen={isHashtagModalOpen}
+          onClose={() => {
+            setIsHashtagModalOpen(false);
+            setActiveHashtag(null);
+          }}
+          tag={activeHashtag}
+          posts={hashtagResultsData.data.posts}
+          sportsByKey={sportsByKey}
+          currentUserId={hashtagResultsData.currentUserId}
+          onToggleLike={hashtagResultsData.toggleLike}
+          onHashtagClick={(tag) => setActiveHashtag(tag)}
+          onDeletePost={hashtagResultsData.deletePost}
+          onOpenComments={(postId) => {
+            // Hide the modal but keep `activeHashtag` set — see the state
+            // declaration's comment for why clearing it here would break
+            // usePost's own cache-seeding above.
+            setIsHashtagModalOpen(false);
+            openComments(postId);
+          }}
+          hasMorePosts={hashtagResultsData.hasMorePosts}
+          isFetchingMorePosts={hashtagResultsData.isFetchingMorePosts}
+          onLoadMore={hashtagResultsData.fetchMorePosts}
+          isLoading={hashtagResultsData.isLoading}
+          isError={hashtagResultsData.isError}
+          onRetry={hashtagResultsData.retryPosts}
+          isLoadMoreError={hashtagResultsData.isLoadMorePostsError}
+        />
+      </main>
+    </ModalAnchorProvider>
   );
 }

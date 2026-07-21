@@ -8,3 +8,13 @@ import { afterEach } from 'vitest';
 afterEach(() => {
   cleanup();
 });
+
+// jsdom doesn't implement ResizeObserver (GRP-6's useAnchorBottom needs it to
+// track an anchor element's size). A no-op stub is enough for component
+// tests — none of them assert on resize-driven re-measurement.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;

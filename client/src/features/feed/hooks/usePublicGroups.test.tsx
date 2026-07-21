@@ -25,7 +25,7 @@ const emptyPage = {
 describe('usePublicGroups', () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it('calls GET /groups/public with no params when sportId/keyword are absent', async () => {
+  it('calls GET /groups/public with no params when sportIds/keyword are absent', async () => {
     vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
       data: { success: true, message: '', data: emptyPage, timestamp: '' },
     });
@@ -36,16 +36,29 @@ describe('usePublicGroups', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/groups/public', { params: {} });
   });
 
-  it('passes sportId and keyword as params when provided', async () => {
+  it('passes sportIds and keyword as params when provided', async () => {
     vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
       data: { success: true, message: '', data: emptyPage, timestamp: '' },
     });
 
-    const { result } = renderHook(() => usePublicGroups(5, 'riverside'), { wrapper });
+    const { result } = renderHook(() => usePublicGroups([5, 6], 'riverside'), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(apiClient.get).toHaveBeenCalledWith('/groups/public', {
-      params: { sportId: 5, keyword: 'riverside' },
+      params: { sportIds: [5, 6], keyword: 'riverside' },
+    });
+  });
+
+  it('omits sportIds when the array is empty', async () => {
+    vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: { success: true, message: '', data: emptyPage, timestamp: '' },
+    });
+
+    const { result } = renderHook(() => usePublicGroups([], 'riverside'), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(apiClient.get).toHaveBeenCalledWith('/groups/public', {
+      params: { keyword: 'riverside' },
     });
   });
 

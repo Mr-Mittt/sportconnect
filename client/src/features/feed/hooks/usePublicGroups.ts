@@ -5,20 +5,24 @@ import type { GroupSearchResult, PagedApiResponse } from '../types';
 
 /**
  * Wraps GET /api/groups/public — JoinGroupModal's search/browse source
- * (FEED-5). `keyword`/`sportId` are both optional server-side filters; an
- * empty keyword still returns a browsable list (member groups sort first
- * when authenticated, per the endpoint's own behavior), so this doesn't
- * gate on a non-empty search term — only on `enabled` (default true),
- * which `useJoinGroupModalData` sets to the modal's own `isOpen` so it
- * doesn't keep fetching in the background while visually closed.
+ * (FEED-5, multi-sport filter added GRP-6/A10). `sportIds` maps to the
+ * backend's multi-value `sportIds` param (A10,
+ * `modules/social/group-impl/docs/BACKLOG_MVP.md`) — sent as repeated bare
+ * keys (`?sportIds=1&sportIds=2`), which requires `apiClient`'s
+ * `paramsSerializer: { indexes: null }` (axios's default bracket-notation
+ * array serialization is not what Spring's `List<Long> @RequestParam`
+ * binds). `enabled` is owned by the caller — `useJoinGroupModalData` sets
+ * it to `isOpen && keyword !== ''` (GRP-6: no query while the search input
+ * is empty, a deliberate change from FEED-5's original "browse with no
+ * query" default).
  */
-export function usePublicGroups(sportId: number | undefined, keyword: string, enabled = true) {
+export function usePublicGroups(sportIds: number[] | undefined, keyword: string, enabled = true) {
   return useQuery({
-    queryKey: feedKeys.publicGroups(sportId, keyword),
+    queryKey: feedKeys.publicGroups(sportIds, keyword),
     queryFn: async () => {
       const response = await apiClient.get<PagedApiResponse<GroupSearchResult>>('/groups/public', {
         params: {
-          ...(sportId !== undefined ? { sportId } : {}),
+          ...(sportIds !== undefined && sportIds.length > 0 ? { sportIds } : {}),
           ...(keyword !== '' ? { keyword } : {}),
         },
       });
