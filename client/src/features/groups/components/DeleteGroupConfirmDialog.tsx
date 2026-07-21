@@ -1,5 +1,5 @@
 import { Button } from '@/shared/ui/button';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 
 interface DeleteGroupConfirmDialogProps {
   isOpen: boolean;
@@ -26,10 +26,7 @@ export function DeleteGroupConfirmDialog({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">
-        <div className="mb-3 flex items-start justify-between gap-2">
-          <DialogTitle>Delete {groupName}?</DialogTitle>
-          <DialogClose aria-label="Close" />
-        </div>
+        <DialogHeader title={`Delete ${groupName}?`} className="mb-3" />
         <p className="mb-3 text-2sm text-text-secondary">
           This removes the group for every member. Posts and membership can't be recovered.
         </p>

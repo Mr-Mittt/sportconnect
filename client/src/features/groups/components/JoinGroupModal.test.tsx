@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { GroupSearchResult } from '@/features/feed/types';
+import type { GroupedSearchResults } from '@/features/groups/useJoinGroupModalData';
+import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { JoinGroupModal } from './JoinGroupModal';
 
 function result(overrides: Partial<GroupSearchResult>): GroupSearchResult {
@@ -18,13 +20,23 @@ function result(overrides: Partial<GroupSearchResult>): GroupSearchResult {
   };
 }
 
+const football: SportProfile = { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' };
+const tennis: SportProfile = { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' };
+
+function grouped(sportProfile: SportProfile, results: GroupSearchResult[]): GroupedSearchResults {
+  return { sportKey: sportProfile.key, sportProfile, results };
+}
+
 const baseProps = {
   isOpen: true,
   onClose: () => {},
   inputValue: '',
   onInputChange: () => {},
   onSearch: () => {},
-  results: [] as GroupSearchResult[],
+  sportProfiles: [football, tennis],
+  selectedSports: new Set<SportKey>(['football', 'tennis']),
+  onToggleSport: () => {},
+  groupedResults: [] as GroupedSearchResults[],
   isSearching: false,
   isSearchError: false,
   pendingGroupIds: new Set<number>(),
@@ -55,15 +67,56 @@ describe('JoinGroupModal', () => {
     expect(onSearch).toHaveBeenCalledTimes(2);
   });
 
+  it('renders a pill per sport profile and reflects selection via aria-pressed', () => {
+    render(<JoinGroupModal {...baseProps} selectedSports={new Set(['football'])} />);
+    expect(screen.getByRole('button', { name: 'Football' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Tennis' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('calls onToggleSport with the clicked sport\'s key', async () => {
+    const user = userEvent.setup();
+    const onToggleSport = vi.fn();
+    render(<JoinGroupModal {...baseProps} onToggleSport={onToggleSport} />);
+
+    await user.click(screen.getByRole('button', { name: 'Tennis' }));
+    expect(onToggleSport).toHaveBeenCalledWith('tennis');
+  });
+
+  it('renders results grouped into sections by sport', () => {
+    render(
+      <JoinGroupModal
+        {...baseProps}
+        groupedResults={[
+          grouped(football, [result({ id: 1, groupName: 'Riverside Ballers' })]),
+          grouped(tennis, [result({ id: 2, sportId: 2, groupName: 'Ace Club' })]),
+        ]}
+      />,
+    );
+    // "Football"/"Tennis" each appear twice: once as a filter pill label, once as a section header.
+    expect(screen.getAllByText('Football')).toHaveLength(2);
+    expect(screen.getByText('Riverside Ballers')).toBeInTheDocument();
+    expect(screen.getAllByText('Tennis')).toHaveLength(2);
+    expect(screen.getByText('Ace Club')).toBeInTheDocument();
+  });
+
   it('shows "Already a member" with no action for a joined group', () => {
-    render(<JoinGroupModal {...baseProps} results={[result({ isMember: true })]} />);
+    render(
+      <JoinGroupModal
+        {...baseProps}
+        groupedResults={[grouped(football, [result({ isMember: true })])]}
+      />,
+    );
     expect(screen.getByText('Already a member')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Request to join' })).not.toBeInTheDocument();
   });
 
   it('shows "Pending" with no action for a group with a pending request', () => {
     render(
-      <JoinGroupModal {...baseProps} results={[result({ id: 5 })]} pendingGroupIds={new Set([5])} />,
+      <JoinGroupModal
+        {...baseProps}
+        groupedResults={[grouped(football, [result({ id: 5 })])]}
+        pendingGroupIds={new Set([5])}
+      />,
     );
     expect(screen.getByText('Pending')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Request to join' })).not.toBeInTheDocument();
@@ -75,7 +128,7 @@ describe('JoinGroupModal', () => {
     render(
       <JoinGroupModal
         {...baseProps}
-        results={[result({ groupName: 'Riverside Ballers' })]}
+        groupedResults={[grouped(football, [result({ groupName: 'Riverside Ballers' })])]}
         onRequestToJoin={onRequestToJoin}
       />,
     );
@@ -99,8 +152,8 @@ describe('JoinGroupModal', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't send the request");
   });
 
-  it('shows an empty state when the search has no results', () => {
-    render(<JoinGroupModal {...baseProps} />);
+  it('shows an empty state when there are no grouped results (no matches, or zero sports selected)', () => {
+    render(<JoinGroupModal {...baseProps} selectedSports={new Set()} groupedResults={[]} />);
     expect(screen.getByText('No groups found.')).toBeInTheDocument();
   });
 });

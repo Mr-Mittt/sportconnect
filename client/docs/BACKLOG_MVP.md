@@ -110,7 +110,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 40 | GRP-1 | Group page restructure — cover banner, Posts/Chat/Settings tabs, inline discovery panel | `DONE` |
 | 41 | GRP-2 | Adapt Settings tab to the full group settings data set — blocked on B7 (group-impl) | `DONE` |
 | 42 | GRP-3 | Members tab — group member management (search, invite, 5 status-grouped lists) | `DONE` |
-| 43 | GRP-6 | Join Group modal — multi-select sport filter + grouped results — A10 shipped, no longer blocked — **new ticket, not in either epic, supersedes GRP-5** | `TODO` |
+| 43 | GRP-6 | Join Group modal — multi-select sport filter + grouped results — **new ticket, not in either epic, supersedes GRP-5** | `DONE` |
 | 44 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3 | `TODO` |
 | 45 | GRP-5 | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
 | **Phase 8 — Chat (new, not in either epic — see `documentation/md/CHAT_SERVICE_INTEGRATION.md`)** | | | |
@@ -1830,7 +1830,8 @@ members/already-invited users from results — don't assume either way.
 ---
 
 ### GRP-6 · Join Group modal — multi-select sport filter + grouped results
-**Status:** `TODO` · **Type:** Enhancement · **Dependency:** A10
+**Status:** `DONE` (2026-07-21, `client/docs/GRP-6_JOIN_GROUP_MODAL_MULTI_SPORT_FILTER.md`) ·
+**Type:** Enhancement · **Dependency:** A10
 (`modules/social/group-impl/docs/BACKLOG_MVP.md` — backend, adds `sportIds` multi-value filter to
 `GET /api/groups/public`) · **Filed:** 2026-07-21 (user-specified UX enhancement, picked up ahead of
 GRP-4 by user decision) · **Supersedes:** GRP-5 (below) — GRP-5's static single-sport indicator is
@@ -1840,11 +1841,12 @@ subsumed by this ticket's interactive multi-select filter; GRP-5 is not built.
 user), but the user specified a materially richer fix instead of a static indicator: an interactive,
 multi-select sport filter — pre-seeded from page context — with results grouped by sport.
 
-**Blocked on A10 (discovered mid-pickup, 2026-07-21):** the first design pass planned a client-side
-fan-out (one `usePublicGroups` request per selected sport, each section resolving independently).
-User decision reversed this in favor of a real backend multi-sport filter instead — simpler client
-state (a single query, one `isLoading`/`isError` pair) at the cost of a small additive backend
-change. **Do not start client implementation until A10 ships.**
+**A10 shipped (2026-07-21, `modules/social/group-impl/docs/A10_MULTI_SPORT_FILTER_PUBLIC_GROUPS.md`)
+— no longer blocked.** The first design pass planned a client-side fan-out (one `usePublicGroups`
+request per selected sport, each section resolving independently). User decision reversed this in
+favor of a real backend multi-sport filter instead — simpler client state (a single query, one
+`isLoading`/`isError` pair) at the cost of a small additive backend change, now live: `GET
+/api/groups/public?sportIds=1&sportIds=2` (repeated query params, confirmed live-verified in A10).
 
 **What ships:**
 - **Header:** center-align `JoinGroupModal`'s header row (currently `flex items-center
@@ -1890,15 +1892,16 @@ change. **Do not start client implementation until A10 ships.**
   off of). Section order follows the filter pills' order. Each section's header matches its filter
   pill's styling — icon (via `getSportIcon()`) + sport name.
 
-**Design questions to resolve at pickup:**
-- Exact pill toggle visual/interaction design for the new local multi-select pill component (can
-  mirror `SportSwitcher`'s `Pill` styling visually without sharing its implementation).
-- Confirm A10's exact param shape (`sportIds` as repeated `?sportIds=1&sportIds=2` vs. comma-joined
-  `?sportIds=1,2`) against however Spring resolves a `List<Long> @RequestParam` by default, and
-  match `apiClient`'s param-serialization behavior to it (don't assume without checking).
-- Given zero-selected-sports now returns a genuine empty *combined* response rather than N
-  independently-resolved sections, confirm the empty-state copy still reads sensibly (e.g. "No
-  groups found" vs. something sport-selection-aware).
+**Design questions — resolved during implementation:**
+- Pill styling mirrors `SportSwitcher`'s `Pill` visually (same active-border treatment) via a
+  separate `SportFilterPill` component in `JoinGroupModal.tsx` — not shared code, since
+  `SportSwitcher`'s `Pill` is single-select.
+- A10's `sportIds` binds via **repeated bare keys** (`?sportIds=1&sportIds=2`), confirmed against
+  Spring's default `List<Long> @RequestParam` binding. axios's *default* array serialization uses
+  bracket notation (`?sportIds[]=1`) instead, which Spring does not bind correctly — fixed via
+  `apiClient`'s new `paramsSerializer: { indexes: null }` (global fix, not a per-call workaround).
+- Zero-selected-sports keeps the existing "No groups found." copy — no separate
+  sport-selection-aware message; reads fine in practice (verified in a live browser walkthrough).
 
 **Out of scope:**
 - Changing `CreateGroupModal`'s existing single-sport locked behavior — untouched by this ticket.

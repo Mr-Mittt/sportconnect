@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 
 interface InviteFriendModalProps {
@@ -29,10 +29,7 @@ export function InviteFriendModal({ isOpen, onClose, initialQuery }: InviteFrien
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
-        <div className="border-hairline-b flex items-center justify-between border-border px-4 py-3">
-          <DialogTitle>Invite a friend</DialogTitle>
-          <DialogClose aria-label="Close" />
-        </div>
+        <DialogHeader title="Invite a friend" className="border-hairline-b border-border px-4 py-3" />
         <div className="border-hairline-b border-border px-4 py-3">
           <Input
             value={query}

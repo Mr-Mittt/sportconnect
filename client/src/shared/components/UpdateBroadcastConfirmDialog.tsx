@@ -1,5 +1,5 @@
 import { Button } from '@/shared/ui/button';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 
 interface UpdateBroadcastConfirmDialogProps {
   isOpen: boolean;
@@ -32,10 +32,7 @@ export function UpdateBroadcastConfirmDialog({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">
-        <div className="mb-3 flex items-start justify-between gap-2">
-          <DialogTitle>Update the active broadcast?</DialogTitle>
-          <DialogClose aria-label="Close" />
-        </div>
+        <DialogHeader title="Update the active broadcast?" className="mb-3" />
         <p className="mb-2 text-2sm text-text-secondary">
           This group already has an active broadcast. Posting a new one will replace it instead of
           creating a second broadcast:

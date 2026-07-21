@@ -2,6 +2,14 @@ import { IconX } from '@tabler/icons-react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as React from 'react';
 import { cn } from '@/shared/lib/utils';
+import { useModalAnchor } from '@/shared/lib/modalAnchor';
+
+/** Gap (px) between the page anchor's bottom edge and an anchored modal's top edge. */
+const ANCHOR_GAP_PX = 12;
+/** Bottom margin (px) kept clear below an anchored modal, same visual breathing room as the default centered position. */
+const ANCHOR_BOTTOM_MARGIN_PX = 16;
+/** Fixed height for modals whose content amount varies a lot (CommentSection, JoinGroupModal — user decision). */
+const FIXED_HEIGHT_VH = 60;
 
 /*
  * shadcn/ui-style Dialog (Radix), hand-written (not CLI-generated — same
@@ -17,7 +25,10 @@ function DialogPortal(props: React.ComponentProps<typeof DialogPrimitive.Portal>
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
 }
 
-function DialogOverlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+function DialogOverlay({
+  className,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
@@ -27,18 +38,48 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
   );
 }
 
-function DialogContent({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+interface DialogContentProps extends React.ComponentProps<typeof DialogPrimitive.Content> {
+  /**
+   * Fixed (not shrink-to-fit) height at `60vh`, for modals whose content
+   * amount varies a lot — CommentSection and JoinGroupModal only (user
+   * decision). Every other modal keeps shrinking to fit its content, up to
+   * whatever ceiling applies (the anchored available space, or `85vh` when
+   * centered).
+   */
+  fixedHeight?: boolean;
+}
+
+function DialogContent({ className, children, style, fixedHeight = false, ...props }: DialogContentProps) {
+  // Page-level anchor (user decision) — Home Feed positions modals below the
+  // sport pill row, Groups below the group pill row ("All") or the group
+  // cover banner (a specific group selected). `null` outside those pages'
+  // `ModalAnchorProvider`, which keeps today's viewport-centered position.
+  const anchorBottom = useModalAnchor();
+
+  let computedStyle: React.CSSProperties | undefined;
+  if (anchorBottom !== null) {
+    const top = anchorBottom + ANCHOR_GAP_PX;
+    const available = `calc(100vh - ${top}px - ${ANCHOR_BOTTOM_MARGIN_PX}px)`;
+    computedStyle = {
+      top,
+      // Fixed height is still capped by the space actually available below
+      // the anchor, so it can never push past the viewport bottom.
+      ...(fixedHeight ? { height: `min(${FIXED_HEIGHT_VH}vh, ${available})` } : { maxHeight: available }),
+    };
+  } else if (fixedHeight) {
+    computedStyle = { height: `${FIXED_HEIGHT_VH}vh` };
+  }
+
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        style={{ ...computedStyle, ...style }}
         className={cn(
-          'shadow-card fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border-hairline border-border-strong bg-surface-2',
+          'shadow-card fixed left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-col overflow-hidden rounded-xl border-hairline border-border-strong bg-surface-2',
+          anchorBottom === null && 'top-1/2 -translate-y-1/2',
+          anchorBottom === null && !fixedHeight && 'max-h-[85vh]',
           className,
         )}
         {...props}
@@ -80,4 +121,30 @@ function DialogClose({ className, ...props }: React.ComponentProps<typeof Dialog
   );
 }
 
-export { Dialog, DialogContent, DialogTitle, DialogClose };
+interface DialogHeaderProps {
+  title: React.ReactNode;
+  /** Applied to the header row itself — each modal's own border/padding treatment. */
+  className?: string;
+  /** Extra behavior beyond dismissing the dialog (e.g. SettingsUnsavedChangesDialog's onCancel). */
+  onCloseClick?: () => void;
+}
+
+/**
+ * Every modal's header, centered (user decision) — a 3-column grid (empty
+ * spacer / centered title / close button) rather than `justify-between`,
+ * which only looked centered by accident when the close button happened to
+ * be the sole element on the right. Not used by `CommentSection`, whose
+ * header shows post author/avatar/timestamp rather than a single title —
+ * this component doesn't fit that shape.
+ */
+function DialogHeader({ title, className, onCloseClick }: DialogHeaderProps) {
+  return (
+    <div className={cn('grid grid-cols-[1fr_auto_1fr] items-center', className)}>
+      <span aria-hidden="true" />
+      <DialogTitle className="text-center">{title}</DialogTitle>
+      <DialogClose aria-label="Close" className="justify-self-end" onClick={onCloseClick} />
+    </div>
+  );
+}
+
+export { Dialog, DialogContent, DialogTitle, DialogClose, DialogHeader };

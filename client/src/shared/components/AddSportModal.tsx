@@ -4,7 +4,7 @@ import { SPORT_PROFILE_CONFIG } from '@/shared/lib/sportProfileConfig';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey } from '@/shared/types/sport';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
@@ -74,10 +74,7 @@ export function AddSportModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
-        <div className="border-hairline-b flex items-center justify-between border-border px-4 py-3">
-          <DialogTitle>Add a sport</DialogTitle>
-          <DialogClose aria-label="Close" />
-        </div>
+        <DialogHeader title="Add a sport" className="border-hairline-b border-border px-4 py-3" />
         <div className="flex flex-col gap-3.5 overflow-y-auto px-4 py-3.5">
           {availableSports.length === 0 ? (
             <p className="text-sm text-text-secondary">
