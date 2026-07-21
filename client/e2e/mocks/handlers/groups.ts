@@ -3,11 +3,23 @@ import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import type {
   CreateGroupPayload,
   Group,
+  GroupInfo,
   GroupSearchResult,
+  GroupSettings,
   JoinRequest,
   JoinRequestPayload,
+  UpdateGroupPayload,
+  UpdateGroupSettingsPayload,
 } from '../../../src/features/feed/types.ts';
-import { mockGroup, mockOwnedGroup, mockPageResponse, mockPublicGroup, mockUser } from '../fixtures.ts';
+import {
+  mockGroup,
+  mockGroupInfo,
+  mockGroupSettings,
+  mockOwnedGroup,
+  mockPageResponse,
+  mockPublicGroup,
+  mockUser,
+} from '../fixtures.ts';
 import { getOverrides } from '../overrides.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
@@ -30,6 +42,12 @@ interface GroupsSession {
   userGroupsState: Group[];
   publicGroupsState: GroupSearchResult[];
   joinRequestsState: JoinRequest[];
+  // GRP-2: keyed by groupId — only mockOwnedGroup has a real fixture entry;
+  // any other groupId 404s (no group-settings row for a group that isn't
+  // part of this session's fixtures).
+  groupSettingsState: Record<number, GroupSettings>;
+  // GRP-2: rules/schedule, same keying reasoning as groupSettingsState.
+  groupInfoState: Record<number, GroupInfo>;
   nextGroupId: number;
   nextJoinRequestId: number;
 }
@@ -47,6 +65,8 @@ function defaultGroupsSession(): GroupsSession {
       mockPublicGroup,
     ],
     joinRequestsState: [],
+    groupSettingsState: { [mockOwnedGroup.id]: { ...mockGroupSettings } },
+    groupInfoState: { [mockOwnedGroup.id]: { ...mockGroupInfo } },
     nextGroupId: 100,
     nextJoinRequestId: 100,
   };
@@ -169,6 +189,88 @@ export const groupHandlers: HttpHandler[] = [
     return HttpResponse.json(
       apiResponse(mockPageResponse(pending), 'Join requests retrieved successfully'),
     );
+  }),
+
+  // GRP-1/GRP-2: Privacy toggle and rules/schedule both go through this same
+  // endpoint. No handler existed for it before GRP-2 — Privacy's own e2e
+  // coverage never exercised a real PUT call until this ticket added one.
+  http.put('/api/groups/:groupId', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    const existingGroup = session.userGroupsState.find((candidate) => candidate.id === groupId);
+    if (!existingGroup) {
+      return HttpResponse.json(apiError('Group not found'), { status: 404 });
+    }
+    const body = (await request.json()) as UpdateGroupPayload;
+    const updatedGroup: Group = {
+      ...existingGroup,
+      ...(body.groupName !== undefined ? { groupName: body.groupName } : {}),
+      ...(body.description !== undefined ? { description: body.description } : {}),
+      ...(body.avatarUrl !== undefined ? { avatarUrl: body.avatarUrl } : {}),
+      ...(body.coverUrl !== undefined ? { coverUrl: body.coverUrl } : {}),
+      ...(body.isPrivate !== undefined ? { isPrivate: body.isPrivate } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+    session.userGroupsState = session.userGroupsState.map((candidate) =>
+      candidate.id === groupId ? updatedGroup : candidate,
+    );
+    // rules/schedule aren't part of GroupResponse but are persisted
+    // server-side — update groupInfoState too so a later GET .../info
+    // reflects them, matching the real backend's behavior.
+    const existingInfo = session.groupInfoState[groupId];
+    if (existingInfo && (body.rules !== undefined || body.schedule !== undefined)) {
+      session.groupInfoState[groupId] = {
+        ...existingInfo,
+        ...(body.rules !== undefined ? { rules: body.rules } : {}),
+        ...(body.schedule !== undefined ? { schedule: body.schedule } : {}),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return HttpResponse.json(apiResponse(updatedGroup, 'Group updated successfully'));
+  }),
+
+  // GRP-2
+  http.get('/api/groups/:groupId/info', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const info = groupsSessions.get(sessionIdFromRequest(request)).groupInfoState[groupId];
+    if (!info) {
+      return HttpResponse.json(apiError('Group not found'), { status: 404 });
+    }
+    return HttpResponse.json(apiResponse(info, 'Info retrieved successfully'));
+  }),
+
+  http.get('/api/groups/:groupId/settings', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const settings = groupsSessions.get(sessionIdFromRequest(request)).groupSettingsState[groupId];
+    if (!settings) {
+      return HttpResponse.json(apiError('Group settings not found'), { status: 404 });
+    }
+    return HttpResponse.json(apiResponse(settings, 'Settings retrieved successfully'));
+  }),
+
+  http.put('/api/groups/:groupId/settings', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    const existing = session.groupSettingsState[groupId];
+    if (!existing) {
+      return HttpResponse.json(apiError('Group settings not found'), { status: 404 });
+    }
+    const body = (await request.json()) as UpdateGroupSettingsPayload;
+    const updated: GroupSettings = {
+      ...existing,
+      ...body,
+      updatedAt: new Date().toISOString(),
+    };
+    session.groupSettingsState[groupId] = updated;
+    return HttpResponse.json(apiResponse(updated, 'Settings updated successfully'));
   }),
 ];
 
