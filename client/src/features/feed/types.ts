@@ -198,6 +198,31 @@ export interface UpdateGroupPayload {
   schedule?: string;
 }
 
+// GroupSettingsResponse (GET/PUT /api/groups/{groupId}/settings). B7 replaced
+// a manually-set maxMembers with a fixed group-type tier system — the real
+// DTO still carries a resolved `maxMembers` number, but GRP-2 deliberately
+// doesn't display it (no UI to change it yet — that's B10, not built), so
+// it's intentionally omitted here rather than modeled and left unused.
+export interface GroupSettings {
+  id: number;
+  groupId: number;
+  allowMemberPosts: boolean;
+  requirePostApproval: boolean;
+  allowMemberInvites: boolean;
+  groupTypeName: string;
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+}
+
+// UpdateGroupSettingsRequest — owner-only (stricter than UpdateGroupPayload's
+// owner+admin), partial update. maxMembers was removed server-side by B7 —
+// never send it.
+export interface UpdateGroupSettingsPayload {
+  allowMemberPosts?: boolean;
+  requirePostApproval?: boolean;
+  allowMemberInvites?: boolean;
+}
+
 // CreateJoinRequestRequest — looked up by group NAME server-side
 // (GroupServiceImpl.findByGroupName), not id; there is no groupId field on
 // this request at all.

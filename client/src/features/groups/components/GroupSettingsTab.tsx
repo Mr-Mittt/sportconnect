@@ -1,5 +1,42 @@
-import type { Group } from '@/features/feed/types';
+import type { Group, GroupSettings, UpdateGroupSettingsPayload } from '@/features/feed/types';
 import { Button } from '@/shared/ui/button';
+
+interface ToggleFieldRowProps {
+  label: string;
+  description: string;
+  value: boolean;
+  canEdit: boolean;
+  onChange: (value: boolean) => void;
+}
+
+/** One `GroupSettings` boolean row — same visual shape as the Privacy row below. */
+function ToggleFieldRow({ label, description, value, canEdit, onChange }: ToggleFieldRowProps) {
+  return (
+    <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
+      <div>
+        <div className="text-2sm font-medium text-text-primary">{label}</div>
+        <div className="text-2xs text-text-muted">{description}</div>
+      </div>
+      {canEdit ? (
+        <button
+          type="button"
+          onClick={() => onChange(!value)}
+          aria-pressed={value}
+          aria-label={`${label}: ${value ? 'On' : 'Off'}`}
+          className={`cursor-pointer rounded-full px-3 py-1.5 text-2sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent ${
+            value
+              ? 'border-2 border-border-accent font-medium text-text-primary'
+              : 'border-hairline border-border bg-surface-1 text-text-secondary'
+          }`}
+        >
+          {value ? 'On' : 'Off'}
+        </button>
+      ) : (
+        <span className="text-2sm text-text-secondary">{value ? 'On' : 'Off'}</span>
+      )}
+    </div>
+  );
+}
 
 interface GroupSettingsTabProps {
   group: Group;
@@ -12,22 +49,39 @@ interface GroupSettingsTabProps {
   isLeaving: boolean;
   isLeaveError: boolean;
   onRequestDelete: () => void;
+  /** GRP-2 — undefined while loading, per `useGroupSettings`. */
+  groupSettings: GroupSettings | undefined;
+  isSettingsLoading: boolean;
+  isSettingsError: boolean;
+  onUpdateSetting: <K extends keyof UpdateGroupSettingsPayload>(
+    key: K,
+    value: UpdateGroupSettingsPayload[K],
+  ) => void;
+  hasUnsavedSettingsChanges: boolean;
+  onSaveSettings: () => void;
+  isSavingSettings: boolean;
+  isSaveSettingsError: boolean;
 }
 
 /**
  * Settings tab (`design-reference-group-feed.html`'s Settings, extended per
- * GRP-1's decided scope — see `client/docs/BACKLOG_MVP.md`). Deliberately
- * narrower than the reference: only Privacy, Leave, and Delete are wired —
- * the `GroupSettings` toggle fields (`allowMemberPosts`/etc.) and the
- * Notifications toggle are out of scope here (GRP-2, blocked on B7).
+ * GRP-1's decided scope, then GRP-2 — see `client/docs/BACKLOG_MVP.md`).
+ * The Notifications toggle shown in the reference has no backing endpoint
+ * anywhere and stays out of scope.
  *
  * Gating (matches the real backend, not the reference — which shows no
  * gating at all):
- * - Member: everything read-only, no Delete button.
- * - Admin: can edit Privacy (`PUT /api/groups/{groupId}` is owner/admin), no
- *   Delete button.
- * - Owner: can edit Privacy, Delete Group button at the very bottom
- *   (`DELETE /api/groups/{groupId}` is owner-only).
+ * - Privacy (`updateGroup`) — owner+admin edit, member read-only. Applies
+ *   immediately on click, no draft/Save (GRP-1, unchanged by GRP-2).
+ * - The three `GroupSettings` toggles below (`updateGroupSettings`, B7) —
+ *   **owner-only** edit; admin and member see the current value as plain
+ *   text. Draft-based: edits stage locally, a Save button (disabled until
+ *   something changed) persists them. Leaving the tab/group/page with a
+ *   pending draft is guarded by the parent's `useSettingsUnsavedGuard`.
+ * - Group type (read-only, all roles) — no cap number shown; changing type
+ *   isn't built yet (B10).
+ * - Member: no Delete button. Admin: no Delete button. Owner: Delete Group
+ *   button at the very bottom (`DELETE /api/groups/{groupId}` is owner-only).
  * Leave Group is available to any non-owner member; the owner must transfer
  * ownership first (existing backend rule) — disabled with an explanatory
  * note here rather than letting it 400.
@@ -42,6 +96,14 @@ export function GroupSettingsTab({
   isLeaving,
   isLeaveError,
   onRequestDelete,
+  groupSettings,
+  isSettingsLoading,
+  isSettingsError,
+  onUpdateSetting,
+  hasUnsavedSettingsChanges,
+  onSaveSettings,
+  isSavingSettings,
+  isSaveSettingsError,
 }: GroupSettingsTabProps) {
   const isOwner = currentUserRole === 'group_owner';
   const isAdmin = currentUserRole === 'group_admin';
@@ -101,6 +163,69 @@ export function GroupSettingsTab({
       )}
       {!canEdit && (
         <p className="-mt-2.5 text-2xs text-text-muted">Only the owner and admins can change this.</p>
+      )}
+
+      <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
+        <div>
+          <div className="text-2sm font-medium text-text-primary">Group type</div>
+          <div className="text-2xs text-text-muted">Determines this group's member cap</div>
+        </div>
+        {isSettingsLoading ? (
+          <span className="text-2sm text-text-muted">Loading…</span>
+        ) : isSettingsError ? (
+          <span role="alert" className="text-2sm text-text-danger">
+            Couldn't load
+          </span>
+        ) : (
+          <span className="text-2sm text-text-secondary">{groupSettings?.groupTypeName}</span>
+        )}
+      </div>
+
+      {isSettingsError ? null : (
+        <>
+          <ToggleFieldRow
+            label="Allow member posts"
+            description="Members can post in this group"
+            value={groupSettings?.allowMemberPosts ?? false}
+            canEdit={isOwner}
+            onChange={(value) => onUpdateSetting('allowMemberPosts', value)}
+          />
+          <ToggleFieldRow
+            label="Require post approval"
+            description="Owner/admin must approve member posts before they're visible"
+            value={groupSettings?.requirePostApproval ?? false}
+            canEdit={isOwner}
+            onChange={(value) => onUpdateSetting('requirePostApproval', value)}
+          />
+          <ToggleFieldRow
+            label="Allow member invites"
+            description="Members can invite friends to join this group"
+            value={groupSettings?.allowMemberInvites ?? false}
+            canEdit={isOwner}
+            onChange={(value) => onUpdateSetting('allowMemberInvites', value)}
+          />
+          {isOwner ? (
+            <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
+              {isSaveSettingsError ? (
+                <p role="alert" className="text-2xs text-text-danger">
+                  Couldn't save settings. Try again.
+                </p>
+              ) : (
+                <span />
+              )}
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={onSaveSettings}
+                disabled={!hasUnsavedSettingsChanges || isSavingSettings || isSettingsLoading}
+              >
+                {isSavingSettings ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+          ) : (
+            <p className="-mt-2.5 text-2xs text-text-muted">Only the owner can change these.</p>
+          )}
+        </>
       )}
 
       <div className="border-hairline-t border-border pt-3.5">

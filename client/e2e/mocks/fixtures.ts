@@ -4,6 +4,7 @@ import type {
   Comment,
   Group,
   GroupSearchResult,
+  GroupSettings,
   Hashtag,
   JoinRequest,
   PageResponse,
@@ -132,6 +133,19 @@ export const mockOwnedGroup: Group = {
   createdAt: '2026-06-05T10:00:00',
   updatedAt: '2026-06-05T10:00:00',
   pinnedPosts: null,
+};
+
+// GRP-2: settings for mockOwnedGroup (the only group the test user owns) —
+// GET/PUT /api/groups/:groupId/settings.
+export const mockGroupSettings: GroupSettings = {
+  id: 1,
+  groupId: mockOwnedGroup.id,
+  allowMemberPosts: true,
+  requirePostApproval: false,
+  allowMemberInvites: false,
+  groupTypeName: 'DEFAULT',
+  createdAt: '2026-06-05T10:00:00',
+  updatedAt: '2026-06-05T10:00:00',
 };
 
 export const mockPost: Post = {

@@ -1046,6 +1046,25 @@ and **GRP-2** (client, blocked on B7) to extend Settings with the remaining `Gro
 backend (register → add sport → create group → Posts/Chat/Settings tabs, owner-role Settings gating
 confirmed with real API responses).
 
+**GRP-2 DONE** (2026-07-21, `client/docs/GRP-2_SETTINGS_TAB_FULL_DATA_SET.md`): extended the Settings
+tab with the three owner-only `GroupSettings` toggles (`allowMemberPosts`/`requirePostApproval`/
+`allowMemberInvites`) plus a read-only group-type row — B7 shipped since GRP-1 filed this, replacing
+the originally-planned settable `maxMembers` field with fixed group-type tiers, so no cap number is
+shown at all (B10, not built, is what would make one meaningful again). Added a draft/Save flow
+(disabled until something changed) and a Discard/Save confirmation guard covering three "leaving with
+unsaved changes" triggers: tab/group switch, in-app navigation, and browser close/refresh (the last
+can only ever show the browser's own native prompt, a hard platform limitation). The in-app-navigation
+trigger needed `useBlocker`, which required migrating the whole app from `<BrowserRouter>` to
+`createBrowserRouter`/`RouterProvider` — done first as an isolated, separately-verified step (not a
+formally tracked ticket, referenced as "ROUTER-1" in code comments). A mid-ticket request to add
+localization was deliberately deferred to its own unscoped **I18N-1** ticket
+(`client/docs/BACKLOG_V1.md`) rather than bundled in. 417/417 Vitest (up from 395), `tsc -b`/`eslint`
+clean, Storybook build clean, 35/35 Playwright `e2e` (34 pre-existing + a new `group-settings.spec.ts`
+covering toggle+Save+persistence and both testable unsaved-changes-guard triggers);
+`client/docs/E2E_OVERVIEW.md` updated to match. Also moved **B10** (group type change flow) from the
+group-impl MVP backlog to its V1 backlog — B10 was the last remaining MVP ticket there, so the group
+module's MVP backlog is now fully `DONE`.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and

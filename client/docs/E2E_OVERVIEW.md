@@ -141,6 +141,7 @@ e2e/
     a11y.spec.ts
     auth-journey.spec.ts
     feed-groups-journey.spec.ts
+    group-settings.spec.ts
     msw-setup.spec.ts
     post-deep-link.spec.ts
   visual/                    # `visual-regression` project specs
@@ -203,11 +204,13 @@ Groups:
 | Fixture | id | sportId | `currentUserRole` | Notes |
 |---|---|---|---|---|
 | `mockGroup` | 1 | 5 (Soccer) | `group_member` | "Friday Night Football" |
-| `mockOwnedGroup` | 3 | 2 (Tennis) | `group_owner` | "Weekend Tennis Ladder" — the owner/admin broadcast-toggle fixture |
+| `mockOwnedGroup` | 3 | 2 (Tennis) | `group_owner` | "Weekend Tennis Ladder" — the owner/admin broadcast-toggle fixture, also GRP-2's Settings-tab fixture |
 | `mockPublicGroup` | 2 | 6 (Basketball) | n/a (not joined) | "Riverside Hoopers" — the "request to join" fixture |
 
 `mockHashtag`: `fridayrun`, `usageCount: 12`. `mockComment`: one root comment on `mockPost` (matches its
-`commentCount: 1`).
+`commentCount: 1`). `mockGroupSettings`: settings for `mockOwnedGroup` (`groupTypeName: 'DEFAULT'`,
+all three toggles off except `allowMemberPosts`) — the only group with a `groupSettingsState` entry in
+`groups.ts`'s handler session (any other groupId 404s `GET/PUT .../settings`).
 
 **Timestamps are never hardcoded** — `hoursAgo`/`hoursFromNow` (`src/shared/lib/mockClock.ts`) compute
 relative to load time. A hardcoded broadcast expiry date drifting into the past (and silently breaking
@@ -300,6 +303,24 @@ This spec destructures `mockSessionId` directly (needed by the seed/override adm
 | Test | What it checks | Notes |
 |---|---|---|
 | zero sport profiles | `seedZeroSportProfilesOnNextLoad(mockSessionId)` → only "All" + "Add sport" render, 2 buttons total, no crash | SPORT-1's zero-profile edge case — can't coexist with the main journey's 3-sport-cap step 9, hence a separate test |
+
+### `e2e/flows/group-settings.spec.ts` (GRP-2, one `test()` with 4 steps)
+
+Uses `mockOwnedGroup` ("Weekend Tennis Ladder") — the only fixture group where the test user is
+`group_owner`, required for the three owner-only `GroupSettings` toggles to be editable at all.
+
+| Step | What it checks | Notes |
+|---|---|---|
+| 1. loads settings | Group type ("DEFAULT") and the three toggles render, Save disabled with no draft | |
+| 2. toggle + Save persists | Toggle "Allow member invites" on → Save enables → Save → button disables → reload + re-select group + re-open Settings → still on | Confirms a real server round trip via `PUT /api/groups/:groupId/settings`, not just the optimistic cache write |
+| 3. tab-switch guard, Discard | Toggle off (unsaved) → click Posts tab → Discard/Save dialog appears → Discard → lands on Posts tab; re-opening Settings shows step 2's saved value untouched | Covers the guard's in-page tab-switch trigger |
+| 4. in-app-nav guard, Save | Toggle off (unsaved) → click Home in `NavTabs` → dialog appears, URL still `/groups` (blocked) → Save changes → proceeds to `/` | Covers the `useBlocker`-backed in-app-navigation trigger (requires the data router, ROUTER-1) |
+
+**Not covered here** (see `useSettingsUnsavedGuard.test.tsx`/`GroupSettingsTab.test.tsx` for these instead):
+the guard's third trigger (`beforeunload` on browser close/refresh/typed-URL nav) — that can only ever
+show the browser's own native prompt, nothing a Playwright assertion can meaningfully exercise; admin/
+member read-only rendering of the three toggles (pure component-level concern, no real navigation
+involved).
 
 ### `e2e/flows/msw-setup.spec.ts` (proves the mock server itself works)
 

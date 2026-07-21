@@ -4,10 +4,19 @@ import type {
   CreateGroupPayload,
   Group,
   GroupSearchResult,
+  GroupSettings,
   JoinRequest,
   JoinRequestPayload,
+  UpdateGroupSettingsPayload,
 } from '../../../src/features/feed/types.ts';
-import { mockGroup, mockOwnedGroup, mockPageResponse, mockPublicGroup, mockUser } from '../fixtures.ts';
+import {
+  mockGroup,
+  mockGroupSettings,
+  mockOwnedGroup,
+  mockPageResponse,
+  mockPublicGroup,
+  mockUser,
+} from '../fixtures.ts';
 import { getOverrides } from '../overrides.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
@@ -30,6 +39,10 @@ interface GroupsSession {
   userGroupsState: Group[];
   publicGroupsState: GroupSearchResult[];
   joinRequestsState: JoinRequest[];
+  // GRP-2: keyed by groupId — only mockOwnedGroup has a real fixture entry;
+  // any other groupId 404s (no group-settings row for a group that isn't
+  // part of this session's fixtures).
+  groupSettingsState: Record<number, GroupSettings>;
   nextGroupId: number;
   nextJoinRequestId: number;
 }
@@ -47,6 +60,7 @@ function defaultGroupsSession(): GroupsSession {
       mockPublicGroup,
     ],
     joinRequestsState: [],
+    groupSettingsState: { [mockOwnedGroup.id]: { ...mockGroupSettings } },
     nextGroupId: 100,
     nextJoinRequestId: 100,
   };
@@ -169,6 +183,37 @@ export const groupHandlers: HttpHandler[] = [
     return HttpResponse.json(
       apiResponse(mockPageResponse(pending), 'Join requests retrieved successfully'),
     );
+  }),
+
+  // GRP-2
+  http.get('/api/groups/:groupId/settings', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const settings = groupsSessions.get(sessionIdFromRequest(request)).groupSettingsState[groupId];
+    if (!settings) {
+      return HttpResponse.json(apiError('Group settings not found'), { status: 404 });
+    }
+    return HttpResponse.json(apiResponse(settings, 'Settings retrieved successfully'));
+  }),
+
+  http.put('/api/groups/:groupId/settings', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    const existing = session.groupSettingsState[groupId];
+    if (!existing) {
+      return HttpResponse.json(apiError('Group settings not found'), { status: 404 });
+    }
+    const body = (await request.json()) as UpdateGroupSettingsPayload;
+    const updated: GroupSettings = {
+      ...existing,
+      ...body,
+      updatedAt: new Date().toISOString(),
+    };
+    session.groupSettingsState[groupId] = updated;
+    return HttpResponse.json(apiResponse(updated, 'Settings updated successfully'));
   }),
 ];
 

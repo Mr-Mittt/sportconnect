@@ -2,7 +2,7 @@
 
 **Version:** V1
 **Module:** `client`
-**Last updated:** 2026-07-17
+**Last updated:** 2026-07-21
 **Prerequisite:** MVP backlog (`client/docs/BACKLOG_MVP.md`) should be closed, or at least the ticket
 that filed an entry here, before picking anything up.
 
@@ -22,6 +22,7 @@ that filed an entry here, before picking anything up.
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | ANON-1 | Decide and scope anonymous/logged-out post viewing | `TODO` |
+| 2 | I18N-1 | Introduce i18n / multi-language UI text support | `TODO` |
 
 ---
 
@@ -84,6 +85,48 @@ resulting work — **it does not implement anything itself.**
 
 - Any actual implementation — this ticket is the decision + scoping pass, not the build.
 - Public group/profile pages — only in scope if the decision above explicitly extends there.
+
+#### Tests
+
+Not applicable yet — write these when the ticket is actually scoped into an implementation ticket.
+
+---
+
+### I18N-1 · Introduce i18n / multi-language UI text support
+**Status:** `TODO` · **Type:** Infrastructure (Foundation) · **Filed:** 2026-07-21, raised during
+GRP-2 scoping then deliberately deferred out of it — GRP-2 is scoped narrowly (Settings tab data
+set), and app-wide i18n is a cross-cutting foundation change, not a per-tab feature.
+
+#### Origin
+
+Raised mid-GRP-2 as a "let's add localization" idea, then explicitly deferred by the user to its
+own V1 ticket rather than bundled in. Nothing about *which* languages, *how much* of the app, or
+*which library* was discussed yet — this ticket is unscoped and needs a proper Phase 1/2/3 pass
+(same as any other ticket) when picked up, not just "add react-i18next."
+
+#### Questions to resolve when picked up
+
+1. Which language(s) beyond English, and is there a priority order (drives whether this is a
+   single extra locale or a general N-locale framework from day one)?
+2. Scope: whole app at once, or one page/feature first (e.g. Settings tab, since that's what
+   prompted this) with the rest following incrementally?
+3. Library choice — `react-i18next` is the common React default, but confirm against this repo's
+   "no second [library category] without a conversation" convention (`client/CLAUDE.md`) before
+   adding a new dependency category.
+4. Where do translated strings live — JSON files per locale, a translation-management service, or
+   something else? Who owns keeping them in sync as new UI copy ships?
+5. Does this affect `client/CLAUDE.md`'s testing conventions (Vitest/RTL assertions currently match
+   on literal English strings in many places) — a locale switch could break a lot of existing
+   tests if not scoped carefully (e.g. test against `data-testid`/roles instead of text where i18n
+   lands, or keep tests locale-pinned to English).
+6. Any backend-side implication (e.g. does any user-facing string currently originate server-side,
+   like validation messages surfaced verbatim) that also needs translation, or is this purely a
+   client-rendered-text concern?
+
+#### Out of scope for this filing
+
+- Any actual implementation, library choice, or locale list — this ticket is unscoped, filed only
+  to not lose the idea; scoping happens at pickup.
 
 #### Tests
 
