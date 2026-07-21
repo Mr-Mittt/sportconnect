@@ -174,6 +174,33 @@ export interface JoinRequest {
   updatedAt: string; // ISO timestamp
 }
 
+// GroupInvitationResponse. status is a plain string on the wire (verified
+// against GroupServiceImpl) — 5 literals: the two in-flight ones GRP-3 shows
+// (pending_owner: awaiting owner/admin approval; pending_user: approved,
+// awaiting the invitee) plus 3 terminal ones no in-scope endpoint returns
+// today (getMemberSentInvitations only ever returns the two pending ones).
+export type InvitationStatus =
+  | 'pending_owner'
+  | 'pending_user'
+  | 'accepted'
+  | 'declined_by_owner'
+  | 'declined_by_user';
+
+export interface GroupInvitation {
+  id: number;
+  groupId: number;
+  groupName: string;
+  inviterId: string;
+  inviterFullName: string;
+  inviteeId: string;
+  inviteeFullName: string;
+  status: InvitationStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null; // ISO timestamp
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+}
+
 // CreateGroupRequest. sportId/groupName are the only server-required
 // fields (@NotNull/@NotBlank) — isPrivate has no required-validation
 // annotation but is still sent explicitly (defaults to false client-side)

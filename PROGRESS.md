@@ -1076,6 +1076,26 @@ unsaved-changes dialog as the toggles, per user decision. New MSW `PUT /api/grou
 handler — didn't exist at all before, so Privacy's own e2e coverage had never exercised a real call
 to it either. 430/430 Vitest (up from 417), clean `tsc -b`/`eslint`/Storybook build, 35/35 e2e.
 
+**GRP-3 DONE** (2026-07-21, `client/docs/GRP-3_MEMBERS_TAB.md`): new Members tab in `GroupTabs`
+(Posts → Chat → **Members** → Settings) — a "find member" filter + "Invite friend" button, then 5
+status-grouped lists loaded together on tab activation: "Waiting for group approve" (owner/admin
+only, real `GET/PUT /groups/{id}/join-requests*`, Accept/Decline), "Waiting for user accept" (B8's
+`GET /groups/{id}/invitations/sent`, hidden when empty, per-row label distinguishing
+`pending_owner`/`pending_user`), "Group administrator" (owner first) / "Members" (one
+`GET /groups/{id}/members` fetch split client-side by role, size=100 — none of the 3 endpoints
+support a keyword filter, a known MVP scaling limit), and "Blacklist" (permanent "Coming soon" — no
+backend concept exists). `InviteFriendModal` ships mocked on purpose (pre-filled, static "coming
+soon" results, no network call) — real search+invite is filed as **GRP-4**. Found and closed a real
+gap: `a11y.spec.ts` had zero Groups-page axe coverage despite GRP-1/GRP-2 both claiming to extend it
+— added one baseline check (owner role, Members tab, 1280px) rather than carrying the gap forward
+again. Same-day follow-up: the signed-in user's own row in "Group administrator"/"Members" now shows
+a muted "(you)" suffix (`GroupMembersTab`'s new `currentUserId` prop). 447/447 Vitest,
+`tsc -b`/`eslint`/Storybook build clean, 38/38 Playwright `e2e` (new `group-members.spec.ts`, no
+regression in `group-settings.spec.ts`). Verified live against a real running backend beyond MSW:
+registered two users, created a group, ran a full
+request→accept→re-fetch round trip via curl — every new endpoint's response shape matched the
+client types exactly, no divergence from the design.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and

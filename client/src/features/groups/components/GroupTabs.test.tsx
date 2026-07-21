@@ -31,4 +31,17 @@ describe('GroupTabs', () => {
     await user.keyboard('{ArrowUp}');
     expect(onChange).toHaveBeenLastCalledWith('posts');
   });
+
+  // GRP-3
+  it('renders a Members tab between Chat and Settings and calls onChange when clicked', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<GroupTabs activeTab="posts" onChange={onChange} />);
+
+    const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent);
+    expect(tabs).toEqual(['Posts', 'Chat', 'Members', 'Settings']);
+
+    await user.click(screen.getByRole('tab', { name: 'Members' }));
+    expect(onChange).toHaveBeenCalledWith('members');
+  });
 });

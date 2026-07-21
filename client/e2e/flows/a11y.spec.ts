@@ -63,6 +63,26 @@ test('sport-filtered state — axe reports no critical/serious violations', asyn
 });
 
 /*
+ * GRP-3: baseline axe coverage for the Groups page — GRP-1/GRP-2 both
+ * claimed to extend this file in their own acceptance criteria but neither
+ * actually added a Groups-page block, so this establishes it rather than
+ * silently carrying the gap forward again. One check at 1280px, owner role,
+ * Members tab (the richest of the per-group tabs — 5 sections, role-gated
+ * content, action buttons) — not a full breakpoint/tab matrix backfill for
+ * Posts/Chat/Settings, which is out of proportion for this ticket.
+ */
+test('groups page — Members tab (owner) — axe reports no critical/serious violations', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await seedAuthenticatedSession(page, '/groups');
+  await page.getByRole('group', { name: 'Group filter' }).getByRole('button', { name: /Weekend Tennis Ladder/ }).click();
+  await page.getByRole('tab', { name: 'Members' }).click();
+  await expect(page.getByRole('region', { name: 'Group administrator' })).toBeVisible();
+  expect(await gatingViolations(page)).toEqual([]);
+});
+
+/*
  * AUTH-6: same a11y gate extended to Login/Register — logged-out routes, not
  * behind ProtectedRoute, so no seedAuthenticatedSession() call. MSW's default
  * /auth/refresh handler 401s without a cookie (fixtures.ts), which is the

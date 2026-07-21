@@ -19,4 +19,7 @@ export const feedKeys = {
   joinRequests: (userId: string) => [...feedKeys.all, 'join-requests', userId] as const,
   groupSettings: (groupId: number) => [...feedKeys.all, 'group-settings', groupId] as const,
   groupInfo: (groupId: number) => [...feedKeys.all, 'group-info', groupId] as const,
+  groupMembers: (groupId: number) => [...feedKeys.all, 'group-members', groupId] as const,
+  groupJoinRequests: (groupId: number) => [...feedKeys.all, 'group-join-requests', groupId] as const,
+  sentInvitations: (groupId: number) => [...feedKeys.all, 'sent-invitations', groupId] as const,
 };
