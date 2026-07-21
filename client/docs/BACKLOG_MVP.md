@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-07-20
+**Last updated:** 2026-07-21
 
 ---
 
@@ -108,9 +108,10 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 39 | FEED-11 | Visual regression harness for the post comment modal — **new ticket, not in either epic** | `DONE` |
 | **Phase 7 — Groups page epic (new, not in either epic — see deferred-items table below)** | | | |
 | 40 | GRP-1 | Group page restructure — cover banner, Posts/Chat/Settings tabs, inline discovery panel | `DONE` |
-| 41 | GRP-2 | Adapt Settings tab to the full group settings data set — blocked on B7 (group-impl) | `TODO` |
+| 41 | GRP-2 | Adapt Settings tab to the full group settings data set — blocked on B7 (group-impl) | `DONE` |
 | 42 | GRP-3 | Members tab — group member management (search, invite, 5 status-grouped lists) | `TODO` |
 | 43 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3 | `TODO` |
+| 44 | GRP-5 | Join Group modal — show the active sport filter — **new ticket, not in either epic** | `TODO` |
 
 **Dependencies:**
 ```
@@ -1665,21 +1666,30 @@ scope here, flagged as a follow-up, not silently dropped.
 ---
 
 ### GRP-2 · Adapt Settings tab to the full group settings data set
-**Status:** `TODO` · **Type:** Feature · **Dependency:** B7 (`modules/social/group-impl/docs/BACKLOG_MVP.md`, `TODO`) ·
+**Status:** `DONE` (2026-07-21) · **Summary:** `client/docs/GRP-2_SETTINGS_TAB_FULL_DATA_SET.md`
+**Type:** Feature · **Dependency:** B7 (`modules/social/group-impl/docs/BACKLOG_MVP.md`, `DONE`)
+
 **Origin:** filed alongside GRP-1 — GRP-1 ships the Settings tab with only Privacy/Leave/Delete
 (unambiguous real endpoints). The four `GroupSettings` fields (`allowMemberPosts`/
 `requirePostApproval`/`allowMemberInvites`/`maxMembers`) are also real but were deliberately left
 out of GRP-1 pending B7's audit of the split-contract permission model.
 
-**What ships:** once B7 confirms the contract and permission enforcement, extend the Settings tab
-(built in GRP-1) with toggles for `allowMemberPosts`/`requirePostApproval`/`allowMemberInvites` and
-a number field for `maxMembers`, calling `GET`/`PUT /api/groups/{groupId}/settings`. Same gating
-shape as GRP-1's Privacy toggle unless B7 finds a reason to differ (owner-only per the current
-`CLAUDE.md` role table — confirm against B7's findings, don't assume GRP-1's owner/admin split
-carries over unchanged).
+**Delta (executed, corrects the draft above):** B7 shipped after this ticket was filed and replaced
+`maxMembers` entirely with fixed group-type tiers (read-only, no settable cap) — **no number field
+was built**; only a read-only "Group type" row shows the tier name. The three toggles are
+**owner-only** (B7 confirmed `updateGroupSettings` is stricter than Privacy's owner+admin
+`updateGroup`), not "same gating shape as Privacy" as originally guessed. Shipped with a
+draft/Save flow and a Discard/Save unsaved-changes guard (tab switch, group switch, in-app
+navigation via a new `useBlocker`-dependent router migration, plus the browser's native
+close/refresh prompt) — beyond the ticket's original text, added mid-session. Full writeup: the
+summary doc above.
 
-**Not yet scoped in detail** — full acceptance criteria to be written when B7 lands and this ticket
-is picked up.
+**Delta 2 (same day, requested after the above shipped):** reorganized into two default-expanded
+collapsible sections — **General** (name/description, Privacy, rules/schedule, Group type) and
+**Permission** (the three toggles) — and added `rules`/`schedule` as new editable fields (existed
+on the backend since B6b, never wired client-side — `GroupResponse` doesn't return them, only
+`GET .../info` does). Rules/schedule share the *same* draft/Save/guard as the toggles, per explicit
+user decision, rather than a second independent save flow. Full writeup: the summary doc above.
 
 ---
 
@@ -1782,6 +1792,43 @@ modal-wide failure. Confirm at pickup whether `U6`'s response already excludes e
 members/already-invited users from results — don't assume either way.
 
 **Not yet scoped in detail** — full acceptance criteria to be written when picked up.
+
+---
+
+### GRP-5 · Join Group modal — show the active sport filter
+**Status:** `TODO` · **Type:** Enhancement · **Filed:** 2026-07-21, found while explaining existing
+behavior (not a bug report — the filter itself works correctly, only its visibility doesn't)
+
+**Origin:** confirmed via code read (`GroupsPage.tsx`/`useJoinGroupModalData.ts`/`usePublicGroups.ts`)
+that `JoinGroupModal`'s search **does** apply the Groups page's active sport filter server-side —
+`GroupsPage` computes `lockedSport = activeSport !== 'all' ? activeSport : null` and passes its
+`sportId` through `useJoinGroupModalData` into `usePublicGroups`, which sends it as a `GET
+/api/groups/public?sportId=...` query param. When `activeSport === 'all'`, no `sportId` is sent and
+results span every sport.
+
+**The gap:** `CreateGroupModal` already receives this same `lockedSport` value and visibly shows/locks
+the sport in its form — `JoinGroupModal` does not. It has no `lockedSport` prop at all; the filtering
+happens silently. A user on, say, the Basketball tab who opens Join Group and doesn't see a football
+group they expected has no indication in the modal itself that results are scoped to Basketball —
+they'd have to notice the sport tab underneath to infer why.
+
+**What ships:** thread `lockedSport` (already computed in `GroupsPage.tsx`, same value
+`CreateGroupModal` already takes) into `JoinGroupModal` and render a visible indicator when it's
+non-null — e.g. "Searching in {sport}" near the search input — matching whatever visual treatment
+`CreateGroupModal`'s locked-sport display already uses, for consistency rather than inventing a new
+pattern.
+
+**Design questions to resolve at pickup:**
+- Exact copy/placement — mirror `CreateGroupModal`'s locked-sport UI verbatim, or does the modal's
+  layout call for something lighter (e.g. a small badge vs. a full form field, since Join Group has no
+  sport dropdown to replace the way Create Group does)?
+- Should the indicator be static text, or does it need its own `aria-label`/live-region treatment so
+  a screen-reader user searching gets the same "why are results limited" context sighted users would
+  infer from the page's sport tab?
+
+**Out of scope:**
+- Changing the filtering behavior itself — it already works correctly; this is a visibility-only fix.
+- Any change to `CreateGroupModal`'s existing locked-sport display.
 
 ---
 

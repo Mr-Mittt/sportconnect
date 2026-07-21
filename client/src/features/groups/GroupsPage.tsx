@@ -31,8 +31,10 @@ import { GroupSettingsTab } from './components/GroupSettingsTab';
 import { GroupSpaceSwitcher } from './components/GroupSpaceSwitcher';
 import { GroupTabs, type GroupTabKey } from './components/GroupTabs';
 import { JoinGroupModal } from './components/JoinGroupModal';
+import { SettingsUnsavedChangesDialog } from './components/SettingsUnsavedChangesDialog';
 import { useGroupsPageData } from './useGroupsPageData';
 import { useJoinGroupModalData } from './useJoinGroupModalData';
+import { useSettingsUnsavedGuard } from './useSettingsUnsavedGuard';
 
 // Callback-only entry points with no destination yet — same "affordance
 // exists, destination doesn't yet" pattern as HF-3/HF-4/HF-7's other no-ops.
@@ -158,6 +160,18 @@ export function GroupsPage() {
     selectGroup(groupId, groupSportId ?? undefined);
     setActiveGroupTab('posts');
   };
+  // GRP-2: unsaved GroupSettings-toggle draft, Save, and the leave-guard
+  // (tab/group switch here; in-app nav + browser close/refresh inside the
+  // hook itself). `guard()` below wraps every action that would navigate
+  // away from the currently viewed Settings tab.
+  const settingsGuard = useSettingsUnsavedGuard(
+    selectedGroupId ?? undefined,
+    activeGroupTab === 'settings',
+    currentUserId,
+  );
+  const guardedSetActiveGroupTab = (tab: GroupTabKey) => settingsGuard.guard(() => setActiveGroupTab(tab));
+  const guardedSelectGroupAndShowPosts = (groupId: number | null, groupSportId?: number | null) =>
+    settingsGuard.guard(() => selectGroupAndShowPosts(groupId, groupSportId));
   const commentsData = useCommentsData(
     activeCommentsPostId ?? -1,
     activeCommentsPostId !== null,
@@ -266,7 +280,7 @@ export function GroupsPage() {
         <GroupSpaceSwitcher
           groups={data.groups}
           selectedGroupId={selectedGroupId}
-          onSelect={selectGroupAndShowPosts}
+          onSelect={guardedSelectGroupAndShowPosts}
           sportsByKey={sportsByKey}
           isLoading={isGroupsLoading}
           isError={isGroupsError}
@@ -277,7 +291,7 @@ export function GroupsPage() {
         <GroupCoverBanner
           group={selectedGroup}
           sport={selectedGroupSport}
-          onBack={() => selectGroupAndShowPosts(null)}
+          onBack={() => guardedSelectGroupAndShowPosts(null)}
         />
       )}
       <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[2.1fr_0.9fr]">
@@ -286,7 +300,7 @@ export function GroupsPage() {
             <GroupDiscoveryPanel
               groups={data.groups}
               sportsByKey={sportsByKey}
-              onOpenGroup={selectGroupAndShowPosts}
+              onOpenGroup={guardedSelectGroupAndShowPosts}
               onCreateGroup={openCreateGroup}
               onJoinGroup={openJoinGroupWithQuery}
               isLoading={isGroupsLoading}
@@ -295,7 +309,7 @@ export function GroupsPage() {
             />
           ) : (
             <div className="border-hairline flex gap-3.5 rounded-xl border-border bg-surface-2 p-3.5">
-              <GroupTabs activeTab={activeGroupTab} onChange={setActiveGroupTab} />
+              <GroupTabs activeTab={activeGroupTab} onChange={guardedSetActiveGroupTab} />
               <div className="min-w-0 flex-1">
                 {activeGroupTab === 'posts' && (
                   <div className="flex flex-col gap-3.5">
@@ -351,6 +365,18 @@ export function GroupsPage() {
                     isLeaving={leaveGroupMutation.isPending}
                     isLeaveError={leaveGroupMutation.isError}
                     onRequestDelete={() => setIsDeleteConfirmOpen(true)}
+                    groupSettings={settingsGuard.settings}
+                    isSettingsLoading={settingsGuard.isSettingsLoading}
+                    isSettingsError={settingsGuard.isSettingsError}
+                    onUpdateSetting={settingsGuard.updateSettingField}
+                    groupInfo={settingsGuard.info}
+                    isGroupInfoLoading={settingsGuard.isInfoLoading}
+                    isGroupInfoError={settingsGuard.isInfoError}
+                    onUpdateGroupInfoField={settingsGuard.updateInfoField}
+                    hasUnsavedSettingsChanges={settingsGuard.hasUnsavedChanges}
+                    onSaveSettings={settingsGuard.save}
+                    isSavingSettings={settingsGuard.isSaving}
+                    isSaveSettingsError={settingsGuard.isSaveError}
                   />
                 )}
               </div>
@@ -507,6 +533,14 @@ export function GroupsPage() {
           groupName={selectedGroup.groupName}
         />
       )}
+      <SettingsUnsavedChangesDialog
+        isOpen={settingsGuard.isLeaveDialogOpen}
+        onCancel={settingsGuard.cancelLeave}
+        onDiscard={settingsGuard.discard}
+        onSave={settingsGuard.save}
+        isSaving={settingsGuard.isSaving}
+        isSaveError={settingsGuard.isSaveError}
+      />
     </main>
   );
 }

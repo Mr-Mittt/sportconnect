@@ -187,7 +187,8 @@ export interface CreateGroupPayload {
 
 // UpdateGroupRequest — partial update, only non-null fields are applied
 // server-side (GroupController.updateGroup's own @Operation description).
-// Owner or admin only; GRP-1 only ever sends `isPrivate`.
+// Owner or admin only; GRP-1 only ever sent `isPrivate` — GRP-2 adds
+// rules/schedule as the second use of this same payload/endpoint.
 export interface UpdateGroupPayload {
   groupName?: string;
   description?: string;
@@ -196,6 +197,44 @@ export interface UpdateGroupPayload {
   isPrivate?: boolean;
   rules?: string;
   schedule?: string;
+}
+
+// GroupInfoResponse (GET /api/groups/{groupId}/info) — rules/schedule text.
+// Writable via the existing UpdateGroupPayload/updateGroup endpoint above,
+// but GroupResponse itself never returns them — this is the only response
+// shape that does, hence a dedicated query hook (useGroupInfo) rather than
+// reusing Group.
+export interface GroupInfo {
+  groupId: number;
+  groupName: string;
+  rules: string | null;
+  schedule: string | null;
+  updatedAt: string; // ISO timestamp
+}
+
+// GroupSettingsResponse (GET/PUT /api/groups/{groupId}/settings). B7 replaced
+// a manually-set maxMembers with a fixed group-type tier system — the real
+// DTO still carries a resolved `maxMembers` number, but GRP-2 deliberately
+// doesn't display it (no UI to change it yet — that's B10, not built), so
+// it's intentionally omitted here rather than modeled and left unused.
+export interface GroupSettings {
+  id: number;
+  groupId: number;
+  allowMemberPosts: boolean;
+  requirePostApproval: boolean;
+  allowMemberInvites: boolean;
+  groupTypeName: string;
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+}
+
+// UpdateGroupSettingsRequest — owner-only (stricter than UpdateGroupPayload's
+// owner+admin), partial update. maxMembers was removed server-side by B7 —
+// never send it.
+export interface UpdateGroupSettingsPayload {
+  allowMemberPosts?: boolean;
+  requirePostApproval?: boolean;
+  allowMemberInvites?: boolean;
 }
 
 // CreateJoinRequestRequest — looked up by group NAME server-side

@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './app/apiClient';
 import { useAuthStore } from './app/authStore';
-import App from './App';
+import { routes } from './router';
 
 const fixtureUser = {
   id: '1',
@@ -27,17 +27,19 @@ const fixtureAuthResponse = {
   },
 };
 
-// App itself calls useSessionBootstrap() on mount (AUTH-3), and every route
-// under AppShell is now gated by ProtectedRoute (AUTH-4) — main.tsx provides
-// a QueryClientProvider at the real app root, so every test rendering
-// <App /> must wrap it here to match production.
+// RootLayout calls useSessionBootstrap() on mount (AUTH-3), and every route
+// under AppShell is gated by ProtectedRoute (AUTH-4) — main.tsx provides a
+// QueryClientProvider at the real app root, so every test rendering the
+// route tree must wrap it here to match production. Builds its own
+// createMemoryRouter from the same `routes` main.tsx's createBrowserRouter
+// uses (ROUTER-1) — RouterProvider, not <MemoryRouter>, since useBlocker
+// (GRP-2) only works with a data router.
 function renderApp(initialEntries: Array<string | { pathname: string; state?: unknown }>) {
   const queryClient = new QueryClient();
+  const memoryRouter = createMemoryRouter(routes, { initialEntries });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={initialEntries}>
-        <App />
-      </MemoryRouter>
+      <RouterProvider router={memoryRouter} />
     </QueryClientProvider>,
   );
 }
