@@ -143,3 +143,80 @@ open, dirty Settings tab.
   future pickup.
 - The `beforeunload` trigger's dialog content — platform limitation, not a gap in this
   implementation.
+
+## Delta (2026-07-21, same day) — Part C: General/Permission collapsible sections + rules/schedule
+
+Requested after the above shipped: reorganize the tab into two collapsible sections, both
+default-expanded — **General** ("group properties": group name/description, Privacy, rules,
+schedule, the read-only Group type row) and **Permission** ("group settings": the three
+`GroupSettings` toggles) — plus wire up `rules`/`schedule` as new editable fields. These existed on
+the backend (`Group.rules`/`schedule`, set via the existing `updateGroup` endpoint) but were never
+readable by any response the client already used — `GroupResponse` doesn't return them; only
+`GET /api/groups/{groupId}/info` (`GroupInfoResponse`) does, and nothing in the client called it
+before this.
+
+**Design decision, confirmed before implementing:** rules/schedule share the *same* draft/Save/
+unsaved-changes-guard mechanism as the Permission toggles — one Save button, one dirty flag, one
+dialog — rather than a second independent save flow for General. Privacy itself stays untouched
+(immediate-apply, owner+admin, unrelated to either draft).
+
+**New primitives** (`src/shared/ui/`, following the existing hand-written-Radix-wrapper pattern —
+`@radix-ui/react-collapsible` added as a dependency):
+- `collapsible.tsx` — `Collapsible`/`CollapsibleTrigger`/`CollapsibleContent`, chevron rotates via
+  Radix's own `data-state` attribute, no separate open-state prop needed on the trigger.
+- `textarea.tsx` — multi-line counterpart to the existing `Input`, same token/focus-ring styling.
+
+**Types** (`feed/types.ts`): `GroupInfo` (`GET /api/groups/{groupId}/info`'s real shape).
+`UpdateGroupPayload` already had `rules`/`schedule` (added by B6b, never used client-side) — no
+change needed there.
+
+**Data layer**: new `useGroupInfo(groupId, enabled)` hook (`feed/hooks/`), same `enabled`-gating
+pattern as `useGroupSettings`. No new mutation hook — rules/schedule save through the *existing*
+`useUpdateGroup` (same endpoint Privacy uses), called as a second, independent mutation instance
+inside the guard hook (see below) so its `isPending`/`isError` doesn't conflate with Privacy's own.
+
+**`useSettingsUnsavedGuard` extended, not replaced** — now tracks two drafts
+(`settingsDraft`/`infoDraft`), combines them into one `hasUnsavedChanges`, and `save()` fires
+whichever mutation(s) actually have pending changes (one, the other, or both — via
+`Promise.all`), only resolving the pending/blocked navigation once every fired mutation settles.
+Renamed the hook's public field `updateField` → `updateSettingField` (added `updateInfoField`
+alongside it) and `isLoading`/`isError` → `isSettingsLoading`/`isSettingsError` (added
+`isInfoLoading`/`isInfoError` alongside) — a breaking rename of Part B's own return shape, updated
+at both call sites (`GroupsPage.tsx`, all of `useSettingsUnsavedGuard.test.tsx`).
+
+Since `GroupResponse` never returns `rules`/`schedule`, a successful `updateGroup` call for these
+fields can't refresh the `groupInfo` cache from its own response the way `useUpdateGroupSettings`
+does — `save()` patches the `groupInfo` query cache directly with what was just submitted instead
+of an extra round-trip refetch.
+
+**Component** (`GroupSettingsTab.tsx`, restructured, not just extended): two `Collapsible` blocks,
+local `useState(true)` per section (page-local UI state, not lifted — nothing else needs to know
+if a section is collapsed). New `TextFieldRow` (rules/schedule: Textarea for owner+admin, plain
+text with an empty-state message for member, independent loading/error states from the toggles).
+The shared Save button's visibility is gated on `canEdit` (owner **or** admin) rather than
+`isOwner` — an admin can't touch the toggles but *can* edit rules/schedule, so they still need a
+working Save button; the toggles' own read-only fallback is unchanged (owner-only).
+
+**Tests**: `useGroupInfo.test.tsx` (3, mirrors `useGroupSettings.test.tsx`).
+`useSettingsUnsavedGuard.test.tsx` rewritten for the two-draft shape (mocks both GET endpoints by
+URL instead of the old single `mockResolvedValueOnce`) — new cases for info-only dirty tracking and
+three independent save-path assertions (settings-only, info-only, both). `GroupSettingsTab.test.tsx`
+gained section-collapse assertions, rules/schedule read-only/editable/empty-state cases, and a
+corrected admin case (previously asserted "no Save button for admin" — now admin *does* see one,
+disabled until they edit rules/schedule, since Part C's `canEdit` gating supersedes Part B's
+`isOwner`-only gating). `GroupSettingsTab.stories.tsx` gained group-info loading/error/empty states.
+
+**E2E**: `group-settings.spec.ts` rewritten — step 1 now checks section collapse/expand instead of
+just "loads settings"; step 2 edits *both* a rules field and a toggle through one Save and confirms
+both persist across reload; steps 3/4 (the guard triggers) now originate from a General-section
+edit and a Permission-section edit respectively, instead of both being toggle-based. New MSW
+handlers: `PUT /api/groups/:groupId` (didn't exist at all before — Privacy's own e2e coverage never
+exercised a real call to it either) and `GET /api/groups/:groupId/info`, plus `mockGroupInfo`
+fixture and a `groupInfoState` session slice in `groups.ts`, kept in sync by the new `PUT
+/api/groups/:groupId` handler. `client/docs/E2E_OVERVIEW.md` updated again to match.
+
+**Verification**: `tsc -b`/`eslint .` clean, `pnpm exec vitest run` — 430/430 across 81 files (up
+from 417/80), `pnpm run build-storybook` clean, `pnpm run e2e` — 35/35. One transient e2e failure
+mid-session traced to a stray `pnpm dev`/build process left listening on :5173 from an earlier
+manual check (same root cause as Part A's own transient failure) — killing it and re-running came
+back green; not a real regression either time.

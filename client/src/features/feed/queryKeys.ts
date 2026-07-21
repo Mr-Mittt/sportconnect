@@ -18,4 +18,5 @@ export const feedKeys = {
     [...feedKeys.all, 'public-groups', sportId ?? 'any', keyword] as const,
   joinRequests: (userId: string) => [...feedKeys.all, 'join-requests', userId] as const,
   groupSettings: (groupId: number) => [...feedKeys.all, 'group-settings', groupId] as const,
+  groupInfo: (groupId: number) => [...feedKeys.all, 'group-info', groupId] as const,
 };

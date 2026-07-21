@@ -210,7 +210,11 @@ Groups:
 `mockHashtag`: `fridayrun`, `usageCount: 12`. `mockComment`: one root comment on `mockPost` (matches its
 `commentCount: 1`). `mockGroupSettings`: settings for `mockOwnedGroup` (`groupTypeName: 'DEFAULT'`,
 all three toggles off except `allowMemberPosts`) — the only group with a `groupSettingsState` entry in
-`groups.ts`'s handler session (any other groupId 404s `GET/PUT .../settings`).
+`groups.ts`'s handler session (any other groupId 404s `GET/PUT .../settings`). `mockGroupInfo`:
+rules/schedule for `mockOwnedGroup` (both `null` by default — empty-state fixture), same
+one-group-only keying as `mockGroupSettings` (`groupInfoState`, `GET .../info`) — written via
+`PUT /api/groups/:groupId` (`groups.ts`'s handler also had no coverage for this endpoint at all
+before GRP-2 added rules/schedule; it now updates both `userGroupsState` and `groupInfoState`).
 
 **Timestamps are never hardcoded** — `hoursAgo`/`hoursFromNow` (`src/shared/lib/mockClock.ts`) compute
 relative to load time. A hardcoded broadcast expiry date drifting into the past (and silently breaking
@@ -307,20 +311,22 @@ This spec destructures `mockSessionId` directly (needed by the seed/override adm
 ### `e2e/flows/group-settings.spec.ts` (GRP-2, one `test()` with 4 steps)
 
 Uses `mockOwnedGroup` ("Weekend Tennis Ladder") — the only fixture group where the test user is
-`group_owner`, required for the three owner-only `GroupSettings` toggles to be editable at all.
+`group_owner`, required for General's Privacy/rules/schedule (owner+admin) and Permission's three
+toggles (owner-only) to all be editable.
 
 | Step | What it checks | Notes |
 |---|---|---|
-| 1. loads settings | Group type ("DEFAULT") and the three toggles render, Save disabled with no draft | |
-| 2. toggle + Save persists | Toggle "Allow member invites" on → Save enables → Save → button disables → reload + re-select group + re-open Settings → still on | Confirms a real server round trip via `PUT /api/groups/:groupId/settings`, not just the optimistic cache write |
-| 3. tab-switch guard, Discard | Toggle off (unsaved) → click Posts tab → Discard/Save dialog appears → Discard → lands on Posts tab; re-opening Settings shows step 2's saved value untouched | Covers the guard's in-page tab-switch trigger |
-| 4. in-app-nav guard, Save | Toggle off (unsaved) → click Home in `NavTabs` → dialog appears, URL still `/groups` (blocked) → Save changes → proceeds to `/` | Covers the `useBlocker`-backed in-app-navigation trigger (requires the data router, ROUTER-1) |
+| 1. sections default-expanded | `General`/`Permission` both `data-state="open"`; collapsing one (General) hides its content but leaves the other's visible | Verifies the two-collapsible-section split, added when this ticket was extended mid-session |
+| 2. edit General (rules) + Permission (a toggle), one shared Save, persists both | Rules textarea + "Allow member invites" toggle both edited → one Save enables/persists both → reload + re-select group + re-open Settings → both still set | Confirms real server round trips via `PUT /api/groups/:groupId` (rules — no handler existed for this endpoint before this ticket, Privacy's own e2e coverage never exercised it either) and `PUT /api/groups/:groupId/settings` (toggle) |
+| 3. tab-switch guard, Discard | Rules edited further (unsaved) → click Posts tab → Discard/Save dialog appears → Discard → lands on Posts tab; re-opening Settings shows step 2's saved value untouched | Covers the guard's in-page tab-switch trigger, now from a General-section edit rather than Permission |
+| 4. in-app-nav guard, Save | Toggle off again (unsaved) → click Home in `NavTabs` → dialog appears, URL still `/groups` (blocked) → Save changes → proceeds to `/` | Covers the `useBlocker`-backed in-app-navigation trigger (requires the data router, ROUTER-1) |
 
 **Not covered here** (see `useSettingsUnsavedGuard.test.tsx`/`GroupSettingsTab.test.tsx` for these instead):
 the guard's third trigger (`beforeunload` on browser close/refresh/typed-URL nav) — that can only ever
 show the browser's own native prompt, nothing a Playwright assertion can meaningfully exercise; admin/
-member read-only rendering of the three toggles (pure component-level concern, no real navigation
-involved).
+member read-only rendering of the three toggles and rules/schedule (pure component-level concern, no
+real navigation involved); independent single-section saves (rules-only, toggle-only) — covered at the
+hook level in `useSettingsUnsavedGuard.test.tsx` instead of duplicating here.
 
 ### `e2e/flows/msw-setup.spec.ts` (proves the mock server itself works)
 

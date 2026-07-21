@@ -187,7 +187,8 @@ export interface CreateGroupPayload {
 
 // UpdateGroupRequest — partial update, only non-null fields are applied
 // server-side (GroupController.updateGroup's own @Operation description).
-// Owner or admin only; GRP-1 only ever sends `isPrivate`.
+// Owner or admin only; GRP-1 only ever sent `isPrivate` — GRP-2 adds
+// rules/schedule as the second use of this same payload/endpoint.
 export interface UpdateGroupPayload {
   groupName?: string;
   description?: string;
@@ -196,6 +197,19 @@ export interface UpdateGroupPayload {
   isPrivate?: boolean;
   rules?: string;
   schedule?: string;
+}
+
+// GroupInfoResponse (GET /api/groups/{groupId}/info) — rules/schedule text.
+// Writable via the existing UpdateGroupPayload/updateGroup endpoint above,
+// but GroupResponse itself never returns them — this is the only response
+// shape that does, hence a dedicated query hook (useGroupInfo) rather than
+// reusing Group.
+export interface GroupInfo {
+  groupId: number;
+  groupName: string;
+  rules: string | null;
+  schedule: string | null;
+  updatedAt: string; // ISO timestamp
 }
 
 // GroupSettingsResponse (GET/PUT /api/groups/{groupId}/settings). B7 replaced

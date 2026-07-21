@@ -1065,6 +1065,17 @@ covering toggle+Save+persistence and both testable unsaved-changes-guard trigger
 group-impl MVP backlog to its V1 backlog — B10 was the last remaining MVP ticket there, so the group
 module's MVP backlog is now fully `DONE`.
 
+**GRP-2 delta, same day:** reorganized the Settings tab into two default-expanded collapsible
+sections — General ("group properties": name/description, Privacy, rules/schedule, Group type) and
+Permission ("group settings": the three toggles) — and wired up `rules`/`schedule` as new editable
+fields. These existed on the backend since B6b but were never readable client-side: `GroupResponse`
+doesn't return them, only `GET /api/groups/{groupId}/info` does, which nothing called before this.
+New `Collapsible`/`Textarea` UI primitives, new `useGroupInfo` hook, `useSettingsUnsavedGuard`
+extended (not replaced) to track a second draft so rules/schedule share the *same* Save button and
+unsaved-changes dialog as the toggles, per user decision. New MSW `PUT /api/groups/:groupId`
+handler — didn't exist at all before, so Privacy's own e2e coverage had never exercised a real call
+to it either. 430/430 Vitest (up from 417), clean `tsc -b`/`eslint`/Storybook build, 35/35 e2e.
+
 **HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and

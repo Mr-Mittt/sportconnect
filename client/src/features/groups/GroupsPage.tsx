@@ -167,6 +167,7 @@ export function GroupsPage() {
   const settingsGuard = useSettingsUnsavedGuard(
     selectedGroupId ?? undefined,
     activeGroupTab === 'settings',
+    currentUserId,
   );
   const guardedSetActiveGroupTab = (tab: GroupTabKey) => settingsGuard.guard(() => setActiveGroupTab(tab));
   const guardedSelectGroupAndShowPosts = (groupId: number | null, groupSportId?: number | null) =>
@@ -365,9 +366,13 @@ export function GroupsPage() {
                     isLeaveError={leaveGroupMutation.isError}
                     onRequestDelete={() => setIsDeleteConfirmOpen(true)}
                     groupSettings={settingsGuard.settings}
-                    isSettingsLoading={settingsGuard.isLoading}
-                    isSettingsError={settingsGuard.isError}
-                    onUpdateSetting={settingsGuard.updateField}
+                    isSettingsLoading={settingsGuard.isSettingsLoading}
+                    isSettingsError={settingsGuard.isSettingsError}
+                    onUpdateSetting={settingsGuard.updateSettingField}
+                    groupInfo={settingsGuard.info}
+                    isGroupInfoLoading={settingsGuard.isInfoLoading}
+                    isGroupInfoError={settingsGuard.isInfoError}
+                    onUpdateGroupInfoField={settingsGuard.updateInfoField}
                     hasUnsavedSettingsChanges={settingsGuard.hasUnsavedChanges}
                     onSaveSettings={settingsGuard.save}
                     isSavingSettings={settingsGuard.isSaving}

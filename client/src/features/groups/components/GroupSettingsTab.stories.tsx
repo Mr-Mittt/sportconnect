@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { Group, GroupSettings } from '@/features/feed/types';
+import type { Group, GroupInfo, GroupSettings } from '@/features/feed/types';
 import { GroupSettingsTab } from './GroupSettingsTab';
 
 const group: Group = {
@@ -31,6 +31,14 @@ const groupSettings: GroupSettings = {
   updatedAt: '2026-07-15T00:00:00',
 };
 
+const groupInfo: GroupInfo = {
+  groupId: 1,
+  groupName: 'Riverside Ballers',
+  rules: 'Be on time. Bring both light and dark shirts.',
+  schedule: 'Every Tuesday, 7pm at Riverside Courts.',
+  updatedAt: '2026-07-15T00:00:00',
+};
+
 const meta = {
   title: 'Groups/GroupSettingsTab',
   component: GroupSettingsTab,
@@ -48,6 +56,10 @@ const meta = {
     isSettingsLoading: false,
     isSettingsError: false,
     onUpdateSetting: () => {},
+    groupInfo,
+    isGroupInfoLoading: false,
+    isGroupInfoError: false,
+    onUpdateGroupInfoField: () => {},
     hasUnsavedSettingsChanges: false,
     onSaveSettings: () => {},
     isSavingSettings: false,
@@ -98,4 +110,20 @@ export const SavingSettings: Story = {
 
 export const SaveSettingsError: Story = {
   args: { currentUserRole: 'group_owner', hasUnsavedSettingsChanges: true, isSaveSettingsError: true },
+};
+
+export const GroupInfoLoading: Story = {
+  args: { currentUserRole: 'group_owner', isGroupInfoLoading: true },
+};
+
+export const GroupInfoLoadError: Story = {
+  args: { currentUserRole: 'group_owner', isGroupInfoError: true },
+};
+
+/** No rules/schedule set yet — member view shows the empty-state copy. */
+export const EmptyGroupInfo: Story = {
+  args: {
+    currentUserRole: 'group_member',
+    groupInfo: { ...groupInfo, rules: null, schedule: null },
+  },
 };

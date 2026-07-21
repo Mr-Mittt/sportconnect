@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-07-20
+**Last updated:** 2026-07-21
 
 ---
 
@@ -111,6 +111,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 41 | GRP-2 | Adapt Settings tab to the full group settings data set — blocked on B7 (group-impl) | `DONE` |
 | 42 | GRP-3 | Members tab — group member management (search, invite, 5 status-grouped lists) | `TODO` |
 | 43 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3 | `TODO` |
+| 44 | GRP-5 | Join Group modal — show the active sport filter — **new ticket, not in either epic** | `TODO` |
 
 **Dependencies:**
 ```
@@ -1683,6 +1684,13 @@ navigation via a new `useBlocker`-dependent router migration, plus the browser's
 close/refresh prompt) — beyond the ticket's original text, added mid-session. Full writeup: the
 summary doc above.
 
+**Delta 2 (same day, requested after the above shipped):** reorganized into two default-expanded
+collapsible sections — **General** (name/description, Privacy, rules/schedule, Group type) and
+**Permission** (the three toggles) — and added `rules`/`schedule` as new editable fields (existed
+on the backend since B6b, never wired client-side — `GroupResponse` doesn't return them, only
+`GET .../info` does). Rules/schedule share the *same* draft/Save/guard as the toggles, per explicit
+user decision, rather than a second independent save flow. Full writeup: the summary doc above.
+
 ---
 
 ### GRP-3 · Members tab — group member management
@@ -1784,6 +1792,43 @@ modal-wide failure. Confirm at pickup whether `U6`'s response already excludes e
 members/already-invited users from results — don't assume either way.
 
 **Not yet scoped in detail** — full acceptance criteria to be written when picked up.
+
+---
+
+### GRP-5 · Join Group modal — show the active sport filter
+**Status:** `TODO` · **Type:** Enhancement · **Filed:** 2026-07-21, found while explaining existing
+behavior (not a bug report — the filter itself works correctly, only its visibility doesn't)
+
+**Origin:** confirmed via code read (`GroupsPage.tsx`/`useJoinGroupModalData.ts`/`usePublicGroups.ts`)
+that `JoinGroupModal`'s search **does** apply the Groups page's active sport filter server-side —
+`GroupsPage` computes `lockedSport = activeSport !== 'all' ? activeSport : null` and passes its
+`sportId` through `useJoinGroupModalData` into `usePublicGroups`, which sends it as a `GET
+/api/groups/public?sportId=...` query param. When `activeSport === 'all'`, no `sportId` is sent and
+results span every sport.
+
+**The gap:** `CreateGroupModal` already receives this same `lockedSport` value and visibly shows/locks
+the sport in its form — `JoinGroupModal` does not. It has no `lockedSport` prop at all; the filtering
+happens silently. A user on, say, the Basketball tab who opens Join Group and doesn't see a football
+group they expected has no indication in the modal itself that results are scoped to Basketball —
+they'd have to notice the sport tab underneath to infer why.
+
+**What ships:** thread `lockedSport` (already computed in `GroupsPage.tsx`, same value
+`CreateGroupModal` already takes) into `JoinGroupModal` and render a visible indicator when it's
+non-null — e.g. "Searching in {sport}" near the search input — matching whatever visual treatment
+`CreateGroupModal`'s locked-sport display already uses, for consistency rather than inventing a new
+pattern.
+
+**Design questions to resolve at pickup:**
+- Exact copy/placement — mirror `CreateGroupModal`'s locked-sport UI verbatim, or does the modal's
+  layout call for something lighter (e.g. a small badge vs. a full form field, since Join Group has no
+  sport dropdown to replace the way Create Group does)?
+- Should the indicator be static text, or does it need its own `aria-label`/live-region treatment so
+  a screen-reader user searching gets the same "why are results limited" context sighted users would
+  infer from the page's sport tab?
+
+**Out of scope:**
+- Changing the filtering behavior itself — it already works correctly; this is a visibility-only fix.
+- Any change to `CreateGroupModal`'s existing locked-sport display.
 
 ---
 
