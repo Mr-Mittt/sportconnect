@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/social/group-impl`  
-**Last updated:** 2026-07-20
+**Last updated:** 2026-07-21
 
 ---
 
@@ -35,7 +35,6 @@
 | 14 | B8 | Extend member-sent invitations to include owner-approved status | `DONE` |
 | 15 | B7 | Settings data set audit → group-type membership-cap tiers | `DONE` |
 | 16 | B9 | Group system posts — welcome post on member join | `DONE` |
-| 17 | B10 | Group type change flow (upgrade/downgrade) | `TODO` |
 
 ---
 
@@ -425,25 +424,6 @@ this ticket); no way to change a group's type after creation (**B10**, below).
 
 ---
 
-### B10 · Group type change flow (upgrade/downgrade)
-**Status:** `TODO`  
-**Type:** New Feature  
-**Origin:** filed directly out of B7 — every group is silently created as `DEFAULT` (50 members) with
-no way to move to `STANDARD` (100) or `PREMIUM` (500). `GroupType` entity/repository and the
-`group_types` table already exist (B7); this ticket is the actual change-type flow.
-
-**Design questions to resolve at pickup (flagging now, not assumed):**
-- Who can change a group's type — owner only (matches `updateGroupSettings`'s existing owner-only
-  precedent), or does this need an approval/payment gate (tiers read like a monetization surface —
-  confirm with the user before assuming it's free/self-serve)?
-- Downgrade path: what happens if `currentMemberCount > newType.maxMembers`? Reject the downgrade,
-  or allow it and let the group sit "over cap" (no further joins until it's back under, per B7's
-  `enforceMemberCapacity`)?
-- New endpoint shape: extend `PUT /api/groups/{groupId}/settings` with a `groupTypeId` field, or a
-  dedicated `PUT /api/groups/{groupId}/type` endpoint?
-
----
-
 ### B9 · Group system posts — welcome post on member join
 **Status:** `DONE` (2026-07-21) · **Summary:** `modules/social/group-impl/docs/B9_GROUP_WELCOME_SYSTEM_POST.md`
 **Type:** New Feature (cross-module — touches post module, same shape as B3)
@@ -528,3 +508,4 @@ per-user/per-group opt-out toggle; any push-notification tie-in.
 | A4 · Post approval | Removed — all members can post immediately; no approval needed |
 | B4 · Group location | Deferred — will be considered in a later phase |
 | B6 · Group announcements | Replaced by A6a (pinned posts) + B6b (group info fields) |
+| B10 · Group type change flow (upgrade/downgrade) | Moved to V1 — `modules/social/group-impl/docs/BACKLOG_V1.md` |

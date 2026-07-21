@@ -2,7 +2,7 @@
 
 **Version:** V1
 **Module:** `modules/social/group-impl`
-**Last updated:** 2026-07-13
+**Last updated:** 2026-07-21
 **Prerequisite:** All MVP tickets in `modules/social/group-impl/docs/BACKLOG_MVP.md` must be `DONE` before starting V1.
 
 ---
@@ -21,6 +21,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | A1 | Migrate Group/GroupMember ids to Snowflake IDs | `TODO` |
+| 2 | B10 | Group type change flow (upgrade/downgrade) | `TODO` |
 
 ---
 
@@ -89,6 +90,24 @@ and whichever of FEED-1/2/3/4/6/7/8/9 have shipped by then.
 - Confirm `GroupResponse`/`GroupMemberResponse`/`GroupSearchResponse`/`GroupInvitationResponse`/
   `JoinRequestResponse`/`PinnedPostResponse` all serialize their id fields as JSON strings
   (integration test against the real controller, checking the raw JSON body).
+
+---
+
+### B10 · Group type change flow (upgrade/downgrade)
+**Status:** `TODO` · **Type:** New Feature · **Moved from MVP backlog:** 2026-07-21
+**Origin:** filed directly out of B7 — every group is silently created as `DEFAULT` (50 members) with
+no way to move to `STANDARD` (100) or `PREMIUM` (500). `GroupType` entity/repository and the
+`group_types` table already exist (B7); this ticket is the actual change-type flow.
+
+**Design questions to resolve at pickup (flagging now, not assumed):**
+- Who can change a group's type — owner only (matches `updateGroupSettings`'s existing owner-only
+  precedent), or does this need an approval/payment gate (tiers read like a monetization surface —
+  confirm with the user before assuming it's free/self-serve)?
+- Downgrade path: what happens if `currentMemberCount > newType.maxMembers`? Reject the downgrade,
+  or allow it and let the group sit "over cap" (no further joins until it's back under, per B7's
+  `enforceMemberCapacity`)?
+- New endpoint shape: extend `PUT /api/groups/{groupId}/settings` with a `groupTypeId` field, or a
+  dedicated `PUT /api/groups/{groupId}/type` endpoint?
 
 ---
 
