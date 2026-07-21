@@ -35,6 +35,7 @@
 | 14 | B8 | Extend member-sent invitations to include owner-approved status | `DONE` |
 | 15 | B7 | Settings data set audit → group-type membership-cap tiers | `DONE` |
 | 16 | B9 | Group system posts — welcome post on member join | `DONE` |
+| 17 | A10 | Add multi-value `sportIds` filter to `GET /api/groups/public` — unblocks client GRP-6 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
 
 ---
 
@@ -497,6 +498,60 @@ an invitation.
 
 **Out of scope:** system posts for leave/remove/role-change events (future, if wanted); a
 per-user/per-group opt-out toggle; any push-notification tie-in.
+
+---
+
+### A10 · Add multi-value `sportIds` filter to `GET /api/groups/public`
+**Status:** `DONE` (2026-07-21, `modules/social/group-impl/docs/A10_MULTI_SPORT_FILTER_PUBLIC_GROUPS.md`) ·
+**Type:** Enhancement · **Dependency:** B5 (existing single-`sportId` filter
+on this endpoint) · **Filed:** 2026-07-21, found while scoping the client's GRP-6 (`client/docs/
+BACKLOG_MVP.md`) — the Join Group modal's new multi-select sport filter needs to search across
+several of the current user's sports in one combined, groupable result set.
+
+**Origin:** `GroupController.getPublicGroups` (`GroupController.java:112-121`) currently accepts
+only a single optional `sportId` (`Long`). `GroupRepository.searchPublicGroupsWithCounts`/
+`searchPublicGroupsAnon` (`GroupRepository.java:59-90`) apply it via `(:sportId IS NULL OR
+g.sportId = :sportId)` in the JPQL `WHERE` clause. There is no way today to search "groups in any
+of these N sports" in one call — only one sport, or every sport.
+
+**What ships:**
+- Add `@RequestParam(required = false) List<Long> sportIds` to `getPublicGroups`, alongside the
+  existing `sportId` param (kept, untouched, for back-compat — `sportId` has no other confirmed
+  caller today besides the client's `usePublicGroups` hook, which GRP-6 is updating to use
+  `sportIds` instead, but keeping the singular param costs nothing and avoids a silent breaking
+  change to a public, Swagger-documented endpoint).
+- `GroupServiceImpl.getPublicGroups` — add a `List<Long> sportIds` param, pass through to the
+  repository. Precedence when both are somehow present: `sportIds` (if non-empty) takes priority
+  over `sportId`; `sportId` remains the sole filter when `sportIds` is absent/empty — the two are
+  not combined/ORed together, to avoid an ambiguous "both filters active" query shape.
+- `GroupRepository`'s two search queries — extend the `WHERE` clause to
+  `(:sportIds IS NULL OR g.sportId IN :sportIds)`, replacing (not appending to) the existing
+  `sportId` condition when `sportIds` is provided. Both query methods need the new `@Param
+  ("sportIds") List<Long> sportIds` parameter threaded through.
+- No DTO change needed — `GroupSearchResponse` already carries `sportId` per row
+  (`GroupSearchResponse.java:14`), which is exactly what the client needs to group a single flat
+  response by sport client-side.
+- No migration — this is a query-shape change only, no schema impact.
+
+**Acceptance criteria:**
+- `GET /api/groups/public?sportIds=1&sportIds=2` (Spring's default binding for a `List<Long>`
+  `@RequestParam` from repeated query params — verify this is indeed how it resolves before
+  finalizing the client's param-serialization side of GRP-6, don't assume comma-joined) returns
+  groups from either sport 1 or 2 only.
+- `GET /api/groups/public?sportId=1` (legacy singular param, no `sportIds`) still behaves exactly
+  as before — regression-tested, not just assumed unchanged.
+- `GET /api/groups/public` (neither param) still returns every public group, unchanged.
+- Spock coverage: `GroupServiceImplSpec` — new case(s) for `sportIds` filtering (multiple ids,
+  empty list treated as "no filter", `sportIds` taking priority over a simultaneously-present
+  `sportId`), plus the existing single-`sportId` cases must still pass unmodified (no behavior
+  change for that path).
+- `./gradlew :modules:social:group-impl:test` and `./gradlew :server:test` both green.
+
+**Out of scope:**
+- Removing or deprecating the singular `sportId` param — kept for back-compat, not this ticket's
+  concern to clean up.
+- Any client-side change — that's GRP-6 (`client/docs/BACKLOG_MVP.md`), which depends on this
+  ticket, not the other way around.
 
 ---
 

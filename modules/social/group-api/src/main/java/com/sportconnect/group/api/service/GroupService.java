@@ -40,7 +40,12 @@ public interface GroupService {
      */
     Page<GroupResponse> getUserGroups(UUID userId, Pageable pageable);
     
-    Page<GroupSearchResponse> getPublicGroups(UUID currentUserId, Long sportId, String keyword, Pageable pageable);
+    /**
+     * Searches public groups. {@code sportId} is the legacy single-sport filter (kept for
+     * back-compat); {@code sportIds} is a newer multi-sport filter (A10) — when non-empty it
+     * takes priority over {@code sportId} rather than the two being combined/ORed together.
+     */
+    Page<GroupSearchResponse> getPublicGroups(UUID currentUserId, Long sportId, List<Long> sportIds, String keyword, Pageable pageable);
     
     GroupResponse updateGroup(Long groupId, UUID userId, UpdateGroupRequest request);
     

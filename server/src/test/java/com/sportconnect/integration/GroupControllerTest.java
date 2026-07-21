@@ -187,8 +187,8 @@ class GroupControllerTest extends BaseIT {
     @Test
     void getPublicGroups_Success() throws Exception {
         // Arrange
-        // Signature grew to (viewerId, sportId, search, pageable) → Page<GroupSearchResponse>
-        // in the group-spaces work
+        // Signature grew to (viewerId, sportId, sportIds, search, pageable) → Page<GroupSearchResponse>
+        // (A10 added sportIds alongside the legacy single sportId)
         com.sportconnect.group.api.dto.GroupSearchResponse searchResponse =
                 com.sportconnect.group.api.dto.GroupSearchResponse.builder()
                         .id(1L)
@@ -199,7 +199,7 @@ class GroupControllerTest extends BaseIT {
         Page<com.sportconnect.group.api.dto.GroupSearchResponse> page =
                 new PageImpl<>(List.of(searchResponse),
                         org.springframework.data.domain.PageRequest.of(0, 10), 1);
-        when(groupService.getPublicGroups(any(), any(), any(), any())).thenReturn(page);
+        when(groupService.getPublicGroups(any(), any(), any(), any(), any())).thenReturn(page);
 
         // Act & Assert
         mockMvc.perform(get("/api/groups/public")
@@ -209,7 +209,7 @@ class GroupControllerTest extends BaseIT {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].groupName").value("Test Group"));
 
-        verify(groupService).getPublicGroups(any(), any(), any(), any());
+        verify(groupService).getPublicGroups(any(), any(), any(), any(), any());
     }
 
     @Test

@@ -249,10 +249,17 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<GroupSearchResponse> getPublicGroups(UUID currentUserId, Long sportId, String keyword, Pageable pageable) {
+    public Page<GroupSearchResponse> getPublicGroups(UUID currentUserId, Long sportId, List<Long> sportIds, String keyword, Pageable pageable) {
+        // A10: sportIds (non-empty) takes priority over the legacy single sportId — the two
+        // are never combined/ORed. A single sportId is wrapped into a one-element list so the
+        // repository only ever has to reason about one IN-based filter shape.
+        List<Long> effectiveSportIds = (sportIds != null && !sportIds.isEmpty())
+                ? sportIds
+                : (sportId != null ? List.of(sportId) : null);
+
         Page<Object[]> rawPage = currentUserId != null
-                ? groupRepository.searchPublicGroupsWithCounts(currentUserId, sportId, keyword, pageable)
-                : groupRepository.searchPublicGroupsAnon(sportId, keyword, pageable);
+                ? groupRepository.searchPublicGroupsWithCounts(currentUserId, effectiveSportIds, keyword, pageable)
+                : groupRepository.searchPublicGroupsAnon(effectiveSportIds, keyword, pageable);
 
         if (rawPage.isEmpty()) {
             return org.springframework.data.domain.Page.empty(pageable);
