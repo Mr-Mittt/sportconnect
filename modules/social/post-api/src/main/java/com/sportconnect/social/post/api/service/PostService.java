@@ -14,6 +14,16 @@ public interface PostService {
 
     PostResponse createPost(UUID userId, CreatePostRequest request);
 
+    /**
+     * Creates a {@code GROUP_SYSTEM} post directly, bypassing {@link #createPost}'s validation.
+     * Not reachable via the public {@code POST /api/posts} endpoint — {@code createPost} rejects
+     * caller-supplied {@code postType == GROUP_SYSTEM} outright, since a self-authored "system"
+     * post could otherwise be used to impersonate the system or fabricate a social-graph claim
+     * (e.g. a fake "invited by" mention). Intended only for {@code GroupServiceImpl} to call when
+     * a new member joins a group (B9).
+     */
+    void createSystemPost(Long groupId, UUID authorUserId, String content);
+
     PostResponse getPostById(Long postId, UUID currentUserId);
 
     /**

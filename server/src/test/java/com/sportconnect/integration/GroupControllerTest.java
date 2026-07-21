@@ -255,19 +255,18 @@ class GroupControllerTest extends BaseIT {
     void addMember_Success() throws Exception {
         // Arrange
         UUID targetUserId = UUID.randomUUID();
-        doNothing().when(groupService).addMember(1L, userId, targetUserId, "group_member");
+        doNothing().when(groupService).addMember(1L, userId, targetUserId);
 
         // Act & Assert
         mockMvc.perform(post("/api/groups/1/members")
                         .with(csrf())
                         .param("adminUserId", userId.toString())
-                        .param("targetUserId", targetUserId.toString())
-                        .param("roleName", "group_member"))
+                        .param("targetUserId", targetUserId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Member added successfully"));
+                .andExpect(jsonPath("$.message").value("Invitation sent — awaiting the user's acceptance"));
 
-        verify(groupService).addMember(1L, userId, targetUserId, "group_member");
+        verify(groupService).addMember(1L, userId, targetUserId);
     }
 
     @Test

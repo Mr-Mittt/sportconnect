@@ -603,6 +603,10 @@ class GroupServiceImplSpec extends Specification {
         and: "group has room under its type cap"
         def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
 
+        and: "the owner membership, for the welcome post"
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()
+
         when: "accepting join request"
         groupService.acceptJoinRequest(1L, userId)
 
@@ -617,6 +621,11 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
         1 * groupMemberRepository.save(_ as GroupMember)
         1 * joinRequestRepository.save({ GroupJoinRequest req -> req.status == "accepted" })
+
+        and: "welcome post is created, authored by the owner"
+        1 * userService.getUsersByIds([otherUserId]) >> [(otherUserId): testUser]
+        1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
+        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
     }
 
     def "acceptJoinRequest should throw BadRequestException when group is at its member cap"() {
@@ -1589,6 +1598,8 @@ class GroupServiceImplSpec extends Specification {
                 .id(1L).groupId(testGroup.id).inviterId(otherUserId).inviteeId(inviteeId)
                 .status("pending_user").build()
         def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()
 
         when:
         groupService.acceptInvitation(1L, inviteeId)
@@ -1601,6 +1612,12 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
         1 * groupMemberRepository.save({ it.userId == inviteeId && it.roleId == memberRole.id })
         1 * invitationRepository.save({ it.status == "accepted" })
+
+        and: "welcome post mentions the inviter, authored by the owner"
+        1 * userService.getUsersByIds([inviteeId, otherUserId]) >> [(inviteeId): testUser, (otherUserId): testUser]
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
+        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
     }
 
     def "acceptInvitation should throw BadRequestException when group is at its member cap"() {
@@ -1921,15 +1938,17 @@ class GroupServiceImplSpec extends Specification {
     }
 
     // ─── addMember ────────────────────────────────────────────────────────────
+    // B9: addMember no longer inserts a GroupMember row directly — it creates a self-approved
+    // (pending_user) GroupInvitation that the target must still accept.
 
-    def "addMember should create membership when caller is admin"() {
-        given: "admin adds a new user as group_member"
+    def "addMember should create a self-approved pending_user invitation when caller is admin"() {
+        given: "admin invites a friend, auto-approved"
         def adminMember = GroupMember.builder()
                 .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
         def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
 
         when:
-        groupService.addMember(testGroup.id, userId, otherUserId, "group_member")
+        groupService.addMember(testGroup.id, userId, otherUserId)
 
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
@@ -1937,23 +1956,25 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
-        1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
+        1 * userFriendService.areFriends(userId, otherUserId) >> true
+        1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> false
+        1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
-        1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
-        1 * groupMemberRepository.save({
-            GroupMember m -> m.userId == otherUserId && m.roleId == memberRole.id
+        1 * invitationRepository.save({
+            GroupInvitation inv -> inv.groupId == testGroup.id && inv.inviterId == userId &&
+                    inv.inviteeId == otherUserId && inv.status == "pending_user" && inv.reviewedBy == userId
         })
     }
 
     def "addMember should throw BadRequestException when group is at its member cap"() {
-        given: "admin tries to add a user to a full group"
+        given: "admin tries to invite a friend to a full group"
         def adminMember = GroupMember.builder()
                 .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
         def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
 
         when:
-        groupService.addMember(testGroup.id, userId, otherUserId, "group_member")
+        groupService.addMember(testGroup.id, userId, otherUserId)
 
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
@@ -1961,47 +1982,49 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
-        1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
+        1 * userFriendService.areFriends(userId, otherUserId) >> true
+        1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> false
+        1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> defaultGroupType.maxMembers
-        0 * groupMemberRepository.save(_)
+        0 * invitationRepository.save(_)
         thrown(BadRequestException)
     }
 
     def "addMember should throw NotFoundException when group does not exist"() {
         when:
-        groupService.addMember(999L, userId, otherUserId, "group_member")
+        groupService.addMember(999L, userId, otherUserId)
 
         then:
         1 * groupRepository.existsById(999L) >> false
-        0 * groupMemberRepository.save(_)
+        0 * invitationRepository.save(_)
         thrown(NotFoundException)
     }
 
     def "addMember should throw BadRequestException when caller is not admin or owner"() {
-        given: "regular member tries to add someone"
+        given: "regular member tries to invite someone"
         def callerMember = GroupMember.builder()
                 .groupId(testGroup.id).userId(userId).roleId(memberRole.id).build()
 
         when:
-        groupService.addMember(testGroup.id, userId, otherUserId, "group_member")
+        groupService.addMember(testGroup.id, userId, otherUserId)
 
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(callerMember)
-        0 * groupMemberRepository.save(_)
+        0 * invitationRepository.save(_)
         thrown(BadRequestException)
     }
 
     def "addMember should throw BadRequestException when target is already a member"() {
-        given: "admin tries to add a user who is already a member"
+        given: "admin tries to invite a user who is already a member"
         def adminMember = GroupMember.builder()
                 .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
 
         when:
-        groupService.addMember(testGroup.id, userId, otherUserId, "group_member")
+        groupService.addMember(testGroup.id, userId, otherUserId)
 
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
@@ -2009,7 +2032,46 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> true
-        0 * groupMemberRepository.save(_)
+        0 * invitationRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "addMember should throw BadRequestException when admin and target are not friends"() {
+        given: "admin tries to invite a non-friend"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
+
+        when:
+        groupService.addMember(testGroup.id, userId, otherUserId)
+
+        then:
+        1 * groupRepository.existsById(testGroup.id) >> true
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
+        1 * userFriendService.areFriends(userId, otherUserId) >> false
+        0 * invitationRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "addMember should throw BadRequestException when target already has a pending invitation"() {
+        given: "target already has an in-flight invitation to this group"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
+
+        when:
+        groupService.addMember(testGroup.id, userId, otherUserId)
+
+        then:
+        1 * groupRepository.existsById(testGroup.id) >> true
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
+        1 * userFriendService.areFriends(userId, otherUserId) >> true
+        1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> true
+        0 * invitationRepository.save(_)
         thrown(BadRequestException)
     }
 

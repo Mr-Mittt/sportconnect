@@ -47,7 +47,16 @@ public interface GroupService {
     void deleteGroup(Long groupId, UUID userId);
 
     // Member Management
-    void addMember(Long groupId, UUID adminUserId, UUID targetUserId, String roleName);
+
+    /**
+     * Owner/admin adds {@code targetUserId} to the group. Does NOT add them immediately (B9) —
+     * creates a {@code GroupInvitation} at {@code pending_user} (self-approved by the caller) that
+     * {@code targetUserId} must accept via {@link #acceptInvitation}, same as a peer-sent
+     * invitation once approved. Still requires the caller and target to be friends, same gate as
+     * {@link #createInvitation}. Always results in a {@code group_member} role on acceptance —
+     * promote via {@link #updateMemberRole} afterward if a higher role is needed.
+     */
+    void addMember(Long groupId, UUID adminUserId, UUID targetUserId);
     
     void removeMember(Long groupId, UUID adminUserId, UUID targetUserId);
     

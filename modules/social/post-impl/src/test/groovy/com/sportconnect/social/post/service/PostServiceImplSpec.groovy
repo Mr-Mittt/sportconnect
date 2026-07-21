@@ -227,6 +227,35 @@ class PostServiceImplSpec extends Specification {
         thrown(BadRequestException)
     }
 
+    def "createPost rejects caller-supplied GROUP_SYSTEM postType"() {
+        given: "a caller tries to self-author a system post (B9 spoofing guard)"
+        def request = CreatePostRequest.builder()
+                .content("fake system message")
+                .postType(PostType.GROUP_SYSTEM)
+                .groupId(groupId)
+                .build()
+
+        when:
+        postService.createPost(userId, request)
+
+        then:
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    // ── createSystemPost (B9) ─────────────────────────────────────────────────
+
+    def "createSystemPost creates a GROUP_SYSTEM post authored by the given user"() {
+        when:
+        postService.createSystemPost(groupId, userId, "Alice joined the group 👋")
+
+        then:
+        1 * postRepository.save({
+            Post p -> p.postType == PostType.GROUP_SYSTEM && p.groupId == groupId &&
+                    p.userId == userId && p.content == "Alice joined the group 👋"
+        })
+    }
+
     // ── createPost — GROUP_POST ───────────────────────────────────────────────
 
     def "createPost GROUP_POST without groupId throws BadRequestException"() {
@@ -730,6 +759,21 @@ class PostServiceImplSpec extends Specification {
         thrown(BadRequestException)
     }
 
+    def "updatePost rejects GROUP_SYSTEM posts even for the nominal author"() {
+        given: "the post is authored (per B9) by the current owner, who tries to edit it"
+        def post = savedPost(PostType.GROUP_SYSTEM, groupId)
+        def request = CreatePostRequest.builder().content("rewritten").build()
+
+        when:
+        postService.updatePost(postId, userId, request)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * groupService._
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
     // ── deletePost ────────────────────────────────────────────────────────────
 
     def "deletePost soft deletes post when user is owner"() {
@@ -798,6 +842,20 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         1 * groupService.isGroupOwner(groupId, callerId) >> false
         1 * groupService.isGroupAdmin(groupId, callerId) >> false
+        thrown(BadRequestException)
+    }
+
+    def "deletePost rejects GROUP_SYSTEM posts even for the group owner"() {
+        given: "the post is authored (per B9) by the current owner, who tries to delete it"
+        def post = savedPost(PostType.GROUP_SYSTEM, groupId)
+
+        when:
+        postService.deletePost(postId, userId)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * groupService._
+        0 * postRepository.save(_)
         thrown(BadRequestException)
     }
 

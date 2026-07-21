@@ -83,6 +83,9 @@ public class PostServiceImpl implements PostService {
         PostType postType = request.getPostType() != null ? request.getPostType() : PostType.USER_FEED;
         Long groupId = request.getGroupId();
 
+        if (postType == PostType.GROUP_SYSTEM) {
+            throw new BadRequestException("GROUP_SYSTEM posts cannot be created directly");
+        }
         if (postType == PostType.USER_FEED && groupId != null) {
             throw new BadRequestException("USER_FEED posts cannot be associated with a group");
         }
@@ -149,6 +152,20 @@ public class PostServiceImpl implements PostService {
         List<Post> single = List.of(post);
         return mapToResponse(post, userId, hashtagService.getTagsForPost(post.getId()),
                 getUsersForPosts(single), getSportsForPosts(single));
+    }
+
+    @Override
+    @Transactional
+    public void createSystemPost(Long groupId, UUID authorUserId, String content) {
+        Post post = Post.builder()
+                .userId(authorUserId)
+                .groupId(groupId)
+                .postType(PostType.GROUP_SYSTEM)
+                .content(content)
+                .visibility("public")
+                .build();
+        postRepository.save(post);
+        log.info("Created GROUP_SYSTEM post for group {} authored by {}", groupId, authorUserId);
     }
 
     @Override
@@ -226,6 +243,10 @@ public class PostServiceImpl implements PostService {
         Post post = postRepository.findByIdAndIsActiveTrue(postId)
                 .orElseThrow(() -> new NotFoundException("Post not found"));
 
+        if (post.getPostType() == PostType.GROUP_SYSTEM) {
+            throw new BadRequestException("GROUP_SYSTEM posts cannot be edited");
+        }
+
         boolean isCreator = post.getUserId().equals(userId);
         boolean isBroadcastModerator = post.getPostType() == PostType.GROUP_BROADCAST
                 && post.getGroupId() != null
@@ -257,6 +278,10 @@ public class PostServiceImpl implements PostService {
     public void deletePost(Long postId, UUID userId) {
         Post post = postRepository.findByIdAndIsActiveTrue(postId)
                 .orElseThrow(() -> new NotFoundException("Post not found"));
+
+        if (post.getPostType() == PostType.GROUP_SYSTEM) {
+            throw new BadRequestException("GROUP_SYSTEM posts cannot be deleted");
+        }
 
         boolean isOwner = post.getUserId().equals(userId);
         boolean isGroupModerator = post.getGroupId() != null &&

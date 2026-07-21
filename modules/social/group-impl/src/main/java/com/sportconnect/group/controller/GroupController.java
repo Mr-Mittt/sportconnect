@@ -155,22 +155,24 @@ public class GroupController {
 
     // Member Management
 
-    @Operation(summary = "Add a member directly", description = "Owner or admin only.")
+    @Operation(summary = "Invite a member directly", description = "Owner or admin only. Creates a "
+            + "self-approved invitation (status pending_user) rather than adding the user "
+            + "immediately — they must still accept it via the invitations accept endpoint. "
+            + "Caller and target must be friends, same gate as a peer-sent invitation.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Member added"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin, or already a member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Invitation sent"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin, already a member, not friends, or already has a pending invitation"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found, or roleName doesn't exist")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
     @PostMapping("/{groupId}/members")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> addMember(
             @PathVariable Long groupId,
             @AuthenticationPrincipal String userIdStr,
-            @RequestParam UUID targetUserId,
-            @RequestParam String roleName) {
-        groupService.addMember(groupId, UUID.fromString(userIdStr), targetUserId, roleName);
-        return ResponseEntity.ok(ApiResponse.<Void>success("Member added successfully", null));
+            @RequestParam UUID targetUserId) {
+        groupService.addMember(groupId, UUID.fromString(userIdStr), targetUserId);
+        return ResponseEntity.ok(ApiResponse.<Void>success("Invitation sent — awaiting the user's acceptance", null));
     }
 
     @Operation(summary = "Remove a member", description = "Owner or admin only. The owner cannot be removed this way.")
