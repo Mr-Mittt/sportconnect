@@ -140,7 +140,17 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `BadRequestException` has no global handler anywhere in the app — tracked as **C1** in the new
   `modules/common/docs/BACKLOG_MVP.md`.
 - **U8 (2026-07-03):** Fix N+1 in `UserFriendServiceImpl` pending-request mappers — `toFriendRequestResponse` no longer calls `userRepository.findById()` twice per request; new shared helper `mapFriendRequests()` batches all sender+receiver ids into 1 `findAllById()` call for the whole list instead of `1 + 2N`; found during the same cross-module N+1 audit as group-impl's A7/A8 and post-impl's A6/A7; automatically removes the indirect waste in `searchUsers` (U6) too, which called these methods purely for id extraction; 1 new Spock test (empty-input guard)
-- **MVP backlog:** 8 tickets (U1–U8) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, **all `DONE`**
+- **U9 (2026-07-22):** Fix `sendFriendRequest` crash on re-send after decline/cancel/unfriend —
+  `friend_requests`' `UNIQUE(sender_id, receiver_id)` plus accept/decline/cancel only ever flipping
+  `status` (never deleting the row) meant re-sending to anyone previously declined/cancelled/
+  unfriended hit the unique constraint on `INSERT`, an unhandled 500, not a clean error. Now looks up
+  any existing row for the pair regardless of status and reactivates it back to `PENDING` instead of
+  inserting a duplicate (still blocks re-sending onto a genuinely `PENDING` row, unchanged). Corrected
+  U1's own summary, which had framed the crash's symptom ("prevents re-sending") as an intended
+  design decision. 3 new Spock tests; live-verified against the real running backend (decline→resend
+  and accept→unfriend→resend both now return `200`). Found while wiring FRIEND-1's real friend-request
+  flow — see `client/docs/FRIEND-1_FRIENDS_PAGE.md`.
+- **MVP backlog:** 9 tickets (U1–U9) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, **all `DONE`**
 
 #### `modules:sport:sport-api` + `modules:sport:sport-impl`
 - `Sport` entity: name, description, category, icon_url, min/max players, soft delete

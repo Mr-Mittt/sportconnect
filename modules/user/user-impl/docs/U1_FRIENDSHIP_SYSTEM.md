@@ -32,7 +32,7 @@ A bidirectional explicit friendship system replacing the old `user_follows` unid
 ## Key decisions
 
 - **Two-row friendships:** `friendships` stores one row per direction (`(A,B)` and `(B,A)`) so `getFriends(userId)` is a simple `findByUserId` — no OR query needed.
-- **`friend_requests` kept after accept:** Status updated to ACCEPTED rather than deleted. Preserves history and prevents re-sending.
+- **`friend_requests` kept after accept:** Status updated to ACCEPTED rather than deleted. Preserves history. **Correction (U9, 2026-07-22):** "prevents re-sending" described a symptom, not a real design goal — combined with the table's `UNIQUE(sender_id, receiver_id)` constraint, a kept row of any non-PENDING status (DECLINED/CANCELLED/stale ACCEPTED after an unfriend) made `sendFriendRequest` crash with an unhandled persistence exception on re-send, rather than cleanly blocking it. U9 fixed this by reactivating the existing row back to PENDING instead of inserting a duplicate — re-sending now works as a real user would expect.
 - **`UserFriendService` in `user-api`:** Cross-domain callers (`group-impl` invite guard, `post-impl` feed) use `areFriends()` / `getAcceptedFriendIds()` via this interface only — never import user-impl directly.
 - **SecurityConfig:** Added `.requestMatchers("/api/users/friends/**").authenticated()` before the broad `GET /api/users/**` permit-all rule so friend endpoints always require auth.
 - **`getAcceptedFriendIds` returns `List<UUID>`:** Used by B2 (personalized feed) in an `IN` clause.

@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -34,6 +35,21 @@ public class UserFriendServiceImpl implements UserFriendService {
     private final FriendshipRepository friendshipRepository;
     private final UserRepository userRepository;
 
+    /**
+     * Sends a friend request from {@code senderId} to {@code receiverId}, or reactivates one.
+     * {@code friend_requests} has a {@code UNIQUE(sender_id, receiver_id)} constraint — one row per
+     * directed pair, forever, since accept/decline/cancel only flip {@code status} rather than
+     * deleting the row. A prior request from this exact sender to this exact receiver therefore
+     * always has a matching row, regardless of its outcome: still {@code PENDING} (rejected below,
+     * unchanged behavior), {@code DECLINED}/{@code CANCELLED}, or {@code ACCEPTED} for a friendship
+     * that was later removed (removeFriend only deletes the {@code friendships} rows, not this one).
+     * The last three cases reactivate that same row back to {@code PENDING} instead of inserting a
+     * second row for the pair, which would violate the unique constraint and surface as an
+     * unhandled persistence exception rather than a clean 400 — a real bug, not a "re-sending is
+     * blocked by design" outcome, whatever an older name-only reading of the schema might suggest.
+     * {@code createdAt} is intentionally left as the original request's timestamp ({@code @CreationTimestamp}
+     * is not updatable) — {@code updatedAt} reflects the reactivation.
+     */
     @Override
     @Transactional
     public void sendFriendRequest(UUID senderId, UUID receiverId) {
@@ -48,8 +64,19 @@ public class UserFriendServiceImpl implements UserFriendService {
             throw new BadRequestException("You are already friends");
         }
 
-        friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(senderId, receiverId, FriendRequestStatus.PENDING)
-                .ifPresent(r -> { throw new BadRequestException("Friend request already pending"); });
+        Optional<FriendRequest> existing = friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId);
+        if (existing.isPresent()) {
+            FriendRequest request = existing.get();
+            FriendRequestStatus previousStatus = request.getStatus();
+            if (previousStatus == FriendRequestStatus.PENDING) {
+                throw new BadRequestException("Friend request already pending");
+            }
+            request.setStatus(FriendRequestStatus.PENDING);
+            friendRequestRepository.save(request);
+            log.info("Friend request re-sent from {} to {} (reactivated existing row, was {})",
+                    senderId, receiverId, previousStatus);
+            return;
+        }
 
         FriendRequest request = FriendRequest.builder()
                 .senderId(senderId)
