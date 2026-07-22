@@ -4,7 +4,7 @@ import { act, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
-import { sportProfilesQueryKey } from './useSportProfiles';
+import { sportProfilesQueryKey } from './useSportProfilesForUser';
 import { useAddSportProfile } from './useAddSportProfile';
 
 function profile(overrides: Partial<UserSportProfileResponse>): UserSportProfileResponse {

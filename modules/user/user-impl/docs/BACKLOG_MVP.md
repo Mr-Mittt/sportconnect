@@ -27,6 +27,9 @@
 | 6 | U6 | User discovery — find people to add as friends | `DONE` |
 | 7 | U7 | General physical profile stats | `DONE` |
 | 8 | U8 | Fix N+1 in UserFriendServiceImpl pending-request mappers | `DONE` |
+| 9 | U9 | Fix sendFriendRequest crash on re-send after decline/cancel/unfriend | `DONE` |
+| 10 | U10 | Crossed friend requests establish friendship immediately | `DONE` |
+| 11 | U11 | Protect user data — scope public user-lookup endpoints away from full PII | `TODO` |
 
 **Dependencies:**
 ```
@@ -370,6 +373,152 @@ front, one `userRepository.findAllById(...)` call (same domain, no cross-domain 
 methods to expect a single batched `findAllById` call instead.
 
 **Out of scope:** no change to what data is displayed — pure performance refactor, same fields/values.
+
+---
+
+### U9 · Fix sendFriendRequest crash on re-send after decline/cancel/unfriend
+**Status:** `DONE`  
+**Type:** Bug Fix  
+**Scope:** `UserFriendServiceImpl.sendFriendRequest`, `FriendRequestRepository` only
+
+**Found while wiring FRIEND-1** (client Friends page): `friend_requests` has
+`UNIQUE(sender_id, receiver_id)` — accept/decline/cancel only flip `status`, they never delete the
+row (`friend_requests` kept after accept" was documented in U1's own summary as a deliberate choice
+to preserve history — see the correction below). `sendFriendRequest` only checked for an existing
+row with `status = PENDING`; any other prior outcome for that exact sender→receiver direction
+(`DECLINED`, `CANCELLED`, or a stale `ACCEPTED` row left behind after `removeFriend`, which only
+deletes the `friendships` rows, not this one) fell through to an `INSERT` for the same
+`(sender_id, receiver_id)` pair — a **guaranteed unique-constraint violation**, surfacing as an
+unhandled `DataIntegrityViolationException` (raw 500), not a clean `BadRequestException`. In
+practice this permanently blocked re-sending a request to anyone previously declined/cancelled/
+unfriended, with an ugly failure mode instead of a designed one.
+
+**Correction to U1's summary** (`U1_FRIENDSHIP_SYSTEM.md`): its "Preserves history and prevents
+re-sending" line described the *symptom* as if it were the intended behavior. Permanently blocking
+re-sending (especially after an unfriend) is not a real product requirement anywhere in this
+backlog — it was an unexamined side effect of the unique constraint, not a decision.
+
+**Fix:** `sendFriendRequest` now looks up any existing row for the pair
+(`FriendRequestRepository.findBySenderIdAndReceiverId`, new method) regardless of status. A
+`PENDING` match still throws `"Friend request already pending"` (unchanged). Any other status
+reactivates the *same* row back to `PENDING` (`updatedAt` bumps; `createdAt` stays the original
+timestamp — `@CreationTimestamp` is not updatable) instead of inserting a second row, which would
+hit the same constraint. No migration needed — schema is unchanged, only the service's read/write
+path changed.
+
+**Tests:** `UserFriendServiceImplSpec` updated (`findBySenderIdAndReceiverIdAndStatus` →
+`findBySenderIdAndReceiverId` in the existing "already pending"/"create request" specs) plus 3 new
+cases: reactivate after `DECLINED`, after `CANCELLED`, and after a stale `ACCEPTED` row (friendship
+since removed). `./gradlew :modules:user:user-impl:test` and `:server:test` both green.
+
+**Live-verified against the real running backend**: registered two real users, A → B → decline →
+A re-sends → `200` (was an unhandled 500 before the fix), same `requestId` reactivated to `PENDING`.
+Separately verified the accept → unfriend → re-send path the same way.
+
+**Out of scope:** no notification/audit-trail change; `FriendRequestResponse` still only exposes
+`createdAt` (not `updatedAt`), so a reactivated request's list row shows its original send time, not
+the reactivation time — a minor display nuance, not addressed here.
+
+---
+
+### U10 · Crossed friend requests establish friendship immediately
+**Status:** `DONE`  
+**Type:** Enhancement  
+**Scope:** `UserFriendServiceImpl.sendFriendRequest`/`acceptFriendRequest` only
+
+**User-requested enhancement**, found in the same session as U9: if A sends a request to B, and
+before either accepts/declines, B independently sends a request back to A, both requests would sit
+as two separate `PENDING` rows (`(A,B)` and `(B,A)` — different pairs, no unique-constraint
+conflict) — both people would stay stuck waiting on each other's explicit accept even though mutual
+interest is already obvious from both having initiated contact.
+
+**Fix:** `sendFriendRequest` now checks for an existing `PENDING` row in the *reverse* direction
+(`receiverId → senderId`) before anything else. If found, it's accepted immediately — establishing
+both `friendships` rows and marking that reverse row `ACCEPTED` — instead of inserting a second
+pending row for the forward direction. Extracted the friendship-creation logic shared between this
+path and `acceptFriendRequest`'s explicit-accept path into one private `establishFriendship(FriendRequest)`
+method, so there's a single place that defines "how a request becomes a friendship" rather than two
+copies that could drift.
+
+**Ordering note:** the crossed-request check runs before U9's reactivation check — a crossed
+`PENDING` reverse row always wins over whatever state the forward direction's own row might be in
+(e.g. a previously `CANCELLED` forward row is simply left as-is, never touched, once the reverse
+`PENDING` resolves the relationship via the other row).
+
+**Tests:** 1 new Spock case (`sendFriendRequest should establish friendship immediately when the
+receiver already sent the caller a pending request`); every other existing `sendFriendRequest` test
+updated to stub the new reverse-direction lookup as empty, since Spock `Mock()` returns `null` (not
+`Optional.empty()`) for an unstubbed call — an unstubbed `Optional` would have NPE'd on
+`.isPresent()`. `./gradlew :modules:user:user-impl:test` and `:server:test` both green.
+
+**Live-verified against the real running backend**: two real users registered, A sent a request to
+B, B (without accepting) sent one back to A — both immediately appeared in each other's
+`GET /api/users/friends`, and both pending lists were empty afterward.
+
+**Out of scope:** no change to `acceptFriendRequest`'s own contract or response shape — this only
+changes what `sendFriendRequest` does internally when it detects the crossed case.
+
+---
+
+### U11 · Protect user data — scope public user-lookup endpoints away from full PII
+**Status:** `TODO`  
+**Type:** Security Fix  
+**Scope:** `UserController` (3 endpoints) + a new `user-api` DTO — no change to `UserService`'s
+internal contract or any cross-domain caller
+
+**Found while discussing FRIEND-1's data model.** Returning a user's `id` (a random
+`gen_random_uuid()` value, not a sequential integer) to a client is not itself a security problem —
+it's normal REST practice and not enumerable. The real problem is what three of `UserController`'s
+endpoints do once a caller has (or doesn't even need) an id:
+
+- `GET /api/users/{userId}`
+- `GET /api/users/email/{email}`
+- `GET /api/users/username/{username}`
+
+All three are `security = {}` (public, no authentication at all — `SecurityConfig`'s
+`GET /api/users/**` permit-all rule) and all three return the **full `UserResponse` DTO** — the same
+shape a user's own `/profile` view would get: `email`, `phoneNumber`, `dateOfBirth`, `gender`,
+`heightCm`/`weightKg`/`shoeSizeCm`, `location` (lat/long), `lastLoginAt`, `isEmailVerified`, `roles`.
+No distinction between "a stranger looking someone up" and "the user viewing their own profile."
+
+Two compounding factors make this a real, not theoretical, exposure:
+1. **The email/username lookups don't even require an id** — anyone can type in any email address
+   (guessed, scraped, bought) and get that person's full PII back, unauthenticated.
+2. **User ids are now genuinely everywhere in the app** — post/comment authors, group members,
+   friends list, search results (FEED-1, GRP-3, FRIEND-1, ...). "An attacker would need to already
+   have the id" is not a meaningful barrier once every social feature surfaces ids by design.
+
+**Fix approach (not yet fully designed — confirm at pickup):**
+1. New `PublicUserResponse` DTO in `user-api` — safe subset only: `id`, `fullName`, `username`,
+   `avatarUrl`, `coverUrl`, `bio`. (Deliberately close to FRIEND-1's own `FriendUser` client type —
+   `client/src/features/friends/types.ts` — which already only models this subset; narrowing the
+   backend to match should need little-to-no client change.)
+2. `getUserById`/`getUserByEmail`/`getUserByUsername` in `UserController` return `PublicUserResponse`
+   instead of `UserResponse` for every caller, authenticated or not — no "return full for self"
+   special case, since these 3 endpoints have no reliable way to know who's asking (two of them
+   don't even require auth) and mixing return shapes on one endpoint contract complicates every
+   typed client that already consumes it.
+3. **Confirmed safe to narrow — nothing legitimate depends on the full shape from these 3
+   endpoints today:** grepped every caller. `AuthServiceImpl`/`CommentServiceImpl`/`PostServiceImpl`
+   all call `UserService.getUserById()`/`getUserByEmail()` directly as an **in-process Java method**
+   (the `-api` interface, cross-domain convention) — never through the public REST controller — so
+   narrowing the controller's HTTP response touches none of them. No "view my own full profile"
+   client screen exists yet either (Profile page is still a `ComingSoonPage` stub) to depend on the
+   wider shape.
+4. **A real "get my own full profile" endpoint doesn't exist anywhere** (confirmed in AUTH-3's own
+   summary: no `/api/users/me`, the refresh response's `user` object doubles as who-am-I). If/when
+   the Profile page is scoped, it will need one — flagging this as a related future gap, not solved
+   here, since nothing currently depends on it.
+
+**Tests:** update `UserControllerTest`/`UserServiceImplSpec` wherever these 3 endpoints' response
+shape is asserted; add a case confirming `PublicUserResponse` never serializes `email`/
+`phoneNumber`/`dateOfBirth`/`gender`/`heightCm`/`weightKg`/`shoeSizeCm`/`location`/`lastLoginAt`/
+`roles`.
+
+**Out of scope:** a dedicated authenticated "my own full profile" endpoint (flagged above, not
+built here — nothing depends on it yet); any change to `UserService`'s internal Java contract or
+any in-process cross-domain caller; rate-limiting/enumeration defenses beyond narrowing the response
+(the ids themselves are already non-enumerable).
 
 ---
 

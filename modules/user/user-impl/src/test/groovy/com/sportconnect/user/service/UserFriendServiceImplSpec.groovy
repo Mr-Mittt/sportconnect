@@ -42,7 +42,8 @@ class UserFriendServiceImplSpec extends Specification {
         then:
         1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.of(user(receiverId))
         1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
-        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(senderId, receiverId, FriendRequestStatus.PENDING) >> Optional.empty()
+        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.empty()
+        1 * friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId) >> Optional.empty()
         1 * friendRequestRepository.save(_ as FriendRequest)
     }
 
@@ -85,8 +86,77 @@ class UserFriendServiceImplSpec extends Specification {
         then:
         1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.of(user(receiverId))
         1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
-        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(senderId, receiverId, FriendRequestStatus.PENDING) >> Optional.of(existing)
+        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.empty()
+        1 * friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId) >> Optional.of(existing)
         thrown(BadRequestException)
+        0 * friendRequestRepository.save(_)
+    }
+
+    def "sendFriendRequest should reactivate a DECLINED row back to PENDING instead of inserting a second row"() {
+        given:
+        def existing = FriendRequest.builder().id(requestId).senderId(senderId).receiverId(receiverId)
+                .status(FriendRequestStatus.DECLINED).build()
+
+        when:
+        service.sendFriendRequest(senderId, receiverId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.of(user(receiverId))
+        1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
+        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.empty()
+        1 * friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId) >> Optional.of(existing)
+        1 * friendRequestRepository.save({ it.id == requestId && it.status == FriendRequestStatus.PENDING })
+    }
+
+    def "sendFriendRequest should reactivate a CANCELLED row back to PENDING"() {
+        given:
+        def existing = FriendRequest.builder().id(requestId).senderId(senderId).receiverId(receiverId)
+                .status(FriendRequestStatus.CANCELLED).build()
+
+        when:
+        service.sendFriendRequest(senderId, receiverId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.of(user(receiverId))
+        1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
+        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.empty()
+        1 * friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId) >> Optional.of(existing)
+        1 * friendRequestRepository.save({ it.id == requestId && it.status == FriendRequestStatus.PENDING })
+    }
+
+    def "sendFriendRequest should reactivate a stale ACCEPTED row (friendship since removed) back to PENDING"() {
+        given:
+        def existing = FriendRequest.builder().id(requestId).senderId(senderId).receiverId(receiverId)
+                .status(FriendRequestStatus.ACCEPTED).build()
+
+        when:
+        service.sendFriendRequest(senderId, receiverId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.of(user(receiverId))
+        // Not currently friends (removeFriend already ran) — passes the earlier "already friends" gate.
+        1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
+        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.empty()
+        1 * friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId) >> Optional.of(existing)
+        1 * friendRequestRepository.save({ it.id == requestId && it.status == FriendRequestStatus.PENDING })
+    }
+
+    def "sendFriendRequest should establish friendship immediately when the receiver already sent the caller a pending request (crossed requests)"() {
+        given:
+        def reverseRequest = FriendRequest.builder().id(requestId).senderId(receiverId).receiverId(senderId)
+                .status(FriendRequestStatus.PENDING).build()
+
+        when:
+        service.sendFriendRequest(senderId, receiverId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.of(user(receiverId))
+        1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
+        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.of(reverseRequest)
+        1 * friendRequestRepository.save({ it.id == requestId && it.status == FriendRequestStatus.ACCEPTED })
+        2 * friendshipRepository.save(_ as Friendship)
+        // Never falls through to the reactivation/fresh-insert path for the (senderId, receiverId) pair.
+        0 * friendRequestRepository.findBySenderIdAndReceiverId(_, _)
     }
 
     // ─── acceptFriendRequest ─────────────────────────────────────────────────
