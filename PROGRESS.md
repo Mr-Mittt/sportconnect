@@ -150,7 +150,18 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   design decision. 3 new Spock tests; live-verified against the real running backend (decline→resend
   and accept→unfriend→resend both now return `200`). Found while wiring FRIEND-1's real friend-request
   flow — see `client/docs/FRIEND-1_FRIENDS_PAGE.md`.
-- **MVP backlog:** 9 tickets (U1–U9) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, **all `DONE`**
+- **U10 (2026-07-22):** Crossed friend requests establish friendship immediately — if A sends B a
+  request and B independently sends one back before either accepts, both requests used to sit as
+  two separate `PENDING` rows (different `(sender,receiver)` pairs, no constraint conflict), leaving
+  both people waiting on each other's explicit accept despite mutual interest already being obvious.
+  `sendFriendRequest` now checks for a `PENDING` reverse-direction row first and accepts it
+  immediately instead of inserting a second pending row; extracted the shared friendship-creation
+  logic into one `establishFriendship()` used by both this path and the explicit
+  `acceptFriendRequest` path. 1 new Spock test + every other `sendFriendRequest` test updated to stub
+  the new reverse-direction lookup (Spock `Mock()` returns `null`, not `Optional.empty()`, for an
+  unstubbed call). Live-verified against the real running backend: both users appeared in each
+  other's friends list immediately, no pending rows left. User-requested, same session as U9.
+- **MVP backlog:** 10 tickets (U1–U10) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, **all `DONE`**
 
 #### `modules:sport:sport-api` + `modules:sport:sport-impl`
 - `Sport` entity: name, description, category, icon_url, min/max players, soft delete

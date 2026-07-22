@@ -36,19 +36,31 @@ public class UserFriendServiceImpl implements UserFriendService {
     private final UserRepository userRepository;
 
     /**
-     * Sends a friend request from {@code senderId} to {@code receiverId}, or reactivates one.
-     * {@code friend_requests} has a {@code UNIQUE(sender_id, receiver_id)} constraint — one row per
-     * directed pair, forever, since accept/decline/cancel only flip {@code status} rather than
-     * deleting the row. A prior request from this exact sender to this exact receiver therefore
-     * always has a matching row, regardless of its outcome: still {@code PENDING} (rejected below,
-     * unchanged behavior), {@code DECLINED}/{@code CANCELLED}, or {@code ACCEPTED} for a friendship
-     * that was later removed (removeFriend only deletes the {@code friendships} rows, not this one).
-     * The last three cases reactivate that same row back to {@code PENDING} instead of inserting a
-     * second row for the pair, which would violate the unique constraint and surface as an
-     * unhandled persistence exception rather than a clean 400 — a real bug, not a "re-sending is
-     * blocked by design" outcome, whatever an older name-only reading of the schema might suggest.
-     * {@code createdAt} is intentionally left as the original request's timestamp ({@code @CreationTimestamp}
-     * is not updatable) — {@code updatedAt} reflects the reactivation.
+     * Sends a friend request from {@code senderId} to {@code receiverId}, or resolves one
+     * immediately without waiting for an explicit accept.
+     * <p>
+     * Three outcomes, checked in order:
+     * <ol>
+     *   <li><b>Crossed requests (U10):</b> the receiver already sent the caller a {@code PENDING}
+     *       request in the other direction — mutual interest is already established, so this
+     *       accepts that reverse request on the spot (via {@link #establishFriendship}) instead of
+     *       creating a second, redundant pending row that would leave both people waiting on each
+     *       other.</li>
+     *   <li><b>Reactivation (U9):</b> {@code friend_requests} has a
+     *       {@code UNIQUE(sender_id, receiver_id)} constraint — one row per directed pair, forever,
+     *       since accept/decline/cancel only flip {@code status} rather than deleting the row. A
+     *       prior request from this exact sender to this exact receiver therefore always has a
+     *       matching row, regardless of its outcome: {@code DECLINED}/{@code CANCELLED}, or
+     *       {@code ACCEPTED} for a friendship later removed (removeFriend only deletes the
+     *       {@code friendships} rows, not this one). Reactivates that same row back to
+     *       {@code PENDING} instead of inserting a second row for the pair, which would violate the
+     *       unique constraint and surface as an unhandled persistence exception rather than a clean
+     *       400. {@code createdAt} is intentionally left as the original request's timestamp
+     *       ({@code @CreationTimestamp} is not updatable) — {@code updatedAt} reflects the
+     *       reactivation. A still-{@code PENDING} existing row is rejected instead (unchanged from
+     *       before U9).</li>
+     *   <li><b>Fresh request:</b> no row exists for the pair at all — inserts a new one.</li>
+     * </ol>
      */
     @Override
     @Transactional
@@ -62,6 +74,15 @@ public class UserFriendServiceImpl implements UserFriendService {
 
         if (friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId)) {
             throw new BadRequestException("You are already friends");
+        }
+
+        Optional<FriendRequest> reverseRequest = friendRequestRepository
+                .findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING);
+        if (reverseRequest.isPresent()) {
+            establishFriendship(reverseRequest.get());
+            log.info("Crossed friend requests between {} and {} — friendship established immediately",
+                    senderId, receiverId);
+            return;
         }
 
         Optional<FriendRequest> existing = friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId);
@@ -87,16 +108,13 @@ public class UserFriendServiceImpl implements UserFriendService {
         // TODO: notify receiver
     }
 
-    @Override
-    @Transactional
-    public void acceptFriendRequest(UUID requestId, UUID receiverId) {
-        FriendRequest request = friendRequestRepository.findByIdAndReceiverId(requestId, receiverId)
-                .orElseThrow(() -> new NotFoundException("Friend request not found"));
-
-        if (request.getStatus() != FriendRequestStatus.PENDING) {
-            throw new BadRequestException("Friend request is no longer pending");
-        }
-
+    /**
+     * Marks {@code request} {@code ACCEPTED} and writes both direction rows to {@code friendships}.
+     * Shared by {@link #acceptFriendRequest} (explicit accept) and {@link #sendFriendRequest}'s
+     * crossed-request case (implicit accept of the other side's pending request) so there is one
+     * place that defines "how a request becomes a friendship."
+     */
+    private void establishFriendship(FriendRequest request) {
         request.setStatus(FriendRequestStatus.ACCEPTED);
         friendRequestRepository.save(request);
 
@@ -108,6 +126,19 @@ public class UserFriendServiceImpl implements UserFriendService {
                 .userId(request.getReceiverId())
                 .friendId(request.getSenderId())
                 .build());
+    }
+
+    @Override
+    @Transactional
+    public void acceptFriendRequest(UUID requestId, UUID receiverId) {
+        FriendRequest request = friendRequestRepository.findByIdAndReceiverId(requestId, receiverId)
+                .orElseThrow(() -> new NotFoundException("Friend request not found"));
+
+        if (request.getStatus() != FriendRequestStatus.PENDING) {
+            throw new BadRequestException("Friend request is no longer pending");
+        }
+
+        establishFriendship(request);
 
         log.info("Friend request {} accepted", requestId);
     }
