@@ -2,12 +2,16 @@ import { seedAuthenticatedSession } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
- * GRP-3: Members tab — the "find member" filter, "Invite friend" (mocked
- * per this ticket's scope), and the 5 status-grouped lists. Uses
- * `mockOwnedGroup` ("Weekend Tennis Ladder", the only fixture group where
- * the test user is `group_owner`) for the owner-only sections, and
- * `mockGroup` ("Friday Night Football", where the test user is a plain
- * `group_member`) to confirm the role-gated section stays hidden.
+ * GRP-3: Members tab — the "find member" filter and the 5 status-grouped
+ * lists. GRP-4: "Invite friend" now runs a real search (step 3) instead of
+ * the old "Search coming soon." mock. Uses `mockOwnedGroup` ("Weekend Tennis
+ * Ladder", the only fixture group where the test user is `group_owner`) for
+ * the owner-only sections, and `mockGroup` ("Friday Night Football", where
+ * the test user is a plain `group_member`) to confirm the role-gated
+ * section stays hidden. `mockFriend` ("Priya Shah", id `priya-shah`) is
+ * GRP-4's invitable-friend fixture — distinct from `mockGroupJoinRequest`'s
+ * unrelated "Priya Shah" row (a different id) already in "Waiting for group
+ * approve", neither a member nor already invited to `mockOwnedGroup`.
  */
 
 test('Group Members tab — owner sees all 5 sections, accept/decline, filtering, and Invite friend', async ({
@@ -48,14 +52,18 @@ test('Group Members tab — owner sees all 5 sections, accept/decline, filtering
     await page.getByLabel('Find member').fill('');
   });
 
-  await test.step('3. Invite friend opens pre-filled with the current search text, mocked results', async () => {
-    await page.getByLabel('Find member').fill('robin');
+  await test.step('3. Invite friend opens pre-filled, auto-runs a real search, and invites a friend (GRP-4)', async () => {
+    await page.getByLabel('Find member').fill('priya');
     await page.getByRole('button', { name: 'Invite friend' }).click();
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByLabel('Search friends')).toHaveValue('robin');
-    await expect(dialog.getByText('Search coming soon.')).toBeVisible();
+    await expect(dialog.getByLabel('Search friends')).toHaveValue('priya');
+    await expect(dialog.getByText('Priya Shah')).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Invite' }).click();
+    await expect(dialog.getByText('Already invited')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Invite' })).not.toBeVisible();
 
     await dialog.getByRole('button', { name: 'Close' }).click();
     await expect(dialog).not.toBeVisible();

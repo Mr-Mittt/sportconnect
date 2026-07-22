@@ -9,7 +9,8 @@ fixtures exist, and a full catalog of every test case with anything non-obvious 
 is the living reference, that one is the point-in-time implementation record), `AUTH-8_E2E_AUTH_JOURNEY.md`,
 `FEED-10_E2E_FEED_GROUPS_JOURNEY.md`, `FEED-12_COMMENT_MODAL_DEEP_LINK.md` (the `/posts/:postId` route),
 `HF-11_E2E_HOME_FEED_JOURNEY.md`, `HF-10a/b` (visual-regression harness), `GRP-3_MEMBERS_TAB.md`
-(new `group-members.spec.ts` + the first Groups-page block in `a11y.spec.ts`).
+(new `group-members.spec.ts` + the first Groups-page block in `a11y.spec.ts`), `GRP-4_INVITE_FRIEND_REAL.md`
+(replaces `group-members.spec.ts`'s step 3 with a real search + invite).
 
 ---
 
@@ -219,6 +220,12 @@ rules/schedule for `mockOwnedGroup` (both `null` by default — empty-state fixt
 one-group-only keying as `mockGroupSettings` (`groupInfoState`, `GET .../info`) — written via
 `PUT /api/groups/:groupId` (`groups.ts`'s handler also had no coverage for this endpoint at all
 before GRP-2 added rules/schedule; it now updates both `userGroupsState` and `groupInfoState`).
+`mockSentInvitation`: an in-flight invitation to "Robin Park" for `mockOwnedGroup`, `pending_owner`.
+GRP-4 adds a stateful `POST /api/groups/:groupId/invitations` to `groups.ts` — appends to
+`sentInvitationsState`, 400s "User is already a member of this group" for an existing member,
+returns the existing invitation idempotently (201) for a re-invite; the not-friends/
+`allowMemberInvites`-off 400s aren't simulated since the client already filters non-friend results
+out before an invite is reachable.
 
 **Timestamps are never hardcoded** — `hoursAgo`/`hoursFromNow` (`src/shared/lib/mockClock.ts`) compute
 relative to load time. A hardcoded broadcast expiry date drifting into the past (and silently breaking
@@ -229,7 +236,7 @@ and `GET /users/search` for every id these fixtures reference, plus the Add-mode
 
 | Fixture | id | Notes |
 |---|---|---|
-| `mockFriend` | `priya-shah` | Same person as `mockComment`'s commenter — an accepted friend, renders under Offline (Online always empty, no presence system exists) |
+| `mockFriend` | `priya-shah` | Same person as `mockComment`'s commenter — an accepted friend, renders under Offline (Online always empty, no presence system exists). GRP-4 reuses it as `group-members.spec.ts`'s invitable-friend fixture — not a member/not already invited to `mockOwnedGroup` |
 | `mockIncomingFriendRequest` | `req-incoming-1`, sender `hana-kim` | Sent TO the test user — Friend Requests row + the profile panel's Accept/Decline action bar |
 | `mockSentFriendRequest` | `req-outgoing-1`, receiver `diego-alvarez` | Sent BY the test user — Friend Requests row + the profile panel's disabled "Waiting for response" |
 | `mockSearchResultUser` | `owen-clarke`, `friendshipStatus: 'NONE'` | Only reachable via Add mode's directory search, never in the default friend list |
@@ -344,11 +351,14 @@ member read-only rendering of the three toggles and rules/schedule (pure compone
 real navigation involved); independent single-section saves (rules-only, toggle-only) — covered at the
 hook level in `useSettingsUnsavedGuard.test.tsx` instead of duplicating here.
 
-### `e2e/flows/group-members.spec.ts` (GRP-3, 2 `test()`s)
+### `e2e/flows/group-members.spec.ts` (GRP-3, GRP-4, 2 `test()`s)
 
 Uses `mockOwnedGroup` ("Weekend Tennis Ladder", test user is `group_owner`) for the owner-only
 section and the accept flow, and `mockGroup` ("Friday Night Football", test user is a plain
-`group_member`) to confirm the role-gated section stays hidden for a non-manager.
+`group_member`) to confirm the role-gated section stays hidden for a non-manager. GRP-4's step 3
+uses `mockFriend` ("Priya Shah", id `priya-shah`) as the invitable-friend fixture — distinct from
+`mockGroupJoinRequest`'s unrelated "Priya Shah" row (a different id) already in "Waiting for group
+approve"; `mockFriend` is neither a member nor already invited to `mockOwnedGroup`.
 
 **Test 1 — owner sees all 5 sections, accept/decline, filtering, and Invite friend** (4 steps):
 
@@ -356,7 +366,7 @@ section and the accept flow, and `mockGroup` ("Friday Night Football", test user
 |---|---|---|
 | 1. all 5 sections render with real fixture data | "Waiting for group approve" (Priya Shah), "Waiting for user accept" (Robin Park, "Awaiting owner approval"), "Group administrator" (Jordan Lee owner-first, then Sam Ito), "Members" (Alex Chen), "Blacklist" ("Coming soon.") | `mockGroupJoinRequest`/`mockSentInvitation`/`mockGroupMembers` fixtures, all scoped to `mockOwnedGroup.id` |
 | 2. "find member" filters all visible lists in place | Typing "sam" narrows Group administrator to Sam Ito, empties Members to "No matches.", URL unchanged | No debounce, case-insensitive substring — matches the literal spec |
-| 3. Invite friend opens pre-filled, mocked results | Click "Invite friend" with "robin" typed → dialog's search input pre-filled "robin", shows "Search coming soon." | Confirms GRP-3 ships this modal mocked on purpose — real search/invite is GRP-4 |
+| 3. Invite friend opens pre-filled, auto-runs a real search, and invites a friend (GRP-4) | Click "Invite friend" with "priya" typed → dialog's search input pre-filled "priya" → real debounced `GET /users/search` returns Priya Shah (a friend, not yet a member/invited) → click Invite → row flips to "Already invited", button gone | Real `POST /groups/{groupId}/invitations`; supersedes GRP-3's mocked "Search coming soon." step |
 | 4. Accept moves the request into Members | Click Accept in "Waiting for group approve" → Priya Shah disappears from that section, appears in Members | Exercises the stateful MSW accept handler (removes from the group's join-request queue, appends a `group_member` row) |
 
 **Test 2 — a plain member never sees "Waiting for group approve":** selects `mockGroup` (test user is

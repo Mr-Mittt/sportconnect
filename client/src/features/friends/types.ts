@@ -21,11 +21,16 @@ export interface FriendUser {
 }
 
 // UserSearchResponse (GET /api/users/search) — U6's directory-search
-// projection, lighter than UserResponse (no bio/coverUrl).
+// projection, lighter than UserResponse (no bio/coverUrl). `username` is
+// `string | null`, not always a set string (live-verified against the real
+// backend at GRP-4 pickup: a freshly registered account with no username set
+// returns `null` here) — FRIEND-1's original type never rendered this field
+// anywhere, so the gap went unnoticed until GRP-4's InviteFriendModal became
+// the first consumer to actually display it.
 export interface UserSearchResult {
   id: string;
   fullName: string;
-  username: string;
+  username: string | null;
   avatarUrl: string | null;
   city: string | null;
   country: string | null;

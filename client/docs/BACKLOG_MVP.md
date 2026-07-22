@@ -113,8 +113,9 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 42 | GRP-3 | Members tab — group member management (search, invite, 5 status-grouped lists) | `DONE` |
 | 43 | GRP-6 | Join Group modal — multi-select sport filter + grouped results — **new ticket, not in either epic, supersedes GRP-5** | `DONE` |
 | 44 | FRIEND-1 | Friends page — rail, profile/chat panel, directory search, friend-request actions — **new ticket, not in either epic**, inserted ahead of GRP-4 (user decision, 2026-07-22) | `DONE` |
-| 45 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3, unblocked now that FRIEND-1 is `DONE` | `TODO` |
+| 45 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3, unblocked now that FRIEND-1 is `DONE` | `DONE` |
 | 46 | GRP-5 | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
+| 51 | GRP-7 | Wire the invitation approve/accept lifecycle — owner/admin approval + invitee acceptance — **new ticket, not in either epic, found while closing out GRP-4** (2026-07-23) | `TODO` |
 | **Phase 8 — Chat (new, not in either epic — see `documentation/md/CHAT_SERVICE_INTEGRATION.md`)** | | | |
 | 47 | CHAT-2 | Wire GroupChatTab to real-time PubNub delivery — blocked on CHAT-1 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) | `TODO` |
 | 48 | CHAT-4 | Persisted chat history + hardening — blocked on CHAT-3 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) and CHAT-2 | `TODO` |
@@ -168,6 +169,12 @@ DM-1 (backend, new)/DM-2 (client, new) filed alongside FRIEND-1, same lineage as
   backend at all, not even a filed ticket, unlike group chat's CHAT-1) — DM-1 scopes and builds the
   real conversations/messages backend, DM-2 wires FRIEND-1's chat panel to it. Neither blocks
   FRIEND-1 or anything else in this backlog.
+GRP-7 (new, filed 2026-07-23) — GRP-3, GRP-4 (both DONE). No backend blocker: all 6 endpoints it
+  needs already ship in modules/social/group-impl. Discovered while closing out GRP-4: an invitation
+  GRP-4 sends can never be approved/accepted through the app today (the create step is the only one
+  wired) — this ticket wires the remaining owner-approval + invitee-acceptance steps. Two design
+  questions (section layout for owner approval, exact invitee-side placement/post-accept behavior)
+  are still open — see the ticket entry.
 ```
 
 **Backend blockers (tracked outside this backlog):**
@@ -2019,7 +2026,8 @@ against.
 ---
 
 ### GRP-4 · Wire invite-friend search to the real backend
-**Status:** `TODO` · **Type:** Feature · **Dependency:** GRP-3 (`DONE`), FRIEND-1 (`DONE`)
+**Status:** `DONE` (2026-07-22, `client/docs/GRP-4_INVITE_FRIEND_REAL.md`) · **Type:** Feature ·
+**Dependency:** GRP-3 (`DONE`), FRIEND-1 (`DONE`)
 **Origin:** filed alongside GRP-3 — the invite-friend modal ships with mocked "coming soon" results
 in GRP-3 on purpose, so the modal's UI/UX lands independently of the real search+invite call chain.
 
@@ -2041,7 +2049,79 @@ been a dead end. **FRIEND-1** was filed to close that gap and inserted ahead of 
 queue — now `DONE` (`client/docs/FRIEND-1_FRIENDS_PAGE.md`), so this ticket is unblocked and ready
 to pick up for real.
 
-**Not yet scoped in detail** — full acceptance criteria to be written when picked up.
+**Delta (2026-07-22, resolved at pickup):** confirmed `U6` does NOT exclude existing
+members/already-invited users (no `groupId` param exists on the endpoint at all) — so the client
+resolves both client-side against `GroupMembersTab`'s already-loaded members/sentInvitations
+queries. **Supersedes this entry's original "surface the 400 as an inline error" framing for the
+non-friend case**: non-friend search results are dropped from the list entirely (user decision, not
+shown disabled/inline-erroring), since `friendshipStatus` is already known per-row without a click.
+Already-a-member/already-invited friends are NOT filtered out — they're sorted to the end of the
+list, badged instead of actionable. The inline-per-result-error treatment described above still
+applies to the two 400s that aren't knowable ahead of a click (`allowMemberInvites` off, capacity
+full). Also fixed a real pre-existing bug found while live-verifying against the backend:
+`UserSearchResult.username` (FRIEND-1's type) is nullable in practice, not always a string — widened
+the type and guarded the render. Full writeup: `client/docs/GRP-4_INVITE_FRIEND_REAL.md`.
+
+**Found while closing out this ticket (2026-07-23): the invitation lifecycle past "create" is entirely
+unwired client-side** — an invitation this ticket sends can never actually be approved or accepted
+through the app. Filed as **GRP-7** below, not fixed inline (see that entry for the full gap).
+
+---
+
+### GRP-7 · Wire the invitation approve/accept lifecycle
+**Status:** `TODO` · **Type:** Feature · **Dependency:** GRP-3 (`DONE`), GRP-4 (`DONE`) ·
+**Filed:** 2026-07-23, discovered while closing out GRP-4
+
+**Origin:** `POST /api/groups/{groupId}/invitations` (B1) creates every invitation — even one sent by
+the group's own owner — with `status="pending_owner"` unconditionally
+(`GroupServiceImpl.createInvitation`, no special-case for an owner-as-inviter). The controller's own
+Javadoc names the intended flow: *"3-step flow: member invites -> owner approves -> invitee
+accepts."* GRP-3 and GRP-4 together wired only step 1 (create) and a read-only view of what's been
+sent (`GET .../invitations/sent`, GRP-3's "Waiting for user accept" — displays both `pending_owner`/
+`pending_user` rows with a status label, but no actions on either). Steps 2 and 3 have **zero**
+client wiring — six endpoints are entirely unused anywhere in this app:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /{groupId}/invitations` | owner/admin's queue of `pending_owner` invitations awaiting their decision |
+| `PUT /invitations/{id}/approve` | owner/admin approves -> flips to `pending_user` |
+| `PUT /invitations/{id}/decline` | owner/admin declines -> `declined_by_owner` |
+| `GET /invitations/user` | the invitee's own pending (`pending_user`) invitations, across all groups |
+| `PUT /invitations/{id}/accept` | invitee accepts -> becomes a member |
+| `PUT /invitations/{id}/reject` | invitee declines -> `declined_by_user` |
+
+Net effect as GRP-4 ships: an invitation can be *sent* but never actually resolves — it sits at
+`pending_owner` forever, with no UI anywhere (not even for the group's own owner) to move it
+forward. Confirmed by user (2026-07-23): this is a real gap, not a misunderstanding of existing
+behavior — file as its own ticket rather than fix inline.
+
+**What ships — two parts, likely one ticket (bundles a cohesive user-facing gap, same reasoning
+FRIEND-1 used to bundle rail/profile/chat under one ticket rather than three):**
+
+1. **Owner/admin approval.** Where these rows surface within `GroupMembersTab`'s existing "Waiting
+   for group approve" section is an **open question, not yet resolved** — that section is currently
+   wired exclusively to `JoinRequest` (the self-service "request to join" flow), a different entity
+   from `GroupInvitation` with a different row shape (a join-request row is just the requester; an
+   invitation-awaiting-approval row needs both inviter AND invitee). Two options surfaced at
+   scoping, neither picked yet:
+   - Two labeled sub-groups under the existing section header ("Join requests" / "Invitations to
+     approve"), keeping row shapes unambiguous.
+   - One merged, chronological list, row layout adapting per type.
+   The section's own name — "Waiting for **group** approve" — plausibly already meant to cover both
+   concepts (as a parallel to "Waiting for **user** accept" covering the invitee side of the same
+   lifecycle), so folding invitations in here is the leading option, but confirm at pickup rather
+   than assuming.
+2. **Invitee acceptance.** Where a user sees invitations sent *to* them is also **not yet locked
+   down**. Leading option: a new "Invitations" section on `GroupDiscoveryPanel`'s "All groups"
+   landing state (shown when no group is selected) — natural fit since no notification system
+   exists anywhere in this app — hidden entirely when empty (same convention GRP-3's own "Waiting
+   for user accept" already established). Confirm this placement at pickup; the user did not
+   object to it in discussion but didn't explicitly confirm it either.
+   Also unresolved: **post-accept behavior** — auto-navigate into the newly joined group, or leave
+   the user on the discovery panel with the list/grid just refreshed.
+
+**Backend:** all 6 endpoints above are `DONE` (`modules/social/group-impl`, `GroupController`/
+`GroupServiceImpl`) — this is a pure client ticket, no backend work needed.
 
 ---
 

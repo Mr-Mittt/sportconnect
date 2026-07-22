@@ -37,6 +37,7 @@ import { JoinGroupModal } from './components/JoinGroupModal';
 import { SettingsUnsavedChangesDialog } from './components/SettingsUnsavedChangesDialog';
 import { useGroupMembersTabData } from './useGroupMembersTabData';
 import { useGroupsPageData } from './useGroupsPageData';
+import { useInviteFriendModalData } from './useInviteFriendModalData';
 import { useJoinGroupModalData } from './useJoinGroupModalData';
 import { useSettingsUnsavedGuard } from './useSettingsUnsavedGuard';
 
@@ -109,11 +110,11 @@ export function GroupsPage() {
   const [pendingCreateGroupName, setPendingCreateGroupName] = useState('');
   const [isJoinGroupOpen, setIsJoinGroupOpen] = useState(false);
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
-  // GRP-3: Members tab's "Invite friend" — same pre-fill/remount pattern as
-  // pendingCreateGroupName/createGroupOpenCount above.
+  // GRP-3: Members tab's "Invite friend". GRP-4: search/invite state now
+  // lives in useInviteFriendModalData below (re-seeded per open via its own
+  // ref, same as useJoinGroupModalData) — no more key-remount trick.
   const [isInviteFriendOpen, setIsInviteFriendOpen] = useState(false);
   const [inviteFriendQuery, setInviteFriendQuery] = useState('');
-  const [inviteFriendOpenCount, setInviteFriendOpenCount] = useState(0);
   // GRP-1: which of the per-group tabs is showing. Reset to 'posts' at every
   // point that changes `selectedGroupId` (see `selectGroupAndShowPosts`
   // below) rather than via an effect, per React's own guidance to avoid
@@ -122,8 +123,9 @@ export function GroupsPage() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   // Bumped on every open (not close) — remounts CreateGroupModal/AddSportModal
   // so their internal form field state starts fresh each time, without an
-  // effect calling setState. JoinGroupModal doesn't need this — its search
-  // state lives in useJoinGroupModalData below, not in the component itself.
+  // effect calling setState. JoinGroupModal/InviteFriendModal don't need
+  // this — their search state lives in useJoinGroupModalData/
+  // useInviteFriendModalData below, not in the components themselves.
   const [createGroupOpenCount, setCreateGroupOpenCount] = useState(0);
   const [addSportOpenCount, setAddSportOpenCount] = useState(0);
   // GroupsPage renders behind ProtectedRoute (AUTH-4), so user is guaranteed
@@ -197,6 +199,12 @@ export function GroupsPage() {
     data.sportProfiles,
     isJoinGroupOpen,
   );
+  // GRP-4
+  const inviteFriendModalData = useInviteFriendModalData(
+    selectedGroupId ?? undefined,
+    isInviteFriendOpen,
+    inviteFriendQuery,
+  );
 
   const sportsByKey = useMemo(
     () =>
@@ -260,7 +268,6 @@ export function GroupsPage() {
   // input — same pre-fill reasoning as openJoinGroupWithQuery above.
   const openInviteFriend = (query: string) => {
     setInviteFriendQuery(query);
-    setInviteFriendOpenCount((count) => count + 1);
     setIsInviteFriendOpen(true);
   };
 
@@ -548,10 +555,14 @@ export function GroupsPage() {
           isRequestError={joinGroupModalData.isRequestError}
         />
         <InviteFriendModal
-          key={`invite-friend-${inviteFriendOpenCount}`}
           isOpen={isInviteFriendOpen}
           onClose={() => setIsInviteFriendOpen(false)}
-          initialQuery={inviteFriendQuery}
+          inputValue={inviteFriendModalData.inputValue}
+          onInputChange={inviteFriendModalData.setInputValue}
+          rows={inviteFriendModalData.rows}
+          isSearching={inviteFriendModalData.isSearching}
+          isSearchError={inviteFriendModalData.isSearchError}
+          onInvite={inviteFriendModalData.sendInvite}
         />
         <AddSportModal
           key={`add-sport-${addSportOpenCount}`}

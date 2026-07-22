@@ -2,6 +2,7 @@ import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import type {
   CreateGroupPayload,
+  CreateInvitationPayload,
   Group,
   GroupInfo,
   GroupInvitation,
@@ -14,6 +15,7 @@ import type {
   UpdateGroupSettingsPayload,
 } from '../../../src/features/feed/types.ts';
 import {
+  mockFriend,
   mockGroup,
   mockGroupInfo,
   mockGroupJoinRequest,
@@ -61,7 +63,19 @@ interface GroupsSession {
   nextGroupId: number;
   nextJoinRequestId: number;
   nextMemberId: number;
+  nextInvitationId: number;
 }
+
+// GRP-4: resolves a search result's id -> display name for a freshly created
+// invitation's `inviteeFullName` (the POST body only carries `inviteeId`).
+// Same small-dictionary reasoning as friends.ts's KNOWN_USERS — only needs
+// to cover ids this mock's own /users/search handler (friends.ts, reused
+// as-is for GRP-4) can actually return with `friendshipStatus: 'FRIENDS'`,
+// since GRP-4's client drops every non-friend row before an invite is
+// reachable at all.
+const KNOWN_INVITEE_NAMES: Record<string, string> = {
+  [mockFriend.id]: mockFriend.fullName,
+};
 
 // FEED-5's own small stateful fake backend, same "not a fixed responder"
 // reasoning as feed.ts's postsState — a created group must actually appear
@@ -84,6 +98,7 @@ function defaultGroupsSession(): GroupsSession {
     nextGroupId: 100,
     nextJoinRequestId: 100,
     nextMemberId: 100,
+    nextInvitationId: 100,
   };
 }
 
@@ -317,6 +332,52 @@ export const groupHandlers: HttpHandler[] = [
     return HttpResponse.json(
       apiResponse(mockPageResponse(invitations), 'Sent invitations retrieved successfully'),
     );
+  }),
+
+  // GRP-4. The real backend's not-friends/allowMemberInvites-off 400s aren't
+  // simulated here — GRP-4's client already filters non-friend search
+  // results out before an invite can ever be attempted, so an e2e journey
+  // never reaches those paths. Already-a-member and the idempotent
+  // already-invited case ARE simulated, since a search result can't rule
+  // those out client-side (U6 doesn't filter by group).
+  http.post('/api/groups/:groupId/invitations', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const body = (await request.json()) as CreateInvitationPayload;
+    if (!body.inviteeId) {
+      return HttpResponse.json(apiError('Invitee ID is required'), { status: 400 });
+    }
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    const isAlreadyMember = (session.groupMembersState[groupId] ?? []).some(
+      (member) => member.userId === body.inviteeId,
+    );
+    if (isAlreadyMember) {
+      return HttpResponse.json(apiError('User is already a member of this group'), { status: 400 });
+    }
+    const existing = (session.sentInvitationsState[groupId] ?? []).find(
+      (invitation) => invitation.inviteeId === body.inviteeId,
+    );
+    if (existing) {
+      return HttpResponse.json(apiResponse(existing, 'Invitation sent successfully'), { status: 201 });
+    }
+    const group = session.userGroupsState.find((candidate) => candidate.id === groupId);
+    const created: GroupInvitation = {
+      id: session.nextInvitationId++,
+      groupId,
+      groupName: group?.groupName ?? 'Group',
+      inviterId: mockUser.id,
+      inviterFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+      inviteeId: body.inviteeId,
+      inviteeFullName: KNOWN_INVITEE_NAMES[body.inviteeId] ?? 'New Friend',
+      status: 'pending_owner',
+      reviewedBy: null,
+      reviewedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    session.sentInvitationsState[groupId] = [...(session.sentInvitationsState[groupId] ?? []), created];
+    return HttpResponse.json(apiResponse(created, 'Invitation sent successfully'), { status: 201 });
   }),
 
   // GRP-3: accept moves the request out of its group's pending queue and
