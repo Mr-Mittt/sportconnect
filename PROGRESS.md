@@ -1214,6 +1214,29 @@ accepted-friend state on both sides. `pnpm test:visual`'s 18 failures are the pr
 Windows-vs-Linux font-rendering noise floor (HF-12..19's own precedent) on Home Feed/post-modal
 baselines — FRIEND-1 touches neither. GRP-4 (blocked on this ticket) is now unblocked.
 
+**GRP-4 DONE** (2026-07-22, `client/docs/GRP-4_INVITE_FRIEND_REAL.md`): `InviteFriendModal` now runs
+a real debounced `GET /api/users/search` and wires "Invite" to `POST
+/api/groups/{groupId}/invitations`. Non-friend results are dropped entirely (not shown disabled);
+already-a-member/already-invited friends are sorted to the end of the list, badged instead of
+actionable (both per user decision during pickup, superseding the ticket's original "surface the
+400 inline" framing for the non-friend case). Found and fixed a real pre-existing type bug while
+live-verifying against the real backend: `UserSearchResult.username` (FRIEND-1's type) is nullable in
+practice, not always a string — FRIEND-1 never rendered it so the gap was latent; this ticket's
+`@{username}` row is the first place it would have broken. Live-verified the full contract (search's
+`friendshipStatus` transitions, exact 400 messages/check order, idempotent re-invite) against the
+real running backend beyond MSW.
+
+**GRP-7 filed** (2026-07-23, `client/docs/BACKLOG_MVP.md`): found while closing out GRP-4 that the
+invitation lifecycle past "create" is entirely unwired client-side — `POST
+/api/groups/{groupId}/invitations` always creates a `pending_owner` invitation (even one the group's
+own owner sends), but none of the six endpoints that move it forward (`GET {groupId}/invitations` +
+approve/decline for the owner, `GET invitations/user` + accept/reject for the invitee) are called
+anywhere in the app. So a GRP-4 invitation can be sent but never resolves. All 6 endpoints are
+already `DONE` server-side — this is a pure client gap. Filed as GRP-7, scoping only (no code) —
+two design questions (whether pending-owner invitations fold into `GroupMembersTab`'s existing
+"Waiting for group approve" section or get their own, and where/how the invitee sees + accepts an
+invitation) are left open for pickup.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

@@ -201,6 +201,11 @@ export interface GroupInvitation {
   updatedAt: string; // ISO timestamp
 }
 
+// CreateInvitationRequest — inviteeId is the only field (@NotNull).
+export interface CreateInvitationPayload {
+  inviteeId: string;
+}
+
 // CreateGroupRequest. sportId/groupName are the only server-required
 // fields (@NotNull/@NotBlank) — isPrivate has no required-validation
 // annotation but is still sent explicitly (defaults to false client-side)
