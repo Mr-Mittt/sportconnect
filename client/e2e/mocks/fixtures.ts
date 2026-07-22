@@ -13,6 +13,7 @@ import type {
   PageResponse,
   Post,
 } from '../../src/features/feed/types.ts';
+import type { FriendRequest, FriendUser, UserSearchResult } from '../../src/features/friends/types.ts';
 import { hoursAgo, hoursFromNow } from '../../src/shared/lib/mockClock.ts';
 import type { UserSportProfileResponse } from '../../src/shared/types/sport.ts';
 import { MOCK_SERVER_URL } from './mockServerConfig.ts';
@@ -390,6 +391,53 @@ export const mockComment: Comment = {
   replies: [],
   createdAt: '2026-07-13T09:30:00',
   updatedAt: '2026-07-13T09:30:00',
+};
+
+// FRIEND-1 fixtures. mockFriend is mockUser's one accepted friend (renders
+// under Offline — Online always empty, no presence system exists).
+export const mockFriend: FriendUser = {
+  id: 'priya-shah',
+  fullName: 'Priya Shah',
+  avatarUrl: null,
+  coverUrl: null,
+  bio: 'Weekend hooper, always down for pickup.',
+};
+
+// Incoming — sent TO mockUser, resolves the rail's "Friend Requests" row and
+// the profile panel's Accept/Decline action bar.
+export const mockIncomingFriendRequest: FriendRequest = {
+  requestId: 'req-incoming-1',
+  senderId: 'hana-kim',
+  senderName: 'Hana Kim',
+  receiverId: mockUser.id,
+  receiverName: `${mockUser.firstName} ${mockUser.lastName}`,
+  status: 'PENDING',
+  createdAt: '2026-07-20T00:00:00',
+};
+
+// Outgoing — sent BY mockUser, resolves to the profile panel's disabled
+// "Waiting for response" state.
+export const mockSentFriendRequest: FriendRequest = {
+  requestId: 'req-outgoing-1',
+  senderId: mockUser.id,
+  senderName: `${mockUser.firstName} ${mockUser.lastName}`,
+  receiverId: 'diego-alvarez',
+  receiverName: 'Diego Alvarez',
+  status: 'PENDING',
+  createdAt: '2026-07-20T00:00:00',
+};
+
+// A directory-search result with no existing relationship — Add mode's
+// "Matches for ..." row, resolves to the profile panel's enabled
+// "Send a friend request" action.
+export const mockSearchResultUser: UserSearchResult = {
+  id: 'owen-clarke',
+  fullName: 'Owen Clarke',
+  username: 'owenclarke',
+  avatarUrl: null,
+  city: null,
+  country: null,
+  friendshipStatus: 'NONE',
 };
 
 /** Builds a Spring Data `Page<T>`-shaped response from a full content array. */

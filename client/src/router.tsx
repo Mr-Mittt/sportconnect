@@ -1,6 +1,7 @@
 import { createBrowserRouter, createRoutesFromElements, Route } from 'react-router-dom';
 import { LoginPage } from './features/auth/LoginPage';
 import { RegisterPage } from './features/auth/RegisterPage';
+import { FriendsPage } from './features/friends/FriendsPage';
 import { GroupsPage } from './features/groups/GroupsPage';
 import { HomeFeedPage } from './features/home-feed/HomeFeedPage';
 import { RootLayout } from './RootLayout';
@@ -53,7 +54,7 @@ export const routes = createRoutesFromElements(
           client/docs/BACKLOG_V1.md, for the future "should this be
           publicly viewable" decision — not answered here). */}
       <Route path="/posts/:postId" element={<HomeFeedPage />} />
-      <Route path="/friends" element={<ComingSoonPage title="Friends" />} />
+      <Route path="/friends" element={<FriendsPage />} />
       <Route path="/groups" element={<GroupsPage />} />
       <Route path="/matches" element={<ComingSoonPage title="Matches" />} />
       <Route path="/profile" element={<ComingSoonPage title="Profile" />} />

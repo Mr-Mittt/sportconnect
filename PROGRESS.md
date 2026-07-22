@@ -1165,6 +1165,25 @@ decision, matching `GroupChatTab`'s pre-CHAT-2 precedent) with real wiring filed
 (backend)/**DM-2** (client), same lineage as CHAT-1/CHAT-2. Scoping only this session, no code —
 pick up FRIEND-1 in a future `/workon`.
 
+**FRIEND-1 DONE** (2026-07-22, `client/docs/FRIEND-1_FRIENDS_PAGE.md`): built exactly as scoped
+above — `FriendRail` (search + Add-friend directory search + 4 collapsible status sections),
+`FriendProfilePanel` (cover/avatar/sport pills/collapsible Achievements/`friendshipStatus`-driven
+action bar), `FriendChatPanel` (local-state mock, `GroupChatTab`-pre-CHAT-2 precedent), all real
+against `U1`'s 5 friend-request endpoints + `U6`'s user search + the public user/sport-profile GETs.
+Found and fixed a real gap while composing the selected person's sports: `useSportProfiles` (SPORT-1)
+was hardcoded to the current authenticated user — extracted a new `useSportProfilesForUser(userId)`
+in `shared/hooks/` so FRIEND-1 can fetch an arbitrary selected friend/search-result's sports without
+duplicating the sportId→SportKey mapping a second time; `useSportProfiles()` now delegates to it,
+existing test unaffected. Also added `shared/hooks/useDebouncedValue.ts` (new, generic — no debounce
+hook existed anywhere in this codebase before; every prior search flow used explicit-submit).
+New `e2e/mocks/handlers/friends.ts` (stateful) + `friends-journey.spec.ts` (7 steps) +
+`a11y.spec.ts` extension, all green. **Live-verified against the real running backend** (not just
+MSW): two real users registered via the actual UI, one searched the real directory for the other,
+sent a real friend request, the other saw and accepted it, both reloaded and confirmed the real
+accepted-friend state on both sides. `pnpm test:visual`'s 18 failures are the pre-existing
+Windows-vs-Linux font-rendering noise floor (HF-12..19's own precedent) on Home Feed/post-modal
+baselines — FRIEND-1 touches neither. GRP-4 (blocked on this ticket) is now unblocked.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

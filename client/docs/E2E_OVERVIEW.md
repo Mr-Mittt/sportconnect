@@ -144,6 +144,7 @@ e2e/
     feed-groups-journey.spec.ts
     group-settings.spec.ts
     group-members.spec.ts
+    friends-journey.spec.ts
     msw-setup.spec.ts
     post-deep-link.spec.ts
   visual/                    # `visual-regression` project specs
@@ -163,6 +164,7 @@ e2e/
       feed.ts
       groups.ts
       sport.ts
+      friends.ts
 ```
 
 ---
@@ -222,6 +224,16 @@ before GRP-2 added rules/schedule; it now updates both `userGroupsState` and `gr
 relative to load time. A hardcoded broadcast expiry date drifting into the past (and silently breaking
 the "active" assumption) is a real bug this project has hit before — don't reintroduce it.
 
+Friends (FRIEND-1) — `friends.ts`'s own small `KNOWN_USERS` directory resolves `GET /users/:userId`
+and `GET /users/search` for every id these fixtures reference, plus the Add-mode-only stranger below:
+
+| Fixture | id | Notes |
+|---|---|---|
+| `mockFriend` | `priya-shah` | Same person as `mockComment`'s commenter — an accepted friend, renders under Offline (Online always empty, no presence system exists) |
+| `mockIncomingFriendRequest` | `req-incoming-1`, sender `hana-kim` | Sent TO the test user — Friend Requests row + the profile panel's Accept/Decline action bar |
+| `mockSentFriendRequest` | `req-outgoing-1`, receiver `diego-alvarez` | Sent BY the test user — Friend Requests row + the profile panel's disabled "Waiting for response" |
+| `mockSearchResultUser` | `owen-clarke`, `friendshipStatus: 'NONE'` | Only reachable via Add mode's directory search, never in the default friend list |
+
 ---
 
 ## 6. Full test case catalog
@@ -248,7 +260,7 @@ helpers called.
 | 7. "Add sport" | `aria-disabled="true"` | Relies on the fixture user being **at** the 3-sport cap |
 | 8. delete | "..." menu only on the caller's own post (not Priya Shah's); delete removes it, count 3→2 | |
 
-### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + GRP-3, several independent `test()`s)
+### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + GRP-3 + FRIEND-1, several independent `test()`s)
 
 | Test(s) | What it checks | Notes |
 |---|---|---|
@@ -256,6 +268,7 @@ helpers called.
 | `home feed @ {375,768,1280}px — axe reports no critical/serious violations` (×3) | `axe-core` scan, filtered to `impact === 'critical' \| 'serious'` | Moderate/minor violations don't fail the gate |
 | `sport-filtered state — axe reports no critical/serious violations` | Same axe gate after clicking Basketball (1 article) | |
 | `groups page — Members tab (owner) — axe reports no critical/serious violations` | Same axe gate on the Groups page, `mockOwnedGroup` selected, Members tab active | GRP-3: the first Groups-page a11y coverage in this file — GRP-1/GRP-2 both claimed to extend this file but never actually added a Groups-page block. One check (owner role, 1280px, Members tab — the richest per-group tab) establishes a baseline rather than backfilling every tab/breakpoint retroactively |
+| `friends page — friend selected — axe reports no critical/serious violations` | Same axe gate on the Friends page with `mockFriend` selected (profile + chat split, the richest state) | FRIEND-1: one check at 1280px, same "one representative state" scoping the Groups-page check above uses |
 | `/login`/`/register` @ {375,768,1280}px — no horizontal overflow (×6) | Same overflow check, logged-out pages | No `seedAuthenticatedSession` — these routes aren't behind `ProtectedRoute` |
 | `/login`/`/register` @ {375,768,1280}px — axe violations (×6) | Same axe gate | |
 | `/login: Tab reaches every control in order` | Explicit Tab sequence: Email → Password → "Show password" toggle → Log in → "Create an account" link | `getByLabel('Password', { exact: true })` — substring matching would collide with the toggle's `aria-label="Show password"` |
@@ -350,6 +363,22 @@ section and the accept flow, and `mockGroup` ("Friday Night Football", test user
 `group_member` there), opens Members tab, confirms "Group administrator" renders but "Waiting for
 group approve" does not — the parent hook never even fires that request for a non-manager (the real
 endpoint 400s for one).
+
+### `e2e/flows/friends-journey.spec.ts` (FRIEND-1, one `test()` with 7 steps)
+
+Uses `mockFriend` ("Priya Shah", Offline), `mockIncomingFriendRequest` ("Hana Kim" → the test user,
+Friend Requests), `mockSentFriendRequest` ("Diego Alvarez", outgoing, also Friend Requests), and
+`mockSearchResultUser` ("Owen Clarke", `friendshipStatus: 'NONE'`, Add-mode-only).
+
+| Step | What it checks | Notes |
+|---|---|---|
+| 1. all 4 sections render | Online/Blocked "Nothing here yet." (no presence system/blacklist backend exists); Friend Requests shows Hana Kim; Offline shows Priya Shah | |
+| 2. rail search filters in place | Typing "priya" narrows Offline to Priya Shah, empties Friend Requests to "No matches." | No debounce — this is the rail's local filter, not Add mode's directory search |
+| 3. select an existing friend | Profile panel shows bio; chat panel visible; no "Send a friend request" button (`FRIENDS` status) | |
+| 4. Add friend searches the real directory + sends a request | "Add friend" → type "Owen" → `Matches for "Owen"` → select → real `POST /users/friends/requests` → button flips to disabled "Waiting for response" | Exercises the debounced `GET /users/search` end-to-end, not MSW-bypassed |
+| 5. clearing the search returns to the default list | "x" clear button exits Add mode, restores the unfiltered Offline section | |
+| 6. accept moves the request | Select Hana Kim (Accept/Decline visible) → Accept → disappears from Friend Requests, appears in Offline | Exercises the stateful MSW accept handler (moves the row from `receivedRequestsState` into `friendsState`) |
+| 7. mock chat doesn't persist across a selection | Send a message while Priya selected → visible; switch to Hana → message gone, "No messages yet." | `FriendChatPanel` remounts via `key={selectedPerson.id}` |
 
 ### `e2e/flows/msw-setup.spec.ts` (proves the mock server itself works)
 

@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { getResponse } from 'msw';
 import { handlers } from './handlers/index.ts';
 import { resetFeedSession, seedPostsState } from './handlers/feed.ts';
+import { resetFriendHandlersState } from './handlers/friends.ts';
 import { resetGroupHandlersState } from './handlers/groups.ts';
 import { resetSportHandlersState } from './handlers/sport.ts';
 import { buildPaginatedFeed } from './paginatedFeedFixture.ts';
@@ -55,6 +56,7 @@ function resetSession(sessionId: string): void {
   resetFeedSession(sessionId);
   resetGroupHandlersState(sessionId);
   resetSportHandlersState(sessionId);
+  resetFriendHandlersState(sessionId);
   resetOverrides(sessionId);
   requestLogs.delete(sessionId);
 }

@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
 import type { ApiResponse } from '@/shared/types/api';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
-import { sportProfilesQueryKey } from './useSportProfiles';
+import { sportProfilesQueryKey } from './useSportProfilesForUser';
 
 export interface AddSportProfilePayload {
   sportId: number;

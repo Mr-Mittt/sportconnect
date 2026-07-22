@@ -83,6 +83,22 @@ test('groups page — Members tab (owner) — axe reports no critical/serious vi
 });
 
 /*
+ * FRIEND-1: baseline axe coverage for the Friends page. One check at 1280px
+ * with a friend selected (the richest state — rail + profile/chat split,
+ * same "one representative state, not a full breakpoint/tab matrix" scoping
+ * the Groups-page check above used).
+ */
+test('friends page — friend selected — axe reports no critical/serious violations', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await seedAuthenticatedSession(page, '/friends');
+  await page.getByRole('region', { name: 'Offline' }).getByText('Priya Shah').click();
+  await expect(page.getByLabel('Message')).toBeVisible();
+  expect(await gatingViolations(page)).toEqual([]);
+});
+
+/*
  * AUTH-6: same a11y gate extended to Login/Register — logged-out routes, not
  * behind ProtectedRoute, so no seedAuthenticatedSession() call. MSW's default
  * /auth/refresh handler 401s without a cookie (fixtures.ts), which is the
