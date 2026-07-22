@@ -1148,6 +1148,23 @@ states × 3 breakpoints), the 9 `home-feed-*` files (no modal open in those capt
 byte-identical — same "only the causally-connected baselines move" pattern HF-16 established.
 Human-verified the new captures show the intended fixed-height empty space, not a rendering bug.
 
+**FRIEND-1 scoped, GRP-4 reverted** (2026-07-22, `client/docs/BACKLOG_MVP.md`): picking up GRP-4
+(wire invite-friend search to the real backend) surfaced a real gap — its invite flow requires the
+invitee already be the inviter's friend (backend `A6`'s `areFriends` gate), but the client had no
+way to become anyone's friend at all, despite the backend friendship system (`U1`) having shipped
+long ago with 8 real endpoints (`/api/users/friends/**`) never wired to any client UI. GRP-4 was
+reverted from `IN PROGRESS` back to `TODO`. Filed **FRIEND-1** (Friends page — status-grouped rail,
+directory search via `U6`, a 50/50 profile/chat content panel, real friend-request actions) and
+inserted it ahead of GRP-4 in the queue; design reference
+`client/design-reference/design-reference-friend.html`. Two real backend gaps surfaced and scoped
+around, matching this backlog's existing precedent for partial backend coverage: no presence system
+exists at all (Online section ships permanently empty, all friends render under Offline, same
+treatment GRP-3 gave its Blacklist gap), and no direct-message backend exists at all — not even a
+filed ticket like group chat's CHAT-1 — so the chat panel ships as a local-state mock (per user
+decision, matching `GroupChatTab`'s pre-CHAT-2 precedent) with real wiring filed as **DM-1**
+(backend)/**DM-2** (client), same lineage as CHAT-1/CHAT-2. Scoping only this session, no code —
+pick up FRIEND-1 in a future `/workon`.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

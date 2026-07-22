@@ -112,11 +112,15 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 41 | GRP-2 | Adapt Settings tab to the full group settings data set — blocked on B7 (group-impl) | `DONE` |
 | 42 | GRP-3 | Members tab — group member management (search, invite, 5 status-grouped lists) | `DONE` |
 | 43 | GRP-6 | Join Group modal — multi-select sport filter + grouped results — **new ticket, not in either epic, supersedes GRP-5** | `DONE` |
-| 44 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3 | `TODO` |
-| 45 | GRP-5 | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
+| 44 | FRIEND-1 | Friends page — rail, profile/chat panel, directory search, friend-request actions — **new ticket, not in either epic**, inserted ahead of GRP-4 (user decision, 2026-07-22) | `TODO` |
+| 45 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3, now also practically blocked on FRIEND-1 (see delta) | `TODO` |
+| 46 | GRP-5 | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
 | **Phase 8 — Chat (new, not in either epic — see `documentation/md/CHAT_SERVICE_INTEGRATION.md`)** | | | |
-| 46 | CHAT-2 | Wire GroupChatTab to real-time PubNub delivery — blocked on CHAT-1 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) | `TODO` |
-| 47 | CHAT-4 | Persisted chat history + hardening — blocked on CHAT-3 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) and CHAT-2 | `TODO` |
+| 47 | CHAT-2 | Wire GroupChatTab to real-time PubNub delivery — blocked on CHAT-1 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) | `TODO` |
+| 48 | CHAT-4 | Persisted chat history + hardening — blocked on CHAT-3 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) and CHAT-2 | `TODO` |
+| **Phase 9 — Direct messaging (new, filed alongside FRIEND-1 — same CHAT-1/CHAT-2 lineage, applied to 1:1 chat)** | | | |
+| 49 | DM-1 | Direct-message backend — conversations/messages module scaffold + endpoints (backend, `modules/user` or new module TBD at pickup) | `TODO` |
+| 50 | DM-2 | Wire FRIEND-1's local-state mock chat panel to DM-1 — blocked on DM-1, FRIEND-1 | `TODO` |
 
 **Dependencies:**
 ```
@@ -152,6 +156,18 @@ CHAT-1 (modules/social/chat-impl/docs/BACKLOG_MVP.md, backend — module scaffol
   persisted history + hardening). Independent of every other Phase 5–8 ticket — GroupChatTab
   already exists (GRP-1), this just wires it to a real backend. See
   documentation/md/CHAT_SERVICE_INTEGRATION.md for the full architecture.
+FRIEND-1 (new, filed 2026-07-22) has no hard code dependency — U1 (friendship system) and U6 (user
+  search), the two backend pieces it needs, both shipped long ago
+  (modules/user/user-impl/docs/BACKLOG_MVP.md). **Inserted ahead of GRP-4 by user decision**: GRP-4
+  was picked up first, but its invite flow requires the invitee already be the inviter's friend
+  (A6's areFriends gate), and there was no client-side way to become someone's friend at all before
+  this ticket — GRP-4 was reverted from IN PROGRESS back to TODO once this gap surfaced mid-pickup.
+  GRP-4 should be picked up only after FRIEND-1 ships.
+DM-1 (backend, new)/DM-2 (client, new) filed alongside FRIEND-1, same lineage as CHAT-1/CHAT-2 but
+  for 1:1 chat instead of group chat: FRIEND-1 ships its chat panel as a local-state-only mock (no
+  backend at all, not even a filed ticket, unlike group chat's CHAT-1) — DM-1 scopes and builds the
+  real conversations/messages backend, DM-2 wires FRIEND-1's chat panel to it. Neither blocks
+  FRIEND-1 or anything else in this backlog.
 ```
 
 **Backend blockers (tracked outside this backlog):**
@@ -1843,8 +1859,147 @@ Full writeup: `client/docs/GRP-3_MEMBERS_TAB.md`.
 
 ---
 
+### FRIEND-1 · Friends page — rail, profile/chat panel, directory search, friend-request actions
+**Status:** `TODO` · **Type:** Feature · **Dependency:** none blocking — backend `U1` (friendship
+system) and `U6` (user search) are both `DONE` (`modules/user/user-impl/docs/BACKLOG_MVP.md`); the
+`/friends` route and nav tab already exist (`NavTabs.tsx`/`AppShell.tsx`), currently a
+`ComingSoonPage` stub.
+**Design reference:** `client/design-reference/design-reference-friend.html` (interactive, same
+static-baseline convention as `design-reference-home-feed.html`/`design-reference-group-feed.html`).
+
+**Origin:** filed 2026-07-22 while picking up GRP-4 — GRP-4's invite-to-group flow requires the
+invitee already be the inviter's friend (backend `A6`'s `areFriends` gate), but there was no
+client-side way to become anyone's friend at all. The backend friendship system (`U1`) has existed
+and been `DONE` since before the Home Feed epic even started; nothing in either epic doc ever
+scoped a client Friends page against it. Inserted ahead of GRP-4 in the queue (user decision) — see
+GRP-4's own delta entry.
+
+**What ships:**
+- New `/friends` page replacing the `ComingSoonPage` stub. Right rail (Upcoming/Trending/Group
+  broadcasts) is unchanged — same shared components Home Feed and Groups already use.
+- Main area is a fixed-width `FriendRail` (left) + flexible `FriendContent` (right), per the design
+  reference's `#friend-rail`/`#friend-content` split.
+- **FriendRail:**
+  - Header row: a shared search input (filters the rendered friend list on every keystroke, no
+    debounce — same "no debounce" precedent `GroupMembersTab`'s "find member" input already set)
+    plus an icon-only "Add friend" button (`aria-label="Add friend"`) that toggles Add mode. The
+    input has a clear ("x") affordance that always returns to the default friend-list view (exits
+    Add mode too, per the reference's behavior).
+  - Default mode: 4 collapsible, status-grouped sections, each header formatted `{Label} (count)` +
+    a chevron toggle: **Online**, **Friend Requests**, **Offline**, **Blocked**. See the presence/
+    blocked decisions below for what actually populates each.
+  - Add mode: replaces the section list with a left-aligned "← Back to friend list" button + one
+    ungrouped results section titled `Matches for "{query}"` / `No users found for "{query}"`,
+    sourced from a **debounced** real query against `GET /api/users/search?q=` (U6) — gated on
+    trimmed length ≥ 2 (the backend 400s below that: `"Search keyword must be at least 2
+    characters"`).
+- **FriendContent** (empty state: "Select a friend to view their profile and chat" until a rail row
+  is selected). Fixed 50/50 vertical split when a row (friend or search result) is selected:
+  - **Top half — profile panel:** cover strip + avatar + name (`GET /api/users/{userId}`, public —
+    needed for search-result rows since `U6`'s `UserSearchResponse` doesn't carry `bio`/`coverUrl`;
+    friend-list rows already have this from `GET /api/users/friends`'s full `UserResponse`), sport
+    pills (`GET /api/sports/profiles/user/{userId}`, public, same endpoint SPORT-1 already wired —
+    fetched **only for the selected person**, not every rail row, to avoid N+1 across the whole
+    list), an "Achievements" section (static "Coming soon", no backend anywhere), and a docked
+    action bar driven by the selected person's real friendship state — not a mockup-style
+    `isDirectory` branch, since the backend already tells us this directly:
+    - `friendshipStatus === 'NONE'` → "Send a friend request" (enabled) →
+      `POST /api/users/friends/requests`. Gating on real status (not always-enabled) matters here:
+      re-sending a still-pending request 400s (`"Friend request already pending"`), not idempotent
+      like group invitations.
+    - `'PENDING_SENT'` (caller sent it) → disabled "Waiting for response".
+    - `'PENDING_RECEIVED'` (caller received it) → "Decline" / "Accept" buttons →
+      `PUT /api/users/friends/requests/{requestId}/decline` / `/accept`. The `requestId` isn't on
+      the search result or `UserResponse` — resolve it by matching the selected person's `userId`
+      against the already-loaded `getPendingReceivedRequests()` list (loaded for the rail's Friend
+      Requests section — no extra call needed).
+    - `'FRIENDS'` → no action bar (matches the reference exactly — accepted friends get none).
+  - **Bottom half — chat panel:** local component state only, same precedent as `GroupChatTab`
+    before CHAT-2 (message list + input + Send button, a "not saved"-style disclaimer, nothing
+    persisted, no backend call at all) — **per user decision, this ships as a working UI now, real
+    wiring is a separate follow-up** (see DM-1/DM-2 below), not a placeholder.
+
+**Design decisions resolved before pickup (2026-07-22, user decisions):**
+- **Online/Offline:** no presence system exists anywhere in the backend (no heartbeat, session
+  tracking, or WebSocket presence — `lastLoginAt` exists but isn't a reliable "online now" signal).
+  Ships exactly as the reference shows (both sections render), but **"Online" always renders empty**
+  — same permanent "Coming soon"-style placeholder treatment GRP-3 gave its Blacklist section, not a
+  fabricated status. Every accepted friend (`GET /api/users/friends`) renders under **Offline**.
+- **Blocked:** no block/unblock endpoint, schema, or repository concept exists at all (confirmed,
+  same gap class as GRP-3's Blacklist). Ships as a permanent "Coming soon" empty section.
+- **Chat:** ships as a fully working local-state mock now (not deferred/placeholder-only) — real
+  backend wiring is out of scope for this ticket, filed as DM-1 (backend)/DM-2 (client) below.
+
+**Backend mapping:**
+
+| Piece | Backend | Notes |
+|---|---|---|
+| Friends list | Real — `GET /api/users/friends` (U1, `DONE`) | Full `UserResponse` (bio/avatarUrl/coverUrl included) |
+| Pending requests (sent/received) | Real — `GET /api/users/friends/requests/{sent,received}` (U1) | Merge both into the rail's one "Friend Requests" section; keep each row's direction for the content-pane action bar |
+| Send/accept/decline/cancel | Real — `POST /requests`, `PUT /requests/{id}/accept`, `PUT /requests/{id}/decline`, `DELETE /requests/{id}` (U1) | Send 400s "already pending" on a duplicate — gate the button on real status |
+| Directory search | Real — `GET /api/users/search?q=` (U6, `DONE`) | 400s under 2 trimmed chars; `friendshipStatus` per row reused directly for the content-pane action bar once selected |
+| Sport pills | Real — `GET /api/sports/profiles/user/{userId}` (public) | Selected person only, not every rail row (N+1 avoidance) |
+| Full profile (bio/cover) | Real — `GET /api/users/{userId}` (public) | Needed for search-result rows only |
+| Online/offline presence | **No backend concept exists** | Online ships permanently empty; all friends render under Offline |
+| Block/blacklist | **No backend concept exists** | Same treatment as GRP-3's Blacklist — permanent "Coming soon" |
+| Direct-message chat | **No backend concept exists at all** (not even a filed ticket, unlike group chat's CHAT-1) | Ships as local-state mock only; real wiring filed as DM-1 (backend)/DM-2 (client) |
+
+**Out of scope:**
+- Real-time presence/online status — needs its own backend design pass before a follow-up ticket.
+- Real direct messaging — filed as DM-1/DM-2.
+- Unfriending (`DELETE /api/users/friends/{friendId}` exists server-side) and blocking — neither
+  appears in the reference's action bar; not built here. Flag at pickup if this feels wrong.
+- Achievements — permanent "Coming soon", no backend, no follow-up filed.
+
+**Acceptance criteria:**
+- `/friends` renders the rail + content two-column layout; right rail unchanged from Home
+  Feed/Groups.
+- Typing in the rail search filters all four sections' visible rows in place (case-insensitive
+  substring on name); each section independently collapsible, header shows `{label} (count)`.
+- "Add friend" swaps the section list for "← Back to friend list" + one grouped
+  `Matches for "..."`/`No users found for "..."` result section, backed by a debounced real search
+  (≥ 2 trimmed chars); the input's "x" and "← Back" both return to the default friend-list view.
+- Selecting any rail row (friend or search result) renders the fixed 50/50 content split: profile
+  panel (cover/avatar/name/sport pills/Achievements-coming-soon/action bar) + chat panel (local
+  mock, disclaimer visible).
+- The docked action bar reflects real `friendshipStatus`/pending-request state (Send/Waiting/
+  Accept-Decline/nothing) and each action calls its real endpoint, updating both the rail and
+  content pane afterward (e.g. accepting a request moves that person from "Friend Requests" into
+  "Offline").
+- Storybook coverage: `FriendRail` (all 4 section states incl. collapsed/populated/empty, Add mode
+  with results/no-results) and the profile-panel action bar (all 4 `friendshipStatus` variants).
+- No new axe violations (extends `e2e/flows/a11y.spec.ts`, same convention GRP-3 established for
+  the Groups page).
+
+---
+
+### DM-1 · Direct-message backend — conversations/messages module scaffold + endpoints
+**Status:** `TODO` · **Type:** Feature (backend) · **Dependency:** FRIEND-1 (client half needs this,
+not the reverse)
+**Origin:** filed alongside FRIEND-1 — FRIEND-1's chat panel ships as a local-state mock on purpose
+(no backend exists for 1:1 messaging at all, unlike group chat which at least has CHAT-1 filed).
+Same "smallest shippable slice" sequencing this backlog already uses for CHAT-1/CHAT-2.
+
+**Not yet scoped in detail** — needs its own design pass (schema, real-time transport — reuse
+PubNub per-pair channels like the chat architecture doc, or a simpler polled/REST approach; module
+placement, e.g. extending `modules/social/chat-impl` once CHAT-1 creates it, vs. a new module)
+before pickup. See `documentation/md/CHAT_SERVICE_INTEGRATION.md` for the group-chat precedent this
+would likely follow.
+
+---
+
+### DM-2 · Wire FRIEND-1's chat panel to the real backend
+**Status:** `TODO` · **Type:** Feature (client) · **Dependency:** DM-1, FRIEND-1
+**Origin:** filed alongside DM-1 and FRIEND-1 — same CHAT-2-after-CHAT-1 pattern applied to 1:1 chat.
+
+**Not yet scoped in detail** — full acceptance criteria to be written once DM-1 exists to build
+against.
+
+---
+
 ### GRP-4 · Wire invite-friend search to the real backend
-**Status:** `TODO` · **Type:** Feature · **Dependency:** GRP-3 (`TODO`)
+**Status:** `TODO` · **Type:** Feature · **Dependency:** GRP-3 (`DONE`), and practically **FRIEND-1**
+(see delta below — added 2026-07-22, not a formal dependency at filing time)
 **Origin:** filed alongside GRP-3 — the invite-friend modal ships with mocked "coming soon" results
 in GRP-3 on purpose, so the modal's UI/UX lands independently of the real search+invite call chain.
 
@@ -1856,6 +2011,15 @@ the inviter/invitee aren't friends (`A6`'s `UserFriendService.areFriends` gate) 
 `allowMemberInvites` is off for the group. Surface that 400 as an inline per-result error, not a
 modal-wide failure. Confirm at pickup whether `U6`'s response already excludes existing
 members/already-invited users from results — don't assume either way.
+
+**Delta (2026-07-22, picked up then reverted):** this ticket was briefly started and reverted back
+to `TODO` — the user flagged that `B1`'s invite endpoint requires the inviter/invitee to already be
+friends (`areFriends` gate), and the client had **no way to become someone's friend at all** at that
+point (no Friends page, no send/accept-request UI, despite the backend's `U1` friendship system
+being `DONE` since long before). Every non-friend row in this modal's real search results would've
+been a dead end. **FRIEND-1** was filed to close that gap and inserted ahead of this ticket in the
+queue (see the backlog's "Implementation Order" dependency notes) — pick up FRIEND-1 first, even
+though GRP-3 alone technically satisfies this ticket's formal `Dependency` field.
 
 **Not yet scoped in detail** — full acceptance criteria to be written when picked up.
 
