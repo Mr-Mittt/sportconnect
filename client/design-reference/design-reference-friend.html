@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SportHub - home feed design reference (do not implement from this file directly, treat as visual baseline)</title>
+<!-- Icon font vendored locally (HF-10a) so this file renders identically offline/in CI.
+     The original CDN URL (jsdelivr @tabler/icons-webfont@2.47.0/dist/...) was a 404 —
+     same font version, now actually loading. Only this line differs from the approved mockup. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.29.0/dist/tabler-icons.min.css">
+<style>
+  :root {
+    --surface-0: #f7f7f4;
+    --surface-1: #f1efe8;
+    --surface-2: #ffffff;
+    --text-primary: #1a1a18;
+    --text-secondary: #5f5e5a;
+    --text-muted: #6e6d66; /* darkened from #888780 for WCAG AA (HF-8) */
+    --border: rgba(44,44,42,0.12);
+    --border-strong: rgba(44,44,42,0.24);
+    --border-accent: #378ADD;
+    --bg-accent: #E6F1FB;
+    --text-accent: #185FA5;
+    --text-danger: #A32D2D;
+    --accent-solid: #185FA5;
+    --overlay: rgba(26,26,24,0.5);
+
+    --teal-50: #E1F5EE;   --teal-800: #085041;
+    --coral-50: #FAECE7;  --coral-800: #712B13;
+    --purple-50: #EEEDFE; --purple-800: #3C3489;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface-0);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text-primary);
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  #frame { width: 960px; max-width: 100%; }
+  button { font-family: inherit; }
+  .note {
+    max-width: 960px;
+    margin: 0 auto 20px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--surface-1);
+    border: 0.5px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+</style>
+</head>
+<body>
+<div style="width:100%;">
+<div class="note">Reference only. This is the approved home feed mockup, frozen as a static baseline for visual QA (HF-10) — not production code. Open at 375px, 768px, and 1280px viewport widths to compare against the built React implementation.</div>
+<div id="frame">
+<div style="padding: 1rem 0;">
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+  <div style="font-size:18px;font-weight:500;color:var(--text-primary);">SportHub</div>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <i class="ti ti-search" style="font-size:19px;color:var(--text-secondary);" aria-hidden="true"></i>
+    <i class="ti ti-bell" style="font-size:19px;color:var(--text-secondary);" aria-hidden="true"></i>
+    <div style="width:28px;height:28px;border-radius:50%;background:var(--bg-accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--text-accent);">BN</div>
+  </div>
+</div>
+
+<div style="display:flex;gap:6px;border-bottom:0.5px solid var(--border);padding-bottom:8px;margin-bottom:14px;">
+  <button data-nav="home" class="nav-btn" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-primary);font-weight:500;padding:6px 8px;border-radius:8px;cursor:pointer;"><i class="ti ti-home" style="font-size:16px;" aria-hidden="true"></i>Home</button>
+  <button data-nav="friends" class="nav-btn" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-secondary);padding:6px 8px;border-radius:8px;cursor:pointer;"><i class="ti ti-users" style="font-size:16px;" aria-hidden="true"></i>Friends</button>
+  <button data-nav="groups" class="nav-btn" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-secondary);padding:6px 8px;border-radius:8px;cursor:pointer;"><i class="ti ti-users-group" style="font-size:16px;" aria-hidden="true"></i>Groups</button>
+  <button data-nav="matches" class="nav-btn" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-secondary);padding:6px 8px;border-radius:8px;cursor:pointer;"><i class="ti ti-calendar-event" style="font-size:16px;" aria-hidden="true"></i>Matches</button>
+  <button data-nav="profile" class="nav-btn" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-secondary);padding:6px 8px;border-radius:8px;cursor:pointer;"><i class="ti ti-user" style="font-size:16px;" aria-hidden="true"></i>Profile</button>
+</div>
+
+<div id="home-view">
+<div id="sport-switcher" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;"></div>
+
+<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
+  <div style="display:flex;gap:10px;">
+    <div style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:var(--bg-accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--text-accent);">BN</div>
+    <textarea id="composer-input" rows="1" placeholder="What's on your mind, Ben?" style="flex:1;min-width:0;resize:none;border:none;outline:none;background:none;font-family:inherit;font-size:14px;color:var(--text-primary);padding:8px 0;line-height:1.4;"></textarea>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;border-top:0.5px solid var(--border);padding-top:10px;margin-top:4px;">
+    <div style="display:flex;gap:14px;">
+      <button data-composer-action="photo" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer;padding:2px;"><i class="ti ti-photo" style="font-size:16px;" aria-hidden="true"></i>Photo</button>
+      <button data-composer-action="location" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer;padding:2px;"><i class="ti ti-map-pin" style="font-size:16px;" aria-hidden="true"></i>Location</button>
+      <button data-composer-action="sport" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer;padding:2px;"><i class="ti ti-ball-football" style="font-size:16px;" aria-hidden="true"></i>Tag sport</button>
+    </div>
+    <button id="composer-post" disabled style="border:none;background:var(--border);color:var(--text-muted);font-size:13px;font-weight:500;padding:7px 16px;border-radius:20px;cursor:not-allowed;">Post</button>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;">
+  <div id="feed" style="min-width:0;display:flex;flex-direction:column;gap:10px;"></div>
+  <div style="min-width:0;display:flex;flex-direction:column;gap:14px;">
+    <div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:500;color:var(--text-primary);">Upcoming</div>
+        <button data-nav-inline="matches" style="border:none;background:none;font-size:12px;color:var(--text-accent);cursor:pointer;padding:0;">See all</button>
+      </div>
+      <div id="upcoming" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+    <div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">
+      <div style="font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:10px;">Trending</div>
+      <div id="hashtags" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+    <div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">
+      <div style="font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:10px;">Group broadcasts</div>
+      <div id="broadcasts" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="groups-view" style="display:none;">
+<div id="sport-switcher-groups" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;"></div>
+<div id="group-switcher" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;"></div>
+
+<div id="group-cover" style="min-width:0;margin-bottom:14px;"></div>
+<div style="display:grid;grid-template-columns:2.1fr 0.9fr;gap:14px;">
+  <div id="group-main" style="min-width:0;"></div>
+  <div style="min-width:0;display:flex;flex-direction:column;gap:14px;">
+    <div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:500;color:var(--text-primary);">Upcoming</div>
+        <button data-nav-inline="matches" style="border:none;background:none;font-size:12px;color:var(--text-accent);cursor:pointer;padding:0;">See all</button>
+      </div>
+      <div id="upcoming-groups" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+    <div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">
+      <div style="font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:10px;">Trending</div>
+      <div id="hashtags-groups" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+    <div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">
+      <div style="font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:10px;">Group broadcasts</div>
+      <div id="broadcasts-groups" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="friends-view" style="display:none;">
+<div style="display:grid;grid-template-columns:2.1fr 0.9fr;gap:14px;">
+  <div id="friends-main" style="min-width:0;display:flex;gap:14px;">
+    <div id="friend-rail" style="width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;"></div>
+    <div id="friend-content" style="min-width:0;flex:1;"></div>
+  </div>
+  <div style="min-width:0;display:flex;flex-direction:column;gap:14px;">
+    <div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:500;color:var(--text-primary);">Upcoming</div>
+        <button data-nav-inline="matches" style="border:none;background:none;font-size:12px;color:var(--text-accent);cursor:pointer;padding:0;">See all</button>
+      </div>
+      <div id="upcoming-friends" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+    <div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">
+      <div style="font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:10px;">Trending</div>
+      <div id="hashtags-friends" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+    <div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">
+      <div style="font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:10px;">Group broadcasts</div>
+      <div id="broadcasts-friends" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+</div>
+
+<div id="overlay" style="display:none;position:fixed;inset:0;background:var(--overlay, rgba(26,26,24,0.5));z-index:50;"></div>
+<div id="dialog" role="dialog" aria-label="Comments" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:51;width:calc(100% - 2rem);max-width:448px;max-height:85vh;flex-direction:column;overflow:hidden;background:var(--surface-2);border-radius:12px;border:0.5px solid var(--border-strong);box-shadow:0 1px 3px rgba(44,44,42,0.06), 0 12px 40px rgba(44,44,42,0.06);">
+  <div id="dialog-post" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:0.5px solid var(--border);"></div>
+  <div id="dialog-body" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:12px;"></div>
+  <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:0.5px solid var(--border);">
+    <div style="width:32px;height:32px;flex-shrink:0;border-radius:50%;background:var(--bg-accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:var(--text-accent);">BN</div>
+    <input id="comment-input" type="text" placeholder="Add a comment&hellip;" maxlength="1000" aria-label="Add a comment" style="flex:1;min-width:0;border:0.5px solid var(--border);background:var(--surface-1);border-radius:8px;padding:6px 12px;font-size:13px;color:var(--text-primary);outline:none;">
+    <button id="post-btn" disabled style="border:none;background:var(--border);color:var(--text-muted);font-size:13px;font-weight:500;padding:6px 12px;border-radius:8px;cursor:default;">Post</button>
+  </div>
+</div>
+
+<script>
+function sendPrompt(msg) { console.log('[sendPrompt]', msg); }
+
+var sports = [
+  { key: 'all', label: 'All', icon: 'ti-layout-grid', ramp: 'gray' },
+  { key: 'football', label: 'Football', icon: 'ti-ball-football', ramp: 'teal' },
+  { key: 'basketball', label: 'Basketball', icon: 'ti-ball-basketball', ramp: 'coral' },
+  { key: 'tennis', label: 'Tennis', icon: 'ti-ball-tennis', ramp: 'purple' }
+];
+
+var posts = [
+  { sport: 'football', name: 'Marcus Lee', init: 'ML', time: '2h', text: 'Great 5-a-side session tonight, 3 wins in a row for the squad.', tags: ['#5aside', '#fridayrun'], likes: 14, comments: 3 },
+  { sport: 'basketball', name: 'Priya Shah', init: 'PS', time: '4h', text: 'Looking for 2 more players for Sunday pickup at Riverside courts.', tags: ['#pickup', '#riverside'], likes: 9, comments: 6 },
+  { sport: 'tennis', name: 'Diego Alvarez', init: 'DA', time: '6h', text: 'New PB on serve speed this week. Coach says footwork is finally clicking.', tags: ['#tennislife'], likes: 21, comments: 2 },
+  { sport: 'football', name: 'Hana Kim', init: 'HK', time: '1d', text: 'Our clan is hosting a mini tournament next Saturday, open to all levels.', tags: ['#tournament', '#openclan'], likes: 32, comments: 11 }
+];
+
+var upcoming = [
+  { sport: 'football', ramp: 'teal', icon: 'ti-ball-football', title: 'FC Weekend Warriors vs Riverside FC', when: 'Tomorrow, 7:00 PM', where: 'Central Turf Park', spots: 2 },
+  { sport: 'basketball', ramp: 'coral', icon: 'ti-ball-basketball', title: 'Sunday pickup run', when: 'Sun, 9:00 AM', where: 'Riverside Courts', spots: 4 },
+  { sport: 'tennis', ramp: 'purple', icon: 'ti-ball-tennis', title: 'Singles ladder match vs D. Alvarez', when: 'Wed, 6:30 PM', where: 'Greenwood Club', spots: 0 }
+];
+
+var hashtags = [
+  { tag: '#fridayrun', count: 128 },
+  { tag: '#tournament', count: 94 },
+  { tag: '#pickup', count: 61 },
+  { tag: '#tennislife', count: 47 }
+];
+
+var broadcasts = [
+  { group: 'Riverside Ballers', init: 'RB', ramp: 'coral', text: 'Court booking confirmed for Sunday 9am, see you there.', time: '1h' },
+  { group: 'FC Weekend Warriors', init: 'FW', ramp: 'teal', text: 'Tournament bracket is posted, check the schedule tab.', time: '5h' }
+];
+
+var likeState = {};
+posts.forEach(function(p, i) { likeState[i] = { liked: false, count: p.likes }; });
+
+var currentUserId = 'me';
+var postComments = {};
+var nextCommentId = 100;
+var activePostIndex = null;
+var dialogCtx = null;
+
+function initials(name) {
+  return name.split(' ').filter(Boolean).map(function(p) { return p[0]; }).join('').slice(0, 2).toUpperCase();
+}
+
+function seedComments(p, i) {
+  if (dialogCtx.comments[i]) return dialogCtx.comments[i];
+  var seeded = [];
+  if (p.comments > 0) {
+    seeded.push({ id: nextCommentId++, userId: 'user-seed', userFullName: 'Priya Shah', content: 'Nice one, count me in next time!', likeCount: 1, isLikedByCurrentUser: false, replies: [] });
+  }
+  dialogCtx.comments[i] = seeded;
+  return seeded;
+}
+
+function findComment(id) {
+  var list = dialogCtx.comments[activePostIndex] || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].id === id) return { comment: list[i], root: list[i], isRoot: true };
+    for (var j = 0; j < list[i].replies.length; j++) {
+      if (list[i].replies[j].id === id) return { comment: list[i].replies[j], root: list[i], isRoot: false };
+    }
+  }
+  return null;
+}
+
+function commentRow(c) {
+  var isOwn = c.userId === currentUserId;
+  var canReply = !!c.replies;
+  var html = '<div class="comment-row" data-id="' + c.id + '" style="display:flex;align-items:flex-start;gap:8px;">' +
+    '<div style="width:28px;height:28px;flex-shrink:0;border-radius:50%;background:var(--surface-1);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:var(--text-primary);">' + initials(c.userFullName) + '</div>' +
+    '<div style="min-width:0;flex:1;">' +
+    '<div style="background:var(--surface-1);border-radius:8px;padding:6px 10px;"><span style="font-size:13px;font-weight:500;color:var(--text-primary);">' + c.userFullName + '</span><span style="font-size:11px;color:var(--text-muted);margin-left:6px;">just now</span>' +
+    '<div style="font-size:13px;color:var(--text-primary);">' + c.content + '</div></div>' +
+    '<div style="display:flex;align-items:center;gap:12px;padding:4px 4px 0;">' +
+    '<button data-comment-like="' + c.id + '" style="border:none;background:none;cursor:pointer;padding:2px;font-size:11px;display:flex;align-items:center;gap:4px;color:' + (c.isLikedByCurrentUser ? 'var(--text-danger)' : 'var(--text-secondary)') + ';"><i class="ti ti-heart' + (c.isLikedByCurrentUser ? '-filled' : '') + '" style="font-size:13px;" aria-hidden="true"></i>' + c.likeCount + '</button>' +
+    (canReply ? '<button data-comment-reply="' + c.id + '" style="border:none;background:none;cursor:pointer;padding:2px;font-size:11px;font-weight:500;color:var(--text-secondary);">Reply</button>' : '') +
+    (isOwn ? '<button data-comment-delete="' + c.id + '" style="border:none;background:none;cursor:pointer;padding:2px;font-size:11px;color:var(--text-muted);margin-left:auto;"><i class="ti ti-trash" style="font-size:13px;" aria-hidden="true"></i></button>' : '') +
+    '</div>';
+  if (canReply) {
+    html += '<div data-reply-box="' + c.id + '" style="display:none;margin-top:6px;align-items:center;gap:6px;">' +
+      '<input class="reply-input" data-reply-input="' + c.id + '" type="text" placeholder="Reply to ' + c.userFullName + '" aria-label="Reply to ' + c.userFullName + '" style="flex:1;min-width:0;border:0.5px solid var(--border);background:var(--surface-2);border-radius:8px;padding:4px 10px;font-size:13px;color:var(--text-primary);outline:none;">' +
+      '<button data-reply-submit="' + c.id + '" disabled style="border:none;background:var(--border);color:var(--text-muted);font-size:13px;font-weight:500;padding:6px 12px;border-radius:8px;cursor:default;">Post</button></div>';
+  }
+  if (c.replies && c.replies.length > 0) {
+    html += '<div style="margin-top:8px;padding-left:12px;display:flex;flex-direction:column;gap:8px;">' + c.replies.map(commentRow).join('') + '</div>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function renderDialogPost(p) {
+  var badge = dialogCtx.badge(p);
+  document.getElementById('dialog-post').innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;min-width:0;">' +
+    '<div style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:var(--surface-1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--text-primary);">' + p.init + '</div>' +
+    '<div style="min-width:0;"><div style="font-size:14px;font-weight:500;color:var(--text-primary);">' + p.name + '</div>' +
+    '<div style="font-size:12px;color:var(--text-muted);">' + p.time + ' ago</div></div></div>' +
+    '<div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:6px;flex-shrink:0;align-self:stretch;">' +
+    '<button id="dialog-close" aria-label="Close" style="border:none;background:none;cursor:pointer;padding:4px;border-radius:6px;color:var(--text-secondary);"><i class="ti ti-x" style="font-size:16px;" aria-hidden="true"></i></button>' +
+    '<span style="background:var(--' + badge.ramp + '-50, var(--surface-1));color:var(--' + badge.ramp + '-800, var(--text-primary));font-size:11px;padding:3px 9px;border-radius:20px;display:flex;align-items:center;gap:4px;">' +
+    '<i class="ti ' + badge.icon + '" style="font-size:12px;" aria-hidden="true"></i>' + badge.label + '</span></div>';
+  document.getElementById('dialog-close').addEventListener('click', closeDialog);
+}
+
+function renderDialogBody() {
+  var body = document.getElementById('dialog-body');
+  var list = dialogCtx.comments[activePostIndex] || [];
+  var p = dialogCtx.posts[activePostIndex];
+  var postTextHtml = '<div style="font-size:14px;color:var(--text-primary);line-height:1.5;padding-bottom:12px;border-bottom:0.5px solid var(--border);">' + p.text + '</div>';
+  if (list.length === 0) {
+    body.innerHTML = postTextHtml + '<p style="font-size:13px;color:var(--text-muted);">No comments yet. Be the first to comment!</p>';
+  } else {
+    body.innerHTML = postTextHtml + list.map(commentRow).join('');
+  }
+  body.querySelectorAll('[data-comment-like]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var c = list.find(function(x) { return x.id === Number(btn.getAttribute('data-comment-like')); });
+      c.isLikedByCurrentUser = !c.isLikedByCurrentUser;
+      c.likeCount += c.isLikedByCurrentUser ? 1 : -1;
+      renderDialogBody();
+    });
+  });
+  body.querySelectorAll('[data-comment-delete]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = Number(btn.getAttribute('data-comment-delete'));
+      var found = findComment(id);
+      if (!found) return;
+      if (found.isRoot) {
+        dialogCtx.comments[activePostIndex] = list.filter(function(x) { return x.id !== id; });
+      } else {
+        found.root.replies = found.root.replies.filter(function(r) { return r.id !== id; });
+      }
+      renderDialogBody();
+    });
+  });
+  body.querySelectorAll('[data-comment-reply]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var box = body.querySelector('[data-reply-box="' + btn.getAttribute('data-comment-reply') + '"]');
+      box.style.display = box.style.display === 'none' ? 'flex' : 'none';
+    });
+  });
+  body.querySelectorAll('[data-reply-input]').forEach(function(input) {
+    input.addEventListener('input', function() {
+      var submitBtn = body.querySelector('[data-reply-submit="' + input.getAttribute('data-reply-input') + '"]');
+      var has = input.value.trim().length > 0;
+      submitBtn.disabled = !has;
+      submitBtn.style.background = has ? 'var(--accent-solid)' : 'var(--border)';
+      submitBtn.style.color = has ? '#fff' : 'var(--text-muted)';
+      submitBtn.style.cursor = has ? 'pointer' : 'default';
+    });
+  });
+  body.querySelectorAll('[data-reply-submit]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var parentId = Number(btn.getAttribute('data-reply-submit'));
+      var input = body.querySelector('[data-reply-input="' + parentId + '"]');
+      var text = input.value.trim();
+      if (!text) return;
+      var found = findComment(parentId);
+      found.root.replies.push({ id: nextCommentId++, userId: currentUserId, userFullName: 'Ben Nyx', content: text, likeCount: 0, isLikedByCurrentUser: false });
+      dialogCtx.posts[activePostIndex].comments += 1;
+      renderDialogBody();
+      dialogCtx.onChange();
+    });
+  });
+}
+
+function openDialog(i, ctx) {
+  dialogCtx = ctx;
+  activePostIndex = i;
+  var p = dialogCtx.posts[i];
+  seedComments(p, i);
+  renderDialogPost(p);
+  renderDialogBody();
+  document.getElementById('comment-input').value = '';
+  document.getElementById('post-btn').disabled = true;
+  document.getElementById('post-btn').style.background = 'var(--border)';
+  document.getElementById('post-btn').style.color = 'var(--text-muted)';
+  document.getElementById('overlay').style.display = 'block';
+  document.getElementById('dialog').style.display = 'flex';
+}
+
+function closeDialog() {
+  activePostIndex = null;
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('dialog').style.display = 'none';
+}
+
+document.getElementById('overlay').addEventListener('click', closeDialog);
+
+var commentInput = document.getElementById('comment-input');
+var dialogPostBtn = document.getElementById('post-btn');
+commentInput.addEventListener('input', function() {
+  var hasText = commentInput.value.trim().length > 0;
+  dialogPostBtn.disabled = !hasText;
+  dialogPostBtn.style.background = hasText ? 'var(--accent-solid)' : 'var(--border)';
+  dialogPostBtn.style.color = hasText ? '#fff' : 'var(--text-muted)';
+  dialogPostBtn.style.cursor = hasText ? 'pointer' : 'default';
+});
+dialogPostBtn.addEventListener('click', function() {
+  var text = commentInput.value.trim();
+  if (!text || activePostIndex === null) return;
+  var i = activePostIndex;
+  dialogCtx.comments[i].unshift({ id: nextCommentId++, userId: currentUserId, userFullName: 'Ben Nyx', content: text, likeCount: 0, isLikedByCurrentUser: false, replies: [] });
+  dialogCtx.posts[i].comments += 1;
+  commentInput.value = '';
+  dialogPostBtn.disabled = true;
+  dialogPostBtn.style.background = 'var(--border)';
+  dialogPostBtn.style.color = 'var(--text-muted)';
+  renderDialogBody();
+  dialogCtx.onChange();
+});
+
+var activeSport = 'all';
+
+function renderSwitcher(containerId) {
+  var el = document.getElementById(containerId || 'sport-switcher');
+  el.innerHTML = sports.map(function(s) {
+    var isActive = s.key === activeSport;
+    return '<button data-sport="' + s.key + '" style="border:' + (isActive ? '2px solid var(--border-accent)' : '0.5px solid var(--border)') + ';background:var(--surface-1);display:flex;align-items:center;gap:6px;font-size:13px;font-weight:' + (isActive ? '500' : '400') + ';color:var(--text-primary);padding:7px 12px;border-radius:20px;cursor:pointer;">' +
+      '<i class="ti ' + s.icon + '" style="font-size:15px;" aria-hidden="true"></i>' + s.label + '</button>';
+  }).join('') + '<button data-sport="__add" style="border:0.5px dashed var(--border-strong);background:none;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);padding:7px 12px;border-radius:20px;cursor:pointer;"><i class="ti ti-plus" style="font-size:15px;" aria-hidden="true"></i>Add sport</button>';
+
+  el.querySelectorAll('button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var key = btn.getAttribute('data-sport');
+      if (key === '__add') { sendPrompt('I want to add a new sport profile to my account'); return; }
+      activeSport = key;
+      renderSwitcher('sport-switcher');
+      renderSwitcher('sport-switcher-groups');
+      renderFeed();
+      renderUpcoming('upcoming', activeSport);
+    });
+  });
+}
+
+function renderFeed() {
+  var el = document.getElementById('feed');
+  var filtered = posts.map(function(p, i) { return { p: p, i: i }; }).filter(function(x) {
+    return activeSport === 'all' || x.p.sport === activeSport;
+  });
+  if (filtered.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:24px 0;text-align:center;">No posts yet for this sport.</div>';
+    return;
+  }
+  el.innerHTML = filtered.map(function(x) {
+    var p = x.p, i = x.i;
+    var sportInfo = sports.find(function(s) { return s.key === p.sport; });
+    var st = likeState[i];
+    return '<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
+      '<div style="width:36px;height:36px;border-radius:50%;background:var(--surface-1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--text-primary);">' + p.init + '</div>' +
+      '<div style="flex:1;">' +
+      '<div style="font-size:14px;font-weight:500;color:var(--text-primary);">' + p.name + '</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);">' + p.time + ' ago</div>' +
+      '</div>' +
+      '<span style="background:var(--' + sportInfo.ramp + '-50, var(--surface-1));color:var(--' + sportInfo.ramp + '-800, var(--text-primary));font-size:11px;padding:3px 9px;border-radius:20px;display:flex;align-items:center;gap:4px;">' +
+      '<i class="ti ' + sportInfo.icon + '" style="font-size:12px;" aria-hidden="true"></i>' + sportInfo.label + '</span>' +
+      '</div>' +
+      '<div style="font-size:14px;color:var(--text-primary);line-height:1.5;margin-bottom:8px;">' + p.text + '</div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:10px;">' + p.tags.map(function(t) { return '<span style="font-size:12px;color:var(--text-accent);">' + t + '</span>'; }).join('') + '</div>' +
+      '<div style="display:flex;gap:16px;border-top:0.5px solid var(--border);padding-top:8px;">' +
+      '<button data-like="' + i + '" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:' + (st.liked ? 'var(--text-danger)' : 'var(--text-secondary)') + ';cursor:pointer;padding:2px;"><i class="ti ti-heart' + (st.liked ? '-filled' : '') + '" style="font-size:15px;" aria-hidden="true"></i>' + st.count + '</button>' +
+      '<button data-comment="' + i + '" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer;padding:2px;"><i class="ti ti-message-circle" style="font-size:15px;" aria-hidden="true"></i>' + p.comments + '</button>' +
+      '</div></div>';
+  }).join('');
+
+  el.querySelectorAll('[data-like]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var i = btn.getAttribute('data-like');
+      likeState[i].liked = !likeState[i].liked;
+      likeState[i].count += likeState[i].liked ? 1 : -1;
+      renderFeed();
+    });
+  });
+  el.querySelectorAll('[data-comment]').forEach(function(btn) {
+    btn.addEventListener('click', function() { openDialog(Number(btn.getAttribute('data-comment')), { posts: posts, comments: postComments, onChange: renderFeed, badge: function(p) { var s = sports.find(function(x) { return x.key === p.sport; }); return { ramp: s.ramp, icon: s.icon, label: s.label }; } }); });
+  });
+}
+
+function renderUpcoming(containerId, sportFilter) {
+  var el = document.getElementById(containerId || 'upcoming');
+  var filtered = upcoming.filter(function(u) { return !sportFilter || sportFilter === 'all' || u.sport === sportFilter; });
+  if (filtered.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0;">No upcoming matches for this sport.</div>';
+    return;
+  }
+  el.innerHTML = filtered.map(function(u, i) {
+    var full = u.spots === 0;
+    return '<div style="border:0.5px solid var(--border);border-radius:8px;padding:10px;">' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
+      '<span style="width:22px;height:22px;border-radius:50%;background:var(--' + u.ramp + '-50);color:var(--' + u.ramp + '-800);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ti ' + u.icon + '" style="font-size:12px;" aria-hidden="true"></i></span>' +
+      '<div style="font-size:12px;font-weight:500;color:var(--text-primary);line-height:1.3;">' + u.title + '</div>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:2px;"><i class="ti ti-clock" style="font-size:12px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>' + u.when + '</div>' +
+      '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;"><i class="ti ti-map-pin" style="font-size:12px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>' + u.where + '</div>' +
+      '<button data-rsvp="' + i + '" style="width:100%;border:0.5px solid var(--border-strong);background:none;font-size:12px;color:' + (full ? 'var(--text-muted)' : 'var(--text-primary)') + ';padding:5px;border-radius:8px;cursor:pointer;">' + (full ? 'Full, view details' : u.spots + ' spots left, join') + '</button>' +
+      '</div>';
+  }).join('');
+
+  el.querySelectorAll('[data-rsvp]').forEach(function(btn) {
+    btn.addEventListener('click', function() { sendPrompt('Show me details for this upcoming match and let me join or view it'); });
+  });
+}
+
+function renderHashtags(containerId) {
+  var el = document.getElementById(containerId || 'hashtags');
+  el.innerHTML = hashtags.map(function(h) {
+    return '<button data-tag="' + h.tag + '" style="border:none;background:none;display:flex;align-items:center;justify-content:space-between;padding:0;cursor:pointer;text-align:left;">' +
+      '<span style="font-size:13px;color:var(--text-accent);">' + h.tag + '</span>' +
+      '<span style="font-size:12px;color:var(--text-muted);">' + h.count + ' posts</span>' +
+      '</button>';
+  }).join('');
+  el.querySelectorAll('button').forEach(function(btn) {
+    btn.addEventListener('click', function() { sendPrompt('Show me posts tagged ' + btn.getAttribute('data-tag')); });
+  });
+}
+
+function renderBroadcasts(containerId) {
+  var el = document.getElementById(containerId || 'broadcasts');
+  el.innerHTML = broadcasts.map(function(b) {
+    return '<div style="display:flex;gap:9px;">' +
+      '<div style="width:30px;height:30px;flex-shrink:0;border-radius:50%;background:var(--' + b.ramp + '-50);color:var(--' + b.ramp + '-800);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;">' + b.init + '</div>' +
+      '<div style="min-width:0;">' +
+      '<div style="font-size:12px;font-weight:500;color:var(--text-primary);">' + b.group + ' <span style="font-weight:400;color:var(--text-muted);">' + b.time + '</span></div>' +
+      '<div style="font-size:12px;color:var(--text-secondary);line-height:1.4;">' + b.text + '</div>' +
+      '</div></div>';
+  }).join('');
+}
+
+var groups = [
+  { key: 'riverside-ballers', name: 'Riverside Ballers', icon: 'ti-ball-basketball', ramp: 'coral', members: 42 },
+  { key: 'fc-weekend-warriors', name: 'FC Weekend Warriors', icon: 'ti-ball-football', ramp: 'teal', members: 68 },
+  { key: 'greenwood-tennis-club', name: 'Greenwood Tennis Club', icon: 'ti-ball-tennis', ramp: 'purple', members: 24 }
+];
+
+var groupPosts = {
+  'riverside-ballers': [
+    { name: 'Priya Shah', init: 'PS', time: '3h', text: 'Court booking confirmed for Sunday 9am, see you there.', tags: [], likes: 6, comments: 1 }
+  ],
+  'fc-weekend-warriors': [
+    { name: 'Hana Kim', init: 'HK', time: '5h', text: 'Tournament bracket is posted, check the schedule tab.', tags: ['#tournament'], likes: 11, comments: 2 }
+  ],
+  'greenwood-tennis-club': [
+    { name: 'Diego Alvarez', init: 'DA', time: '1d', text: 'Ladder standings updated after this week\u2019s matches.', tags: [], likes: 4, comments: 0 }
+  ]
+};
+
+var groupComments = {};
+groups.forEach(function(g) { groupComments[g.key] = {}; });
+
+var groupChats = {
+  'riverside-ballers': [
+    { userId: 'user-seed', name: 'Priya Shah', text: 'Anyone free for a warm-up rally before the match?', time: '9:02 AM' },
+    { userId: 'me', name: 'Ben Nyx', text: 'I can get there 20 min early.', time: '9:05 AM' }
+  ],
+  'fc-weekend-warriors': [
+    { userId: 'user-seed', name: 'Hana Kim', text: 'Bracket is live, we play Riverside FC first round.', time: 'Yesterday' }
+  ],
+  'greenwood-tennis-club': [
+    { userId: 'user-seed', name: 'Diego Alvarez', text: 'Ladder challenge deadline is Friday.', time: 'Mon' }
+  ]
+};
+
+var groupSettings = {
+  'riverside-ballers': { description: 'Weekend pickup basketball crew at Riverside Courts.', privacy: 'public', notifications: true },
+  'fc-weekend-warriors': { description: '5-a-side football clan, casual and competitive matches.', privacy: 'private', notifications: true },
+  'greenwood-tennis-club': { description: 'Ladder-style singles and doubles tennis club.', privacy: 'public', notifications: false }
+};
+
+var activeGroupKey = 'all';
+var activeGroupTab = 'group-post';
+
+function renderGroupSwitcher() {
+  var el = document.getElementById('group-switcher');
+  var chips = [{ key: 'all', label: 'All', icon: 'ti-layout-grid' }].concat(groups.map(function(g) { return { key: g.key, label: g.name, icon: g.icon }; }));
+  el.innerHTML = chips.map(function(c) {
+    var isActive = c.key === activeGroupKey;
+    return '<button data-group="' + c.key + '" style="border:' + (isActive ? '2px solid var(--border-accent)' : '0.5px solid var(--border)') + ';background:var(--surface-1);display:flex;align-items:center;gap:6px;font-size:13px;font-weight:' + (isActive ? '500' : '400') + ';color:var(--text-primary);padding:7px 12px;border-radius:20px;cursor:pointer;">' +
+      '<i class="ti ' + c.icon + '" style="font-size:15px;" aria-hidden="true"></i>' + c.label + '</button>';
+  }).join('');
+
+  el.querySelectorAll('button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var key = btn.getAttribute('data-group');
+      activeGroupKey = key;
+      activeGroupTab = 'group-post';
+      renderGroupSwitcher();
+      renderGroupCover();
+      renderGroupMain();
+    });
+  });
+}
+
+function groupCard(g) {
+  return '<button data-open-group="' + g.key + '" style="width:100%;min-height:110px;text-align:left;border:0.5px solid var(--border);background:var(--surface-2);border-radius:12px;padding:14px;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;gap:8px;">' +
+    '<div style="display:flex;align-items:center;gap:12px;">' +
+    '<span style="width:44px;height:44px;flex-shrink:0;border-radius:50%;background:var(--' + g.ramp + '-50);color:var(--' + g.ramp + '-800);display:flex;align-items:center;justify-content:center;"><i class="ti ' + g.icon + '" style="font-size:20px;" aria-hidden="true"></i></span>' +
+    '<div style="min-width:0;font-size:14px;font-weight:500;color:var(--text-primary);">' + g.name + '</div>' +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--text-muted);">' + g.members + ' members</div>' +
+    '</button>';
+}
+
+function renderGroupCover() {
+  var el = document.getElementById('group-cover');
+  if (activeGroupKey === 'all') { el.innerHTML = ''; return; }
+  var g = groups.find(function(x) { return x.key === activeGroupKey; });
+  el.innerHTML =
+    '<div style="border:0.5px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface-2);">' +
+    '<div style="height:110px;background:var(--' + g.ramp + '-50);display:flex;align-items:flex-end;padding:14px;">' +
+    '<span style="width:56px;height:56px;border-radius:12px;background:var(--surface-2);color:var(--' + g.ramp + '-800);display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(44,44,42,0.12);"><i class="ti ' + g.icon + '" style="font-size:26px;" aria-hidden="true"></i></span>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;">' +
+    '<div><div style="font-size:15px;font-weight:500;color:var(--text-primary);">' + g.name + '</div>' +
+    '<div style="font-size:12px;color:var(--text-muted);">' + g.members + ' members</div></div>' +
+    '<button data-cover-back style="border:0.5px solid var(--border);background:none;font-size:12px;color:var(--text-secondary);padding:6px 12px;border-radius:8px;cursor:pointer;">All groups</button>' +
+    '</div></div>';
+  el.querySelector('[data-cover-back]').addEventListener('click', function() {
+    activeGroupKey = 'all';
+    renderGroupSwitcher();
+    renderGroupCover();
+    renderGroupMain();
+  });
+}
+
+function renderGroupMain() {
+  var el = document.getElementById('group-main');
+  if (activeGroupKey === 'all') {
+    el.innerHTML = '<div style="border:0.5px solid var(--border);background:var(--surface-1);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:14px;">' +
+      '<div style="display:flex;align-items:center;justify-content:center;gap:8px;">' +
+      '<input id="group-action-input" type="text" placeholder="Group name or invite code" style="flex:1;max-width:320px;border:0.5px solid var(--border);background:var(--surface-2);border-radius:20px;padding:8px 14px;font-size:13px;color:var(--text-primary);outline:none;">' +
+      '<button data-group-action="join" style="border:0.5px solid var(--border-strong);background:var(--surface-2);display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-primary);padding:7px 12px;border-radius:20px;cursor:pointer;white-space:nowrap;"><i class="ti ti-door-enter" style="font-size:15px;" aria-hidden="true"></i>Join Group</button>' +
+      '<button data-group-action="create" style="border:0.5px dashed var(--border-strong);background:var(--surface-2);display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);padding:7px 12px;border-radius:20px;cursor:pointer;white-space:nowrap;"><i class="ti ti-plus" style="font-size:15px;" aria-hidden="true"></i>Create Group</button>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:10px;">' + groups.map(groupCard).join('') + '</div>' +
+      '</div>';
+    var actionInput = document.getElementById('group-action-input');
+    el.querySelector('[data-group-action="join"]').addEventListener('click', function() {
+      var v = actionInput.value.trim();
+      sendPrompt(v ? 'Join the group "' + v + '"' : 'Show me groups I can join');
+    });
+    el.querySelector('[data-group-action="create"]').addEventListener('click', function() {
+      var v = actionInput.value.trim();
+      sendPrompt(v ? 'Create a new group called "' + v + '"' : 'Let me create a new group');
+    });
+    el.querySelectorAll('[data-open-group]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        activeGroupKey = btn.getAttribute('data-open-group');
+        activeGroupTab = 'group-post';
+        renderGroupSwitcher();
+        renderGroupCover();
+        renderGroupMain();
+      });
+    });
+    return;
+  }
+
+  var tabs = [
+    { key: 'group-post', label: 'Posts', icon: 'ti-message-2' },
+    { key: 'group-chat', label: 'Chat', icon: 'ti-messages' },
+    { key: 'group-settings', label: 'Settings', icon: 'ti-settings' }
+  ];
+  el.innerHTML = '<div style="display:flex;gap:14px;min-width:0;">' +
+    '<div id="group-tabs" style="display:flex;flex-direction:column;gap:4px;width:150px;flex-shrink:0;">' +
+    tabs.map(function(t) {
+      var isActive = t.key === activeGroupTab;
+      return '<button data-group-tab="' + t.key + '" style="border:none;text-align:left;background:' + (isActive ? 'var(--bg-accent)' : 'none') + ';display:flex;align-items:center;gap:8px;font-size:13px;font-weight:' + (isActive ? '500' : '400') + ';color:' + (isActive ? 'var(--text-accent)' : 'var(--text-secondary)') + ';padding:8px 10px;border-radius:8px;cursor:pointer;"><i class="ti ' + t.icon + '" style="font-size:16px;" aria-hidden="true"></i>' + t.label + '</button>';
+    }).join('') +
+    '</div>' +
+    '<div id="group-tab-content" style="min-width:0;flex:1;display:flex;flex-direction:column;gap:10px;"></div>' +
+    '</div>';
+
+  el.querySelectorAll('[data-group-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      activeGroupTab = btn.getAttribute('data-group-tab');
+      renderGroupMain();
+    });
+  });
+
+  if (activeGroupTab === 'group-post') renderGroupPostTab();
+  else if (activeGroupTab === 'group-chat') renderGroupChatTab();
+  else renderGroupSettingsTab();
+}
+
+function renderGroupPostTab() {
+  var el = document.getElementById('group-tab-content');
+  el.innerHTML =
+    '<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">' +
+    '<div style="display:flex;gap:10px;">' +
+    '<div style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:var(--bg-accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--text-accent);">BN</div>' +
+    '<textarea id="group-composer-input" rows="1" placeholder="Share something with the group\u2026" style="flex:1;min-width:0;resize:none;border:none;outline:none;background:none;font-family:inherit;font-size:14px;color:var(--text-primary);padding:8px 0;line-height:1.4;"></textarea>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;justify-content:flex-end;border-top:0.5px solid var(--border);padding-top:10px;margin-top:4px;">' +
+    '<button id="group-composer-post" disabled style="border:none;background:var(--border);color:var(--text-muted);font-size:13px;font-weight:500;padding:7px 16px;border-radius:20px;cursor:not-allowed;">Post</button>' +
+    '</div></div>' +
+    '<div id="group-feed" style="display:flex;flex-direction:column;gap:10px;"></div>';
+
+  var input = document.getElementById('group-composer-input');
+  var postBtn = document.getElementById('group-composer-post');
+  input.addEventListener('input', function() {
+    var hasText = input.value.trim().length > 0;
+    postBtn.disabled = !hasText;
+    postBtn.style.background = hasText ? 'var(--border-accent)' : 'var(--border)';
+    postBtn.style.color = hasText ? '#fff' : 'var(--text-muted)';
+    postBtn.style.cursor = hasText ? 'pointer' : 'not-allowed';
+  });
+  postBtn.addEventListener('click', function() {
+    var text = input.value.trim();
+    if (!text) return;
+    groupPosts[activeGroupKey].unshift({ name: 'Ben Nyx', init: 'BN', time: 'now', text: text, tags: [], likes: 0, comments: 0 });
+    var oldComments = groupComments[activeGroupKey];
+    var shifted = {};
+    Object.keys(oldComments).sort(function(a, b) { return b - a; }).forEach(function(k) { shifted[Number(k) + 1] = oldComments[k]; });
+    groupComments[activeGroupKey] = shifted;
+    renderGroupFeed();
+  });
+
+  renderGroupFeed();
+}
+
+function renderGroupFeed() {
+  var el = document.getElementById('group-feed');
+  if (!el) return;
+  var list = groupPosts[activeGroupKey];
+  var g = groups.find(function(x) { return x.key === activeGroupKey; });
+  if (list.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:24px 0;text-align:center;">No posts yet in this group.</div>';
+    return;
+  }
+  el.innerHTML = list.map(function(p, i) {
+    return '<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
+      '<div style="width:36px;height:36px;border-radius:50%;background:var(--surface-1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--text-primary);">' + p.init + '</div>' +
+      '<div style="flex:1;"><div style="font-size:14px;font-weight:500;color:var(--text-primary);">' + p.name + '</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);">' + p.time + ' ago</div></div>' +
+      '<span style="background:var(--' + g.ramp + '-50);color:var(--' + g.ramp + '-800);font-size:11px;padding:3px 9px;border-radius:20px;display:flex;align-items:center;gap:4px;">' +
+      '<i class="ti ' + g.icon + '" style="font-size:12px;" aria-hidden="true"></i>' + g.name + '</span></div>' +
+      '<div style="font-size:14px;color:var(--text-primary);line-height:1.5;margin-bottom:8px;">' + p.text + '</div>' +
+      (p.tags.length ? '<div style="display:flex;gap:6px;margin-bottom:10px;">' + p.tags.map(function(t) { return '<span style="font-size:12px;color:var(--text-accent);">' + t + '</span>'; }).join('') + '</div>' : '') +
+      '<div style="display:flex;gap:16px;border-top:0.5px solid var(--border);padding-top:8px;">' +
+      '<button data-group-like="' + i + '" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer;padding:2px;"><i class="ti ti-heart" style="font-size:15px;" aria-hidden="true"></i>' + p.likes + '</button>' +
+      '<button data-group-comment="' + i + '" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer;padding:2px;"><i class="ti ti-message-circle" style="font-size:15px;" aria-hidden="true"></i>' + p.comments + '</button>' +
+      '</div></div>';
+  }).join('');
+
+  el.querySelectorAll('[data-group-like]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var i = Number(btn.getAttribute('data-group-like'));
+      list[i].likes += 1;
+      renderGroupFeed();
+    });
+  });
+  el.querySelectorAll('[data-group-comment]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var i = Number(btn.getAttribute('data-group-comment'));
+      openDialog(i, { posts: list, comments: groupComments[activeGroupKey], onChange: renderGroupFeed, badge: function() { return { ramp: g.ramp, icon: g.icon, label: g.name }; } });
+    });
+  });
+}
+
+function renderGroupChatTab() {
+  var el = document.getElementById('group-tab-content');
+  var msgs = groupChats[activeGroupKey];
+  el.innerHTML =
+    '<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;display:flex;flex-direction:column;height:420px;">' +
+    '<div id="group-chat-log" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;"></div>' +
+    '<div style="display:flex;gap:8px;padding:12px 14px;border-top:0.5px solid var(--border);">' +
+    '<input id="group-chat-input" type="text" placeholder="Message the group\u2026" style="flex:1;min-width:0;border:0.5px solid var(--border);background:var(--surface-1);border-radius:8px;padding:7px 12px;font-size:13px;color:var(--text-primary);outline:none;">' +
+    '<button id="group-chat-send" disabled style="border:none;background:var(--border);color:var(--text-muted);font-size:13px;font-weight:500;padding:7px 14px;border-radius:8px;cursor:default;">Send</button>' +
+    '</div></div>';
+
+  function renderLog() {
+    var log = document.getElementById('group-chat-log');
+    log.innerHTML = msgs.map(function(m) {
+      var isOwn = m.userId === 'me';
+      return '<div style="display:flex;flex-direction:column;align-items:' + (isOwn ? 'flex-end' : 'flex-start') + ';">' +
+        '<div style="background:' + (isOwn ? 'var(--bg-accent)' : 'var(--surface-1)') + ';border-radius:10px;padding:7px 11px;max-width:75%;">' +
+        (isOwn ? '' : '<div style="font-size:11px;font-weight:500;color:var(--text-primary);margin-bottom:2px;">' + m.name + '</div>') +
+        '<div style="font-size:13px;color:var(--text-primary);">' + m.text + '</div></div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + m.time + '</div></div>';
+    }).join('');
+    log.scrollTop = log.scrollHeight;
+  }
+
+  var input = document.getElementById('group-chat-input');
+  var sendBtn = document.getElementById('group-chat-send');
+  input.addEventListener('input', function() {
+    var has = input.value.trim().length > 0;
+    sendBtn.disabled = !has;
+    sendBtn.style.background = has ? 'var(--accent-solid)' : 'var(--border)';
+    sendBtn.style.color = has ? '#fff' : 'var(--text-muted)';
+    sendBtn.style.cursor = has ? 'pointer' : 'default';
+  });
+  sendBtn.addEventListener('click', function() {
+    var text = input.value.trim();
+    if (!text) return;
+    msgs.push({ userId: 'me', name: 'Ben Nyx', text: text, time: 'now' });
+    input.value = '';
+    sendBtn.disabled = true;
+    sendBtn.style.background = 'var(--border)';
+    sendBtn.style.color = 'var(--text-muted)';
+    renderLog();
+  });
+
+  renderLog();
+}
+
+function renderGroupSettingsTab() {
+  var el = document.getElementById('group-tab-content');
+  var g = groups.find(function(x) { return x.key === activeGroupKey; });
+  var s = groupSettings[activeGroupKey];
+  el.innerHTML =
+    '<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:16px;">' +
+    '<div><div style="font-size:15px;font-weight:500;color:var(--text-primary);margin-bottom:4px;">' + g.name + '</div>' +
+    '<div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">' + s.description + '</div></div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;border-top:0.5px solid var(--border);padding-top:14px;">' +
+    '<div><div style="font-size:13px;font-weight:500;color:var(--text-primary);">Privacy</div><div style="font-size:12px;color:var(--text-muted);">Who can see and join this group</div></div>' +
+    '<div style="display:flex;gap:6px;">' +
+    '<button data-setting="privacy-public" style="border:' + (s.privacy === 'public' ? '2px solid var(--border-accent)' : '0.5px solid var(--border)') + ';background:var(--surface-1);font-size:12px;color:var(--text-primary);padding:6px 12px;border-radius:20px;cursor:pointer;">Public</button>' +
+    '<button data-setting="privacy-private" style="border:' + (s.privacy === 'private' ? '2px solid var(--border-accent)' : '0.5px solid var(--border)') + ';background:var(--surface-1);font-size:12px;color:var(--text-primary);padding:6px 12px;border-radius:20px;cursor:pointer;">Private</button>' +
+    '</div></div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;border-top:0.5px solid var(--border);padding-top:14px;">' +
+    '<div><div style="font-size:13px;font-weight:500;color:var(--text-primary);">Notifications</div><div style="font-size:12px;color:var(--text-muted);">Alerts for new posts and messages</div></div>' +
+    '<button data-setting="toggle-notif" style="border:0.5px solid var(--border);background:' + (s.notifications ? 'var(--bg-accent)' : 'var(--surface-1)') + ';color:' + (s.notifications ? 'var(--text-accent)' : 'var(--text-secondary)') + ';font-size:12px;padding:6px 12px;border-radius:20px;cursor:pointer;display:flex;align-items:center;gap:6px;"><i class="ti ' + (s.notifications ? 'ti-bell' : 'ti-bell-off') + '" style="font-size:14px;" aria-hidden="true"></i>' + (s.notifications ? 'On' : 'Off') + '</button>' +
+    '</div>' +
+    '<div style="border-top:0.5px solid var(--border);padding-top:14px;">' +
+    '<button data-setting="leave" style="border:0.5px solid var(--border-strong);background:none;color:var(--text-danger);font-size:13px;font-weight:500;padding:8px 14px;border-radius:8px;cursor:pointer;">Leave Group</button>' +
+    '</div></div>';
+
+  el.querySelectorAll('[data-setting]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var action = btn.getAttribute('data-setting');
+      if (action === 'privacy-public') s.privacy = 'public';
+      else if (action === 'privacy-private') s.privacy = 'private';
+      else if (action === 'toggle-notif') s.notifications = !s.notifications;
+      else if (action === 'leave') { sendPrompt('Confirm that I want to leave ' + g.name); return; }
+      renderGroupSettingsTab();
+    });
+  });
+}
+
+var composerInput = document.getElementById('composer-input');
+var composerPost = document.getElementById('composer-post');
+
+function autosize() {
+  composerInput.style.height = 'auto';
+  composerInput.style.height = composerInput.scrollHeight + 'px';
+}
+
+function updateComposerButton() {
+  var hasText = composerInput.value.trim().length > 0;
+  composerPost.disabled = !hasText;
+  composerPost.style.background = hasText ? 'var(--border-accent)' : 'var(--border)';
+  composerPost.style.color = hasText ? '#fff' : 'var(--text-muted)';
+  composerPost.style.cursor = hasText ? 'pointer' : 'not-allowed';
+}
+
+composerInput.addEventListener('input', function() { autosize(); updateComposerButton(); });
+
+var friends = [
+  { id: 'f1', name: 'Priya Shah', init: 'PS', ramp: 'coral', status: 'online', sports: ['Basketball', 'Running'], bio: 'Weekend hooper, always down for pickup.' },
+  { id: 'f2', name: 'Marcus Lee', init: 'ML', ramp: 'teal', status: 'online', sports: ['Football'], bio: '5-a-side regular, Friday night crew.' },
+  { id: 'f3', name: 'Hana Kim', init: 'HK', ramp: 'teal', status: 'friend_request', direction: 'incoming', sports: ['Football', 'Cycling'], bio: 'Clan captain, loves a tournament.' },
+  { id: 'f4', name: 'Diego Alvarez', init: 'DA', ramp: 'purple', status: 'friend_request', direction: 'outgoing', sports: ['Tennis'], bio: 'Ladder climber at Greenwood Club.' },
+  { id: 'f5', name: 'Sofia Rossi', init: 'SR', ramp: 'coral', status: 'offline', sports: ['Basketball'], bio: 'Point guard, plays Tuesday nights.' },
+  { id: 'f6', name: 'Tom Becker', init: 'TB', ramp: 'purple', status: 'offline', sports: ['Tennis', 'Swimming'], bio: 'Doubles specialist.' },
+  { id: 'f7', name: 'Ana Kovac', init: 'AK', ramp: 'teal', status: 'blocked', sports: ['Football'], bio: '' }
+];
+
+var friendDirectory = [
+  { id: 'u1', name: 'Owen Clarke', init: 'OC', ramp: 'coral', sports: ['Basketball'], bio: 'New to the area, looking for a squad.' },
+  { id: 'u2', name: 'Lena Fischer', init: 'LF', ramp: 'purple', sports: ['Tennis'], bio: 'Singles player, evenings only.' },
+  { id: 'u3', name: 'Ravi Patel', init: 'RP', ramp: 'teal', sports: ['Football'], bio: 'Goalkeeper, Sunday league.' }
+];
+
+var friendChats = {
+  f1: [{ userId: 'f1', name: 'Priya Shah', text: 'Pickup game Sunday, you in?', time: '9:10 AM' }, { userId: 'me', name: 'Ben Nyx', text: 'Yep, see you there!', time: '9:12 AM' }],
+  f2: [{ userId: 'f2', name: 'Marcus Lee', text: 'Good game tonight.', time: 'Yesterday' }],
+  f5: [{ userId: 'f5', name: 'Sofia Rossi', text: 'Same court next week?', time: 'Mon' }]
+};
+
+var friendSectionDefs = [
+  { key: 'online', label: 'Online' },
+  { key: 'friend_request', label: 'Friend Requests' },
+  { key: 'offline', label: 'Offline' },
+  { key: 'blocked', label: 'Blocked' }
+];
+var friendSectionCollapsed = { online: false, friend_request: false, offline: false, blocked: false };
+var friendAddMode = false;
+var friendSearchQuery = '';
+var selectedFriendId = null;
+var selectedDirectoryUser = null;
+
+function friendById(id) { return friends.find(function(f) { return f.id === id; }); }
+
+function friendRow(f) {
+  var isSelected = selectedFriendId === f.id;
+  return '<button data-select-friend="' + f.id + '" style="width:100%;text-align:left;border:none;background:' + (isSelected ? 'var(--bg-accent)' : 'none') + ';display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;">' +
+    '<span style="position:relative;flex-shrink:0;">' +
+    '<span style="width:30px;height:30px;border-radius:50%;background:var(--' + f.ramp + '-50);color:var(--' + f.ramp + '-800);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;">' + f.init + '</span>' +
+    (f.status === 'online' ? '<span style="position:absolute;bottom:-1px;right:-1px;width:8px;height:8px;border-radius:50%;background:#3a9d5d;border:2px solid var(--surface-0);"></span>' : '') +
+    '</span>' +
+    '<span style="min-width:0;flex:1;font-size:13px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + f.name + '</span>' +
+    (f.status === 'friend_request' && f.direction === 'incoming' ? '<span style="width:7px;height:7px;border-radius:50%;background:var(--text-accent);flex-shrink:0;"></span>' : '') +
+    '</button>';
+}
+
+function renderFriendRail() {
+  var el = document.getElementById('friend-rail');
+  var searchRow =
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">' +
+    '<div style="position:relative;flex:1;min-width:0;">' +
+    '<input id="friend-search-input" type="text" placeholder="Search friends" value="' + friendSearchQuery.replace(/"/g, '&quot;') + '" style="width:100%;border:0.5px solid var(--border);background:var(--surface-2);border-radius:20px;padding:7px 28px 7px 12px;font-size:13px;color:var(--text-primary);outline:none;">' +
+    (friendSearchQuery ? '<button id="friend-search-clear" aria-label="Clear search" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;color:var(--text-muted);padding:2px;"><i class="ti ti-x" style="font-size:14px;" aria-hidden="true"></i></button>' : '') +
+    '</div>' +
+    '<button id="friend-add-btn" aria-label="Add friend" title="Find more friends" style="border:0.5px solid var(--border-strong);background:' + (friendAddMode ? 'var(--bg-accent)' : 'var(--surface-2)') + ';color:' + (friendAddMode ? 'var(--text-accent)' : 'var(--text-primary)') + ';width:32px;height:32px;flex-shrink:0;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;"><i class="ti ti-user-plus" style="font-size:16px;" aria-hidden="true"></i></button>' +
+    '</div>';
+
+  var listHtml;
+  if (friendAddMode) {
+    var q = friendSearchQuery.trim().toLowerCase();
+    var results = q ? friendDirectory.filter(function(u) { return u.name.toLowerCase().indexOf(q) !== -1; }) : friendDirectory;
+    listHtml = '<button id="friend-back-btn" style="border:none;background:none;text-align:left;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-accent);cursor:pointer;padding:4px 2px;margin-bottom:8px;"><i class="ti ti-arrow-left" style="font-size:15px;" aria-hidden="true"></i>Back to friend list</button>' +
+      '<div style="font-size:12px;color:var(--text-muted);padding:2px 2px 6px;text-align:center;">' +
+      (results.length ? 'Matches for &ldquo;' + (q || '') + '&rdquo;' : 'No users found for &ldquo;' + q + '&rdquo;') +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:2px;">' + results.map(function(u) {
+        var isSelected = selectedDirectoryUser && selectedDirectoryUser.id === u.id;
+        return '<button data-select-directory="' + u.id + '" style="width:100%;text-align:left;border:none;background:' + (isSelected ? 'var(--bg-accent)' : 'none') + ';display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;">' +
+          '<span style="width:30px;height:30px;flex-shrink:0;border-radius:50%;background:var(--' + u.ramp + '-50);color:var(--' + u.ramp + '-800);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;">' + u.init + '</span>' +
+          '<span style="min-width:0;flex:1;font-size:13px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + u.name + '</span>' +
+          '</button>';
+      }).join('') + '</div>';
+  } else {
+    var fq = friendSearchQuery.trim().toLowerCase();
+    listHtml = friendSectionDefs.map(function(sec) {
+      var members = friends.filter(function(f) { return f.status === sec.key && (!fq || f.name.toLowerCase().indexOf(fq) !== -1); });
+      var collapsed = friendSectionCollapsed[sec.key];
+      return '<div>' +
+        '<button data-toggle-section="' + sec.key + '" style="width:100%;border:none;background:none;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 2px;cursor:pointer;">' +
+        '<span style="font-size:12px;font-weight:500;color:var(--text-secondary);">' + sec.label + ' (' + members.length + ')</span>' +
+        '<i class="ti ' + (collapsed ? 'ti-chevron-down' : 'ti-chevron-up') + '" style="font-size:15px;color:var(--text-muted);" aria-hidden="true"></i>' +
+        '</button>' +
+        (collapsed ? '' : '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:6px;">' +
+          (members.length ? members.map(friendRow).join('') : '<div style="font-size:12px;color:var(--text-muted);padding:4px 8px;">No matches.</div>') +
+          '</div>') +
+        '</div>';
+    }).join('');
+  }
+
+  el.innerHTML = searchRow + '<div style="flex:1;min-height:0;overflow-y:auto;">' + listHtml + '</div>';
+
+  var searchInput = document.getElementById('friend-search-input');
+  searchInput.addEventListener('input', function() {
+    friendSearchQuery = searchInput.value;
+    renderFriendRail();
+    searchInput.focus();
+    searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+  });
+  var clearBtn = document.getElementById('friend-search-clear');
+  if (clearBtn) clearBtn.addEventListener('click', function() { friendSearchQuery = ''; friendAddMode = false; renderFriendRail(); });
+  document.getElementById('friend-add-btn').addEventListener('click', function() {
+    friendAddMode = !friendAddMode;
+    renderFriendRail();
+  });
+  var backBtn = document.getElementById('friend-back-btn');
+  if (backBtn) backBtn.addEventListener('click', function() { friendAddMode = false; friendSearchQuery = ''; renderFriendRail(); });
+  el.querySelectorAll('[data-toggle-section]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var key = btn.getAttribute('data-toggle-section');
+      friendSectionCollapsed[key] = !friendSectionCollapsed[key];
+      renderFriendRail();
+    });
+  });
+  el.querySelectorAll('[data-select-friend]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      selectedFriendId = btn.getAttribute('data-select-friend');
+      selectedDirectoryUser = null;
+      renderFriendRail();
+      renderFriendContent();
+    });
+  });
+  el.querySelectorAll('[data-select-directory]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = btn.getAttribute('data-select-directory');
+      selectedDirectoryUser = friendDirectory.find(function(u) { return u.id === id; });
+      selectedFriendId = null;
+      renderFriendRail();
+      renderFriendContent();
+    });
+  });
+}
+
+function friendActionBarHtml(person, isDirectory) {
+  if (isDirectory) {
+    return '<button data-friend-action="send" style="border:none;background:var(--accent-solid);color:#fff;font-size:13px;font-weight:500;padding:8px 16px;border-radius:20px;cursor:pointer;">Send a friend request</button>';
+  }
+  if (person.status === 'friend_request') {
+    if (person.direction === 'incoming') {
+      return '<div style="display:flex;gap:8px;">' +
+        '<button data-friend-action="decline" style="border:0.5px solid var(--border-strong);background:none;color:var(--text-primary);font-size:13px;font-weight:500;padding:8px 16px;border-radius:20px;cursor:pointer;">Decline</button>' +
+        '<button data-friend-action="accept" style="border:none;background:var(--accent-solid);color:#fff;font-size:13px;font-weight:500;padding:8px 16px;border-radius:20px;cursor:pointer;">Accept</button>' +
+        '</div>';
+    }
+    return '<button disabled style="border:0.5px solid var(--border);background:var(--surface-1);color:var(--text-muted);font-size:13px;font-weight:500;padding:8px 16px;border-radius:20px;cursor:default;">Waiting for response</button>';
+  }
+  return '';
+}
+
+function renderFriendInfo(person, isDirectory) {
+  var actionHtml = friendActionBarHtml(person, isDirectory);
+  return '<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;height:100%;">' +
+    '<div style="height:72px;background:var(--' + person.ramp + '-50);flex-shrink:0;"></div>' +
+    '<div style="padding:0 16px;flex:1;min-height:0;overflow-y:auto;">' +
+    '<div style="display:flex;align-items:flex-end;gap:12px;margin-top:-28px;margin-bottom:10px;">' +
+    '<span style="width:64px;height:64px;border-radius:50%;background:var(--' + person.ramp + '-50);color:var(--' + person.ramp + '-800);border:3px solid var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:500;">' + person.init + '</span>' +
+    '<div style="font-size:16px;font-weight:500;color:var(--text-primary);padding-bottom:6px;">' + person.name + '</div>' +
+    '</div>' +
+    (person.bio ? '<div style="font-size:13px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">' + person.bio + '</div>' : '') +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">' + person.sports.map(function(s) {
+      return '<span style="background:var(--surface-1);color:var(--text-primary);font-size:11px;padding:3px 9px;border-radius:20px;">' + s + '</span>';
+    }).join('') + '</div>' +
+    '<div style="border-top:0.5px solid var(--border);padding-top:10px;padding-bottom:14px;">' +
+    '<div style="font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:4px;">Achievements</div>' +
+    '<div style="font-size:12px;color:var(--text-muted);">Coming soon.</div>' +
+    '</div>' +
+    '</div>' +
+    (actionHtml ? '<div style="padding:12px 16px;border-top:0.5px solid var(--border);display:flex;justify-content:flex-end;flex-shrink:0;">' + actionHtml + '</div>' : '') +
+    '</div>';
+}
+
+function renderFriendChat(id, msgs) {
+  return '<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;display:flex;flex-direction:column;height:100%;">' +
+    '<div id="friend-chat-log" style="flex:1;min-height:0;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;"></div>' +
+    '<div style="display:flex;gap:8px;padding:12px 14px;border-top:0.5px solid var(--border);flex-shrink:0;">' +
+    '<input id="friend-chat-input" type="text" placeholder="Message&hellip;" style="flex:1;min-width:0;border:0.5px solid var(--border);background:var(--surface-1);border-radius:8px;padding:7px 12px;font-size:13px;color:var(--text-primary);outline:none;">' +
+    '<button id="friend-chat-send" disabled style="border:none;background:var(--border);color:var(--text-muted);font-size:13px;font-weight:500;padding:7px 14px;border-radius:8px;cursor:default;">Send</button>' +
+    '</div></div>';
+}
+
+function renderFriendContent() {
+  var el = document.getElementById('friend-content');
+  var person = selectedFriendId ? friendById(selectedFriendId) : selectedDirectoryUser;
+  if (!person) {
+    el.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;border:0.5px solid var(--border);border-radius:12px;background:var(--surface-2);">Select a friend to view their profile and chat.</div>';
+    return;
+  }
+  var isDirectory = !selectedFriendId;
+  el.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px;height:640px;">' +
+    '<div style="height:50%;min-height:0;">' + renderFriendInfo(person, isDirectory) + '</div>' +
+    '<div style="height:50%;min-height:0;">' + renderFriendChat(person.id, friendChats[person.id] || []) + '</div>' +
+    '</div>';
+
+  var actionBtns = el.querySelectorAll('[data-friend-action]');
+  actionBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var action = btn.getAttribute('data-friend-action');
+      if (action === 'send') {
+        var newFriend = { id: person.id, name: person.name, init: person.init, ramp: person.ramp, status: 'friend_request', direction: 'outgoing', sports: person.sports, bio: person.bio };
+        friends.push(newFriend);
+        selectedDirectoryUser = null;
+        selectedFriendId = newFriend.id;
+        friendAddMode = false;
+        friendSearchQuery = '';
+      } else if (action === 'accept') {
+        person.status = 'online';
+        delete person.direction;
+      } else if (action === 'decline') {
+        friends = friends.filter(function(f) { return f.id !== person.id; });
+        selectedFriendId = null;
+      }
+      renderFriendRail();
+      renderFriendContent();
+    });
+  });
+
+  var msgs = friendChats[person.id] || (friendChats[person.id] = []);
+  function renderLog() {
+    var log = document.getElementById('friend-chat-log');
+    if (!log) return;
+    log.innerHTML = msgs.length ? msgs.map(function(m) {
+      var isOwn = m.userId === 'me';
+      return '<div style="display:flex;flex-direction:column;align-items:' + (isOwn ? 'flex-end' : 'flex-start') + ';">' +
+        '<div style="background:' + (isOwn ? 'var(--bg-accent)' : 'var(--surface-1)') + ';border-radius:10px;padding:7px 11px;max-width:75%;">' +
+        '<div style="font-size:13px;color:var(--text-primary);">' + m.text + '</div></div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + m.time + '</div></div>';
+    }).join('') : '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px 0;">No messages yet.</div>';
+    log.scrollTop = log.scrollHeight;
+  }
+  var chatInput = document.getElementById('friend-chat-input');
+  var chatSend = document.getElementById('friend-chat-send');
+  if (chatInput) {
+    chatInput.addEventListener('input', function() {
+      var has = chatInput.value.trim().length > 0;
+      chatSend.disabled = !has;
+      chatSend.style.background = has ? 'var(--accent-solid)' : 'var(--border)';
+      chatSend.style.color = has ? '#fff' : 'var(--text-muted)';
+      chatSend.style.cursor = has ? 'pointer' : 'default';
+    });
+    chatSend.addEventListener('click', function() {
+      var text = chatInput.value.trim();
+      if (!text) return;
+      msgs.push({ userId: 'me', name: 'Ben Nyx', text: text, time: 'now' });
+      chatInput.value = '';
+      chatSend.disabled = true;
+      chatSend.style.background = 'var(--border)';
+      chatSend.style.color = 'var(--text-muted)';
+      renderLog();
+    });
+  }
+  renderLog();
+}
+
+document.querySelectorAll('[data-composer-action]').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var action = btn.getAttribute('data-composer-action');
+    var labels = { photo: 'attach a photo to my new post', location: 'add a location to my new post', sport: 'tag a sport on my new post' };
+    sendPrompt('Let me ' + labels[action]);
+  });
+});
+
+composerPost.addEventListener('click', function() {
+  var text = composerInput.value.trim();
+  if (!text) return;
+  var sportKey = activeSport === 'all' ? 'football' : activeSport;
+  posts.unshift({ sport: sportKey, name: 'Ben Nyx', init: 'BN', time: 'now', text: text, tags: [], likes: 0, comments: 0 });
+  Object.keys(likeState).sort(function(a, b) { return b - a; }).forEach(function(k) { likeState[Number(k) + 1] = likeState[k]; });
+  likeState[0] = { liked: false, count: 0 };
+  Object.keys(postComments).sort(function(a, b) { return b - a; }).forEach(function(k) { postComments[Number(k) + 1] = postComments[k]; });
+  delete postComments[0];
+  composerInput.value = '';
+  autosize();
+  updateComposerButton();
+  renderFeed();
+});
+
+document.querySelectorAll('.nav-btn, [data-nav-inline]').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var section = btn.getAttribute('data-nav') || btn.getAttribute('data-nav-inline');
+    if (section === 'home') { setView('home'); return; }
+    if (section === 'groups') { setView('groups'); return; }
+    if (section === 'friends') { setView('friends'); return; }
+    var labels = { matches: 'find or create a match', profile: 'view and edit my profile' };
+    sendPrompt('Show me the ' + section + ' screen to ' + labels[section]);
+  });
+});
+
+function setView(view) {
+  document.getElementById('home-view').style.display = view === 'home' ? 'block' : 'none';
+  document.getElementById('groups-view').style.display = view === 'groups' ? 'block' : 'none';
+  document.getElementById('friends-view').style.display = view === 'friends' ? 'block' : 'none';
+  document.querySelectorAll('.nav-btn').forEach(function(btn) {
+    var isActive = btn.getAttribute('data-nav') === view;
+    btn.style.color = isActive ? 'var(--text-primary)' : 'var(--text-secondary)';
+    btn.style.fontWeight = isActive ? '500' : '400';
+  });
+}
+
+renderSwitcher('sport-switcher');
+renderSwitcher('sport-switcher-groups');
+renderFeed();
+renderUpcoming('upcoming', activeSport);
+renderHashtags('hashtags');
+renderBroadcasts('broadcasts');
+renderUpcoming('upcoming-groups');
+renderHashtags('hashtags-groups');
+renderBroadcasts('broadcasts-groups');
+renderGroupSwitcher();
+renderGroupCover();
+renderGroupMain();
+renderUpcoming('upcoming-friends');
+renderHashtags('hashtags-friends');
+renderBroadcasts('broadcasts-friends');
+renderFriendRail();
+renderFriendContent();
+</script>
+</body>
+</html>
