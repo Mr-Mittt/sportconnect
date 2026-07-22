@@ -1140,6 +1140,14 @@ rather than a single title. jsdom has no `ResizeObserver`; added a no-op stub to
 anchor contexts (sport pill, group pill, cover banner) plus the fixed-60vh case in a real browser
 against the real backend.
 
+**HF-19 DONE** (2026-07-22): regenerated the `post-modal-*` visual-regression baselines
+(FEED-11/FEED-12's comment-modal suite) — GRP-6's addendum gave `CommentSection` a fixed 60vh
+height, so its dialog renders differently. SHA-256-compared the provided `visual-baselines.zip`
+against the committed set before overwriting: exactly the 9 `post-modal-*` files changed (all 3
+states × 3 breakpoints), the 9 `home-feed-*` files (no modal open in those captures) were
+byte-identical — same "only the causally-connected baselines move" pattern HF-16 established.
+Human-verified the new captures show the intended fixed-height empty space, not a rendering bug.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime
