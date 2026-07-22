@@ -161,7 +161,16 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   the new reverse-direction lookup (Spock `Mock()` returns `null`, not `Optional.empty()`, for an
   unstubbed call). Live-verified against the real running backend: both users appeared in each
   other's friends list immediately, no pending rows left. User-requested, same session as U9.
-- **MVP backlog:** 10 tickets (U1–U10) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, **all `DONE`**
+- **U11 filed (2026-07-22, `TODO`):** Protect user data — `GET /api/users/{userId}`,
+  `/email/{email}`, `/username/{username}` are all public (no auth) and return the full
+  `UserResponse` (email, phone, DOB, gender, height/weight/shoe size, precise location,
+  lastLoginAt) to anyone, not a safe subset. The email/username lookups don't even need an id, and
+  ids now surface everywhere (posts, comments, group members, friends, search). Confirmed safe to
+  narrow: every internal caller (`AuthServiceImpl`, `CommentServiceImpl`, `PostServiceImpl`) calls
+  `UserService` directly in-process, never through this HTTP layer. No client screen depends on the
+  wider shape either. Scoping only, no code yet.
+- **MVP backlog:** 11 tickets (U1–U11) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, 10 `DONE`,
+  U11 `TODO`
 
 #### `modules:sport:sport-api` + `modules:sport:sport-impl`
 - `Sport` entity: name, description, category, icon_url, min/max players, soft delete
