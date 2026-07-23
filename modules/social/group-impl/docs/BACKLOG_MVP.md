@@ -36,6 +36,7 @@
 | 15 | B7 | Settings data set audit → group-type membership-cap tiers | `DONE` |
 | 16 | B9 | Group system posts — welcome post on member join | `DONE` |
 | 17 | A10 | Add multi-value `sportIds` filter to `GET /api/groups/public` — unblocks client GRP-6 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
+| 18 | B11 | Reconcile join-request/invitation race conditions — blocks client GRP-7 (`client/docs/BACKLOG_MVP.md`) | `TODO` |
 
 ---
 
@@ -552,6 +553,106 @@ of these N sports" in one call — only one sport, or every sport.
   concern to clean up.
 - Any client-side change — that's GRP-6 (`client/docs/BACKLOG_MVP.md`), which depends on this
   ticket, not the other way around.
+
+---
+
+### B11 · Reconcile join-request/invitation race conditions
+**Status:** `TODO` · **Type:** Bug fix / business rule · **Dependency:** B1 (member invitation
+flow, `DONE`), A3 (join requests, `DONE`) · **Filed:** 2026-07-23, found while scoping the client's
+GRP-7 (`client/docs/BACKLOG_MVP.md`). **Blocks GRP-7** — the client ticket wires the approve/accept
+UI for both flows and should be built against corrected business rules, not retrofitted after.
+
+**Read `documentation/md/adr/JOIN_GROUP_ADR.md` §5 before implementing.** That section is the
+canonical, diagrammed version of the three rules below — both tables' full schema/use-case
+background (§1–4) plus two Mermaid sequence diagrams showing exactly where each rule's check sits
+in the existing `createInvitation`/`approveInvitation`/`createJoinRequest` flows, tagged by rule
+number. The prose here is a summary; the diagrams are the source of truth for the exact
+call-site/branch structure. If implementation reveals the rules need to change, **update §5 first,
+then this ticket** — don't let them drift apart.
+
+**Origin:** `group_join_requests` (self-service) and `group_invitations` (member-initiated) are
+independent tables with no cross-awareness today. Verified by reading the actual service methods:
+`createInvitation` always sets `status="pending_owner"` regardless of who the inviter is
+(`GroupServiceImpl.java:991`); `approveInvitation` flips `pending_owner→pending_user` with no check
+for anything else pending for that (group, user) pair (`GroupServiceImpl.java:1000-1021`);
+`createJoinRequest` checks membership + an existing pending join request + capacity, but never
+checks for an existing invitation (`GroupServiceImpl.java:563-597`). Three real races fall out of
+this:
+
+1. A member invites A (→ `pending_owner`). Before the owner approves, A independently sends a join
+   request for the same group. Today both rows sit there as two unrelated pending items — the owner
+   has to separately act on each, and approving the invitation still leaves A needing to
+   individually accept it, ignoring that A already proved intent via the join request.
+2. An owner/admin invites A directly. There's no reason for the owner to "approve their own
+   invitation," but today it still starts at `pending_owner` and needs an explicit approve step
+   before A can even see it.
+3. If A already has, or independently creates, a join request while an invitation to A is sitting at
+   `pending_user`, nothing connects the two — A ends up needing to act on the invitation separately
+   even though a join request is exactly as strong a signal of intent.
+
+**What ships — three rules (user-specified 2026-07-23, resolved interaction confirmed same day):**
+
+1. **`createInvitation`**: if the inviter passes `canManageMembers(groupId, inviterId)` (owner or
+   admin), create the invitation at `status="pending_user"` directly — skip `pending_owner`
+   entirely, since there's no one else who needs to approve the owner/admin's own action.
+2. **Join-request short-circuit, checked at every point an invitation is about to enter
+   `pending_user`** — both `approveInvitation`'s normal `pending_owner→pending_user` transition
+   *and* rule 1's direct-to-`pending_user` creation path (confirmed: both call sites need this
+   check, not just `approveInvitation` — an owner-authored invitation must also check for a
+   pre-existing join request from that user, or the owner-authored path could skip the ADR's rule
+   entirely). If a `pending` `GroupJoinRequest` already exists for that (group, user): skip
+   `pending_user`, set the invitation `status="accepted"` directly, create the `GroupMember` row,
+   post the welcome message (crediting the invitation's `inviterId`) — **and** update the join
+   request's own row to `status="accepted"` with `reviewedBy`/`reviewedAt` set (confirmed: don't
+   leave it dangling at `pending` — it would otherwise sit as a phantom row in the owner's
+   "Waiting for group approve" queue forever, with no clean way to act on it since the user is
+   already a member).
+3. **`createJoinRequest`**: before creating a new row, check for an existing `pending_user`
+   `GroupInvitation` for that (group, user). If one exists: do **not** create a join request row at
+   all — instead accept that invitation directly (`status="accepted"`, create `GroupMember`, post
+   welcome message, same effect as `acceptInvitation`).
+
+**Open questions to resolve at pickup:**
+- `createJoinRequest`'s declared return type is `JoinRequestResponse` — when rule 3 short-circuits
+  and no join request is ever created, what does the endpoint return? A few options: a
+  `GroupInvitationResponse`-shaped result instead (contract change — needs a client-side type
+  update too), a synthetic `JoinRequestResponse` with `status="accepted"` pointing at the resolved
+  invitation's id (keeps the response shape stable but is semantically odd — it's not really a join
+  request), or a different response wrapper entirely for this case. Pick before implementing, not
+  during — this is a real API-contract decision, not a detail to improvise mid-method.
+- All three rules end in the same "create GroupMember + post welcome message" effect that already
+  exists three times over (`acceptJoinRequest`, `acceptInvitation`, and now this). Worth extracting
+  a shared private helper (e.g. `finalizeMembership(groupId, userId, creditedInviterId)`) rather
+  than a fourth near-identical block — not required for correctness, but flagged since the
+  duplication was already borderline before this ticket adds a fourth copy.
+- Capacity: every new short-circuit path (`createInvitation`'s owner-authored case, both
+  `pending_user`-entry check-ins, `createJoinRequest`'s short-circuit) results in an actual
+  membership creation and must run `checkMemberCapacityNotExceeded`/`enforceMemberCapacity` exactly
+  like the existing accept paths do — easy to miss since these are new code paths, not extensions of
+  the ones that already have the check.
+- Decline-side interactions (declining an invitation/join request while the other is also pending)
+  are **explicitly out of scope** for this ticket — only the three rules above, as specified. Don't
+  invent additional symmetric rules beyond what's written here.
+
+**Acceptance criteria:**
+- All three rules verified with a live-backend walkthrough (register two users, exercise each race
+  in order), not just Spock mocks — these are exactly the kind of cross-repository interaction
+  GRP-4's own verification found real gaps in.
+- Spock coverage in `GroupServiceImplSpec` for each of the three rules independently, plus the
+  combined case (rule 1 + rule 2 interaction: owner-authored invitation created after a pending join
+  request already exists).
+- `./gradlew :modules:social:group-impl:test` and `./gradlew :server:test` both green.
+- No regression to the existing single-flow paths (a plain member's invitation still starts at
+  `pending_owner` and still requires explicit owner approval when no join request is in play; a
+  plain join request with no invitation in play behaves exactly as today).
+
+**Out of scope:**
+- Any client-side change — GRP-7 depends on this ticket, not the other way around; the client's
+  merged "Waiting for group approve" list (already scoped in GRP-7) should reflect whatever these
+  corrected backend semantics produce, once this ships.
+- Decline-side symmetric rules (see above).
+- The `group_invitations` table's missing DB-level FKs/CHECK constraint on `status` — a
+  pre-existing, separate gap noted in `JOIN_GROUP_ADR.md`, not this ticket's concern.
 
 ---
 
