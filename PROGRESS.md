@@ -1237,6 +1237,31 @@ two design questions (whether pending-owner invitations fold into `GroupMembersT
 "Waiting for group approve" section or get their own, and where/how the invitee sees + accepts an
 invitation) are left open for pickup.
 
+**JOIN_GROUP_ADR written** (2026-07-23, `documentation/md/adr/JOIN_GROUP_ADR.md`): while scoping
+GRP-7, the question came up of merging `group_join_requests` and `group_invitations` into one table.
+Documented all 13 use cases both flows support, both schemas (current two-table vs. a proposed
+merged `group_membership_requests` with a `type` discriminator), and pros/cons of each.
+**Recommendation: keep the two tables** — the two flows have genuinely different approval-chain
+lengths (1 reviewer vs. 2 sequential) and gates (friends-only + `allowMemberInvites`, invitation-only),
+so merging only consolidates the read/list side (which GRP-7 already handles via a client-side
+merge, at negligible cost) while the write/transition side — the more complex half — stays separate
+either way. No schema change made; GRP-7 proceeds against the current schema.
+
+**B11 filed, GRP-7 reverted to TODO** (2026-07-23,
+`modules/social/group-impl/docs/BACKLOG_MVP.md`): picking up GRP-7 for real surfaced three
+unhandled race conditions between `group_join_requests` and `group_invitations` — user-specified,
+confirmed absent by reading the actual service methods (`createInvitation` always starts at
+`pending_owner` regardless of inviter role; `approveInvitation` never checks for an existing join
+request; `createJoinRequest` never checks for an existing invitation). Filed as backend **B11**:
+(1) an owner/admin's own invitation should start at `pending_user`, skipping the redundant
+self-approval step; (2) whenever an invitation is about to enter `pending_user` (via approval, or
+directly per rule 1), check for an already-pending join request from the same user and short-circuit
+straight to `accepted` for both records instead of leaving two disconnected pending rows; (3)
+creating a join request should check for an already-`pending_user` invitation and accept that
+instead of creating a redundant row. GRP-7 reverted from `IN PROGRESS` to `TODO`, blocked on B11 —
+same pattern as GRP-4 reverting for FRIEND-1. No client code was written before the revert (caught
+during Phase 1/2 exploration, not after implementation).
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

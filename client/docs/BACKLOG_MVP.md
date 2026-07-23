@@ -115,7 +115,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 44 | FRIEND-1 | Friends page — rail, profile/chat panel, directory search, friend-request actions — **new ticket, not in either epic**, inserted ahead of GRP-4 (user decision, 2026-07-22) | `DONE` |
 | 45 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3, unblocked now that FRIEND-1 is `DONE` | `DONE` |
 | 46 | GRP-5 | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
-| 51 | GRP-7 | Wire the invitation approve/accept lifecycle — owner/admin approval + invitee acceptance — **new ticket, not in either epic, found while closing out GRP-4** (2026-07-23) | `TODO` |
+| 51 | GRP-7 | Wire the invitation approve/accept lifecycle — owner/admin approval + invitee acceptance — **new ticket, not in either epic, found while closing out GRP-4** (2026-07-23) — blocked on backend B11 | `TODO` |
 | **Phase 8 — Chat (new, not in either epic — see `documentation/md/CHAT_SERVICE_INTEGRATION.md`)** | | | |
 | 47 | CHAT-2 | Wire GroupChatTab to real-time PubNub delivery — blocked on CHAT-1 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) | `TODO` |
 | 48 | CHAT-4 | Persisted chat history + hardening — blocked on CHAT-3 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) and CHAT-2 | `TODO` |
@@ -169,12 +169,19 @@ DM-1 (backend, new)/DM-2 (client, new) filed alongside FRIEND-1, same lineage as
   backend at all, not even a filed ticket, unlike group chat's CHAT-1) — DM-1 scopes and builds the
   real conversations/messages backend, DM-2 wires FRIEND-1's chat panel to it. Neither blocks
   FRIEND-1 or anything else in this backlog.
-GRP-7 (new, filed 2026-07-23) — GRP-3, GRP-4 (both DONE). No backend blocker: all 6 endpoints it
-  needs already ship in modules/social/group-impl. Discovered while closing out GRP-4: an invitation
-  GRP-4 sends can never be approved/accepted through the app today (the create step is the only one
-  wired) — this ticket wires the remaining owner-approval + invitee-acceptance steps. Two design
-  questions (section layout for owner approval, exact invitee-side placement/post-accept behavior)
-  are still open — see the ticket entry.
+GRP-7 (new, filed 2026-07-23) — GRP-3, GRP-4 (both DONE). Discovered while closing out GRP-4: an
+  invitation GRP-4 sends can never be approved/accepted through the app today (the create step is
+  the only one wired) — this ticket wires the remaining owner-approval + invitee-acceptance steps.
+  Two design questions (section layout for owner approval, exact invitee-side placement/post-accept
+  behavior) were resolved during pickup (merged chronological list; GroupDiscoveryPanel's "All
+  groups" view; auto-navigate on accept) — see the ticket entry. **Reverted from IN PROGRESS back to
+  TODO (2026-07-23)**: picking it up surfaced three unhandled race conditions between the two tables
+  (an invitation and a join request converging on the same person) that the current backend doesn't
+  resolve correctly — same "no client-side way to do the thing correctly yet" pattern GRP-4 hit with
+  FRIEND-1. Filed as backend ticket **B11**
+  (`modules/social/group-impl/docs/BACKLOG_MVP.md`) and inserted as this ticket's blocker. Pick up
+  GRP-7 again only after B11 ships. Background: `documentation/md/adr/JOIN_GROUP_ADR.md` (schema/
+  use-case reference for both tables, written during this same pickup).
 ```
 
 **Backend blockers (tracked outside this backlog):**
@@ -2069,8 +2076,10 @@ through the app. Filed as **GRP-7** below, not fixed inline (see that entry for 
 ---
 
 ### GRP-7 · Wire the invitation approve/accept lifecycle
-**Status:** `TODO` · **Type:** Feature · **Dependency:** GRP-3 (`DONE`), GRP-4 (`DONE`) ·
-**Filed:** 2026-07-23, discovered while closing out GRP-4
+**Status:** `TODO` (reverted from `IN PROGRESS` 2026-07-23 — blocked, see delta below) · **Type:**
+Feature · **Dependency:** GRP-3 (`DONE`), GRP-4 (`DONE`), **B11**
+(`modules/social/group-impl/docs/BACKLOG_MVP.md`, `TODO`) · **Filed:** 2026-07-23, discovered while
+closing out GRP-4
 
 **Origin:** `POST /api/groups/{groupId}/invitations` (B1) creates every invitation — even one sent by
 the group's own owner — with `status="pending_owner"` unconditionally
@@ -2095,33 +2104,41 @@ Net effect as GRP-4 ships: an invitation can be *sent* but never actually resolv
 forward. Confirmed by user (2026-07-23): this is a real gap, not a misunderstanding of existing
 behavior — file as its own ticket rather than fix inline.
 
-**What ships — two parts, likely one ticket (bundles a cohesive user-facing gap, same reasoning
-FRIEND-1 used to bundle rail/profile/chat under one ticket rather than three):**
+**What ships — two parts, one ticket (bundles a cohesive user-facing gap, same reasoning FRIEND-1
+used to bundle rail/profile/chat under one ticket rather than three). Design decisions below
+resolved 2026-07-23:**
 
-1. **Owner/admin approval.** Where these rows surface within `GroupMembersTab`'s existing "Waiting
-   for group approve" section is an **open question, not yet resolved** — that section is currently
-   wired exclusively to `JoinRequest` (the self-service "request to join" flow), a different entity
-   from `GroupInvitation` with a different row shape (a join-request row is just the requester; an
-   invitation-awaiting-approval row needs both inviter AND invitee). Two options surfaced at
-   scoping, neither picked yet:
-   - Two labeled sub-groups under the existing section header ("Join requests" / "Invitations to
-     approve"), keeping row shapes unambiguous.
-   - One merged, chronological list, row layout adapting per type.
-   The section's own name — "Waiting for **group** approve" — plausibly already meant to cover both
-   concepts (as a parallel to "Waiting for **user** accept" covering the invitee side of the same
-   lifecycle), so folding invitations in here is the leading option, but confirm at pickup rather
-   than assuming.
-2. **Invitee acceptance.** Where a user sees invitations sent *to* them is also **not yet locked
-   down**. Leading option: a new "Invitations" section on `GroupDiscoveryPanel`'s "All groups"
-   landing state (shown when no group is selected) — natural fit since no notification system
-   exists anywhere in this app — hidden entirely when empty (same convention GRP-3's own "Waiting
-   for user accept" already established). Confirm this placement at pickup; the user did not
-   object to it in discussion but didn't explicitly confirm it either.
-   Also unresolved: **post-accept behavior** — auto-navigate into the newly joined group, or leave
-   the user on the discovery panel with the list/grid just refreshed.
+1. **Owner/admin approval.** `GroupMembersTab`'s "Waiting for group approve" section merges
+   `JoinRequest` rows and `pending_owner` `GroupInvitation` rows into **one chronological list**
+   (sorted by `createdAt`), not two labeled sub-groups — row layout adapts per type (a join-request
+   row is just the requester; an invitation row shows both inviter and invitee). "find member"
+   filters an invitation row by `inviteeFullName` (the prospective member), not the inviter.
+2. **Invitee acceptance.** A new "Invitations" section on `GroupDiscoveryPanel`'s "All groups"
+   landing state (shown when no group is selected), above the joined-groups grid, hidden entirely
+   when empty. Each row: group name + "Invited by {inviterFullName}" + Accept/Reject.
+   **Post-accept:** auto-navigates into the newly joined group. Since `GroupInvitationResponse`
+   carries no `sportId`, the handler calls `setActiveSport('all')` before selecting the group —
+   guarantees the group is visible regardless of its sport, avoiding a fragile refetch-then-lookup
+   race (`feedSpaceStore`'s own invariant requires `activeSport` and the selected group's sport to
+   always match).
 
-**Backend:** all 6 endpoints above are `DONE` (`modules/social/group-impl`, `GroupController`/
-`GroupServiceImpl`) — this is a pure client ticket, no backend work needed.
+**Delta (2026-07-23, reverted from `IN PROGRESS` back to `TODO`):** picking this up for real
+surfaced that the backend's join-request and invitation tables have **zero cross-awareness** — three
+real race conditions exist between them (e.g. a member invites A, A independently sends a join
+request before the owner approves; today both sit as unrelated pending rows instead of resolving to
+immediate membership). Same "found a blocking gap mid-pickup" pattern as GRP-4 hitting FRIEND-1's
+absence. Filed as backend ticket **B11**
+(`modules/social/group-impl/docs/BACKLOG_MVP.md`) — GRP-7 should be built against B11's corrected
+business rules, not shipped first and patched after. Full schema/use-case background (including two
+diagrams — a UML use case diagram and per-flow sequence diagrams) written to
+`documentation/md/adr/JOIN_GROUP_ADR.md` during this same pickup. **Pick up GRP-7 again only once
+B11 is `DONE`.**
+
+**Backend:** the original 6 endpoints (table above) are `DONE`. B11 changes 3 of their underlying
+service methods' business rules (`createInvitation`, `approveInvitation`, `createJoinRequest`) —
+confirm B11 has shipped and re-read its final rules before resuming client work, since the exact
+response contract for `createJoinRequest`'s short-circuit case was left as an open question on B11
+itself.
 
 ---
 
