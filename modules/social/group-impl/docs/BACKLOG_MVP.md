@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/social/group-impl`  
-**Last updated:** 2026-07-21
+**Last updated:** 2026-07-24
 
 ---
 
@@ -700,6 +700,94 @@ cancels their own `pending_owner` invitation successfully and it disappears from
 approval queue, cancelling after approval correctly 400s).
 
 **Client:** wired the same session as a GRP-7 addendum — see `client/docs/BACKLOG_MVP.md`.
+
+---
+
+### B13 · Persist a rejection reason on invitee-declined invitations
+**Status:** `TODO` · **Type:** Enhancement · **Filed:** 2026-07-24, alongside client ticket **GRP-8**
+(`client/docs/BACKLOG_MVP.md`) — GRP-8's invitee-facing reject flow asks for a reason before
+rejecting an invitation, but `PUT /invitations/{invitationId}/reject` takes no request body today.
+Confirmed: `GroupController.rejectInvitation` has no `@RequestBody` parameter at all, and
+`GroupInvitation` (entity) has no reason/notes column — this is a real gap, not an oversight to
+build around client-side.
+
+**What ships:**
+- New Liquibase changeset adding a nullable `reject_reason` column (`text`, no length cap — same
+  precedent as `Post.content`) to `group_invitations`.
+- New `RejectInvitationRequest` DTO with an optional `reason` field; `PUT
+  /invitations/{invitationId}/reject` accepts it in the body (empty/absent is fine — the invitee
+  isn't required to give one at the API layer, even though GRP-8's client UI may require it
+  client-side).
+- `GroupServiceImpl.rejectInvitation` persists the reason alongside the existing
+  `status="declined_by_user"` transition.
+- Surface it on `GroupInvitationResponse.rejectReason` (`string | null`) so **`getMemberSentInvitations`**
+  (GRP-3's "Waiting for user accept" section, already shown to the inviter) can display why their
+  invitation was declined — no new endpoint needed, just a new field on the existing response.
+
+**Out of scope:** no equivalent reason field for `declineJoinRequest` (join-request decline, the
+owner/admin side) — GRP-8 only asks for a reason on invitation reject, not that flow.
+
+---
+
+### B14 · Track every co-inviter on a single group invitation
+**Status:** `TODO` · **Type:** Feature · **Filed:** 2026-07-24, alongside client ticket **GRP-8**
+(`client/docs/BACKLOG_MVP.md`) — user requested that when more than one group member independently
+invites the same prospective member, both the invitee's own Invitations view and the owner/admin's
+approval queue show one merged row ("Invited by X, Y, Z"), and a single owner/admin approval covers
+all of them.
+
+**Current behavior (confirmed):** `createInvitation`'s `existsByGroupIdAndInviteeIdAndStatusIn(groupId,
+inviteeId, [pending_owner, pending_user])` check means a second, different member's invite attempt
+for an already-pending invitee **silently returns the existing single-inviter invitation
+unchanged** — the second inviter is never recorded anywhere. There is no way today for "multiple
+invitations to the same new member" to exist as multiple `GroupInvitation` rows.
+
+**Decision (resolved for this ticket — flag if the user actually intended literal duplicate rows,
+one per inviter, bulk-actioned together):** track every inviter against **one canonical invitation
+row**, not one row per inviter. The alternative (duplicate rows, bulk-approved/bulk-declined
+together) reintroduces exactly the class of multi-row-race problem **B11** was filed to eliminate —
+two independently-transitioned rows for the same real-world event can drift out of sync (e.g. an
+owner approves one, the invitee accepts one, sibling rows dangle at `pending_owner`/`pending_user`
+forever with no reconciliation path, the same failure mode B11's ADR documents). A single row with
+multiple recorded inviters has no such race: there is nothing to reconcile.
+
+**What ships:**
+- New join table `group_invitation_inviters` (`invitation_id` FK → `group_invitations.id`,
+  `inviter_id`, `created_at`, unique on `(invitation_id, inviter_id)`) via a new Liquibase
+  changeset. The original single inviter (`GroupInvitation.inviterId`) is backfilled into this table
+  as its first row on migration; the `inviterId` column itself is kept as-is on the entity (no
+  column removed — existing code reading "who created it" keeps working unchanged).
+- `createInvitation`: when `alreadyInvited` is true and the calling `inviterId` isn't already a
+  co-inviter on the existing row, insert a `group_invitation_inviters` row for them instead of
+  returning the existing invitation untouched. A repeat call from the same person still no-ops
+  (existing behavior, now scoped to "already a co-inviter" rather than "an invitation already
+  exists").
+- `GroupInvitationResponse` gains `inviterFullNames: List<String>` (every co-inviter, oldest-first;
+  a singleton list in the common single-inviter case) alongside the existing singular `inviterId`/
+  `inviterFullName` (kept unchanged for backward compatibility with GRP-3/GRP-4/GRP-7's existing
+  client code).
+- `approveInvitation`/`declineInvitation`/`acceptInvitation`/`rejectInvitation`/`cancelInvitation` are
+  all **unchanged** — they still operate on the one canonical row, so a single approve/accept/
+  reject/cancel already covers every co-inviter with no bulk-update logic needed anywhere.
+
+**Out of scope:** no UI/API to remove one co-inviter from an invitation individually, and no
+per-co-inviter timestamps beyond `created_at` on the join row — the list is display-only.
+
+---
+
+### B15 · Add sportId/sportName to GroupInvitationResponse
+**Status:** `TODO` · **Type:** Enhancement · **Filed:** 2026-07-24, alongside client ticket **GRP-8**
+— two client needs both require knowing an invitation's group's sport without a second round-trip:
+(1) GRP-7's accept-invitation flow works around this gap today by force-switching the sport filter
+to "All" before navigating, instead of switching directly to the group's real sport; (2) GRP-8's new
+"add this sport to your profile?" accept-time confirmation needs the sportId both to check whether
+the invitee already has a matching sport profile and to submit the profile-creation call if they
+confirm.
+
+**What ships:** `mapToGroupInvitationResponse` additionally reads `Group.sportId`/the sport's name
+(the `Group` row is already loaded in every call site to resolve `groupName`) and sets two new
+fields, `sportId: Long` and `sportName: String`, on `GroupInvitationResponse`. Purely additive — no
+new query, no schema change (`Group.sportId` already exists).
 
 ---
 

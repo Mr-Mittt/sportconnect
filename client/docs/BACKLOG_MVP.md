@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-07-21
+**Last updated:** 2026-07-24
 
 ---
 
@@ -116,6 +116,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 45 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3, unblocked now that FRIEND-1 is `DONE` | `DONE` |
 | 46 | GRP-5 | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
 | 51 | GRP-7 | Wire the invitation approve/accept lifecycle — owner/admin approval + invitee acceptance — **new ticket, not in either epic, found while closing out GRP-4** (2026-07-23) — blocked on backend B11 | `DONE` |
+| 52 | GRP-8 | Sport pill follows an opened group + merged multi-inviter display (invitee + owner/admin views) + reason-gated invitation reject + join-request withdraw + sport-add confirmation on accept — **new ticket, not in either epic, filed while using GRP-7's shipped lifecycle, amended same day** (2026-07-24) — blocked on backend B13 (reject reason), B14 (multi-inviter tracking), B15 (sportId on invitation response) | `TODO` |
 | **Phase 8 — Chat (new, not in either epic — see `documentation/md/CHAT_SERVICE_INTEGRATION.md`)** | | | |
 | 47 | CHAT-2 | Wire GroupChatTab to real-time PubNub delivery — blocked on CHAT-1 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) | `TODO` |
 | 48 | CHAT-4 | Persisted chat history + hardening — blocked on CHAT-3 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) and CHAT-2 | `TODO` |
@@ -182,6 +183,19 @@ GRP-7 (new, filed 2026-07-23) — GRP-3, GRP-4 (both DONE). Discovered while clo
   (`modules/social/group-impl/docs/BACKLOG_MVP.md`) and inserted as this ticket's blocker. Pick up
   GRP-7 again only after B11 ships. Background: `documentation/md/adr/JOIN_GROUP_ADR.md` (schema/
   use-case reference for both tables, written during this same pickup).
+GRP-8 (new, filed 2026-07-24, amended same day) — GRP-3, GRP-4, GRP-7 (all DONE), no code dependency
+  on any of the three, just built on top of what they shipped. Five gaps found/added the same day
+  using the Groups page after GRP-7 landed — see the ticket entry's Origin list. Parts 1 and 3 (the
+  sport-pill fix and the new join-request withdraw section) have no backend dependency and can ship
+  immediately. Part 2 (invitee-side merged invitations + reason-gated reject) and part 4 (the
+  Members-tab approval queue's identical merged-display gap) both need backend ticket **B14**
+  (`modules/social/group-impl/docs/BACKLOG_MVP.md`, `TODO`) — tracks every co-inviter against one
+  canonical invitation row instead of allowing the multi-row/bulk-action design that would reintroduce
+  B11's race class — plus **B13** (already filed) for the reject-reason persistence specifically. Part
+  5 (sport-add confirmation on accept) needs **B15** (same file, `TODO`) — adds `sportId`/`sportName`
+  to `GroupInvitationResponse`, which part 1's accept-invitation exception also benefits from. Split
+  any part into its own follow-up if its backend dependency isn't ready by pickup, same "ship the
+  unblocked part, split the rest" precedent GRP-1/GRP-2 and GRP-3/GRP-4 already used.
 ```
 
 **Backend blockers (tracked outside this backlog):**
@@ -2167,6 +2181,139 @@ invitation. Needed new backend ticket **B12**
 (`modules/social/group-impl/docs/BACKLOG_MVP.md`) — `cancelInvitation`/`DELETE
 /invitations/{invitationId}`, mirroring A3's `cancelJoinRequest`. Full detail in the "Addendum"
 section of `client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`.
+
+---
+
+### GRP-8 · Sport pill follows an opened group, merged multi-inviter display, reason-gated reject, join-request withdraw, and sport-add confirmation on accept
+**Status:** `TODO` · **Type:** Enhancement · **Dependency:** GRP-3, GRP-4, GRP-7 (all `DONE`, no code
+blocker) · **Filed:** 2026-07-24, user-requested directly, amended same day with two more items
+(parts 4–5 below) before pickup.
+
+**Origin:** five separate UX gaps found using the Groups page after GRP-7 shipped the invitation
+lifecycle:
+1. Opening a specific group (from the switcher pill, a discovery-panel card, or right after
+   creating one) leaves `SportSwitcher`'s active pill on whatever it was before — usually "All" —
+   instead of reflecting the opened group's actual sport.
+2. GRP-7's `GroupInvitationsSection` (invitee-facing) renders one row per invitation with a single
+   inviter name; it doesn't merge multiple members' invitations to the same person into one row, and
+   Reject fires immediately with no confirmation or reason capture.
+3. The user's own sent join requests are already fetched (`useJoinRequests`, wraps `GET
+   /groups/join-requests/user/{userId}`, used today only to badge "already requested" rows inside
+   `JoinGroupModal`) but have no visible list anywhere with a way to withdraw one —
+   `cancelJoinRequest`/`DELETE /join-requests/{requestId}` exists and works server-side and is
+   entirely unused client-side.
+4. **(added same day)** The Members tab's owner/admin approval queue (GRP-3/GRP-7's merged
+   chronological list) has the identical single-inviter display gap as item 2, on the owner/admin
+   side instead of the invitee side.
+5. **(added same day)** Accepting an invitation for a group whose sport the invitee doesn't already
+   have a profile for should offer to add that sport profile as part of accepting, rather than
+   silently leaving the invitee a member of a sport-group with no matching sport pill.
+
+**Backend redesign needed for items 2 and 4 (resolved 2026-07-24):** confirmed against
+`GroupServiceImpl.createInvitation`'s `existsByGroupIdAndInviteeIdAndStatusIn` check that at most one
+pending invitation can exist per (group, invitee) pair today — a second member's invite attempt
+silently returns the first inviter's existing row untouched, so "multiple invitations to the same
+person" cannot currently exist as multiple rows to merge. Filed as backend ticket **B14**
+(`modules/social/group-impl/docs/BACKLOG_MVP.md`, `TODO`) to track every inviter against **one**
+canonical invitation row (a new `group_invitation_inviters` join table) rather than allowing
+duplicate rows bulk-actioned together — the duplicate-row design would reintroduce the exact
+multi-table-race class **B11** was filed to eliminate (two independently-transitioned rows for one
+real event can drift out of sync). With B14, `GroupInvitationResponse.inviterFullNames: string[]`
+is real backend data and a single approve/accept/reject/cancel already covers every co-inviter — no
+client-side row-merging or bulk-action looping needed at all.
+
+**Backend addition needed for item 5 (resolved 2026-07-24):** `GroupInvitationResponse` carries no
+`sportId` today (confirmed) — needed to know the group's sport without a second round trip, both for
+item 1's accept-invitation exception (below) and item 5's profile check. Filed as backend ticket
+**B15** (same file, `TODO`) — purely additive (`sportId`/`sportName` fields), no schema change.
+
+**What ships — five parts:**
+
+1. **Sport pill follows the opened group.** `feedSpaceStore.selectGroup(groupId, groupSportId)` now
+   also sets `activeSport` to the sport matching `groupSportId` whenever `groupId` is non-null — a
+   group is 1:1 with a sport, so this is an unambiguous derivation done once at the store level, not
+   per call site. `GroupSpaceSwitcher`'s pill click, `GroupDiscoveryPanel`'s card click, and
+   `CreateGroupModal`'s `onSuccess` all already pass `groupSportId` today, so none of the three needs
+   its own change. Selecting "All" (`groupId === null`) leaves `activeSport` untouched, matching
+   today's behavior — only opening a *specific* group drives the pill.
+   - **GRP-7's accept-invitation callback no longer needs its `'all'`-first workaround, now that B15
+     ships `sportId` on the invitation:** `useGroupInvitationsData`'s `onAccepted` can call
+     `setActiveSport(sportKeyForId(invitation.sportId))` directly before `selectGroupAndShowPosts`,
+     the same as every other call site, instead of detouring through `'all'` and re-deriving the
+     sport after a refetch. If GRP-8 is picked up before B15 ships, keep the existing `'all'`-first
+     workaround for this one call site as a documented stopgap rather than blocking the rest of the
+     ticket on it.
+   - Extend `feedSpaceStore.test.ts`'s `selectGroup` cases to cover the new `activeSport` side effect
+     (including that selecting "All" doesn't touch it).
+
+2. **Invitations section (invitee-facing) shows every co-inviter; Reject requires a reason.**
+   - `GroupInvitationsSection` renders `inviterFullNames` (B14): "Group invitation from
+     {inviterFullNames[0]}" for one inviter, Oxford-comma joined ("…from {A}, {B}, and {C}") for
+     more — add a small `formatNameList()` helper (`shared/lib/`) if nothing equivalent exists yet.
+     Reuse this same helper for part 4 below.
+   - Reject opens a new `RejectInvitationConfirmDialog` (same `Dialog`/`DialogContent`/`DialogHeader`
+     shape as `DeleteGroupConfirmDialog`) with a `Textarea` for the reason. Reject stays disabled
+     until the reason is non-empty (same required-field gating precedent as `CreatePostForm`'s Post
+     button) — flag at pickup if a reason should be optional instead. Confirming calls
+     `useRejectInvitation()` with the reason, targeting the one invitation id the merged row
+     represents (B14 guarantees exactly one canonical row per group+invitee, so no looping needed).
+   - **Depends on backend ticket B13** (already filed, `TODO`) for the reason to actually persist —
+     `PUT /invitations/{invitationId}/reject` takes no request body today. If B13 isn't ready by
+     pickup, split this sub-item into its own follow-up rather than blocking the rest of this ticket,
+     same "ship what's unblocked" precedent GRP-1/GRP-2 and GRP-3/GRP-4 already used.
+
+3. **New "Join requests" section on `GroupDiscoveryPanel`'s "All groups" view**, below the
+   joined-groups grid — section order top to bottom: Invitations → your groups grid → Join requests,
+   matching the user's spec. New `useCancelJoinRequest()` hook (`DELETE
+   /groups/join-requests/{requestId}`, mirrors `useCancelInvitation`'s shape exactly — blunt
+   `feedKeys.all` invalidation). Reuses the existing `useJoinRequests(currentUserId)` for data (already
+   pending-filtered server-side) — no new query endpoint needed. Each row: group name + "Withdraw"
+   button, no confirmation dialog (the user's spec only asked for one on invitation reject — flag if
+   this feels wrong at pickup). Hidden entirely when empty, same convention as the Invitations
+   section.
+
+4. **Members tab approval queue shows every co-inviter too.** `GroupMembersTab.tsx`'s invitation-row
+   subtitle (currently `Invited by ${item.data.inviterFullName}`, singular) switches to the same
+   `formatNameList(item.data.inviterFullNames)` helper part 2 introduces — the only change on this
+   side, since B14 keeps Approve/Decline operating on the single canonical row exactly as today.
+
+5. **Accepting an invitation offers to add the group's sport if the invitee doesn't have it.** Before
+   calling `acceptInvitation`, check whether `sportKeyForId(invitation.sportId)` (B15) is present in
+   the current user's own `sportProfiles` (already loaded on `GroupsPage`/`useGroupsPageData`). If it
+   is, accept proceeds exactly as today. If not, open **`AddSportModal`** (already exists, SPORT-1) —
+   reused rather than a bespoke dialog, since adding a valid sport profile needs at least a skill
+   level (a required field `AddSportModal` already collects) and it already handles the 3-profile-cap
+   case via its existing error state. Pre-select the invitation's sport (pass a single-item
+   `availableSports` list) and add a new optional note/description prop showing the user's requested
+   copy: *"This {sportName} group — accepting this invitation will add this sport to your profile."*
+   On successful sport-profile creation, proceed to call `acceptInvitation`; on cancel, the invitation
+   stays pending and nothing else changes. **At-cap edge case (already at 3 active profiles):** let
+   `AddSportModal`'s existing submit-error path surface it exactly as it does for the standalone "Add
+   sport" flow today — don't special-case a blocking message here, since the user can already see and
+   act on that same error there.
+
+**Acceptance criteria:**
+- Opening a specific group (pill, card, or a just-created group) switches `SportSwitcher`'s active
+  pill to that group's sport; selecting "All" is unaffected; accepting an invitation still lands the
+  user in the new group with the correct sport pill active, not stuck on "All" (directly, once B15
+  ships — via the stopgap otherwise).
+- Multiple members' invitations to the same person merge into one row naming every inviter, in both
+  the invitee's Invitations section and the Members tab's approval queue; a single-inviter row still
+  reads naturally ("Group invitation from {name}" / "Invited by {name}").
+- Reject (invitee side) opens a confirmation dialog; Reject stays disabled until a reason is typed;
+  confirming sends the reason and removes the row.
+- The new Join requests section lists every pending join request the current user has sent, each
+  with a working Withdraw button that removes it from the list and (verify live) also clears it from
+  `JoinGroupModal`'s "already requested" badge.
+- Accepting an invitation for a sport the invitee has no profile for opens `AddSportModal` with the
+  requested note and the sport pre-selected; completing it adds the profile and then accepts the
+  invitation; cancelling leaves the invitation pending. Accepting for a sport already in the
+  invitee's profiles skips this step entirely.
+- Storybook coverage: merged multi-inviter row (both the Invitations section and the Members tab
+  approval queue), `RejectInvitationConfirmDialog` (empty/filled reason states), Join requests
+  section (populated/empty), `AddSportModal`'s new note/pre-selected variant.
+- No new axe violations (extends `a11y.spec.ts`, same convention every Groups-page ticket since GRP-1
+  has followed).
 
 ---
 
