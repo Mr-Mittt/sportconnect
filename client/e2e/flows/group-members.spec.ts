@@ -38,7 +38,7 @@ test('Group Members tab — owner sees all 5 sections, accept/decline, filtering
   await test.step('1. all 5 sections render for the owner, with real fixture data', async () => {
     await expect(approveSection.getByText('Priya Shah')).toBeVisible();
     await expect(acceptSection.getByText('Robin Park')).toBeVisible();
-    await expect(acceptSection.getByText('Awaiting owner approval')).toBeVisible();
+    await expect(acceptSection.getByText('Invitation sent — waiting for owner approval')).toBeVisible();
     await expect(adminSection.getByText('Jordan Lee', { exact: false })).toBeVisible(); // owner, listed first
     // Jordan Lee IS the authenticated test session user (mockUser) here —
     // their own row is marked "(you)".

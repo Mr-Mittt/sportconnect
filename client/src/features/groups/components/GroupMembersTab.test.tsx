@@ -186,11 +186,11 @@ describe('GroupMembersTab', () => {
     );
     const section = screen.getByRole('region', { name: 'Waiting for user accept' });
     expect(within(section).getByText('Robin Park')).toBeInTheDocument();
-    expect(within(section).getByText('Awaiting owner approval')).toBeInTheDocument();
+    expect(within(section).getByText('Invitation sent — waiting for owner approval')).toBeInTheDocument();
     expect(within(section).getByText("Awaiting Sam's response")).toBeInTheDocument();
   });
 
-  it('a pending_owner sent invitation gets a Cancel button; a pending_user one does not (GRP-7 addendum)', async () => {
+  it('a pending_owner sent invitation gets a Withdraw button; a pending_user one does not (GRP-7 addendum)', async () => {
     const user = userEvent.setup();
     const onCancelInvitation = vi.fn();
     render(
@@ -206,12 +206,12 @@ describe('GroupMembersTab', () => {
     const section = screen.getByRole('region', { name: 'Waiting for user accept' });
 
     const robinRow = within(section).getByText('Robin Park').closest('div[class*="border-hairline"]') as HTMLElement;
-    expect(within(robinRow).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(within(robinRow).getByRole('button', { name: 'Withdraw' })).toBeInTheDocument();
 
     const samRow = within(section).getByText('Sam Ito').closest('div[class*="border-hairline"]') as HTMLElement;
-    expect(within(samRow).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    expect(within(samRow).queryByRole('button', { name: 'Withdraw' })).not.toBeInTheDocument();
 
-    await user.click(within(robinRow).getByRole('button', { name: 'Cancel' }));
+    await user.click(within(robinRow).getByRole('button', { name: 'Withdraw' }));
     expect(onCancelInvitation).toHaveBeenCalledWith(1);
   });
 

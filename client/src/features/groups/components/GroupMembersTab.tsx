@@ -96,7 +96,7 @@ function Section({ title, isLoading, isError, onRetry, totalCount, filteredCount
 }
 
 function invitationStatusLabel(invitation: GroupInvitation): string {
-  if (invitation.status === 'pending_owner') return 'Awaiting owner approval';
+  if (invitation.status === 'pending_owner') return 'Invitation sent — waiting for owner approval';
   const firstName = invitation.inviteeFullName.split(' ')[0] ?? invitation.inviteeFullName;
   return `Awaiting ${firstName}'s response`;
 }
@@ -165,10 +165,11 @@ interface GroupMembersTabProps {
  * personally sent — using the *unfiltered* count, not the search-filtered
  * one, so typing into "find member" never makes this section
  * reappear/disappear on its own. GRP-7 addendum: a "Waiting for user
- * accept" row also gets a Cancel button, but only while `status ===
+ * accept" row also gets a "Withdraw" button, but only while `status ===
  * 'pending_owner'` — once an owner/admin has approved it, it's out of the
  * inviter's hands (matches the backend's own `cancelInvitation` status
- * gate).
+ * gate). The prop/handler names still say "cancel" (matching the backend
+ * method name) — only the button's visible label reads "Withdraw".
  */
 export function GroupMembersTab({
   canManage,
@@ -290,7 +291,7 @@ export function GroupMembersTab({
                       disabled={isCancelingInvitation}
                       onClick={() => onCancelInvitation(invitation.id)}
                     >
-                      Cancel
+                      Withdraw
                     </Button>
                   ) : undefined
                 }
