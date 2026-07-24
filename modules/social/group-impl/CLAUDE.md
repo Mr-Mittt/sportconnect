@@ -88,7 +88,29 @@ GET    /api/groups/{groupId}/permissions/user-role
    one, B9). When adding a new member-join path in the future (e.g. a new invite mechanism),
    check whether it needs this wired in too, the same way B7's `enforceMemberCapacity` had to be
    added to every insertion path. The post is authored by `resolveGroupOwnerId(groupId)` (the
-   *current* owner, not `createdBy`) — there is no dedicated system user account.
+   *current* owner, not `createdBy`) — there is no dedicated system user account. All member-insert
+   paths funnel through the private `finalizeMembership(groupId, userId, creditedInviterId)`
+   helper (B11) — capacity check + `GroupMember` insert + welcome post in one place; a new
+   member-join path should call this rather than reinventing the three steps.
+8. `group_join_requests` and `group_invitations` are independent tables with no DB-level link, but
+   the service layer keeps them reconciled (B11) so the same (group, person) pair can't sit as two
+   unrelated pending items:
+   - `createInvitation`: an owner/admin's own invitation skips `pending_owner` — created directly
+     at `pending_user` (or `accepted`, if rule 2 below fires in the same call).
+   - Both places an invitation is about to become `pending_user` (`approveInvitation`'s normal
+     transition, and the owner/admin direct-create path above) check for a `pending` join request
+     from the same person first — if one exists, the invitation goes straight to `accepted`, the
+     join request is marked `accepted` too (not left dangling), and membership is finalized then
+     and there.
+   - `createJoinRequest`: if the requester already has a `pending_user` invitation for this group,
+     no ordinary pending row is created — a `GroupJoinRequest` is created directly as `accepted`,
+     crediting the invitation's approver as `reviewedBy`, and the invitation is accepted too.
+   - Deliberate consequence: a single real join event can leave two `accepted` rows (one
+     invitation, one join request) for the same (group, person) — no attempt is made to merge or
+     suppress either. See `modules/social/group-impl/docs/B11_JOIN_INVITATION_RACE_CONDITIONS.md`
+     and the note on client ticket GRP-7 (`client/docs/BACKLOG_MVP.md`) for the display-side
+     follow-up.
+   - Full rule diagrams: `documentation/md/adr/JOIN_GROUP_ADR.md` §5.
 
 ## Gotchas
 

@@ -74,6 +74,15 @@ public interface GroupService {
     void leaveMember(Long groupId, UUID userId);
 
     // Join Request Management
+
+    /**
+     * Self-service request to join a group by name. B11: if the caller already has a
+     * {@code pending_user} invitation for this group, this doesn't create an ordinary
+     * pending row — it accepts that invitation directly (membership + welcome message) and returns
+     * a {@code JoinRequestResponse} already at {@code status="accepted"}, with {@code reviewedBy}
+     * attributed to whoever approved the invitation. Otherwise behaves as before: rejects if
+     * already a member, if a pending request already exists, or if the group is at capacity.
+     */
     JoinRequestResponse createJoinRequest(UUID userId, CreateJoinRequestRequest request);
     
     void acceptJoinRequest(Long requestId, UUID adminUserId);
@@ -120,8 +129,22 @@ public interface GroupService {
     List<Long> getGroupIdsForMember(UUID userId);
 
     // Invitations
+
+    /**
+     * Member-initiated invitation. B11 rule 1: if {@code inviterId} is the group's owner or admin,
+     * the invitation skips {@code pending_owner} entirely (no one else needs to approve their own
+     * action) — it's created heading straight for {@code pending_user}, itself subject to rule 2
+     * below. A regular member's invitation is unaffected — still created at {@code pending_owner}.
+     */
     GroupInvitationResponse createInvitation(Long groupId, UUID inviterId, CreateInvitationRequest request);
 
+    /**
+     * Owner/admin approves a member-sent invitation. B11 rule 2: if the invitee already has a
+     * {@code pending} join request for this group, this doesn't move the invitation to
+     * {@code pending_user} — it accepts it directly (membership + welcome message crediting the
+     * original inviter) and marks that join request {@code accepted} too, rather than leaving it
+     * dangling {@code pending}.
+     */
     void approveInvitation(Long invitationId, UUID ownerId);
 
     void declineInvitation(Long invitationId, UUID ownerId);
