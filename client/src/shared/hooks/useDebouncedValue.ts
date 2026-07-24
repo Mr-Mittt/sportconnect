@@ -22,11 +22,21 @@ import { useEffect, useState } from 'react';
 export function useDebouncedValue<T>(value: T, delayMs: number, immediate = false): T {
   const [debounced, setDebounced] = useState(value);
 
+  // `immediate` syncs during render rather than in an effect — React's own
+  // recommended fix for "adjust state in response to a prop change"
+  // (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes):
+  // calling setState here bails out and re-renders before the browser
+  // paints, so there's no extra visible frame, and it sidesteps
+  // react-hooks/set-state-in-effect (which flags the equivalent
+  // `useEffect(() => setDebounced(value), ...)` as a cascading-render risk)
+  // entirely rather than fighting it. Guarded so it only fires the render
+  // it's actually needed, not on every render while `immediate` is true.
+  if (immediate && debounced !== value) {
+    setDebounced(value);
+  }
+
   useEffect(() => {
-    if (immediate) {
-      setDebounced(value);
-      return;
-    }
+    if (immediate) return;
     const timeout = setTimeout(() => setDebounced(value), delayMs);
     return () => clearTimeout(timeout);
   }, [value, delayMs, immediate]);

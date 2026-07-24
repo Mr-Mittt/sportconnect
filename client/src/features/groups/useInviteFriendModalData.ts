@@ -71,9 +71,15 @@ export function useInviteFriendModalData(
   const [errorsByUserId, setErrorsByUserId] = useState<Record<string, string>>({});
 
   const seededForOpenRef = useRef(false);
+  // Guards the close-time reset below the same way `seededForOpenRef`
+  // guards the open-time one — "run once per close", not on every render
+  // while `isOpen` stays false.
+  const resetForCloseRef = useRef(false);
   useEffect(() => {
     if (!isOpen) {
       seededForOpenRef.current = false;
+      if (resetForCloseRef.current) return;
+      resetForCloseRef.current = true;
       // Reset here, on close, not only on the next open — an effect can't
       // run until after the next open's first paint, so a reset that only
       // fired on open would flash the previous session's stale query text
@@ -87,6 +93,7 @@ export function useInviteFriendModalData(
       setErrorsByUserId({});
       return;
     }
+    resetForCloseRef.current = false;
     if (seededForOpenRef.current) return;
     seededForOpenRef.current = true;
     setInputValue(initialQuery);
