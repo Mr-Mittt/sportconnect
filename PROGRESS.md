@@ -1323,6 +1323,27 @@ per-group tabbed view (not the discovery panel) rendered immediately. Full Vites
 and the group-touching e2e specs (`group-settings`, `group-members`, `group-invitations`,
 `feed-groups-journey`) all green — none assumed the old reload-resets-to-All behavior.
 
+**InviteFriendModal reopen flash fixed** (2026-07-24, user-reported): searching in the modal, closing
+it, then reopening with no pre-fill briefly showed the *previous* search's stale results before
+clearing. Two compounding causes in `useInviteFriendModalData`: (1) the input/state reset only ran
+via a `useEffect` on *reopen* — an effect can't run before the first paint, so that first paint still
+showed the old query text, and TanStack Query (keyed on that exact text) returned its cached stale
+results instantly; (2) even after the effect fired and cleared the input, the actual search-driving
+`debouncedQuery` value lagged behind by the full 300ms debounce window, keeping the stale results
+visible a bit longer. Fixed both: the reset now also runs on *close* (so a later reopen's first paint
+already reflects it), and `useDebouncedValue` gained an `immediate` param (new optional 3rd arg,
+default `false`, the one other consumer — `useFriendsPageData` — unaffected) that
+`useInviteFriendModalData` sets to `!isOpen`, force-settling the debounced value the moment the modal
+closes instead of waiting out the timer — closes the race deterministically regardless of how fast
+the user reopens, not just for reopens that happen to land after 300ms of real time. Confirmed
+`useJoinGroupModalData` doesn't share this bug — its equivalent "seed on open" is a direct synchronous
+call at click-time (`openSearch`), not a post-open effect. New regression test in
+`useInviteFriendModalData.test.tsx` (rerender through open→search→close→reopen, assert `rows` is
+already empty on the very next render, no artificial wait). Live-verified through the real UI against
+the real running backend: search → 1 result → close → reopen with no pre-fill → confirmed empty
+input and no stale result, immediately and 500ms later. Full Vitest suite (512/512) and the
+InviteFriendModal-touching e2e spec (`group-members`) both green.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime
