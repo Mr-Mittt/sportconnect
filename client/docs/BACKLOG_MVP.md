@@ -2134,11 +2134,21 @@ diagrams — a UML use case diagram and per-flow sequence diagrams) written to
 `documentation/md/adr/JOIN_GROUP_ADR.md` during this same pickup. **Pick up GRP-7 again only once
 B11 is `DONE`.**
 
-**Backend:** the original 6 endpoints (table above) are `DONE`. B11 changes 3 of their underlying
-service methods' business rules (`createInvitation`, `approveInvitation`, `createJoinRequest`) —
-confirm B11 has shipped and re-read its final rules before resuming client work, since the exact
-response contract for `createJoinRequest`'s short-circuit case was left as an open question on B11
-itself.
+**Backend:** B11 is now `DONE` (2026-07-23,
+`modules/social/group-impl/docs/B11_JOIN_INVITATION_RACE_CONDITIONS.md`) — unblocked. B11 changed 3
+service methods' business rules (`createInvitation`, `approveInvitation`, `createJoinRequest`), all
+without any response-contract change: `createJoinRequest`'s short-circuit case (a `pending_user`
+invitation already exists) was resolved by always creating a real `GroupJoinRequest` row — directly
+at `status="accepted"` — rather than the synthetic-response or contract-change options the ticket
+had floated, so no client-side type/parsing change is needed for that case.
+
+**Note for this ticket (added by B11, 2026-07-23):** B11's rules 2 and 3 (the join-request/invitation
+short-circuits) deliberately leave **two `accepted` rows** behind for a single real join event — one
+`GroupInvitation`, one `GroupJoinRequest` — both for the same (group, person) pair. Nothing merges or
+suppresses either row server-side. If GRP-7 (or any future view) lists accepted/historical
+membership events across both endpoints, a single join can show up twice. How to de-duplicate or
+label this in the UI — if at all — is an open decision for whoever builds that view, not resolved by
+B11.
 
 ---
 

@@ -36,7 +36,7 @@
 | 15 | B7 | Settings data set audit → group-type membership-cap tiers | `DONE` |
 | 16 | B9 | Group system posts — welcome post on member join | `DONE` |
 | 17 | A10 | Add multi-value `sportIds` filter to `GET /api/groups/public` — unblocks client GRP-6 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
-| 18 | B11 | Reconcile join-request/invitation race conditions — blocks client GRP-7 (`client/docs/BACKLOG_MVP.md`) | `TODO` |
+| 18 | B11 | Reconcile join-request/invitation race conditions — blocks client GRP-7 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
 
 ---
 
@@ -557,7 +557,8 @@ of these N sports" in one call — only one sport, or every sport.
 ---
 
 ### B11 · Reconcile join-request/invitation race conditions
-**Status:** `TODO` · **Type:** Bug fix / business rule · **Dependency:** B1 (member invitation
+**Status:** `DONE` (2026-07-23, `modules/social/group-impl/docs/B11_JOIN_INVITATION_RACE_CONDITIONS.md`) ·
+**Type:** Bug fix / business rule · **Dependency:** B1 (member invitation
 flow, `DONE`), A3 (join requests, `DONE`) · **Filed:** 2026-07-23, found while scoping the client's
 GRP-7 (`client/docs/BACKLOG_MVP.md`). **Blocks GRP-7** — the client ticket wires the approve/accept
 UI for both flows and should be built against corrected business rules, not retrofitted after.
@@ -633,6 +634,21 @@ this:
 - Decline-side interactions (declining an invitation/join request while the other is also pending)
   are **explicitly out of scope** for this ticket — only the three rules above, as specified. Don't
   invent additional symmetric rules beyond what's written here.
+
+**Delta (2026-07-23, resolved at pickup, executed as shipped):**
+- **Return-shape open question resolved differently than either floated option:** neither a
+  `GroupInvitationResponse`-shaped result nor a synthetic accepted `JoinRequestResponse` — rule 3
+  always creates a **real** `GroupJoinRequest` row, directly at `status="accepted"`, with
+  `reviewedBy` set to the invitation's approver. The endpoint's return type and contract are
+  completely unaffected; no client-side change needed for this case.
+- **Confirmed consequence of that choice, explicitly accepted by the user:** rules 2 and 3 can now
+  leave **two** `accepted` rows for a single real join event — one `GroupInvitation`, one
+  `GroupJoinRequest` — both persisted as-is, no merge/suppression logic added. Flagged on GRP-7's
+  backlog entry (`client/docs/BACKLOG_MVP.md`) for the client's future display decision.
+- `finalizeMembership(groupId, userId, creditedInviterId)` helper extracted as suggested — confirmed
+  with the user rather than left as an optional cleanup, since this ticket was about to add a 4th
+  near-identical copy of the capacity+insert+welcome-post block.
+- Full writeup: `modules/social/group-impl/docs/B11_JOIN_INVITATION_RACE_CONDITIONS.md`.
 
 **Acceptance criteria:**
 - All three rules verified with a live-backend walkthrough (register two users, exercise each race

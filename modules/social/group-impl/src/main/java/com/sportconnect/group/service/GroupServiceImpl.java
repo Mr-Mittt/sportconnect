@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -400,19 +401,31 @@ public class GroupServiceImpl implements GroupService {
 
         checkMemberCapacityNotExceeded(groupId);
 
+        // B11 rule 2: this is a third call site (alongside approveInvitation and
+        // createSelfApprovedInvitation) where an invitation is about to enter pending_user — check
+        // for an existing pending join request from the target first, same as the other two.
+        Optional<GroupJoinRequest> pendingJoinRequest = joinRequestRepository
+                .findByGroupIdAndUserIdAndStatus(groupId, targetUserId, "pending");
+
         // B9: self-approved invitation — owner/admin IS the approver, so it starts at
-        // pending_user rather than pending_owner. Target must still accept via acceptInvitation.
+        // pending_user rather than pending_owner. Target must still accept via acceptInvitation —
+        // unless rule 2 above already found a pending join request, in which case it's accepted here.
         GroupInvitation invitation = GroupInvitation.builder()
                 .groupId(groupId)
                 .inviterId(adminUserId)
                 .inviteeId(targetUserId)
-                .status("pending_user")
+                .status(pendingJoinRequest.isPresent() ? "accepted" : "pending_user")
                 .reviewedBy(adminUserId)
                 .reviewedAt(LocalDateTime.now())
                 .build();
         invitationRepository.save(invitation);
 
-        log.info("Owner/admin {} invited user {} to group {} (self-approved)", adminUserId, targetUserId, groupId);
+        if (pendingJoinRequest.isPresent()) {
+            acceptJoinRequestAsSideEffect(pendingJoinRequest.get(), adminUserId, adminUserId);
+        }
+
+        log.info("Owner/admin {} invited user {} to group {} (self-approved{})", adminUserId, targetUserId, groupId,
+                pendingJoinRequest.isPresent() ? ", auto-accepted via existing join request" : "");
     }
 
     @Override
@@ -570,30 +583,76 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("You are already a member of this group");
         }
 
-        // Check if pending request exists
-        if (joinRequestRepository.existsByGroupIdAndUserIdAndStatus(group.getId(), userId, "pending")) {
-            throw new BadRequestException("You already have a pending request for this group");
+        // B11 rule 3: an invitation already awaiting this user's response is at least as strong a
+        // signal of intent as a fresh join request — accept it directly instead of creating a
+        // second, independent pending item for the owner/admin to separately act on.
+        Optional<GroupInvitation> pendingUserInvitation = invitationRepository
+                .findByGroupIdAndInviteeIdAndStatusIn(group.getId(), userId, List.of("pending_user"));
+
+        GroupJoinRequest joinRequest;
+        if (pendingUserInvitation.isPresent()) {
+            joinRequest = acceptInvitationAsJoinRequest(group, userId, request.getMessage(), pendingUserInvitation.get());
+        } else {
+            // Check if pending request exists
+            if (joinRequestRepository.existsByGroupIdAndUserIdAndStatus(group.getId(), userId, "pending")) {
+                throw new BadRequestException("You already have a pending request for this group");
+            }
+
+            checkMemberCapacityNotExceeded(group.getId());
+
+            joinRequest = GroupJoinRequest.builder()
+                    .groupId(group.getId())
+                    .userId(userId)
+                    .status("pending")
+                    .message(request.getMessage())
+                    .build();
+            joinRequest = joinRequestRepository.save(joinRequest);
+            log.info("Created join request {} for group {} by user {}", joinRequest.getId(), group.getId(), userId);
         }
-
-        checkMemberCapacityNotExceeded(group.getId());
-
-        // Create join request
-        GroupJoinRequest joinRequest = GroupJoinRequest.builder()
-                .groupId(group.getId())
-                .userId(userId)
-                .status("pending")
-                .message(request.getMessage())
-                .build();
-
-        joinRequest = joinRequestRepository.save(joinRequest);
-        log.info("Created join request {} for group {} by user {}", joinRequest.getId(), group.getId(), userId);
 
         Group requestGroup = groupRepository.findById(joinRequest.getGroupId()).orElse(null);
         Map<Long, Group> groupsById = requestGroup != null
                 ? Map.of(requestGroup.getId(), requestGroup)
                 : Map.of();
-        Map<UUID, UserResponse> usersById = userService.getUsersByIds(List.of(userId));
+        // B11 rule 3: a short-circuited join request already has reviewedBy set (the invitation's
+        // approver) — resolve that name too, not just the requester's, so the response doesn't
+        // silently show "Unknown User" for a reviewer that does exist.
+        List<UUID> idsToResolve = joinRequest.getReviewedBy() != null
+                ? List.of(userId, joinRequest.getReviewedBy())
+                : List.of(userId);
+        Map<UUID, UserResponse> usersById = userService.getUsersByIds(idsToResolve);
         return mapToJoinRequestResponse(joinRequest, groupsById, usersById);
+    }
+
+    /**
+     * B11 rule 3: called when a {@code pending_user} invitation already exists for the requester.
+     * Rather than silently skipping row creation, this still records a {@code GroupJoinRequest}
+     * row — created directly as {@code accepted}, with {@code reviewedBy} attributed to whoever
+     * approved the invitation ({@code invitation.getReviewedBy()}) — so the requester's join-request
+     * history isn't missing this event, alongside accepting the invitation itself and creating the
+     * membership. This deliberately leaves two accepted rows (one invitation, one join request) for
+     * the same real-world join event; no attempt is made to merge or suppress either — see the note
+     * left on GRP-7's backlog entry for the client-side display decision.
+     */
+    private GroupJoinRequest acceptInvitationAsJoinRequest(Group group, UUID userId, String message, GroupInvitation invitation) {
+        finalizeMembership(group.getId(), userId, invitation.getInviterId());
+
+        invitation.setStatus("accepted");
+        invitationRepository.save(invitation);
+
+        GroupJoinRequest joinRequest = GroupJoinRequest.builder()
+                .groupId(group.getId())
+                .userId(userId)
+                .status("accepted")
+                .message(message)
+                .reviewedBy(invitation.getReviewedBy())
+                .reviewedAt(LocalDateTime.now())
+                .build();
+        joinRequest = joinRequestRepository.save(joinRequest);
+
+        log.info("Join request for group {} by user {} auto-accepted via existing invitation {}",
+                group.getId(), userId, invitation.getId());
+        return joinRequest;
     }
 
     @Override
@@ -612,27 +671,13 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Request is not pending");
         }
 
-        enforceMemberCapacity(request.getGroupId());
-
-        // Get member role
-        GroupRole memberRole = groupRoleRepository.findByRoleName("group_member")
-                .orElseThrow(() -> new NotFoundException("Member role not found"));
-
-        // Create membership
-        GroupMember member = GroupMember.builder()
-                .groupId(request.getGroupId())
-                .userId(request.getUserId())
-                .roleId(memberRole.getId())
-                .build();
-        groupMemberRepository.save(member);
+        finalizeMembership(request.getGroupId(), request.getUserId(), null);
 
         // Update request
         request.setStatus("accepted");
         request.setReviewedBy(adminUserId);
         request.setReviewedAt(LocalDateTime.now());
         joinRequestRepository.save(request);
-
-        postWelcomeMessage(request.getGroupId(), request.getUserId(), null);
 
         log.info("Accepted join request {} by admin {}", requestId, adminUserId);
     }
@@ -984,6 +1029,12 @@ public class GroupServiceImpl implements GroupService {
 
         checkMemberCapacityNotExceeded(groupId);
 
+        // B11 rule 1: an owner/admin's own invitation needs no self-approval — skip pending_owner
+        // entirely and head straight for pending_user (still subject to rule 2, below).
+        if (canManageMembers(groupId, inviterId)) {
+            return createSelfApprovedInvitation(group, inviterId, inviteeId);
+        }
+
         GroupInvitation invitation = GroupInvitation.builder()
                 .groupId(groupId)
                 .inviterId(inviterId)
@@ -995,6 +1046,36 @@ public class GroupServiceImpl implements GroupService {
         log.info("Invitation created for user {} in group {} by member {}", inviteeId, groupId, inviterId);
         return mapToGroupInvitationResponse(invitation, group.getGroupName(),
                 userService.getUsersByIds(List.of(invitation.getInviterId(), invitation.getInviteeId())));
+    }
+
+    /**
+     * B11 rule 1: builds the owner/admin's self-approved invitation. Runs the same rule-2
+     * join-request short-circuit that {@link #approveInvitation} runs — this is the other call
+     * site where an invitation is about to enter {@code pending_user}.
+     */
+    private GroupInvitationResponse createSelfApprovedInvitation(Group group, UUID inviterId, UUID inviteeId) {
+        Optional<GroupJoinRequest> pendingJoinRequest = joinRequestRepository
+                .findByGroupIdAndUserIdAndStatus(group.getId(), inviteeId, "pending");
+
+        GroupInvitation invitation = GroupInvitation.builder()
+                .groupId(group.getId())
+                .inviterId(inviterId)
+                .inviteeId(inviteeId)
+                .status(pendingJoinRequest.isPresent() ? "accepted" : "pending_user")
+                .reviewedBy(inviterId)
+                .reviewedAt(LocalDateTime.now())
+                .build();
+        invitation = invitationRepository.save(invitation);
+
+        if (pendingJoinRequest.isPresent()) {
+            acceptJoinRequestAsSideEffect(pendingJoinRequest.get(), inviterId, inviterId);
+        }
+
+        log.info("Owner/admin {} invited user {} to group {} (self-approved{})",
+                inviterId, inviteeId, group.getId(),
+                pendingJoinRequest.isPresent() ? ", auto-accepted via existing join request" : "");
+        return mapToGroupInvitationResponse(invitation, group.getGroupName(),
+                userService.getUsersByIds(List.of(inviterId, inviteeId)));
     }
 
     @Override
@@ -1010,14 +1091,46 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Invitation is not pending owner approval");
         }
 
-        invitation.setStatus("pending_user");
+        // B11 rule 2: an invitation about to enter pending_user short-circuits straight to
+        // accepted if the invitee already has a pending join request in flight for this group —
+        // that join request is at least as strong a signal of intent as accepting the invitation
+        // would be, so there's no reason to make the invitee separately act on both.
+        Optional<GroupJoinRequest> pendingJoinRequest = joinRequestRepository
+                .findByGroupIdAndUserIdAndStatus(invitation.getGroupId(), invitation.getInviteeId(), "pending");
+
+        invitation.setStatus(pendingJoinRequest.isPresent() ? "accepted" : "pending_user");
         invitation.setReviewedBy(ownerId);
         invitation.setReviewedAt(LocalDateTime.now());
         invitationRepository.save(invitation);
 
-        // TODO: notify — send in-app notification to invitee (pending ADR.md#in-app-notification)
+        if (pendingJoinRequest.isPresent()) {
+            acceptJoinRequestAsSideEffect(pendingJoinRequest.get(), invitation.getInviterId(), ownerId);
+        } else {
+            // TODO: notify — send in-app notification to invitee (pending ADR.md#in-app-notification)
+        }
 
-        log.info("Invitation {} approved by {}", invitationId, ownerId);
+        log.info("Invitation {} approved by {}{}", invitationId, ownerId,
+                pendingJoinRequest.isPresent() ? " (auto-accepted via existing join request)" : "");
+    }
+
+    /**
+     * B11 rule 2: shared by both call sites where an invitation is about to enter
+     * {@code pending_user} ({@link #approveInvitation}'s normal transition and
+     * {@link #createSelfApprovedInvitation}'s direct-to-pending_user creation) when a pending join
+     * request already exists for the same (group, invitee). Finalizes the membership crediting
+     * {@code creditedInviterId} (the invitation's original inviter — may differ from
+     * {@code reviewerId}, the owner/admin who performed this approving action), and marks the join
+     * request itself {@code accepted} rather than leaving it dangling {@code pending}. Deliberately
+     * leaves two accepted rows (the invitation, handled by the caller, and this join request) for
+     * the same real-world join event — see the note left on GRP-7's backlog entry.
+     */
+    private void acceptJoinRequestAsSideEffect(GroupJoinRequest joinRequest, UUID creditedInviterId, UUID reviewerId) {
+        finalizeMembership(joinRequest.getGroupId(), joinRequest.getUserId(), creditedInviterId);
+
+        joinRequest.setStatus("accepted");
+        joinRequest.setReviewedBy(reviewerId);
+        joinRequest.setReviewedAt(LocalDateTime.now());
+        joinRequestRepository.save(joinRequest);
     }
 
     @Override
@@ -1054,22 +1167,10 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Invitation is not pending your response");
         }
 
-        enforceMemberCapacity(invitation.getGroupId());
-
-        GroupRole memberRole = groupRoleRepository.findByRoleName("group_member")
-                .orElseThrow(() -> new NotFoundException("Group member role not found"));
-
-        GroupMember member = GroupMember.builder()
-                .groupId(invitation.getGroupId())
-                .userId(inviteeId)
-                .roleId(memberRole.getId())
-                .build();
-        groupMemberRepository.save(member);
+        finalizeMembership(invitation.getGroupId(), inviteeId, invitation.getInviterId());
 
         invitation.setStatus("accepted");
         invitationRepository.save(invitation);
-
-        postWelcomeMessage(invitation.getGroupId(), inviteeId, invitation.getInviterId());
 
         log.info("Invitation {} accepted by user {}", invitationId, inviteeId);
     }
@@ -1417,5 +1518,29 @@ public class GroupServiceImpl implements GroupService {
                 : newMemberName + " joined the group 👋";
 
         postService.createSystemPost(groupId, resolveGroupOwnerId(groupId), content);
+    }
+
+    /**
+     * Creates the {@code GroupMember} row and posts the welcome message for a newly accepted
+     * membership — the shared final step behind {@code acceptJoinRequest}, {@code
+     * acceptInvitation}, and B11's join-request/invitation reconciliation short-circuits
+     * ({@link #acceptJoinRequestAsSideEffect}, {@link #acceptInvitationAsJoinRequest}). Enforces
+     * the row-locked member-capacity guard ({@link #enforceMemberCapacity}) before inserting,
+     * exactly like the two pre-existing accept paths did individually.
+     */
+    private void finalizeMembership(Long groupId, UUID userId, UUID creditedInviterId) {
+        enforceMemberCapacity(groupId);
+
+        GroupRole memberRole = groupRoleRepository.findByRoleName("group_member")
+                .orElseThrow(() -> new NotFoundException("Member role not found"));
+
+        GroupMember member = GroupMember.builder()
+                .groupId(groupId)
+                .userId(userId)
+                .roleId(memberRole.getId())
+                .build();
+        groupMemberRepository.save(member);
+
+        postWelcomeMessage(groupId, userId, creditedInviterId);
     }
 }
