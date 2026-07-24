@@ -1279,6 +1279,16 @@ contention, not a regression. Along the way, the new fixture data exposed a real
 `group-members.spec.ts` (an unscoped "Accept" button lookup that broke once the approval queue could
 hold two rows) — fixed. Vitest 510/510, `tsc -b` clean, Storybook builds clean.
 
+**GRP-7 follow-up fix** (2026-07-24, same doc): user-reported bug — owner invites someone who already
+has a pending join request (B11 rules 1+2, resolves straight to `accepted` + real membership) and
+"nothing happened" in the UI. Root cause: `useSendGroupInvitation` (built in GRP-4, before B11
+existed) only invalidated `feedKeys.sentInvitations` — correct assumption at the time ("creating an
+invitation doesn't touch membership"), broken once B11 gave `createInvitation` accept-like side
+effects GRP-4 couldn't have anticipated. Fixed by switching to the same blunt `feedKeys.all`
+invalidation `useAcceptJoinRequest`/`useApproveInvitation` already use. Live-verified through the
+real UI against the real backend: before the fix, the invite dialog and Members/approval-queue
+sections all stayed stale; after, everything updates immediately with no manual refresh.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

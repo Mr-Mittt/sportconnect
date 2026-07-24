@@ -1,6 +1,6 @@
 # GRP-7 · Wire the invitation approve/accept lifecycle
 
-**Status:** `DONE` (2026-07-24)
+**Status:** `DONE` (2026-07-24, follow-up fix same day — see "Follow-up fix" below)
 **Type:** Feature
 **Dependencies:** GRP-3 (`DONE`), GRP-4 (`DONE`), backend B11 (`DONE`,
 `modules/social/group-impl/docs/B11_JOIN_INVITATION_RACE_CONDITIONS.md`)
@@ -99,6 +99,44 @@ pattern the new spec uses. Caught by running the full e2e suite, not by the new 
   Spring Boot backend (not just MSW) — every `GroupInvitation` response field matched the client type
   exactly; approve moved a row out of the owner's queue without creating membership; accept created a
   real `GroupMember` row; reject and decline both cleared their respective queues correctly.
+
+## Follow-up fix (2026-07-24) — `useSendGroupInvitation` had a stale invalidation assumption
+
+Reported by the user: as group owner, inviting a user who already had a pending join request for
+the group appeared to do nothing — no error, but the invitee never showed up as a member and the
+stale join-request row stayed in "Waiting for group approve."
+
+Root cause: `useSendGroupInvitation` (`POST /groups/{groupId}/invitations`, built in **GRP-4**,
+before B11 existed) only ever invalidated `feedKeys.sentInvitations(groupId)` on success — a
+deliberate, correct choice *at the time*, documented in its own comment: "creating an invitation
+doesn't touch membership or any other cached list." B11 broke that assumption: when the caller is
+the group's owner/admin (B11 rule 1) and the invitee already has a pending join request (B11 rule
+2), a single `createInvitation` call now resolves straight to `accepted` and inserts a real
+`GroupMember` row server-side — the exact scenario reported. The narrow invalidation missed all of
+it: `useGroupMembers`'s cache stayed stale (Members list), `useGroupJoinRequests`'s cache stayed
+stale ("Waiting for group approve" still showed the resolved join request), and the invitation
+itself — already `accepted`, not in-flight — was never going to show up via
+`feedKeys.sentInvitations` either, so `InviteFriendModal`'s own row for that user never flipped
+to "member." Every visible surface just looked frozen.
+
+This gap existed from the moment B11 shipped (2026-07-23) — GRP-7 didn't introduce it, but should
+have caught it: it's exactly the kind of B11-interaction the ticket's own scope was about, on a
+hook GRP-4 built before B11 could have been anticipated. Missed because GRP-7's testing focused on
+the 6 *new* endpoints it wired, not on re-auditing GRP-4's pre-existing `useSendGroupInvitation` for
+invalidation-scope drift once B11's business rules changed underneath it.
+
+**Fix:** `useSendGroupInvitation` now uses the same blunt `feedKeys.all` invalidation
+`useAcceptJoinRequest`/`useApproveInvitation` already use for this class of side effect, on
+`onSettled` rather than `onSuccess` (matching the existing convention for every other mutation hook
+that can affect membership).
+
+**Verified:** live-verified end-to-end through the real running UI against the real backend (not
+MSW) — registered two real users, had one send a join request, logged in as the owner, and drove
+the actual `InviteFriendModal` "Invite" click. Before the fix: the dialog row and both the
+Members/approval-queue sections stayed stale. After the fix: the dialog row flips to "Already a
+member" immediately, the user appears in Members, and disappears from "Waiting for group approve" —
+no manual refresh needed. Full Vitest suite re-run clean (no test asserted the old narrower
+invalidation scope).
 
 ## Out of scope (unchanged from the ticket)
 
