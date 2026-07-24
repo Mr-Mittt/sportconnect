@@ -401,19 +401,31 @@ public class GroupServiceImpl implements GroupService {
 
         checkMemberCapacityNotExceeded(groupId);
 
+        // B11 rule 2: this is a third call site (alongside approveInvitation and
+        // createSelfApprovedInvitation) where an invitation is about to enter pending_user — check
+        // for an existing pending join request from the target first, same as the other two.
+        Optional<GroupJoinRequest> pendingJoinRequest = joinRequestRepository
+                .findByGroupIdAndUserIdAndStatus(groupId, targetUserId, "pending");
+
         // B9: self-approved invitation — owner/admin IS the approver, so it starts at
-        // pending_user rather than pending_owner. Target must still accept via acceptInvitation.
+        // pending_user rather than pending_owner. Target must still accept via acceptInvitation —
+        // unless rule 2 above already found a pending join request, in which case it's accepted here.
         GroupInvitation invitation = GroupInvitation.builder()
                 .groupId(groupId)
                 .inviterId(adminUserId)
                 .inviteeId(targetUserId)
-                .status("pending_user")
+                .status(pendingJoinRequest.isPresent() ? "accepted" : "pending_user")
                 .reviewedBy(adminUserId)
                 .reviewedAt(LocalDateTime.now())
                 .build();
         invitationRepository.save(invitation);
 
-        log.info("Owner/admin {} invited user {} to group {} (self-approved)", adminUserId, targetUserId, groupId);
+        if (pendingJoinRequest.isPresent()) {
+            acceptJoinRequestAsSideEffect(pendingJoinRequest.get(), adminUserId, adminUserId);
+        }
+
+        log.info("Owner/admin {} invited user {} to group {} (self-approved{})", adminUserId, targetUserId, groupId,
+                pendingJoinRequest.isPresent() ? ", auto-accepted via existing join request" : "");
     }
 
     @Override

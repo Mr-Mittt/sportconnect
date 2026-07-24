@@ -97,11 +97,15 @@ GET    /api/groups/{groupId}/permissions/user-role
    unrelated pending items:
    - `createInvitation`: an owner/admin's own invitation skips `pending_owner` — created directly
      at `pending_user` (or `accepted`, if rule 2 below fires in the same call).
-   - Both places an invitation is about to become `pending_user` (`approveInvitation`'s normal
-     transition, and the owner/admin direct-create path above) check for a `pending` join request
-     from the same person first — if one exists, the invitation goes straight to `accepted`, the
-     join request is marked `accepted` too (not left dangling), and membership is finalized then
-     and there.
+   - **Three** places an invitation is about to become `pending_user` check for a `pending` join
+     request from the same person first — `approveInvitation`'s normal transition, the owner/admin
+     direct-create path above, **and `addMember`** (B9's owner/admin direct-add, which also creates
+     a self-approved `pending_user` invitation) — if one exists, the invitation goes straight to
+     `accepted`, the join request is marked `accepted` too (not left dangling), and membership is
+     finalized then and there. All three route through the shared `acceptJoinRequestAsSideEffect`
+     helper. `addMember`'s rule-2 check was missed in B11's initial pass and added in a follow-up
+     fix the same day — when adding a fourth path that creates an invitation directly at
+     `pending_user`, check whether it needs this wired in too.
    - `createJoinRequest`: if the requester already has a `pending_user` invitation for this group,
      no ordinary pending row is created — a `GroupJoinRequest` is created directly as `accepted`,
      crediting the invitation's approver as `reviewedBy`, and the invitation is accepted too.

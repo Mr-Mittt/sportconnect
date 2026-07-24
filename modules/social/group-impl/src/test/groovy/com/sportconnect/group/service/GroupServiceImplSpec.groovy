@@ -2203,10 +2203,52 @@ class GroupServiceImplSpec extends Specification {
         1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
+        1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, otherUserId, "pending") >> Optional.empty()
         1 * invitationRepository.save({
             GroupInvitation inv -> inv.groupId == testGroup.id && inv.inviterId == userId &&
                     inv.inviteeId == otherUserId && inv.status == "pending_user" && inv.reviewedBy == userId
         })
+
+        and: "no side-effect membership is created — this is still just an invitation awaiting the target"
+        0 * groupMemberRepository.save(_)
+        0 * joinRequestRepository.save(_)
+    }
+
+    def "addMember should auto-accept via an existing pending join request instead of creating pending_user (B11 rule 2)"() {
+        given: "admin adds someone who already independently asked to join"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
+        def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
+        def pendingJoinRequest = GroupJoinRequest.builder()
+                .id(11L).groupId(testGroup.id).userId(otherUserId).status("pending").build()
+
+        when:
+        groupService.addMember(testGroup.id, userId, otherUserId)
+
+        then:
+        1 * groupRepository.existsById(testGroup.id) >> true
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
+        1 * userFriendService.areFriends(userId, otherUserId) >> true
+        1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> false
+        1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
+        2 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        2 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
+        1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, otherUserId, "pending") >> Optional.of(pendingJoinRequest)
+        1 * invitationRepository.save({ it.status == "accepted" && it.reviewedBy == userId })
+
+        and: "finalizeMembership runs: capacity, member insert, welcome post crediting the admin"
+        1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
+        1 * groupMemberRepository.save({ it.userId == otherUserId && it.roleId == memberRole.id })
+        1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
+        1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [adminMember]
+        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
+        1 * userService.getUsersByIds([otherUserId, userId]) >> [(userId): testUser, (otherUserId): testUser]
+
+        and: "the pre-existing join request is closed out as accepted, not left dangling"
+        1 * joinRequestRepository.save({ it.status == "accepted" && it.reviewedBy == userId })
     }
 
     def "addMember should throw BadRequestException when group is at its member cap"() {

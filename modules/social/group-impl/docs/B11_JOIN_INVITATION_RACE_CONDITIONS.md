@@ -1,6 +1,6 @@
 # B11 · Reconcile join-request/invitation race conditions
 
-**Status:** `DONE` (2026-07-23)
+**Status:** `DONE` (2026-07-23, corrected 2026-07-24 — see "Follow-up fix" below)
 **Type:** Bug fix / business rule
 **Dependencies:** B1 (member invitation flow), A3 (join requests)
 **Filed:** 2026-07-23, found while scoping the client's GRP-7 (`client/docs/BACKLOG_MVP.md`)
@@ -75,6 +75,32 @@ unchanged.
 - **`finalizeMembership` extraction:** built as designed — confirmed with the user rather than left
   as the ticket's "not required for correctness" aside, since this ticket was about to add a 4th
   near-identical copy of the capacity+insert+post block.
+
+## Follow-up fix (2026-07-24) — `addMember` was missing rule 2
+
+The initial pass wired rule 2 into exactly the two call sites the ADR (§5) named:
+`approveInvitation`'s `pending_owner→pending_user` transition, and `createSelfApprovedInvitation`
+(rule 1's owner/admin direct-create path in `createInvitation`). It missed a **third** call site
+that also creates a `GroupInvitation` directly at `status="pending_user"`: `addMember` (B9's
+owner/admin direct-add flow) — an owner/admin adding a friend directly still goes through a
+self-approved invitation, not a direct `GroupMember` insert, and that invitation was going straight
+to `pending_user` with no check for an existing pending join request from the target.
+
+Caught by the user re-reviewing the three rules against the actual code, not by the original
+implementation or its tests. Fixed by adding the same
+`joinRequestRepository.findByGroupIdAndUserIdAndStatus(groupId, targetUserId, "pending")` check
+`addMember` was missing, reusing the existing `acceptJoinRequestAsSideEffect` helper for the
+short-circuit — no new helper needed, `addMember`'s shape (self-approved, `reviewedBy` = the acting
+admin for both the invitation and the credited join-request reviewer) matches rule 1's path exactly.
+
+- Two pre-existing `addMember` Spock tests needed a new stub for the added
+  `joinRequestRepository.findByGroupIdAndUserIdAndStatus` call; one new test added for the
+  short-circuit path itself (auto-accept via an existing pending join request).
+- `./gradlew :modules:social:group-impl:test` (117 tests) and `./gradlew :server:test` both green
+  after the fix.
+- Live-verified against a running `bootRun` instance: user F sent a join request, then the group
+  owner called `addMember` on F directly — F became a group member in that same call, and F's join
+  request was closed out as `accepted` rather than left `pending`.
 
 ## Verification
 
