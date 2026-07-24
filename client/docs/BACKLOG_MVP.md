@@ -115,7 +115,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 44 | FRIEND-1 | Friends page — rail, profile/chat panel, directory search, friend-request actions — **new ticket, not in either epic**, inserted ahead of GRP-4 (user decision, 2026-07-22) | `DONE` |
 | 45 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3, unblocked now that FRIEND-1 is `DONE` | `DONE` |
 | 46 | GRP-5 | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
-| 51 | GRP-7 | Wire the invitation approve/accept lifecycle — owner/admin approval + invitee acceptance — **new ticket, not in either epic, found while closing out GRP-4** (2026-07-23) — blocked on backend B11 | `TODO` |
+| 51 | GRP-7 | Wire the invitation approve/accept lifecycle — owner/admin approval + invitee acceptance — **new ticket, not in either epic, found while closing out GRP-4** (2026-07-23) — blocked on backend B11 | `DONE` |
 | **Phase 8 — Chat (new, not in either epic — see `documentation/md/CHAT_SERVICE_INTEGRATION.md`)** | | | |
 | 47 | CHAT-2 | Wire GroupChatTab to real-time PubNub delivery — blocked on CHAT-1 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) | `TODO` |
 | 48 | CHAT-4 | Persisted chat history + hardening — blocked on CHAT-3 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) and CHAT-2 | `TODO` |
@@ -2076,7 +2076,7 @@ through the app. Filed as **GRP-7** below, not fixed inline (see that entry for 
 ---
 
 ### GRP-7 · Wire the invitation approve/accept lifecycle
-**Status:** `TODO` (reverted from `IN PROGRESS` 2026-07-23 — blocked, see delta below) · **Type:**
+**Status:** `DONE` (2026-07-24, `client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`) · **Type:**
 Feature · **Dependency:** GRP-3 (`DONE`), GRP-4 (`DONE`), **B11**
 (`modules/social/group-impl/docs/BACKLOG_MVP.md`, `TODO`) · **Filed:** 2026-07-23, discovered while
 closing out GRP-4
@@ -2149,6 +2149,17 @@ suppresses either row server-side. If GRP-7 (or any future view) lists accepted/
 membership events across both endpoints, a single join can show up twice. How to de-duplicate or
 label this in the UI — if at all — is an open decision for whoever builds that view, not resolved by
 B11.
+
+**Delta (2026-07-24, resolved at pickup):** the B11 dual-accepted-row note above turned out to be a
+non-issue for this ticket specifically — both of GRP-7's lists (the Members tab's approval queue,
+the Invitations section) only ever show *pending* items; a B11 short-circuit just makes the row
+disappear on the next refetch, identical to a normal accept/approve. No de-duplication logic needed.
+Two design decisions not spelled out in the original spec, made during implementation: (1) the
+merged approval-queue's join-request and invitation rows share the same "Accept"/"Decline" button
+labels rather than distinguishing "Approve" for invitations — the technical difference is invisible
+to the user; (2) the merged queue sorts oldest-first (FIFO), while the new Invitations section sorts
+newest-first — a personal inbox reads better with the newest arrival on top, unlike an approval
+queue. Full writeup: `client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`.
 
 ---
 

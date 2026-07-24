@@ -1,9 +1,10 @@
 import { IconSearch } from '@tabler/icons-react';
 import { useState } from 'react';
-import type { GroupInvitation, GroupMember, JoinRequest } from '@/features/feed/types';
+import type { GroupInvitation, GroupMember } from '@/features/feed/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
+import type { ApprovalQueueItem } from '../useGroupMembersTabData';
 
 function initialsFor(fullName: string): string {
   return fullName
@@ -100,19 +101,28 @@ function invitationStatusLabel(invitation: GroupInvitation): string {
   return `Awaiting ${firstName}'s response`;
 }
 
+/** GRP-7: the prospective-member name for either approval-queue row type —
+ * the requester for a join request, the invitee (not the inviter) for an
+ * invitation, matching "find member"'s filter target either way. */
+function approvalQueueItemName(item: ApprovalQueueItem): string {
+  return item.type === 'join_request' ? item.data.userFullName : item.data.inviteeFullName;
+}
+
 interface GroupMembersTabProps {
   canManage: boolean;
   /** The signed-in user's id — flags their own row with "(you)" in the
    * Group administrator/Members lists. */
   currentUserId: string | undefined;
-  joinRequests: JoinRequest[];
-  isJoinRequestsLoading: boolean;
-  isJoinRequestsError: boolean;
-  onRetryJoinRequests: () => void;
-  onAcceptJoinRequest: (requestId: number) => void;
-  onDeclineJoinRequest: (requestId: number) => void;
-  isAcceptingJoinRequest: boolean;
-  isDecliningJoinRequest: boolean;
+  /** GRP-7: join requests and pending_owner invitations merged into one
+   * chronological list — see `useGroupMembersTabData`'s `ApprovalQueueItem`. */
+  approvalQueue: ApprovalQueueItem[];
+  isApprovalQueueLoading: boolean;
+  isApprovalQueueError: boolean;
+  onRetryApprovalQueue: () => void;
+  onAcceptItem: (item: ApprovalQueueItem) => void;
+  onDeclineItem: (item: ApprovalQueueItem) => void;
+  isAcceptingItem: boolean;
+  isDecliningItem: boolean;
   sentInvitations: GroupInvitation[];
   isSentInvitationsLoading: boolean;
   isSentInvitationsError: boolean;
@@ -136,28 +146,32 @@ interface GroupMembersTabProps {
  * owns its own input, read at click time" precedent as
  * `GroupDiscoveryPanel`'s `query` — filtering happens client-side against
  * each row's display name (case-insensitive substring, no debounce, matches
- * the literal spec) since none of the 3 backing endpoints support a keyword
+ * the literal spec) since none of the backing endpoints support a keyword
  * filter (GRP-3 open decision #2).
  *
  * "Waiting for group approve" only renders for `canManage` (owner/admin) —
- * a member calling the endpoint would 400, so the parent hook never even
- * fires that request for them. "Waiting for user accept" instead hides
- * itself when *empty* (per spec), independent of role — any member can see
- * invitations they personally sent — using the *unfiltered* count, not the
- * search-filtered one, so typing into "find member" never makes this
- * section reappear/disappear on its own.
+ * a member calling either backing endpoint would 400, so the parent hook
+ * never even fires those requests for them. GRP-7 merges join requests and
+ * `pending_owner` invitations into this one section (`approvalQueue`) —
+ * both Accept/Decline buttons reuse the same labels regardless of which
+ * underlying type the row is, since the difference is invisible to the
+ * user. "Waiting for user accept" instead hides itself when *empty* (per
+ * spec), independent of role — any member can see invitations they
+ * personally sent — using the *unfiltered* count, not the search-filtered
+ * one, so typing into "find member" never makes this section
+ * reappear/disappear on its own.
  */
 export function GroupMembersTab({
   canManage,
   currentUserId,
-  joinRequests,
-  isJoinRequestsLoading,
-  isJoinRequestsError,
-  onRetryJoinRequests,
-  onAcceptJoinRequest,
-  onDeclineJoinRequest,
-  isAcceptingJoinRequest,
-  isDecliningJoinRequest,
+  approvalQueue,
+  isApprovalQueueLoading,
+  isApprovalQueueError,
+  onRetryApprovalQueue,
+  onAcceptItem,
+  onDeclineItem,
+  isAcceptingItem,
+  isDecliningItem,
   sentInvitations,
   isSentInvitationsLoading,
   isSentInvitationsError,
@@ -171,7 +185,7 @@ export function GroupMembersTab({
 }: GroupMembersTabProps) {
   const [query, setQuery] = useState('');
 
-  const filteredJoinRequests = joinRequests.filter((request) => matchesQuery(request.userFullName, query));
+  const filteredApprovalQueue = approvalQueue.filter((item) => matchesQuery(approvalQueueItemName(item), query));
   const filteredAdministrators = administrators.filter((member) => matchesQuery(member.userFullName, query));
   const filteredMembers = members.filter((member) => matchesQuery(member.userFullName, query));
 
@@ -200,25 +214,26 @@ export function GroupMembersTab({
       {canManage && (
         <Section
           title="Waiting for group approve"
-          isLoading={isJoinRequestsLoading}
-          isError={isJoinRequestsError}
-          onRetry={onRetryJoinRequests}
-          totalCount={joinRequests.length}
-          filteredCount={filteredJoinRequests.length}
+          isLoading={isApprovalQueueLoading}
+          isError={isApprovalQueueError}
+          onRetry={onRetryApprovalQueue}
+          totalCount={approvalQueue.length}
+          filteredCount={filteredApprovalQueue.length}
         >
-          {filteredJoinRequests.map((request) => (
+          {filteredApprovalQueue.map((item) => (
             <MemberRow
-              key={request.id}
-              avatarUrl={request.userAvatarUrl}
-              name={request.userFullName}
+              key={`${item.type}-${item.data.id}`}
+              avatarUrl={item.type === 'join_request' ? item.data.userAvatarUrl : null}
+              name={approvalQueueItemName(item)}
+              subtitle={item.type === 'invitation' ? `Invited by ${item.data.inviterFullName}` : undefined}
               action={
                 <div className="flex gap-1.5">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={isDecliningJoinRequest}
-                    onClick={() => onDeclineJoinRequest(request.id)}
+                    disabled={isDecliningItem}
+                    onClick={() => onDeclineItem(item)}
                   >
                     Decline
                   </Button>
@@ -226,8 +241,8 @@ export function GroupMembersTab({
                     type="button"
                     variant="primary"
                     size="sm"
-                    disabled={isAcceptingJoinRequest}
-                    onClick={() => onAcceptJoinRequest(request.id)}
+                    disabled={isAcceptingItem}
+                    onClick={() => onAcceptItem(item)}
                   >
                     Accept
                   </Button>

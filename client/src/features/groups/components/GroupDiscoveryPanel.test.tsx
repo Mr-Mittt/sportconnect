@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { Group } from '@/features/feed/types';
+import type { Group, GroupInvitation } from '@/features/feed/types';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { GroupDiscoveryPanel } from './GroupDiscoveryPanel';
 
@@ -32,6 +32,24 @@ function group(overrides: Partial<Group> = {}): Group {
   };
 }
 
+function invitation(overrides: Partial<GroupInvitation> = {}): GroupInvitation {
+  return {
+    id: 1,
+    groupId: 2,
+    groupName: 'Riverside Hoopers',
+    inviterId: 'user-4',
+    inviterFullName: 'Priya Shah',
+    inviteeId: 'user-1',
+    inviteeFullName: 'Jordan Lee',
+    status: 'pending_user',
+    reviewedBy: 'user-5',
+    reviewedAt: '2026-07-16T00:00:00',
+    createdAt: '2026-07-16T00:00:00',
+    updatedAt: '2026-07-16T00:00:00',
+    ...overrides,
+  };
+}
+
 const baseProps = {
   sportsByKey,
   onOpenGroup: vi.fn(),
@@ -40,6 +58,14 @@ const baseProps = {
   isLoading: false,
   isError: false,
   onRetry: vi.fn(),
+  invitations: [] as GroupInvitation[],
+  isInvitationsLoading: false,
+  isInvitationsError: false,
+  onRetryInvitations: vi.fn(),
+  onAcceptInvitation: vi.fn(),
+  onRejectInvitation: vi.fn(),
+  isAcceptingInvitation: false,
+  isRejectingInvitation: false,
 };
 
 describe('GroupDiscoveryPanel', () => {
@@ -105,5 +131,34 @@ describe('GroupDiscoveryPanel', () => {
 
     await user.click(screen.getByRole('button', { name: 'Create Group' }));
     expect(onCreateGroup).toHaveBeenCalledWith('Riverside Ballers');
+  });
+
+  it('hides the Invitations section entirely when there are none (GRP-7)', () => {
+    render(<GroupDiscoveryPanel {...baseProps} groups={[]} invitations={[]} />);
+    expect(screen.queryByRole('region', { name: 'Invitations' })).not.toBeInTheDocument();
+  });
+
+  it('shows an invitation row with Accept/Reject, dispatching the invitation id (GRP-7)', async () => {
+    const user = userEvent.setup();
+    const onAcceptInvitation = vi.fn();
+    const onRejectInvitation = vi.fn();
+    render(
+      <GroupDiscoveryPanel
+        {...baseProps}
+        groups={[]}
+        invitations={[invitation({ id: 3, groupName: 'Riverside Hoopers', inviterFullName: 'Priya Shah' })]}
+        onAcceptInvitation={onAcceptInvitation}
+        onRejectInvitation={onRejectInvitation}
+      />,
+    );
+    const section = screen.getByRole('region', { name: 'Invitations' });
+    expect(within(section).getByText('Riverside Hoopers')).toBeInTheDocument();
+    expect(within(section).getByText('Invited by Priya Shah')).toBeInTheDocument();
+
+    await user.click(within(section).getByRole('button', { name: 'Accept' }));
+    expect(onAcceptInvitation).toHaveBeenCalledWith(3);
+
+    await user.click(within(section).getByRole('button', { name: 'Reject' }));
+    expect(onRejectInvitation).toHaveBeenCalledWith(3);
   });
 });

@@ -35,6 +35,7 @@ import { GroupTabs, type GroupTabKey } from './components/GroupTabs';
 import { InviteFriendModal } from './components/InviteFriendModal';
 import { JoinGroupModal } from './components/JoinGroupModal';
 import { SettingsUnsavedChangesDialog } from './components/SettingsUnsavedChangesDialog';
+import { useGroupInvitationsData } from './useGroupInvitationsData';
 import { useGroupMembersTabData } from './useGroupMembersTabData';
 import { useGroupsPageData } from './useGroupsPageData';
 import { useInviteFriendModalData } from './useInviteFriendModalData';
@@ -236,6 +237,21 @@ export function GroupsPage() {
     selectedGroup?.currentUserRole ?? null,
   );
 
+  // GRP-7: accepting an invitation lands the user straight in the newly
+  // joined group. setActiveSport('all') runs first — GroupInvitationResponse
+  // carries no sportId, and data.groups is sport-filtered, so switching to
+  // 'all' first guarantees the group resolves in `data.groups` regardless of
+  // its own sport or of exactly when the background refetch lands (a
+  // fragile refetch-then-lookup race otherwise).
+  const groupInvitationsData = useGroupInvitationsData(
+    currentUserId,
+    selectedGroup === null,
+    (groupId) => {
+      setActiveSport('all');
+      selectGroupAndShowPosts(groupId);
+    },
+  );
+
   const updateGroupMutation = useUpdateGroup(currentUserId);
   const leaveGroupMutation = useLeaveGroup(currentUserId);
   const deleteGroupMutation = useDeleteGroup(currentUserId);
@@ -354,6 +370,14 @@ export function GroupsPage() {
                 isLoading={isGroupsLoading}
                 isError={isGroupsError}
                 onRetry={retryGroups}
+                invitations={groupInvitationsData.invitations}
+                isInvitationsLoading={groupInvitationsData.isLoading}
+                isInvitationsError={groupInvitationsData.isError}
+                onRetryInvitations={groupInvitationsData.retry}
+                onAcceptInvitation={groupInvitationsData.acceptInvitation}
+                onRejectInvitation={groupInvitationsData.rejectInvitation}
+                isAcceptingInvitation={groupInvitationsData.isAccepting}
+                isRejectingInvitation={groupInvitationsData.isRejecting}
               />
             ) : (
               <div className="border-hairline flex gap-3.5 rounded-xl border-border bg-surface-2 p-3.5">
@@ -406,14 +430,14 @@ export function GroupsPage() {
                     <GroupMembersTab
                       canManage={membersTabData.canManage}
                       currentUserId={currentUserId}
-                      joinRequests={membersTabData.joinRequests}
-                      isJoinRequestsLoading={membersTabData.isJoinRequestsLoading}
-                      isJoinRequestsError={membersTabData.isJoinRequestsError}
-                      onRetryJoinRequests={membersTabData.retryJoinRequests}
-                      onAcceptJoinRequest={membersTabData.acceptJoinRequest}
-                      onDeclineJoinRequest={membersTabData.declineJoinRequest}
-                      isAcceptingJoinRequest={membersTabData.isAcceptingJoinRequest}
-                      isDecliningJoinRequest={membersTabData.isDecliningJoinRequest}
+                      approvalQueue={membersTabData.approvalQueue}
+                      isApprovalQueueLoading={membersTabData.isApprovalQueueLoading}
+                      isApprovalQueueError={membersTabData.isApprovalQueueError}
+                      onRetryApprovalQueue={membersTabData.retryApprovalQueue}
+                      onAcceptItem={membersTabData.acceptApprovalQueueItem}
+                      onDeclineItem={membersTabData.declineApprovalQueueItem}
+                      isAcceptingItem={membersTabData.isAcceptingApprovalQueueItem}
+                      isDecliningItem={membersTabData.isDecliningApprovalQueueItem}
                       sentInvitations={membersTabData.sentInvitations}
                       isSentInvitationsLoading={membersTabData.isSentInvitationsLoading}
                       isSentInvitationsError={membersTabData.isSentInvitationsError}

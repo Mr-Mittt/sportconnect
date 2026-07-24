@@ -1,12 +1,13 @@
 import { IconPlus, IconSearch, IconUsersGroup } from '@tabler/icons-react';
 import { useState } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
-import type { Group } from '@/features/feed/types';
+import type { Group, GroupInvitation } from '@/features/feed/types';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Input } from '@/shared/ui/input';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
+import { GroupInvitationsSection } from './GroupInvitationsSection';
 
 interface GroupDiscoveryPanelProps {
   /** Already sport-filtered by the caller (same `data.groups` GroupSpaceSwitcher
@@ -24,6 +25,17 @@ interface GroupDiscoveryPanelProps {
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
+  /** GRP-7: the current user's own pending_user invitations across every
+   * group — rendered above the joined-groups grid, hidden entirely when
+   * empty. */
+  invitations: GroupInvitation[];
+  isInvitationsLoading: boolean;
+  isInvitationsError: boolean;
+  onRetryInvitations: () => void;
+  onAcceptInvitation: (invitationId: number) => void;
+  onRejectInvitation: (invitationId: number) => void;
+  isAcceptingInvitation: boolean;
+  isRejectingInvitation: boolean;
 }
 
 function initialsFor(groupName: string): string {
@@ -39,10 +51,12 @@ function initialsFor(groupName: string): string {
 /**
  * `group-main`'s "All groups" state (`design-reference-group-feed.html`) —
  * renders in place of the tabbed per-group view whenever no group is
- * selected. A shared "Group name or invite code" input feeds both the
- * Join/Create buttons (whichever fires reads the current text — matches the
- * reference's `group-action-input`), then a card grid of the user's joined
- * groups (sport-filtered) below, matching the reference exactly.
+ * selected. GRP-7's "Invitations" section (`GroupInvitationsSection`) sits
+ * above everything else, hidden entirely when empty. A shared "Group name or
+ * invite code" input feeds both the Join/Create buttons (whichever fires
+ * reads the current text — matches the reference's `group-action-input`),
+ * then a card grid of the user's joined groups (sport-filtered) below,
+ * matching the reference exactly.
  *
  * The card grid necessarily shows the same groups as `GroupSpaceSwitcher`'s
  * pill row above it — that's the reference's actual design, not an
@@ -62,6 +76,14 @@ export function GroupDiscoveryPanel({
   isLoading,
   isError,
   onRetry,
+  invitations,
+  isInvitationsLoading,
+  isInvitationsError,
+  onRetryInvitations,
+  onAcceptInvitation,
+  onRejectInvitation,
+  isAcceptingInvitation,
+  isRejectingInvitation,
 }: GroupDiscoveryPanelProps) {
   // Transient UI input, same "component owns its own input state" precedent
   // as CreatePostForm's textarea — read at click time by whichever button
@@ -70,6 +92,16 @@ export function GroupDiscoveryPanel({
 
   return (
     <div className="border-hairline flex flex-col gap-3.5 rounded-xl border-border bg-surface-1 p-3.5">
+      <GroupInvitationsSection
+        invitations={invitations}
+        isLoading={isInvitationsLoading}
+        isError={isInvitationsError}
+        onRetry={onRetryInvitations}
+        onAccept={onAcceptInvitation}
+        onReject={onRejectInvitation}
+        isAccepting={isAcceptingInvitation}
+        isRejecting={isRejectingInvitation}
+      />
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Input
           value={query}

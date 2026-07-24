@@ -1263,6 +1263,22 @@ instead of creating a redundant row. GRP-7 reverted from `IN PROGRESS` to `TODO`
 same pattern as GRP-4 reverting for FRIEND-1. No client code was written before the revert (caught
 during Phase 1/2 exploration, not after implementation).
 
+**GRP-7 DONE** (2026-07-24, `client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`, resumed once
+B11 shipped): wired all 6 previously-unused invitation endpoints. Owner/admin approval merges into
+`GroupMembersTab`'s existing "Waiting for group approve" section — join requests and `pending_owner`
+invitations combined into one `approvalQueue`, sorted oldest-first, both row types sharing the same
+Accept/Decline buttons. Invitee acceptance gets a new "Invitations" section on
+`GroupDiscoveryPanel`'s All-groups landing state, hidden entirely when empty, accepting navigates
+straight into the new group (`setActiveSport('all')` first, since `GroupInvitationResponse` carries
+no `sportId` and the groups list is sport-filtered). 6 new hooks, `useGroupMembersTabData` extended,
+new `useGroupInvitationsData` + `GroupInvitationsSection`. Live-verified all 6 endpoints against the
+real running backend (not just MSW) — every response field matched the client type exactly. Full
+Playwright `e2e` suite (43 specs) passes at reduced worker parallelism (`--workers=2`) — full
+parallelism produced 27 scattered, unrelated timeouts confirmed as this sandbox's resource
+contention, not a regression. Along the way, the new fixture data exposed a real pre-existing bug in
+`group-members.spec.ts` (an unscoped "Accept" button lookup that broke once the approval queue could
+hold two rows) — fixed. Vitest 510/510, `tsc -b` clean, Storybook builds clean.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

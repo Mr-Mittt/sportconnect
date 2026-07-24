@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { Group } from '@/features/feed/types';
+import type { Group, GroupInvitation } from '@/features/feed/types';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { GroupDiscoveryPanel } from './GroupDiscoveryPanel';
 
@@ -30,6 +30,22 @@ function group(overrides: Partial<Group>): Group {
   };
 }
 
+// GRP-7
+const invitation: GroupInvitation = {
+  id: 1,
+  groupId: 2,
+  groupName: 'Riverside Hoopers',
+  inviterId: 'user-4',
+  inviterFullName: 'Priya Shah',
+  inviteeId: 'user-1',
+  inviteeFullName: 'Jordan Lee',
+  status: 'pending_user',
+  reviewedBy: 'user-5',
+  reviewedAt: '2026-07-16T00:00:00',
+  createdAt: '2026-07-16T00:00:00',
+  updatedAt: '2026-07-16T00:00:00',
+};
+
 const meta = {
   title: 'Groups/GroupDiscoveryPanel',
   component: GroupDiscoveryPanel,
@@ -42,6 +58,14 @@ const meta = {
     isLoading: false,
     isError: false,
     onRetry: () => {},
+    invitations: [],
+    isInvitationsLoading: false,
+    isInvitationsError: false,
+    onRetryInvitations: () => {},
+    onAcceptInvitation: () => {},
+    onRejectInvitation: () => {},
+    isAcceptingInvitation: false,
+    isRejectingInvitation: false,
   },
 } satisfies Meta<typeof GroupDiscoveryPanel>;
 
@@ -49,6 +73,11 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const ZeroGroups: Story = {};
+
+/** GRP-7: the Invitations section above the (empty) joined-groups grid. */
+export const WithInvitation: Story = {
+  args: { invitations: [invitation] },
+};
 
 export const WithGroups: Story = {
   args: {

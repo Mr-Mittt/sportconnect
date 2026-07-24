@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GroupInvitation, GroupMember, JoinRequest } from '@/features/feed/types';
+import type { ApprovalQueueItem } from '../useGroupMembersTabData';
 import { GroupMembersTab } from './GroupMembersTab';
 
 const joinRequests: JoinRequest[] = [
@@ -18,6 +19,29 @@ const joinRequests: JoinRequest[] = [
     createdAt: '2026-07-16T00:00:00',
     updatedAt: '2026-07-16T00:00:00',
   },
+];
+
+// GRP-7: a pending_owner invitation (a member's, not the owner's own — an
+// owner-authored invite skips pending_owner per B11) merged into the same
+// approval queue as the join request above.
+const approvalQueueInvitation: GroupInvitation = {
+  id: 2,
+  groupId: 1,
+  groupName: 'Riverside Ballers',
+  inviterId: 'user-5',
+  inviterFullName: 'Sam Ito',
+  inviteeId: 'user-8',
+  inviteeFullName: 'Morgan Diaz',
+  status: 'pending_owner',
+  reviewedBy: null,
+  reviewedAt: null,
+  createdAt: '2026-07-16T12:00:00',
+  updatedAt: '2026-07-16T12:00:00',
+};
+
+const approvalQueue: ApprovalQueueItem[] = [
+  { type: 'join_request', data: joinRequests[0]! },
+  { type: 'invitation', data: approvalQueueInvitation },
 ];
 
 const sentInvitations: GroupInvitation[] = [
@@ -109,14 +133,14 @@ const meta = {
     // Matches administrators[0].userId below — the default variants show
     // the "(you)" indicator on the owner row.
     currentUserId: 'user-1',
-    joinRequests: [],
-    isJoinRequestsLoading: false,
-    isJoinRequestsError: false,
-    onRetryJoinRequests: () => {},
-    onAcceptJoinRequest: () => {},
-    onDeclineJoinRequest: () => {},
-    isAcceptingJoinRequest: false,
-    isDecliningJoinRequest: false,
+    approvalQueue: [],
+    isApprovalQueueLoading: false,
+    isApprovalQueueError: false,
+    onRetryApprovalQueue: () => {},
+    onAcceptItem: () => {},
+    onDeclineItem: () => {},
+    isAcceptingItem: false,
+    isDecliningItem: false,
     sentInvitations: [],
     isSentInvitationsLoading: false,
     isSentInvitationsError: false,
@@ -140,9 +164,11 @@ export const AsMemberPopulated: Story = {
 
 export const AsMemberEmpty: Story = {};
 
-/** Admin: "Waiting for group approve" visible with Accept/Decline. */
+/** Admin: "Waiting for group approve" visible with Accept/Decline — GRP-7's
+ * merged queue shows a join-request row and a pending_owner invitation row
+ * together. */
 export const AsAdminPopulated: Story = {
-  args: { canManage: true, joinRequests, sentInvitations, administrators, members },
+  args: { canManage: true, approvalQueue, sentInvitations, administrators, members },
 };
 
 export const AsAdminEmpty: Story = {
@@ -153,7 +179,7 @@ export const AsAdminEmpty: Story = {
  * binary `canManage`, not a 3-way switch — included for the ticket's
  * explicit "owner/admin/member" acceptance-criteria wording. */
 export const AsOwnerPopulated: Story = {
-  args: { canManage: true, joinRequests, sentInvitations, administrators, members },
+  args: { canManage: true, approvalQueue, sentInvitations, administrators, members },
 };
 
 export const AsOwnerEmpty: Story = {

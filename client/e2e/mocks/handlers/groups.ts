@@ -18,12 +18,14 @@ import {
   mockFriend,
   mockGroup,
   mockGroupInfo,
+  mockGroupInvitation,
   mockGroupJoinRequest,
   mockGroupMembers,
   mockGroupSettings,
   mockOwnedGroup,
   mockPageResponse,
   mockPublicGroup,
+  mockReceivedInvitation,
   mockSentInvitation,
   mockUser,
 } from '../fixtures.ts';
@@ -60,6 +62,16 @@ interface GroupsSession {
   groupMembersState: Record<number, GroupMember[]>;
   groupJoinRequestsState: Record<number, JoinRequest[]>;
   sentInvitationsState: Record<number, GroupInvitation[]>;
+  // GRP-7: the owner/admin's pending_owner approval queue per group —
+  // distinct from sentInvitationsState (which GRP-3 already keys by group
+  // and holds every invitation regardless of status, standing in for "the
+  // caller's own sent invitations" without actually filtering by inviter).
+  // Keeping this separate avoids coupling GRP-7's new merged-queue behavior
+  // to GRP-3's existing fixture/tests.
+  groupInvitationsState: Record<number, GroupInvitation[]>;
+  // GRP-7: pending_user invitations addressed to the test user, across every
+  // group — not group-scoped, unlike the other invitation state above.
+  userPendingInvitationsState: GroupInvitation[];
   nextGroupId: number;
   nextJoinRequestId: number;
   nextMemberId: number;
@@ -95,6 +107,8 @@ function defaultGroupsSession(): GroupsSession {
     groupMembersState: { [mockOwnedGroup.id]: mockGroupMembers.map((member) => ({ ...member })) },
     groupJoinRequestsState: { [mockOwnedGroup.id]: [{ ...mockGroupJoinRequest }] },
     sentInvitationsState: { [mockOwnedGroup.id]: [{ ...mockSentInvitation }] },
+    groupInvitationsState: { [mockOwnedGroup.id]: [{ ...mockGroupInvitation }] },
+    userPendingInvitationsState: [{ ...mockReceivedInvitation }],
     nextGroupId: 100,
     nextJoinRequestId: 100,
     nextMemberId: 100,
@@ -378,6 +392,125 @@ export const groupHandlers: HttpHandler[] = [
     };
     session.sentInvitationsState[groupId] = [...(session.sentInvitationsState[groupId] ?? []), created];
     return HttpResponse.json(apiResponse(created, 'Invitation sent successfully'), { status: 201 });
+  }),
+
+  // GRP-7 part 1: the owner/admin's pending_owner approval queue for a
+  // group, merged client-side with join requests into one chronological
+  // list — distinct from /invitations/sent (GRP-3, "invitations I sent"),
+  // see groupInvitationsState's own comment above.
+  http.get('/api/groups/:groupId/invitations', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const invitations =
+      groupsSessions.get(sessionIdFromRequest(request)).groupInvitationsState[groupId] ?? [];
+    return HttpResponse.json(
+      apiResponse(mockPageResponse(invitations), 'Invitations retrieved successfully'),
+    );
+  }),
+
+  // Same "search every group's queue by id" shape as
+  // /join-requests/:requestId/accept below — :invitationId alone identifies
+  // the group. Real backend behavior (B11) can short-circuit this straight
+  // to accepted if the invitee already has a pending join request — not
+  // simulated here, same "don't replicate every backend edge case"
+  // precedent GRP-4 already set for its own 400s.
+  http.put('/api/groups/invitations/:invitationId/approve', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const invitationId = Number(params.invitationId);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    const groupId = Object.keys(session.groupInvitationsState)
+      .map(Number)
+      .find((id) => session.groupInvitationsState[id].some((inv) => inv.id === invitationId));
+    if (groupId === undefined) {
+      return HttpResponse.json(apiError('Invitation not found'), { status: 404 });
+    }
+    session.groupInvitationsState[groupId] = session.groupInvitationsState[groupId].filter(
+      (inv) => inv.id !== invitationId,
+    );
+    return HttpResponse.json(apiResponse(null, 'Invitation approved'));
+  }),
+
+  http.put('/api/groups/invitations/:invitationId/decline', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const invitationId = Number(params.invitationId);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    for (const groupId of Object.keys(session.groupInvitationsState).map(Number)) {
+      session.groupInvitationsState[groupId] = session.groupInvitationsState[groupId].filter(
+        (inv) => inv.id !== invitationId,
+      );
+    }
+    return HttpResponse.json(apiResponse(null, 'Invitation declined'));
+  }),
+
+  // GRP-7 part 2: every pending_user invitation addressed to the test user,
+  // across all groups — backs GroupDiscoveryPanel's "Invitations" section.
+  http.get('/api/groups/invitations/user', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const pending = groupsSessions.get(sessionIdFromRequest(request)).userPendingInvitationsState;
+    return HttpResponse.json(
+      apiResponse(mockPageResponse(pending), 'Invitations retrieved successfully'),
+    );
+  }),
+
+  // Accepting makes the test user a member of a group they may not have had
+  // any prior fixture row for (e.g. mockPublicGroup/Riverside Hoopers) —
+  // synthesizes a full Group from the matching publicGroupsState search
+  // result so it appears in a later GET /groups/user/:userId, same
+  // "actually mutate state so a refetch reflects it" reasoning as every
+  // other stateful handler in this file.
+  http.put('/api/groups/invitations/:invitationId/accept', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const invitationId = Number(params.invitationId);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    const invitation = session.userPendingInvitationsState.find((inv) => inv.id === invitationId);
+    if (!invitation) {
+      return HttpResponse.json(apiError('Invitation not found'), { status: 404 });
+    }
+    session.userPendingInvitationsState = session.userPendingInvitationsState.filter(
+      (inv) => inv.id !== invitationId,
+    );
+    const alreadyMember = session.userGroupsState.some((group) => group.id === invitation.groupId);
+    if (!alreadyMember) {
+      const searchResult = session.publicGroupsState.find((group) => group.id === invitation.groupId);
+      const joinedGroup: Group = {
+        id: invitation.groupId,
+        sportId: searchResult?.sportId ?? 0,
+        groupName: invitation.groupName,
+        description: searchResult?.description ?? null,
+        avatarUrl: searchResult?.avatarUrl ?? null,
+        coverUrl: null,
+        isPrivate: false,
+        isActive: true,
+        createdBy: invitation.inviterId,
+        createdByFullName: invitation.inviterFullName,
+        memberCount: (searchResult?.memberCount ?? 0) + 1,
+        currentUserRole: 'group_member',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        pinnedPosts: null,
+      };
+      session.userGroupsState = [joinedGroup, ...session.userGroupsState];
+    }
+    session.publicGroupsState = session.publicGroupsState.map((group) =>
+      group.id === invitation.groupId ? { ...group, isMember: true } : group,
+    );
+    return HttpResponse.json(apiResponse(null, 'Invitation accepted'));
+  }),
+
+  http.put('/api/groups/invitations/:invitationId/reject', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const invitationId = Number(params.invitationId);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    session.userPendingInvitationsState = session.userPendingInvitationsState.filter(
+      (inv) => inv.id !== invitationId,
+    );
+    return HttpResponse.json(apiResponse(null, 'Invitation rejected'));
   }),
 
   // GRP-3: accept moves the request out of its group's pending queue and

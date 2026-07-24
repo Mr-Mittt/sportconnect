@@ -243,6 +243,26 @@ export const mockSentInvitation: GroupInvitation = {
   updatedAt: '2026-07-17T00:00:00',
 };
 
+// GRP-7: GET /api/groups/:groupId/invitations — mockOwnedGroup's
+// owner-approval queue. Deliberately sent by Sam Ito (the group's admin,
+// `mockGroupMembers[1]`), not the test user — post-B11, an owner/admin's own
+// invitation would skip pending_owner entirely, so the only invitation that
+// can realistically sit here is one a plain member/admin sent.
+export const mockGroupInvitation: GroupInvitation = {
+  id: 3,
+  groupId: mockOwnedGroup.id,
+  groupName: mockOwnedGroup.groupName,
+  inviterId: '33333333-3333-4333-8333-333333333333', // Sam Ito, mockGroupMembers[1]
+  inviterFullName: 'Sam Ito',
+  inviteeId: '66666666-6666-4666-8666-666666666666',
+  inviteeFullName: 'Morgan Diaz',
+  status: 'pending_owner',
+  reviewedBy: null,
+  reviewedAt: null,
+  createdAt: '2026-07-18T00:00:00',
+  updatedAt: '2026-07-18T00:00:00',
+};
+
 export const mockPost: Post = {
   id: 1,
   userId: mockUser.id,
@@ -372,6 +392,27 @@ export const mockJoinRequest: JoinRequest = {
   reviewedAt: null,
   createdAt: '2026-07-15T00:00:00',
   updatedAt: '2026-07-15T00:00:00',
+};
+
+// GRP-7: GET /api/groups/invitations/user — an invitation addressed to the
+// test user for mockPublicGroup (Riverside Hoopers), a group they haven't
+// joined yet. Backs GroupDiscoveryPanel's new "Invitations" section and its
+// accept-then-navigate journey (accepting should land the user inside
+// Riverside Hoopers even though it's a different sport than whatever's
+// currently active).
+export const mockReceivedInvitation: GroupInvitation = {
+  id: 4,
+  groupId: mockPublicGroup.id,
+  groupName: mockPublicGroup.groupName,
+  inviterId: '77777777-7777-4777-8777-777777777777',
+  inviterFullName: 'Priya Shah',
+  inviteeId: mockUser.id,
+  inviteeFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  status: 'pending_user',
+  reviewedBy: '77777777-7777-4777-8777-777777777777',
+  reviewedAt: '2026-07-19T00:00:00',
+  createdAt: '2026-07-19T00:00:00',
+  updatedAt: '2026-07-19T00:00:00',
 };
 
 // FEED-2 comment fixtures. mockComment is mockPost's one existing comment
