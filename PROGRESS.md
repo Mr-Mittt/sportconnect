@@ -1303,6 +1303,26 @@ button through the real UI (renders, clicks, row disappears, no manual refresh).
 new cases mirroring `cancelJoinRequest`'s own 5) + `:server:test` green; client `tsc -b` clean,
 Vitest green.
 
+**GRP-7 copy fixes** (2026-07-24, user-requested): the B12 button's label renamed "Cancel" →
+"Withdraw" (prop/handler names left as-is, matching the backend method name); the `pending_owner`
+status subtitle "Awaiting owner approval" → "Invitation sent — waiting for owner approval", reading
+clearly as the sender's own status rather than an ambiguous third-party state.
+
+**feedSpaceStore persisted to sessionStorage** (2026-07-24, user-reported): reloading the browser
+while on a specific group's tab in `GroupsPage` reset to the "All groups" landing state — `/groups`
+carries no `:groupId` in the URL (unlike `/posts/:postId`, FEED-12's deep-link route), so
+`selectedGroupId` lived only in `feedSpaceStore`, a plain in-memory Zustand store wiped on every
+reload. User chose `sessionStorage` persistence (via Zustand's `persist` middleware) over a
+URL-param route change — smaller change, no routing/shareable-link implications, survives reload
+but clears on tab close. All three state fields (`activeSport`/`selectedGroupId`/
+`selectedGroupSportId`) persist together so a restored session never lands with a mismatched sport
+tab vs. selected group. `activeGroupTab` (which per-group tab, e.g. Settings vs. Posts) stays
+page-local/unpersisted — out of scope, resets to Posts on reload same as before. Live-verified
+through the real UI against the real running backend: selected a group, reloaded, confirmed the
+per-group tabbed view (not the discovery panel) rendered immediately. Full Vitest suite (511/511)
+and the group-touching e2e specs (`group-settings`, `group-members`, `group-invitations`,
+`feed-groups-journey`) all green — none assumed the old reload-resets-to-All behavior.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime
