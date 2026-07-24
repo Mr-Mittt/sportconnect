@@ -1263,6 +1263,87 @@ instead of creating a redundant row. GRP-7 reverted from `IN PROGRESS` to `TODO`
 same pattern as GRP-4 reverting for FRIEND-1. No client code was written before the revert (caught
 during Phase 1/2 exploration, not after implementation).
 
+**GRP-7 DONE** (2026-07-24, `client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`, resumed once
+B11 shipped): wired all 6 previously-unused invitation endpoints. Owner/admin approval merges into
+`GroupMembersTab`'s existing "Waiting for group approve" section — join requests and `pending_owner`
+invitations combined into one `approvalQueue`, sorted oldest-first, both row types sharing the same
+Accept/Decline buttons. Invitee acceptance gets a new "Invitations" section on
+`GroupDiscoveryPanel`'s All-groups landing state, hidden entirely when empty, accepting navigates
+straight into the new group (`setActiveSport('all')` first, since `GroupInvitationResponse` carries
+no `sportId` and the groups list is sport-filtered). 6 new hooks, `useGroupMembersTabData` extended,
+new `useGroupInvitationsData` + `GroupInvitationsSection`. Live-verified all 6 endpoints against the
+real running backend (not just MSW) — every response field matched the client type exactly. Full
+Playwright `e2e` suite (43 specs) passes at reduced worker parallelism (`--workers=2`) — full
+parallelism produced 27 scattered, unrelated timeouts confirmed as this sandbox's resource
+contention, not a regression. Along the way, the new fixture data exposed a real pre-existing bug in
+`group-members.spec.ts` (an unscoped "Accept" button lookup that broke once the approval queue could
+hold two rows) — fixed. Vitest 510/510, `tsc -b` clean, Storybook builds clean.
+
+**GRP-7 follow-up fix** (2026-07-24, same doc): user-reported bug — owner invites someone who already
+has a pending join request (B11 rules 1+2, resolves straight to `accepted` + real membership) and
+"nothing happened" in the UI. Root cause: `useSendGroupInvitation` (built in GRP-4, before B11
+existed) only invalidated `feedKeys.sentInvitations` — correct assumption at the time ("creating an
+invitation doesn't touch membership"), broken once B11 gave `createInvitation` accept-like side
+effects GRP-4 couldn't have anticipated. Fixed by switching to the same blunt `feedKeys.all`
+invalidation `useAcceptJoinRequest`/`useApproveInvitation` already use. Live-verified through the
+real UI against the real backend: before the fix, the invite dialog and Members/approval-queue
+sections all stayed stale; after, everything updates immediately with no manual refresh.
+
+**B12 DONE + GRP-7 addendum** (2026-07-24, `modules/social/group-impl/docs/BACKLOG_MVP.md` +
+`client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`): user-requested — a "Cancel" button on
+a sent invitation while it's still `pending_owner`. No backend endpoint existed for this side
+(only `cancelJoinRequest`, A3); new `GroupService.cancelInvitation`/`DELETE
+/invitations/{invitationId}` mirrors `cancelJoinRequest` exactly (ownership + active-group +
+status checks, hard delete, no new status literal). Scope boundary confirmed with user: cancel is
+`pending_owner`-only, not available once an owner/admin has approved (`pending_user`). Client: new
+`useCancelInvitation` hook, `GroupMembersTab`'s "Waiting for user accept" row gets a Cancel button
+gated on `status === 'pending_owner'`. Both live-verified against the real running backend — the
+new endpoint directly (non-inviter 400s, inviter succeeds, post-approval cancel 400s) and the
+button through the real UI (renders, clicks, row disappears, no manual refresh). Backend Spock (5
+new cases mirroring `cancelJoinRequest`'s own 5) + `:server:test` green; client `tsc -b` clean,
+Vitest green.
+
+**GRP-7 copy fixes** (2026-07-24, user-requested): the B12 button's label renamed "Cancel" →
+"Withdraw" (prop/handler names left as-is, matching the backend method name); the `pending_owner`
+status subtitle "Awaiting owner approval" → "Invitation sent — waiting for owner approval", reading
+clearly as the sender's own status rather than an ambiguous third-party state.
+
+**feedSpaceStore persisted to sessionStorage** (2026-07-24, user-reported): reloading the browser
+while on a specific group's tab in `GroupsPage` reset to the "All groups" landing state — `/groups`
+carries no `:groupId` in the URL (unlike `/posts/:postId`, FEED-12's deep-link route), so
+`selectedGroupId` lived only in `feedSpaceStore`, a plain in-memory Zustand store wiped on every
+reload. User chose `sessionStorage` persistence (via Zustand's `persist` middleware) over a
+URL-param route change — smaller change, no routing/shareable-link implications, survives reload
+but clears on tab close. All three state fields (`activeSport`/`selectedGroupId`/
+`selectedGroupSportId`) persist together so a restored session never lands with a mismatched sport
+tab vs. selected group. `activeGroupTab` (which per-group tab, e.g. Settings vs. Posts) stays
+page-local/unpersisted — out of scope, resets to Posts on reload same as before. Live-verified
+through the real UI against the real running backend: selected a group, reloaded, confirmed the
+per-group tabbed view (not the discovery panel) rendered immediately. Full Vitest suite (511/511)
+and the group-touching e2e specs (`group-settings`, `group-members`, `group-invitations`,
+`feed-groups-journey`) all green — none assumed the old reload-resets-to-All behavior.
+
+**InviteFriendModal reopen flash fixed** (2026-07-24, user-reported): searching in the modal, closing
+it, then reopening with no pre-fill briefly showed the *previous* search's stale results before
+clearing. Two compounding causes in `useInviteFriendModalData`: (1) the input/state reset only ran
+via a `useEffect` on *reopen* — an effect can't run before the first paint, so that first paint still
+showed the old query text, and TanStack Query (keyed on that exact text) returned its cached stale
+results instantly; (2) even after the effect fired and cleared the input, the actual search-driving
+`debouncedQuery` value lagged behind by the full 300ms debounce window, keeping the stale results
+visible a bit longer. Fixed both: the reset now also runs on *close* (so a later reopen's first paint
+already reflects it), and `useDebouncedValue` gained an `immediate` param (new optional 3rd arg,
+default `false`, the one other consumer — `useFriendsPageData` — unaffected) that
+`useInviteFriendModalData` sets to `!isOpen`, force-settling the debounced value the moment the modal
+closes instead of waiting out the timer — closes the race deterministically regardless of how fast
+the user reopens, not just for reopens that happen to land after 300ms of real time. Confirmed
+`useJoinGroupModalData` doesn't share this bug — its equivalent "seed on open" is a direct synchronous
+call at click-time (`openSearch`), not a post-open effect. New regression test in
+`useInviteFriendModalData.test.tsx` (rerender through open→search→close→reopen, assert `rows` is
+already empty on the very next render, no artificial wait). Live-verified through the real UI against
+the real running backend: search → 1 result → close → reopen with no pre-fill → confirmed empty
+input and no stale result, immediately and 500ms later. Full Vitest suite (512/512) and the
+InviteFriendModal-touching e2e spec (`group-members`) both green.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

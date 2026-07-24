@@ -1,23 +1,52 @@
 import { useMemo } from 'react';
 import { useAcceptJoinRequest } from '@/features/feed/hooks/useAcceptJoinRequest';
+import { useApproveInvitation } from '@/features/feed/hooks/useApproveInvitation';
+import { useCancelInvitation } from '@/features/feed/hooks/useCancelInvitation';
+import { useDeclineInvitation } from '@/features/feed/hooks/useDeclineInvitation';
 import { useDeclineJoinRequest } from '@/features/feed/hooks/useDeclineJoinRequest';
+import { useGroupInvitations } from '@/features/feed/hooks/useGroupInvitations';
 import { useGroupJoinRequests } from '@/features/feed/hooks/useGroupJoinRequests';
 import { useGroupMembers } from '@/features/feed/hooks/useGroupMembers';
 import { useSentInvitations } from '@/features/feed/hooks/useSentInvitations';
+import type { GroupInvitation, JoinRequest } from '@/features/feed/types';
+
+/**
+ * GRP-7: a single "Waiting for group approve" row — either an existing
+ * `JoinRequest` (self-service) or a `pending_owner` `GroupInvitation`
+ * (member-initiated), merged into one chronological list per the ticket
+ * spec. `GroupMembersTab` renders each variant differently (a join-request
+ * row shows only the requester; an invitation row shows both inviter and
+ * invitee) and filters an invitation row by `inviteeFullName`, not the
+ * inviter — the prospective member is what "find member" means for either
+ * row type.
+ */
+export type ApprovalQueueItem =
+  | { type: 'join_request'; data: JoinRequest }
+  | { type: 'invitation'; data: GroupInvitation };
 
 /**
  * GRP-3's Members tab data boundary — mirrors `useSettingsUnsavedGuard`'s
  * role as a page-level orchestration hook, minus any draft/save state (this
- * tab has none). Wires the three read queries, gated on `isActive` (the
- * Members tab being the one currently shown) and, for join requests, on
- * `canManage` too — a `group_member` calling `getGroupJoinRequests` gets a
- * 400, so this never fires that request for them at all rather than firing
- * it and hiding the error.
+ * tab has none). Wires the read queries, gated on `isActive` (the Members
+ * tab being the one currently shown) and, for join requests and the
+ * approval-queue invitations, on `canManage` too — a `group_member` calling
+ * either `getGroupJoinRequests` or `getGroupInvitations` gets a 400, so this
+ * never fires those requests for them at all rather than firing and hiding
+ * the error.
  *
  * `administrators`/`members` are `useGroupMembers`' one fetch split
  * client-side by `roleName` (open decision #1: the owner folds into
  * "Group administrator" rather than a 6th section) — owner sorted first
  * within administrators.
+ *
+ * GRP-7: `approvalQueue` merges the join-requests and group-invitations
+ * queries into one list, sorted oldest-first by `createdAt` (a FIFO
+ * approval queue reads naturally oldest-on-top). `acceptApprovalQueueItem`/
+ * `declineApprovalQueueItem` dispatch to the right mutation
+ * (`useAcceptJoinRequest`/`useApproveInvitation` and
+ * `useDeclineJoinRequest`/`useDeclineInvitation` respectively) based on the
+ * item's `type` — the component only ever calls one pair of handlers,
+ * unaware of which underlying endpoint actually fires.
  */
 export function useGroupMembersTabData(
   groupId: number | undefined,
@@ -28,10 +57,14 @@ export function useGroupMembersTabData(
 
   const membersQuery = useGroupMembers(groupId, isActive);
   const joinRequestsQuery = useGroupJoinRequests(groupId, isActive && canManage);
+  const groupInvitationsQuery = useGroupInvitations(groupId, isActive && canManage);
   const sentInvitationsQuery = useSentInvitations(groupId, isActive);
 
-  const acceptMutation = useAcceptJoinRequest();
-  const declineMutation = useDeclineJoinRequest();
+  const acceptJoinRequestMutation = useAcceptJoinRequest();
+  const declineJoinRequestMutation = useDeclineJoinRequest();
+  const approveInvitationMutation = useApproveInvitation();
+  const declineInvitationMutation = useDeclineInvitation();
+  const cancelInvitationMutation = useCancelInvitation();
 
   const { administrators, members } = useMemo(() => {
     const allMembers = membersQuery.data?.content ?? [];
@@ -43,6 +76,27 @@ export function useGroupMembersTabData(
     };
   }, [membersQuery.data]);
 
+  const approvalQueue = useMemo<ApprovalQueueItem[]>(() => {
+    const joinRequestItems: ApprovalQueueItem[] = (joinRequestsQuery.data?.content ?? []).map(
+      (data) => ({ type: 'join_request', data }),
+    );
+    const invitationItems: ApprovalQueueItem[] = (groupInvitationsQuery.data?.content ?? []).map(
+      (data) => ({ type: 'invitation', data }),
+    );
+    return [...joinRequestItems, ...invitationItems].sort(
+      (a, b) => new Date(a.data.createdAt).getTime() - new Date(b.data.createdAt).getTime(),
+    );
+  }, [joinRequestsQuery.data, groupInvitationsQuery.data]);
+
+  const acceptApprovalQueueItem = (item: ApprovalQueueItem) => {
+    if (item.type === 'join_request') acceptJoinRequestMutation.mutate(item.data.id);
+    else approveInvitationMutation.mutate(item.data.id);
+  };
+  const declineApprovalQueueItem = (item: ApprovalQueueItem) => {
+    if (item.type === 'join_request') declineJoinRequestMutation.mutate(item.data.id);
+    else declineInvitationMutation.mutate(item.data.id);
+  };
+
   return {
     canManage,
     administrators,
@@ -50,20 +104,29 @@ export function useGroupMembersTabData(
     isMembersLoading: membersQuery.isLoading,
     isMembersError: membersQuery.isError,
     retryMembers: () => membersQuery.refetch(),
-    joinRequests: joinRequestsQuery.data?.content ?? [],
-    isJoinRequestsLoading: joinRequestsQuery.isLoading,
-    isJoinRequestsError: joinRequestsQuery.isError,
-    retryJoinRequests: () => joinRequestsQuery.refetch(),
+    approvalQueue,
+    isApprovalQueueLoading: joinRequestsQuery.isLoading || groupInvitationsQuery.isLoading,
+    isApprovalQueueError: joinRequestsQuery.isError || groupInvitationsQuery.isError,
+    retryApprovalQueue: () => {
+      void joinRequestsQuery.refetch();
+      void groupInvitationsQuery.refetch();
+    },
     sentInvitations: sentInvitationsQuery.data?.content ?? [],
     isSentInvitationsLoading: sentInvitationsQuery.isLoading,
     isSentInvitationsError: sentInvitationsQuery.isError,
     retrySentInvitations: () => sentInvitationsQuery.refetch(),
-    acceptJoinRequest: (requestId: number) => acceptMutation.mutate(requestId),
-    isAcceptingJoinRequest: acceptMutation.isPending,
-    isAcceptJoinRequestError: acceptMutation.isError,
-    declineJoinRequest: (requestId: number) => declineMutation.mutate(requestId),
-    isDecliningJoinRequest: declineMutation.isPending,
-    isDeclineJoinRequestError: declineMutation.isError,
+    // GRP-7 addendum: cancel one of the caller's own still-pending_owner sent
+    // invitations — every row in `sentInvitations` is already the caller's
+    // own (see `useSentInvitations`), so no extra ownership check needed
+    // here; `GroupMembersTab` only shows the button for `pending_owner` rows.
+    cancelInvitation: (invitationId: number) => cancelInvitationMutation.mutate(invitationId),
+    isCancelingInvitation: cancelInvitationMutation.isPending,
+    acceptApprovalQueueItem,
+    isAcceptingApprovalQueueItem:
+      acceptJoinRequestMutation.isPending || approveInvitationMutation.isPending,
+    declineApprovalQueueItem,
+    isDecliningApprovalQueueItem:
+      declineJoinRequestMutation.isPending || declineInvitationMutation.isPending,
   };
 }
 

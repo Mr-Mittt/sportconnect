@@ -71,11 +71,29 @@ export function useInviteFriendModalData(
   const [errorsByUserId, setErrorsByUserId] = useState<Record<string, string>>({});
 
   const seededForOpenRef = useRef(false);
+  // Guards the close-time reset below the same way `seededForOpenRef`
+  // guards the open-time one — "run once per close", not on every render
+  // while `isOpen` stays false.
+  const resetForCloseRef = useRef(false);
   useEffect(() => {
     if (!isOpen) {
       seededForOpenRef.current = false;
+      if (resetForCloseRef.current) return;
+      resetForCloseRef.current = true;
+      // Reset here, on close, not only on the next open — an effect can't
+      // run until after the next open's first paint, so a reset that only
+      // fired on open would flash the previous session's stale query text
+      // and (from TanStack Query's cache, keyed by that exact text) its
+      // stale results for one frame, then clear ~300ms later once
+      // `debouncedQuery` finally caught up. Resetting immediately on close
+      // means state is already blank by the time a later open's first
+      // render happens, so there's nothing stale left to flash.
+      setInputValue('');
+      setPendingIds(new Set());
+      setErrorsByUserId({});
       return;
     }
+    resetForCloseRef.current = false;
     if (seededForOpenRef.current) return;
     seededForOpenRef.current = true;
     setInputValue(initialQuery);
@@ -84,7 +102,13 @@ export function useInviteFriendModalData(
   }, [isOpen, initialQuery]);
 
   const trimmedQuery = inputValue.trim();
-  const debouncedQuery = useDebouncedValue(trimmedQuery, SEARCH_DEBOUNCE_MS);
+  // While closed, force-settle immediately rather than waiting out the
+  // normal typing-speed debounce — see useDebouncedValue's own comment on
+  // `immediate` for why this is what actually closes the stale-flash race
+  // (the close-time reset above only fixes it for reopens that happen
+  // after the debounce would have settled anyway; this fixes it
+  // unconditionally).
+  const debouncedQuery = useDebouncedValue(trimmedQuery, SEARCH_DEBOUNCE_MS, !isOpen);
 
   const searchQuery = useUserSearch(
     debouncedQuery,

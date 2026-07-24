@@ -10,7 +10,8 @@ is the living reference, that one is the point-in-time implementation record), `
 `FEED-10_E2E_FEED_GROUPS_JOURNEY.md`, `FEED-12_COMMENT_MODAL_DEEP_LINK.md` (the `/posts/:postId` route),
 `HF-11_E2E_HOME_FEED_JOURNEY.md`, `HF-10a/b` (visual-regression harness), `GRP-3_MEMBERS_TAB.md`
 (new `group-members.spec.ts` + the first Groups-page block in `a11y.spec.ts`), `GRP-4_INVITE_FRIEND_REAL.md`
-(replaces `group-members.spec.ts`'s step 3 with a real search + invite).
+(replaces `group-members.spec.ts`'s step 3 with a real search + invite), `GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`
+(new `group-invitations.spec.ts` — the merged approval queue + the Invitations section's accept/reject).
 
 ---
 
@@ -145,6 +146,7 @@ e2e/
     feed-groups-journey.spec.ts
     group-settings.spec.ts
     group-members.spec.ts
+    group-invitations.spec.ts
     friends-journey.spec.ts
     msw-setup.spec.ts
     post-deep-link.spec.ts
@@ -226,6 +228,25 @@ GRP-4 adds a stateful `POST /api/groups/:groupId/invitations` to `groups.ts` —
 returns the existing invitation idempotently (201) for a re-invite; the not-friends/
 `allowMemberInvites`-off 400s aren't simulated since the client already filters non-friend results
 out before an invite is reachable.
+
+GRP-7 adds two more invitation fixtures, kept deliberately separate from `mockSentInvitation`'s state:
+`mockGroupInvitation` — a `pending_owner` invitation for `mockOwnedGroup`, sent by **Sam Ito** (the
+group's admin, `mockGroupMembers[1]`), not the test user — post-B11, an owner/admin's own invite
+skips `pending_owner` entirely, so the only invitation that can realistically sit in the
+owner-approval queue is one a peer member sent. Backs `groupInvitationsState`/`GET
+.../invitations` (the owner/admin's merged-queue source, distinct from `sentInvitationsState`/`GET
+.../invitations/sent`). `mockReceivedInvitation` — a `pending_user` invitation addressed to the
+test user for `mockPublicGroup` ("Riverside Hoopers", Basketball, not yet joined), from **Priya
+Shah**. Backs `userPendingInvitationsState`/`GET /invitations/user` — `GroupDiscoveryPanel`'s
+"Invitations" section. Accepting it (`PUT .../accept`) synthesizes a full `Group` from the matching
+`publicGroupsState` entry and prepends it to `userGroupsState`, same "mutate state so a refetch
+reflects it" pattern as every other stateful handler here; approving/declining
+`mockGroupInvitation` (`PUT .../approve` or `.../decline`) only removes it from the queue — it does
+**not** add a member, matching real backend semantics (approving only moves `pending_owner` →
+`pending_user`; membership needs the invitee's own accept). Real backend B11 short-circuits
+(approve/accept jumping straight to `accepted` when the other flow already has a pending row for the
+same person) aren't simulated here, same precedent as the not-friends/`allowMemberInvites` 400s
+above.
 
 **Timestamps are never hardcoded** — `hoursAgo`/`hoursFromNow` (`src/shared/lib/mockClock.ts`) compute
 relative to load time. A hardcoded broadcast expiry date drifting into the past (and silently breaking
@@ -364,7 +385,7 @@ approve"; `mockFriend` is neither a member nor already invited to `mockOwnedGrou
 
 | Step | What it checks | Notes |
 |---|---|---|
-| 1. all 5 sections render with real fixture data | "Waiting for group approve" (Priya Shah), "Waiting for user accept" (Robin Park, "Awaiting owner approval"), "Group administrator" (Jordan Lee owner-first, then Sam Ito), "Members" (Alex Chen), "Blacklist" ("Coming soon.") | `mockGroupJoinRequest`/`mockSentInvitation`/`mockGroupMembers` fixtures, all scoped to `mockOwnedGroup.id` |
+| 1. all 5 sections render with real fixture data | "Waiting for group approve" (Priya Shah), "Waiting for user accept" (Robin Park, "Invitation sent — waiting for owner approval"), "Group administrator" (Jordan Lee owner-first, then Sam Ito), "Members" (Alex Chen), "Blacklist" ("Coming soon.") | `mockGroupJoinRequest`/`mockSentInvitation`/`mockGroupMembers` fixtures, all scoped to `mockOwnedGroup.id` |
 | 2. "find member" filters all visible lists in place | Typing "sam" narrows Group administrator to Sam Ito, empties Members to "No matches.", URL unchanged | No debounce, case-insensitive substring — matches the literal spec |
 | 3. Invite friend opens pre-filled, auto-runs a real search, and invites a friend (GRP-4) | Click "Invite friend" with "priya" typed → dialog's search input pre-filled "priya" → real debounced `GET /users/search` returns Priya Shah (a friend, not yet a member/invited) → click Invite → row flips to "Already invited", button gone | Real `POST /groups/{groupId}/invitations`; supersedes GRP-3's mocked "Search coming soon." step |
 | 4. Accept moves the request into Members | Click Accept in "Waiting for group approve" → Priya Shah disappears from that section, appears in Members | Exercises the stateful MSW accept handler (removes from the group's join-request queue, appends a `group_member` row) |

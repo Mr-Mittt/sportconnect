@@ -52,7 +52,7 @@ describe('useGroupMembersTabData', () => {
       throw new Error(`unexpected GET ${url}`);
     });
 
-    // group_member — canManage is false, so join-requests must never fire.
+    // group_member — canManage is false, so join-requests/invitations must never fire.
     const { result } = renderHook(() => useGroupMembersTabData(1, true, 'group_member'), { wrapper });
 
     await waitFor(() => expect(result.current.isMembersLoading).toBe(false));
@@ -60,9 +60,10 @@ describe('useGroupMembersTabData', () => {
     expect(result.current.administrators.map((m) => m.userFullName)).toEqual(['Jordan Lee', 'Sam Ito']);
     expect(result.current.members.map((m) => m.userFullName)).toEqual(['Alex Chen']);
     expect(apiClient.get).not.toHaveBeenCalledWith('/groups/1/join-requests', expect.anything());
+    expect(apiClient.get).not.toHaveBeenCalledWith('/groups/1/invitations', expect.anything());
   });
 
-  it('fetches join requests only when canManage is true', async () => {
+  it('fetches join requests and group invitations only when canManage is true', async () => {
     const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValue({
       data: { success: true, message: '', data: emptyPage, timestamp: '' },
     });
@@ -72,11 +73,92 @@ describe('useGroupMembersTabData', () => {
     await waitFor(() => expect(result.current.isMembersLoading).toBe(false));
     expect(result.current.canManage).toBe(true);
     expect(getSpy).toHaveBeenCalledWith('/groups/1/join-requests', { params: { size: 100 } });
+    expect(getSpy).toHaveBeenCalledWith('/groups/1/invitations', { params: { size: 100 } });
   });
 
   it('does not fetch anything while inactive', () => {
     const getSpy = vi.spyOn(apiClient, 'get');
     renderHook(() => useGroupMembersTabData(1, false, 'group_owner'), { wrapper });
     expect(getSpy).not.toHaveBeenCalled();
+  });
+
+  it('merges join requests and group invitations into one queue, sorted oldest-first', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/groups/1/members') {
+        return { data: { success: true, message: '', data: membersPage([]), timestamp: '' } };
+      }
+      if (url === '/groups/1/join-requests') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: {
+              ...emptyPage,
+              content: [
+                {
+                  id: 1,
+                  groupId: 1,
+                  groupName: 'Test Group',
+                  userId: 'u1',
+                  userFullName: 'Priya Shah',
+                  userAvatarUrl: null,
+                  status: 'pending',
+                  message: null,
+                  reviewedBy: null,
+                  reviewedByFullName: null,
+                  reviewedAt: null,
+                  createdAt: '2026-07-20T00:00:00',
+                  updatedAt: '2026-07-20T00:00:00',
+                },
+              ],
+            },
+            timestamp: '',
+          },
+        };
+      }
+      if (url === '/groups/1/invitations') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: {
+              ...emptyPage,
+              content: [
+                {
+                  id: 2,
+                  groupId: 1,
+                  groupName: 'Test Group',
+                  inviterId: 'u2',
+                  inviterFullName: 'Sam Ito',
+                  inviteeId: 'u3',
+                  inviteeFullName: 'Morgan Diaz',
+                  status: 'pending_owner',
+                  reviewedBy: null,
+                  reviewedAt: null,
+                  createdAt: '2026-07-18T00:00:00',
+                  updatedAt: '2026-07-18T00:00:00',
+                },
+              ],
+            },
+            timestamp: '',
+          },
+        };
+      }
+      if (url === '/groups/1/invitations/sent') {
+        return { data: { success: true, message: '', data: emptyPage, timestamp: '' } };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    const { result } = renderHook(() => useGroupMembersTabData(1, true, 'group_owner'), { wrapper });
+
+    await waitFor(() => expect(result.current.isApprovalQueueLoading).toBe(false));
+    // The invitation (2026-07-18) predates the join request (2026-07-20) —
+    // oldest-first means the invitation comes first despite join requests
+    // being fetched second above.
+    expect(result.current.approvalQueue).toEqual([
+      { type: 'invitation', data: expect.objectContaining({ id: 2, inviteeFullName: 'Morgan Diaz' }) },
+      { type: 'join_request', data: expect.objectContaining({ id: 1, userFullName: 'Priya Shah' }) },
+    ]);
   });
 });

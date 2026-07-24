@@ -184,6 +184,35 @@ describe('useInviteFriendModalData', () => {
     await waitFor(() => expect(result.current.rows[0].isSending).toBe(false));
   });
 
+  it('does not flash the previous search\'s stale results when reopened with no pre-fill', async () => {
+    mockGet({ search: [searchUser({ id: 'user-1', fullName: 'Someone Found' })] });
+
+    const { result, rerender } = renderHook(
+      ({ isOpen, initialQuery }) => useInviteFriendModalData(1, isOpen, initialQuery),
+      { wrapper, initialProps: { isOpen: true, initialQuery: '' } },
+    );
+
+    // First open: type a query, get results back.
+    act(() => result.current.setInputValue('someone'));
+    await waitFor(() => expect(result.current.rows).toHaveLength(1), { timeout: 2000 });
+
+    // Close.
+    rerender({ isOpen: false, initialQuery: '' });
+
+    // Reopen with no pre-fill — the very first render after this rerender
+    // must already reflect the reset, not the previous session's query
+    // text or its cached results (the bug: an effect-based reset that only
+    // fires on open can't run until after that first paint, so the old
+    // "someone" text + its 1 stale result would flash before clearing).
+    rerender({ isOpen: true, initialQuery: '' });
+    expect(result.current.inputValue).toBe('');
+    expect(result.current.rows).toHaveLength(0);
+
+    // Stays empty — no delayed clear-then-repopulate flicker either.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(result.current.rows).toHaveLength(0);
+  });
+
   it('sets a per-row error on failure without affecting other rows', async () => {
     mockGet({
       search: [searchUser({ id: 'user-1', fullName: 'Robin' }), searchUser({ id: 'user-2', fullName: 'Priya' })],

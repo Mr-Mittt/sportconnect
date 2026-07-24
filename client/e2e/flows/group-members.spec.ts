@@ -12,6 +12,13 @@ import { expect, test } from '../mocks/test.ts';
  * GRP-4's invitable-friend fixture — distinct from `mockGroupJoinRequest`'s
  * unrelated "Priya Shah" row (a different id) already in "Waiting for group
  * approve", neither a member nor already invited to `mockOwnedGroup`.
+ *
+ * GRP-7: "Waiting for group approve" now also holds `mockGroupInvitation`
+ * ("Morgan Diaz", invited by Sam Ito) merged in alongside the join request —
+ * this spec's own Accept click (step 4) is scoped to Priya Shah's row rather
+ * than a bare "Accept" lookup for that reason. The merged-queue rendering
+ * itself, and the invitee-facing "Invitations" section, are covered in the
+ * dedicated `group-invitations.spec.ts`.
  */
 
 test('Group Members tab — owner sees all 5 sections, accept/decline, filtering, and Invite friend', async ({
@@ -31,7 +38,7 @@ test('Group Members tab — owner sees all 5 sections, accept/decline, filtering
   await test.step('1. all 5 sections render for the owner, with real fixture data', async () => {
     await expect(approveSection.getByText('Priya Shah')).toBeVisible();
     await expect(acceptSection.getByText('Robin Park')).toBeVisible();
-    await expect(acceptSection.getByText('Awaiting owner approval')).toBeVisible();
+    await expect(acceptSection.getByText('Invitation sent — waiting for owner approval')).toBeVisible();
     await expect(adminSection.getByText('Jordan Lee', { exact: false })).toBeVisible(); // owner, listed first
     // Jordan Lee IS the authenticated test session user (mockUser) here —
     // their own row is marked "(you)".
@@ -71,7 +78,14 @@ test('Group Members tab — owner sees all 5 sections, accept/decline, filtering
   });
 
   await test.step('4. Accept moves the join request out of "Waiting for group approve" and into Members', async () => {
-    await approveSection.getByRole('button', { name: 'Accept' }).click();
+    // GRP-7: this section now also holds a pending_owner invitation row
+    // (mockGroupInvitation, "Morgan Diaz") merged in alongside the join
+    // request — scope the click to Priya Shah's own row rather than a bare
+    // "Accept" lookup, which would now match two rows.
+    const joinRequestRow = approveSection
+      .getByText('Priya Shah')
+      .locator('xpath=ancestor::div[contains(@class, "border-hairline")][1]');
+    await joinRequestRow.getByRole('button', { name: 'Accept' }).click();
     await expect(approveSection.getByText('Priya Shah')).not.toBeVisible();
     await expect(membersSection.getByText('Priya Shah')).toBeVisible();
   });

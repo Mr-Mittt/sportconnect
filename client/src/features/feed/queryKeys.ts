@@ -22,4 +22,9 @@ export const feedKeys = {
   groupMembers: (groupId: number) => [...feedKeys.all, 'group-members', groupId] as const,
   groupJoinRequests: (groupId: number) => [...feedKeys.all, 'group-join-requests', groupId] as const,
   sentInvitations: (groupId: number) => [...feedKeys.all, 'sent-invitations', groupId] as const,
+  // GRP-7: the owner/admin's pending_owner approval queue for a group.
+  groupInvitations: (groupId: number) => [...feedKeys.all, 'group-invitations', groupId] as const,
+  // GRP-7: the invitee's own pending_user invitations across every group.
+  userPendingInvitations: (userId: string) =>
+    [...feedKeys.all, 'user-pending-invitations', userId] as const,
 };
