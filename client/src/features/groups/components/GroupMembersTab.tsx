@@ -127,6 +127,11 @@ interface GroupMembersTabProps {
   isSentInvitationsLoading: boolean;
   isSentInvitationsError: boolean;
   onRetrySentInvitations: () => void;
+  /** GRP-7 addendum: cancel one of the caller's own `pending_owner` sent
+   * invitations — every `sentInvitations` row is already the caller's own,
+   * so this needs no extra ownership check, only the status gate below. */
+  onCancelInvitation: (invitationId: number) => void;
+  isCancelingInvitation: boolean;
   administrators: GroupMember[];
   members: GroupMember[];
   isMembersLoading: boolean;
@@ -159,7 +164,11 @@ interface GroupMembersTabProps {
  * spec), independent of role — any member can see invitations they
  * personally sent — using the *unfiltered* count, not the search-filtered
  * one, so typing into "find member" never makes this section
- * reappear/disappear on its own.
+ * reappear/disappear on its own. GRP-7 addendum: a "Waiting for user
+ * accept" row also gets a Cancel button, but only while `status ===
+ * 'pending_owner'` — once an owner/admin has approved it, it's out of the
+ * inviter's hands (matches the backend's own `cancelInvitation` status
+ * gate).
  */
 export function GroupMembersTab({
   canManage,
@@ -176,6 +185,8 @@ export function GroupMembersTab({
   isSentInvitationsLoading,
   isSentInvitationsError,
   onRetrySentInvitations,
+  onCancelInvitation,
+  isCancelingInvitation,
   administrators,
   members,
   isMembersLoading,
@@ -270,6 +281,19 @@ export function GroupMembersTab({
                 avatarUrl={null}
                 name={invitation.inviteeFullName}
                 subtitle={invitationStatusLabel(invitation)}
+                action={
+                  invitation.status === 'pending_owner' ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isCancelingInvitation}
+                      onClick={() => onCancelInvitation(invitation.id)}
+                    >
+                      Cancel
+                    </Button>
+                  ) : undefined
+                }
               />
             ))}
         </Section>

@@ -1289,6 +1289,20 @@ invalidation `useAcceptJoinRequest`/`useApproveInvitation` already use. Live-ver
 real UI against the real backend: before the fix, the invite dialog and Members/approval-queue
 sections all stayed stale; after, everything updates immediately with no manual refresh.
 
+**B12 DONE + GRP-7 addendum** (2026-07-24, `modules/social/group-impl/docs/BACKLOG_MVP.md` +
+`client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`): user-requested — a "Cancel" button on
+a sent invitation while it's still `pending_owner`. No backend endpoint existed for this side
+(only `cancelJoinRequest`, A3); new `GroupService.cancelInvitation`/`DELETE
+/invitations/{invitationId}` mirrors `cancelJoinRequest` exactly (ownership + active-group +
+status checks, hard delete, no new status literal). Scope boundary confirmed with user: cancel is
+`pending_owner`-only, not available once an owner/admin has approved (`pending_user`). Client: new
+`useCancelInvitation` hook, `GroupMembersTab`'s "Waiting for user accept" row gets a Cancel button
+gated on `status === 'pending_owner'`. Both live-verified against the real running backend — the
+new endpoint directly (non-inviter 400s, inviter succeeds, post-approval cancel 400s) and the
+button through the real UI (renders, clicks, row disappears, no manual refresh). Backend Spock (5
+new cases mirroring `cancelJoinRequest`'s own 5) + `:server:test` green; client `tsc -b` clean,
+Vitest green.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

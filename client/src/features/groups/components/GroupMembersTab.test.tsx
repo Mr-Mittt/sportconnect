@@ -84,6 +84,8 @@ const baseProps = {
   isSentInvitationsLoading: false,
   isSentInvitationsError: false,
   onRetrySentInvitations: vi.fn(),
+  onCancelInvitation: vi.fn(),
+  isCancelingInvitation: false,
   administrators: [] as GroupMember[],
   members: [] as GroupMember[],
   isMembersLoading: false,
@@ -186,6 +188,31 @@ describe('GroupMembersTab', () => {
     expect(within(section).getByText('Robin Park')).toBeInTheDocument();
     expect(within(section).getByText('Awaiting owner approval')).toBeInTheDocument();
     expect(within(section).getByText("Awaiting Sam's response")).toBeInTheDocument();
+  });
+
+  it('a pending_owner sent invitation gets a Cancel button; a pending_user one does not (GRP-7 addendum)', async () => {
+    const user = userEvent.setup();
+    const onCancelInvitation = vi.fn();
+    render(
+      <GroupMembersTab
+        {...baseProps}
+        sentInvitations={[
+          invitation({ id: 1, inviteeFullName: 'Robin Park', status: 'pending_owner' }),
+          invitation({ id: 2, inviteeFullName: 'Sam Ito', status: 'pending_user' }),
+        ]}
+        onCancelInvitation={onCancelInvitation}
+      />,
+    );
+    const section = screen.getByRole('region', { name: 'Waiting for user accept' });
+
+    const robinRow = within(section).getByText('Robin Park').closest('div[class*="border-hairline"]') as HTMLElement;
+    expect(within(robinRow).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+
+    const samRow = within(section).getByText('Sam Ito').closest('div[class*="border-hairline"]') as HTMLElement;
+    expect(within(samRow).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+
+    await user.click(within(robinRow).getByRole('button', { name: 'Cancel' }));
+    expect(onCancelInvitation).toHaveBeenCalledWith(1);
   });
 
   it('splits Group administrator (owner first, then admin) from Members', () => {

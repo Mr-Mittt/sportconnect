@@ -166,4 +166,13 @@ public interface GroupService {
      * use for them here.
      */
     Page<GroupInvitationResponse> getMemberSentInvitations(Long groupId, UUID inviterId, Pageable pageable);
+
+    /**
+     * The inviter cancels their own invitation while it's still {@code pending_owner} — mirrors
+     * {@link #cancelJoinRequest(Long, UUID)}'s same "requestor withdraws their own in-flight item"
+     * shape (ownership check, status check, hard delete — no "cancelled" status literal, same as
+     * cancelling a join request). Once an owner/admin has approved it ({@code pending_user}), it's
+     * out of the inviter's hands — cancelling at that point isn't supported by this method.
+     */
+    void cancelInvitation(Long invitationId, UUID callerId);
 }

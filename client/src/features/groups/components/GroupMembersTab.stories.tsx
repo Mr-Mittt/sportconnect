@@ -145,6 +145,8 @@ const meta = {
     isSentInvitationsLoading: false,
     isSentInvitationsError: false,
     onRetrySentInvitations: () => {},
+    onCancelInvitation: () => {},
+    isCancelingInvitation: false,
     administrators: [],
     members: [],
     isMembersLoading: false,

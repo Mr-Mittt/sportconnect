@@ -2161,6 +2161,13 @@ to the user; (2) the merged queue sorts oldest-first (FIFO), while the new Invit
 newest-first — a personal inbox reads better with the newest arrival on top, unlike an approval
 queue. Full writeup: `client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`.
 
+**Addendum (2026-07-24, user-requested):** a "Cancel" button on "Waiting for user accept" rows,
+shown only while `status === 'pending_owner'` — the inviter withdraws their own not-yet-approved
+invitation. Needed new backend ticket **B12**
+(`modules/social/group-impl/docs/BACKLOG_MVP.md`) — `cancelInvitation`/`DELETE
+/invitations/{invitationId}`, mirroring A3's `cancelJoinRequest`. Full detail in the "Addendum"
+section of `client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`.
+
 ---
 
 ### GRP-6 · Join Group modal — multi-select sport filter + grouped results

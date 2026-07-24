@@ -1998,6 +1998,91 @@ class GroupServiceImplSpec extends Specification {
         response.content*.status as Set == ["pending_owner", "pending_user"] as Set
     }
 
+    def "cancelInvitation should delete invitation when caller is the inviter and status is pending_owner"() {
+        given: "a pending_owner invitation sent by the caller"
+        def invitation = GroupInvitation.builder()
+                .id(1L).groupId(testGroup.id).inviterId(userId).inviteeId(otherUserId)
+                .status("pending_owner").build()
+
+        when: "cancelling the invitation"
+        groupService.cancelInvitation(1L, userId)
+
+        then: "invitation is found, group is active, invitation is deleted"
+        1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
+        1 * invitationRepository.deleteById(1L)
+    }
+
+    def "cancelInvitation should throw NotFoundException when invitation does not exist"() {
+        when: "cancelling a non-existent invitation"
+        groupService.cancelInvitation(999L, userId)
+
+        then: "invitation is not found"
+        1 * invitationRepository.findById(999L) >> Optional.empty()
+
+        and: "exception is thrown"
+        thrown(NotFoundException)
+    }
+
+    def "cancelInvitation should throw BadRequestException when caller is not the inviter"() {
+        given: "a pending_owner invitation sent by another user"
+        def invitation = GroupInvitation.builder()
+                .id(1L).groupId(testGroup.id).inviterId(otherUserId).inviteeId(userId)
+                .status("pending_owner").build()
+
+        when: "a different user tries to cancel"
+        groupService.cancelInvitation(1L, userId)
+
+        then: "invitation is found"
+        1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        0 * invitationRepository.deleteById(_)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
+    }
+
+    def "cancelInvitation should throw BadRequestException when group is inactive"() {
+        given: "a pending_owner invitation for an inactive group"
+        def inactiveGroup = Group.builder()
+                .id(testGroup.id)
+                .groupName("Disbanded Group")
+                .isActive(false)
+                .build()
+
+        def invitation = GroupInvitation.builder()
+                .id(1L).groupId(testGroup.id).inviterId(userId).inviteeId(otherUserId)
+                .status("pending_owner").build()
+
+        when: "cancelling the invitation"
+        groupService.cancelInvitation(1L, userId)
+
+        then: "invitation is found, group is inactive"
+        1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        1 * groupRepository.findById(testGroup.id) >> Optional.of(inactiveGroup)
+        0 * invitationRepository.deleteById(_)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
+    }
+
+    def "cancelInvitation should throw BadRequestException when invitation is not pending_owner"() {
+        given: "an already-approved invitation"
+        def invitation = GroupInvitation.builder()
+                .id(1L).groupId(testGroup.id).inviterId(userId).inviteeId(otherUserId)
+                .status("pending_user").build()
+
+        when: "trying to cancel a pending_user invitation"
+        groupService.cancelInvitation(1L, userId)
+
+        then: "invitation and group are found, status check fails"
+        1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
+        0 * invitationRepository.deleteById(_)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
+    }
+
     // ─── removeMember ─────────────────────────────────────────────────────────
 
     def "removeMember should delete membership when caller is admin"() {

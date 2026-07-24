@@ -1256,6 +1256,35 @@ public class GroupServiceImpl implements GroupService {
         return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, groupName, usersById));
     }
 
+    /**
+     * The inviter cancels their own invitation while it's still {@code pending_owner} — same
+     * ownership-check + status-check + hard-delete shape as {@link #cancelJoinRequest}, no
+     * "cancelled" status literal introduced.
+     */
+    @Override
+    @Transactional
+    public void cancelInvitation(Long invitationId, UUID callerId) {
+        GroupInvitation invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+
+        if (!invitation.getInviterId().equals(callerId)) {
+            throw new BadRequestException("You can only cancel your own invitation");
+        }
+
+        Group group = groupRepository.findById(invitation.getGroupId())
+                .orElseThrow(() -> new NotFoundException("Group not found"));
+        if (!Boolean.TRUE.equals(group.getIsActive())) {
+            throw new BadRequestException("Group no longer exists");
+        }
+
+        if (!"pending_owner".equals(invitation.getStatus())) {
+            throw new BadRequestException("Invitation is not pending owner approval");
+        }
+
+        invitationRepository.deleteById(invitationId);
+        log.info("Cancelled invitation {} by user {}", invitationId, callerId);
+    }
+
     // Helper methods
     private GroupResponse mapToGroupResponse(Group group, UUID currentUserId) {
         String createdByFullName = userService.getUsersByIds(List.of(group.getCreatedBy())).values().stream()

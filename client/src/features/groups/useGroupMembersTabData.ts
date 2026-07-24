@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useAcceptJoinRequest } from '@/features/feed/hooks/useAcceptJoinRequest';
 import { useApproveInvitation } from '@/features/feed/hooks/useApproveInvitation';
+import { useCancelInvitation } from '@/features/feed/hooks/useCancelInvitation';
 import { useDeclineInvitation } from '@/features/feed/hooks/useDeclineInvitation';
 import { useDeclineJoinRequest } from '@/features/feed/hooks/useDeclineJoinRequest';
 import { useGroupInvitations } from '@/features/feed/hooks/useGroupInvitations';
@@ -63,6 +64,7 @@ export function useGroupMembersTabData(
   const declineJoinRequestMutation = useDeclineJoinRequest();
   const approveInvitationMutation = useApproveInvitation();
   const declineInvitationMutation = useDeclineInvitation();
+  const cancelInvitationMutation = useCancelInvitation();
 
   const { administrators, members } = useMemo(() => {
     const allMembers = membersQuery.data?.content ?? [];
@@ -113,6 +115,12 @@ export function useGroupMembersTabData(
     isSentInvitationsLoading: sentInvitationsQuery.isLoading,
     isSentInvitationsError: sentInvitationsQuery.isError,
     retrySentInvitations: () => sentInvitationsQuery.refetch(),
+    // GRP-7 addendum: cancel one of the caller's own still-pending_owner sent
+    // invitations — every row in `sentInvitations` is already the caller's
+    // own (see `useSentInvitations`), so no extra ownership check needed
+    // here; `GroupMembersTab` only shows the button for `pending_owner` rows.
+    cancelInvitation: (invitationId: number) => cancelInvitationMutation.mutate(invitationId),
+    isCancelingInvitation: cancelInvitationMutation.isPending,
     acceptApprovalQueueItem,
     isAcceptingApprovalQueueItem:
       acceptJoinRequestMutation.isPending || approveInvitationMutation.isPending,

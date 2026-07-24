@@ -593,6 +593,22 @@ public class GroupController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @Operation(summary = "Cancel the caller's own invitation", description = "Only while it's still pending_owner (awaiting owner/admin approval) — once approved, it's out of the inviter's hands.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Invitation cancelled"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not the inviter, group no longer active, or invitation no longer pending_owner"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invitation or group not found")
+    })
+    @DeleteMapping("/invitations/{invitationId}")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> cancelInvitation(
+            @PathVariable Long invitationId,
+            @AuthenticationPrincipal String userIdStr) {
+        groupService.cancelInvitation(invitationId, UUID.fromString(userIdStr));
+        return ResponseEntity.ok(ApiResponse.<Void>success("Invitation cancelled", null));
+    }
+
     // Permission Checks
 
     @Operation(summary = "Check whether the caller owns the group", description = "Never 404s — a nonexistent group or non-membership both just resolve to false.")

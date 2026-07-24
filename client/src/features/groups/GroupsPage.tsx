@@ -442,6 +442,8 @@ export function GroupsPage() {
                       isSentInvitationsLoading={membersTabData.isSentInvitationsLoading}
                       isSentInvitationsError={membersTabData.isSentInvitationsError}
                       onRetrySentInvitations={membersTabData.retrySentInvitations}
+                      onCancelInvitation={membersTabData.cancelInvitation}
+                      isCancelingInvitation={membersTabData.isCancelingInvitation}
                       administrators={membersTabData.administrators}
                       members={membersTabData.members}
                       isMembersLoading={membersTabData.isMembersLoading}

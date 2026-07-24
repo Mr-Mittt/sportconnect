@@ -138,6 +138,34 @@ member" immediately, the user appears in Members, and disappears from "Waiting f
 no manual refresh needed. Full Vitest suite re-run clean (no test asserted the old narrower
 invalidation scope).
 
+## Addendum (2026-07-24) — Cancel a sent invitation
+
+User-requested: a "Cancel" button on a "Waiting for user accept" row, shown when the current user
+is the inviter and the invitation is still `pending_owner`. Every row in that section is already
+the current user's own sent invitation (`getMemberSentInvitations` is scoped to the caller), so no
+extra ownership check was needed client-side — just the status gate.
+
+No backend endpoint existed for this (only `cancelJoinRequest`, A3, on the join-request side) — new
+backend ticket **B12** (`modules/social/group-impl/docs/BACKLOG_MVP.md`) added
+`cancelInvitation`/`DELETE /invitations/{invitationId}`, mirroring `cancelJoinRequest` exactly
+(ownership check, active-group check, status check, hard delete).
+
+Client: new `useCancelInvitation` hook (blunt `feedKeys.all` invalidation, same reasoning as every
+other invitation mutation), `useGroupMembersTabData` exposes `cancelInvitation`/
+`isCancelingInvitation`, `GroupMembersTab`'s "Waiting for user accept" row action renders a Cancel
+button only when `invitation.status === 'pending_owner'`.
+
+**Scope boundary (user-confirmed):** cancel is `pending_owner`-only — once approved
+(`pending_user`), the invitation is out of the inviter's hands; no cancel affordance for that state.
+
+**Verified:** live end-to-end through the real UI against the real running backend — a member sent
+an invitation, logged in as that same member, confirmed the Cancel button renders on the
+`pending_owner` row, clicked it, confirmed the row disappeared with no manual refresh. Backend
+also live-verified independently via direct API calls: non-inviter cancel attempt 400s, inviter
+cancel succeeds and clears the owner's approval queue, cancel-after-approval 400s. `tsc -b` clean,
+Vitest full suite green (new Cancel-button test added to `GroupMembersTab.test.tsx`), backend Spock
+(5 new cases) and `:server:test` both green.
+
 ## Out of scope (unchanged from the ticket)
 
 The B11 dual-accepted-row consequence (a single join event can leave both an `accepted`
