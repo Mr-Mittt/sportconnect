@@ -101,7 +101,17 @@ test('a group selection on the Groups page survives switching sport on Home Feed
 
   await test.step('switch to "All" on Home Feed, then return to Groups — the group is still open, pill still Tennis', async () => {
     await page.getByRole('button', { name: 'Home' }).click();
-    await page.getByRole('group', { name: 'Sport filter' }).getByRole('button', { name: 'All' }).click();
+    // GroupsPage and HomeFeedPage both render the shared SportSwitcher with
+    // the identical accessible name (role="group", aria-label="Sport
+    // filter") — under a slow/contended route transition, GroupsPage's own
+    // pills can still be attached for a moment after this click, so an
+    // unscoped locator here can race and land on the wrong page's "All"
+    // pill (a real, reproduced failure in feed-groups-journey.spec.ts's
+    // analogous step). Home Feed's sr-only h1 is a page-unique anchor —
+    // waiting for it first guarantees the click below targets Home Feed's
+    // own Sport filter, not the Groups page's leftover one.
+    await expect(page.getByRole('heading', { name: 'Home Feed' })).toBeVisible();
+    await page.getByRole('group', { name: 'Sport filter' }).getByRole('button', { name: 'All', exact: true }).click();
 
     await page.getByRole('button', { name: 'Groups' }).click();
     await expect(page.getByRole('tab', { name: 'Posts' })).toBeVisible();
@@ -109,7 +119,7 @@ test('a group selection on the Groups page survives switching sport on Home Feed
   });
 
   await test.step('clicking "All" directly on the Groups page deselects the group', async () => {
-    await sportFilter.getByRole('button', { name: 'All' }).click();
+    await sportFilter.getByRole('button', { name: 'All', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Posts' })).not.toBeVisible();
     // GroupDiscoveryPanel's "All groups" state — always present regardless
     // of fixture data, unlike a specific invitation/group row.

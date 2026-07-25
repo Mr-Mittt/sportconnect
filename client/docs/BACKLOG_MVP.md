@@ -2223,9 +2223,14 @@ Also wired `GroupsPage`'s `SportSwitcher` through the existing unsaved-Settings-
 sport switch can silently discard an unsaved draft the same way every other group-deselecting action
 already guards against.
 
-`pnpm e2e` was not verified green this session (pre-existing sandbox environment issue reproduced on
-the clean base commit, unrelated to this ticket's changes — see the summary doc); `pnpm test` (529),
-`tsc -b`, lint, and the Storybook build are all clean.
+`pnpm e2e` is now fully green (46/46) — the earlier "couldn't verify" was a stray leftover dev-server
+process Playwright was silently reusing (`reuseExistingServer`), not a code issue; killing it and
+re-running clean surfaced 3 real, since-fixed issues: a locator bug in the new cross-page test
+(`{ name: 'All' }` without `exact: true` also matched "Foot**ball**"/"Basket**ball**"), a mock-server
+override (`sportProfilesEmpty`) that only faked the GET response and left the real session state at
+the 3-profile default, and 2 pre-existing `feed-groups-journey.spec.ts` steps whose "sport pill stays
+on All" assumption part 1 legitimately invalidates (now reset the pill explicitly where needed). Full
+breakdown in the summary doc. `pnpm test` (529), `tsc -b`, lint, and the Storybook build are all clean.
 
 **Origin:** five separate UX gaps found using the Groups page after GRP-7 shipped the invitation
 lifecycle:

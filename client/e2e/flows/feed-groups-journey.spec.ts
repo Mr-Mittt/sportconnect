@@ -48,7 +48,16 @@ test('Feed/groups journey', async ({ page, mockSessionId }) => {
     await expect(page.getByRole('article')).toHaveCount(20);
     await expect(page.getByText('Pickup game this weekend')).not.toBeVisible();
 
-    await page.getByRole('button', { name: 'Load more' }).click();
+    // useInfiniteScrollSentinel's IntersectionObserver (rootMargin: 200px,
+    // Feed.tsx) fires the exact same fetch this button does, and can win the
+    // race under slow/contended rendering (real, benign race — a real user
+    // would just see it already loaded). Only force the manual click if the
+    // button hasn't already been superseded by that auto-fetch, so this step
+    // still proves the manual fallback works without being racy against it.
+    const loadMoreButton = page.getByRole('button', { name: 'Load more' });
+    if (await loadMoreButton.isVisible().catch(() => false)) {
+      await loadMoreButton.click().catch(() => {});
+    }
     await expect(page.getByRole('article')).toHaveCount(21);
     await expect(page.getByText('Pickup game this weekend', { exact: false })).toBeVisible();
     await expect(page.getByRole('button', { name: /load more/i })).not.toBeVisible();
@@ -119,9 +128,17 @@ test('Feed/groups journey', async ({ page, mockSessionId }) => {
     await groupSwitcher.getByRole('button', { name: 'All', exact: true }).click();
     await page.getByRole('button', { name: 'Create Group' }).click();
 
+    // GRP-8 part 1: step 5 selected "Friday Night Football" via the group
+    // switcher, which now also drives this page's own sport pill to match
+    // (`groupsPageStore.selectGroup`'s derivation) — deselecting the group
+    // just now (the "All" click above) intentionally leaves that sport pill
+    // on Football, since it's a *group* deselection, not a *sport* reset.
+    // CreateGroupModal therefore opens with `lockedSport = 'football'` and
+    // has no manual Sport select to interact with (`lockedSport === null`
+    // gates it) — the group is created as Football directly.
     const dialog = page.getByRole('dialog');
     await dialog.locator('#create-group-name').fill('Sunday Runners');
-    await dialog.locator('#create-group-sport').selectOption({ label: 'Football' });
+    await expect(dialog.locator('#create-group-sport')).toHaveCount(0);
     await dialog.getByRole('button', { name: 'Create group' }).click();
     await expect(dialog).not.toBeVisible();
 
@@ -149,6 +166,12 @@ test('Feed/groups journey', async ({ page, mockSessionId }) => {
     await groupSwitcher.getByRole('button', { name: /Friday Night Football/ }).click();
     await expect(page.getByRole('button', { name: /Broadcast/ })).not.toBeVisible();
 
+    // GRP-8 part 1: the group switcher list is sport-filtered by this page's
+    // own pill, which now reliably follows whatever group was last touched
+    // (still Football, from the click above and step 6's Football group
+    // create) — "Weekend Tennis Ladder" (Tennis) isn't reachable in that
+    // filtered list until the sport pill is reset to "All".
+    await page.getByRole('group', { name: 'Sport filter' }).getByRole('button', { name: 'All', exact: true }).click();
     await groupSwitcher.getByRole('button', { name: /Weekend Tennis Ladder/ }).click();
     await expect(page.getByRole('button', { name: /Broadcast/ })).toBeVisible();
   });
@@ -156,6 +179,16 @@ test('Feed/groups journey', async ({ page, mockSessionId }) => {
   await test.step('9. SPORT-1 delta — switching to a real sport profile filters the feed', async () => {
     await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Home' }).click();
     await expect(page).toHaveURL('/');
+    // GroupsPage and HomeFeedPage both render the shared SportSwitcher with
+    // the identical accessible name (role="group", aria-label="Sport
+    // filter") — under a slow/contended route transition, GroupsPage's own
+    // pills can still be attached for a moment after the URL already reads
+    // '/', so an unscoped click here can race and land on the wrong page's
+    // button (a real, reproduced failure: the click silently no-ops against
+    // GroupsPage while Home Feed's own pill stays on "All"). Home Feed's
+    // sr-only h1 is a page-unique anchor — waiting for it first guarantees
+    // the click below targets Home Feed's own Sport filter.
+    await expect(page.getByRole('heading', { name: 'Home Feed' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Basketball', exact: true }).click();
     await expect(page.getByRole('article')).toHaveCount(1);

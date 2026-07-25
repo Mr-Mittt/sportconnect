@@ -161,14 +161,76 @@ precedent as the store's own unknown-sport handling in part 1.
   `group-invitations.spec.ts` (it had none before — a pre-existing gap from GRP-7, fixed here since
   this ticket materially changed the file).
 
-**Verification status — a real environment limitation, not a code issue:** `pnpm test` (529 tests, 93
-files) is fully green, `tsc -b` is clean, lint is clean, and `pnpm build-storybook` succeeds including
-every new/changed story. `pnpm e2e` could **not** be verified green in this session: the Playwright `e2e`
-project times out on every spec's login step (`page.waitForURL` after clicking "Log in") in this
-sandbox, confirmed via a controlled check — stashing every GRP-8 change and re-running the identical
-suite against the clean pre-ticket base commit reproduces the exact same universal failure (29/45
-specs, including specs this ticket never touched, e.g. `smoke.spec.ts`, `msw-setup.spec.ts`'s raw-fetch
-tests). This is a pre-existing environment issue in this sandbox, not a regression from this ticket —
-recorded as a conditional, not swept under a passing claim. The new/changed e2e specs were written and
-reviewed against the existing suite's own conventions (fixture shapes, admin-route seeding pattern,
-dialog role/name queries) but have not been run to a green result here.
+**Verification status — `pnpm e2e` is now fully green (46/46).** `pnpm test` (529 tests, 93 files) is
+fully green, `tsc -b` is clean, lint is clean, and `pnpm build-storybook` succeeds including every
+new/changed story.
+
+The earlier session had `pnpm e2e` blocked by a genuine sandbox environment issue: a stray leftover
+Vite dev server process on port 5173 was silently reused by Playwright's `webServer` config
+(`reuseExistingServer: !process.env.CI`), and something about that stale process made every spec's
+login step (`page.waitForURL` after clicking "Log in") time out — confirmed unrelated to this ticket's
+code via a controlled check (stashing every change and re-running against the clean pre-ticket base
+commit reproduced the identical universal failure). Killing that stray process and running clean
+resolved it entirely — a real fix, not a retry-until-lucky workaround.
+
+With a clean environment, three **real** issues surfaced and were fixed:
+1. **My own test's locator bug:** `getByRole('button', { name: 'All' })` without `exact: true` — Playwright's
+   default substring matching means "All" matches "Foot**ball**"/"Basket**ball**" too (both end in
+   "...ball", which contains "all"). Fixed both occurrences in the new cross-page test; the existing
+   suite's own convention (`{ name: 'All', exact: true }`, used everywhere else) confirmed this was the
+   right fix, not a new pattern.
+2. **Mock server bug, not product code:** `seedZeroSportProfilesOnNextLoad`'s `sportProfilesEmpty`
+   override only faked the `GET /sports/profiles/user/:id` response — the *real* underlying session
+   state stayed at the 3-profile default fixture (which already includes Basketball). My part-5 sport-gate
+   test was the first to combine this override with an actual `POST /sports/profiles` call, which 400'd
+   ("Already has a profile for this sport") against that stale real state. Fixed by having the override
+   also clear the real state (new `seedZeroSportProfilesState` in `handlers/sport.ts`, wired into
+   `mockServer.ts`'s admin route) — same "seed real state, not just a faked response" precedent as
+   `seedPostsState`/`seedJoinRequestsState`.
+3. **A genuine, intentional consequence of part 1 rippling into a pre-existing test.** Part 1 makes
+   *any* group selection (not just the ones GRP-8 itself added) drive this page's own sport pill to
+   match — including selecting a group via `GroupSpaceSwitcher`'s own pill row, and creating a new
+   group. `feed-groups-journey.spec.ts`'s pre-existing "create a group" step assumed the sport pill was
+   still "All" (true before GRP-8, since only `setActiveSport` calls used to change it) and tried to
+   manually pick a sport from `CreateGroupModal`'s select — which no longer renders once the sport pill
+   is already locked to Football from the preceding step's group selection (`lockedSport === null` gates
+   it). The very next step then tried to reach a *Tennis* group via the same sport-filtered switcher,
+   which no longer showed it. Both were pre-existing FEED-5/GRP-1 test steps, not part of GRP-8's own
+   scope — updated to explicitly reset the sport pill to "All" where the step's intent requires seeing
+   across sports, and to assert the now-locked `CreateGroupModal` state instead of a manual select.
+
+### Follow-up: headless-specific flakiness under `pnpm e2e`'s default 8-way parallelism
+
+A later run surfaced 3 tests failing that had just been verified green — but only under the full
+`pnpm e2e` suite (46 tests, 8 workers), never in isolation or under an artificially-stressed repeat of
+the same single test. That "only reproduces at full-suite parallelism" signature pointed at genuine
+timing races exposed by contention, not simple flakiness, and both were confirmed real and fixed:
+
+1. **`feed-groups-journey.spec.ts` step 1** (Load more): `useInfiniteScrollSentinel`'s
+   `IntersectionObserver` (`rootMargin: '200px'`) and the manual "Load more" button both trigger the
+   exact same fetch. Under slow/contended rendering, the sentinel can auto-fire first; the button then
+   disables or disappears (`hasMorePosts` flips false) mid-click, and Playwright's actionability retry
+   times out on the now-detached element (`element was detached from the DOM, retrying`). Reproduced
+   reliably via `--repeat-each=8..12 --workers=8` on the single spec file (never on 1 worker). This is a
+   real, benign race for an actual user too (a real user would just see the second page already loaded)
+   — fixed at the test level: only click "Load more" if it's still visible, then assert the end state
+   regardless of which trigger won.
+2. **`feed-groups-journey.spec.ts` step 9** (Basketball filter) and **`group-invitations.spec.ts`**'s
+   "survives switching sport on Home Feed" test: both navigate Groups → Home mid-test and then click an
+   unscoped `page.getByRole('button'/'group', { name: ... })` targeting Home Feed's own `SportSwitcher`.
+   `GroupsPage` and `HomeFeedPage` render that same shared component with the identical accessible name
+   (`role="group"`, `aria-label="Sport filter"`) — under a contended route transition, `GroupsPage`'s own
+   pills can still be attached for a moment after `page` already reports the new URL, so the click can
+   silently land on the *previous* page's pill instead (confirmed via the failing run's
+   `error-context.md` page snapshot: Home Feed's own "All" pill stayed `[pressed]`, proving the
+   Basketball click never reached it). Fixed by waiting for Home Feed's page-unique `sr-only` `<h1>`
+   ("Home Feed") before interacting with its Sport filter in both specs — reproduced reliably across
+   3/3 full-suite runs before the fix, 7/7 clean after.
+
+A third originally-reported failure (`group-invitations.spec.ts`'s sport-gate-on-accept test) could not
+be reproduced even under `--repeat-each=15 --workers=8` in isolation — most likely an incidental victim
+of the same-run system load rather than its own bug; left as-is.
+
+**Verification status, updated:** `pnpm e2e` — 7/7 consecutive full-suite runs green after both fixes
+(previously 3/3 consecutive failures at the same two spots before them).
+   `client/docs/E2E_OVERVIEW.md`'s catalog updated for both changed steps.

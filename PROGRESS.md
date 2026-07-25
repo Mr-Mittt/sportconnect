@@ -1419,10 +1419,24 @@ paragraph struck through with a note on why it reversed) since this is a real ar
 not just a bug fix. Also wired `GroupsPage`'s `SportSwitcher` through the existing
 unsaved-Settings-changes guard, since a sport switch can silently discard an unsaved Settings draft the
 same way any other group-deselecting action already guards against. `pnpm test` 529 green (93 files),
-`tsc -b` clean, lint clean, Storybook build clean. `pnpm e2e` could not be verified green in this
-session — a pre-existing sandbox environment issue (every spec's login step times out, reproduced
-identically on the clean pre-ticket base commit), not a regression; recorded as an explicit conditional
-in the summary doc.
+`tsc -b` clean, lint clean, Storybook build clean, **`pnpm e2e` 46/46 green** — the earlier "couldn't
+verify" was a stray leftover dev-server process Playwright was silently reusing; killing it and
+re-running clean surfaced and led to fixing 3 real issues (a locator bug in my own new test, a mock
+server override that only faked a GET response instead of the real state, and 2 pre-existing
+`feed-groups-journey.spec.ts` steps whose "sport pill stays on All" assumption part 1 legitimately
+invalidates) — see the summary doc's Verification section for the full breakdown.
+
+**e2e headless-parallelism follow-up (2026-07-25, user-reported "headless fails, headed passes"):**
+found and fixed 2 genuine timing races that only reproduced under `pnpm e2e`'s full 8-worker
+parallelism, never in isolation: (1) `feed-groups-journey.spec.ts`'s manual "Load more" click racing
+against `useInfiniteScrollSentinel`'s own auto-fetch trigger (a real, benign race for actual users too);
+(2) `feed-groups-journey.spec.ts` step 9 and `group-invitations.spec.ts`'s Home/Groups cross-page test
+clicking an unscoped `SportSwitcher` locator that both pages share the identical accessible name for —
+under a contended route transition the click could silently land on the previous page's pill. Both
+fixed at the test level (tolerate the auto-load race; wait for Home Feed's page-unique heading before
+touching its Sport filter). 7/7 consecutive full-suite runs green after, vs. 3/3 consecutive failures
+at the same two spots before. Full root-cause writeup in `GRP-8_INVITATION_LIFECYCLE_POLISH.md`'s
+"Follow-up" section.
 
 **Friends page rail state persistence (2026-07-25, user-requested,
 `client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the

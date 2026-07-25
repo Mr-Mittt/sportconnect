@@ -111,3 +111,18 @@ export const sportHandlers: HttpHandler[] = [
 export function resetSportHandlersState(sessionId: string): void {
   sportSessions.reset(sessionId);
 }
+
+/**
+ * GRP-8 bug fix — the `sportProfilesEmpty` override used to only fake the
+ * GET response, leaving the real `userSportProfilesState` at its 3-profile
+ * default underneath. That was fine for tests that only ever read the list
+ * (e.g. "zero sport profiles renders without error"), but broke the first
+ * test to also POST a new profile afterward: the create handler checked the
+ * real (still full) state and 400'd with "Already has a profile for this
+ * sport" for Basketball, since the default fixture already includes it.
+ * Called alongside `setOverride(sessionId, 'sportProfilesEmpty')` so the
+ * real state actually is empty, not just the faked response.
+ */
+export function seedZeroSportProfilesState(sessionId: string): void {
+  sportSessions.get(sessionId).userSportProfilesState = [];
+}

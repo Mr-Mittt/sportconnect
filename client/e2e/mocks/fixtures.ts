@@ -593,7 +593,11 @@ export async function seedPaginatedFeedOnNextLoad(sessionId: string): Promise<vo
 /**
  * FEED-10's SPORT-1 delta step — for a user with zero sport profiles
  * (rather than the primary fixture user's 3-sport cap, needed elsewhere in
- * the same journey).
+ * the same journey). GRP-8: also clears the real underlying session state
+ * (`seedZeroSportProfilesState` in mockServer.ts's admin route), not just
+ * the GET response — needed for tests that also POST a new profile
+ * afterward (e.g. GRP-8's sport-add-on-accept flow), which would otherwise
+ * 400 against the still-full default fixture underneath.
  */
 export async function seedZeroSportProfilesOnNextLoad(sessionId: string): Promise<void> {
   await postAdmin(sessionId, 'override/sportProfilesEmpty');
