@@ -33,6 +33,7 @@ class GroupServiceImplSpec extends Specification {
     PostService postService = Mock()
     GroupPinnedPostRepository pinnedPostRepository = Mock()
     GroupInvitationRepository invitationRepository = Mock()
+    GroupInvitationInviterRepository invitationInviterRepository = Mock()
 
     @Subject
     GroupServiceImpl groupService = new GroupServiceImpl(
@@ -47,7 +48,8 @@ class GroupServiceImplSpec extends Specification {
             userSportProfileService,
             postService,
             pinnedPostRepository,
-            invitationRepository
+            invitationRepository,
+            invitationInviterRepository
     )
 
     UUID userId = UUID.randomUUID()
@@ -1544,6 +1546,8 @@ class GroupServiceImplSpec extends Specification {
         2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(memberRole.id).build())
         1 * invitationRepository.save(_ as GroupInvitation) >> savedInvitation
+        1 * invitationInviterRepository.save(_)
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
         1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId): testUser]
         response.status == "pending_owner"
         response.groupId == testGroup.id
@@ -1657,9 +1661,204 @@ class GroupServiceImplSpec extends Specification {
         1 * userFriendService.areFriends(userId, otherUserId) >> true
         1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> true
         1 * invitationRepository.findByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> Optional.of(existing)
+        1 * invitationInviterRepository.existsByInvitationIdAndInviterId(99L, userId) >> true
+        0 * invitationInviterRepository.save(_)
         0 * invitationRepository.save(_)
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
         1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
         response.id == 99L
+    }
+
+    def "createInvitation should record a new co-inviter without changing status when a regular member joins a pending_owner invitation (B14)"() {
+        given: "member A's invitation is already pending_owner; member B (not owner/admin) also invites the same person"
+        def request = CreateInvitationRequest.builder().inviteeId(otherUserId).build()
+        def settings = GroupSettings.builder().groupId(testGroup.id).allowMemberInvites(true).build()
+        def existing = GroupInvitation.builder()
+                .id(99L).groupId(testGroup.id).inviterId(userId).inviteeId(otherUserId)
+                .status("pending_owner").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def memberBId = UUID.randomUUID()
+        def otherTestUser = UserResponse.builder().id(memberBId).firstName("Other").lastName("Member").build()
+
+        when:
+        def response = groupService.createInvitation(testGroup.id, memberBId, request)
+
+        then:
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, memberBId) >> true
+        1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
+        1 * userFriendService.areFriends(memberBId, otherUserId) >> true
+        1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> true
+        1 * invitationRepository.findByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> Optional.of(existing)
+        1 * invitationInviterRepository.existsByInvitationIdAndInviterId(99L, memberBId) >> false
+        1 * invitationInviterRepository.save({ it.invitationId == 99L && it.inviterId == memberBId })
+
+        and: "member B has no approval rights, so the status is untouched — still pending_owner"
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, memberBId) >> Optional.of(
+                GroupMember.builder().groupId(testGroup.id).userId(memberBId).roleId(memberRole.id).build())
+        0 * invitationRepository.save(_)
+
+        and: "the response lists both co-inviters, oldest first"
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([99L]) >> [
+                GroupInvitationInviter.builder().invitationId(99L).inviterId(userId).createdAt(LocalDateTime.now().minusMinutes(5)).build(),
+                GroupInvitationInviter.builder().invitationId(99L).inviterId(memberBId).createdAt(LocalDateTime.now()).build(),
+        ]
+        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser, (memberBId): otherTestUser]
+        response.status == "pending_owner"
+        response.inviterFullNames == [testUser.fullName, otherTestUser.fullName]
+    }
+
+    def "createInvitation should auto-approve to pending_user when a co-inviting owner/admin joins a pending_owner invitation (B14)"() {
+        given: "member A's invitation is pending_owner; the group's admin also invites the same person"
+        def request = CreateInvitationRequest.builder().inviteeId(otherUserId).build()
+        def settings = GroupSettings.builder().groupId(testGroup.id).allowMemberInvites(true).build()
+        def existing = GroupInvitation.builder()
+                .id(99L).groupId(testGroup.id).inviterId(otherUserId).inviteeId(otherUserId)
+                .status("pending_owner").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+
+        when: "the caller (userId) is the group's admin"
+        def response = groupService.createInvitation(testGroup.id, userId, request)
+
+        then:
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
+        1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
+        1 * userFriendService.areFriends(userId, otherUserId) >> true
+        1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> true
+        1 * invitationRepository.findByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> Optional.of(existing)
+        1 * invitationInviterRepository.existsByInvitationIdAndInviterId(99L, userId) >> false
+        1 * invitationInviterRepository.save({ it.invitationId == 99L && it.inviterId == userId })
+
+        and: "userId is an admin, so joining as a co-inviter auto-approves the still-pending_owner row (B11 rule 1's reasoning, applied to B14)"
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
+                GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(adminRole.id).build())
+        1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, otherUserId, "pending") >> Optional.empty()
+        1 * invitationRepository.save({ it.id == 99L && it.status == "pending_user" && it.reviewedBy == userId }) >> { GroupInvitation inv -> inv }
+
+        and:
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([99L]) >> []
+        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        response.status == "pending_user"
+    }
+
+    def "createInvitation should auto-accept via an existing pending join request when a co-inviting owner/admin joins (B14 + B11 rule 2)"() {
+        given: "member A's invitation is pending_owner, the invitee has independently also sent a join request, and the group's admin also invites them"
+        def request = CreateInvitationRequest.builder().inviteeId(otherUserId).build()
+        def settings = GroupSettings.builder().groupId(testGroup.id).allowMemberInvites(true).build()
+        def existing = GroupInvitation.builder()
+                .id(99L).groupId(testGroup.id).inviterId(otherUserId).inviteeId(otherUserId)
+                .status("pending_owner").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def pendingJoinRequest = GroupJoinRequest.builder()
+                .id(7L).groupId(testGroup.id).userId(otherUserId).status("pending").build()
+        def adminMember = GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
+        def settingsForCapacity = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
+
+        when:
+        def response = groupService.createInvitation(testGroup.id, userId, request)
+
+        then:
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
+        1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
+        1 * userFriendService.areFriends(userId, otherUserId) >> true
+        1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> true
+        1 * invitationRepository.findByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> Optional.of(existing)
+        1 * invitationInviterRepository.existsByInvitationIdAndInviterId(99L, userId) >> false
+        1 * invitationInviterRepository.save({ it.invitationId == 99L && it.inviterId == userId })
+        2 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, otherUserId, "pending") >> Optional.of(pendingJoinRequest)
+        1 * invitationRepository.save({ it.id == 99L && it.status == "accepted" && it.reviewedBy == userId }) >> { GroupInvitation inv -> inv }
+
+        and: "finalizeMembership runs; the welcome post is authored by resolveGroupOwnerId (here, userId), independent of who's credited in its text"
+        1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settingsForCapacity)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
+        1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
+        1 * groupMemberRepository.save({ it.userId == otherUserId && it.roleId == memberRole.id })
+        1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [adminMember]
+        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
+        1 * joinRequestRepository.save({ it.status == "accepted" && it.reviewedBy == userId })
+
+        and:
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([99L]) >> []
+        _ * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        response.status == "accepted"
+    }
+
+    def "createInvitation should create a fresh invitation when the invitee's only prior invitation was declined_by_owner (B14)"() {
+        given: "yesterday's invitation was declined by the owner, so it no longer counts as pending — a new invite starts a brand-new row, not a merge"
+        def request = CreateInvitationRequest.builder().inviteeId(otherUserId).build()
+        def settings = GroupSettings.builder()
+                .groupId(testGroup.id).allowMemberInvites(true).groupTypeId(defaultGroupType.id).build()
+        def savedInvitation = GroupInvitation.builder()
+                .id(2L).groupId(testGroup.id).inviterId(userId).inviteeId(otherUserId)
+                .status("pending_owner").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+
+        when:
+        def response = groupService.createInvitation(testGroup.id, userId, request)
+
+        then: "the repository's own pending-only status filter already excludes the declined_by_owner row, so this is a normal create"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
+        2 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
+        1 * userFriendService.areFriends(userId, otherUserId) >> true
+        1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> false
+        0 * invitationRepository.findByGroupIdAndInviteeIdAndStatusIn(_, _, _)
+        0 * invitationInviterRepository.existsByInvitationIdAndInviterId(_, _)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
+                GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(memberRole.id).build())
+        1 * invitationRepository.save(_ as GroupInvitation) >> savedInvitation
+        1 * invitationInviterRepository.save({ it.invitationId == 2L && it.inviterId == userId })
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
+        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        response.status == "pending_owner"
+    }
+
+    def "createInvitation should create a fresh invitation when the invitee's only prior invitation was declined_by_user (B14)"() {
+        given: "yesterday's invitation was rejected by the invitee themselves, so it no longer counts as pending — a new invite starts a brand-new row, not a merge"
+        def request = CreateInvitationRequest.builder().inviteeId(otherUserId).build()
+        def settings = GroupSettings.builder()
+                .groupId(testGroup.id).allowMemberInvites(true).groupTypeId(defaultGroupType.id).build()
+        def savedInvitation = GroupInvitation.builder()
+                .id(3L).groupId(testGroup.id).inviterId(userId).inviteeId(otherUserId)
+                .status("pending_owner").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+
+        when:
+        def response = groupService.createInvitation(testGroup.id, userId, request)
+
+        then: "the repository's own pending-only status filter already excludes the declined_by_user row, so this is a normal create"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
+        2 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
+        1 * userFriendService.areFriends(userId, otherUserId) >> true
+        1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> false
+        0 * invitationRepository.findByGroupIdAndInviteeIdAndStatusIn(_, _, _)
+        0 * invitationInviterRepository.existsByInvitationIdAndInviterId(_, _)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
+                GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(memberRole.id).build())
+        1 * invitationRepository.save(_ as GroupInvitation) >> savedInvitation
+        1 * invitationInviterRepository.save({ it.invitationId == 3L && it.inviterId == userId })
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
+        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        response.status == "pending_owner"
     }
 
     def "createInvitation should skip pending_owner when inviter is owner/admin (B11 rule 1)"() {
@@ -1689,6 +1888,8 @@ class GroupServiceImplSpec extends Specification {
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build())
         1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, otherUserId, "pending") >> Optional.empty()
         1 * invitationRepository.save({ it.status == "pending_user" && it.reviewedBy == userId }) >> savedInvitation
+        1 * invitationInviterRepository.save(_)
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
         1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
 
         and: "no side-effect membership is created — this is still just an invitation awaiting the invitee"
@@ -1728,6 +1929,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, otherUserId, "pending") >> Optional.of(pendingJoinRequest)
         1 * invitationRepository.save({ it.status == "accepted" && it.reviewedBy == userId }) >> savedInvitation
+        1 * invitationInviterRepository.save(_)
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
 
         and: "finalizeMembership runs: capacity, member insert, welcome post crediting the owner"
         1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
@@ -1761,7 +1964,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build())
         1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, inviteeId, "pending") >> Optional.empty()
-        1 * invitationRepository.save({ it.status == "pending_user" })
+        1 * invitationRepository.save({ it.status == "pending_user" }) >> { GroupInvitation inv -> inv }
     }
 
     def "approveInvitation should throw when caller is not owner or admin"() {
@@ -1817,7 +2020,7 @@ class GroupServiceImplSpec extends Specification {
         2 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, inviteeId, "pending") >> Optional.of(pendingJoinRequest)
-        1 * invitationRepository.save({ it.status == "accepted" && it.reviewedBy == userId })
+        1 * invitationRepository.save({ it.status == "accepted" && it.reviewedBy == userId }) >> { GroupInvitation inv -> inv }
 
         and: "finalizeMembership runs, crediting the invitation's original inviter (a regular member), not the approving owner"
         1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
@@ -2027,6 +2230,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
         1 * invitationRepository.findByGroupIdAndStatus(testGroup.id, "declined_by_user", pageable) >> page
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([1L]) >> []
         1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId): testUser]
         response.content.size() == 1
         response.content[0].rejectReason == "Schedule doesn't work for me"
@@ -2065,15 +2269,43 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
-        1 * invitationRepository.findByGroupIdAndInviterIdAndStatusIn(
+        1 * invitationRepository.findByGroupIdAndCoInviterIdAndStatusIn(
                 testGroup.id, userId, ["pending_owner", "pending_user"], pageable) >> page
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([1L, 2L]) >> []
         1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId1): testUser, (inviteeId2): testUser]
         response.content.size() == 2
         response.content*.status as Set == ["pending_owner", "pending_user"] as Set
     }
 
+    def "getMemberSentInvitations should include an invitation where the caller is a co-inviter, not the original inviter (B14)"() {
+        given: "otherUserId originally created the invitation; userId later joined it as a co-inviter"
+        def pageable = PageRequest.of(0, 10)
+        def inviteeId = UUID.randomUUID()
+        def invitation = GroupInvitation.builder()
+                .id(5L).groupId(testGroup.id).inviterId(otherUserId).inviteeId(inviteeId)
+                .status("pending_owner").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def page = new PageImpl<GroupInvitation>([invitation], pageable, 1)
+
+        when: "userId (the co-inviter, not the original inviter) checks their own sent invitations"
+        def response = groupService.getMemberSentInvitations(testGroup.id, userId, pageable)
+
+        then: "the query itself is scoped to co-inviters, not GroupInvitation.inviterId — this row is found via userId's group_invitation_inviters entry"
+        1 * groupRepository.existsById(testGroup.id) >> true
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
+        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
+        1 * invitationRepository.findByGroupIdAndCoInviterIdAndStatusIn(
+                testGroup.id, userId, ["pending_owner", "pending_user"], pageable) >> page
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([5L]) >> [
+                GroupInvitationInviter.builder().invitationId(5L).inviterId(otherUserId).createdAt(LocalDateTime.now().minusMinutes(3)).build(),
+                GroupInvitationInviter.builder().invitationId(5L).inviterId(userId).createdAt(LocalDateTime.now()).build(),
+        ]
+        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser, (inviteeId): testUser]
+        response.content.size() == 1
+        response.content[0].inviterFullNames.size() == 2
+    }
+
     def "cancelInvitation should delete invitation when caller is the inviter and status is pending_owner"() {
-        given: "a pending_owner invitation sent by the caller"
+        given: "a pending_owner invitation sent by the caller, with no other co-inviters"
         def invitation = GroupInvitation.builder()
                 .id(1L).groupId(testGroup.id).inviterId(userId).inviteeId(otherUserId)
                 .status("pending_owner").build()
@@ -2081,10 +2313,33 @@ class GroupServiceImplSpec extends Specification {
         when: "cancelling the invitation"
         groupService.cancelInvitation(1L, userId)
 
-        then: "invitation is found, group is active, invitation is deleted"
+        then: "invitation is found, caller is a co-inviter, group is active"
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        1 * invitationInviterRepository.existsByInvitationIdAndInviterId(1L, userId) >> true
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
+
+        and: "B14: the caller's own co-inviter row is removed, and since they were the last one, the invitation itself is deleted too"
+        1 * invitationInviterRepository.deleteByInvitationIdAndInviterId(1L, userId)
+        1 * invitationInviterRepository.countByInvitationId(1L) >> 0L
         1 * invitationRepository.deleteById(1L)
+    }
+
+    def "cancelInvitation should withdraw the caller's own co-invite without deleting the invitation when other co-inviters remain"() {
+        given: "a pending_owner invitation with two co-inviters"
+        def invitation = GroupInvitation.builder()
+                .id(1L).groupId(testGroup.id).inviterId(userId).inviteeId(otherUserId)
+                .status("pending_owner").build()
+
+        when: "one of the two co-inviters withdraws"
+        groupService.cancelInvitation(1L, userId)
+
+        then:
+        1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        1 * invitationInviterRepository.existsByInvitationIdAndInviterId(1L, userId) >> true
+        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
+        1 * invitationInviterRepository.deleteByInvitationIdAndInviterId(1L, userId)
+        1 * invitationInviterRepository.countByInvitationId(1L) >> 1L
+        0 * invitationRepository.deleteById(_)
     }
 
     def "cancelInvitation should throw NotFoundException when invitation does not exist"() {
@@ -2098,8 +2353,8 @@ class GroupServiceImplSpec extends Specification {
         thrown(NotFoundException)
     }
 
-    def "cancelInvitation should throw BadRequestException when caller is not the inviter"() {
-        given: "a pending_owner invitation sent by another user"
+    def "cancelInvitation should throw BadRequestException when caller is not a recorded co-inviter"() {
+        given: "a pending_owner invitation sent by another user, with the caller never having co-invited"
         def invitation = GroupInvitation.builder()
                 .id(1L).groupId(testGroup.id).inviterId(otherUserId).inviteeId(userId)
                 .status("pending_owner").build()
@@ -2109,6 +2364,8 @@ class GroupServiceImplSpec extends Specification {
 
         then: "invitation is found"
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        1 * invitationInviterRepository.existsByInvitationIdAndInviterId(1L, userId) >> false
+        0 * invitationInviterRepository.deleteByInvitationIdAndInviterId(_, _)
         0 * invitationRepository.deleteById(_)
 
         and: "exception is thrown"
@@ -2130,8 +2387,9 @@ class GroupServiceImplSpec extends Specification {
         when: "cancelling the invitation"
         groupService.cancelInvitation(1L, userId)
 
-        then: "invitation is found, group is inactive"
+        then: "invitation is found, caller is a co-inviter, group is inactive"
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        1 * invitationInviterRepository.existsByInvitationIdAndInviterId(1L, userId) >> true
         1 * groupRepository.findById(testGroup.id) >> Optional.of(inactiveGroup)
         0 * invitationRepository.deleteById(_)
 
@@ -2148,8 +2406,9 @@ class GroupServiceImplSpec extends Specification {
         when: "trying to cancel a pending_user invitation"
         groupService.cancelInvitation(1L, userId)
 
-        then: "invitation and group are found, status check fails"
+        then: "invitation and group are found, caller is a co-inviter, status check fails"
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        1 * invitationInviterRepository.existsByInvitationIdAndInviterId(1L, userId) >> true
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
         0 * invitationRepository.deleteById(_)
 
@@ -2366,7 +2625,8 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.save({
             GroupInvitation inv -> inv.groupId == testGroup.id && inv.inviterId == userId &&
                     inv.inviteeId == otherUserId && inv.status == "pending_user" && inv.reviewedBy == userId
-        })
+        }) >> { GroupInvitation inv -> inv.id = 42L; inv }
+        1 * invitationInviterRepository.save(_)
 
         and: "no side-effect membership is created — this is still just an invitation awaiting the target"
         0 * groupMemberRepository.save(_)
@@ -2396,7 +2656,8 @@ class GroupServiceImplSpec extends Specification {
         2 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         2 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, otherUserId, "pending") >> Optional.of(pendingJoinRequest)
-        1 * invitationRepository.save({ it.status == "accepted" && it.reviewedBy == userId })
+        1 * invitationRepository.save({ it.status == "accepted" && it.reviewedBy == userId }) >> { GroupInvitation inv -> inv.id = 43L; inv }
+        1 * invitationInviterRepository.save(_)
 
         and: "finalizeMembership runs: capacity, member insert, welcome post crediting the admin"
         1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)

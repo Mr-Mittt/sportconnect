@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/social/group-impl`  
-**Last updated:** 2026-07-24
+**Last updated:** 2026-07-25
 
 ---
 
@@ -39,7 +39,7 @@
 | 18 | B11 | Reconcile join-request/invitation race conditions — blocks client GRP-7 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
 | 19 | B12 | Cancel a sent invitation while still `pending_owner` — unblocks a client GRP-7 addendum (`client/docs/BACKLOG_MVP.md`) | `DONE` |
 | 20 | B13 | Persist a rejection reason on invitee-declined invitations — unblocks client GRP-8 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
-| 21 | B14 | Track every co-inviter on a single group invitation — unblocks client GRP-8 | `TODO` |
+| 21 | B14 | Track every co-inviter on a single group invitation — unblocks client GRP-8 | `DONE` |
 | 22 | B15 | Add sportId/sportName to GroupInvitationResponse — unblocks client GRP-8 | `TODO` |
 
 ---
@@ -757,7 +757,7 @@ owner, and a non-owner/admin correctly getting a 400). Full writeup:
 ---
 
 ### B14 · Track every co-inviter on a single group invitation
-**Status:** `TODO` · **Type:** Feature · **Filed:** 2026-07-24, alongside client ticket **GRP-8**
+**Status:** `DONE` (2026-07-25) · **Type:** Feature · **Filed:** 2026-07-24, alongside client ticket **GRP-8**
 (`client/docs/BACKLOG_MVP.md`) — user requested that when more than one group member independently
 invites the same prospective member, both the invitee's own Invitations view and the owner/admin's
 approval queue show one merged row ("Invited by X, Y, Z"), and a single owner/admin approval covers
@@ -793,12 +793,42 @@ multiple recorded inviters has no such race: there is nothing to reconcile.
   a singleton list in the common single-inviter case) alongside the existing singular `inviterId`/
   `inviterFullName` (kept unchanged for backward compatibility with GRP-3/GRP-4/GRP-7's existing
   client code).
-- `approveInvitation`/`declineInvitation`/`acceptInvitation`/`rejectInvitation`/`cancelInvitation` are
-  all **unchanged** — they still operate on the one canonical row, so a single approve/accept/
-  reject/cancel already covers every co-inviter with no bulk-update logic needed anywhere.
+- `approveInvitation`/`declineInvitation`/`acceptInvitation`/`rejectInvitation` are all **unchanged** —
+  they still operate on the one canonical row, so a single approve/accept/reject already covers every
+  co-inviter with no bulk-update logic needed anywhere.
 
-**Out of scope:** no UI/API to remove one co-inviter from an invitation individually, and no
-per-co-inviter timestamps beyond `created_at` on the join row — the list is display-only.
+**Out of scope:** no UI/API to remove one co-inviter from an invitation individually outside of
+`cancelInvitation`'s own withdraw action, and no per-co-inviter timestamps beyond `created_at` on the
+join row — the list is display-only.
+
+**Delta (2026-07-25, resolved at pickup — `cancelInvitation` is NOT unchanged as originally
+scoped):** three real design questions surfaced during pickup, all resolved directly with the user
+before implementing (not assumed):
+1. **Owner/admin auto-approve on merge** — confirmed: joining as a co-inviter on a still-
+   `pending_owner` row as owner/admin auto-transitions it toward `pending_user` (or `accepted` under
+   B11 rule 2), same reasoning as B11 rule 1's self-approval. A regular member joining does not
+   change the status.
+2. **`getMemberSentInvitations` scope** — confirmed: matches any recorded co-inviter, not just the
+   row's original creator. New repository query `findByGroupIdAndCoInviterIdAndStatusIn` (EXISTS
+   subquery) replaces `findByGroupIdAndInviterIdAndStatusIn`.
+3. **`cancelInvitation` is per-co-inviter, not per-row** — this reverses the "unchanged" bullet above:
+   any recorded co-inviter can withdraw their own invite (deletes only their
+   `group_invitation_inviters` row); the invitation itself is deleted only once its *last*
+   co-inviter withdraws. A real, user-specified design change from B12's original single-inviter
+   cancel semantics.
+
+Also confirmed (unit tests + live verification, per explicit user request covering **both** terminal
+statuses, not just one): a prior invitation resolved as `declined_by_owner` or `declined_by_user`
+never merges with a subsequent invite — the subsequent invite always creates a genuinely fresh row.
+
+**Executed:** shipped as revised above, plus (not originally itemized, but necessary for correctness)
+every `GroupInvitation`-creating path — not just `createInvitation`'s merge branch — now records its
+creator as the first co-inviter (`createInvitation`'s normal create, `createSelfApprovedInvitation`,
+`addMember`'s direct-add path), so `inviterFullNames` is populated for every invitation created after
+this ships, not only merged ones. N+1-safe batched co-inviter/user resolution across all 6
+page-returning invitation-listing call sites. 132 Spock tests green (13 new), `./gradlew :server:test`
+green, five-scenario live verification against a real running backend. Full writeup:
+`modules/social/group-impl/docs/B14_INVITATION_CO_INVITER_TRACKING.md`.
 
 ---
 

@@ -70,4 +70,7 @@
     <!-- B13: Persist a rejection reason on invitee-declined invitations -->
     <include file="db/changelog/changes/V028__add_reject_reason_to_group_invitations.sql" relativeToChangelogFile="false"/>
 
+    <!-- B14: Track every co-inviter on a single group invitation -->
+    <include file="db/changelog/changes/V029__create_group_invitation_inviters.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

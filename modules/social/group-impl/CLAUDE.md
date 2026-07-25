@@ -97,15 +97,21 @@ GET    /api/groups/{groupId}/permissions/user-role
    unrelated pending items:
    - `createInvitation`: an owner/admin's own invitation skips `pending_owner` — created directly
      at `pending_user` (or `accepted`, if rule 2 below fires in the same call).
-   - **Three** places an invitation is about to become `pending_user` check for a `pending` join
+   - **Four** places an invitation is about to become `pending_user` check for a `pending` join
      request from the same person first — `approveInvitation`'s normal transition, the owner/admin
-     direct-create path above, **and `addMember`** (B9's owner/admin direct-add, which also creates
-     a self-approved `pending_user` invitation) — if one exists, the invitation goes straight to
+     direct-create path above, `addMember` (B9's owner/admin direct-add, which also creates a
+     self-approved `pending_user` invitation), **and B14's `recordCoInviterIfNew`** (an owner/admin
+     joining an already-pending invitation as a co-inviter auto-approves it, same reasoning as the
+     direct-create path) — if a pending join request exists, the invitation goes straight to
      `accepted`, the join request is marked `accepted` too (not left dangling), and membership is
-     finalized then and there. All three route through the shared `acceptJoinRequestAsSideEffect`
-     helper. `addMember`'s rule-2 check was missed in B11's initial pass and added in a follow-up
-     fix the same day — when adding a fourth path that creates an invitation directly at
-     `pending_user`, check whether it needs this wired in too.
+     finalized then and there. All four route through the shared `acceptJoinRequestAsSideEffect`
+     helper. `approveInvitation` and B14's `recordCoInviterIfNew` additionally share
+     `transitionInvitationTowardPendingUser` (B14) for the "mutate an existing invitation" shape —
+     `createSelfApprovedInvitation`/`addMember` build a brand-new row instead, so they keep their own
+     inline copy of the same check rather than being forced through that helper. `addMember`'s rule-2
+     check was missed in B11's initial pass and added in a follow-up fix the same day — when adding a
+     fifth path that creates or mutates an invitation into `pending_user`, check whether it needs this
+     wired in too.
    - `createJoinRequest`: if the requester already has a `pending_user` invitation for this group,
      no ordinary pending row is created — a `GroupJoinRequest` is created directly as `accepted`,
      crediting the invitation's approver as `reviewedBy`, and the invitation is accepted too.
@@ -115,6 +121,17 @@ GET    /api/groups/{groupId}/permissions/user-role
      and the note on client ticket GRP-7 (`client/docs/BACKLOG_MVP.md`) for the display-side
      follow-up.
    - Full rule diagrams: `documentation/md/adr/JOIN_GROUP_ADR.md` §5.
+9. **A `GroupInvitation` row can have multiple inviters (B14).** `group_invitation_inviters`
+   (`invitation_id`, `inviter_id`, unique per pair) tracks every member who has invited a given
+   person to a given group — when a second member tries to invite someone who already has an
+   in-flight invitation, no second `GroupInvitation` row is created; the second person is recorded
+   here instead (unless already recorded). `GroupInvitation.inviterId` stays the original/first
+   inviter, immutable, kept only for backward compatibility — the authoritative list is
+   `group_invitation_inviters`, surfaced via `GroupInvitationResponse.inviterFullNames`. Every path
+   that creates a new `GroupInvitation` row must also insert a `group_invitation_inviters` row for
+   its creator (`createInvitation`, `createSelfApprovedInvitation`, `addMember` all do); a new
+   invitation-creating path in the future needs to do the same, the same way B9's welcome post and
+   B7's capacity check had to be wired into every insertion path.
 
 ## Gotchas
 
