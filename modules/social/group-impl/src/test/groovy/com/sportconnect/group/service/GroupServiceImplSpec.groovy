@@ -1551,6 +1551,7 @@ class GroupServiceImplSpec extends Specification {
         1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId): testUser]
         response.status == "pending_owner"
         response.groupId == testGroup.id
+        response.sportId == testGroup.sportId
     }
 
     def "createInvitation should throw BadRequestException when group is at its member cap"() {
@@ -2178,6 +2179,35 @@ class GroupServiceImplSpec extends Specification {
         thrown(BadRequestException)
     }
 
+    def "getGroupInvitations should return pending_owner rows with the group's sportId (B15) for an owner caller"() {
+        given: "user is owner"
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(ownerRole.id)
+                .build()
+        def pageable = PageRequest.of(0, 10)
+        def inviteeId = UUID.randomUUID()
+        def pendingInvitation = GroupInvitation.builder()
+                .id(1L).groupId(testGroup.id).inviterId(userId).inviteeId(inviteeId)
+                .status("pending_owner").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def page = new PageImpl<GroupInvitation>([pendingInvitation], pageable, 1)
+
+        when:
+        def response = groupService.getGroupInvitations(testGroup.id, userId, pageable)
+
+        then:
+        1 * groupRepository.existsById(testGroup.id) >> true
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
+        1 * invitationRepository.findByGroupIdAndStatus(testGroup.id, "pending_owner", pageable) >> page
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([1L]) >> []
+        1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId): testUser]
+        response.content.size() == 1
+        response.content[0].sportId == testGroup.sportId
+    }
+
     def "getDeclinedInvitations should throw NotFoundException when group does not exist"() {
         given:
         def pageable = PageRequest.of(0, 10)
@@ -2234,6 +2264,7 @@ class GroupServiceImplSpec extends Specification {
         1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId): testUser]
         response.content.size() == 1
         response.content[0].rejectReason == "Schedule doesn't work for me"
+        response.content[0].sportId == testGroup.sportId
     }
 
     def "getMemberSentInvitations should throw when caller is not a member"() {
@@ -2275,6 +2306,7 @@ class GroupServiceImplSpec extends Specification {
         1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId1): testUser, (inviteeId2): testUser]
         response.content.size() == 2
         response.content*.status as Set == ["pending_owner", "pending_user"] as Set
+        response.content.every { it.sportId == testGroup.sportId }
     }
 
     def "getMemberSentInvitations should include an invitation where the caller is a co-inviter, not the original inviter (B14)"() {
@@ -2302,6 +2334,55 @@ class GroupServiceImplSpec extends Specification {
         1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser, (inviteeId): testUser]
         response.content.size() == 1
         response.content[0].inviterFullNames.size() == 2
+    }
+
+    def "getUserPendingInvitations should resolve each row's own group's sportId (B15) across multiple groups in one page"() {
+        given: "two pending_user invitations to the same invitee from two different groups/sports"
+        def otherGroup = Group.builder()
+                .id(42L).sportId(7L).groupName("Basketball Crew")
+                .isPrivate(false).isActive(true).createdBy(userId)
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def pageable = PageRequest.of(0, 10)
+        def invitationInTestGroup = GroupInvitation.builder()
+                .id(1L).groupId(testGroup.id).inviterId(userId).inviteeId(otherUserId)
+                .status("pending_user").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def invitationInOtherGroup = GroupInvitation.builder()
+                .id(2L).groupId(otherGroup.id).inviterId(userId).inviteeId(otherUserId)
+                .status("pending_user").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def page = new PageImpl<GroupInvitation>([invitationInTestGroup, invitationInOtherGroup], pageable, 2)
+
+        when:
+        def response = groupService.getUserPendingInvitations(otherUserId, pageable)
+
+        then:
+        1 * invitationRepository.findByInviteeIdAndStatus(otherUserId, "pending_user", pageable) >> page
+        1 * groupRepository.findAllById([testGroup.id, otherGroup.id]) >> [testGroup, otherGroup]
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([1L, 2L]) >> []
+        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        response.content.size() == 2
+        response.content.find { it.groupId == testGroup.id }.sportId == testGroup.sportId
+        response.content.find { it.groupId == otherGroup.id }.sportId == otherGroup.sportId
+    }
+
+    def "getUserPendingInvitations should default sportId to null when the invitation's group is missing from the batch"() {
+        given: "a pending_user invitation whose group lookup misses (defensive fallback, shouldn't happen in practice)"
+        def pageable = PageRequest.of(0, 10)
+        def orphanInvitation = GroupInvitation.builder()
+                .id(9L).groupId(999L).inviterId(userId).inviteeId(otherUserId)
+                .status("pending_user").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def page = new PageImpl<GroupInvitation>([orphanInvitation], pageable, 1)
+
+        when:
+        def response = groupService.getUserPendingInvitations(otherUserId, pageable)
+
+        then:
+        1 * invitationRepository.findByInviteeIdAndStatus(otherUserId, "pending_user", pageable) >> page
+        1 * groupRepository.findAllById([999L]) >> []
+        1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([9L]) >> []
+        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        response.content.size() == 1
+        response.content[0].groupName == "Unknown Group"
+        response.content[0].sportId == null
     }
 
     def "cancelInvitation should delete invitation when caller is the inviter and status is pending_owner"() {

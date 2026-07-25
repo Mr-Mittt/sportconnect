@@ -1031,7 +1031,7 @@ public class GroupServiceImpl implements GroupService {
                     .findByGroupIdAndInviteeIdAndStatusIn(groupId, inviteeId, List.of("pending_owner", "pending_user"))
                     .orElseThrow();
             existing = recordCoInviterIfNew(existing, inviterId, groupId);
-            return mapSingleInvitationResponse(existing, group.getGroupName());
+            return mapSingleInvitationResponse(existing, group);
         }
 
         checkMemberCapacityNotExceeded(groupId);
@@ -1052,7 +1052,7 @@ public class GroupServiceImpl implements GroupService {
         recordCoInviter(invitation.getId(), inviterId);
 
         log.info("Invitation created for user {} in group {} by member {}", inviteeId, groupId, inviterId);
-        return mapSingleInvitationResponse(invitation, group.getGroupName());
+        return mapSingleInvitationResponse(invitation, group);
     }
 
     /**
@@ -1113,7 +1113,7 @@ public class GroupServiceImpl implements GroupService {
         log.info("Owner/admin {} invited user {} to group {} (self-approved{})",
                 inviterId, inviteeId, group.getId(),
                 pendingJoinRequest.isPresent() ? ", auto-accepted via existing join request" : "");
-        return mapSingleInvitationResponse(invitation, group.getGroupName());
+        return mapSingleInvitationResponse(invitation, group);
     }
 
     @Override
@@ -1259,10 +1259,10 @@ public class GroupServiceImpl implements GroupService {
         if (!canManageMembers(groupId, ownerId)) {
             throw new BadRequestException("Only group owner or admin can view invitations");
         }
-        String groupName = groupRepository.findById(groupId).map(Group::getGroupName).orElse("Unknown Group");
+        Group group = groupRepository.findById(groupId).orElse(null);
         Page<GroupInvitation> invitationsPage =
                 invitationRepository.findByGroupIdAndStatus(groupId, "pending_owner", pageable);
-        return mapInvitationPage(invitationsPage, groupName);
+        return mapInvitationPage(invitationsPage, group);
     }
 
     @Override
@@ -1274,10 +1274,10 @@ public class GroupServiceImpl implements GroupService {
         if (!canManageMembers(groupId, ownerId)) {
             throw new BadRequestException("Only group owner or admin can view declined invitations");
         }
-        String groupName = groupRepository.findById(groupId).map(Group::getGroupName).orElse("Unknown Group");
+        Group group = groupRepository.findById(groupId).orElse(null);
         Page<GroupInvitation> invitationsPage =
                 invitationRepository.findByGroupIdAndStatus(groupId, "declined_by_user", pageable);
-        return mapInvitationPage(invitationsPage, groupName);
+        return mapInvitationPage(invitationsPage, group);
     }
 
     @Override
@@ -1290,19 +1290,17 @@ public class GroupServiceImpl implements GroupService {
                 .map(GroupInvitation::getGroupId)
                 .distinct()
                 .collect(Collectors.toList());
-        Map<Long, String> groupNamesById = groupIds.isEmpty()
+        Map<Long, Group> groupsById = groupIds.isEmpty()
                 ? Map.of()
                 : groupRepository.findAllById(groupIds).stream()
-                        .collect(Collectors.toMap(Group::getId, Group::getGroupName));
+                        .collect(Collectors.toMap(Group::getId, group -> group));
 
         Map<Long, List<UUID>> coInviterIdsByInvitation = buildCoInviterIdsByInvitation(invitationsPage.getContent());
         Map<UUID, UserResponse> usersById =
                 buildInviterInviteeUserMap(invitationsPage.getContent(), coInviterIdsByInvitation);
 
-        return invitationsPage.map(inv -> {
-            String groupName = groupNamesById.getOrDefault(inv.getGroupId(), "Unknown Group");
-            return mapToGroupInvitationResponse(inv, groupName, usersById, coInviterIdsByInvitation);
-        });
+        return invitationsPage.map(inv -> mapToGroupInvitationResponse(
+                inv, groupsById.get(inv.getGroupId()), usersById, coInviterIdsByInvitation));
     }
 
     private static final List<String> SENT_INVITATION_IN_FLIGHT_STATUSES = List.of("pending_owner", "pending_user");
@@ -1323,22 +1321,22 @@ public class GroupServiceImpl implements GroupService {
         if (!isGroupMember(groupId, inviterId)) {
             throw new BadRequestException("Only group members can view their sent invitations");
         }
-        String groupName = groupRepository.findById(groupId).map(Group::getGroupName).orElse("Unknown Group");
+        Group group = groupRepository.findById(groupId).orElse(null);
         Page<GroupInvitation> invitationsPage = invitationRepository.findByGroupIdAndCoInviterIdAndStatusIn(
                 groupId, inviterId, SENT_INVITATION_IN_FLIGHT_STATUSES, pageable);
-        return mapInvitationPage(invitationsPage, groupName);
+        return mapInvitationPage(invitationsPage, group);
     }
 
     /**
      * Shared by every invitation-listing method whose rows all belong to the same group (so one
-     * {@code groupName} covers the whole page) — batches the co-inviter lookup and user resolution
+     * {@code Group} covers the whole page) — batches the co-inviter lookup and user resolution
      * once per page rather than once per row (no N+1).
      */
-    private Page<GroupInvitationResponse> mapInvitationPage(Page<GroupInvitation> invitationsPage, String groupName) {
+    private Page<GroupInvitationResponse> mapInvitationPage(Page<GroupInvitation> invitationsPage, Group group) {
         Map<Long, List<UUID>> coInviterIdsByInvitation = buildCoInviterIdsByInvitation(invitationsPage.getContent());
         Map<UUID, UserResponse> usersById =
                 buildInviterInviteeUserMap(invitationsPage.getContent(), coInviterIdsByInvitation);
-        return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, groupName, usersById, coInviterIdsByInvitation));
+        return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, group, usersById, coInviterIdsByInvitation));
     }
 
     /**
@@ -1557,15 +1555,23 @@ public class GroupServiceImpl implements GroupService {
      * {@code GroupInvitationResponse} rather than a {@code Page} ({@link #createInvitation}'s two
      * return paths, {@link #createSelfApprovedInvitation}) — same batching helpers, sized to one.
      */
-    private GroupInvitationResponse mapSingleInvitationResponse(GroupInvitation invitation, String groupName) {
+    private GroupInvitationResponse mapSingleInvitationResponse(GroupInvitation invitation, Group group) {
         Map<Long, List<UUID>> coInviterIdsByInvitation = buildCoInviterIdsByInvitation(List.of(invitation));
         Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(List.of(invitation), coInviterIdsByInvitation);
-        return mapToGroupInvitationResponse(invitation, groupName, usersById, coInviterIdsByInvitation);
+        return mapToGroupInvitationResponse(invitation, group, usersById, coInviterIdsByInvitation);
     }
 
-    private GroupInvitationResponse mapToGroupInvitationResponse(GroupInvitation invitation, String groupName,
+    /**
+     * B15: takes the already-loaded {@code Group} (rather than just its name) so {@code sportId}
+     * can be read off the same row with no extra query — {@code Group.sportId} is required
+     * (non-null) on every group, so a null here only ever means the {@code group} lookup itself
+     * missed (defensive, same "Unknown Group" convention as the name fallback).
+     */
+    private GroupInvitationResponse mapToGroupInvitationResponse(GroupInvitation invitation, Group group,
                                                                   Map<UUID, UserResponse> usersById,
                                                                   Map<Long, List<UUID>> coInviterIdsByInvitation) {
+        String groupName = group != null ? group.getGroupName() : "Unknown Group";
+        Long sportId = group != null ? group.getSportId() : null;
         UserResponse inviter = usersById.get(invitation.getInviterId());
         UserResponse invitee = usersById.get(invitation.getInviteeId());
         String inviterFullName = inviter != null ? inviter.getFullName() : "Unknown User";
@@ -1586,6 +1592,7 @@ public class GroupServiceImpl implements GroupService {
                 .id(invitation.getId())
                 .groupId(invitation.getGroupId())
                 .groupName(groupName)
+                .sportId(sportId)
                 .inviterId(invitation.getInviterId())
                 .inviterFullName(inviterFullName)
                 .inviterFullNames(inviterFullNames)

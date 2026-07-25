@@ -1379,6 +1379,18 @@ starts a fresh row, per explicit user request to cover both statuses. 132 Spock 
 cascade-withdraw, fresh-row-after-decline, owner/admin auto-approve, co-inviter's own sent-invitations
 view).
 
+**B15 DONE** (2026-07-25, `modules/social/group-impl/docs/B15_INVITATION_SPORT_ID.md`):
+`GroupInvitationResponse` gains `sportId`, resolved from the already-loaded `Group` row with zero
+new queries (no `sportName` — sports are static reference data already fully exposed via the
+public `GET /api/sports`, so the client resolves the display name locally instead of the backend
+joining it in per-response, unlike `post-impl`'s A9 pattern). Filed a follow-up ticket
+(`modules/social/post-impl/docs/BACKLOG_MVP.md`'s new **A12**) to revisit whether A9's `sportName`
+join on `PostResponse` is still needed for the same reason — not executed, since that field is
+already shipped and client-consumed, unlike B15's brand-new field. Unblocks client's GRP-7 (real
+sport-switch on accept, instead of forcing "All") and GRP-8 (add-to-profile confirmation).
+`./gradlew :modules:social:group-impl:test` 131 green (added coverage for two previously-untested
+methods, `getGroupInvitations` and `getUserPendingInvitations`), `:server:test` 34 green.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime
