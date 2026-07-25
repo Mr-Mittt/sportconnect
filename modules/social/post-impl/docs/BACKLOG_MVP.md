@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/social/post-impl`  
-**Last updated:** 2026-07-02
+**Last updated:** 2026-07-25
 
 ---
 
@@ -36,6 +36,7 @@
 | 15 | A9 | Fix `PostResponse` never populating `userFullName`/`sportName`/`shareCount` | `DONE` |
 | 16 | A10 | Fix `GET /api/posts/hashtag/{tag}` — always 500s (conflicting `ORDER BY`) | `DONE` |
 | 17 | A11 | Fix broadcast-expiry timezone mismatch (JVM-local `LocalDateTime` vs DB-UTC `CURRENT_TIMESTAMP`) | `TODO` |
+| 18 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `TODO` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
 
@@ -706,5 +707,37 @@ integration test that creates a broadcast with a short explicit `broadcastEndTim
 the future and asserts it's still returned by `getActiveBroadcasts` immediately after creation, so a
 regression here fails a real test instead of only surfacing via manual/live verification again (same
 lesson as A10).
+
+---
+
+### A12 · Revisit A9's `sportName` join
+**Status:** `TODO` · **Type:** Enhancement (Efficiency) · **Filed:** 2026-07-25, raised while scoping
+group-impl's B15 (`modules/social/group-impl/docs/BACKLOG_MVP.md`).
+
+**Origin:** B15 needed to add `sportId` to `GroupInvitationResponse` and initially considered mirroring
+A9's pattern here — inject `SportService` and batch-resolve `sportName` via `getSportsByIds()` once per
+page. Instead, B15 shipped `sportId` only: sports are static reference data already fully exposed via
+the public `GET /api/sports` endpoint, so a client can fetch that list once and resolve any `sportId` to
+a name locally, with no need for the backend to join the name into every response that carries a
+`sportId`. That reasoning applies equally to A9's `sportName` field on `PostResponse` — flagged here as
+a candidate simplification, not applied automatically, because unlike B15 (a brand-new field, no
+existing consumer), A9's `sportName` is already shipped and live-consumed by the client's Feed/PostCard
+sport-badge rendering (A9's own ticket text: "`sportName` blocks any sport-badge rendering on a post
+card that only has `sportId`" — implying the client did *not* already have a locally-cached sports list
+at the time A9 was scoped).
+
+**What this ticket needs to resolve before any code changes:**
+- Confirm whether the client (by now) already fetches/caches the full sports list somewhere reachable
+  from Feed/PostCard's rendering context (e.g. for a sport switcher or filter elsewhere in the app). If
+  yes, `sportName` becomes redundant duplication, not a hard client dependency, and can potentially be
+  removed. If no, this ticket should conclude "leave as-is" rather than force a client change just for
+  backend simplification.
+- This is a **breaking contract change** if pursued (removing an existing `PostResponse` field), unlike
+  B15's purely-additive `sportId` — needs a corresponding client ticket, not just a backend one, and
+  should not land in the same session as any client work depending on the current `sportName` field
+  without coordinating both sides.
+
+**Out of scope:** any change to `GroupInvitationResponse`/group-impl (B15 already shipped, sportId-only,
+no sportName) — this ticket is scoped entirely to `post-impl`'s existing A9 field.
 
 ---

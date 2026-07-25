@@ -17,6 +17,13 @@ public class GroupInvitationResponse {
     private Long id;
     private Long groupId;
     private String groupName;
+    /**
+     * B15: the invited group's sport id (the group's own {@code sportId}, never null in practice).
+     * No {@code sportName} field — sports are static reference data already exposed in full via
+     * {@code GET /api/sports}; clients resolve the display name from that already-fetched list
+     * rather than the backend joining it in on every invitation row.
+     */
+    private Long sportId;
     private UUID inviterId;
     private String inviterFullName;
     /**

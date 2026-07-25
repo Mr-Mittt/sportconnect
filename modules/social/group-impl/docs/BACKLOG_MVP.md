@@ -40,7 +40,7 @@
 | 19 | B12 | Cancel a sent invitation while still `pending_owner` — unblocks a client GRP-7 addendum (`client/docs/BACKLOG_MVP.md`) | `DONE` |
 | 20 | B13 | Persist a rejection reason on invitee-declined invitations — unblocks client GRP-8 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
 | 21 | B14 | Track every co-inviter on a single group invitation — unblocks client GRP-8 | `DONE` |
-| 22 | B15 | Add sportId/sportName to GroupInvitationResponse — unblocks client GRP-8 | `TODO` |
+| 22 | B15 | Add sportId to GroupInvitationResponse — unblocks client GRP-8 | `DONE` |
 
 ---
 
@@ -832,19 +832,50 @@ green, five-scenario live verification against a real running backend. Full writ
 
 ---
 
-### B15 · Add sportId/sportName to GroupInvitationResponse
-**Status:** `TODO` · **Type:** Enhancement · **Filed:** 2026-07-24, alongside client ticket **GRP-8**
-— two client needs both require knowing an invitation's group's sport without a second round-trip:
-(1) GRP-7's accept-invitation flow works around this gap today by force-switching the sport filter
-to "All" before navigating, instead of switching directly to the group's real sport; (2) GRP-8's new
-"add this sport to your profile?" accept-time confirmation needs the sportId both to check whether
-the invitee already has a matching sport profile and to submit the profile-creation call if they
-confirm.
+### B15 · Add sportId to GroupInvitationResponse
+**Status:** `DONE` (2026-07-25) · **Type:** Enhancement · **Filed:** 2026-07-24, alongside client
+ticket **GRP-8** — two client needs both require knowing an invitation's group's sport without a
+second round-trip: (1) GRP-7's accept-invitation flow works around this gap today by
+force-switching the sport filter to "All" before navigating, instead of switching directly to the
+group's real sport; (2) GRP-8's new "add this sport to your profile?" accept-time confirmation
+needs the sportId both to check whether the invitee already has a matching sport profile and to
+submit the profile-creation call if they confirm.
 
-**What ships:** `mapToGroupInvitationResponse` additionally reads `Group.sportId`/the sport's name
-(the `Group` row is already loaded in every call site to resolve `groupName`) and sets two new
-fields, `sportId: Long` and `sportName: String`, on `GroupInvitationResponse`. Purely additive — no
-new query, no schema change (`Group.sportId` already exists).
+**Delta (2026-07-25, resolved at pickup — `sportName` dropped from scope):** the ticket as
+originally filed also called for a `sportName` field, resolved the same way `post-impl`'s A9
+resolves `PostResponse.sportName` (inject `SportService`, batch `getSportsByIds()` once per page).
+Reconsidered before implementation: sports are static reference data, already fully exposed via the
+public `GET /api/sports` endpoint — a client fetches that list once and resolves any `sportId` to a
+name locally, so there's no need for the backend to add a new cross-domain `SportService`
+dependency to `group-impl` just to join a name in on every response. This also resolves an internal
+contradiction in the original scope text, which called the change "purely additive — no new query"
+while `sportName` would in fact have required one.
+
+**What shipped:** `GroupInvitationResponse.sportId: Long` only, resolved from the already-loaded
+`Group` row (zero new queries). The invitation-mapping helper chain
+(`mapToGroupInvitationResponse`/`mapInvitationPage`/`mapSingleInvitationResponse`) now threads the
+`Group` entity itself through instead of just its `groupName` string — same convention already used
+by `mapToJoinRequestResponse(request, groupsById, usersById)` for join requests.
+`getUserPendingInvitations` (the one call site spanning multiple groups/sports in one page) batches
+a `Map<Long, Group>` via its existing `groupRepository.findAllById(...)` call, no new query added.
+
+**Follow-up filed, not executed:** the same static-reference-data reasoning applies to `post-impl`'s
+A9 `sportName` field — but that field is already shipped and live-consumed by the client's
+Feed/PostCard sport-badge rendering, so removing it would be a breaking contract change, not a
+purely-additive one like this ticket. Filed as `modules/social/post-impl/docs/BACKLOG_MVP.md`'s new
+**A12** to resolve whether the client already has a locally-cached sports list reachable from that
+render path before acting on it.
+
+**Tests:** `GroupServiceImplSpec` — added `sportId` assertions to existing happy-path tests
+(`getDeclinedInvitations`, `getMemberSentInvitations` ×2, `createInvitation`); added a new
+happy-path test for `getGroupInvitations` (previously had zero happy-path coverage, only a
+permission-denied case); added two new tests for `getUserPendingInvitations` (previously had
+**zero** Spock coverage at all) covering per-group sportId resolution across a multi-group page and
+the defensive null/"Unknown Group" fallback. `./gradlew :modules:social:group-impl:test` — 131
+green. `./gradlew :server:test` — 34 green (required setting `DOCKER_HOST` explicitly per
+`server/README.md`'s documented Rancher Desktop/Windows Testcontainers workaround — environment
+quirk, not a code issue). Full writeup:
+`modules/social/group-impl/docs/B15_INVITATION_SPORT_ID.md`.
 
 ---
 
