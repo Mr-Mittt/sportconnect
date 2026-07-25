@@ -1359,6 +1359,26 @@ group-not-found cases) plus new `GroupControllerTest` MockMvc cases for both cha
 friend them, create a group, self-approved owner invitation, reject with a reason, confirm the new
 endpoint returns it, confirm a non-owner/admin gets 400).
 
+**B14 DONE** (2026-07-25, `modules/social/group-impl/docs/B14_INVITATION_CO_INVITER_TRACKING.md`):
+when a second group member invites someone who already has a pending invitation to the group, that
+no longer silently no-ops — a new `group_invitation_inviters` join table (V029) records them as an
+additional co-inviter on the **same** canonical `GroupInvitation` row, surfaced via
+`GroupInvitationResponse.inviterFullNames: List<String>`. Deliberately one row with multiple
+inviters, not duplicate rows bulk-actioned together — the duplicate-row design would reintroduce the
+exact multi-row race **B11** was filed to eliminate. Owner/admin joining a still-`pending_owner`
+invitation as a co-inviter auto-approves it (same B11-rule-1 reasoning as a brand-new self-approved
+invitation); `getMemberSentInvitations` now matches any co-inviter, not just the row's original
+creator; `cancelInvitation` withdraws only the caller's own co-invite, deleting the invitation itself
+only once its last co-inviter withdraws (a real design change from B12, confirmed with the user, not
+assumed). N+1-safe batched mapping across all invitation-listing endpoints. Filed alongside client
+ticket **GRP-8** (`client/docs/BACKLOG_MVP.md`), which needs `inviterFullNames` for its merged
+"Invited by X, Y, Z" display. Confirmed (unit tests + live verification) that a *terminal* prior
+invitation (`declined_by_owner` or `declined_by_user`) never merges — a subsequent invite always
+starts a fresh row, per explicit user request to cover both statuses. 132 Spock tests green,
+`:server:test` green, five-scenario live verification against a real running backend (merge,
+cascade-withdraw, fresh-row-after-decline, owner/admin auto-approve, co-inviter's own sent-invitations
+view).
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

@@ -18,12 +18,14 @@ import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.group.entity.Group;
 import com.sportconnect.group.entity.GroupInvitation;
+import com.sportconnect.group.entity.GroupInvitationInviter;
 import com.sportconnect.group.entity.GroupJoinRequest;
 import com.sportconnect.group.entity.GroupMember;
 import com.sportconnect.group.entity.GroupPinnedPost;
 import com.sportconnect.group.entity.GroupRole;
 import com.sportconnect.group.entity.GroupSettings;
 import com.sportconnect.group.entity.GroupType;
+import com.sportconnect.group.repository.GroupInvitationInviterRepository;
 import com.sportconnect.group.repository.GroupInvitationRepository;
 import com.sportconnect.group.repository.GroupJoinRequestRepository;
 import com.sportconnect.group.repository.GroupMemberRepository;
@@ -51,6 +53,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -74,6 +77,7 @@ public class GroupServiceImpl implements GroupService {
     private final PostService postService;
     private final GroupPinnedPostRepository pinnedPostRepository;
     private final GroupInvitationRepository invitationRepository;
+    private final GroupInvitationInviterRepository invitationInviterRepository;
 
     /**
      * Explicit constructor (not {@code @RequiredArgsConstructor}) because {@code postService}
@@ -97,7 +101,8 @@ public class GroupServiceImpl implements GroupService {
             UserSportProfileService userSportProfileService,
             @Lazy PostService postService,
             GroupPinnedPostRepository pinnedPostRepository,
-            GroupInvitationRepository invitationRepository) {
+            GroupInvitationRepository invitationRepository,
+            GroupInvitationInviterRepository invitationInviterRepository) {
         this.groupRepository = groupRepository;
         this.groupMemberRepository = groupMemberRepository;
         this.joinRequestRepository = joinRequestRepository;
@@ -110,6 +115,7 @@ public class GroupServiceImpl implements GroupService {
         this.postService = postService;
         this.pinnedPostRepository = pinnedPostRepository;
         this.invitationRepository = invitationRepository;
+        this.invitationInviterRepository = invitationInviterRepository;
     }
 
     @Override
@@ -418,7 +424,8 @@ public class GroupServiceImpl implements GroupService {
                 .reviewedBy(adminUserId)
                 .reviewedAt(LocalDateTime.now())
                 .build();
-        invitationRepository.save(invitation);
+        invitation = invitationRepository.save(invitation);
+        recordCoInviter(invitation.getId(), adminUserId);
 
         if (pendingJoinRequest.isPresent()) {
             acceptJoinRequestAsSideEffect(pendingJoinRequest.get(), adminUserId, adminUserId);
@@ -1023,8 +1030,8 @@ public class GroupServiceImpl implements GroupService {
             GroupInvitation existing = invitationRepository
                     .findByGroupIdAndInviteeIdAndStatusIn(groupId, inviteeId, List.of("pending_owner", "pending_user"))
                     .orElseThrow();
-            return mapToGroupInvitationResponse(existing, group.getGroupName(),
-                    userService.getUsersByIds(List.of(existing.getInviterId(), existing.getInviteeId())));
+            existing = recordCoInviterIfNew(existing, inviterId, groupId);
+            return mapSingleInvitationResponse(existing, group.getGroupName());
         }
 
         checkMemberCapacityNotExceeded(groupId);
@@ -1042,10 +1049,41 @@ public class GroupServiceImpl implements GroupService {
                 .status("pending_owner")
                 .build();
         invitation = invitationRepository.save(invitation);
+        recordCoInviter(invitation.getId(), inviterId);
 
         log.info("Invitation created for user {} in group {} by member {}", inviteeId, groupId, inviterId);
-        return mapToGroupInvitationResponse(invitation, group.getGroupName(),
-                userService.getUsersByIds(List.of(invitation.getInviterId(), invitation.getInviteeId())));
+        return mapSingleInvitationResponse(invitation, group.getGroupName());
+    }
+
+    /**
+     * B14: called from {@code createInvitation}'s "already invited" branch when a second (or
+     * later) member tries to invite someone who already has a pending invitation to this group.
+     * If {@code inviterId} isn't already a recorded co-inviter, records them — and, if they're an
+     * owner/admin and the invitation is still {@code pending_owner}, treats that exactly like
+     * B11 rule 1 treats a brand-new self-approved invitation: no separate Approve click needed,
+     * since they already have approval rights and are the one taking this action. Returns the
+     * invitation as it stands after this call (possibly transitioned).
+     */
+    private GroupInvitation recordCoInviterIfNew(GroupInvitation invitation, UUID inviterId, Long groupId) {
+        boolean isNewCoInviter = !invitationInviterRepository.existsByInvitationIdAndInviterId(invitation.getId(), inviterId);
+        if (!isNewCoInviter) {
+            return invitation;
+        }
+        recordCoInviter(invitation.getId(), inviterId);
+        log.info("User {} joined invitation {} as a co-inviter", inviterId, invitation.getId());
+
+        if ("pending_owner".equals(invitation.getStatus()) && canManageMembers(groupId, inviterId)) {
+            invitation = transitionInvitationTowardPendingUser(invitation, inviterId);
+            log.info("Invitation {} auto-approved via co-inviting owner/admin {}", invitation.getId(), inviterId);
+        }
+        return invitation;
+    }
+
+    private void recordCoInviter(Long invitationId, UUID inviterId) {
+        invitationInviterRepository.save(GroupInvitationInviter.builder()
+                .invitationId(invitationId)
+                .inviterId(inviterId)
+                .build());
     }
 
     /**
@@ -1066,6 +1104,7 @@ public class GroupServiceImpl implements GroupService {
                 .reviewedAt(LocalDateTime.now())
                 .build();
         invitation = invitationRepository.save(invitation);
+        recordCoInviter(invitation.getId(), inviterId);
 
         if (pendingJoinRequest.isPresent()) {
             acceptJoinRequestAsSideEffect(pendingJoinRequest.get(), inviterId, inviterId);
@@ -1074,8 +1113,7 @@ public class GroupServiceImpl implements GroupService {
         log.info("Owner/admin {} invited user {} to group {} (self-approved{})",
                 inviterId, inviteeId, group.getId(),
                 pendingJoinRequest.isPresent() ? ", auto-accepted via existing join request" : "");
-        return mapToGroupInvitationResponse(invitation, group.getGroupName(),
-                userService.getUsersByIds(List.of(inviterId, inviteeId)));
+        return mapSingleInvitationResponse(invitation, group.getGroupName());
     }
 
     @Override
@@ -1091,26 +1129,43 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Invitation is not pending owner approval");
         }
 
-        // B11 rule 2: an invitation about to enter pending_user short-circuits straight to
-        // accepted if the invitee already has a pending join request in flight for this group —
-        // that join request is at least as strong a signal of intent as accepting the invitation
-        // would be, so there's no reason to make the invitee separately act on both.
+        invitation = transitionInvitationTowardPendingUser(invitation, ownerId);
+
+        log.info("Invitation {} approved by {}{}", invitationId, ownerId,
+                "accepted".equals(invitation.getStatus()) ? " (auto-accepted via existing join request)" : "");
+    }
+
+    /**
+     * B11 rule 2 + B14: shared by every call site where an already-persisted invitation is about
+     * to move from {@code pending_owner} toward {@code pending_user} —
+     * {@link #approveInvitation}'s normal owner/admin approval, and B14's
+     * {@link #recordCoInviterIfNew} auto-approval when an owner/admin joins as a co-inviter on a
+     * still-pending row. (Not used by {@link #createSelfApprovedInvitation}/{@code addMember}'s
+     * direct-add path — both build a brand-new row rather than mutate an existing one, a different
+     * enough shape that forcing them through this helper wouldn't simplify anything.)
+     *
+     * Short-circuits straight to {@code accepted} if the invitee already has a {@code pending}
+     * join request in flight for this group — that join request is at least as strong a signal of
+     * intent as accepting the invitation would be, so there's no reason to make the invitee
+     * separately act on both. {@code reviewerId} is credited as who reviewed it; the join-request
+     * side effect (if any) still credits the invitation's original inviter as who gets the welcome
+     * message, not necessarily {@code reviewerId}.
+     */
+    private GroupInvitation transitionInvitationTowardPendingUser(GroupInvitation invitation, UUID reviewerId) {
         Optional<GroupJoinRequest> pendingJoinRequest = joinRequestRepository
                 .findByGroupIdAndUserIdAndStatus(invitation.getGroupId(), invitation.getInviteeId(), "pending");
 
         invitation.setStatus(pendingJoinRequest.isPresent() ? "accepted" : "pending_user");
-        invitation.setReviewedBy(ownerId);
+        invitation.setReviewedBy(reviewerId);
         invitation.setReviewedAt(LocalDateTime.now());
-        invitationRepository.save(invitation);
+        invitation = invitationRepository.save(invitation);
 
         if (pendingJoinRequest.isPresent()) {
-            acceptJoinRequestAsSideEffect(pendingJoinRequest.get(), invitation.getInviterId(), ownerId);
+            acceptJoinRequestAsSideEffect(pendingJoinRequest.get(), invitation.getInviterId(), reviewerId);
         } else {
             // TODO: notify — send in-app notification to invitee (pending ADR.md#in-app-notification)
         }
-
-        log.info("Invitation {} approved by {}{}", invitationId, ownerId,
-                pendingJoinRequest.isPresent() ? " (auto-accepted via existing join request)" : "");
+        return invitation;
     }
 
     /**
@@ -1207,8 +1262,7 @@ public class GroupServiceImpl implements GroupService {
         String groupName = groupRepository.findById(groupId).map(Group::getGroupName).orElse("Unknown Group");
         Page<GroupInvitation> invitationsPage =
                 invitationRepository.findByGroupIdAndStatus(groupId, "pending_owner", pageable);
-        Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(invitationsPage.getContent());
-        return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, groupName, usersById));
+        return mapInvitationPage(invitationsPage, groupName);
     }
 
     @Override
@@ -1223,8 +1277,7 @@ public class GroupServiceImpl implements GroupService {
         String groupName = groupRepository.findById(groupId).map(Group::getGroupName).orElse("Unknown Group");
         Page<GroupInvitation> invitationsPage =
                 invitationRepository.findByGroupIdAndStatus(groupId, "declined_by_user", pageable);
-        Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(invitationsPage.getContent());
-        return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, groupName, usersById));
+        return mapInvitationPage(invitationsPage, groupName);
     }
 
     @Override
@@ -1242,11 +1295,13 @@ public class GroupServiceImpl implements GroupService {
                 : groupRepository.findAllById(groupIds).stream()
                         .collect(Collectors.toMap(Group::getId, Group::getGroupName));
 
-        Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(invitationsPage.getContent());
+        Map<Long, List<UUID>> coInviterIdsByInvitation = buildCoInviterIdsByInvitation(invitationsPage.getContent());
+        Map<UUID, UserResponse> usersById =
+                buildInviterInviteeUserMap(invitationsPage.getContent(), coInviterIdsByInvitation);
 
         return invitationsPage.map(inv -> {
             String groupName = groupNamesById.getOrDefault(inv.getGroupId(), "Unknown Group");
-            return mapToGroupInvitationResponse(inv, groupName, usersById);
+            return mapToGroupInvitationResponse(inv, groupName, usersById, coInviterIdsByInvitation);
         });
     }
 
@@ -1255,7 +1310,9 @@ public class GroupServiceImpl implements GroupService {
     /**
      * Returns both {@code pending_owner} and {@code pending_user} rows for {@code inviterId} in one
      * page — the caller (or {@code GroupInvitationResponse#getStatus()} on each row) tells them
-     * apart, so this doesn't need a separate call per status.
+     * apart, so this doesn't need a separate call per status. B14: matches against any recorded
+     * co-inviter, not just the row's original/first inviter — a member who joined an
+     * already-pending invitation as a co-inviter sees it in their own sent-invitations list too.
      */
     @Override
     @Transactional(readOnly = true)
@@ -1267,10 +1324,21 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Only group members can view their sent invitations");
         }
         String groupName = groupRepository.findById(groupId).map(Group::getGroupName).orElse("Unknown Group");
-        Page<GroupInvitation> invitationsPage = invitationRepository.findByGroupIdAndInviterIdAndStatusIn(
+        Page<GroupInvitation> invitationsPage = invitationRepository.findByGroupIdAndCoInviterIdAndStatusIn(
                 groupId, inviterId, SENT_INVITATION_IN_FLIGHT_STATUSES, pageable);
-        Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(invitationsPage.getContent());
-        return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, groupName, usersById));
+        return mapInvitationPage(invitationsPage, groupName);
+    }
+
+    /**
+     * Shared by every invitation-listing method whose rows all belong to the same group (so one
+     * {@code groupName} covers the whole page) — batches the co-inviter lookup and user resolution
+     * once per page rather than once per row (no N+1).
+     */
+    private Page<GroupInvitationResponse> mapInvitationPage(Page<GroupInvitation> invitationsPage, String groupName) {
+        Map<Long, List<UUID>> coInviterIdsByInvitation = buildCoInviterIdsByInvitation(invitationsPage.getContent());
+        Map<UUID, UserResponse> usersById =
+                buildInviterInviteeUserMap(invitationsPage.getContent(), coInviterIdsByInvitation);
+        return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, groupName, usersById, coInviterIdsByInvitation));
     }
 
     /**
@@ -1284,7 +1352,10 @@ public class GroupServiceImpl implements GroupService {
         GroupInvitation invitation = invitationRepository.findById(invitationId)
                 .orElseThrow(() -> new NotFoundException("Invitation not found"));
 
-        if (!invitation.getInviterId().equals(callerId)) {
+        // B14: any recorded co-inviter can withdraw their own invite, not just the original —
+        // withdrawing only removes the caller's own group_invitation_inviters row; the invitation
+        // itself is only deleted once its last co-inviter withdraws.
+        if (!invitationInviterRepository.existsByInvitationIdAndInviterId(invitationId, callerId)) {
             throw new BadRequestException("You can only cancel your own invitation");
         }
 
@@ -1298,8 +1369,15 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Invitation is not pending owner approval");
         }
 
-        invitationRepository.deleteById(invitationId);
-        log.info("Cancelled invitation {} by user {}", invitationId, callerId);
+        invitationInviterRepository.deleteByInvitationIdAndInviterId(invitationId, callerId);
+        long remainingCoInviters = invitationInviterRepository.countByInvitationId(invitationId);
+        if (remainingCoInviters == 0) {
+            invitationRepository.deleteById(invitationId);
+            log.info("Cancelled invitation {} by user {} (last co-inviter, invitation deleted)", invitationId, callerId);
+        } else {
+            log.info("User {} withdrew as co-inviter from invitation {} ({} co-inviter(s) remain)",
+                    callerId, invitationId, remainingCoInviters);
+        }
     }
 
     // Helper methods
@@ -1442,22 +1520,67 @@ public class GroupServiceImpl implements GroupService {
                 .build();
     }
 
-    private Map<UUID, UserResponse> buildInviterInviteeUserMap(List<GroupInvitation> invitations) {
+    /**
+     * B14: one query for every invitation id in the batch, grouped in memory — the N+1-safe way to
+     * resolve "who has co-invited this person" across a whole {@code Page}, rather than one query
+     * per row. Preserves {@code created_at} order (oldest-first) within each invitation's list.
+     */
+    private Map<Long, List<UUID>> buildCoInviterIdsByInvitation(List<GroupInvitation> invitations) {
+        List<Long> invitationIds = invitations.stream()
+                .map(GroupInvitation::getId)
+                .distinct()
+                .collect(Collectors.toList());
+        if (invitationIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<UUID>> result = new LinkedHashMap<>();
+        for (GroupInvitationInviter row : invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(invitationIds)) {
+            result.computeIfAbsent(row.getInvitationId(), key -> new ArrayList<>()).add(row.getInviterId());
+        }
+        return result;
+    }
+
+    private Map<UUID, UserResponse> buildInviterInviteeUserMap(List<GroupInvitation> invitations,
+                                                                Map<Long, List<UUID>> coInviterIdsByInvitation) {
         List<UUID> userIds = new ArrayList<>();
         for (GroupInvitation invitation : invitations) {
             userIds.add(invitation.getInviterId());
             userIds.add(invitation.getInviteeId());
         }
+        coInviterIdsByInvitation.values().forEach(userIds::addAll);
         List<UUID> distinctUserIds = userIds.stream().distinct().collect(Collectors.toList());
         return distinctUserIds.isEmpty() ? Map.of() : userService.getUsersByIds(distinctUserIds);
     }
 
+    /**
+     * Single-invitation counterpart of {@link #mapInvitationPage} for call sites returning one
+     * {@code GroupInvitationResponse} rather than a {@code Page} ({@link #createInvitation}'s two
+     * return paths, {@link #createSelfApprovedInvitation}) — same batching helpers, sized to one.
+     */
+    private GroupInvitationResponse mapSingleInvitationResponse(GroupInvitation invitation, String groupName) {
+        Map<Long, List<UUID>> coInviterIdsByInvitation = buildCoInviterIdsByInvitation(List.of(invitation));
+        Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(List.of(invitation), coInviterIdsByInvitation);
+        return mapToGroupInvitationResponse(invitation, groupName, usersById, coInviterIdsByInvitation);
+    }
+
     private GroupInvitationResponse mapToGroupInvitationResponse(GroupInvitation invitation, String groupName,
-                                                                  Map<UUID, UserResponse> usersById) {
+                                                                  Map<UUID, UserResponse> usersById,
+                                                                  Map<Long, List<UUID>> coInviterIdsByInvitation) {
         UserResponse inviter = usersById.get(invitation.getInviterId());
         UserResponse invitee = usersById.get(invitation.getInviteeId());
         String inviterFullName = inviter != null ? inviter.getFullName() : "Unknown User";
         String inviteeFullName = invitee != null ? invitee.getFullName() : "Unknown User";
+
+        // B14: falls back to just the legacy single inviterId if this invitation predates the
+        // co-inviter table somehow being empty for it (shouldn't happen post-migration/backfill,
+        // but keeps this mapper defensive rather than emitting an empty list).
+        List<UUID> coInviterIds = coInviterIdsByInvitation.getOrDefault(invitation.getId(), List.of(invitation.getInviterId()));
+        List<String> inviterFullNames = coInviterIds.stream()
+                .map(id -> {
+                    UserResponse user = usersById.get(id);
+                    return user != null ? user.getFullName() : "Unknown User";
+                })
+                .collect(Collectors.toList());
 
         return GroupInvitationResponse.builder()
                 .id(invitation.getId())
@@ -1465,6 +1588,7 @@ public class GroupServiceImpl implements GroupService {
                 .groupName(groupName)
                 .inviterId(invitation.getInviterId())
                 .inviterFullName(inviterFullName)
+                .inviterFullNames(inviterFullNames)
                 .inviteeId(invitation.getInviteeId())
                 .inviteeFullName(inviteeFullName)
                 .status(invitation.getStatus())

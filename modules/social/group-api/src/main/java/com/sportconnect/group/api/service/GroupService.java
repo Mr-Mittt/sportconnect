@@ -135,6 +135,15 @@ public interface GroupService {
      * the invitation skips {@code pending_owner} entirely (no one else needs to approve their own
      * action) — it's created heading straight for {@code pending_user}, itself subject to rule 2
      * below. A regular member's invitation is unaffected — still created at {@code pending_owner}.
+     * <p>
+     * B14: if {@code inviteeId} already has an in-flight ({@code pending_owner}/{@code
+     * pending_user}) invitation to this group, no second {@code GroupInvitation} row is created —
+     * {@code inviterId} is instead recorded as an additional co-inviter on the existing row (see
+     * {@code GroupInvitationResponse#getInviterFullNames()}), unless they're already recorded. If
+     * they're newly added and are the group's owner/admin and the row is still
+     * {@code pending_owner}, joining as a co-inviter auto-approves it toward {@code pending_user}
+     * (or straight to {@code accepted} under B11 rule 2) — the same reasoning as this method's own
+     * B11-rule-1 self-approval, applied to a co-invite instead of the original invite.
      */
     GroupInvitationResponse createInvitation(Long groupId, UUID inviterId, CreateInvitationRequest request);
 
@@ -176,16 +185,21 @@ public interface GroupService {
      * awaiting the invitee's response) — both statuses in a single page, distinguishable via each
      * row's {@link GroupInvitationResponse#getStatus()}. Terminal statuses (accepted/declined_*)
      * are never included, since a caller paging through their own "still waiting on" list has no
-     * use for them here.
+     * use for them here. B14: matches against any recorded co-inviter for the invitation, not just
+     * the row's original/first inviter — a member who joined an already-pending invitation as a
+     * co-inviter sees it here too, not only the person who created the row.
      */
     Page<GroupInvitationResponse> getMemberSentInvitations(Long groupId, UUID inviterId, Pageable pageable);
 
     /**
-     * The inviter cancels their own invitation while it's still {@code pending_owner} — mirrors
-     * {@link #cancelJoinRequest(Long, UUID)}'s same "requestor withdraws their own in-flight item"
-     * shape (ownership check, status check, hard delete — no "cancelled" status literal, same as
-     * cancelling a join request). Once an owner/admin has approved it ({@code pending_user}), it's
-     * out of the inviter's hands — cancelling at that point isn't supported by this method.
+     * B14: a co-inviter withdraws their own invite while the invitation is still
+     * {@code pending_owner} — mirrors {@link #cancelJoinRequest(Long, UUID)}'s "requestor withdraws
+     * their own in-flight item" shape (co-inviter check, status check), but only removes
+     * {@code callerId}'s own {@code group_invitation_inviters} row rather than unconditionally
+     * deleting the invitation. The invitation itself is deleted only once its last remaining
+     * co-inviter withdraws — any other co-inviter can still act on it in the meantime. Once an
+     * owner/admin has approved it ({@code pending_user}), it's out of every co-inviter's hands —
+     * cancelling at that point isn't supported by this method, for any of them.
      */
     void cancelInvitation(Long invitationId, UUID callerId);
 }
