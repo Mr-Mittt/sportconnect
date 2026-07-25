@@ -232,8 +232,10 @@ export const mockSentInvitation: GroupInvitation = {
   id: 1,
   groupId: mockOwnedGroup.id,
   groupName: mockOwnedGroup.groupName,
+  sportId: mockOwnedGroup.sportId,
   inviterId: mockUser.id,
   inviterFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  inviterFullNames: [`${mockUser.firstName} ${mockUser.lastName}`],
   inviteeId: '55555555-5555-4555-8555-555555555555',
   inviteeFullName: 'Robin Park',
   status: 'pending_owner',
@@ -252,8 +254,10 @@ export const mockGroupInvitation: GroupInvitation = {
   id: 3,
   groupId: mockOwnedGroup.id,
   groupName: mockOwnedGroup.groupName,
+  sportId: mockOwnedGroup.sportId,
   inviterId: '33333333-3333-4333-8333-333333333333', // Sam Ito, mockGroupMembers[1]
   inviterFullName: 'Sam Ito',
+  inviterFullNames: ['Sam Ito'],
   inviteeId: '66666666-6666-4666-8666-666666666666',
   inviteeFullName: 'Morgan Diaz',
   status: 'pending_owner',
@@ -404,8 +408,10 @@ export const mockReceivedInvitation: GroupInvitation = {
   id: 4,
   groupId: mockPublicGroup.id,
   groupName: mockPublicGroup.groupName,
+  sportId: mockPublicGroup.sportId,
   inviterId: '77777777-7777-4777-8777-777777777777',
   inviterFullName: 'Priya Shah',
+  inviterFullNames: ['Priya Shah'],
   inviteeId: mockUser.id,
   inviteeFullName: `${mockUser.firstName} ${mockUser.lastName}`,
   status: 'pending_user',
@@ -591,6 +597,17 @@ export async function seedPaginatedFeedOnNextLoad(sessionId: string): Promise<vo
  */
 export async function seedZeroSportProfilesOnNextLoad(sessionId: string): Promise<void> {
   await postAdmin(sessionId, 'override/sportProfilesEmpty');
+}
+
+/**
+ * GRP-8 part 3 — seeds `mockJoinRequest` (the test user's own pending
+ * request against `mockPublicGroup`) directly into session state, rather
+ * than driving JoinGroupModal's search UI (no existing e2e coverage to
+ * build on for that flow) — same "seed state directly" shape as
+ * `seedPaginatedFeedOnNextLoad`.
+ */
+export async function seedJoinRequestOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'seed-join-requests');
 }
 
 /**

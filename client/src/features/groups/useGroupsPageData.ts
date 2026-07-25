@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useAuthStore } from '@/app/authStore';
-import { useFeedSpaceStore } from '@/app/feedSpaceStore';
+import { useGroupsPageStore } from '@/app/groupsPageStore';
 import { useActiveBroadcasts } from '@/features/feed/hooks/useActiveBroadcasts';
 import { useCreatePost } from '@/features/feed/hooks/useCreatePost';
 import { useDeletePost } from '@/features/feed/hooks/useDeletePost';
@@ -38,10 +38,10 @@ export interface GroupsPageData {
 
 /**
  * The Groups page's data boundary (FEED-4) — mirrors useHomeFeedData's role
- * and shape. `groups` is the user's joined groups filtered to the shared
- * `feedSpaceStore.activeSport` (a group is 1:1 with a sport, so this is
- * exact, not a heuristic). `selectedGroupId` (also shared state — carried
- * over if a page later needs it) decides `posts`' source:
+ * and shape. `groups` is the user's joined groups filtered to this page's
+ * own `groupsPageStore.activeSport` (independent of Home Feed's — a group
+ * is 1:1 with a sport, so this is exact, not a heuristic). `selectedGroupId`
+ * decides `posts`' source:
  *
  * - a specific group selected → `useGroupFeed(selectedGroupId)`, the real
  *   per-group feed.
@@ -114,9 +114,9 @@ export function useGroupsPageData(): {
   retryGroups: () => void;
 } {
   const currentUserId = useAuthStore((state) => state.user?.id);
-  const activeSport = useFeedSpaceStore((state) => state.activeSport);
-  const selectedGroupId = useFeedSpaceStore((state) => state.selectedGroupId);
-  const selectGroup = useFeedSpaceStore((state) => state.selectGroup);
+  const activeSport = useGroupsPageStore((state) => state.activeSport);
+  const selectedGroupId = useGroupsPageStore((state) => state.selectedGroupId);
+  const selectGroup = useGroupsPageStore((state) => state.selectGroup);
 
   const sportProfilesQuery = useSportProfiles();
   const upcomingMatchesQuery = useUpcomingMatches();

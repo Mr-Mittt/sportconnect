@@ -15,17 +15,20 @@ import { useUserPendingInvitations } from '@/features/feed/hooks/useUserPendingI
  * approval queue, a personal invitation inbox reads better with the newest
  * arrival on top.
  *
- * `onAccepted(groupId)` fires after a successful accept, before this hook's
- * own `feedKeys.all` invalidation settles — `GroupsPage.tsx` uses it to run
- * the `setActiveSport('all')`-then-`selectGroup` navigation GRP-7 specifies
- * (avoiding the fragile refetch-then-lookup race a sport-filtered group list
- * would otherwise hit), keeping that store-level orchestration in the page
- * component rather than reaching into `feedSpaceStore` from here.
+ * `onAccepted(groupId, sportId)` fires after a successful accept, before this
+ * hook's own `feedKeys.all` invalidation settles — `GroupsPage.tsx` uses it
+ * to navigate straight to the new group with its own sport pill active
+ * (GRP-8 part 1, via B15's `sportId` on the invitation — no more
+ * `setActiveSport('all')` detour), keeping that store-level orchestration in
+ * the page component rather than reaching into `groupsPageStore` from here.
+ *
+ * `rejectInvitation` takes an optional `reason` (GRP-8 part 2/B13) — reasons
+ * are optional at this layer too (empty/absent both send fine).
  */
 export function useGroupInvitationsData(
   userId: string | undefined,
   enabled: boolean,
-  onAccepted: (groupId: number) => void,
+  onAccepted: (groupId: number, sportId: number) => void,
 ) {
   const invitationsQuery = useUserPendingInvitations(userId, enabled);
   const acceptMutation = useAcceptInvitation();
@@ -43,7 +46,7 @@ export function useGroupInvitationsData(
     const invitation = invitations.find((candidate) => candidate.id === invitationId);
     acceptMutation.mutate(invitationId, {
       onSuccess: () => {
-        if (invitation !== undefined) onAccepted(invitation.groupId);
+        if (invitation !== undefined) onAccepted(invitation.groupId, invitation.sportId);
       },
     });
   };
@@ -55,8 +58,10 @@ export function useGroupInvitationsData(
     retry: () => invitationsQuery.refetch(),
     acceptInvitation,
     isAccepting: acceptMutation.isPending,
-    rejectInvitation: (invitationId: number) => rejectMutation.mutate(invitationId),
+    rejectInvitation: (invitationId: number, reason?: string) =>
+      rejectMutation.mutate({ invitationId, reason }),
     isRejecting: rejectMutation.isPending,
+    isRejectError: rejectMutation.isError,
   };
 }
 

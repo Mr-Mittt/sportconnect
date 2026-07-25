@@ -3,8 +3,9 @@ import { getResponse } from 'msw';
 import { handlers } from './handlers/index.ts';
 import { resetFeedSession, seedPostsState } from './handlers/feed.ts';
 import { resetFriendHandlersState } from './handlers/friends.ts';
-import { resetGroupHandlersState } from './handlers/groups.ts';
+import { resetGroupHandlersState, seedJoinRequestsState } from './handlers/groups.ts';
 import { resetSportHandlersState } from './handlers/sport.ts';
+import { mockJoinRequest } from './fixtures.ts';
 import { buildPaginatedFeed } from './paginatedFeedFixture.ts';
 import { resetOverrides, setOverride, type SessionOverrides } from './overrides.ts';
 import { MOCK_SERVER_PORT } from './mockServerConfig.ts';
@@ -161,6 +162,12 @@ async function handleAdminRoute(
 
   if (action === 'seed-paginated-feed' && req.method === 'POST') {
     seedPostsState(sessionId, buildPaginatedFeed());
+    sendJson(res, 200, { seeded: true });
+    return;
+  }
+
+  if (action === 'seed-join-requests' && req.method === 'POST') {
+    seedJoinRequestsState(sessionId, [mockJoinRequest]);
     sendJson(res, 200, { seeded: true });
     return;
   }

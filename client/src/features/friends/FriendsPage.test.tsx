@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
+import { useFriendsPageStore } from '@/app/friendsPageStore';
 import { FriendsPage } from './FriendsPage';
 import type { FriendRequest, FriendUser } from './types';
 
@@ -86,6 +87,7 @@ describe('FriendsPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useAuthStore.getState().setSession(testUser, 'access-token');
+    useFriendsPageStore.setState({ query: '', isAddMode: false, selectedPersonId: undefined });
   });
 
   afterEach(() => {

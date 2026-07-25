@@ -6,15 +6,15 @@ import { sportKeyForId } from '@/features/feed/sportIdMap';
 import type { Group } from '@/features/feed/types';
 
 interface GroupSpaceSwitcherProps {
-  /** Caller pre-filters to the shared feedSpaceStore's activeSport — a group
-   * is 1:1 with a sport, so this bounds the pill row to a handful of groups
-   * instead of the user's full (unbounded) group list. */
+  /** Caller pre-filters to the Groups page's own `groupsPageStore.activeSport`
+   * — a group is 1:1 with a sport, so this bounds the pill row to a handful
+   * of groups instead of the user's full (unbounded) group list. */
   groups: Group[];
   /** null = "All" (the aggregate view — no single group to post into). */
   selectedGroupId: number | null;
-  /** `groupSportId` (the selected group's own sport) lets the shared
-   * feedSpaceStore decide whether this selection is still valid the next
-   * time the sport filter changes — omit/undefined when selecting "All". */
+  /** `groupSportId` (the selected group's own sport) lets `groupsPageStore`
+   * decide whether this selection is still valid the next time the sport
+   * filter changes — omit/undefined when selecting "All". */
   onSelect: (groupId: number | null, groupSportId?: number) => void;
   sportsByKey: Record<SportKey, SportProfile>;
   isLoading: boolean;

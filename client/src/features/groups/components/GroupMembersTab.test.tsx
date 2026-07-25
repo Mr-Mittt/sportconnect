@@ -44,8 +44,10 @@ function invitation(overrides: Partial<GroupInvitation> = {}): GroupInvitation {
     id: 1,
     groupId: 1,
     groupName: 'Riverside Ballers',
+    sportId: 5,
     inviterId: 'user-1',
     inviterFullName: 'Jordan Lee',
+    inviterFullNames: ['Jordan Lee'],
     inviteeId: 'user-3',
     inviteeFullName: 'Robin Park',
     status: 'pending_owner',
@@ -131,6 +133,7 @@ describe('GroupMembersTab', () => {
     const item = invitationItem({
       id: 9,
       inviterFullName: 'Sam Ito',
+      inviterFullNames: ['Sam Ito'],
       inviteeFullName: 'Morgan Diaz',
     });
     render(
@@ -151,6 +154,18 @@ describe('GroupMembersTab', () => {
 
     await user.click(within(section).getByRole('button', { name: 'Decline' }));
     expect(onDecline).toHaveBeenCalledWith(item);
+  });
+
+  // GRP-8 part 4
+  it('merges multiple co-inviters into one "Invited by" line in the approval queue', () => {
+    const item = invitationItem({
+      id: 10,
+      inviterFullNames: ['Sam Ito', 'Priya Shah'],
+      inviteeFullName: 'Morgan Diaz',
+    });
+    render(<GroupMembersTab {...baseProps} canManage approvalQueue={[item]} />);
+    const section = screen.getByRole('region', { name: 'Waiting for group approve' });
+    expect(within(section).getByText('Invited by Sam Ito and Priya Shah')).toBeInTheDocument();
   });
 
   it('merges join-request and invitation rows in the same "Waiting for group approve" list', () => {

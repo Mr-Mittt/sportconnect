@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { Group, GroupInvitation } from '@/features/feed/types';
+import type { Group, GroupInvitation, JoinRequest } from '@/features/feed/types';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { GroupDiscoveryPanel } from './GroupDiscoveryPanel';
 
@@ -30,13 +30,15 @@ function group(overrides: Partial<Group>): Group {
   };
 }
 
-// GRP-7
+// GRP-7/GRP-8
 const invitation: GroupInvitation = {
   id: 1,
   groupId: 2,
   groupName: 'Riverside Hoopers',
+  sportId: 6,
   inviterId: 'user-4',
   inviterFullName: 'Priya Shah',
+  inviterFullNames: ['Priya Shah'],
   inviteeId: 'user-1',
   inviteeFullName: 'Jordan Lee',
   status: 'pending_user',
@@ -44,6 +46,30 @@ const invitation: GroupInvitation = {
   reviewedAt: '2026-07-16T00:00:00',
   createdAt: '2026-07-16T00:00:00',
   updatedAt: '2026-07-16T00:00:00',
+};
+
+// GRP-8 part 2: a merged invitation from more than one co-inviter.
+const mergedInvitation: GroupInvitation = {
+  ...invitation,
+  id: 6,
+  inviterFullNames: ['Priya Shah', 'Sam Ito', 'Morgan Diaz'],
+};
+
+// GRP-8 part 3
+const joinRequest: JoinRequest = {
+  id: 1,
+  groupId: 3,
+  groupName: 'Weekend Tennis Ladder',
+  userId: 'user-1',
+  userFullName: 'Jordan Lee',
+  userAvatarUrl: null,
+  status: 'pending',
+  message: null,
+  reviewedBy: null,
+  reviewedByFullName: null,
+  reviewedAt: null,
+  createdAt: '2026-07-17T00:00:00',
+  updatedAt: '2026-07-17T00:00:00',
 };
 
 const meta = {
@@ -66,6 +92,12 @@ const meta = {
     onRejectInvitation: () => {},
     isAcceptingInvitation: false,
     isRejectingInvitation: false,
+    joinRequests: [],
+    isJoinRequestsLoading: false,
+    isJoinRequestsError: false,
+    onRetryJoinRequests: () => {},
+    onWithdrawJoinRequest: () => {},
+    isWithdrawingJoinRequest: false,
   },
 } satisfies Meta<typeof GroupDiscoveryPanel>;
 
@@ -77,6 +109,16 @@ export const ZeroGroups: Story = {};
 /** GRP-7: the Invitations section above the (empty) joined-groups grid. */
 export const WithInvitation: Story = {
   args: { invitations: [invitation] },
+};
+
+/** GRP-8 part 2: multiple co-inviters render as one merged row. */
+export const WithMergedInvitation: Story = {
+  args: { invitations: [mergedInvitation] },
+};
+
+/** GRP-8 part 3: the new Join requests section, below the joined-groups grid. */
+export const WithJoinRequest: Story = {
+  args: { joinRequests: [joinRequest] },
 };
 
 export const WithGroups: Story = {

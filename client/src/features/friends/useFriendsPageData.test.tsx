@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
+import { useFriendsPageStore } from '@/app/friendsPageStore';
 import type { User } from '@/features/auth/types';
 import type { FriendRequest, FriendUser, UserSearchResult } from './types';
 import { useFriendsPageData } from './useFriendsPageData';
@@ -100,6 +101,7 @@ describe('useFriendsPageData', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useAuthStore.setState({ user: mockUser, accessToken: 'token', isBootstrapping: false });
+    useFriendsPageStore.setState({ query: '', isAddMode: false, selectedPersonId: undefined });
   });
 
   it('resolves a friend-list selection to FRIENDS without calling GET /users/{id}', async () => {
@@ -213,5 +215,53 @@ describe('useFriendsPageData', () => {
     act(() => result.current.setQuery('priya'));
     expect(result.current.offlineFriends.map((f) => f.fullName)).toEqual(['Priya Shah']);
     expect(result.current.friendRequestRows.map((r) => r.name)).toEqual([]);
+  });
+
+  // User-requested: leaving the Friends page and coming back restores mode/
+  // search text/selection; a restored selection that's no longer in any
+  // reloaded list clears back to "no selection" instead of lingering.
+  it('restores a persisted query/Add-mode/selection on a fresh mount (simulates returning to the page)', async () => {
+    useFriendsPageStore.setState({ query: 'priya', isAddMode: false, selectedPersonId: 'f1' });
+    mockGet();
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    expect(result.current.query).toBe('priya');
+    expect(result.current.isAddMode).toBe(false);
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('FRIENDS'));
+    expect(result.current.selectedPerson?.fullName).toBe('Priya Shah');
+  });
+
+  it('clears a restored selection that no longer resolves to anyone once the reloaded lists settle', async () => {
+    // f9 was presumably a friend/pending request last visit — none of the
+    // reloaded lists include it this time (e.g. unfriended, or the request
+    // was resolved elsewhere).
+    useFriendsPageStore.setState({ query: '', isAddMode: false, selectedPersonId: 'f9' });
+    mockGet({ friends: [priya] });
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.selectedPersonId).toBeUndefined());
+    expect(result.current.selectedPerson).toBeUndefined();
+  });
+
+  it('keeps a restored Add-mode search selection once the re-run search confirms it\'s still there', async () => {
+    const searchResult: UserSearchResult = {
+      id: 'u1',
+      fullName: 'Owen Clarke',
+      username: 'owenc',
+      avatarUrl: null,
+      city: null,
+      country: null,
+      friendshipStatus: 'NONE',
+    };
+    useFriendsPageStore.setState({ query: 'Owen', isAddMode: true, selectedPersonId: 'u1' });
+    mockGet({
+      search: [searchResult],
+      profiles: { u1: { id: 'u1', fullName: 'Owen Clarke', avatarUrl: null, coverUrl: null, bio: null } },
+    });
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.searchResults).toHaveLength(1), { timeout: 2000 });
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('NONE'));
+    expect(result.current.selectedPersonId).toBe('u1');
   });
 });

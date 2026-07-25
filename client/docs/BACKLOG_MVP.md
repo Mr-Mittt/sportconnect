@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-07-24
+**Last updated:** 2026-07-25
 
 ---
 
@@ -116,7 +116,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 45 | GRP-4 | Wire invite-friend search to the real backend — blocked on GRP-3, unblocked now that FRIEND-1 is `DONE` | `DONE` |
 | 46 | GRP-5 | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
 | 51 | GRP-7 | Wire the invitation approve/accept lifecycle — owner/admin approval + invitee acceptance — **new ticket, not in either epic, found while closing out GRP-4** (2026-07-23) — blocked on backend B11 | `DONE` |
-| 52 | GRP-8 | Sport pill follows an opened group + merged multi-inviter display (invitee + owner/admin views) + reason-gated invitation reject + join-request withdraw + sport-add confirmation on accept — **new ticket, not in either epic, filed while using GRP-7's shipped lifecycle, amended same day** (2026-07-24) — blocked on backend B13 (reject reason), B14 (multi-inviter tracking), B15 (sportId on invitation response) | `TODO` |
+| 52 | GRP-8 | Sport pill follows an opened group + merged multi-inviter display (invitee + owner/admin views) + reason-gated invitation reject + join-request withdraw + sport-add confirmation on accept — **new ticket, not in either epic, filed while using GRP-7's shipped lifecycle, amended same day** (2026-07-24) — backend B13/B14/B15 all shipped, no longer blocking | `DONE` |
 | **Phase 8 — Chat (new, not in either epic — see `documentation/md/CHAT_SERVICE_INTEGRATION.md`)** | | | |
 | 47 | CHAT-2 | Wire GroupChatTab to real-time PubNub delivery — blocked on CHAT-1 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) | `TODO` |
 | 48 | CHAT-4 | Persisted chat history + hardening — blocked on CHAT-3 (`modules/social/chat-impl/docs/BACKLOG_MVP.md`) and CHAT-2 | `TODO` |
@@ -2185,9 +2185,47 @@ section of `client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`.
 ---
 
 ### GRP-8 · Sport pill follows an opened group, merged multi-inviter display, reason-gated reject, join-request withdraw, and sport-add confirmation on accept
-**Status:** `TODO` · **Type:** Enhancement · **Dependency:** GRP-3, GRP-4, GRP-7 (all `DONE`, no code
-blocker) · **Filed:** 2026-07-24, user-requested directly, amended same day with two more items
-(parts 4–5 below) before pickup.
+**Status:** `DONE` (2026-07-25, `client/docs/GRP-8_INVITATION_LIFECYCLE_POLISH.md`) · **Type:**
+Enhancement · **Dependency:** GRP-3, GRP-4, GRP-7 (all `DONE`, no code blocker) · **Filed:**
+2026-07-24, user-requested directly, amended same day with two more items (parts 4–5 below) before
+pickup.
+
+**Delta (2026-07-25, resolved at pickup — part 5's UI shape changed):** the ticket originally sketched
+adding an optional `note`/description prop to `AddSportModal` itself. User revised this at pickup: a
+separate `AddSportIntroDialog` shows the explanatory copy first, with a single **OK** button (not a
+Confirm/Cancel pair) — only after OK does the existing, unmodified `AddSportModal` open. Everything
+else shipped as scoped below.
+
+**Follow-up fix (2026-07-25, same day, user-reported, revised three times):** part 1 as first shipped
+only synced group→sport (opening a group drives the pill), not the reverse. Repro: open a football
+group (pill correctly shows Football) → go to Home Feed → switch to "All" there → return to Groups →
+the football group's tabs are still showing under a mismatched "All" pill; the same root cause meant
+clicking "All" while viewing a specific group did nothing.
+
+Two intermediate revisions (shared store always clears the group on "All"; then a one-directional
+guard plus a derived `effectiveActiveSport`) each fixed a real problem the previous one introduced,
+but both still kept `activeSport` as one field shared cross-page.
+
+**Final revision — full separation (user-requested directly):** split `feedSpaceStore` into two
+independent stores — `homeFeedStore.ts` (Home Feed's own `activeSport`) and `groupsPageStore.ts` (the
+Groups page's own `activeSport`/`selectedGroupId`/`selectedGroupSportId`/`selectGroup`). Switching
+sport on either page can now never affect the other, by construction — no shared field to drift, no
+guard logic needed to compensate. `effectiveActiveSport` was removed entirely; `GroupsPage.tsx`'s pill/
+`Feed`/`UpcomingMatches` go back to reading `groupsPageStore.activeSport` directly, which is now always
+correct since only this page's own actions ever write to it (`selectGroup`'s derivation, or
+`guardedSetActiveSport`'s explicit deselect when the picked sport doesn't match the open group).
+Home Feed's `goToGroup` (a group post's "> groupname" link) writes into `groupsPageStore.selectGroup`
+directly as a deliberate one-off cross-store call ("open this group when you land there"), without
+touching its own `homeFeedStore.activeSport`. `client/CLAUDE.md`'s cross-page-state section updated —
+its original "promote activeSport to one shared store" guidance is struck through with a note
+explaining the reversal, since this is a real architecture decision future tickets should know about.
+Also wired `GroupsPage`'s `SportSwitcher` through the existing unsaved-Settings-changes guard, since a
+sport switch can silently discard an unsaved draft the same way every other group-deselecting action
+already guards against.
+
+`pnpm e2e` was not verified green this session (pre-existing sandbox environment issue reproduced on
+the clean base commit, unrelated to this ticket's changes — see the summary doc); `pnpm test` (529),
+`tsc -b`, lint, and the Storybook build are all clean.
 
 **Origin:** five separate UX gaps found using the Groups page after GRP-7 shipped the invitation
 lifecycle:

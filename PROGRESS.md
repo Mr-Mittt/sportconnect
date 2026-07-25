@@ -1391,6 +1391,49 @@ sport-switch on accept, instead of forcing "All") and GRP-8 (add-to-profile conf
 `./gradlew :modules:social:group-impl:test` 131 green (added coverage for two previously-untested
 methods, `getGroupInvitations` and `getUserPendingInvitations`), `:server:test` 34 green.
 
+**GRP-8 DONE** (2026-07-25, `client/docs/GRP-8_INVITATION_LIFECYCLE_POLISH.md`): five-part Groups-page
+polish, all backend deps (B13/B14/B15) shipped before pickup. (1) opening a specific group now
+switches `SportSwitcher`'s active pill to match (`feedSpaceStore.selectGroup` derives it), including
+GRP-7's accept-invitation flow — no more forcing "All" first. (2) the invitee-facing Invitations
+section renders every co-inviter (B14's `inviterFullNames`, Oxford-comma joined) and Reject now opens
+a confirmation dialog with an optional reason (B13), not a required field. (3) new "Join requests"
+section on the All-groups view — withdraw a pending join request directly, no confirmation. (4) the
+Members tab's owner/admin approval queue gets the same merged-inviter display as (2). (5) accepting an
+invitation for a sport the invitee has no profile for shows a plain intro dialog ("This {sport}
+group…", single OK button — a mid-session revision from the ticket's original `AddSportModal`-note-prop
+sketch) before opening the existing `AddSportModal` pre-selected to that sport. **Follow-up fix (same
+day, user-reported, revised three times):** part 1 only synced group→sport, not the reverse —
+clicking "All" on Home Feed never touched the group selected on the Groups page, so returning to
+Groups showed a stale group's tabs under a mismatched "All" pill (and clicking "All" while viewing a
+group did nothing). Two intermediate revisions (shared store always clears on "All", then a
+one-directional guard + derived `effectiveActiveSport`) were each an improvement but still left
+`activeSport` as one field shared cross-page. **Final revision (user-requested): full separation** —
+`feedSpaceStore` split into two independent stores, `homeFeedStore.ts` (Home Feed's own `activeSport`)
+and `groupsPageStore.ts` (the Groups page's own `activeSport`/`selectedGroupId`/`selectGroup`).
+Switching sport on either page can now never affect the other, by construction, not by guard logic —
+`effectiveActiveSport` became unnecessary and was removed. Home Feed's `goToGroup` (a group post's
+"> groupname" link) writes into `groupsPageStore.selectGroup` directly as a deliberate one-off
+cross-store call ("open this group there"), without touching its own `homeFeedStore.activeSport`.
+`client/CLAUDE.md`'s cross-page-state guidance updated (the original "promote to a shared store"
+paragraph struck through with a note on why it reversed) since this is a real architecture decision,
+not just a bug fix. Also wired `GroupsPage`'s `SportSwitcher` through the existing
+unsaved-Settings-changes guard, since a sport switch can silently discard an unsaved Settings draft the
+same way any other group-deselecting action already guards against. `pnpm test` 529 green (93 files),
+`tsc -b` clean, lint clean, Storybook build clean. `pnpm e2e` could not be verified green in this
+session — a pre-existing sandbox environment issue (every spec's login step times out, reproduced
+identically on the clean pre-ticket base commit), not a regression; recorded as an explicit conditional
+in the summary doc.
+
+**Friends page rail state persistence (2026-07-25, user-requested,
+`client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
+rail's mode (friend list vs. directory search), search text, and selected person — previously all
+three reset on every remount. New `friendsPageStore` (sessionStorage-persisted, same convention as
+`feedSpaceStore`) replaces `useFriendsPageData`'s local `useState` for `query`/`isAddMode`/
+`selectedPersonId`. The underlying friends/requests/search lists always refetch fresh on remount
+already (TanStack Query's default `staleTime: 0`, shared cache across route changes) — no extra
+wiring needed there. A restored selection that no longer resolves to anyone once the reloaded lists
+settle clears back to "no selection" rather than lingering. `pnpm test` 529 green, `tsc -b`/lint clean.
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

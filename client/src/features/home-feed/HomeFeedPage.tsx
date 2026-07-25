@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
-import { useFeedSpaceStore } from '@/app/feedSpaceStore';
+import { useGroupsPageStore } from '@/app/groupsPageStore';
+import { useHomeFeedStore } from '@/app/homeFeedStore';
 import { usePost } from '@/features/feed/hooks/usePost';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
@@ -30,9 +31,10 @@ const noop = () => {};
  * Assembles the Home Feed (HF-7): SportSwitcher above a two-column grid —
  * feed left, rail (Upcoming → Trending → Broadcasts) right, stacking below md
  * (768px; HF-8 hardens responsiveness). TopBar/NavTabs come from AppShell, not
- * here. activeSport now lives in the shared `feedSpaceStore` (FEED-4) — the
- * Groups page needs it too, so it was promoted out of page-local state per
- * client/CLAUDE.md's cross-page state rule.
+ * here. activeSport lives in its own `homeFeedStore` — independent of the
+ * Groups page's `groupsPageStore` (2026-07-25 decision, reversing FEED-4's
+ * original single shared store: switching sport on one page used to be able
+ * to silently affect the other, since both read/wrote the same field).
  *
  * Feed's posts are real (FEED-1, `usePersonalFeed()` behind
  * `useHomeFeedData()`); sportProfiles (SPORT-1) and hashtags (FEED-6) are
@@ -60,9 +62,11 @@ const noop = () => {};
  * pagination and making it work from a cold load with no prior fetch at all.
  */
 export function HomeFeedPage() {
-  const activeSport = useFeedSpaceStore((state) => state.activeSport);
-  const setActiveSport = useFeedSpaceStore((state) => state.setActiveSport);
-  const selectGroup = useFeedSpaceStore((state) => state.selectGroup);
+  const activeSport = useHomeFeedStore((state) => state.activeSport);
+  const setActiveSport = useHomeFeedStore((state) => state.setActiveSport);
+  // Only used to hand off to the Groups page's own state below (`goToGroup`)
+  // — Home Feed never reads the Groups page's selection/sport itself.
+  const selectGroupOnGroupsPage = useGroupsPageStore((state) => state.selectGroup);
   const navigate = useNavigate();
   // Source of truth for which post's comment dialog is open — the URL, not
   // local state (FEED-12). `useParams` re-runs on every route match, so this
@@ -72,13 +76,13 @@ export function HomeFeedPage() {
   const activeCommentsPostId = postIdParam !== undefined ? Number(postIdParam) : null;
   const openComments = (postId: number) => navigate(`/posts/${postId}`);
   const closeComments = () => navigate('/', { replace: true });
-  // Clicking a group post's "> groupname" link — switches the Groups page to
-  // that group's sport (a group is 1:1 with exactly one sport) before
-  // selecting it, then navigates there. Mirrors GroupSpaceSwitcher's own
-  // click behavior so the destination looks identical either way.
+  // Clicking a group post's "> groupname" link — tells the Groups page which
+  // group to show (its own `selectGroup` already derives that page's sport
+  // pill to match, same as `GroupSpaceSwitcher`'s own click behavior), then
+  // navigates there. Deliberately does NOT touch Home Feed's own
+  // `activeSport` — the two pages' sport pills are independent.
   const goToGroup = (groupId: number, sportId: number) => {
-    setActiveSport(sportKeyForId(sportId) ?? 'all');
-    selectGroup(groupId, sportId);
+    selectGroupOnGroupsPage(groupId, sportId);
     navigate('/groups');
   };
   // Which hashtag's results modal is open — still page-local state (unlike

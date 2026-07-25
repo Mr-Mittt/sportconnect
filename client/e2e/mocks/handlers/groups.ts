@@ -235,6 +235,22 @@ export const groupHandlers: HttpHandler[] = [
     );
   }),
 
+  // GRP-8 part 3: withdraw one of the caller's own pending join requests —
+  // mirrors the accept/decline handlers' "find in joinRequestsState, mutate,
+  // 200" shape. No ownership check needed (same reasoning as the real
+  // backend's cancelJoinRequest) since this mock's join-requests state is
+  // already scoped to the one test user.
+  http.delete('/api/groups/join-requests/:requestId', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const requestId = Number(params.requestId);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    session.joinRequestsState = session.joinRequestsState.filter(
+      (request_) => request_.id !== requestId,
+    );
+    return HttpResponse.json(apiResponse(null, 'Join request cancelled'));
+  }),
+
   // GRP-1/GRP-2: Privacy toggle and rules/schedule both go through this same
   // endpoint. No handler existed for it before GRP-2 — Privacy's own e2e
   // coverage never exercised a real PUT call until this ticket added one.
@@ -380,8 +396,10 @@ export const groupHandlers: HttpHandler[] = [
       id: session.nextInvitationId++,
       groupId,
       groupName: group?.groupName ?? 'Group',
+      sportId: group?.sportId ?? 0,
       inviterId: mockUser.id,
       inviterFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+      inviterFullNames: [`${mockUser.firstName} ${mockUser.lastName}`],
       inviteeId: body.inviteeId,
       inviteeFullName: KNOWN_INVITEE_NAMES[body.inviteeId] ?? 'New Friend',
       status: 'pending_owner',
@@ -566,4 +584,14 @@ export const groupHandlers: HttpHandler[] = [
 /** Test-only reset — used by the mock server's `/__mock/sessions/:id/reset`. */
 export function resetGroupHandlersState(sessionId: string): void {
   groupsSessions.reset(sessionId);
+}
+
+/**
+ * GRP-8 part 3 — seeds the test user's own pending join requests directly
+ * (rather than driving JoinGroupModal's search UI, which has no existing
+ * e2e coverage to build on) — same "seed state directly via an admin route"
+ * shape as `seedPostsState`. Reached via `/__mock/sessions/:id/seed-join-requests`.
+ */
+export function seedJoinRequestsState(sessionId: string, requests: JoinRequest[]): void {
+  groupsSessions.get(sessionId).joinRequestsState = requests;
 }

@@ -11,7 +11,9 @@ is the living reference, that one is the point-in-time implementation record), `
 `HF-11_E2E_HOME_FEED_JOURNEY.md`, `HF-10a/b` (visual-regression harness), `GRP-3_MEMBERS_TAB.md`
 (new `group-members.spec.ts` + the first Groups-page block in `a11y.spec.ts`), `GRP-4_INVITE_FRIEND_REAL.md`
 (replaces `group-members.spec.ts`'s step 3 with a real search + invite), `GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`
-(new `group-invitations.spec.ts` — the merged approval queue + the Invitations section's accept/reject).
+(new `group-invitations.spec.ts` — the merged approval queue + the Invitations section's accept/reject),
+`GRP-8_INVITATION_LIFECYCLE_POLISH.md` (extends `group-invitations.spec.ts` with 2 new tests + a new
+`seed-join-requests` admin route).
 
 ---
 
@@ -394,6 +396,21 @@ approve"; `mockFriend` is neither a member nor already invited to `mockOwnedGrou
 `group_member` there), opens Members tab, confirms "Group administrator" renders but "Waiting for
 group approve" does not — the parent hook never even fires that request for a non-manager (the real
 endpoint 400s for one).
+
+### `e2e/flows/group-invitations.spec.ts` (GRP-7, GRP-8, 5 `test()`s)
+
+GRP-7's invitation approve/accept lifecycle, extended by GRP-8's sport-pill/merged-inviter/reject-reason/
+join-request-withdraw/sport-add-on-accept polish. Uses `mockOwnedGroup` ("Weekend Tennis Ladder") for the
+owner/admin approval-queue journey, and `mockPublicGroup` ("Riverside Hoopers", Basketball) via
+`mockReceivedInvitation` for the invitee-facing acceptance journey.
+
+| Test | What it checks | Notes |
+|---|---|---|
+| Merged approval queue shows both row types, approving an invitation only clears the queue row | A join request and a `pending_owner` invitation render together in "Waiting for group approve"; approving the invitation removes only that row (no member added — real semantics: approve just moves `pending_owner` → `pending_user`); the join request still accepts normally afterward | GRP-7 |
+| Invitations section accepts an invitation and navigates into the new group, sport pill included | Accept → lands on the new group's Posts tab; **GRP-8 part 1**: `SportSwitcher`'s Basketball pill is now active (`aria-pressed="true"`) — no more forcing "All" first, since B15 added `sportId` to the invitation | Also asserts the merged-inviter copy: "Group invitation from Priya Shah" |
+| Invitations section is absent once there are none to show | Reject → **GRP-8 part 2**: opens `RejectInvitationConfirmDialog` first (optional reason, left empty here) → confirming inside the dialog removes the row | Exercises "reason is optional" (user decision) |
+| Join requests section withdraws the current user's own pending request | `mockJoinRequest` seeded via a new admin route (`seed-join-requests` — no existing e2e coverage of `JoinGroupModal`'s search UI to drive instead) → "Riverside Hoopers" row visible with a "Withdraw" button → clicking it empties the section | **GRP-8 part 3** |
+| Accepting an invitation for a sport the invitee lacks offers to add it first | Test user's sport profiles zeroed via `seedZeroSportProfilesOnNextLoad` → Accept → `AddSportIntroDialog` ("This Basketball group…", OK button) → `AddSportModal` pre-selected to Basketball → submitting adds the profile then accepts the invitation, landing on the new group's Posts tab | **GRP-8 part 5** |
 
 ### `e2e/flows/friends-journey.spec.ts` (FRIEND-1, one `test()` with 7 steps)
 

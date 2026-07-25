@@ -1,4 +1,5 @@
 import type { GroupInvitation } from '@/features/feed/types';
+import { formatNameList } from '@/shared/lib/formatNameList';
 import { Button } from '@/shared/ui/button';
 import { Skeleton } from '@/shared/ui/skeleton';
 
@@ -24,6 +25,12 @@ interface GroupInvitationsSectionProps {
  * empty. Sorted newest-first by the caller (`useGroupInvitationsData`) — a
  * personal inbox reads better with the newest arrival on top, unlike the
  * Members tab's oldest-first approval queue.
+ *
+ * GRP-8 part 2: renders every co-inviter (B14's `inviterFullNames`) via
+ * `formatNameList`, not just the original inviter. `onReject` no longer
+ * fires the mutation directly — the parent (`GroupsPage`) opens
+ * `RejectInvitationConfirmDialog` instead, which collects an optional reason
+ * before actually calling `useRejectInvitation`.
  */
 export function GroupInvitationsSection({
   invitations,
@@ -73,7 +80,9 @@ export function GroupInvitationsSection({
                 <div className="truncate text-2sm font-medium text-text-primary">
                   {invitation.groupName}
                 </div>
-                <div className="text-2xs text-text-muted">Invited by {invitation.inviterFullName}</div>
+                <div className="text-2xs text-text-muted">
+                  Group invitation from {formatNameList(invitation.inviterFullNames)}
+                </div>
               </div>
               <div className="flex shrink-0 gap-1.5">
                 <Button

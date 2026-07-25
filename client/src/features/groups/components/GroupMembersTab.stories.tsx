@@ -28,8 +28,10 @@ const approvalQueueInvitation: GroupInvitation = {
   id: 2,
   groupId: 1,
   groupName: 'Riverside Ballers',
+  sportId: 5,
   inviterId: 'user-5',
   inviterFullName: 'Sam Ito',
+  inviterFullNames: ['Sam Ito'],
   inviteeId: 'user-8',
   inviteeFullName: 'Morgan Diaz',
   status: 'pending_owner',
@@ -39,9 +41,17 @@ const approvalQueueInvitation: GroupInvitation = {
   updatedAt: '2026-07-16T12:00:00',
 };
 
+// GRP-8 part 4: a second co-inviter joined this invitation.
+const mergedApprovalQueueInvitation: GroupInvitation = {
+  ...approvalQueueInvitation,
+  id: 3,
+  inviterFullNames: ['Sam Ito', 'Priya Shah'],
+};
+
 const approvalQueue: ApprovalQueueItem[] = [
   { type: 'join_request', data: joinRequests[0]! },
   { type: 'invitation', data: approvalQueueInvitation },
+  { type: 'invitation', data: mergedApprovalQueueInvitation },
 ];
 
 const sentInvitations: GroupInvitation[] = [
@@ -49,8 +59,10 @@ const sentInvitations: GroupInvitation[] = [
     id: 1,
     groupId: 1,
     groupName: 'Riverside Ballers',
+    sportId: 5,
     inviterId: 'user-1',
     inviterFullName: 'Jordan Lee',
+    inviterFullNames: ['Jordan Lee'],
     inviteeId: 'user-3',
     inviteeFullName: 'Robin Park',
     status: 'pending_owner',
@@ -63,8 +75,10 @@ const sentInvitations: GroupInvitation[] = [
     id: 2,
     groupId: 1,
     groupName: 'Riverside Ballers',
+    sportId: 5,
     inviterId: 'user-1',
     inviterFullName: 'Jordan Lee',
+    inviterFullNames: ['Jordan Lee'],
     inviteeId: 'user-4',
     inviteeFullName: 'Sam Ito',
     status: 'pending_user',

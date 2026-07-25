@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
-import { useFeedSpaceStore } from '@/app/feedSpaceStore';
+import { useGroupsPageStore } from '@/app/groupsPageStore';
 import type { Group, PageResponse, Post } from '@/features/feed/types';
 import { useGroupsPageData } from './useGroupsPageData';
 
@@ -142,7 +142,7 @@ describe('useGroupsPageData', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useAuthStore.getState().setSession(testUser, 'access-token');
-    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: null });
+    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: null });
   });
 
   afterEach(() => {
@@ -150,7 +150,7 @@ describe('useGroupsPageData', () => {
   });
 
   it('filters groups to the active sport (football=5)', async () => {
-    useFeedSpaceStore.setState({ activeSport: 'football', selectedGroupId: null });
+    useGroupsPageStore.setState({ activeSport: 'football', selectedGroupId: null });
     const groups = [group({ id: 1, sportId: 5 }), group({ id: 2, sportId: 6, groupName: 'Hoops Crew' })];
     mockGet({ '/groups/user/user-1': page(groups), '/posts/feed': page([]) });
 
@@ -184,7 +184,7 @@ describe('useGroupsPageData', () => {
   });
 
   it('selecting a group switches the feed source to GET /posts/group/{id}', async () => {
-    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: 7 });
     const groupPosts = [post({ id: 9, postType: 'GROUP_POST', groupId: 7 })];
     const getSpy = mockGet({ '/groups/user/user-1': page([]), '/posts/group/7': page(groupPosts) });
 
@@ -209,7 +209,7 @@ describe('useGroupsPageData', () => {
   });
 
   it('createPost sends the selected groupId, postType: GROUP_POST, and the group\'s own sportId when a group is selected', async () => {
-    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: 7 });
     // sportId 6 (basketball) — real bug found live: this used to be omitted
     // entirely (-> null server-side) even though the selected group has a
     // definite, known sport. Feed's own sport filter silently hid these
@@ -238,7 +238,7 @@ describe('useGroupsPageData', () => {
   });
 
   it('createPost sends postType: GROUP_BROADCAST and the group\'s sportId when { asBroadcast: true }', async () => {
-    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: 7 });
     mockGet({
       '/groups/user/user-1': page([group({ id: 7, sportId: 6 })]),
       '/posts/group/7': page([]),
@@ -263,7 +263,7 @@ describe('useGroupsPageData', () => {
   });
 
   it('canBroadcast is true only when the selected group\'s currentUserRole is owner/admin', async () => {
-    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: 7 });
     const groups = [
       group({ id: 7, currentUserRole: 'group_admin' }),
       group({ id: 8, currentUserRole: 'group_member' }),
@@ -274,7 +274,7 @@ describe('useGroupsPageData', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.canBroadcast).toBe(true);
 
-    useFeedSpaceStore.setState({ selectedGroupId: 8 });
+    useGroupsPageStore.setState({ selectedGroupId: 8 });
     await waitFor(() => expect(result.current.canBroadcast).toBe(false));
   });
 
@@ -286,7 +286,7 @@ describe('useGroupsPageData', () => {
   });
 
   it('activeBroadcastForSelectedGroup finds the raw active broadcast Post for the selected group', async () => {
-    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: 7 });
     const activeBroadcast = post({
       id: 30,
       postType: 'GROUP_BROADCAST',
@@ -307,7 +307,7 @@ describe('useGroupsPageData', () => {
   });
 
   it('updateBroadcast PUTs the existing broadcast, echoing back its locationName/sportId/visibility', async () => {
-    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: 7 });
     const activeBroadcast = post({
       id: 30,
       postType: 'GROUP_BROADCAST',
@@ -389,7 +389,7 @@ describe('useGroupsPageData', () => {
   });
 
   it('isLoadMorePostsError is true when fetchMorePosts fails on a selected group\'s feed, leaving already-loaded posts intact', async () => {
-    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: 7 });
     let groupFeedCallCount = 0;
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
       if (url === '/posts/group/7') {

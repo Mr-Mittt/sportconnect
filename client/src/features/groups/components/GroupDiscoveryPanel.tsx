@@ -1,9 +1,10 @@
 import { IconPlus, IconSearch, IconUsersGroup } from '@tabler/icons-react';
 import { useState } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
-import type { Group, GroupInvitation } from '@/features/feed/types';
+import type { Group, GroupInvitation, JoinRequest } from '@/features/feed/types';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
+import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -36,6 +37,15 @@ interface GroupDiscoveryPanelProps {
   onRejectInvitation: (invitationId: number) => void;
   isAcceptingInvitation: boolean;
   isRejectingInvitation: boolean;
+  /** GRP-8 part 3: the current user's own pending join requests, rendered
+   * below the joined-groups grid — hidden entirely when empty, same
+   * convention as the Invitations section above. */
+  joinRequests: JoinRequest[];
+  isJoinRequestsLoading: boolean;
+  isJoinRequestsError: boolean;
+  onRetryJoinRequests: () => void;
+  onWithdrawJoinRequest: (requestId: number) => void;
+  isWithdrawingJoinRequest: boolean;
 }
 
 function initialsFor(groupName: string): string {
@@ -66,6 +76,12 @@ function initialsFor(groupName: string): string {
  * card's accessible name is `Open {groupName}` rather than the bare name —
  * visually the two also read differently (compact pill vs. a richer card
  * with avatar + member count), so this isn't just an aria Band-Aid.
+ *
+ * GRP-8 part 3: a "Join requests" section sits below the joined-groups grid
+ * (order: Invitations -> your groups grid -> Join requests, per spec) - the
+ * current user's own pending join requests, each with a direct "Withdraw"
+ * button (no confirmation, user decision). Hidden entirely when empty, same
+ * convention as the Invitations section above it.
  */
 export function GroupDiscoveryPanel({
   groups,
@@ -84,6 +100,12 @@ export function GroupDiscoveryPanel({
   onRejectInvitation,
   isAcceptingInvitation,
   isRejectingInvitation,
+  joinRequests,
+  isJoinRequestsLoading,
+  isJoinRequestsError,
+  onRetryJoinRequests,
+  onWithdrawJoinRequest,
+  isWithdrawingJoinRequest,
 }: GroupDiscoveryPanelProps) {
   // Transient UI input, same "component owns its own input state" precedent
   // as CreatePostForm's textarea — read at click time by whichever button
@@ -190,6 +212,57 @@ export function GroupDiscoveryPanel({
             );
           })}
         </div>
+      )}
+
+      {(isJoinRequestsLoading || isJoinRequestsError || joinRequests.length > 0) && (
+        <section aria-label="Join requests" className="flex flex-col gap-2.5">
+          <h2 className="text-2sm font-semibold text-text-primary">Join requests</h2>
+
+          {isJoinRequestsLoading && (
+            <div className="flex flex-col gap-2.5">
+              <Skeleton className="h-14 w-full rounded-xl" />
+            </div>
+          )}
+
+          {isJoinRequestsError && (
+            <div className="flex items-center gap-2">
+              <p role="alert" className="text-2sm text-text-danger">
+                Couldn't load your join requests.
+              </p>
+              <button
+                type="button"
+                onClick={onRetryJoinRequests}
+                className="cursor-pointer rounded-lg border-hairline border-border px-2.5 py-1 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {!isJoinRequestsLoading && !isJoinRequestsError && (
+            <div className="flex flex-col gap-2">
+              {joinRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="border-hairline flex items-center justify-between gap-3 rounded-lg border-border p-2.5"
+                >
+                  <div className="min-w-0 truncate text-2sm font-medium text-text-primary">
+                    {request.groupName}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isWithdrawingJoinRequest}
+                    onClick={() => onWithdrawJoinRequest(request.id)}
+                  >
+                    Withdraw
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       )}
     </div>
   );

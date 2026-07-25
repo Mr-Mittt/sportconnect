@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
+import { useFriendsPageStore } from '@/app/friendsPageStore';
 import { useSportProfilesForUser } from '@/shared/hooks/useSportProfilesForUser';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useAcceptFriendRequest } from './hooks/useAcceptFriendRequest';
@@ -41,19 +42,32 @@ function matchesQuery(name: string, normalizedQuery: string): boolean {
  * of the three lists) falls back to the search result's own `friendshipStatus`
  * (typically `NONE`). `useUserProfile` itself is only enabled for a selection
  * that ISN'T already a known friend (friend rows already carry bio/coverUrl).
+ *
+ * `query`/`isAddMode`/`selectedPersonId` live in `friendsPageStore`
+ * (sessionStorage-persisted), not local `useState` — user-requested:
+ * leaving the Friends page and coming back restores the rail's mode, search
+ * text, and selection exactly as left. The underlying lists (friends/
+ * requests/search) always refetch fresh on remount (TanStack Query's own
+ * default `staleTime: 0`) — no extra wiring needed for that part. Once those
+ * lists have settled, an effect below clears a restored `selectedPersonId`
+ * that no longer resolves to anyone in them (`collapsedSections` stays local
+ * — a transient UI toggle, not part of what was asked to persist).
  */
 export function useFriendsPageData() {
   const currentUserId = useAuthStore((state) => state.user?.id);
 
-  const [query, setQuery] = useState('');
-  const [isAddMode, setIsAddMode] = useState(false);
+  const query = useFriendsPageStore((state) => state.query);
+  const setQuery = useFriendsPageStore((state) => state.setQuery);
+  const isAddMode = useFriendsPageStore((state) => state.isAddMode);
+  const setIsAddMode = useFriendsPageStore((state) => state.setIsAddMode);
+  const selectedPersonId = useFriendsPageStore((state) => state.selectedPersonId);
+  const setSelectedPersonId = useFriendsPageStore((state) => state.setSelectedPersonId);
   const [collapsedSections, setCollapsedSections] = useState<Record<FriendSectionKey, boolean>>({
     online: false,
     friendRequests: false,
     offline: false,
     blocked: false,
   });
-  const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>(undefined);
 
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
   const trimmedDebounced = debouncedQuery.trim();
@@ -104,6 +118,31 @@ export function useFriendsPageData() {
   const baseSelectedPerson: FriendUser | undefined = selectedFriend ?? profileQuery.data;
   const selectedSearchResult = searchResults.find((result) => result.id === selectedPersonId);
 
+  // A restored (or stale) selection is only judged once every list it could
+  // legitimately come from has actually loaded — search only counts while in
+  // Add mode, since it isn't fetched at all otherwise.
+  const hasSelectionSourcesSettled =
+    !friendsQuery.isLoading &&
+    !receivedQuery.isLoading &&
+    !sentQuery.isLoading &&
+    (!isAddMode || !searchQuery.isLoading);
+  const isSelectedPersonAvailable =
+    isKnownFriend ||
+    (receivedQuery.data ?? []).some((request) => request.senderId === selectedPersonId) ||
+    (sentQuery.data ?? []).some((request) => request.receiverId === selectedPersonId) ||
+    (isAddMode && selectedSearchResult !== undefined);
+
+  // User-requested: a `selectedPersonId` restored from a previous visit (or
+  // one that's simply gone stale, e.g. an accepted/declined request) that no
+  // longer resolves to anyone in the reloaded lists clears back to "no
+  // selection" instead of silently keeping whatever `useUserProfile` might
+  // still resolve for that raw id.
+  useEffect(() => {
+    if (selectedPersonId !== undefined && hasSelectionSourcesSettled && !isSelectedPersonAvailable) {
+      setSelectedPersonId(undefined);
+    }
+  }, [selectedPersonId, hasSelectionSourcesSettled, isSelectedPersonAvailable, setSelectedPersonId]);
+
   const selectedPerson = useMemo<SelectedPerson | undefined>(() => {
     if (selectedPersonId === undefined || baseSelectedPerson === undefined) return undefined;
 
@@ -153,7 +192,7 @@ export function useFriendsPageData() {
     },
 
     isAddMode,
-    toggleAddMode: () => setIsAddMode((previous) => !previous),
+    toggleAddMode: () => setIsAddMode(!isAddMode),
     exitAddMode: () => setIsAddMode(false),
 
     collapsedSections,

@@ -1,6 +1,7 @@
 import { IconSearch } from '@tabler/icons-react';
 import { useState } from 'react';
 import type { GroupInvitation, GroupMember } from '@/features/feed/types';
+import { formatNameList } from '@/shared/lib/formatNameList';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
@@ -237,7 +238,11 @@ export function GroupMembersTab({
               key={`${item.type}-${item.data.id}`}
               avatarUrl={item.type === 'join_request' ? item.data.userAvatarUrl : null}
               name={approvalQueueItemName(item)}
-              subtitle={item.type === 'invitation' ? `Invited by ${item.data.inviterFullName}` : undefined}
+              subtitle={
+                item.type === 'invitation'
+                  ? `Invited by ${formatNameList(item.data.inviterFullNames)}`
+                  : undefined
+              }
               action={
                 <div className="flex gap-1.5">
                   <Button
