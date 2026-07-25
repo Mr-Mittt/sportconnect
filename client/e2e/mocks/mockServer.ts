@@ -3,8 +3,9 @@ import { getResponse } from 'msw';
 import { handlers } from './handlers/index.ts';
 import { resetFeedSession, seedPostsState } from './handlers/feed.ts';
 import { resetFriendHandlersState } from './handlers/friends.ts';
-import { resetGroupHandlersState } from './handlers/groups.ts';
-import { resetSportHandlersState } from './handlers/sport.ts';
+import { resetGroupHandlersState, seedJoinRequestsState } from './handlers/groups.ts';
+import { resetSportHandlersState, seedZeroSportProfilesState } from './handlers/sport.ts';
+import { mockJoinRequest } from './fixtures.ts';
 import { buildPaginatedFeed } from './paginatedFeedFixture.ts';
 import { resetOverrides, setOverride, type SessionOverrides } from './overrides.ts';
 import { MOCK_SERVER_PORT } from './mockServerConfig.ts';
@@ -165,6 +166,12 @@ async function handleAdminRoute(
     return;
   }
 
+  if (action === 'seed-join-requests' && req.method === 'POST') {
+    seedJoinRequestsState(sessionId, [mockJoinRequest]);
+    sendJson(res, 200, { seeded: true });
+    return;
+  }
+
   const overrideMatch = action.match(/^override\/(.+)$/);
   if (overrideMatch && req.method === 'POST') {
     const name = overrideMatch[1];
@@ -173,6 +180,13 @@ async function handleAdminRoute(
       return;
     }
     setOverride(sessionId, name as keyof SessionOverrides);
+    // GRP-8 bug fix: `sportProfilesEmpty` also needs the *real* session state
+    // cleared, not just the faked GET response — see seedZeroSportProfilesState's
+    // own doc comment for why (a POST /sports/profiles right after this used to
+    // 400 against the still-full default fixture underneath).
+    if (name === 'sportProfilesEmpty') {
+      seedZeroSportProfilesState(sessionId);
+    }
     sendJson(res, 200, { override: name, applied: true });
     return;
   }

@@ -1,14 +1,17 @@
 import { useMemo, useRef, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
-import { useFeedSpaceStore } from '@/app/feedSpaceStore';
+import { useGroupsPageStore } from '@/app/groupsPageStore';
+import { useCancelJoinRequest } from '@/features/feed/hooks/useCancelJoinRequest';
 import { useCreateGroup } from '@/features/feed/hooks/useCreateGroup';
 import { useDeleteGroup } from '@/features/feed/hooks/useDeleteGroup';
+import { useJoinRequests } from '@/features/feed/hooks/useJoinRequests';
 import { useLeaveGroup } from '@/features/feed/hooks/useLeaveGroup';
 import { usePost } from '@/features/feed/hooks/usePost';
 import { useUpdateGroup } from '@/features/feed/hooks/useUpdateGroup';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
+import { AddSportIntroDialog } from '@/shared/components/AddSportIntroDialog';
 import { AddSportModal } from '@/shared/components/AddSportModal';
 import { CommentSection } from '@/shared/components/CommentSection';
 import { CreatePostForm } from '@/shared/components/CreatePostForm';
@@ -21,7 +24,7 @@ import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
 import { UpdateBroadcastConfirmDialog } from '@/shared/components/UpdateBroadcastConfirmDialog';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
-import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
+import { ALL_SPORT_KEYS, SPORT_PROFILE_CONFIG } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CreateGroupModal } from './components/CreateGroupModal';
 import { DeleteGroupConfirmDialog } from './components/DeleteGroupConfirmDialog';
@@ -34,6 +37,7 @@ import { GroupSpaceSwitcher } from './components/GroupSpaceSwitcher';
 import { GroupTabs, type GroupTabKey } from './components/GroupTabs';
 import { InviteFriendModal } from './components/InviteFriendModal';
 import { JoinGroupModal } from './components/JoinGroupModal';
+import { RejectInvitationConfirmDialog } from './components/RejectInvitationConfirmDialog';
 import { SettingsUnsavedChangesDialog } from './components/SettingsUnsavedChangesDialog';
 import { useGroupInvitationsData } from './useGroupInvitationsData';
 import { useGroupMembersTabData } from './useGroupMembersTabData';
@@ -54,12 +58,13 @@ const noop = () => {};
  * decision). Reached via NavTabs' existing "Groups" destination (previously
  * a ComingSoonPage stub).
  *
- * activeSport is read from the shared `feedSpaceStore`, so it's carried over
- * from whatever was active on Home Feed (user decision) and remains
- * switchable from here too — one source of truth either page can change.
- * GroupSpaceSwitcher's group list is filtered to that sport (a group is 1:1
- * with a sport, so this is exact). CreatePostForm only renders when a
- * specific group is selected — "All" has no single group to post into.
+ * activeSport is read from this page's own `groupsPageStore` — independent
+ * of Home Feed's `homeFeedStore` (2026-07-25 decision, reversing FEED-4's
+ * original single shared store, which let switching sport on one page
+ * silently affect the other). GroupSpaceSwitcher's group list is filtered to
+ * that sport (a group is 1:1 with a sport, so this is exact). CreatePostForm
+ * only renders when a specific group is selected — "All" has no single
+ * group to post into.
  *
  * The right rail (UpcomingMatches → TrendingHashtags → GroupBroadcasts, FEED-5
  * user decision) is identical to Home Feed's — same shared components and
@@ -80,8 +85,8 @@ const noop = () => {};
  * open state, same `activeCommentsPostId`-style convention already used here.
  */
 export function GroupsPage() {
-  const activeSport = useFeedSpaceStore((state) => state.activeSport);
-  const setActiveSport = useFeedSpaceStore((state) => state.setActiveSport);
+  const activeSport = useGroupsPageStore((state) => state.activeSport);
+  const setActiveSport = useGroupsPageStore((state) => state.setActiveSport);
   // FEED-12: page-local only, unlike HomeFeedPage's URL-driven version —
   // navigating away to `/posts/:id` would unmount this page (and its
   // selected-group state) since that route renders HomeFeedPage, not this
@@ -129,6 +134,19 @@ export function GroupsPage() {
   // useInviteFriendModalData below, not in the components themselves.
   const [createGroupOpenCount, setCreateGroupOpenCount] = useState(0);
   const [addSportOpenCount, setAddSportOpenCount] = useState(0);
+  // GRP-8 part 2: which received invitation is mid-reject — doubles as
+  // RejectInvitationConfirmDialog's open state, same convention as
+  // pendingBroadcastContent.
+  const [rejectingInvitationId, setRejectingInvitationId] = useState<number | null>(null);
+  // GRP-8 part 5: an invitation whose accept is paused pending the invitee
+  // adding the group's sport to their own profile first. `step` tracks which
+  // of the two dialogs (the plain-copy intro, then AddSportModal itself) is
+  // currently showing — doubles as both dialogs' open state.
+  const [sportGate, setSportGate] = useState<{
+    invitationId: number;
+    sportKey: SportKey;
+    step: 'intro' | 'form';
+  } | null>(null);
   // GroupsPage renders behind ProtectedRoute (AUTH-4), so user is guaranteed
   // non-null here — same guarantee HomeFeedPage already relies on.
   const user = useAuthStore((state) => state.user)!;
@@ -221,14 +239,31 @@ export function GroupsPage() {
   );
 
   // GRP-1: the full selected Group (cover banner, Settings tab) — found in
-  // `data.groups`, which is sport-filtered but always contains the
-  // selection, since `feedSpaceStore` only ever lets a selected group's
-  // sport and `activeSport` diverge instantaneously, never settle mismatched.
+  // `data.groups`, which is sport-filtered by this page's own `activeSport`
+  // (`groupsPageStore`, independent of Home Feed's — 2026-07-25 decision).
+  // Since only this page's own actions ever write to `activeSport` now
+  // (`selectGroup`'s derivation, or `guardedSetActiveSport`'s explicit
+  // deselect below), the two never drift apart — `data.groups` is
+  // guaranteed to contain the selection whenever one exists.
   const selectedGroup = data.groups.find((group) => group.id === selectedGroupId) ?? null;
   const selectedGroupSportKey =
     selectedGroup !== null ? sportKeyForId(selectedGroup.sportId) : undefined;
   const selectedGroupSport =
     selectedGroupSportKey !== undefined ? sportsByKey[selectedGroupSportKey] : undefined;
+  // Switching the sport pill can make the currently open group no longer
+  // make sense to keep showing — either because "All" was picked (no single
+  // group belongs to "All"), or because a different, incompatible sport was
+  // picked. Routed through the existing unsaved-Settings-changes guard, same
+  // as every other action that can navigate away from a group's Settings
+  // tab, so a pending draft isn't discarded silently.
+  const guardedSetActiveSport = (sport: SportKey | 'all') =>
+    settingsGuard.guard(() => {
+      setActiveSport(sport);
+      const stillCompatible = selectedGroup !== null && sport === selectedGroupSportKey;
+      if (selectedGroup !== null && !stillCompatible) {
+        selectGroup(null);
+      }
+    });
 
   // GRP-3
   const membersTabData = useGroupMembersTabData(
@@ -237,20 +272,43 @@ export function GroupsPage() {
     selectedGroup?.currentUserRole ?? null,
   );
 
-  // GRP-7: accepting an invitation lands the user straight in the newly
-  // joined group. setActiveSport('all') runs first — GroupInvitationResponse
-  // carries no sportId, and data.groups is sport-filtered, so switching to
-  // 'all' first guarantees the group resolves in `data.groups` regardless of
-  // its own sport or of exactly when the background refetch lands (a
-  // fragile refetch-then-lookup race otherwise).
+  // GRP-7/GRP-8 part 1: accepting an invitation lands the user straight in
+  // the newly joined group, sport pill included. GroupInvitationResponse now
+  // carries sportId (B15), so this calls selectGroupAndShowPosts with both
+  // ids directly — same shape as every other selection call site — instead
+  // of GRP-7's original setActiveSport('all')-then-select detour (that
+  // workaround existed only because the invitation carried no sportId yet).
   const groupInvitationsData = useGroupInvitationsData(
     currentUserId,
     selectedGroup === null,
-    (groupId) => {
-      setActiveSport('all');
-      selectGroupAndShowPosts(groupId);
-    },
+    (groupId, sportId) => selectGroupAndShowPosts(groupId, sportId),
   );
+
+  // GRP-8 part 3: the current user's own pending join requests — same query
+  // JoinGroupModal's "already requested" badge already reads, just rendered
+  // here too.
+  const joinRequestsQuery = useJoinRequests(currentUserId);
+  const cancelJoinRequestMutation = useCancelJoinRequest();
+
+  // GRP-8 part 5: gate accepting an invitation on the invitee already having
+  // a profile for the group's sport. sportKeyForId returning undefined (an
+  // invitation for a sport the client doesn't map yet) skips the gate
+  // entirely and accepts directly — same "unknown sport, don't block"
+  // precedent as useSportProfilesForUser's own silent drop.
+  const handleAcceptInvitation = (invitationId: number) => {
+    const invitation = groupInvitationsData.invitations.find(
+      (candidate) => candidate.id === invitationId,
+    );
+    if (invitation === undefined) return;
+    const sportKey = sportKeyForId(invitation.sportId);
+    const hasSportProfile =
+      sportKey === undefined || data.sportProfiles.some((sport) => sport.key === sportKey);
+    if (!hasSportProfile && sportKey !== undefined) {
+      setSportGate({ invitationId, sportKey, step: 'intro' });
+      return;
+    }
+    groupInvitationsData.acceptInvitation(invitationId);
+  };
 
   const updateGroupMutation = useUpdateGroup(currentUserId);
   const leaveGroupMutation = useLeaveGroup(currentUserId);
@@ -324,7 +382,7 @@ export function GroupsPage() {
           <SportSwitcher
             sports={data.sportProfiles}
             active={activeSport}
-            onChange={setActiveSport}
+            onChange={guardedSetActiveSport}
             onAddSport={() => {
               setAddSportOpenCount((count) => count + 1);
               setIsAddSportOpen(true);
@@ -374,10 +432,16 @@ export function GroupsPage() {
                 isInvitationsLoading={groupInvitationsData.isLoading}
                 isInvitationsError={groupInvitationsData.isError}
                 onRetryInvitations={groupInvitationsData.retry}
-                onAcceptInvitation={groupInvitationsData.acceptInvitation}
-                onRejectInvitation={groupInvitationsData.rejectInvitation}
+                onAcceptInvitation={handleAcceptInvitation}
+                onRejectInvitation={setRejectingInvitationId}
                 isAcceptingInvitation={groupInvitationsData.isAccepting}
                 isRejectingInvitation={groupInvitationsData.isRejecting}
+                joinRequests={joinRequestsQuery.data?.content ?? []}
+                isJoinRequestsLoading={joinRequestsQuery.isLoading}
+                isJoinRequestsError={joinRequestsQuery.isError}
+                onRetryJoinRequests={() => joinRequestsQuery.refetch()}
+                onWithdrawJoinRequest={(requestId) => cancelJoinRequestMutation.mutate(requestId)}
+                isWithdrawingJoinRequest={cancelJoinRequestMutation.isPending}
               />
             ) : (
               <div className="border-hairline flex gap-3.5 rounded-xl border-border bg-surface-2 p-3.5">
@@ -599,6 +663,50 @@ export function GroupsPage() {
           isError={addSportMutation.isError}
           onSubmit={(payload) =>
             addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
+          }
+        />
+        <RejectInvitationConfirmDialog
+          key={rejectingInvitationId ?? 'none'}
+          isOpen={rejectingInvitationId !== null}
+          onClose={() => setRejectingInvitationId(null)}
+          onConfirm={(reason) => {
+            if (rejectingInvitationId === null) return;
+            groupInvitationsData.rejectInvitation(rejectingInvitationId, reason);
+            setRejectingInvitationId(null);
+          }}
+          isSubmitting={groupInvitationsData.isRejecting}
+          isError={groupInvitationsData.isRejectError}
+          groupName={
+            groupInvitationsData.invitations.find((inv) => inv.id === rejectingInvitationId)
+              ?.groupName ?? ''
+          }
+        />
+        {/* GRP-8 part 5: two-step gate before accepting an invitation for a
+          sport the invitee has no profile for — the plain-copy intro first
+          (OK button, decoupled from the form per user decision), then the
+          existing AddSportModal pre-selected to just that one sport. */}
+        <AddSportIntroDialog
+          isOpen={sportGate?.step === 'intro'}
+          onClose={() => setSportGate(null)}
+          onConfirm={() =>
+            setSportGate((current) => (current !== null ? { ...current, step: 'form' } : null))
+          }
+          sportName={sportGate !== null ? SPORT_PROFILE_CONFIG[sportGate.sportKey].label : ''}
+        />
+        <AddSportModal
+          key={`sport-gate-${sportGate?.invitationId ?? 'none'}`}
+          isOpen={sportGate?.step === 'form'}
+          onClose={() => setSportGate(null)}
+          availableSports={sportGate !== null ? [sportGate.sportKey] : []}
+          isSubmitting={addSportMutation.isPending}
+          isError={addSportMutation.isError}
+          onSubmit={(payload) =>
+            addSportMutation.mutate(payload, {
+              onSuccess: () => {
+                if (sportGate !== null) groupInvitationsData.acceptInvitation(sportGate.invitationId);
+                setSportGate(null);
+              },
+            })
           }
         />
         <HashtagPostsModal

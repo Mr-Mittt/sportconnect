@@ -190,8 +190,20 @@ export interface GroupInvitation {
   id: number;
   groupId: number;
   groupName: string;
+  // GRP-8/B15: the group's own sportId — lets the invitee-facing accept flow
+  // switch straight to the right sport pill and offer to add the sport
+  // profile, without a second round trip. No sportName on the wire (B15
+  // decision: sports are static reference data, resolved client-side via
+  // sportKeyForId + SPORT_PROFILE_CONFIG instead of a backend join).
+  sportId: number;
   inviterId: string;
   inviterFullName: string;
+  // GRP-8/B14: every member who has invited this invitee to this group,
+  // oldest-first — a singleton array containing just inviterFullName in the
+  // common single-inviter case. inviterFullName/inviterId are kept unchanged
+  // (still "who originally created this row") for the call sites that don't
+  // need the full list.
+  inviterFullNames: string[];
   inviteeId: string;
   inviteeFullName: string;
   status: InvitationStatus;

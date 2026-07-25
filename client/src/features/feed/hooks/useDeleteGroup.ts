@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
-import { useFeedSpaceStore } from '@/app/feedSpaceStore';
+import { useGroupsPageStore } from '@/app/groupsPageStore';
 import { feedKeys } from '../queryKeys';
 import type { ApiResponse } from '@/shared/types/api';
 import type { Group, PageResponse } from '../types';
@@ -13,7 +13,7 @@ import type { Group, PageResponse } from '../types';
  */
 export function useDeleteGroup(currentUserId: string | undefined) {
   const queryClient = useQueryClient();
-  const selectGroup = useFeedSpaceStore((state) => state.selectGroup);
+  const selectGroup = useGroupsPageStore((state) => state.selectGroup);
   return useMutation({
     mutationFn: async (groupId: number) => {
       await apiClient.delete<ApiResponse<void>>(`/groups/${groupId}`);

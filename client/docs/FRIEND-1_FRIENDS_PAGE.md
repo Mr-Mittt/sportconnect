@@ -136,3 +136,31 @@ from `IN PROGRESS` back to `TODO`, and this ticket was inserted ahead of it in t
   CHAT-1/CHAT-2.
 - Real-time presence and block/blacklist both remain backend gaps needing their own design pass,
   same treatment this backlog already gives HF-4 (matches) and GRP-3 (blacklist).
+
+## Follow-up (2026-07-25, user-requested): rail state persists across a visit
+
+`query`/`isAddMode`/`selectedPersonId` moved from local `useState` in `useFriendsPageData` into a new
+`friendsPageStore` (`src/app/friendsPageStore.ts`) — a small Zustand store persisted to
+`sessionStorage`, same convention as the Groups page's `feedSpaceStore`. Leaving the Friends page
+(e.g. to Home or Groups) and coming back now restores the rail's mode (friend list vs. directory
+search), the search text, and the selected person exactly as left — previously all three reset to
+their defaults on every remount, since `FriendsPage` unmounts on route change.
+
+**The underlying lists (friends/requests/search) always refetch fresh on remount** — no extra wiring
+needed for that part, since the app's `QueryClient` uses TanStack Query's own default `staleTime: 0`
+and the query cache is already shared globally across route changes (not tied to page mount).
+
+**A restored selection that's gone stale clears back to "no selection."** New logic in
+`useFriendsPageData`: once the friends/received/sent lists (and, if in Add mode, the search results)
+have all settled, if the restored `selectedPersonId` doesn't resolve to anyone in any of them, it's
+cleared — rather than silently keeping whatever `useUserProfile` might still separately resolve for
+that raw id (that hook fetches by id directly and doesn't know or care whether the person is still a
+friend/pending request/search hit). `collapsedSections` (the rail's per-section collapse toggles)
+stays local `useState`, not persisted — a transient UI toggle, not part of what was asked to persist.
+
+Tests: new `src/app/friendsPageStore.test.ts` (mirrors `feedSpaceStore.test.ts`'s shape); 3 new cases
+in `useFriendsPageData.test.tsx` (restoring a valid persisted selection, clearing an invalid restored
+selection once lists settle, keeping a restored Add-mode search selection once the re-run search
+confirms it's still there). `pnpm test` 526 green, `tsc -b` clean, lint clean. Not verified against
+`pnpm e2e` — the same pre-existing sandbox environment issue noted in GRP-8's summary doc
+(`GRP-8_INVITATION_LIFECYCLE_POLISH.md`) blocks a green e2e run in this session.

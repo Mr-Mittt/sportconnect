@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { act, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
-import { useFeedSpaceStore } from '@/app/feedSpaceStore';
+import { useGroupsPageStore } from '@/app/groupsPageStore';
 import { feedKeys } from '../queryKeys';
 import type { Group, PageResponse } from '../types';
 import { useDeleteGroup } from './useDeleteGroup';
@@ -52,7 +52,7 @@ function wrapper(queryClient: QueryClient) {
 describe('useDeleteGroup', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    useFeedSpaceStore.setState({ activeSport: 'all', selectedGroupId: null, selectedGroupSportId: null });
+    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: null, selectedGroupSportId: null });
   });
 
   it('calls DELETE /groups/{groupId}', async () => {
@@ -72,7 +72,7 @@ describe('useDeleteGroup', () => {
   it('clears the selected group and drops it from the userGroups cache', async () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     queryClient.setQueryData(feedKeys.userGroups('user-1'), page([group({ id: 1 }), group({ id: 2 })]));
-    useFeedSpaceStore.setState({ selectedGroupId: 1 });
+    useGroupsPageStore.setState({ selectedGroupId: 1 });
     vi.spyOn(apiClient, 'delete').mockResolvedValueOnce({
       data: { success: true, message: '', data: undefined, timestamp: '' },
     });
@@ -82,7 +82,7 @@ describe('useDeleteGroup', () => {
     act(() => result.current.mutate(1));
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(useFeedSpaceStore.getState().selectedGroupId).toBeNull();
+    expect(useGroupsPageStore.getState().selectedGroupId).toBeNull();
     const cached = queryClient.getQueryData<PageResponse<Group>>(feedKeys.userGroups('user-1'));
     expect(cached?.content.map((g) => g.id)).toEqual([2]);
   });

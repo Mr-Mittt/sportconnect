@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { Group, GroupInvitation } from '@/features/feed/types';
+import type { Group, GroupInvitation, JoinRequest } from '@/features/feed/types';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { GroupDiscoveryPanel } from './GroupDiscoveryPanel';
 
@@ -37,8 +37,10 @@ function invitation(overrides: Partial<GroupInvitation> = {}): GroupInvitation {
     id: 1,
     groupId: 2,
     groupName: 'Riverside Hoopers',
+    sportId: 6,
     inviterId: 'user-4',
     inviterFullName: 'Priya Shah',
+    inviterFullNames: ['Priya Shah'],
     inviteeId: 'user-1',
     inviteeFullName: 'Jordan Lee',
     status: 'pending_user',
@@ -46,6 +48,25 @@ function invitation(overrides: Partial<GroupInvitation> = {}): GroupInvitation {
     reviewedAt: '2026-07-16T00:00:00',
     createdAt: '2026-07-16T00:00:00',
     updatedAt: '2026-07-16T00:00:00',
+    ...overrides,
+  };
+}
+
+function joinRequest(overrides: Partial<JoinRequest> = {}): JoinRequest {
+  return {
+    id: 1,
+    groupId: 3,
+    groupName: 'Weekend Tennis Ladder',
+    userId: 'user-1',
+    userFullName: 'Jordan Lee',
+    userAvatarUrl: null,
+    status: 'pending',
+    message: null,
+    reviewedBy: null,
+    reviewedByFullName: null,
+    reviewedAt: null,
+    createdAt: '2026-07-17T00:00:00',
+    updatedAt: '2026-07-17T00:00:00',
     ...overrides,
   };
 }
@@ -66,6 +87,12 @@ const baseProps = {
   onRejectInvitation: vi.fn(),
   isAcceptingInvitation: false,
   isRejectingInvitation: false,
+  joinRequests: [] as JoinRequest[],
+  isJoinRequestsLoading: false,
+  isJoinRequestsError: false,
+  onRetryJoinRequests: vi.fn(),
+  onWithdrawJoinRequest: vi.fn(),
+  isWithdrawingJoinRequest: false,
 };
 
 describe('GroupDiscoveryPanel', () => {
@@ -153,12 +180,50 @@ describe('GroupDiscoveryPanel', () => {
     );
     const section = screen.getByRole('region', { name: 'Invitations' });
     expect(within(section).getByText('Riverside Hoopers')).toBeInTheDocument();
-    expect(within(section).getByText('Invited by Priya Shah')).toBeInTheDocument();
+    expect(within(section).getByText('Group invitation from Priya Shah')).toBeInTheDocument();
 
     await user.click(within(section).getByRole('button', { name: 'Accept' }));
     expect(onAcceptInvitation).toHaveBeenCalledWith(3);
 
     await user.click(within(section).getByRole('button', { name: 'Reject' }));
     expect(onRejectInvitation).toHaveBeenCalledWith(3);
+  });
+
+  // GRP-8 part 2
+  it('merges multiple co-inviters into one row', () => {
+    render(
+      <GroupDiscoveryPanel
+        {...baseProps}
+        groups={[]}
+        invitations={[invitation({ inviterFullNames: ['Priya Shah', 'Sam Ito', 'Morgan Diaz'] })]}
+      />,
+    );
+    expect(
+      screen.getByText('Group invitation from Priya Shah, Sam Ito, and Morgan Diaz'),
+    ).toBeInTheDocument();
+  });
+
+  // GRP-8 part 3
+  it('hides the Join requests section entirely when there are none', () => {
+    render(<GroupDiscoveryPanel {...baseProps} groups={[]} joinRequests={[]} />);
+    expect(screen.queryByRole('region', { name: 'Join requests' })).not.toBeInTheDocument();
+  });
+
+  it('shows a join request row with a Withdraw button, dispatching the request id', async () => {
+    const user = userEvent.setup();
+    const onWithdrawJoinRequest = vi.fn();
+    render(
+      <GroupDiscoveryPanel
+        {...baseProps}
+        groups={[]}
+        joinRequests={[joinRequest({ id: 9, groupName: 'Weekend Tennis Ladder' })]}
+        onWithdrawJoinRequest={onWithdrawJoinRequest}
+      />,
+    );
+    const section = screen.getByRole('region', { name: 'Join requests' });
+    expect(within(section).getByText('Weekend Tennis Ladder')).toBeInTheDocument();
+
+    await user.click(within(section).getByRole('button', { name: 'Withdraw' }));
+    expect(onWithdrawJoinRequest).toHaveBeenCalledWith(9);
   });
 });
