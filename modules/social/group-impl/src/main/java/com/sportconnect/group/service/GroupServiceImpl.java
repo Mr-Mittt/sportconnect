@@ -1177,7 +1177,7 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     @Transactional
-    public void rejectInvitation(Long invitationId, UUID inviteeId) {
+    public void rejectInvitation(Long invitationId, UUID inviteeId, String reason) {
         GroupInvitation invitation = invitationRepository.findById(invitationId)
                 .orElseThrow(() -> new NotFoundException("Invitation not found"));
 
@@ -1189,6 +1189,7 @@ public class GroupServiceImpl implements GroupService {
         }
 
         invitation.setStatus("declined_by_user");
+        invitation.setRejectReason(reason);
         invitationRepository.save(invitation);
 
         log.info("Invitation {} rejected by user {}", invitationId, inviteeId);
@@ -1206,6 +1207,22 @@ public class GroupServiceImpl implements GroupService {
         String groupName = groupRepository.findById(groupId).map(Group::getGroupName).orElse("Unknown Group");
         Page<GroupInvitation> invitationsPage =
                 invitationRepository.findByGroupIdAndStatus(groupId, "pending_owner", pageable);
+        Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(invitationsPage.getContent());
+        return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, groupName, usersById));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<GroupInvitationResponse> getDeclinedInvitations(Long groupId, UUID ownerId, Pageable pageable) {
+        if (!groupRepository.existsById(groupId)) {
+            throw new NotFoundException("Group not found");
+        }
+        if (!canManageMembers(groupId, ownerId)) {
+            throw new BadRequestException("Only group owner or admin can view declined invitations");
+        }
+        String groupName = groupRepository.findById(groupId).map(Group::getGroupName).orElse("Unknown Group");
+        Page<GroupInvitation> invitationsPage =
+                invitationRepository.findByGroupIdAndStatus(groupId, "declined_by_user", pageable);
         Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(invitationsPage.getContent());
         return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, groupName, usersById));
     }
@@ -1453,6 +1470,7 @@ public class GroupServiceImpl implements GroupService {
                 .status(invitation.getStatus())
                 .reviewedBy(invitation.getReviewedBy())
                 .reviewedAt(invitation.getReviewedAt())
+                .rejectReason(invitation.getRejectReason())
                 .createdAt(invitation.getCreatedAt())
                 .updatedAt(invitation.getUpdatedAt())
                 .build();

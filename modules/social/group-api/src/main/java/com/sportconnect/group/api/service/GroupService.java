@@ -151,9 +151,22 @@ public interface GroupService {
 
     void acceptInvitation(Long invitationId, UUID inviteeId);
 
-    void rejectInvitation(Long invitationId, UUID inviteeId);
+    /**
+     * Invitee rejects a {@code pending_user} invitation. {@code reason} (B13) is optional —
+     * persisted as-is, including {@code null}, on {@link GroupInvitationResponse#getRejectReason()}.
+     */
+    void rejectInvitation(Long invitationId, UUID inviteeId, String reason);
 
     Page<GroupInvitationResponse> getGroupInvitations(Long groupId, UUID ownerId, Pageable pageable);
+
+    /**
+     * B13: owner/admin-only view of this group's {@code declined_by_user} invitations (with their
+     * {@code rejectReason}), so an invitation's original inviter(s) — or anyone who can manage the
+     * group — can see why a rejected invitee declined. Deliberately excludes
+     * {@code declined_by_owner} rows: those never reached the invitee, so there's no rejection
+     * reason to show for them.
+     */
+    Page<GroupInvitationResponse> getDeclinedInvitations(Long groupId, UUID ownerId, Pageable pageable);
 
     Page<GroupInvitationResponse> getUserPendingInvitations(UUID userId, Pageable pageable);
 

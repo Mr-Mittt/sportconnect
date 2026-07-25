@@ -1896,7 +1896,7 @@ class GroupServiceImplSpec extends Specification {
         thrown(BadRequestException)
     }
 
-    def "rejectInvitation should set status to declined_by_user"() {
+    def "rejectInvitation should set status to declined_by_user and persist the given reason"() {
         given:
         def inviteeId = UUID.randomUUID()
         def invitation = GroupInvitation.builder()
@@ -1904,11 +1904,28 @@ class GroupServiceImplSpec extends Specification {
                 .status("pending_user").build()
 
         when:
-        groupService.rejectInvitation(1L, inviteeId)
+        groupService.rejectInvitation(1L, inviteeId, "Schedule doesn't work for me")
 
         then:
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
-        1 * invitationRepository.save({ it.status == "declined_by_user" })
+        1 * invitationRepository.save({
+            it.status == "declined_by_user" && it.rejectReason == "Schedule doesn't work for me"
+        })
+    }
+
+    def "rejectInvitation should allow a null reason (B13: optional at the API layer)"() {
+        given:
+        def inviteeId = UUID.randomUUID()
+        def invitation = GroupInvitation.builder()
+                .id(1L).groupId(testGroup.id).inviterId(otherUserId).inviteeId(inviteeId)
+                .status("pending_user").build()
+
+        when:
+        groupService.rejectInvitation(1L, inviteeId, null)
+
+        then:
+        1 * invitationRepository.findById(1L) >> Optional.of(invitation)
+        1 * invitationRepository.save({ it.status == "declined_by_user" && it.rejectReason == null })
     }
 
     def "rejectInvitation should throw when invitation is not in pending_user status"() {
@@ -1919,7 +1936,7 @@ class GroupServiceImplSpec extends Specification {
                 .status("pending_owner").build()
 
         when:
-        groupService.rejectInvitation(1L, inviteeId)
+        groupService.rejectInvitation(1L, inviteeId, null)
 
         then:
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
@@ -1956,6 +1973,63 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
         2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
         thrown(BadRequestException)
+    }
+
+    def "getDeclinedInvitations should throw NotFoundException when group does not exist"() {
+        given:
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        groupService.getDeclinedInvitations(999L, userId, pageable)
+
+        then:
+        1 * groupRepository.existsById(999L) >> false
+        thrown(NotFoundException)
+    }
+
+    def "getDeclinedInvitations should throw when caller is not owner or admin"() {
+        given:
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        groupService.getDeclinedInvitations(testGroup.id, otherUserId, pageable)
+
+        then:
+        1 * groupRepository.existsById(testGroup.id) >> true
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
+        thrown(BadRequestException)
+    }
+
+    def "getDeclinedInvitations should return declined_by_user rows with their rejectReason for an owner caller"() {
+        given: "user is owner"
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(ownerRole.id)
+                .build()
+        def pageable = PageRequest.of(0, 10)
+        def inviteeId = UUID.randomUUID()
+        def declinedInvitation = GroupInvitation.builder()
+                .id(1L).groupId(testGroup.id).inviterId(userId).inviteeId(inviteeId)
+                .status("declined_by_user").rejectReason("Schedule doesn't work for me")
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def page = new PageImpl<GroupInvitation>([declinedInvitation], pageable, 1)
+
+        when:
+        def response = groupService.getDeclinedInvitations(testGroup.id, userId, pageable)
+
+        then:
+        1 * groupRepository.existsById(testGroup.id) >> true
+        // isGroupOwner short-circuits canManageMembers — isGroupAdmin (and group_admin lookup) never called
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
+        1 * invitationRepository.findByGroupIdAndStatus(testGroup.id, "declined_by_user", pageable) >> page
+        1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId): testUser]
+        response.content.size() == 1
+        response.content[0].rejectReason == "Schedule doesn't work for me"
     }
 
     def "getMemberSentInvitations should throw when caller is not a member"() {

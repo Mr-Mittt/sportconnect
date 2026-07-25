@@ -23,6 +23,7 @@ public class GroupInvitationResponse {
     private String status;
     private UUID reviewedBy;
     private LocalDateTime reviewedAt;
+    private String rejectReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
