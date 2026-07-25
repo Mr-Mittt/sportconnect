@@ -8,6 +8,7 @@ import com.sportconnect.group.api.dto.GroupMemberResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.dto.GroupSettingsResponse;
 import com.sportconnect.group.api.dto.JoinRequestResponse;
+import com.sportconnect.group.api.dto.RejectInvitationRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import com.sportconnect.group.api.service.GroupService;
@@ -542,6 +543,84 @@ class GroupControllerTest extends BaseIT {
                 .andExpect(jsonPath("$.message").value("Only group members can view their sent invitations"));
 
         verify(groupService).getMemberSentInvitations(eq(1L), eq(userId), any());
+    }
+
+    @Test
+    void rejectInvitation_WithReason_Success() throws Exception {
+        // B13 — confirms the controller/JSON wiring for the new optional request body: a reason
+        // typed by the invitee reaches GroupService.rejectInvitation as a plain String.
+        RejectInvitationRequest request = RejectInvitationRequest.builder()
+                .reason("Schedule doesn't work for me")
+                .build();
+        doNothing().when(groupService).rejectInvitation(1L, userId, "Schedule doesn't work for me");
+
+        mockMvc.perform(put("/api/groups/invitations/1/reject")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Invitation rejected"));
+
+        verify(groupService).rejectInvitation(1L, userId, "Schedule doesn't work for me");
+    }
+
+    @Test
+    void rejectInvitation_NoBody_Success() throws Exception {
+        // B13 — reason is optional at the API layer: omitting the request body entirely (not even
+        // an empty `{}`) must still reach the service as a null reason, not fail request binding.
+        doNothing().when(groupService).rejectInvitation(1L, userId, null);
+
+        mockMvc.perform(put("/api/groups/invitations/1/reject")
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Invitation rejected"));
+
+        verify(groupService).rejectInvitation(1L, userId, null);
+    }
+
+    @Test
+    void getDeclinedInvitations_Success() throws Exception {
+        // B13 — new owner/admin-only endpoint surfacing declined_by_user rows with their reason.
+        GroupInvitationResponse declined = GroupInvitationResponse.builder()
+                .id(1L)
+                .groupId(1L)
+                .groupName("Test Group")
+                .inviterId(userId)
+                .inviterFullName("Test User")
+                .inviteeId(UUID.randomUUID())
+                .inviteeFullName("Friend One")
+                .status("declined_by_user")
+                .rejectReason("Schedule doesn't work for me")
+                .build();
+        Page<GroupInvitationResponse> page = new PageImpl<>(List.of(declined),
+                org.springframework.data.domain.PageRequest.of(0, 10), 1);
+        when(groupService.getDeclinedInvitations(eq(1L), eq(userId), any())).thenReturn(page);
+
+        mockMvc.perform(get("/api/groups/1/invitations/declined")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].status").value("declined_by_user"))
+                .andExpect(jsonPath("$.data.content[0].rejectReason").value("Schedule doesn't work for me"));
+
+        verify(groupService).getDeclinedInvitations(eq(1L), eq(userId), any());
+    }
+
+    @Test
+    void getDeclinedInvitations_NotOwnerOrAdmin_ReturnsBadRequest() throws Exception {
+        when(groupService.getDeclinedInvitations(eq(1L), eq(userId), any()))
+                .thenThrow(new BadRequestException("Only group owner or admin can view declined invitations"));
+
+        mockMvc.perform(get("/api/groups/1/invitations/declined"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Only group owner or admin can view declined invitations"));
+
+        verify(groupService).getDeclinedInvitations(eq(1L), eq(userId), any());
     }
 
     @Test

@@ -14,6 +14,7 @@ import com.sportconnect.group.api.dto.GroupSettingsResponse;
 import com.sportconnect.group.api.dto.JoinRequestResponse;
 import com.sportconnect.group.api.dto.PinPostRequest;
 import com.sportconnect.group.api.dto.PinnedPostResponse;
+import com.sportconnect.group.api.dto.RejectInvitationRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import com.sportconnect.group.api.service.GroupService;
@@ -540,8 +541,10 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> rejectInvitation(
             @PathVariable Long invitationId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.rejectInvitation(invitationId, UUID.fromString(userIdStr));
+            @AuthenticationPrincipal String userIdStr,
+            @RequestBody(required = false) @Valid RejectInvitationRequest request) {
+        String reason = request != null ? request.getReason() : null;
+        groupService.rejectInvitation(invitationId, UUID.fromString(userIdStr), reason);
         return ResponseEntity.ok(ApiResponse.<Void>success("Invitation rejected", null));
     }
 
@@ -590,6 +593,25 @@ public class GroupController {
             @AuthenticationPrincipal String userIdStr,
             Pageable pageable) {
         Page<GroupInvitationResponse> response = groupService.getMemberSentInvitations(groupId, UUID.fromString(userIdStr), pageable);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "List a group's invitations the invitee rejected (paginated)", description = "Owner or admin only. "
+            + "Each row's `rejectReason` (B13) holds whatever the invitee optionally gave when rejecting. Excludes "
+            + "invitations the owner/admin themselves declined (`declined_by_owner`) — those never reached the invitee.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Declined invitations (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
+    })
+    @GetMapping("/{groupId}/invitations/declined")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Page<GroupInvitationResponse>>> getDeclinedInvitations(
+            @PathVariable Long groupId,
+            @AuthenticationPrincipal String userIdStr,
+            Pageable pageable) {
+        Page<GroupInvitationResponse> response = groupService.getDeclinedInvitations(groupId, UUID.fromString(userIdStr), pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

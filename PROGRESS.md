@@ -1344,6 +1344,21 @@ the real running backend: search → 1 result → close → reopen with no pre-f
 input and no stale result, immediately and 500ms later. Full Vitest suite (512/512) and the
 InviteFriendModal-touching e2e spec (`group-members`) both green.
 
+**B13 DONE** (2026-07-24, `modules/social/group-impl/docs/B13_INVITATION_REJECT_REASON.md`): invitee
+rejecting a group invitation (`PUT /groups/invitations/{id}/reject`) can now optionally include a
+`reason` (new `RejectInvitationRequest` body, `@Size(max=500)`, nothing required at the API layer),
+persisted on `GroupInvitation.rejectReason` (new nullable `TEXT` column, V028). New owner/admin-only
+`GET /groups/{groupId}/invitations/declined` surfaces those rows with their reason — added rather
+than repurposing `getGroupInvitations` (which stays `pending_owner`-only on purpose, so GRP-3/GRP-7's
+approval queue doesn't get polluted with resolved rows) or `getMemberSentInvitations` (member-facing,
+not owner/admin-facing — the user chose owner/admin-only visibility). Filed alongside client ticket
+**GRP-8** (`client/docs/BACKLOG_MVP.md`), which needs this for its reason-gated reject confirmation
+dialog. Full Spock coverage (reason persisted/omitted, new endpoint's happy path + non-owner/admin +
+group-not-found cases) plus new `GroupControllerTest` MockMvc cases for both changed/new endpoints;
+`:server:test` green. Live-verified end-to-end against the real running backend (register two users,
+friend them, create a group, self-approved owner invitation, reject with a reason, confirm the new
+endpoint returns it, confirm a non-owner/admin gets 400).
+
 **Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime

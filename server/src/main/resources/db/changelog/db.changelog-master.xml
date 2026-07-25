@@ -67,4 +67,7 @@
     <!-- B9: Group welcome system posts -->
     <include file="db/changelog/changes/V027__add_group_system_post_type.sql" relativeToChangelogFile="false"/>
 
+    <!-- B13: Persist a rejection reason on invitee-declined invitations -->
+    <include file="db/changelog/changes/V028__add_reject_reason_to_group_invitations.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
