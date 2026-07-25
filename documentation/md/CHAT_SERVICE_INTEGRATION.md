@@ -5,8 +5,10 @@
 **Supersedes:** `PROGRESS.md`'s "Real-Time Chat (designed, not implemented)" entry, which previously
 planned self-hosted WebSocket/Spring STOMP (dependency already sitting unused in
 `server/build.gradle`) — see "Why not self-host" below for why that plan changed.
-**Unblocks:** `modules/social/chat-impl/docs/BACKLOG_MVP.md` (CHAT-1, CHAT-3),
-`client/docs/BACKLOG_MVP.md` (CHAT-2, CHAT-4)
+**Unblocks:** `modules/social/chat-impl/docs/BACKLOG_V1.md` (CHAT-1, CHAT-3),
+`client/docs/BACKLOG_V1.md` (CHAT-2, CHAT-4)
+**Moved to V1 (2026-07-26, user decision):** all four tickets deprioritized out of the MVP release —
+see the backlog files above for the current queue location.
 
 ---
 
@@ -186,9 +188,9 @@ is the actual source of truth:
 Full ticket breakdown lives in two backlogs (backend and client tickets are interleaved by
 dependency — see each file's own dependency notes):
 
-- `modules/social/chat-impl/docs/BACKLOG_MVP.md` — **CHAT-1** (module scaffolding + token-issuing
+- `modules/social/chat-impl/docs/BACKLOG_V1.md` — **CHAT-1** (module scaffolding + token-issuing
   endpoint), **CHAT-3** (message persistence)
-- `client/docs/BACKLOG_MVP.md` — **CHAT-2** (wire `GroupChatTab` to real-time PubNub delivery),
+- `client/docs/BACKLOG_V1.md` — **CHAT-2** (wire `GroupChatTab` to real-time PubNub delivery),
   **CHAT-4** (persisted history + hardening)
 
 Sequencing: CHAT-1 → CHAT-2 (real-time works end-to-end, backed by the vendor's own short-term

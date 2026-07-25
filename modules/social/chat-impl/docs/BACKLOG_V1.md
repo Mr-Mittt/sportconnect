@@ -1,8 +1,10 @@
 # Chat Module — Feature Backlog
 
-**Version:** MVP v1
+**Version:** V1
 **Module:** `modules/social/chat-impl` (new — does not exist yet; CHAT-1 scaffolds it)
-**Last updated:** 2026-07-22
+**Last updated:** 2026-07-26
+**Prerequisite:** none of this module's tickets have an MVP-scope blocker — moved to V1 in full
+(2026-07-26, user decision) to deprioritize group chat out of the MVP release.
 
 ---
 
@@ -11,14 +13,14 @@
 - Pick the first `TODO` ticket in the implementation order
 - Mark it `IN PROGRESS` at the start of the session
 - Mark it `DONE` when implementation + tests are complete
-- Use `/workon chat mvp` to resume (once the module exists — see CHAT-1)
+- Use `/workon chat v1` to resume (once the module exists — see CHAT-1)
 
 **Origin:** `documentation/md/CHAT_SERVICE_INTEGRATION.md` — the decision to integrate PubNub for
 group chat, and the full architecture (token minting, channel model, persistence strategy) these
 tickets implement. Read that doc first; it is the spec, this file is the queue.
 
 Backend tickets only. The matching client tickets (CHAT-2, CHAT-4) live on
-`client/docs/BACKLOG_MVP.md` — sequencing across both files:
+`client/docs/BACKLOG_V1.md` — sequencing across both files:
 
 ```
 CHAT-1 (backend: module scaffold + token endpoint)
@@ -102,7 +104,7 @@ membership gating
 
 ### CHAT-3 · Chat message persistence
 **Status:** `TODO` · **Type:** Feature · **Dependency:** CHAT-1 (module scaffold), CHAT-2
-(client, `client/docs/BACKLOG_MVP.md` — real-time path proven before persistence is added)
+(client, `client/docs/BACKLOG_V1.md` — real-time path proven before persistence is added)
 **Spec:** `documentation/md/CHAT_SERVICE_INTEGRATION.md` § Architecture → Persistence
 
 **What ships:**

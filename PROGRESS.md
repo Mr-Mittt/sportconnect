@@ -1438,6 +1438,15 @@ touching its Sport filter). 7/7 consecutive full-suite runs green after, vs. 3/3
 at the same two spots before. Full root-cause writeup in `GRP-8_INVITATION_LIFECYCLE_POLISH.md`'s
 "Follow-up" section.
 
+**Chat tickets moved to V1 (2026-07-26, user decision):** CHAT-1/CHAT-2/CHAT-3/CHAT-4 (real-time
+group chat via PubNub + persistence) deprioritized out of the MVP backlog in full. Backend queue file
+renamed `modules/social/chat-impl/docs/BACKLOG_MVP.md` → `BACKLOG_V1.md` (CHAT-1, CHAT-3); client
+queue moved CHAT-2/CHAT-4's full ticket entries from `client/docs/BACKLOG_MVP.md` into
+`client/docs/BACKLOG_V1.md`. `documentation/md/CHAT_SERVICE_INTEGRATION.md` (the architecture spec)
+and both backlogs' cross-references updated to point at the new V1 locations. No code changed —
+`GroupChatTab.tsx` keeps shipping as GRP-1's local-state-only mock with its "not saved" disclaimer for
+MVP. Pick up via `/workon chat v1` or `/workon client v1` once resumed.
+
 **Friends page rail state persistence (2026-07-25, user-requested,
 `client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
 rail's mode (friend list vs. directory search), search text, and selected person — previously all
