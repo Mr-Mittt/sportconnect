@@ -42,7 +42,7 @@ original filing's open questions have already been answered.
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | CHAT-5 | Repository/cache integration tests (DB-backed) | `DONE` |
-| 2 | CHAT-6 | WebSocket broadcast + sync resilience tests | `TODO` |
+| 2 | CHAT-6 | WebSocket broadcast + sync resilience tests | `DONE` |
 | 3 | CHAT-7 | Chat API client + data hooks scaffold (client) | `TODO` |
 | 4 | CHAT-8 | Wire `GroupChatTab` to the real chat service | `TODO` |
 | 5 | CHAT-9 | Wire `FriendChatPanel` to the real chat service (1:1 DMs) | `TODO` |
@@ -137,7 +137,8 @@ service container in CI, no new dependency.
 ---
 
 ### CHAT-6 · WebSocket broadcast + sync resilience tests
-**Status:** `TODO` · **Type:** Testing (backend) · **Dependency:** none
+**Status:** `DONE` (2026-07-27) · **Type:** Testing (backend) · **Dependency:** none ·
+**Summary:** `services/chat/docs/CHAT-6_WEBSOCKET_SYNC_RESILIENCE_TESTS.md`
 
 **Origin:** `internal/ws.Hub` and the WebSocket-accept path in `internal/api/handlers.go` were only
 ever confirmed to require auth and exist (a live curl-based check) — never that a second connected
@@ -163,6 +164,29 @@ exercised at all.
 - The WebSocket broadcast test is the one genuinely new piece of test infrastructure this ticket
   needs (a real client dialing back into a real test server) — get this working first, the rest of
   the ticket reuses ordinary table-driven tests.
+
+**Delta (found at pickup):** the "restart... never-acked entry gets redelivered" premise required a
+real production fix, not just a test — `Consumer.Run` only ever read with `>`, which Redis never
+redelivers to any consumer once an entry has been delivered (confirmed empirically via `redis-cli`
+before writing any code). Added `Consumer.reclaimPending` (a single `XREADGROUP ... 0` read at the
+top of `Run`, before the main loop) so a same-identity restart genuinely reclaims its own pending
+entries now. Also made `Consumer`'s stream/group and `Bootstrapper`'s page size per-instance fields
+(defaulting to the real production values — no `main.go` changes) so tests don't touch real shared
+Redis/monolith infrastructure. Full detail:
+`services/chat/docs/CHAT-6_WEBSOCKET_SYNC_RESILIENCE_TESTS.md`.
+
+**Delta (bootstrap test target, user decision):** ships against the real monolith, not an
+`httptest.Server` stub — after being shown that forcing real pagination would otherwise need 501+
+seeded rows (both the monolith's `MAX_LIMIT` and the Bootstrapper's own hardcoded request limit were
+500), the user asked to reduce the page size instead; `Bootstrapper.pageSize` is now test-overridable
+(50 in the test), needing only ~5 seeded rows. The test skips (not fails) when
+`INTERNAL_SERVICE_SECRET` is unset — `chat-ci.yml` never sets it, so this one test never runs in CI,
+by design.
+
+**Delta (`chat-ci.yml`):** added a `redis:7-alpine` service container (CHAT-6's consumer tests need
+real Redis, which the workflow didn't have) and a `JWT_SECRET` env value (the WebSocket test needs
+one; the workflow didn't set it). Both gaps were only caught by re-simulating the workflow end-to-end
+locally (fresh containers, `.env` hidden) — not assumed correct from local `go test` alone.
 
 ---
 

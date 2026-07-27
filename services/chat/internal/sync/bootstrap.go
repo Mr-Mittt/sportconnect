@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -16,11 +17,22 @@ import (
 // once per fresh database: after the first successful run, the consumer
 // group's own acked offset (CacheStore.LastStreamID) is enough to stay
 // current, even across restarts, since Streams persist their backlog.
+// defaultPageSize matches the monolith's own MAX_LIMIT (InternalGroupSyncService/
+// InternalUserSyncService) — the real endpoints clamp to that regardless of what's
+// requested, so this is the largest value that ever does anything in production.
+const defaultPageSize = 500
+
 type Bootstrapper struct {
 	httpClient *http.Client
 	baseURL    string
 	secret     string
 	cache      *CacheStore
+
+	// pageSize defaults to defaultPageSize in production (see NewBootstrapper).
+	// Tests override it directly (same-package access) to force multi-page
+	// pagination against the real monolith with a handful of seeded rows
+	// instead of needing 500+.
+	pageSize int
 }
 
 func NewBootstrapper(baseURL, secret string, cache *CacheStore) *Bootstrapper {
@@ -29,6 +41,7 @@ func NewBootstrapper(baseURL, secret string, cache *CacheStore) *Bootstrapper {
 		baseURL:    baseURL,
 		secret:     secret,
 		cache:      cache,
+		pageSize:   defaultPageSize,
 	}
 }
 
@@ -138,7 +151,7 @@ func (b *Bootstrapper) pullUsers(ctx context.Context) error {
 func fetchPage[T any](ctx context.Context, b *Bootstrapper, path, cursor string) ([]T, string, error) {
 	query := url.Values{}
 	query.Set("cursor", cursor)
-	query.Set("limit", "500")
+	query.Set("limit", strconv.Itoa(b.pageSize))
 
 	reqURL := b.baseURL + path + "?" + query.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)

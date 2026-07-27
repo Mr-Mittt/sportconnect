@@ -159,6 +159,25 @@ Run all three before considering any change here done — see `CLAUDE.md`'s "Bef
 note for why (this codebase was scaffolded without a Go toolchain available to check it, so the
 first real `go` run against it matters more than usual).
 
+**`go test ./...` needs real infrastructure running, not just the Go toolchain** — most of this
+service's tests are DB-/Redis-backed integration tests, not pure-unit tests, per `CLAUDE.md`'s
+testing convention (CHAT-5, CHAT-6):
+
+| Package | Needs |
+|---|---|
+| `internal/conversation`, `internal/message`, `internal/sync` | The dev compose stack's Postgres (`sportconnect_chat_dev`) — see step 1 above. Tests run inside a transaction rolled back at the end, so they never leave rows behind. |
+| `internal/sync` (consumer resilience tests) | The dev compose stack's Redis too — each test uses a throwaway stream/consumer-group name, isolated from the real `sportconnect:domain-events` stream and `chat-service` group a real running instance of this service would use. |
+| `internal/sync` (bootstrap pagination test) | The real monolith running (`./gradlew :server:bootRun`) and reachable at `MONOLITH_BASE_URL` — this one test seeds a handful of synthetic rows directly into the monolith's own dev Postgres, hits the real `/internal/sync/**` endpoint, and cleans up afterward. |
+| `internal/api` (WebSocket broadcast test) | Just the dev Postgres (spins up its own `httptest.Server`, no separately-running chat process needed) |
+
+If any of the above isn't running, the relevant test fails loudly with a clear message (never
+skips silently) — start the dev compose stack (and, for the bootstrap test, the monolith too)
+first. The one deliberate exception is the bootstrap test itself: it skips (doesn't fail) when
+`INTERNAL_SERVICE_SECRET` isn't set, since that's this suite's one signal that the environment
+isn't set up to run the monolith at all. CI (`chat-ci.yml`) provisions its own throwaway Postgres
+and Redis for this; it never sets `INTERNAL_SERVICE_SECRET`, so the bootstrap test always skips
+there (see that workflow's own notes).
+
 ### Production
 
 `Dockerfile` builds a small, self-contained image (a compiled Go binary, no JVM, no Node — a few
@@ -220,7 +239,12 @@ Two parts, working together (full detail in `docs/SYNC_DESIGN.md`):
    a group, a group is deleted, a friend request is accepted/removed, someone changes their display
    name), Spring publishes a small event onto a Redis Stream (`sportconnect:domain-events`). This
    service has a background loop (`internal/sync.Consumer`, started in `main.go`) permanently reading
-   that stream and updating the cache tables above.
+   that stream and updating the cache tables above. On every start (including after a crash), the
+   consumer first reclaims and re-processes any of its own entries left pending/unacked from a prior
+   run (`Consumer.reclaimPending`) before moving on to new events — a handler failure never silently
+   drops an update. This only reclaims *this same consumer identity's* own pending entries; recovering
+   a *different* stuck consumer's entries (relevant only once this service ever runs as more than one
+   instance) still needs `XAUTOCLAIM`, not yet implemented — see `CLAUDE.md`'s Known gaps.
 2. **Cold-start bootstrap.** A stream only carries events from the moment something subscribes to
    it — it can't tell this service about a group that already had 50 members before this service
    ever existed. So, once, the first time this service's database is empty, it calls three
@@ -344,13 +368,30 @@ receive-only from the client's perspective.
 
 ## 8. Current status
 
-Structural only — this describes what exists as of the initial scaffold. Not yet done:
+The structural scaffold (this README's §1–§7) was built and live-verified end-to-end, then given
+real automated regression coverage — this is no longer scaffold-only. Current state, kept current
+per `CLAUDE.md`'s README maintenance convention (check `docs/BACKLOG_MVP.md` for the authoritative,
+up-to-the-day ticket state if this drifts):
 
-- **No Go toolchain verified this code.** It was written without `go` installed in that
-  environment. Run `go build ./... && go vet ./... && go test ./...` before trusting any of it.
-- **No feature-ticket breakdown yet** — this README describes the endpoints as scaffolded, not a
-  committed product scope. Check `docs/BACKLOG_MVP.md` (once it exists) or `PROGRESS.md` for the
-  current plan.
-- **No production reverse-proxy config exists yet** for this or any other service in the repo.
+- **Backend test coverage:** `CHAT-5` (`DONE`) added DB-backed integration tests for
+  `internal/conversation`, `internal/message`, and `internal/sync`'s cache store — previously only
+  pure-validation unit tests existed. `CHAT-6` (`DONE`) added WebSocket broadcast fan-out coverage
+  (a real router, real WebSocket clients, over `httptest.NewServer`), `internal/sync.Consumer`
+  crash-recovery coverage, and `internal/sync.Bootstrapper` pagination coverage against the real
+  monolith. CHAT-6 also fixed a real bug it found while writing that coverage: `Consumer.Run` only
+  ever read Redis Stream entries with `>`, which Redis never redelivers once an entry has been
+  delivered to a consumer group — so a same-identity restart never actually retried a never-acked
+  entry, contrary to what this file used to imply. `Consumer.reclaimPending` (called once at the top
+  of `Run`) fixes this: a same-identity restart now genuinely reclaims and re-processes its own
+  pending entries first.
+- **CI exists:** `.github/workflows/chat-ci.yml` — build/vet/test on every `services/chat/**` PR,
+  against `postgres:16-alpine` and `redis:7-alpine` service containers (Redis added for CHAT-6's
+  consumer tests). It does not run the monolith-dependent bootstrap pagination test (see that test's
+  own skip condition) — a full Java+Gradle+Postgres stack inside a Go-only CI job isn't worth the
+  weight; that one test is a local/pre-release check only.
+- **Client side is untouched so far** — `GroupChatTab.tsx`/`FriendChatPanel.tsx` are still
+  local-state mocks. That's `CHAT-7` onward (`docs/BACKLOG_MVP.md`), not started yet.
+- **No production reverse-proxy config exists yet** for this or any other service in the repo —
+  tracked as `INFRA-7` (`infra/documentation/BACKLOG_MVP.md`).
 - **`/internal/sync/**` network isolation** (must be unreachable from outside the server's network)
-  is not yet enforced anywhere — it's an infra task, not application code.
+  is not yet enforced anywhere — tracked as `INFRA-9`, same file.

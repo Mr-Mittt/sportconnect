@@ -1683,6 +1683,32 @@ verified by reproducing them locally end to end — a throwaway fresh `postgres:
 GitHub-Actions-specific mechanics remain unverified until a real PR runs it (same HF-12-style
 conditional as every other CI ticket in this repo).
 
+**CHAT-6 — WebSocket broadcast + sync resilience tests (2026-07-27,
+`services/chat/docs/CHAT-6_WEBSOCKET_SYNC_RESILIENCE_TESTS.md`):** real WebSocket broadcast-fan-out
+coverage (a real router + real `coder/websocket` clients over `httptest.NewServer`), plus
+`internal/sync.Consumer`/`Bootstrapper` resilience coverage. Found and fixed a real bug while writing
+the consumer test: `Consumer.Run` only ever read Redis Stream entries with `>`, which Redis never
+redelivers once an entry has been delivered to a consumer group — so a same-identity restart never
+actually retried a never-acked entry, contrary to what `CLAUDE.md`'s own "Known gaps" note implied.
+Confirmed empirically via `redis-cli` before touching code. Fixed with `Consumer.reclaimPending` (one
+`XREADGROUP ... 0` read at the top of `Run`, before the main `>` loop). `Consumer`'s stream/group and
+`Bootstrapper`'s page size became per-instance fields (defaulting to the real production values, no
+`main.go` changes) so tests use throwaway stream/group names and a small page size instead of
+touching real shared infrastructure. Bootstrap pagination test runs against the **real monolith**
+(user decision, after being shown the real cost — the monolith's `MAX_LIMIT`/the client's hardcoded
+request limit are both 500, which would've needed 501+ seeded rows; the user's own follow-up
+question, "what's the page size, should we reduce it?", is exactly what shipped — a small
+test-overridable page size needing only ~5 seeded rows against the real `/internal/sync/users`).
+`chat-ci.yml` had two real gaps only caught by re-simulating it end-to-end exactly like CHAT-5 did
+(fresh containers, `.env` hidden, only the workflow's own env values exported): no Redis service
+container at all (added `redis:7-alpine`) and no `JWT_SECRET` (added, CI-only literal). Also added a
+**README maintenance convention** to `services/chat/CLAUDE.md` (none existed before, unlike the
+client's `E2E_OVERVIEW.md` rule) and did a full accuracy pass on `README.md`, which had been stale
+since initial scaffold (still said "no Go toolchain has verified this code" long after CHAT-5/6
+proved otherwise). `go build`/`go vet`/`go test ./...` green locally and in the re-simulated CI
+environment, including confirming the monolith-dependent test SKIPs (not fails) exactly the way
+`chat-ci.yml` will hit it.
+
 **Friends page rail state persistence (2026-07-25, user-requested,
 `client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
 rail's mode (friend list vs. directory search), search text, and selected person — previously all
