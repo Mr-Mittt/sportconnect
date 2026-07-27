@@ -23,6 +23,8 @@ const ownMessage: ChatMessage = {
   senderAvatarUrl: null,
   content: 'Hey team, ready for Sunday?',
   createdAt: '2026-07-26T10:15:00Z',
+  editedAt: null,
+  deletedAt: null,
 };
 
 const otherMessage: ChatMessage = {
@@ -33,6 +35,8 @@ const otherMessage: ChatMessage = {
   senderAvatarUrl: null,
   content: 'Yep, see you at 9!',
   createdAt: '2026-07-26T10:16:00Z',
+  editedAt: null,
+  deletedAt: null,
 };
 
 function baseProps(overrides: Partial<GroupChatTabViewProps> = {}): GroupChatTabViewProps {
@@ -43,6 +47,10 @@ function baseProps(overrides: Partial<GroupChatTabViewProps> = {}): GroupChatTab
     isError: false,
     sendMessage: vi.fn(),
     isSending: false,
+    editMessage: vi.fn(),
+    isEditing: false,
+    deleteMessage: vi.fn(),
+    isDeleting: false,
     hasOlderMessages: false,
     isLoadingOlderMessages: false,
     isLoadOlderMessagesError: false,
@@ -77,6 +85,23 @@ describe('GroupChatTabView', () => {
     expect(screen.getByText('Yep, see you at 9!')).toBeInTheDocument();
     expect(screen.getByText('Hey team, ready for Sunday?')).toBeInTheDocument();
     expect(screen.queryByText('Ben Nyx')).not.toBeInTheDocument();
+  });
+
+  it('aligns the caller\'s own messages left and other members\' right (CHAT-13 reversed convention)', () => {
+    render(<GroupChatTabView {...baseProps({ messages: [otherMessage, ownMessage] })} />);
+    const ownRow = screen.getByText('Hey team, ready for Sunday?').closest('.flex.flex-col');
+    const otherRow = screen.getByText('Yep, see you at 9!').closest('.flex.flex-col');
+    expect(ownRow).toHaveClass('items-start');
+    expect(otherRow).toHaveClass('items-end');
+  });
+
+  it('shows an avatar for other members\' messages but not the caller\'s own', () => {
+    render(<GroupChatTabView {...baseProps({ messages: [otherMessage, ownMessage] })} />);
+    // Radix Avatar's <img> never fires a real load event in jsdom, so the
+    // fallback (initials) is what actually renders — a reliable proxy for
+    // "an avatar is present here" without depending on image loading.
+    expect(screen.getByText('PS')).toBeInTheDocument();
+    expect(screen.queryByText('BN')).not.toBeInTheDocument();
   });
 
   it('sends a message and clears the draft', async () => {
@@ -157,5 +182,66 @@ describe('GroupChatTabView', () => {
     expect(screen.getByText("Couldn't load earlier messages.")).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(loadOlderMessages).toHaveBeenCalled();
+  });
+
+  it('shows edit/delete affordances only on the caller\'s own messages', () => {
+    render(<GroupChatTabView {...baseProps({ messages: [otherMessage, ownMessage] })} />);
+    expect(screen.getAllByRole('button', { name: 'Edit message' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Delete message' })).toHaveLength(1);
+  });
+
+  it('editing a message shows a prefilled inline input, and Save calls editMessage', async () => {
+    const editMessage = vi.fn();
+    const user = userEvent.setup();
+    render(<GroupChatTabView {...baseProps({ messages: [ownMessage], editMessage })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit message' }));
+
+    const editInput = screen.getByLabelText('Edit message content');
+    expect(editInput).toHaveValue('Hey team, ready for Sunday?');
+
+    await user.clear(editInput);
+    await user.type(editInput, 'Hey team, ready for Monday?');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(editMessage).toHaveBeenCalledWith(1, 'Hey team, ready for Monday?');
+    expect(screen.queryByLabelText('Edit message content')).not.toBeInTheDocument();
+  });
+
+  it('Cancel restores the original message without calling editMessage', async () => {
+    const editMessage = vi.fn();
+    const user = userEvent.setup();
+    render(<GroupChatTabView {...baseProps({ messages: [ownMessage], editMessage })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit message' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(editMessage).not.toHaveBeenCalled();
+    expect(screen.getByText('Hey team, ready for Sunday?')).toBeInTheDocument();
+  });
+
+  it('clicking Delete calls deleteMessage immediately, with no confirmation step', async () => {
+    const deleteMessage = vi.fn();
+    const user = userEvent.setup();
+    render(<GroupChatTabView {...baseProps({ messages: [ownMessage], deleteMessage })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Delete message' }));
+
+    expect(deleteMessage).toHaveBeenCalledWith(1);
+  });
+
+  it('shows an "(edited)" tag for an edited message', () => {
+    const edited = { ...ownMessage, editedAt: '2026-07-26T10:20:00Z' };
+    render(<GroupChatTabView {...baseProps({ messages: [edited] })} />);
+    expect(screen.getByText('(edited)')).toBeInTheDocument();
+  });
+
+  it('renders a deleted message as a placeholder with no edit/delete affordance', () => {
+    const deleted = { ...ownMessage, content: '', deletedAt: '2026-07-26T10:25:00Z' };
+    render(<GroupChatTabView {...baseProps({ messages: [deleted] })} />);
+
+    expect(screen.getByText('Message deleted')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit message' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete message' })).not.toBeInTheDocument();
   });
 });

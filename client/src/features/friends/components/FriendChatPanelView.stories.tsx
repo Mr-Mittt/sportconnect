@@ -12,6 +12,8 @@ const ownMessage: ChatMessage = {
   senderAvatarUrl: null,
   content: 'Pickup game Sunday, you in?',
   createdAt: '2026-07-26T10:15:00Z',
+  editedAt: null,
+  deletedAt: null,
 };
 
 const otherMessage: ChatMessage = {
@@ -22,6 +24,22 @@ const otherMessage: ChatMessage = {
   senderAvatarUrl: null,
   content: "I'm in, what time?",
   createdAt: '2026-07-26T10:16:00Z',
+  editedAt: null,
+  deletedAt: null,
+};
+
+const editedOwnMessage: ChatMessage = {
+  ...ownMessage,
+  id: 3,
+  content: 'Pickup game Sunday at 10am, you in?',
+  editedAt: '2026-07-26T10:20:00Z',
+};
+
+const deletedOtherMessage: ChatMessage = {
+  ...otherMessage,
+  id: 4,
+  content: '',
+  deletedAt: '2026-07-26T10:25:00Z',
 };
 
 const meta = {
@@ -34,6 +52,10 @@ const meta = {
     isError: false,
     sendMessage: () => {},
     isSending: false,
+    editMessage: () => {},
+    isEditing: false,
+    deleteMessage: () => {},
+    isDeleting: false,
     hasOlderMessages: false,
     isLoadingOlderMessages: false,
     isLoadOlderMessagesError: false,
@@ -57,9 +79,19 @@ export const Error: Story = {
 /** Conversation opened, no messages sent yet. */
 export const Empty: Story = {};
 
-/** A short transcript mixing the caller's own messages and the other person's. */
+/** A short transcript mixing the caller's own messages and the other person's — own left, other's right. */
 export const Populated: Story = {
   args: { messages: [otherMessage, ownMessage] },
+};
+
+/** An edited own message shows an "(edited)" tag; the edit/delete affordance only appears on own messages. */
+export const WithEditedMessage: Story = {
+  args: { messages: [otherMessage, editedOwnMessage] },
+};
+
+/** A deleted message (either side) renders an italic placeholder, no affordances. */
+export const WithDeletedMessage: Story = {
+  args: { messages: [deletedOtherMessage, ownMessage] },
 };
 
 /** Older history exists — the "Load earlier messages" affordance shows above the transcript. */

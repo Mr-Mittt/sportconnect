@@ -43,6 +43,11 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.Handle("POST /conversations/open/direct/{userId}", deps.Verifier.Middleware(http.HandlerFunc(h.openDirectConversation)))
 	mux.Handle("GET /conversations/{id}/messages", deps.Verifier.Middleware(http.HandlerFunc(h.messageHistory)))
 	mux.Handle("POST /conversations/{id}/messages", deps.Verifier.Middleware(http.HandlerFunc(h.sendMessage)))
+	// CHAT-13: PATCH/DELETE share the same 4-segment path as the "open"
+	// routes above but use methods no other route registers, so there's no
+	// repeat of that comment's wildcard/literal ambiguity to worry about.
+	mux.Handle("PATCH /conversations/{id}/messages/{messageId}", deps.Verifier.Middleware(http.HandlerFunc(h.editMessage)))
+	mux.Handle("DELETE /conversations/{id}/messages/{messageId}", deps.Verifier.Middleware(http.HandlerFunc(h.deleteMessage)))
 	mux.Handle("GET /conversations/{id}/ws", deps.Verifier.MiddlewareWS(http.HandlerFunc(h.connectWebSocket)))
 
 	return corsMiddleware(deps.AllowedOrigin, mux)

@@ -271,12 +271,24 @@ server's own network in production.
 ### 6.4 Real-time delivery — a broadcast, not a two-way channel
 
 Opening a chat view establishes a WebSocket connection (`GET /conversations/{id}/ws`) to this
-service. That connection is used **one way**: the server pushes newly sent messages down it. Actually
-*sending* a message always goes through the regular HTTP endpoint
-(`POST /conversations/{id}/messages`), which persists it and then hands it to
-`internal/ws.Hub.Broadcast`, which pushes it to every other open WebSocket connection for that same
-conversation. If you send a WebSocket frame *to* the server, it's read and discarded — this service
-doesn't listen for chat content over the socket, only over the REST endpoint.
+service. That connection is used **one way**: the server pushes updates down it. Sending, editing,
+or deleting a message always goes through the corresponding REST endpoint (§7), which persists the
+change and then hands it to `internal/ws.Hub.Broadcast`, which pushes it to every connection on that
+same conversation (**including the caller's own**, if they have more than one tab/session open — the
+client is expected to dedupe by message id, see the "the caller's own connections too" note under
+§7's message endpoints). If you send a WebSocket frame *to* the server, it's read and discarded —
+this service doesn't listen for chat content over the socket, only over the REST endpoints.
+
+Every broadcast frame is a JSON envelope, not a bare message object:
+
+```json
+{ "type": "MESSAGE_CREATED", "message": { "id": 501, "...": "..." } }
+```
+
+`type` is one of `MESSAGE_CREATED`, `MESSAGE_EDITED`, or `MESSAGE_DELETED` (CHAT-13) — `message` is
+always the same shape shown under §7's message endpoints, current as of whichever change just
+happened. This is the wire contract every client must parse; there is no bare-message form anymore
+(CHAT-7/8/9 originally shipped one, superseded in the same change that added edit/delete).
 
 ---
 
@@ -341,19 +353,61 @@ not just when it was first opened.
   "senderFullName": "Jordan Lee",
   "senderAvatarUrl": "https://.../avatar.jpg",
   "content": "Let's play Friday",
-  "createdAt": "2026-07-26T10:15:00Z"
+  "createdAt": "2026-07-26T10:15:00Z",
+  "editedAt": null,
+  "deletedAt": null
 }
 ```
 `senderFullName`/`senderAvatarUrl` are always resolved server-side from `user_profiles_cache` —
-never taken from the request body, so a caller can't spoof their displayed name.
+never taken from the request body, so a caller can't spoof their displayed name. `editedAt`/
+`deletedAt` (CHAT-13) are **always present**, explicit JSON `null` until a message is actually
+edited/deleted — deliberately not `omitempty` like `senderAvatarUrl` above. A real bug shipped
+briefly with `omitempty` on these two: Go's `encoding/json` omits a nil-pointer `omitempty` field
+from the output entirely rather than emitting `null`, which a JS client decodes as `undefined` —
+and a client checking `deletedAt !== null` (matching this field's `string | null` type, not
+`string | null | undefined`) sees `undefined !== null` as `true`. Every untouched message rendered
+as deleted immediately. Fixed same-day; see `docs/CHAT-13_EDIT_DELETE_MESSAGES.md`.
 
-On success, the same payload is pushed to every other client currently connected via WebSocket to
-this conversation (§6.4).
+On success, the same message is pushed to every client currently connected via WebSocket to this
+conversation (§6.4) — including the sender's own other connections — wrapped in a
+`{"type": "MESSAGE_CREATED", "message": {...}}` envelope.
 
 **Errors:**
 - `403 Forbidden` — caller no longer allowed in this conversation
 - `400 Bad Request` — empty content, or content over 1000 characters
   (`{"error": "bad_request", "message": "..."}`)
+
+### `PATCH /conversations/{id}/messages/{messageId}`
+
+Edits a message's content in place (CHAT-13) — no edit history is kept, just the current content
+plus an `editedAt` timestamp. **Sender only** — no group-admin moderation over others' messages, and
+no time window (a message can be edited indefinitely).
+
+**Request body:**
+```json
+{ "content": "Let's play Friday at 6pm" }
+```
+
+**Response `200 OK`:** the updated message, same shape as `POST .../messages`, with `editedAt` now
+set. Broadcast to every connection on the conversation as `{"type": "MESSAGE_EDITED", "message": {...}}`.
+
+**Errors:**
+- `403 Forbidden` — caller isn't allowed in this conversation, or isn't the message's sender
+- `404 Not Found` — no such message, or it's already been deleted (soft-deleted messages are treated
+  as not-found for edit/delete purposes)
+- `400 Bad Request` — empty content, or content over 1000 characters
+
+### `DELETE /conversations/{id}/messages/{messageId}`
+
+Soft-deletes a message (CHAT-13): stamps `deletedAt` and scrubs `content` to an empty string
+server-side — the original text is never re-served by `GET .../messages` afterward. The row itself
+stays (id/position stability), matching this app's `User.isActive`/`Group.isActive` convention
+elsewhere. Same sender-only, no-time-window rules as editing.
+
+**Response `200 OK`:** the now-deleted message (`content: ""`, `deletedAt` set). Broadcast as
+`{"type": "MESSAGE_DELETED", "message": {...}}`.
+
+**Errors:** same `403`/`404` cases as `PATCH`, no content-related `400` (there's no request body).
 
 ### `GET /conversations/{id}/messages`
 
@@ -365,17 +419,17 @@ Paginated message history, newest first.
 | `before` | Message ID cursor — returns messages older than this one. Omit for the most recent page. |
 | `limit` | Page size, 1–200, default 50. |
 
-**Response `200 OK`:** a JSON array of the same message shape shown above.
+**Response `200 OK`:** a JSON array of the same message shape shown above — a deleted message in
+this list still has its row (`content: ""`, `deletedAt` set), not omitted.
 
 **Errors:** `403 Forbidden` if the caller isn't currently allowed in this conversation.
 
 ### `GET /conversations/{id}/ws`
 
 Upgrades the connection to a WebSocket. Same authorization check as the endpoints above. Once
-connected, the server pushes every new message sent to this conversation (by anyone, including the
-caller's own other connections) as a JSON text frame, in the exact shape shown under
-`POST .../messages` above. See §6.4 — this connection is receive-only from the client's
-perspective.
+connected, the server pushes every create/edit/delete on this conversation (by anyone, including
+the caller's own other connections) as a JSON text frame — the `{type, message}` envelope described
+in §6.4. See §6.4 — this connection is receive-only from the client's perspective.
 
 **Auth on this route only:** in addition to `Authorization: Bearer <token>`, also accepts
 `?token=<token>` as a query parameter (§6.1) — the one concession to browsers' native `WebSocket`
@@ -406,14 +460,18 @@ up-to-the-day ticket state if this drifts):
   consumer tests). It does not run the monolith-dependent bootstrap pagination test (see that test's
   own skip condition) — a full Java+Gradle+Postgres stack inside a Go-only CI job isn't worth the
   weight; that one test is a local/pre-release check only.
-- **Client foundation exists:** `CHAT-7` (`DONE`) added `client/src/features/chat/` — a chat-scoped
-  API client (`chatApiClient`, targeting `/api/chat`) and `useGroupChatData`/`useDirectChatData`
-  data hooks (open-or-resume conversation, history, send, a real-time WebSocket connection with
-  backoff reconnect), live-verified against these real running services. `GroupChatTab.tsx`/
-  `FriendChatPanel.tsx` themselves are still local-state mocks, not yet wired to these hooks — that's
-  `CHAT-8`/`CHAT-9` (`docs/BACKLOG_MVP.md`). CHAT-7 also found and fixed two things this section
-  used to gloss over: the JWT-algorithm bug described in §6.1, and `vite.config.ts`'s `/api/chat`
-  proxy entry needed `ws: true` added (the string-shorthand form doesn't proxy WebSocket upgrades).
+- **Client is fully wired, both surfaces real:** `CHAT-7` (`DONE`) added `client/src/features/chat/`
+  — a chat-scoped API client (`chatApiClient`, targeting `/api/chat`) and `useGroupChatData`/
+  `useDirectChatData` data hooks (open-or-resume conversation, history, send, a real-time WebSocket
+  connection with backoff reconnect), live-verified against these real running services. `CHAT-8`/
+  `CHAT-9` (both `DONE`) wired `GroupChatTab.tsx`/`FriendChatPanel.tsx` to those hooks for real —
+  neither is a local-state mock anymore. `CHAT-13` (`DONE`) added editing/deleting messages
+  (sender-only, no time window) on both surfaces, plus a reversed message-alignment layout (own
+  left, others' right) and a group-chat-only avatar next to other members' messages. CHAT-7 also
+  found and fixed two things this section used to gloss over: the JWT-algorithm bug described in
+  §6.1, and `vite.config.ts`'s `/api/chat` proxy entry needed `ws: true` added (the string-shorthand
+  form doesn't proxy WebSocket upgrades) — a further proxy bug (missing path-prefix `rewrite`) was
+  found and fixed at CHAT-8.
 - **No production reverse-proxy config exists yet** for this or any other service in the repo —
   tracked as `INFRA-7` (`infra/documentation/BACKLOG_MVP.md`).
 - **`/internal/sync/**` network isolation** (must be unreachable from outside the server's network)

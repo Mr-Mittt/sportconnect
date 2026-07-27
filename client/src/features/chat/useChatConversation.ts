@@ -8,7 +8,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { chatApiClient, buildChatWebSocketUrl } from './chatApiClient';
 import { chatKeys } from './queryKeys';
-import type { ChatMessage, ConnectionStatus, Conversation } from './types';
+import type { ChatMessage, ChatWebSocketEvent, ConnectionStatus, Conversation } from './types';
 
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30000;
@@ -24,6 +24,10 @@ interface UseChatConversationResult {
   error: unknown;
   sendMessage: (content: string) => void;
   isSending: boolean;
+  editMessage: (messageId: number, content: string) => void;
+  isEditing: boolean;
+  deleteMessage: (messageId: number) => void;
+  isDeleting: boolean;
   connectionStatus: ConnectionStatus;
   /** Whether an older page of history exists beyond what's currently loaded. */
   hasOlderMessages: boolean;
@@ -107,6 +111,23 @@ export function useChatConversation(
     [conversationId, queryClient],
   );
 
+  // Edits/deletes never change which page a message lives on (unlike a new
+  // message, which always belongs on the latest page) — find it by id
+  // across every loaded page and replace it in place.
+  const replaceMessage = useCallback(
+    (updated: ChatMessage) => {
+      if (conversationId === undefined) return;
+      queryClient.setQueryData<MessagesData>(chatKeys.messages(conversationId), (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          pages: prev.pages.map((page) => page.map((m) => (m.id === updated.id ? updated : m))),
+        };
+      });
+    },
+    [conversationId, queryClient],
+  );
+
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
       if (conversationId === undefined) {
@@ -118,6 +139,33 @@ export function useChatConversation(
       return response.data;
     },
     onSuccess: mergeMessage,
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async ({ messageId, content }: { messageId: number; content: string }) => {
+      if (conversationId === undefined) {
+        throw new Error('Cannot edit a message before the conversation has opened');
+      }
+      const response = await chatApiClient.patch<ChatMessage>(
+        `/conversations/${conversationId}/messages/${messageId}`,
+        { content },
+      );
+      return response.data;
+    },
+    onSuccess: replaceMessage,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (messageId: number) => {
+      if (conversationId === undefined) {
+        throw new Error('Cannot delete a message before the conversation has opened');
+      }
+      const response = await chatApiClient.delete<ChatMessage>(
+        `/conversations/${conversationId}/messages/${messageId}`,
+      );
+      return response.data;
+    },
+    onSuccess: replaceMessage,
   });
 
   // Ref-held (not state) so the cleanup function below always reaches the
@@ -140,8 +188,20 @@ export function useChatConversation(
       const socket = new WebSocket(buildChatWebSocketUrl(conversationId));
       socketRef.current = socket;
 
+      // Every handler below checks it's still the current connection
+      // (socketRef.current === socket) before doing anything — not just
+      // unmountedRef. React 18 StrictMode double-invokes this effect in dev
+      // (mount → cleanup → mount), and unmountedRef is a single ref shared
+      // across both invocations: the second mount resets it to false before
+      // the first (torn-down) socket's async onclose has fired, so that
+      // stale onclose would otherwise see itself as still "mounted" and
+      // incorrectly kick off a reconnect — including an onopen-triggered
+      // queryClient.invalidateQueries call that could race a just-sent
+      // message into the cache, making it look like it vanished. Comparing
+      // socket identity instead makes a torn-down or superseded socket's
+      // callbacks no-ops regardless of which ref reset when.
       socket.onopen = () => {
-        if (unmountedRef.current) return;
+        if (socketRef.current !== socket) return;
         setConnectionStatus('open');
         reconnectDelayRef.current = RECONNECT_BASE_DELAY_MS;
         if (isReconnect) {
@@ -151,14 +211,21 @@ export function useChatConversation(
       };
 
       socket.onmessage = (event: MessageEvent<string>) => {
+        if (socketRef.current !== socket) return;
         try {
-          mergeMessage(JSON.parse(event.data) as ChatMessage);
+          const wsEvent = JSON.parse(event.data) as ChatWebSocketEvent;
+          if (wsEvent.type === 'MESSAGE_CREATED') {
+            mergeMessage(wsEvent.message);
+          } else {
+            replaceMessage(wsEvent.message);
+          }
         } catch {
           // Malformed frame — ignore rather than tear down the connection.
         }
       };
 
       socket.onclose = () => {
+        if (socketRef.current !== socket) return;
         socketRef.current = null;
         if (unmountedRef.current) return;
         setConnectionStatus('reconnecting');
@@ -176,7 +243,7 @@ export function useChatConversation(
       socketRef.current = null;
       setConnectionStatus('closed');
     };
-  }, [conversationId, mergeMessage, queryClient]);
+  }, [conversationId, mergeMessage, replaceMessage, queryClient]);
 
   return {
     data: messages,
@@ -185,6 +252,10 @@ export function useChatConversation(
     error: conversationQuery.error ?? messagesQuery.error,
     sendMessage: (content: string) => sendMutation.mutate(content),
     isSending: sendMutation.isPending,
+    editMessage: (messageId: number, content: string) => editMutation.mutate({ messageId, content }),
+    isEditing: editMutation.isPending,
+    deleteMessage: (messageId: number) => deleteMutation.mutate(messageId),
+    isDeleting: deleteMutation.isPending,
     connectionStatus,
     hasOlderMessages: messagesQuery.hasNextPage,
     isLoadingOlderMessages: messagesQuery.isFetchingNextPage,

@@ -1793,6 +1793,48 @@ WebSocket opened through the proxy receives a REST-sent message, and 56 sent mes
 split across a 50/6 two-page fetch matching the client hook's pagination logic. Not verified this
 session (same limitation as CHAT-8): the actual rendered UI in a live browser — flagged, not hidden.
 
+**CHAT-13 — Editing and deleting messages (2026-07-28,
+`services/chat/docs/CHAT-13_EDIT_DELETE_MESSAGES.md`):** filed unscoped with 5 open questions;
+resolved with the user before any code: edit replaces content in place (+ nullable `edited_at`, not
+a versioned history table), delete is soft (`deleted_at`, content also scrubbed to `''` server-side
+so deleted text is never re-served), sender-only authorization (group-admin moderation would need
+the documented role-sync gap closed first — deliberately out of scope), no time window, no delete
+confirmation dialog (immediate, matching Slack/Messenger rather than this app's heavier
+`DeleteGroupConfirmDialog` pattern). New migration (`edited_at`/`deleted_at` on `chat_messages`),
+new `PATCH`/`DELETE /conversations/{id}/messages/{messageId}` routes. **Every WebSocket broadcast
+now wraps in a `{type, message}` envelope** (`MESSAGE_CREATED`/`MESSAGE_EDITED`/`MESSAGE_DELETED`)
+— a deliberate breaking change to the bare-message wire shape CHAT-7/8/9 shipped, updated in
+lockstep on both ends since nothing external depends on the old shape yet. **UI change added
+mid-ticket (user request):** own messages now align left, others' right (reversed from the usual
+convention); group chat (only, not 1:1 DMs) shows a circular avatar next to other members'
+messages, reusing the existing `Avatar` component already used by `FriendRail`/`PostCard`. Go suite
+green (9 new tests). Full client suite green: 97 test files / 579 tests (29 new). Full `pnpm e2e`
+green (46/46), no regressions. Live-verified edit/delete/re-edit-after-delete/WS-envelope-ordering
+through the real dev proxy. Not verified this session (same outstanding gap since CHAT-8): the
+actual rendered UI in a live browser.
+
+**Two real bugs found via the user's own manual testing, same day, neither caught by the extensive
+automated coverage above:** (1) sent messages could intermittently vanish —
+`useChatConversation`'s WebSocket handlers guarded on a single shared `unmountedRef`, but React 18
+`StrictMode` (enabled in `main.tsx`) double-invokes effects in dev, and the second mount resets that
+ref before the first (torn-down) socket's async `onclose` necessarily fires — the stale `onclose`
+then incorrectly triggered a reconnect whose `onopen` invalidated the messages query, racing a
+just-sent message. Fixed by comparing socket identity (`socketRef.current !== socket`) in every
+handler instead. (2) The actual reported symptom — **every message rendered as "Message deleted"
+immediately, including ones just sent.** Root cause: `messageBody`'s `editedAt`/`deletedAt` Go
+fields had `omitempty`, which omits a nil pointer field from the JSON entirely rather than emitting
+`null`; the client's `message.deletedAt !== null` check then saw `undefined !== null` (`true`) for
+every untouched message. Fixed by dropping `omitempty` — both fields are now always present,
+explicit `null` when unset. Neither automated test suite caught either bug because both construct
+fixtures as plain objects/structs, never round-tripping through actual JSON (de)serialization — new
+regression tests added for both, confirmed to fail without their respective fix and pass with it
+(temporarily reintroducing each bug to prove it), same verification method CHAT-6/CHAT-8 used: Go's
+`internal/api/responses_test.go` (asserts actual marshaled JSON key presence, not struct values) and
+client's `useChatConversation.test.tsx` (forces a real reconnect, then re-fires the stale socket's
+close a second time). Client suite now 97/580, Go `internal/api` +1. Live-reverified through the
+real proxy: a fresh sent message's raw JSON response now reads `"editedAt":null,"deletedAt":null`
+explicitly.
+
 **Friends page rail state persistence (2026-07-25, user-requested,
 `client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
 rail's mode (friend list vs. directory search), search text, and selected person — previously all
@@ -1961,8 +2003,13 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `GroupChatTabView`, plus older-history pagination) — group chat is real and live now, not a mock.
   CHAT-9 (`DONE`) gave `FriendChatPanel.tsx` the same treatment for 1:1 DMs
   (`useDirectChatData`/`FriendChatPanelView`) — both chat surfaces are now real and live, neither is
-  a mock anymore. Full remaining breakdown (edit/delete, read receipts, typing, attachments, E2E,
-  hardening, QA): `services/chat/docs/BACKLOG_MVP.md`.
+  a mock anymore. CHAT-13 (`DONE`) added editing (replace-in-place + `edited_at`) and soft-deleting
+  (`deleted_at`, content scrubbed server-side) messages, sender-only, no time window — every
+  WebSocket broadcast now wraps in a `{type, message}` envelope
+  (`MESSAGE_CREATED`/`MESSAGE_EDITED`/`MESSAGE_DELETED`) to support it. Also reversed both surfaces'
+  message alignment (own left, others' right) and added a circular avatar for other group members'
+  messages (group chat only), per user request. Full remaining breakdown (read receipts, typing,
+  attachments, E2E, hardening, QA): `services/chat/docs/BACKLOG_MVP.md`.
 - History: originally scoped as self-hosted WebSocket/Spring STOMP (dependency still sits unused in
   `server/build.gradle`), superseded 2026-07-22 by a PubNub-based plan
   (`documentation/md/archive/chat/CHAT_SERVICE_INTEGRATION.md`, scoped as CHAT-1..4 + DM-1/DM-2),

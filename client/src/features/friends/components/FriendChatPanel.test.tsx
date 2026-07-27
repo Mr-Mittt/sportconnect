@@ -43,6 +43,8 @@ const message: ChatMessage = {
   senderAvatarUrl: null,
   content: "I'm in, what time?",
   createdAt: '2026-07-26T10:15:00Z',
+  editedAt: null,
+  deletedAt: null,
 };
 
 function wrapper({ children }: { children: ReactNode }) {

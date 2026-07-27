@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chatApiClient } from './chatApiClient';
-import type { ChatMessage, Conversation } from './types';
+import type { ChatMessage, ChatWebSocketEvent, Conversation } from './types';
 import { useGroupChatData } from './useGroupChatData';
 
 // Hand-rolled fake — no mock-socket dependency, matches this repo's "don't
@@ -35,8 +35,13 @@ class FakeWebSocket {
     this.onopen?.();
   }
 
-  triggerMessage(message: ChatMessage): void {
-    this.onmessage?.({ data: JSON.stringify(message) });
+  // Wraps in the {type, message} envelope every real broadcast uses
+  // (CHAT-13) — defaults to MESSAGE_CREATED, the shape both existing
+  // call sites need (a new message arriving, whether from another
+  // participant or echoed back to the sender's own connection).
+  triggerMessage(message: ChatMessage, type: ChatWebSocketEvent['type'] = 'MESSAGE_CREATED'): void {
+    const event: ChatWebSocketEvent = { type, message };
+    this.onmessage?.({ data: JSON.stringify(event) });
   }
 
   triggerClose(): void {
@@ -65,6 +70,8 @@ const messageA: ChatMessage = {
   senderAvatarUrl: null,
   content: 'hi',
   createdAt: '2026-07-26T10:15:00Z',
+  editedAt: null,
+  deletedAt: null,
 };
 
 const messageB: ChatMessage = {
@@ -75,6 +82,8 @@ const messageB: ChatMessage = {
   senderAvatarUrl: null,
   content: 'hey',
   createdAt: '2026-07-26T10:16:00Z',
+  editedAt: null,
+  deletedAt: null,
 };
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -126,6 +135,66 @@ describe('useGroupChatData (via useChatConversation)', () => {
     FakeWebSocket.latest().triggerMessage(messageB);
 
     await waitFor(() => expect(result.current.data).toEqual([messageA, messageB]));
+  });
+
+  it('replaces a message in place when a MESSAGE_EDITED event arrives over the WebSocket', async () => {
+    vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+    vi.spyOn(chatApiClient, 'get').mockResolvedValueOnce({ data: [messageB, messageA] } as never);
+
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual([messageA, messageB]));
+    FakeWebSocket.latest().triggerOpen();
+
+    const editedA: ChatMessage = { ...messageA, content: 'hi, edited', editedAt: '2026-07-26T10:17:00Z' };
+    FakeWebSocket.latest().triggerMessage(editedA, 'MESSAGE_EDITED');
+
+    await waitFor(() => expect(result.current.data).toEqual([editedA, messageB]));
+  });
+
+  it('replaces a message in place (scrubbed content) when a MESSAGE_DELETED event arrives', async () => {
+    vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+    vi.spyOn(chatApiClient, 'get').mockResolvedValueOnce({ data: [messageB, messageA] } as never);
+
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual([messageA, messageB]));
+    FakeWebSocket.latest().triggerOpen();
+
+    const deletedA: ChatMessage = { ...messageA, content: '', deletedAt: '2026-07-26T10:18:00Z' };
+    FakeWebSocket.latest().triggerMessage(deletedA, 'MESSAGE_DELETED');
+
+    await waitFor(() => expect(result.current.data).toEqual([deletedA, messageB]));
+  });
+
+  it('editMessage PATCHes the message and updates it in the cache', async () => {
+    vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+    vi.spyOn(chatApiClient, 'get').mockResolvedValueOnce({ data: [messageA] } as never);
+    const editedA: ChatMessage = { ...messageA, content: 'hi, edited', editedAt: '2026-07-26T10:17:00Z' };
+    const patchSpy = vi.spyOn(chatApiClient, 'patch').mockResolvedValueOnce({ data: editedA } as never);
+
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual([messageA]));
+    FakeWebSocket.latest().triggerOpen();
+
+    result.current.editMessage(messageA.id, 'hi, edited');
+
+    await waitFor(() => expect(result.current.data).toEqual([editedA]));
+    expect(patchSpy).toHaveBeenCalledWith('/conversations/7/messages/1', { content: 'hi, edited' });
+  });
+
+  it('deleteMessage DELETEs the message and updates it in the cache', async () => {
+    vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+    vi.spyOn(chatApiClient, 'get').mockResolvedValueOnce({ data: [messageA] } as never);
+    const deletedA: ChatMessage = { ...messageA, content: '', deletedAt: '2026-07-26T10:18:00Z' };
+    const deleteSpy = vi.spyOn(chatApiClient, 'delete').mockResolvedValueOnce({ data: deletedA } as never);
+
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual([messageA]));
+    FakeWebSocket.latest().triggerOpen();
+
+    result.current.deleteMessage(messageA.id);
+
+    await waitFor(() => expect(result.current.data).toEqual([deletedA]));
+    expect(deleteSpy).toHaveBeenCalledWith('/conversations/7/messages/1');
   });
 
   it('does not duplicate a sent message when the WebSocket echoes it back', async () => {
@@ -180,6 +249,8 @@ describe('useGroupChatData (via useChatConversation)', () => {
       senderAvatarUrl: null,
       content: `msg ${100 - i}`,
       createdAt: '2026-07-26T10:15:00Z',
+      editedAt: null,
+      deletedAt: null,
     })); // newest-first: ids 100..51
     const olderPage: ChatMessage[] = [messageB, messageA]; // newest-first: id 2, then id 1
 
@@ -227,5 +298,42 @@ describe('useGroupChatData (via useChatConversation)', () => {
     FakeWebSocket.latest().triggerOpen();
 
     await vi.waitFor(() => expect(getSpy).toHaveBeenCalledTimes(2));
+  });
+
+  it("a stale socket's late close event is a no-op once superseded (the StrictMode double-invoke race)", async () => {
+    // React 18 StrictMode double-invokes effects in dev (mount → cleanup →
+    // mount) — the first socket's async onclose can fire after a second,
+    // current socket already exists. Before this guard, that stale onclose
+    // incorrectly reconnected and invalidated the messages cache, which
+    // could race a just-sent message out of view. Simulated here without
+    // StrictMode itself: force a real reconnect (so two sockets exist), then
+    // re-fire the first (now-superseded) socket's close a second time and
+    // confirm nothing further happens.
+    vi.useFakeTimers();
+    vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+    const getSpy = vi.spyOn(chatApiClient, 'get').mockResolvedValue({ data: [messageA] } as never);
+
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    const staleSocket = FakeWebSocket.latest();
+    staleSocket.triggerOpen();
+    await vi.waitFor(() => expect(getSpy).toHaveBeenCalledTimes(1));
+
+    staleSocket.triggerClose();
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2));
+    const currentSocket = FakeWebSocket.latest();
+    currentSocket.triggerOpen();
+    await vi.waitFor(() => expect(result.current.connectionStatus).toBe('open'));
+    await vi.waitFor(() => expect(getSpy).toHaveBeenCalledTimes(2));
+
+    // The stale socket's close fires again, late — must be a no-op now.
+    staleSocket.triggerClose();
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(result.current.connectionStatus).toBe('open');
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(getSpy).toHaveBeenCalledTimes(2);
   });
 });

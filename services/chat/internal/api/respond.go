@@ -27,8 +27,12 @@ func writeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, conversation.ErrNotAMember), errors.Is(err, conversation.ErrNotFriends):
 		writeJSON(w, http.StatusForbidden, errorBody{Error: "forbidden", Message: err.Error()})
+	case errors.Is(err, message.ErrNotSender):
+		writeJSON(w, http.StatusForbidden, errorBody{Error: "forbidden", Message: err.Error()})
 	case errors.Is(err, message.ErrEmptyContent), errors.Is(err, message.ErrContentTooLong):
 		writeJSON(w, http.StatusBadRequest, errorBody{Error: "bad_request", Message: err.Error()})
+	case errors.Is(err, message.ErrMessageNotFound):
+		writeJSON(w, http.StatusNotFound, errorBody{Error: "not_found", Message: err.Error()})
 	default:
 		writeJSON(w, http.StatusInternalServerError, errorBody{Error: "internal_error", Message: "internal error"})
 	}
