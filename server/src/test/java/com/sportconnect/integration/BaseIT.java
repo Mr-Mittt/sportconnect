@@ -11,11 +11,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.utility.DockerImageName;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,33 +19,15 @@ import java.util.UUID;
 /**
  * Base class for integration tests
  * Provides common configuration and utilities for all integration tests
+ * <p>
+ * The real-Redis Testcontainer setup lives in {@link RedisTestContainerBase} (extracted so a test
+ * needing {@code webEnvironment = RANDOM_PORT} instead of this class's {@code MOCK} +
+ * {@code @AutoConfigureMockMvc} can reuse it without duplicating the container).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-public abstract class BaseIT {
-
-    /**
-     * Shared across every {@code BaseIT} subclass in a single test JVM run — a plain static field
-     * started once (not the {@code @Testcontainers}/{@code @Container} JUnit5 extension, which
-     * would start/stop it per test class). {@code PostServiceImpl}/{@code CommentServiceImpl} call
-     * {@code StringRedisTemplate} unconditionally with no fallback (like counters, comment-preview
-     * cache), so any IT exercising those paths needs a reachable Redis. Testcontainers' Ryuk sidecar
-     * reaps this container automatically at JVM exit — no manual teardown needed.
-     */
-    private static final GenericContainer<?> REDIS =
-            new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
-                    .withExposedPorts(6379);
-
-    static {
-        REDIS.start();
-    }
-
-    @DynamicPropertySource
-    static void redisProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.redis.host", REDIS::getHost);
-        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
-    }
+public abstract class BaseIT extends RedisTestContainerBase {
 
     @Autowired
     protected MockMvc mockMvc;

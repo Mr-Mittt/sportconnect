@@ -1,5 +1,6 @@
 package com.sportconnect.user.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
@@ -24,14 +25,20 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.StreamRecords;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -45,7 +52,38 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserFriendService userFriendService;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final ObjectMapper objectMapper;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+
+    // services/chat (the first non-Java service in this repo) consumes this stream to keep its
+    // own local authorization cache in sync — see services/chat/docs/SYNC_DESIGN.md.
+    private static final String DOMAIN_EVENTS_STREAM = "sportconnect:domain-events";
+    private static final int DOMAIN_EVENT_SCHEMA_VERSION = 1;
+
+    /**
+     * Publishes one domain-change event to {@link #DOMAIN_EVENTS_STREAM} for services/chat to
+     * consume. Never lets a publish failure break the domain operation it's attached to — chat's
+     * cold-start bootstrap exists precisely to recover from a gap like a transient Redis outage,
+     * so this only logs and moves on rather than rolling back or rethrowing.
+     */
+    private void publishDomainEvent(String eventType, Object payload) {
+        try {
+            Map<String, String> fields = new LinkedHashMap<>();
+            fields.put("event_id", UUID.randomUUID().toString());
+            fields.put("event_type", eventType);
+            fields.put("schema_version", String.valueOf(DOMAIN_EVENT_SCHEMA_VERSION));
+            fields.put("occurred_at", Instant.now().toString());
+            fields.put("payload", objectMapper.writeValueAsString(payload));
+
+            MapRecord<String, String, String> record = StreamRecords.newRecord()
+                    .ofMap(fields)
+                    .withStreamKey(DOMAIN_EVENTS_STREAM);
+            stringRedisTemplate.opsForStream().add(record);
+        } catch (Exception e) {
+            log.warn("Failed to publish domain event {} for chat sync: {}", eventType, e.getMessage());
+        }
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -87,6 +125,13 @@ public class UserServiceImpl implements UserService {
 
         User user = userRepository.findByIdAndIsActiveTrue(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        // Captured before mutation so the publish below only fires when a field services/chat
+        // actually displays (name/username/avatar) really changed — not on every profile save.
+        String previousFirstName = user.getFirstName();
+        String previousLastName = user.getLastName();
+        String previousUsername = user.getUsername();
+        String previousAvatarUrl = user.getAvatarUrl();
 
         if (request.getFirstName() != null) {
             user.setFirstName(request.getFirstName());
@@ -148,6 +193,19 @@ public class UserServiceImpl implements UserService {
         }
 
         User savedUser = userRepository.save(user);
+
+        boolean displayableFieldChanged = !Objects.equals(previousFirstName, savedUser.getFirstName())
+                || !Objects.equals(previousLastName, savedUser.getLastName())
+                || !Objects.equals(previousUsername, savedUser.getUsername())
+                || !Objects.equals(previousAvatarUrl, savedUser.getAvatarUrl());
+        if (displayableFieldChanged) {
+            publishDomainEvent("user.profile_updated", Map.of(
+                    "user_id", userId.toString(),
+                    "full_name", savedUser.getFullName(),
+                    "username", savedUser.getUsername() != null ? savedUser.getUsername() : "",
+                    "avatar_url", savedUser.getAvatarUrl() != null ? savedUser.getAvatarUrl() : ""));
+        }
+
         log.info("Updated profile for user: {}", userId);
         return toUserResponse(savedUser);
     }

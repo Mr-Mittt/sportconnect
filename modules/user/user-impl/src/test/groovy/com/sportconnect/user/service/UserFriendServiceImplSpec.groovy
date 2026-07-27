@@ -1,5 +1,6 @@
 package com.sportconnect.user.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.user.api.dto.FriendRequestStatus
@@ -9,6 +10,9 @@ import com.sportconnect.user.entity.User
 import com.sportconnect.user.repository.FriendRequestRepository
 import com.sportconnect.user.repository.FriendshipRepository
 import com.sportconnect.user.repository.UserRepository
+import org.springframework.data.redis.connection.stream.MapRecord
+import org.springframework.data.redis.core.StreamOperations
+import org.springframework.data.redis.core.StringRedisTemplate
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -17,12 +21,18 @@ class UserFriendServiceImplSpec extends Specification {
     FriendRequestRepository friendRequestRepository = Mock()
     FriendshipRepository friendshipRepository = Mock()
     UserRepository userRepository = Mock()
+    StringRedisTemplate stringRedisTemplate = Mock()
+    // Real instance, not a Mock() — a pure value-converter with no side effects, and using the
+    // real one lets tests assert on the actual serialized payload publishDomainEvent produces.
+    ObjectMapper objectMapper = new ObjectMapper()
 
     @Subject
     UserFriendServiceImpl service = new UserFriendServiceImpl(
             friendRequestRepository,
             friendshipRepository,
-            userRepository
+            userRepository,
+            stringRedisTemplate,
+            objectMapper
     )
 
     UUID senderId = UUID.randomUUID()
@@ -175,6 +185,32 @@ class UserFriendServiceImplSpec extends Specification {
         2 * friendshipRepository.save(_ as Friendship)
     }
 
+    def "acceptFriendRequest publishes a friendship.accepted event"() {
+        // Regression coverage for services/chat's sync mechanism, added 2026-07-27 — see
+        // services/chat/docs/SYNC_DESIGN.md.
+        given:
+        def request = FriendRequest.builder().id(requestId).senderId(senderId).receiverId(receiverId)
+                .status(FriendRequestStatus.PENDING).build()
+        def streamOps = Mock(StreamOperations)
+
+        when:
+        service.acceptFriendRequest(requestId, receiverId)
+
+        then:
+        1 * friendRequestRepository.findByIdAndReceiverId(requestId, receiverId) >> Optional.of(request)
+        1 * friendRequestRepository.save({ it.status == FriendRequestStatus.ACCEPTED })
+        2 * friendshipRepository.save(_ as Friendship)
+
+        and:
+        1 * stringRedisTemplate.opsForStream() >> streamOps
+        1 * streamOps.add({ MapRecord record ->
+            def payload = objectMapper.readValue(record.value['payload'] as String, Map)
+            record.value['event_type'] == 'friendship.accepted' &&
+                    payload['user_id'] == senderId.toString() &&
+                    payload['friend_id'] == receiverId.toString()
+        })
+    }
+
     def "acceptFriendRequest should throw NotFoundException when request not found for receiver"() {
         when:
         service.acceptFriendRequest(requestId, receiverId)
@@ -254,6 +290,28 @@ class UserFriendServiceImplSpec extends Specification {
         then:
         1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> true
         1 * friendshipRepository.deleteBothDirections(senderId, receiverId)
+    }
+
+    def "removeFriend publishes a friendship.removed event"() {
+        // Regression coverage for services/chat's sync mechanism, added 2026-07-27.
+        given:
+        def streamOps = Mock(StreamOperations)
+
+        when:
+        service.removeFriend(senderId, receiverId)
+
+        then:
+        1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> true
+        1 * friendshipRepository.deleteBothDirections(senderId, receiverId)
+
+        and:
+        1 * stringRedisTemplate.opsForStream() >> streamOps
+        1 * streamOps.add({ MapRecord record ->
+            def payload = objectMapper.readValue(record.value['payload'] as String, Map)
+            record.value['event_type'] == 'friendship.removed' &&
+                    payload['user_id'] == senderId.toString() &&
+                    payload['friend_id'] == receiverId.toString()
+        })
     }
 
     def "removeFriend should throw BadRequestException when not friends"() {

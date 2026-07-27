@@ -1,5 +1,6 @@
 package com.sportconnect.user.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.NotFoundException;
 import com.sportconnect.user.api.dto.FriendRequestResponse;
@@ -15,10 +16,15 @@ import com.sportconnect.user.repository.FriendshipRepository;
 import com.sportconnect.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.StreamRecords;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,6 +40,13 @@ public class UserFriendServiceImpl implements UserFriendService {
     private final FriendRequestRepository friendRequestRepository;
     private final FriendshipRepository friendshipRepository;
     private final UserRepository userRepository;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final ObjectMapper objectMapper;
+
+    // services/chat (the first non-Java service in this repo) consumes this stream to keep its
+    // own local authorization cache in sync — see services/chat/docs/SYNC_DESIGN.md.
+    private static final String DOMAIN_EVENTS_STREAM = "sportconnect:domain-events";
+    private static final int DOMAIN_EVENT_SCHEMA_VERSION = 1;
 
     /**
      * Sends a friend request from {@code senderId} to {@code receiverId}, or resolves one
@@ -126,6 +139,36 @@ public class UserFriendServiceImpl implements UserFriendService {
                 .userId(request.getReceiverId())
                 .friendId(request.getSenderId())
                 .build());
+
+        publishDomainEvent("friendship.accepted", Map.of(
+                "user_id", request.getSenderId().toString(),
+                "friend_id", request.getReceiverId().toString()));
+    }
+
+    /**
+     * Publishes one domain-change event to {@link #DOMAIN_EVENTS_STREAM} for services/chat to
+     * consume (see services/chat/docs/SYNC_DESIGN.md's event catalogue for the exact payload
+     * shape expected per eventType). Never lets a publish failure break the domain operation it's
+     * attached to — chat's cold-start bootstrap exists precisely to recover from a gap like a
+     * transient Redis outage, so this only logs and moves on rather than rolling back or
+     * rethrowing.
+     */
+    private void publishDomainEvent(String eventType, Object payload) {
+        try {
+            Map<String, String> fields = new LinkedHashMap<>();
+            fields.put("event_id", UUID.randomUUID().toString());
+            fields.put("event_type", eventType);
+            fields.put("schema_version", String.valueOf(DOMAIN_EVENT_SCHEMA_VERSION));
+            fields.put("occurred_at", Instant.now().toString());
+            fields.put("payload", objectMapper.writeValueAsString(payload));
+
+            MapRecord<String, String, String> record = StreamRecords.newRecord()
+                    .ofMap(fields)
+                    .withStreamKey(DOMAIN_EVENTS_STREAM);
+            stringRedisTemplate.opsForStream().add(record);
+        } catch (Exception e) {
+            log.warn("Failed to publish domain event {} for chat sync: {}", eventType, e.getMessage());
+        }
     }
 
     @Override
@@ -181,6 +224,9 @@ public class UserFriendServiceImpl implements UserFriendService {
         }
 
         friendshipRepository.deleteBothDirections(userId, friendId);
+        publishDomainEvent("friendship.removed", Map.of(
+                "user_id", userId.toString(),
+                "friend_id", friendId.toString()));
         log.info("Friendship removed between {} and {}", userId, friendId);
     }
 

@@ -10,7 +10,7 @@ SportConnect is a social sports community platform — think Instagram + Meetup 
 
 **Current state:** Social core is implemented (auth, user profiles, sports, social feed, groups). Facility booking, partner matching, payments, and mobile app are planned next phases. See `PROGRESS.md` for the full roadmap.
 
-**Tech stack:** Java 21 / Spring Boot 3.2.0 backend · React 18 frontend · PostgreSQL + PostGIS · Redis · Liquibase · Spock (Groovy) tests
+**Tech stack:** Java 21 / Spring Boot 3.2.0 backend · React 18 frontend · Go chat service · PostgreSQL + PostGIS · Redis · Liquibase · Spock (Groovy) tests
 
 ## Documentation Convention
 
@@ -116,6 +116,13 @@ modules/
     group-impl/    # Group, GroupMember, GroupRole, GroupSettings entities
 server/            # Main application entry point; depends on all *-impl modules
 client/            # New SportHub client — Vite + React 18 + TS + Tailwind v4 + pnpm (scaffolded by HF-00; old CRA app removed 2026-07-06)
+services/
+  chat/            # Chat service (Go + Postgres) — the first service that is NOT a Java Gradle
+                   # module or part of the React client; talks to the client directly (its own
+                   # reverse-proxy path, not through Spring), and to the monolith only via
+                   # independent JWT verification + an async, one-directional data sync. See
+                   # services/chat/CLAUDE.md (conventions) and services/chat/docs/SYNC_DESIGN.md
+                   # (the integration contract) before touching either side of that boundary.
 ```
 
 The `server` module is the Spring Boot assembly point — it holds `SportConnectApplication.java`, `application.yml`, and all Liquibase migration scripts. It imports all `*-impl` modules; the `@SpringBootApplication` scan covers `com.sportconnect` globally.

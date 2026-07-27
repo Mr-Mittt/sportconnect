@@ -1,5 +1,6 @@
 package com.sportconnect.user.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
@@ -17,6 +18,9 @@ import org.locationtech.jts.geom.GeometryFactory
 import org.locationtech.jts.geom.PrecisionModel
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.redis.connection.stream.MapRecord
+import org.springframework.data.redis.core.StreamOperations
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.security.crypto.password.PasswordEncoder
 import spock.lang.Specification
 import spock.lang.Subject
@@ -29,10 +33,14 @@ class UserServiceImplSpec extends Specification {
     RoleRepository roleRepository = Mock()
     PasswordEncoder passwordEncoder = Mock()
     UserFriendService userFriendService = Mock()
+    StringRedisTemplate stringRedisTemplate = Mock()
+    // Real instance, not a Mock() — a pure value-converter with no side effects, and using the
+    // real one lets tests assert on the actual serialized payload publishDomainEvent produces.
+    ObjectMapper objectMapper = new ObjectMapper()
     GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326)
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService)
+    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, stringRedisTemplate, objectMapper)
 
     def "getUserById should return user when found and active"() {
         given:
@@ -189,6 +197,63 @@ class UserServiceImplSpec extends Specification {
             return savedUser
         }
         result.firstName == "New"
+    }
+
+    def "updateProfile publishes a user.profile_updated event when a displayable field changes"() {
+        // Regression coverage for services/chat's sync mechanism, added 2026-07-27 — the
+        // conditional-publish logic (only fires when a displayable field actually changed) had no
+        // test at all before this; see services/chat/docs/SYNC_DESIGN.md.
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId).email("old@example.com").firstName("Old").lastName("Name")
+                .isActive(true).roles([] as Set).build()
+        def request = UpdateProfileRequest.builder()
+                .firstName("New").lastName("Name").username("newusername")
+                .avatarUrl("https://example.com/avatar.jpg").build()
+        def streamOps = Mock(StreamOperations)
+
+        when:
+        userService.updateProfile(userId, userId, request)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * userRepository.save(_) >> { User savedUser -> savedUser }
+
+        and: "a user.profile_updated event is published with the new values"
+        1 * stringRedisTemplate.opsForStream() >> streamOps
+        1 * streamOps.add({ MapRecord record ->
+            def payload = objectMapper.readValue(record.value['payload'] as String, Map)
+            record.value['event_type'] == 'user.profile_updated' &&
+                    payload['user_id'] == userId.toString() &&
+                    payload['full_name'] == 'New Name' &&
+                    payload['username'] == 'newusername' &&
+                    payload['avatar_url'] == 'https://example.com/avatar.jpg'
+        })
+    }
+
+    def "updateProfile does not publish an event when only non-displayable fields change"() {
+        // The other half of the conditional-publish logic — omitting this direction meant a
+        // future bug that fires on EVERY save (not just displayable-field changes) would have
+        // gone uncaught.
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId).email("test@example.com").firstName("Same").lastName("Name")
+                .username("sameusername").avatarUrl("https://example.com/same.jpg")
+                .isActive(true).roles([] as Set).build()
+        def request = UpdateProfileRequest.builder()
+                .bio("A new bio").phoneNumber("+1234567890").city("New York").build()
+
+        when:
+        userService.updateProfile(userId, userId, request)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * userRepository.save(_) >> { User savedUser -> savedUser }
+
+        and: "no event is published — none of the displayable fields changed"
+        0 * stringRedisTemplate.opsForStream()
     }
 
     def "updateProfile should update physical stats when provided within bounds"() {

@@ -53,3 +53,9 @@ app:
     refresh-expiration: 86400000 # 1 day
   cookie:
     secure: false # Vite (:5173) -> API (:8080) over plain HTTP locally
+  # Dev-only literal, same treatment as jwt.secret above — application-prod.yml still requires
+  # the real INTERNAL_SERVICE_SECRET env var with no default. Must match services/chat/.env's
+  # INTERNAL_SERVICE_SECRET (see services/chat/docs/SYNC_DESIGN.md) so the chat service's
+  # cold-start bootstrap pull against /internal/sync/** authenticates locally without either
+  # side needing this exported by hand.
+  internal-service-secret: some-shared-dev-secret

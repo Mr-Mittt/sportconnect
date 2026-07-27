@@ -11,6 +11,9 @@ services:
       - "5432:5432"
     volumes:
       - sportconnect_dev_postgres:/var/lib/postgresql/data
+      # Seeds services/chat's own dev database (sportconnect_chat_dev) on this same instance —
+      # only runs on first volume creation, see infra/scripts/init-chat-db.sql.
+      - ./scripts/init-chat-db.sql:/docker-entrypoint-initdb.d/init-chat-db.sql:ro
 
   redis:
     image: redis:7-alpine
