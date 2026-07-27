@@ -13,6 +13,17 @@
 # postgres service container plus golang-migrate provides that real
 # database, matching the same sportconnect_chat_dev name/schema the local
 # dev compose stack seeds.
+#
+# CHAT-6 added Redis-backed sync-consumer resilience tests (internal/sync's XREADGROUP-based
+# tests) — a redis service container provides that, same "real infra, not a mock" posture as
+# Postgres above. Those tests use a throwaway stream/consumer-group name each, never the real
+# StreamName/ConsumerGroup, so they can't collide with anything else on this container.
+#
+# One CHAT-6 test (TestBootstrapper_UsersPagination_FollowsNextCursorAcrossPages) needs the real
+# Java monolith running too — deliberately NOT spun up here (a full Gradle+JVM+second-Postgres
+# stack is too heavy for this Go-only job just for one test). That test SKIPs itself (not fails)
+# whenever INTERNAL_SERVICE_SECRET isn't set, which this workflow never sets — see
+# services/chat/docs/CHAT-6_*.md and the test's own comments.
 
 name: chat-ci
 
@@ -49,9 +60,23 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     env:
       CHAT_DATABASE_URL: postgres://postgres:sa@localhost:5432/sportconnect_chat_dev
+      REDIS_ADDR: localhost:6379
+      # Only needed to mint/verify tokens inside the WebSocket broadcast test itself (CHAT-6) —
+      # that test never talks to a real monolith, so this never has to match a real secret, just
+      # be consistent between the token this job's own test mints and the Verifier it constructs.
+      JWT_SECRET: chat-ci-test-secret-not-used-outside-this-workflow
 
     steps:
       - uses: actions/checkout@v4

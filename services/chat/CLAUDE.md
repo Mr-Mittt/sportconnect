@@ -150,6 +150,19 @@ anything touching `pgxpool`/Redis needs either a real Postgres/Redis (e.g. via t
 stack) or a documented decision to skip integration coverage for now — don't fake a database
 response by hand-rolling a mock repository unless a real one is genuinely impractical to reach.
 
+## README maintenance convention
+
+`README.md` (§1 "What this service owns", §7 "API reference", §8 "Current status") is this
+service's user-facing description of what it actually does and how — not a scaffold snapshot frozen
+at HF-00/CHAT-1..4 time. Any ticket that adds/changes an HTTP or WebSocket endpoint, an event type
+this service consumes, a package under `internal/`, or what `go test ./...` actually requires to
+pass (e.g. CHAT-5 made it need a real Postgres; a future ticket might add a Redis/monolith
+dependency too) must update the relevant README section in the same PR, the same way
+`client/CLAUDE.md` requires `client/docs/E2E_OVERVIEW.md` to track every e2e spec file. Treat
+"README says X" as a claim that's either true right now or a bug to fix, not aspirational scaffold
+text — §8 in particular ("Current status") should always reflect the real current backlog state
+(`docs/BACKLOG_MVP.md`), not the state at initial scaffold.
+
 ## Error handling convention
 
 Domain packages (`conversation`, `message`) export sentinel errors (`ErrNotAMember`,
@@ -165,6 +178,8 @@ codes inline. Wrap errors with `%w` (via `fmt.Errorf`) when adding context on th
   authorization only ever needs "member or not," not role. Revisit if a feature needs role-aware
   chat behavior.
 - **No `XAUTOCLAIM` sweep yet:** a message whose handler fails is left pending in the consumer group
-  (not acked) and will be retried on the next restart of this service, but nothing currently
-  actively reclaims a pending entry from a *different* stuck consumer instance. Not needed at
-  single-instance scale; revisit before ever running more than one instance of this service.
+  (not acked) and will be retried on the next restart of this service (`Consumer.reclaimPending`,
+  added CHAT-6 — until then, this statement was aspirational, not actually true: `Run` only ever
+  read with `>`, which Redis never redelivers to any consumer once delivered once), but nothing
+  currently actively reclaims a pending entry from a *different* stuck consumer instance. Not needed
+  at single-instance scale; revisit before ever running more than one instance of this service.

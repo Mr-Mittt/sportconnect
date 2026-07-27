@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/Mr-Mittt/sportconnect/services/chat/internal/db"
 )
@@ -30,6 +31,10 @@ var (
 	poolOnce sync.Once
 	pool     *pgxpool.Pool
 	poolErr  error
+
+	redisOnce   sync.Once
+	redisClient *redis.Client
+	redisErr    error
 )
 
 // RequirePool returns the shared test-process Postgres pool, connecting on
@@ -83,6 +88,39 @@ func RequirePool(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("%v", poolErr)
 	}
 	return pool
+}
+
+// RequireRedisClient returns the shared test-process Redis client, connecting
+// on first use. Reads REDIS_ADDR the same way internal/config.Load does in
+// production (defaulting to localhost:6379, loaded from services/chat/.env
+// if not already set in the real environment). Fails the test loudly if
+// unreachable — same "real infra or nothing" posture as RequirePool.
+func RequireRedisClient(t *testing.T) *redis.Client {
+	t.Helper()
+
+	redisOnce.Do(func() {
+		_ = godotenv.Load("../../.env")
+
+		addr := os.Getenv("REDIS_ADDR")
+		if addr == "" {
+			addr = "localhost:6379"
+		}
+
+		client := redis.NewClient(&redis.Options{Addr: addr})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := client.Ping(ctx).Err(); err != nil {
+			redisErr = fmt.Errorf("failed to reach test Redis at REDIS_ADDR=%s: %w", addr, err)
+			return
+		}
+		redisClient = client
+	})
+
+	if redisErr != nil {
+		t.Fatalf("%v", redisErr)
+	}
+	return redisClient
 }
 
 // BeginTx opens a transaction on the shared test pool and registers a
