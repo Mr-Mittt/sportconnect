@@ -10,8 +10,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"github.com/Mr-Mittt/sportconnect/services/chat/internal/db"
 	"github.com/Mr-Mittt/sportconnect/services/chat/internal/sync"
 )
 
@@ -40,10 +39,10 @@ type WithSender struct {
 }
 
 type Repository struct {
-	pool *pgxpool.Pool
+	pool db.Querier
 }
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
+func NewRepository(pool db.Querier) *Repository {
 	return &Repository{pool: pool}
 }
 

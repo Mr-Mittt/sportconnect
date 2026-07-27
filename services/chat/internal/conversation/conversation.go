@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Mr-Mittt/sportconnect/services/chat/internal/db"
 	"github.com/Mr-Mittt/sportconnect/services/chat/internal/sync"
 )
 
@@ -50,10 +50,10 @@ const conversationColumns = `id, type, COALESCE(external_group_id, 0), COALESCE(
 // across domain boundaries" rule, taken to its logical extreme here since
 // there is no shared schema at all across the service boundary.
 type Repository struct {
-	pool *pgxpool.Pool
+	pool db.TxQuerier
 }
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
+func NewRepository(pool db.TxQuerier) *Repository {
 	return &Repository{pool: pool}
 }
 
