@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,6 +28,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmailAndIsActiveTrue(String email);
 
     Optional<User> findByUsernameAndIsActiveTrue(String username);
+
+    // Keyset pagination for services/chat's cold-start bootstrap pull (see
+    // services/chat/docs/SYNC_DESIGN.md) — ordered by id, not offset-paginated.
+    List<User> findByIdGreaterThanAndIsActiveTrueOrderByIdAsc(UUID id, Pageable pageable);
 
     @Query("""
             SELECT u FROM User u

@@ -1,6 +1,7 @@
 package com.sportconnect.user.repository;
 
 import com.sportconnect.user.entity.Friendship;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +15,10 @@ import java.util.UUID;
 public interface FriendshipRepository extends JpaRepository<Friendship, UUID> {
 
     List<Friendship> findByUserId(UUID userId);
+
+    // Keyset pagination for services/chat's cold-start bootstrap pull (see
+    // services/chat/docs/SYNC_DESIGN.md) — ordered by id, not offset-paginated.
+    List<Friendship> findByIdGreaterThanOrderByIdAsc(UUID id, Pageable pageable);
 
     boolean existsByUserIdAndFriendId(UUID userId, UUID friendId);
 

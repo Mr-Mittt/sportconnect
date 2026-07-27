@@ -16,6 +16,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-security'
 
+    // Redis Streams — publishes domain-change events services/chat (the first non-Java service
+    // in this repo) consumes to sync its own authorization cache. See
+    // services/chat/docs/SYNC_DESIGN.md.
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
     // OpenAPI/Swagger annotations for controller documentation — version matches what
     // server's springdoc-openapi-starter-webmvc-ui:2.3.0 resolves (verified, not guessed)
     compileOnly 'io.swagger.core.v3:swagger-annotations-jakarta:2.2.19'

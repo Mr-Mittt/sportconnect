@@ -30,6 +30,12 @@
 *.gz
 *.tgz
 
+# Environment files — real secrets never committed; each service's own
+# .env.example (tracked) documents the keys instead. Currently only
+# services/chat/ uses one (see its CLAUDE.md).
+**/.env
+!**/.env.example
+
 # Other
 **/*.bak
 *.txt

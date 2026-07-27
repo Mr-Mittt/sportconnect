@@ -1,5 +1,6 @@
 package com.sportconnect.group.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.NotFoundException;
 import com.sportconnect.group.api.dto.CreateGroupRequest;
@@ -47,9 +48,13 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.StreamRecords;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -78,6 +83,14 @@ public class GroupServiceImpl implements GroupService {
     private final GroupPinnedPostRepository pinnedPostRepository;
     private final GroupInvitationRepository invitationRepository;
     private final GroupInvitationInviterRepository invitationInviterRepository;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final ObjectMapper objectMapper;
+
+    // services/chat (the first non-Java service in this repo) consumes this stream to keep its
+    // own local authorization cache in sync — see services/chat/docs/SYNC_DESIGN.md for the full
+    // contract publishDomainEvent below implements the Java side of.
+    private static final String DOMAIN_EVENTS_STREAM = "sportconnect:domain-events";
+    private static final int DOMAIN_EVENT_SCHEMA_VERSION = 1;
 
     /**
      * Explicit constructor (not {@code @RequiredArgsConstructor}) because {@code postService}
@@ -102,7 +115,9 @@ public class GroupServiceImpl implements GroupService {
             @Lazy PostService postService,
             GroupPinnedPostRepository pinnedPostRepository,
             GroupInvitationRepository invitationRepository,
-            GroupInvitationInviterRepository invitationInviterRepository) {
+            GroupInvitationInviterRepository invitationInviterRepository,
+            StringRedisTemplate stringRedisTemplate,
+            ObjectMapper objectMapper) {
         this.groupRepository = groupRepository;
         this.groupMemberRepository = groupMemberRepository;
         this.joinRequestRepository = joinRequestRepository;
@@ -116,6 +131,34 @@ public class GroupServiceImpl implements GroupService {
         this.pinnedPostRepository = pinnedPostRepository;
         this.invitationRepository = invitationRepository;
         this.invitationInviterRepository = invitationInviterRepository;
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.objectMapper = objectMapper;
+    }
+
+    /**
+     * Publishes one domain-change event to {@link #DOMAIN_EVENTS_STREAM} for services/chat to
+     * consume (see services/chat/docs/SYNC_DESIGN.md's event catalogue for the exact payload
+     * shape expected per eventType). Never lets a publish failure break the domain operation it's
+     * attached to — chat's cold-start bootstrap exists precisely to recover from a gap like a
+     * transient Redis outage, so this only logs and moves on rather than rolling back or
+     * rethrowing.
+     */
+    private void publishDomainEvent(String eventType, Object payload) {
+        try {
+            Map<String, String> fields = new LinkedHashMap<>();
+            fields.put("event_id", UUID.randomUUID().toString());
+            fields.put("event_type", eventType);
+            fields.put("schema_version", String.valueOf(DOMAIN_EVENT_SCHEMA_VERSION));
+            fields.put("occurred_at", Instant.now().toString());
+            fields.put("payload", objectMapper.writeValueAsString(payload));
+
+            MapRecord<String, String, String> record = StreamRecords.newRecord()
+                    .ofMap(fields)
+                    .withStreamKey(DOMAIN_EVENTS_STREAM);
+            stringRedisTemplate.opsForStream().add(record);
+        } catch (Exception e) {
+            log.warn("Failed to publish domain event {} for chat sync: {}", eventType, e.getMessage());
+        }
     }
 
     @Override
@@ -157,6 +200,10 @@ public class GroupServiceImpl implements GroupService {
                 .roleId(ownerRole.getId())
                 .build();
         groupMemberRepository.save(ownerMember);
+        publishDomainEvent("group.member_added", Map.of(
+                "group_id", group.getId(),
+                "user_id", userId.toString(),
+                "role", "group_owner"));
 
         // Create default settings — every group is silently created as the DEFAULT type;
         // changing type is a separate, not-yet-built ticket (see BACKLOG_MVP.md).
@@ -373,6 +420,7 @@ public class GroupServiceImpl implements GroupService {
 
         group.setIsActive(false);
         groupRepository.save(group);
+        publishDomainEvent("group.deleted", Map.of("group_id", groupId));
         log.info("Deleted group {} by user {}", groupId, userId);
     }
 
@@ -455,6 +503,9 @@ public class GroupServiceImpl implements GroupService {
 
         // Remove membership
         groupMemberRepository.deleteByGroupIdAndUserId(groupId, targetUserId);
+        publishDomainEvent("group.member_removed", Map.of(
+                "group_id", groupId,
+                "user_id", targetUserId.toString()));
         log.info("Removed user {} from group {} by admin {}", targetUserId, groupId, adminUserId);
     }
 
@@ -575,6 +626,9 @@ public class GroupServiceImpl implements GroupService {
 
         // Remove membership
         groupMemberRepository.deleteByGroupIdAndUserId(groupId, userId);
+        publishDomainEvent("group.member_removed", Map.of(
+                "group_id", groupId,
+                "user_id", userId.toString()));
         log.info("User {} left group {}", userId, groupId);
     }
 
@@ -1718,6 +1772,10 @@ public class GroupServiceImpl implements GroupService {
                 .roleId(memberRole.getId())
                 .build();
         groupMemberRepository.save(member);
+        publishDomainEvent("group.member_added", Map.of(
+                "group_id", groupId,
+                "user_id", userId.toString(),
+                "role", "group_member"));
 
         postWelcomeMessage(groupId, userId, creditedInviterId);
     }

@@ -17,6 +17,11 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 
     Optional<GroupMember> findByGroupIdAndUserId(Long groupId, UUID userId);
 
+    // Keyset pagination for services/chat's cold-start bootstrap pull (see
+    // services/chat/docs/SYNC_DESIGN.md) — ordered by id, not offset-paginated, since a full-table
+    // dump degrades badly with OFFSET at any real scale.
+    List<GroupMember> findByIdGreaterThanOrderByIdAsc(Long id, Pageable pageable);
+
     boolean existsByGroupIdAndUserId(Long groupId, UUID userId);
 
     Page<GroupMember> findByGroupId(Long groupId, Pageable pageable);

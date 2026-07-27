@@ -1,10 +1,13 @@
 package com.sportconnect.auth.config;
 
+import com.sportconnect.auth.security.InternalServiceAuthFilter;
 import com.sportconnect.auth.security.JwtAuthenticationEntryPoint;
 import com.sportconnect.auth.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -31,7 +34,38 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
+    @Value("${app.internal-service-secret}")
+    private String internalServiceSecret;
+
+    /**
+     * Service-to-service traffic only ({@code /internal/**} — services/chat's cold-start
+     * bootstrap pull, see services/chat/docs/SYNC_DESIGN.md). Deliberately a separate chain from
+     * the JWT-authenticated one below, not an entry in its {@code permitAll} list — this is not
+     * user authentication, and must never be reachable from outside the Docker network in prod
+     * (an infra/reverse-proxy concern, not enforceable here). {@code @Order(1)} makes Spring
+     * Security evaluate this chain's {@code securityMatcher} first.
+     * <p>
+     * {@link InternalServiceAuthFilter} is constructed directly here, never as a
+     * {@code @Component} — see that class's Javadoc for why: a bean implementing {@code Filter}
+     * gets auto-registered by Spring Boot as a global servlet filter regardless of which
+     * {@code SecurityFilterChain} it's added to, which would apply this filter's rejection to
+     * every request in the app, not just {@code /internal/**} ones.
+     */
     @Bean
+    @Order(1)
+    public SecurityFilterChain internalSyncFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/internal/**")
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .addFilterBefore(new InternalServiceAuthFilter(internalServiceSecret), UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)

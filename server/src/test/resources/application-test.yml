@@ -1,3 +1,10 @@
+app:
+  # SecurityConfig's beans are created regardless of the SecurityAutoConfiguration exclusion
+  # below (it's application code, not Boot autoconfiguration) — app.internal-service-secret has
+  # no default in application.yml on purpose (see its comment there), so the test profile needs
+  # its own value or context startup fails resolving the placeholder.
+  internal-service-secret: test-internal-service-secret
+
 spring:
   datasource:
     url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH

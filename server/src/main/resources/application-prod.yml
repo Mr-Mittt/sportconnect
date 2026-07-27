@@ -41,3 +41,6 @@ app:
     secret: ${JWT_SECRET}
     expiration: 86400000 # 24 hours
     refresh-expiration: 604800000 # 7 days
+
+  # Gates /internal/** — services/chat's cold-start bootstrap pull. See application.yml's comment.
+  internal-service-secret: ${INTERNAL_SERVICE_SECRET}

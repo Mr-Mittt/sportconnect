@@ -88,6 +88,12 @@ app:
     expiration: 86400000 # 24 hours in milliseconds
     refresh-expiration: 604800000 # 7 days in milliseconds
 
+  # Gates /internal/** (services/chat's cold-start bootstrap pull, see
+  # services/chat/docs/SYNC_DESIGN.md) — no dev default, unlike JWT's fallback above: a missing
+  # internal secret must fail startup loudly, same posture the archived PubNub plan already took
+  # for its own secret key. Must be byte-identical to services/chat's INTERNAL_SERVICE_SECRET.
+  internal-service-secret: ${INTERNAL_SERVICE_SECRET}
+
   cookie:
     secure: true # refresh-token cookie; dev profile overrides to false (plain HTTP locally)
 
