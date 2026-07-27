@@ -2,7 +2,7 @@ You are picking up and completing the next ticket from a module's versioned back
 
 Work through the phases below in order. Gate on user input between phases — do not skip ahead.
 
-Some phases branch on whether `module` is `client` (the React app), `infra` (repo-level infrastructure: CI/CD, environments, deployment), or a backend module. For client tickets, `client/CLAUDE.md` is the source of truth for every convention — if this command and that file ever disagree, `client/CLAUDE.md` wins. For infra tickets, `infra/documentation/INFRASTRUCTURE_LAYOUT_AND_CICD.md` plays the same role.
+Some phases branch on whether `module` is `client` (the React app), `infra` (repo-level infrastructure: CI/CD, environments, deployment), `chat` (the Go chat service under `services/chat/`), or a backend module. For client tickets, `client/CLAUDE.md` is the source of truth for every convention — if this command and that file ever disagree, `client/CLAUDE.md` wins. For infra tickets, `infra/documentation/INFRASTRUCTURE_LAYOUT_AND_CICD.md` plays the same role. For chat tickets, `services/chat/CLAUDE.md` plays the same role.
 
 ---
 
@@ -27,6 +27,7 @@ Before touching any files — including the backlog status edit in the next phas
 2. Derive the backlog file path:
    - If `module` is `client` → `client/docs/BACKLOG_<VERSION>.md`
    - If `module` is `infra` → `infra/documentation/BACKLOG_<VERSION>.md`
+   - If `module` is `chat` → `services/chat/docs/BACKLOG_<VERSION>.md`
    - Otherwise, check both of these and use whichever exists:
      a. `modules/<module>/docs/BACKLOG_<VERSION>.md` — domain-level backlog (e.g. "auth MVP" → `modules/auth/docs/BACKLOG_MVP.md`)
      b. `modules/*/<module>-impl/docs/BACKLOG_<VERSION>.md` — glob across domains for a `<module>-impl` submodule (e.g. "group MVP" → `modules/social/group-impl/docs/BACKLOG_MVP.md`, "sport MVP" → `modules/sport/sport-impl/docs/BACKLOG_MVP.md`)
@@ -82,6 +83,12 @@ Do not proceed to Phase 2 until the user confirms the scope.
 - Verify against the real repo, not assumptions: what the Gradle/pnpm builds actually run, what the tests actually require (e.g. grep the Spock tests for real DB/Redis usage before adding service containers), actual ports/credentials/database names from `application-dev.yml` — never guess a config value a file already defines
 - Placement check: artifact-scoped files belong in `client/`/`server/`, environment-scoped in `infra/`, workflows only in `.github/workflows/` (thin YAML, logic in `infra/scripts/`)
 
+**Chat service (Go):** explore to find:
+
+- Re-read `services/chat/CLAUDE.md` (conventions) and `services/chat/docs/SYNC_DESIGN.md` (the sync contract with the monolith) if the ticket touches cross-service data
+- What already exists under `internal/` — reuse existing packages (`conversation`, `message`, `sync`, `ws`, `api`) rather than adding a new one for something that fits an existing domain concern
+- Whether the ticket needs new data from the monolith — if so, it needs a new event type + publish site (Java side) and a cache table, not a synchronous call at request time (see `SYNC_DESIGN.md`)
+
 Surface findings as a short summary before designing. Confirm no surprises.
 
 ---
@@ -127,6 +134,15 @@ Produce a concrete plan:
 
 Produce a concrete plan: workflow/compose file structure, triggers, steps, what can be verified locally vs only on GitHub (the latter becomes a documented conditional, HF-12-style), and doc updates.
 
+**Chat service — non-negotiable constraints (from `services/chat/CLAUDE.md`):**
+
+- **Client reaches this service directly** — never route a new endpoint through Spring as a gateway
+- **Authorization reads the local sync cache only** (`group_members_cache`/`friendships_cache`/`user_profiles_cache`) — never a live call to the monolith at request time; new data needs a new event + publish site instead (see `docs/SYNC_DESIGN.md`)
+- **Packages by domain concern, not technical layer** — extend an existing `internal/` package before adding a new one
+- **No web framework, ORM, or DI container** — stdlib `net/http` + `pgx` + plain constructor wiring in `cmd/chat/main.go`; a real need for one is a conversation, not a per-ticket exception
+
+Produce a concrete plan: which package(s) change, new/changed HTTP or WS endpoints, any new event type + Java-side publish site + cache table needed, migration if the schema changes.
+
 Wait for explicit plan approval before proceeding to Phase 4.
 
 ---
@@ -159,6 +175,13 @@ Follow the folder structure in `client/CLAUDE.md` exactly — files named after 
 1. **Scripts** — anything nontrivial goes in `infra/scripts/`, not inline YAML
 2. **Workflow / compose files** — `.github/workflows/` or `infra/` per the placement rule
 3. **Docs** — usage instructions in `infra/documentation/`, referenced from the root README/CLAUDE.md where devs will look
+
+**Chat service** — execute in this order:
+
+1. **Migration** — `services/chat/migrations/`, next sequential number, `golang-migrate` up/down pair
+2. **Domain/repository code** — under the relevant `internal/<package>/`
+3. **API handler + route registration** — `internal/api/`
+4. **Tests** — co-located `_test.go`, `testify` assertions
 
 ---
 
@@ -197,6 +220,12 @@ If HF-00 hasn't landed yet (no `package.json` in `client/`), the only valid tick
 1. Verify everything that CAN be verified locally: compose files via `docker compose config` (and `up` if Docker is available), workflow YAML by careful review (or actionlint if installed), any referenced pnpm/gradle commands by actually running them locally
 2. What can only be verified on GitHub (a workflow actually executing, required-check settings) is NOT a pass — record it explicitly as a conditional with the exact remaining steps, and keep or create the follow-up ticket (HF-12 pattern)
 
+**Chat service:**
+
+1. `go build ./...`, `go vet ./...`, and `go test ./...` from `services/chat/` — all three, not just the one that happens to be green
+2. If the migration changed: run it against a real Postgres (the dev compose stack's `sportconnect_chat_dev` database) and confirm it applies cleanly
+3. If the ticket touches the sync path: verify against a real Redis Stream (`redis-cli XRANGE sportconnect:domain-events - +`), not just a unit test with a fake event
+
 Report what was tested and whether it passed. Fix failures before moving on.
 
 ---
@@ -209,6 +238,7 @@ Report what was tested and whether it passed. Fix failures before moving on.
 2. Write an implementation summary covering the Phase 3 design (the approved plan, restated — not just a link back to chat), what was built, key decisions, and non-obvious constraints. If what was built diverged from the approved design (e.g. a test premise broke, an edge case forced a different approach), say so explicitly rather than silently updating the design to match the outcome:
    - If `module` is `client` → `client/docs/<TICKET_ID>_<TICKET_TITLE>.md`
    - If `module` is `infra` → `infra/documentation/<TICKET_ID>_<TICKET_TITLE>.md`
+   - If `module` is `chat` → `services/chat/docs/<TICKET_ID>_<TICKET_TITLE>.md`
    - Otherwise → `modules/<domain>/docs/<TICKET_ID>_<TICKET_TITLE>.md`
 3. Add a one-line summary to `PROGRESS.md` under the relevant section
 4. Update the ticket's status to `DONE` in the backlog file (`BACKLOG_<VERSION>.md`). For client tickets, if implementation revealed a correction to the epic spec (changed contract, resolved open question), note it on the backlog entry as a **Delta** so the next ticket doesn't trip on the stale spec.

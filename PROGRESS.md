@@ -1447,6 +1447,220 @@ and both backlogs' cross-references updated to point at the new V1 locations. No
 `GroupChatTab.tsx` keeps shipping as GRP-1's local-state-only mock with its "not saved" disclaimer for
 MVP. Pick up via `/workon chat v1` or `/workon client v1` once resumed.
 
+**Chat plan archived in full, fresh re-plan starting (2026-07-26, user decision):** rather than
+resuming the V1-deprioritized queue above, the entire PubNub-based chat plan — decision doc
+(`documentation/md/CHAT_SERVICE_INTEGRATION.md`), CHAT-1/CHAT-3 (backend backlog, was
+`modules/social/chat-impl/docs/BACKLOG_V1.md` — that module directory, which held only this docs
+folder and no code, was deleted), CHAT-2/CHAT-4 (client backlog), and the same-lineage DM-1/DM-2
+(1:1 direct-message stubs filed alongside FRIEND-1, `client/docs/BACKLOG_MVP.md`) — was collected
+and moved to `documentation/md/archive/chat/` (4 files: `CHAT_SERVICE_INTEGRATION.md`,
+`CHAT-1_CHAT-3_BACKEND_BACKLOG.md`, `CHAT-2_CHAT-4_CLIENT_TICKETS.md`, `DM-1_DM-2_TICKETS.md`), each
+annotated as archived. Live backlogs (`client/docs/BACKLOG_V1.md`, `client/docs/BACKLOG_MVP.md`) and
+this file's own "Real-Time Chat" roadmap entry (§5) updated to point at the archive instead of
+carrying the ticket text directly. No code changed — `GroupChatTab.tsx` and FRIEND-1's
+`FriendChatPanel` keep shipping as their existing local-state-only mocks. Rationale: group chat and
+1:1 direct messages were being planned as two separate, disconnected lineages (CHAT-1..4 vs.
+DM-1/DM-2, the latter barely scoped); a fresh plan will treat chat as one feature. Next step: a new
+planning pass (via `/feature` or `/vision`) to produce the replacement plan.
+
+**Chat service structural scaffold — Go + Postgres (2026-07-26, user decision, plan at
+`services/chat/CLAUDE.md` + `services/chat/docs/SYNC_DESIGN.md`):** the fresh chat plan above
+landed as a decision, not a 3rd-party vendor: a **self-hosted Go + Postgres service**, the first
+service in this repo that is not a Java Gradle module or part of the React client. Structure only —
+this is not a feature-ticket breakdown, that's still a follow-up planning pass.
+
+- **Location & build:** new top-level `services/chat/` (sibling to `modules/`/`client/`/`server/`/`infra/`),
+  plain Go toolchain (`go build`/`go run`/`go test`, no wrapping Makefile), idiomatic package-by-domain
+  layout (`internal/{config,auth,sync,conversation,message,ws,api,db,platform}`), `golang-migrate` for
+  schema (`migrations/000001..000003`, numbered like Liquibase). Deps: `pgx/v5`, `golang-jwt/jwt/v5`,
+  `coder/websocket` (the maintained fork of the now-deprecated `nhooyr.io/websocket`), `redis/go-redis/v9`,
+  `testify` — versions verified live against pkg.go.dev, not recalled from training data.
+- **Auth:** verifies the monolith's HS256 JWTs independently via the shared `JWT_SECRET` — no callback to
+  Spring for authentication, ever.
+- **Cross-service sync (Spring → chat, one-directional):** Redis Streams (`sportconnect:domain-events`,
+  consumer group `chat-service`), not plain Pub/Sub (no persistence, would silently miss events during a
+  restart) or a Postgres outbox (would mean a direct cross-service DB coupling, worse than an event
+  contract). New Java-side publish sites added: `GroupServiceImpl.finalizeMembership`/owner-path in
+  `createGroup` (`group.member_added`), `removeMember`/`leaveMember` (`group.member_removed`),
+  `deleteGroup` (`group.deleted`), `UserFriendServiceImpl.establishFriendship`/`removeFriend`
+  (`friendship.*`), `UserServiceImpl.updateProfile` (`user.profile_updated`, only when a displayable
+  field actually changed) — all via `StringRedisTemplate`, matching `PostServiceImpl`'s existing inline
+  pattern (`group-impl`/`user-impl` both gained `spring-boot-starter-data-redis`). New cold-start
+  bootstrap: `/internal/sync/{group-members,friendships,users}` (new `InternalGroupSyncController`/
+  `InternalUserSyncController`, cursor/keyset-paginated, N+1-safe role-name batching), gated by a new
+  `SecurityConfig` filter chain (`@Order(1)`, `securityMatcher("/internal/**")`) checking header
+  `X-Internal-Service-Secret` against required env var `INTERNAL_SERVICE_SECRET` (no dev default —
+  fails loudly, same posture as every other secret in this stack; test profile needs its own value,
+  added to `application-test.yml`).
+- **Schema (chat-owned, no FKs into the monolith's tables):** `conversations`/`conversation_participants`
+  unify GROUP and DIRECT chat in one lineage (a join table, not two nullable user-id columns — GROUP
+  needs an arbitrary-N member list, so a join table is the only shape that avoids a second table for
+  DIRECT); `chat_messages` keyed by `conversation_id`. Local read-only cache of the monolith's data:
+  `group_members_cache`/`friendships_cache`/`user_profiles_cache`/`sync_state` — joined at query time in
+  Go, never via SQL FK, since there's no shared schema at all across the service boundary.
+- **Routing:** client reaches this service directly (`/api/chat/**` in `client/vite.config.ts`'s proxy,
+  registered before the broader `/api` entry) — Spring is never a gateway for it. Prod reverse-proxy
+  path-routing for this doesn't exist in-repo yet for any service — an infra follow-up, not solved here.
+- **Dev infra:** `infra/docker-compose.dev.yml`'s Postgres container now seeds a second database
+  (`sportconnect_chat_dev`, via `infra/scripts/init-chat-db.sql`) on the same instance — mirrors
+  production (one RDS instance, one DB per service), not a second Postgres container.
+- **Repo/tooling:** root `CLAUDE.md` gained a `services/` row + Go in the tech-stack line;
+  `.claude/commands/workon.md` gained a `chat` branch across Phase 0b/2/3/4/5/6 (backlog path,
+  explore/design/implement/verify/doc-summary conventions), so `/workon chat mvp` works once a backlog
+  file exists there.
+- **Verification:** Java changes (all of the above except the Go service itself) compiled and passed
+  their Spock suites (`group-impl`, `user-impl`, `auth-impl`). **Correction (2026-07-27, see below):**
+  `:server:test` was reported here as having "a large pre-existing block of MockMvc 403 failures,
+  confirmed unrelated to this work" — that conclusion was **wrong**. The "confirmation" reverted only
+  `SecurityConfig.java` via `git stash push -- <file>`, but `InternalServiceAuthFilter.java` was a
+  brand-new *untracked* file at that point, which plain `git stash` (no `-u`) never touches — so the
+  filter's `@Component` bug (see the 2026-07-27 entry below) stayed active in both the "buggy" and
+  "control" runs, producing the same 33 failures either way for the same reason and making the
+  comparison worthless. The 403s were never pre-existing; they were this session's own bug the whole
+  time, now fixed — see below. **The Go code itself is unverified — no Go toolchain was available in
+  this environment.** Every dependency version was checked live against pkg.go.dev; `go.sum` was not
+  generated (needs network + the real `go` CLI). First pickup of anything in `services/chat/` must run
+  `go mod tidy && go build ./... && go vet ./... && go test ./...` before trusting any of it — flagged
+  in `services/chat/CLAUDE.md`'s "Before committing" section as a standing requirement, not a one-time
+  caveat.
+- **Not done in this pass (explicitly deferred):** the fresh feature-ticket breakdown (which endpoints
+  ship first, group vs. DM sequencing) — `services/chat/docs/BACKLOG_MVP.md` doesn't exist yet; prod
+  reverse-proxy config for any service; `/internal/**` network-isolation (must never be reachable from
+  outside the Docker network — an infra ticket).
+
+**Chat service — Go toolchain acquired, full local environment stood up and live-verified
+end-to-end (2026-07-27):** the "unverified Go code"/"missing go.sum" gaps flagged above are closed —
+a working `go` install was located (`go1.26.5`, just not on the PATH the assistant's tools initially
+saw) and used directly for the rest of this work. `go mod tidy`/`build`/`vet`/`test` all clean.
+Stood up the full local loop: created `sportconnect_chat_dev` (the container's data volume predated
+`infra/scripts/init-chat-db.sql`, so the fallback manual `CREATE DATABASE` was needed — expected per
+`services/chat/CLAUDE.md`), installed `golang-migrate` and applied all 3 migrations, added
+`services/chat/.env` (gitignored, from `.env.example`) and a matching dev-only
+`app.internal-service-secret` literal in `server/src/main/resources/application-dev.yml` (same
+treatment already given `app.jwt.secret` there) so neither side needs manual exporting locally.
+
+Two real bugs surfaced only by actually running both services together, not by code review — both
+fixed and re-verified:
+1. **Go route-registration panic at startup**: `POST /conversations/{id}/messages` and
+   `POST /conversations/group/{groupId}` are ambiguous under Go 1.22+'s `net/http.ServeMux` (same
+   method, same segment count, crossed wildcard/literal positions — e.g.
+   `/conversations/group/messages` matches both). Fixed by nesting the two open-conversation routes
+   under an extra `open` segment (`POST /conversations/open/group/{groupId}`,
+   `POST /conversations/open/direct/{userId}`) so their length never collides with the 3-segment
+   `/{id}/...` routes. `services/chat/README.md` updated to match.
+2. **`InternalServiceAuthFilter` was rejecting every request in the entire app, not just
+   `/internal/**`**: it was a `@Component`, and Spring Boot auto-registers any bean implementing
+   `Filter` as a global servlet filter regardless of which `SecurityFilterChain.addFilterBefore(...)`
+   it's also wired into — a well-known Spring Boot gotcha, invisible from reading `SecurityConfig`
+   alone since that config *looks* correctly scoped. Found only by testing an unrelated public
+   endpoint (`GET /api/sports`) after the internal endpoints already tested fine, and noticing it
+   was also being rejected with the internal filter's exact error message. Fixed by removing
+   `@Component` and constructing the filter directly inside `SecurityConfig`
+   (`new InternalServiceAuthFilter(secret)`) instead of injecting it as a bean — see
+   `services/chat/docs/SYNC_DESIGN.md` for the full writeup and the general rule this establishes
+   for any future filter meant to be scoped to one chain. **This bug turns out to be the actual
+   cause of the "pre-existing 403 block" reported in the 2026-07-26 entry above** — that
+   comparison stashed only `SecurityConfig.java`, but the new `InternalServiceAuthFilter.java` was
+   untracked and untouched by the stash, so its `@Component` bug stayed active in both runs
+   compared. `:server:test` is fully green now (confirmed by a full, not targeted, run) — see the
+   correction on that earlier entry.
+
+**Live-verified, not just unit-tested:** registered a real user via the real running monolith,
+updated their profile, confirmed the `user.profile_updated` event landed on the real Redis Stream
+with the correct payload shape, started a real chat service instance, and confirmed it consumed
+that exact event and updated its own `user_profiles_cache` — the full cross-service pipeline
+(Java publish → Redis Stream → Go consumer → chat's own Postgres) works end to end with zero manual
+steps in between. Also directly verified (via live HTTP calls, not just code reading) that all
+three `/internal/sync/**` endpoints work with the correct secret and correctly reject the wrong one,
+and that the chat service's own HTTP routes (`/healthz`, both renamed open-conversation routes) are
+reachable and correctly auth-gated. `auth-impl`/`group-impl`/`user-impl` Spock suites re-run green
+after both fixes.
+
+**Automated regression coverage added for everything in this monolith change-set (2026-07-27,
+user-requested audit + follow-up):** an audit found the entire chat-sync change set (Redis event
+publishing, internal sync endpoints, the auth filter) had essentially zero automated tests — the
+bugs above were all found by manual live testing, and nothing would have caught them again if
+reintroduced. Added, and **proved each one actually catches its target** by temporarily
+reintroducing the exact bug, confirming the new test fails, then reverting and confirming green:
+
+- `InternalServiceFilterScopeIT` (new, `server/src/test/java/com/sportconnect/integration/`) — a
+  `webEnvironment = RANDOM_PORT` test (real embedded server + `TestRestTemplate`, deliberately not
+  `BaseIT`'s `MOCK` + `MockMvc` setup, which cannot reproduce Spring Boot's real global-filter
+  auto-registration). Extracted `RedisTestContainerBase` out of `BaseIT` so both can share the one
+  Testcontainers Redis without duplicating it. Confirmed: fails with the `@Component` bug
+  reintroduced, passes with the fix.
+- 9 new Spock tests across `GroupServiceImplSpec` (5), `UserFriendServiceImplSpec` (2),
+  `UserServiceImplSpec` (2) asserting the actual event type + payload each `publishDomainEvent`
+  call site produces (previously only "the constructor still compiles" was tested). Switched all
+  three specs' `objectMapper` field from `Mock()` to a real `ObjectMapper` so payload JSON could
+  be asserted for real. `UserServiceImplSpec`'s "does not publish when only non-displayable fields
+  change" test confirmed to fail (`TooManyInvocationsError`) when the conditional was temporarily
+  forced to always-true.
+- `InternalGroupSyncServiceSpec` (new, 8 tests) and `InternalUserSyncServiceSpec` (new, 10 tests) —
+  cursor parsing (blank → start, non-blank → parsed), limit clamping to `MAX_LIMIT`, `next_cursor`
+  null-vs-populated on last/full page, and the N+1 role-name-batching guard. Neither service had
+  any test before this (not part of any public `-api` contract, so nothing exercised them
+  incidentally).
+- `InternalServiceAuthFilterSpec` (new, 6 tests, matching this module's existing
+  `JwtAuthenticationFilterSpec` pattern) — correct/wrong/missing/blank-secret cases against the
+  filter directly. Confirmed to fail (missing `Content-Type`, empty body) when the original
+  `sendError(...)` bug was temporarily reintroduced — though notably *not* on status code, since
+  `MockHttpServletResponse` doesn't simulate the real container error-page redispatch that produced
+  the live 401; that half is uniquely covered by `InternalServiceFilterScopeIT` above. Together the
+  two tests cover both halves of the original bug; neither alone would have.
+
+**Important correction surfaced by this pass:** re-running the *full* `:server:test` suite (not
+just a targeted test) after all the above now shows **zero failures** — including
+`GroupControllerTest`/`PostControllerIntegrationTest`'s 403 block, previously logged above as
+"pre-existing, confirmed unrelated to this work." That confirmation was invalid: it stashed only
+`SecurityConfig.java`, and `InternalServiceAuthFilter.java` was untracked at the time (plain
+`git stash` never touches untracked files), so the `@Component` bug stayed active in both the
+"buggy" and "control" runs — the 403s were this session's own bug the whole time, not pre-existing,
+and are now fixed along with everything else.
+
+**Chat MVP + V1 backlogs filed, 3 infra tickets added (2026-07-27, user-requested):** with the
+backend live-verified end to end, filed the actual ticket breakdown for what's left to call the
+*feature* — not just the service — complete.
+
+- **`services/chat/docs/BACKLOG_MVP.md`** (new, CHAT-5..12 — numbering starts at 5 to avoid
+  colliding with the archived `CHAT-1..4` in `documentation/md/archive/chat/`): backend test
+  coverage the live-verification session exposed as missing (CHAT-5 repository/cache integration
+  tests, CHAT-6 WebSocket broadcast + sync resilience tests — the backend itself already works,
+  these just cover it with automated regression tests), then the entire client side, which nothing
+  in this whole effort had touched yet (CHAT-7 chat API client + hooks scaffold, CHAT-8 wire
+  `GroupChatTab`, CHAT-9 wire `FriendChatPanel` for 1:1 DMs, CHAT-10 E2E + MSW handlers including a
+  real decision on the WebSocket-mocking question the archived plan had left open, CHAT-11
+  hardening, CHAT-12 QA). **Scope decision recorded:** both group chat and 1:1 DMs ship in this
+  MVP (the one already-built schema covers both); editing/deleting, read receipts, typing
+  indicators, and attachments are explicit non-goals here.
+- **`services/chat/docs/BACKLOG_V1.md`** (new, CHAT-13..16): the four deferred features above,
+  each filed with open questions to resolve at pickup (e.g. CHAT-13's edit/delete needs a
+  soft-delete-vs-hard-delete call and a schema migration either way; CHAT-15's typing indicators
+  are flagged as a poor fit for this service's persistence-first design — ephemeral, likely
+  Redis/in-memory rather than a new table) rather than any real design — none of these are close to
+  ready to build, filed only so the ideas aren't lost.
+- **`infra/documentation/BACKLOG_MVP.md`** gained **INFRA-7/8/9**: reverse-proxy path-routing for
+  `/api/chat/**` (INFRA-7 — INFRA-3's existing Nginx/Caddy scope only covered one origin, predating
+  `services/chat`'s existence), a CI/publish workflow for `services/chat/Dockerfile` (INFRA-8,
+  mirrors INFRA-4's shape), and enforcing that `/internal/**` is actually unreachable from outside
+  the Docker network in prod (INFRA-9 — today only an application-layer secret check stands
+  between the public internet and a full membership/friendship/profile data dump; the network-layer
+  isolation this depends on doesn't exist yet). INFRA-6's deploy-pipeline ticket amended with a note
+  that it needs to cover restarting the chat container too, once INFRA-7/8/9 land. None of these
+  three block running the chat service locally — dev already routes around all of them (Vite proxy,
+  `go run`, no network boundary on a single dev machine).
+
+**Chat V1 backlog emptied — all 4 tickets moved to MVP (2026-07-27, user decision, same day as
+filed):** editing/deleting messages, read receipts, typing indicators, and attachments (CHAT-13..16)
+are no longer deferred — they're now part of the chat MVP, sequenced after the core wiring tickets
+(CHAT-8/CHAT-9, since each builds on basic send/receive existing) and before the E2E/hardening/QA
+tickets (CHAT-10/11/12, whose scope now covers the full feature set, not just basic messaging).
+This was a priority/sequencing move only — none of the four were actually scoped in the process;
+each still carries its original open questions (e.g. CHAT-13's soft-delete-vs-hard-delete call,
+CHAT-15's likely-Redis-not-Postgres design for ephemeral typing state) and needs its own Phase
+1/2/3 pass at pickup, per root `CLAUDE.md`'s ticket-writing convention. `services/chat/docs/
+BACKLOG_V1.md` is now empty (kept as a file for future deferred ideas, per convention).
+
 **Friends page rail state persistence (2026-07-25, user-requested,
 `client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
 rail's mode (friend list vs. directory search), search text, and selected person — previously all
@@ -1457,7 +1671,8 @@ already (TanStack Query's default `staleTime: 0`, shared cache across route chan
 wiring needed there. A restored selection that no longer resolves to anyone once the reloaded lists
 settle clears back to "no selection" rather than lingering. `pnpm test` 529 green, `tsc -b`/lint clean.
 
-**Chat service decision** (2026-07-22, `documentation/md/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
+**Chat service decision** (2026-07-22, archived 2026-07-26 —
+`documentation/md/archive/chat/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime
 layer would compete for RAM with the app itself on the single free-tier EC2 box
@@ -1601,20 +1816,21 @@ explicit go-ahead at each step (full story in A3's summary doc):
 - Escrow-backed transactions
 - Seller ratings and reviews
 
-### Real-Time Chat (designed, not implemented)
-- **Group chat transport superseded 2026-07-22** (`documentation/md/CHAT_SERVICE_INTEGRATION.md`):
-  the self-hosted WebSocket/Spring STOMP plan below is no longer the approach — cost/hosting
-  reasoning made a 3rd-party pub/sub vendor (**PubNub**) the chosen transport instead, scoped as
-  CHAT-1..4 across `modules/social/chat-impl/docs/BACKLOG_MVP.md` and `client/docs/BACKLOG_MVP.md`.
-  Left below for historical context, not as the active plan.
-- ~~WebSocket (Spring STOMP) — dependency already in `server/build.gradle`~~ (superseded, see above)
-- 1-on-1 direct messages — still unscoped, genuinely future work (PubNub decision only covers group
-  chat; see the decision doc's explicit scope boundary)
-- Group chats — **now scoped**, see CHAT-1..4 above
-- Read receipts, typing indicators, message reactions — still out of scope (matches
-  `GroupChatTab.tsx`'s current UI, which has none of these)
-- ~~Tables needed: `conversations`, `conversation_participants`, `messages`, `message_reactions`~~
-  — superseded by `chat_message` (CHAT-3), a single denormalized table, not this 4-table shape
+### Real-Time Chat (structural scaffold landed 2026-07-26 — Go service, feature tickets not yet scoped)
+- **Status:** the vendor-based (PubNub) plan was archived 2026-07-26 (user decision) to
+  `documentation/md/archive/chat/`; the replacement is a **self-hosted Go + Postgres service**
+  (`services/chat/`, the first non-Java-module/non-client service in this repo) — see
+  `services/chat/CLAUDE.md` and `services/chat/docs/SYNC_DESIGN.md`. What exists so far is
+  structural only (module skeleton, migrations, cross-service sync mechanism, auth) — no feature
+  ticket breakdown yet (which endpoints ship first, group-vs-DM sequencing), and the Go code itself
+  is unverified (no Go toolchain was available when it was scaffolded — see this file's dated entry
+  above for the full punch list and required first-pickup verification steps).
+- History: originally scoped as self-hosted WebSocket/Spring STOMP (dependency still sits unused in
+  `server/build.gradle`), superseded 2026-07-22 by a PubNub-based plan
+  (`documentation/md/archive/chat/CHAT_SERVICE_INTEGRATION.md`, scoped as CHAT-1..4 + DM-1/DM-2),
+  archived in turn 2026-07-26 in favor of the Go service above.
+- `GroupChatTab.tsx` (group) and `FriendChatPanel` (1:1, part of FRIEND-1) both still ship as
+  working local-state-only mocks — real code, not yet wired to the new Go service.
 
 ### Group Advanced Features (not implemented)
 - System posts (auto-generated for admin actions)

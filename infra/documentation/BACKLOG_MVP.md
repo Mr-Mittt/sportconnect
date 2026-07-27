@@ -35,6 +35,9 @@ green run exists" pattern.
 | 4 | INFRA-4 | Server Dockerfile + GHCR publish workflow | `TODO` |
 | 5 | INFRA-5 | Client static build + S3/CloudFront deploy | `TODO` |
 | 6 | INFRA-6 | Deployment pipeline (`deploy.yml`) | `TODO` |
+| 7 | INFRA-7 | Reverse-proxy path-routing for `services/chat` | `TODO` |
+| 8 | INFRA-8 | `services/chat` Dockerfile publish workflow | `TODO` |
+| 9 | INFRA-9 | `/internal/**` network isolation | `TODO` |
 
 **Dependencies:**
 ```
@@ -44,7 +47,21 @@ INFRA-3 → hosting decision made (see INFRA-3_HOSTING_DECISION.md); also wants 
 INFRA-4 → INFRA-3 (needs the GHCR/OIDC pieces the foundation sets up)
 INFRA-5 → INFRA-3 (needs the S3/CloudFront resources)
 INFRA-6 → INFRA-3, INFRA-4, INFRA-5 (orchestrates all three)
+INFRA-7 → INFRA-3 (needs the EC2 + Nginx/Caddy foundation already provisioned there)
+INFRA-8 → INFRA-3 (same GHCR/OIDC pieces INFRA-4 needs, mirrored for services/chat's own image)
+INFRA-9 → INFRA-3 at minimum (EC2 security group); may additionally depend on INFRA-7 if
+           implemented via the reverse proxy rather than (or in addition to) the security group —
+           see INFRA-9's ticket body
+INFRA-6's orchestration should be revisited once INFRA-7/8/9 exist, to also restart the chat
+  container alongside server/client — not re-scoped here, flagged on INFRA-6 below.
 ```
+
+**Filed 2026-07-27** (alongside `services/chat/docs/BACKLOG_MVP.md`): INFRA-7/8/9 close the three
+infra gaps identified while live-verifying the chat service's monolith-side integration — none of
+them block running the chat service locally (dev routes around all three: the Vite proxy talks to
+chat directly, no Docker image is needed to `go run` it, and there's no network boundary to isolate
+on a single dev machine). They only matter once `services/chat` needs to actually run in
+production.
 
 The hosting decision that unblocked this split is recorded in
 `infra/documentation/INFRA-3_HOSTING_DECISION.md`: AWS free tier, single EC2 instance (Docker +
@@ -135,6 +152,13 @@ Provision the AWS resources the deploy pipeline needs, for a single `production`
 **Status:** `TODO` · **Type:** Infrastructure (CD) · **Dependency:** INFRA-3, INFRA-4, INFRA-5 ·
 **Spec:** `INFRASTRUCTURE_LAYOUT_AND_CICD.md` §2, `INFRA-3_HOSTING_DECISION.md`
 
+**Amended 2026-07-27** (filed alongside INFRA-7/8/9): once `services/chat` has its own image
+(INFRA-8) and proxy routing (INFRA-7), this pipeline's "pull the image onto the EC2 instance and
+restart the container" step needs to cover the chat container too, not just the server — a third
+`docker run`/restart alongside the two below. Not re-scoped in detail here; the implementer should
+just not assume "server + client" is still the complete deploy surface by the time this is picked
+up.
+
 Orchestrates the pieces above into one deploy: `.github/workflows/deploy.yml`, thin YAML calling
 scripts in `infra/scripts/`:
 
@@ -148,3 +172,70 @@ scripts in `infra/scripts/`:
 - Done when: a full merge-to-master run deploys server + client and both are reachable; record
   as conditional if the required-reviewer GitHub setting can't be verified without a real PR
   merge (same HF-12/INFRA-1 pattern)
+
+### INFRA-7 · Reverse-proxy path-routing for `services/chat`
+**Status:** `TODO` · **Type:** Infrastructure (networking) · **Dependency:** INFRA-3 ·
+**Spec:** `services/chat/docs/SYNC_DESIGN.md`, `services/chat/README.md` §6
+
+**Origin:** the chat service's client-facing routing decision (client reaches it directly, no
+Spring gateway — see `services/chat/CLAUDE.md`) already assumes a reverse proxy path-routes
+`/api/chat/**` to the chat container and everything else to the server container. INFRA-3 only
+scopes "Nginx or Caddy config on the EC2 instance for TLS termination" for a single origin — it
+doesn't yet describe routing between two backend containers, since `services/chat` didn't exist
+when INFRA-3 was written.
+
+**What ships:**
+- Nginx or Caddy config (whichever INFRA-3 actually provisioned) with two `location`/route blocks
+  on the single EC2 instance: `/api/chat/**` → the chat container's port (`8081` locally; confirm
+  the prod container port matches `CHAT_HTTP_ADDR`), everything else → the server container's port.
+- Confirm the WebSocket upgrade (`GET /conversations/{id}/ws`) actually proxies correctly — Nginx
+  in particular needs explicit `Upgrade`/`Connection` header passthrough config for this path,
+  it's not automatic the way a plain HTTP proxy pass is.
+- Done when: a real request to `/api/chat/healthz` through the production domain reaches the chat
+  container, a real request to `/api/auth/**` still reaches the server container, and a real
+  WebSocket connection through the proxy stays open and receives a pushed message (not just that
+  the HTTP upgrade handshake succeeds).
+
+### INFRA-8 · `services/chat` Dockerfile publish workflow
+**Status:** `TODO` · **Type:** Infrastructure (CI, artifact-scoped) · **Dependency:** INFRA-3 ·
+**Spec:** mirrors INFRA-4's shape, for `services/chat` instead of `server`
+
+**Origin:** `services/chat/Dockerfile` already exists (multi-stage Go build → distroless runtime,
+see `services/chat/CLAUDE.md`) but nothing builds or publishes it — there's no CI workflow for this
+module at all yet, unlike `server-ci.yml` (INFRA-1).
+
+**What ships:**
+- A CI workflow (new `chat-ci.yml`, or a job appended to an existing one — decide in Phase 1)
+  triggered on changes under `services/chat/**`: `go build ./...`, `go vet ./...`, `go test ./...`
+  (mirrors INFRA-1's server-CI shape, Go-flavored).
+- A publish step (extending that workflow or a separate one, matching INFRA-4's split) that builds
+  `services/chat/Dockerfile` and pushes to `ghcr.io/<org>/sportconnect-chat` on merge to `master`,
+  tagged with the commit SHA.
+- Done when: a real image is pushed to GHCR and can be pulled + run locally against the dev compose
+  stack's Postgres/Redis to confirm it boots (same bar INFRA-4 already holds itself to).
+
+### INFRA-9 · `/internal/**` network isolation
+**Status:** `TODO` · **Type:** Infrastructure (security) · **Dependency:** INFRA-3 (at minimum);
+possibly INFRA-7
+**Spec:** `services/chat/docs/SYNC_DESIGN.md`'s cold-start bootstrap section
+
+**Origin:** `/internal/sync/**` (the server's endpoints the chat service's cold-start bootstrap
+pulls from) is gated by a shared-secret header at the application layer
+(`InternalServiceAuthFilter`), but nothing today prevents an external caller from reaching that
+path at all — the secret is the only thing standing between the public internet and a full data
+dump of group memberships/friendships/user profiles. Application-layer auth was always meant to be
+the second layer, not the only one — see the explicit call-out in `SYNC_DESIGN.md`.
+
+**What ships:**
+- Either (or both, decide in Phase 1): an EC2 security-group rule that simply never exposes the
+  server container's port to anything but the reverse proxy and other containers on the same
+  Docker network: or an explicit `location /internal/ { deny all; }`-style block in the INFRA-7
+  reverse-proxy config, so even if the security group is ever loosened, the proxy itself refuses to
+  forward the path externally.
+- Verify from *outside* the VPC/security group (not just "the app returns 403 for a bad secret,"
+  which is a different, already-covered case) that `/internal/**` is genuinely unreachable — e.g.
+  attempt a real external request against the production domain's `/internal/sync/group-members`
+  and confirm it never even reaches the application (connection refused/timeout, not a 403 from the
+  app).
+- Done when: that external-reachability check is performed and documented, not just assumed from
+  the security-group rule existing.
