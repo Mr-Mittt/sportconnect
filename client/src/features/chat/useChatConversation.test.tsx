@@ -103,7 +103,9 @@ describe('useGroupChatData (via useChatConversation)', () => {
     await waitFor(() => expect(result.current.data).toEqual([messageA, messageB]));
     expect(result.current.isError).toBe(false);
     expect(chatApiClient.post).toHaveBeenCalledWith('/conversations/open/group/42');
-    expect(chatApiClient.get).toHaveBeenCalledWith('/conversations/7/messages');
+    expect(chatApiClient.get).toHaveBeenCalledWith('/conversations/7/messages', {
+      params: { limit: 50 },
+    });
 
     await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
     expect(FakeWebSocket.latest().url).toContain('/conversations/7/ws');
@@ -157,6 +159,50 @@ describe('useGroupChatData (via useChatConversation)', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+
+  it('reports no older page when the first page comes back short of the page size', async () => {
+    vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+    vi.spyOn(chatApiClient, 'get').mockResolvedValueOnce({ data: [messageB, messageA] } as never);
+
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual([messageA, messageB]));
+    expect(result.current.hasOlderMessages).toBe(false);
+  });
+
+  it('loadOlderMessages fetches the next page using the oldest loaded message as the cursor, and prepends it', async () => {
+    const fullFirstPage: ChatMessage[] = Array.from({ length: 50 }, (_, i) => ({
+      id: 100 - i,
+      conversationId: 7,
+      senderId: 'user-1',
+      senderFullName: 'Jordan Lee',
+      senderAvatarUrl: null,
+      content: `msg ${100 - i}`,
+      createdAt: '2026-07-26T10:15:00Z',
+    })); // newest-first: ids 100..51
+    const olderPage: ChatMessage[] = [messageB, messageA]; // newest-first: id 2, then id 1
+
+    vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+    const getSpy = vi
+      .spyOn(chatApiClient, 'get')
+      .mockResolvedValueOnce({ data: fullFirstPage } as never)
+      .mockResolvedValueOnce({ data: olderPage } as never);
+
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+
+    await waitFor(() => expect(result.current.data).toHaveLength(50));
+    expect(result.current.hasOlderMessages).toBe(true);
+
+    result.current.loadOlderMessages();
+
+    await waitFor(() => expect(result.current.data).toHaveLength(52));
+    expect(getSpy).toHaveBeenCalledWith('/conversations/7/messages', {
+      params: { before: 51, limit: 50 },
+    });
+    // Older page's messages (oldest-first: 1, 2) precede the first page's.
+    expect(result.current.data?.slice(0, 2).map((m) => m.id)).toEqual([1, 2]);
+    expect(result.current.data?.at(-1)?.id).toBe(100);
   });
 
   it('reconnects with backoff after an unexpected close, refetching history', async () => {

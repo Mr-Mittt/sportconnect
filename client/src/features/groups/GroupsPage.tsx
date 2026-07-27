@@ -488,7 +488,11 @@ export function GroupsPage() {
                     </div>
                   )}
                   {activeGroupTab === 'chat' && (
-                    <GroupChatTab key={selectedGroup.id} currentUserFirstName={user.firstName} />
+                    <GroupChatTab
+                      key={selectedGroup.id}
+                      groupId={selectedGroup.id}
+                      currentUserId={user.id}
+                    />
                   )}
                   {activeGroupTab === 'members' && (
                     <GroupMembersTab

@@ -1740,6 +1740,43 @@ deduped by message id (the backend broadcasts a sent message back to the sender'
 connection too, not just other participants). No component wiring in this ticket — `GroupChatTab`/
 `FriendChatPanel` remain local-state mocks until CHAT-8/CHAT-9.
 
+**CHAT-8 — Wire `GroupChatTab` to the real chat service (2026-07-27,
+`services/chat/docs/CHAT-8_WIRE_GROUP_CHAT_TAB.md`):** `GroupChatTab`'s local-state-only mock swapped
+for CHAT-7's `useGroupChatData(groupId)` — group chat is now real, persisted, and delivers live over
+WebSocket. `GroupChatTab` calls the data hook directly rather than `GroupsPage` (a deliberate
+exception to this app's usual page-owns-the-hook convention), justified by `GroupsPage` already only
+mounting the tab while active and remounting it per group — exactly the lifecycle the hook's
+WebSocket connect/disconnect needs. **Older chat history added mid-ticket (user decision, not in
+the original ticket text):** `useChatConversation` switched from a plain `useQuery` to
+`useInfiniteQuery` for message history, reusing this app's existing `Feed.tsx`/
+`useInfiniteScrollSentinel` pagination pattern rather than inventing a new one — a
+`loadOlderMessages()` + `hasOlderMessages`/`isLoadingOlderMessages`/`isLoadOlderMessagesError` were
+added to the hook. **Structural finding, not anticipated in the design:** no existing infrastructure
+in this repo mocks a real network+WebSocket-backed hook inside Storybook (every other component with
+this tension avoids it by having the page own the hook) — split the component into a thin
+`GroupChatTab` container (calls the hook) and a new presentational `GroupChatTabView` (everything
+visual, driven by plain props), matching this app's established container/presentational split.
+Full client suite green: 96 test files / 550 tests. Live-verified the pagination mechanics against
+the real running services (55 sent messages, page-1/page-2 fetch, reconstructed in correct order) —
+**not verified this session:** the actual rendered UI in a real browser (no browser tooling
+connected), flagged explicitly as a follow-up manual check rather than silently skipped.
+
+**Real bug found via the user's own manual browser check, same day:** `GroupChatTab` failed
+immediately in a real browser with "Couldn't load this group's chat." — `vite.config.ts`'s
+`/api/chat` proxy entry had no `rewrite`, so it forwarded the full `/api/chat/conversations/**` path
+unchanged to the chat service, whose router (`internal/api/router.go`) registers routes with **no**
+`/api/chat` prefix at all — every proxied request 404'd at the Go service. Confirmed directly:
+`/api/chat/conversations/open/group/1` through the Vite proxy → `404`; the same route hit directly
+at `:8081` (no `/api/chat` prefix) → `401` (auth-rejected but route-matched, as expected with a fake
+token) — proving the route was always fine and the proxy was the sole problem. **This bug predates
+CHAT-8** — present since the proxy entry was first added (at latest CHAT-7) — and was masked by
+every prior "live verification" in this whole effort, because those always called the chat service
+directly at `:8081`, never through `:5173`'s actual dev proxy, which is the only path a real browser
+uses. Fixed with `rewrite: (path) => path.replace(/^\/api\/chat/, '')`; re-verified the full flow
+(open, WebSocket connect, send, receive, history re-fetch) through the actual proxy path this time.
+**Lesson recorded for future chat tickets:** a "live-verified" claim must specify whether it went
+through the real dev proxy (`:5173`) or direct to the service (`:8081`) — they are not equivalent.
+
 **Friends page rail state persistence (2026-07-25, user-requested,
 `client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
 rail's mode (friend list vs. directory search), search text, and selected person — previously all
@@ -1903,10 +1940,11 @@ explicit go-ahead at each step (full story in A3's summary doc):
   end to end (real Redis Stream sync, real HTTP/WebSocket API) and now has automated regression
   coverage (CHAT-5 repository/cache integration tests, CHAT-6 WebSocket broadcast + sync resilience
   tests, both `DONE`), plus its own CI pipeline (`chat-ci.yml`). Client: CHAT-7 (`DONE`) landed the
-  API client + `useGroupChatData`/`useDirectChatData` data hooks, live-verified against the real
-  running services — `GroupChatTab.tsx`/`FriendChatPanel` themselves are still local-state mocks,
-  not yet wired to these hooks (`CHAT-8`/`CHAT-9`, `TODO`). Full remaining breakdown:
-  `services/chat/docs/BACKLOG_MVP.md`.
+  API client + `useGroupChatData`/`useDirectChatData` data hooks. CHAT-8 (`DONE`) wired
+  `GroupChatTab.tsx` to `useGroupChatData` for real (split into a thin container + a presentational
+  `GroupChatTabView`, plus older-history pagination) — group chat is real and live now, not a mock.
+  `FriendChatPanel` is still a local-state mock, not yet wired (`CHAT-9`, `TODO`). Full remaining
+  breakdown: `services/chat/docs/BACKLOG_MVP.md`.
 - History: originally scoped as self-hosted WebSocket/Spring STOMP (dependency still sits unused in
   `server/build.gradle`), superseded 2026-07-22 by a PubNub-based plan
   (`documentation/md/archive/chat/CHAT_SERVICE_INTEGRATION.md`, scoped as CHAT-1..4 + DM-1/DM-2),
