@@ -1,5 +1,6 @@
 package com.sportconnect.group.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.group.api.dto.*
@@ -14,6 +15,9 @@ import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.api.service.UserService
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.redis.connection.stream.MapRecord
+import org.springframework.data.redis.core.StreamOperations
+import org.springframework.data.redis.core.StringRedisTemplate
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -34,6 +38,10 @@ class GroupServiceImplSpec extends Specification {
     GroupPinnedPostRepository pinnedPostRepository = Mock()
     GroupInvitationRepository invitationRepository = Mock()
     GroupInvitationInviterRepository invitationInviterRepository = Mock()
+    StringRedisTemplate stringRedisTemplate = Mock()
+    // Real instance, not a Mock() — a pure value-converter with no side effects, and using the
+    // real one lets tests assert on the actual serialized payload publishDomainEvent produces.
+    ObjectMapper objectMapper = new ObjectMapper()
 
     @Subject
     GroupServiceImpl groupService = new GroupServiceImpl(
@@ -49,7 +57,9 @@ class GroupServiceImplSpec extends Specification {
             postService,
             pinnedPostRepository,
             invitationRepository,
-            invitationInviterRepository
+            invitationInviterRepository,
+            stringRedisTemplate,
+            objectMapper
     )
 
     UUID userId = UUID.randomUUID()
@@ -2606,6 +2616,166 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         0 * groupMemberRepository.deleteByGroupIdAndUserId(_, _)
         thrown(BadRequestException)
+    }
+
+    // ─── domain event publishing (chat sync) ─────────────────────────────────
+    // Regression coverage for services/chat's sync mechanism (services/chat/docs/SYNC_DESIGN.md)
+    // — added 2026-07-27 after an audit found the Redis-publish call sites had zero assertions of
+    // their own beyond "the constructor still compiles." publishDomainEvent's own try/catch means
+    // a mis-stubbed stringRedisTemplate silently swallows the resulting exception rather than
+    // failing the test loudly — these tests exist specifically to catch a wrong event_type or a
+    // wrong/missing payload field, which nothing else would.
+
+    def "createGroup publishes a group.member_added event for the owner"() {
+        given: "a create group request with a sport the user has a profile for"
+        def request = CreateGroupRequest.builder()
+                .sportId(1L).groupName("New Group").description("New Description").isPrivate(false)
+                .build()
+        def streamOps = Mock(StreamOperations)
+
+        when: "creating a group"
+        groupService.createGroup(userId, request)
+
+        then: "the usual createGroup collaborators"
+        1 * groupRepository.existsByGroupName(request.groupName) >> false
+        1 * userSportProfileService.hasProfileForSport(userId, 1L) >> true
+        1 * groupRepository.save(_ as Group) >> testGroup
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupMemberRepository.save(_ as GroupMember) >> new GroupMember()
+        1 * groupTypeRepository.findByTypeName("DEFAULT") >> Optional.of(defaultGroupType)
+        1 * groupSettingsRepository.save(_ as GroupSettings) >> new GroupSettings()
+        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >>
+                Optional.of(GroupMember.builder().roleId(ownerRole.id).build())
+        1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
+
+        and: "a group.member_added event is published for the owner"
+        1 * stringRedisTemplate.opsForStream() >> streamOps
+        1 * streamOps.add({ MapRecord record ->
+            def payload = objectMapper.readValue(record.value['payload'] as String, Map)
+            record.value['event_type'] == 'group.member_added' &&
+                    payload['group_id'] == testGroup.id &&
+                    payload['user_id'] == userId.toString() &&
+                    payload['role'] == 'group_owner'
+        })
+    }
+
+    def "finalizeMembership (via acceptJoinRequest) publishes a group.member_added event for the new member"() {
+        given: "a pending join request"
+        def joinRequest = GroupJoinRequest.builder()
+                .id(1L).groupId(testGroup.id).userId(otherUserId).status("pending").build()
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
+        def settings = GroupSettings.builder().groupId(testGroup.id).groupTypeId(defaultGroupType.id).build()
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()
+        def streamOps = Mock(StreamOperations)
+
+        when: "accepting join request"
+        groupService.acceptJoinRequest(1L, userId)
+
+        then: "the usual acceptJoinRequest collaborators"
+        1 * joinRequestRepository.findById(1L) >> Optional.of(joinRequest)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
+        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
+        1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
+        1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
+        1 * groupMemberRepository.save(_ as GroupMember)
+        1 * joinRequestRepository.save({ GroupJoinRequest req -> req.status == "accepted" })
+        1 * userService.getUsersByIds([otherUserId]) >> [(otherUserId): testUser]
+        1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
+        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
+
+        and: "a group.member_added event is published for the new member, not the admin who approved it"
+        1 * stringRedisTemplate.opsForStream() >> streamOps
+        1 * streamOps.add({ MapRecord record ->
+            def payload = objectMapper.readValue(record.value['payload'] as String, Map)
+            record.value['event_type'] == 'group.member_added' &&
+                    payload['group_id'] == testGroup.id &&
+                    payload['user_id'] == otherUserId.toString() &&
+                    payload['role'] == 'group_member'
+        })
+    }
+
+    def "deleteGroup publishes a group.deleted event"() {
+        given: "user is owner"
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()
+        def streamOps = Mock(StreamOperations)
+
+        when: "deleting group"
+        groupService.deleteGroup(testGroup.id, userId)
+
+        then: "group is soft deleted"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupRepository.save({ Group g -> !g.isActive }) >> testGroup
+
+        and: "a group.deleted event is published"
+        1 * stringRedisTemplate.opsForStream() >> streamOps
+        1 * streamOps.add({ MapRecord record ->
+            def payload = objectMapper.readValue(record.value['payload'] as String, Map)
+            record.value['event_type'] == 'group.deleted' && payload['group_id'] == testGroup.id
+        })
+    }
+
+    def "removeMember publishes a group.member_removed event for the removed user"() {
+        given: "admin removes a regular member"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
+        def targetMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(otherUserId).roleId(memberRole.id).build()
+        def streamOps = Mock(StreamOperations)
+
+        when:
+        groupService.removeMember(testGroup.id, userId, otherUserId)
+
+        then:
+        1 * groupRepository.existsById(testGroup.id) >> true
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.of(targetMember)
+        1 * groupMemberRepository.deleteByGroupIdAndUserId(testGroup.id, otherUserId)
+
+        and: "a group.member_removed event is published for the removed user, not the admin"
+        1 * stringRedisTemplate.opsForStream() >> streamOps
+        1 * streamOps.add({ MapRecord record ->
+            def payload = objectMapper.readValue(record.value['payload'] as String, Map)
+            record.value['event_type'] == 'group.member_removed' &&
+                    payload['group_id'] == testGroup.id &&
+                    payload['user_id'] == otherUserId.toString()
+        })
+    }
+
+    def "leaveMember publishes a group.member_removed event for the leaving member"() {
+        given: "regular member wants to leave"
+        def callerMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(memberRole.id).build()
+        def streamOps = Mock(StreamOperations)
+
+        when:
+        groupService.leaveMember(testGroup.id, userId)
+
+        then:
+        1 * groupRepository.existsById(testGroup.id) >> true
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(callerMember)
+        1 * groupMemberRepository.deleteByGroupIdAndUserId(testGroup.id, userId)
+
+        and: "a group.member_removed event is published for the leaving member"
+        1 * stringRedisTemplate.opsForStream() >> streamOps
+        1 * streamOps.add({ MapRecord record ->
+            def payload = objectMapper.readValue(record.value['payload'] as String, Map)
+            record.value['event_type'] == 'group.member_removed' &&
+                    payload['group_id'] == testGroup.id &&
+                    payload['user_id'] == userId.toString()
+        })
     }
 
     // ─── declineJoinRequest ───────────────────────────────────────────────────
