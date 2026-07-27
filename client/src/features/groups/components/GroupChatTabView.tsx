@@ -1,19 +1,36 @@
+import { IconPencil, IconTrash } from '@tabler/icons-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage } from '@/features/chat/types';
 import { useInfiniteScrollSentinel } from '@/shared/lib/useInfiniteScrollSentinel';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 
+function initialsFor(fullName: string): string {
+  return fullName
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 export interface GroupChatTabViewProps {
   /** The signed-in user's id — flags their own messages for the
-   * right-aligned/accent bubble style; every other sender's messages show
-   * their `senderFullName` (resolved server-side, see `useGroupChatData`). */
+   * accent bubble style and the edit/delete affordance (sender-only,
+   * CHAT-13); every other sender's messages show their `senderFullName`
+   * and avatar (resolved server-side, see `useGroupChatData`). */
   currentUserId: string;
   messages: ChatMessage[] | undefined;
   isLoading: boolean;
   isError: boolean;
   sendMessage: (content: string) => void;
   isSending: boolean;
+  editMessage: (messageId: number, content: string) => void;
+  isEditing: boolean;
+  deleteMessage: (messageId: number) => void;
+  isDeleting: boolean;
   hasOlderMessages: boolean;
   isLoadingOlderMessages: boolean;
   isLoadOlderMessagesError: boolean;
@@ -21,14 +38,19 @@ export interface GroupChatTabViewProps {
 }
 
 /**
- * Presentational half of GRP-1's Chat tab (CHAT-8) — everything visual and
- * controlled, no data fetching of its own. Split out from `GroupChatTab`
- * (the thin container that calls `useGroupChatData`) so this component can
- * be driven entirely by plain props in Storybook/tests, the same way every
- * other tab in this app already works (e.g. `GroupMembersTab`) — the
- * container split exists only because `useGroupChatData` owns a real
- * WebSocket tied to mount/unmount, which the container, not this view, needs
- * to be the thing that mounts/unmounts.
+ * Presentational half of GRP-1's Chat tab (CHAT-8, edit/delete + layout
+ * added CHAT-13) — everything visual and controlled, no data fetching of
+ * its own. Split out from `GroupChatTab` (the thin container that calls
+ * `useGroupChatData`) so this component can be driven entirely by plain
+ * props in Storybook/tests, the same way every other tab in this app
+ * already works (e.g. `GroupMembersTab`) — the container split exists only
+ * because `useGroupChatData` owns a real WebSocket tied to mount/unmount,
+ * which the container, not this view, needs to be the thing that
+ * mounts/unmounts.
+ *
+ * CHAT-13 layout: own messages align left, other members' align right (a
+ * deliberate reversal of the usual own-on-right convention, user decision)
+ * — an avatar shows for other members' messages only, not the caller's own.
  */
 export function GroupChatTabView({
   currentUserId,
@@ -37,12 +59,18 @@ export function GroupChatTabView({
   isError,
   sendMessage,
   isSending,
+  editMessage,
+  isEditing,
+  deleteMessage,
+  isDeleting,
   hasOlderMessages,
   isLoadingOlderMessages,
   isLoadOlderMessagesError,
   loadOlderMessages,
 }: GroupChatTabViewProps) {
   const [draft, setDraft] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState('');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const previousScrollHeightRef = useRef<number | null>(null);
   const previousOldestIdRef = useRef<number | null>(null);
@@ -97,6 +125,24 @@ export function GroupChatTabView({
     setDraft('');
   };
 
+  const startEditing = (message: ChatMessage) => {
+    setEditingMessageId(message.id);
+    setEditDraft(message.content);
+  };
+
+  const cancelEditing = () => {
+    setEditingMessageId(null);
+    setEditDraft('');
+  };
+
+  const saveEdit = () => {
+    const text = editDraft.trim();
+    if (!text || editingMessageId === null) return;
+    editMessage(editingMessageId, text);
+    setEditingMessageId(null);
+    setEditDraft('');
+  };
+
   const inputDisabled = isLoading || isError;
 
   return (
@@ -140,23 +186,102 @@ export function GroupChatTabView({
                 <div className="flex flex-col gap-2.5">
                   {(messages ?? []).map((message) => {
                     const isOwn = message.senderId === currentUserId;
+                    const isDeleted = message.deletedAt !== null;
+                    const isEditingThis = editingMessageId === message.id;
+
                     return (
                       <div
                         key={message.id}
-                        className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}
+                        className={`flex flex-col ${isOwn ? 'items-start' : 'items-end'}`}
                       >
-                        <div
-                          className={`max-w-[75%] rounded-lg px-2.75 py-1.75 text-2sm ${
-                            isOwn ? 'bg-bg-accent text-text-primary' : 'bg-surface-1 text-text-primary'
-                          }`}
-                        >
+                        <div className={`flex items-end gap-1.5 ${isOwn ? 'flex-row' : 'flex-row-reverse'}`}>
                           {!isOwn && (
-                            <div className="mb-0.5 text-2xs font-medium text-text-primary">
-                              {message.senderFullName}
-                            </div>
+                            <Avatar className="mb-0.5 size-6 shrink-0">
+                              {message.senderAvatarUrl !== null && (
+                                <AvatarImage src={message.senderAvatarUrl} alt="" />
+                              )}
+                              <AvatarFallback className="text-2xs">
+                                {initialsFor(message.senderFullName)}
+                              </AvatarFallback>
+                            </Avatar>
                           )}
-                          {message.content}
+                          <div
+                            className={`max-w-[75%] rounded-lg px-2.75 py-1.75 text-2sm ${
+                              isOwn ? 'bg-bg-accent text-text-primary' : 'bg-surface-1 text-text-primary'
+                            }`}
+                          >
+                            {isEditingThis ? (
+                              <div className="flex flex-col gap-1.5">
+                                <Input
+                                  value={editDraft}
+                                  onChange={(event) => setEditDraft(event.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') saveEdit();
+                                    if (event.key === 'Escape') cancelEditing();
+                                  }}
+                                  aria-label="Edit message content"
+                                />
+                                <div className="flex gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={saveEdit}
+                                    disabled={editDraft.trim().length === 0}
+                                    className="cursor-pointer text-2xs font-medium text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={cancelEditing}
+                                    className="cursor-pointer text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                {!isOwn && (
+                                  <div className="mb-0.5 text-2xs font-medium text-text-primary">
+                                    {message.senderFullName}
+                                  </div>
+                                )}
+                                {isDeleted ? (
+                                  <span className="italic text-text-muted">Message deleted</span>
+                                ) : (
+                                  <>
+                                    {message.content}
+                                    {message.editedAt !== null && (
+                                      <span className="ml-1 text-2xs text-text-muted">(edited)</span>
+                                    )}
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </div>
+                        {isOwn && !isDeleted && !isEditingThis && (
+                          <div className="mt-0.5 flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => startEditing(message)}
+                              disabled={isEditing || isDeleting}
+                              aria-label="Edit message"
+                              className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
+                            >
+                              <IconPencil className="size-3" aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteMessage(message.id)}
+                              disabled={isEditing || isDeleting}
+                              aria-label="Delete message"
+                              className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
+                            >
+                              <IconTrash className="size-3" aria-hidden="true" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

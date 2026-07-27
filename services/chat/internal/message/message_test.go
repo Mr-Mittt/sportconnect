@@ -28,3 +28,22 @@ func TestSendRejectsContentOverMaxLength(t *testing.T) {
 
 	assert.True(t, errors.Is(err, ErrContentTooLong))
 }
+
+// Edit reuses Send's same validate-before-touching-the-repository shape, so
+// these need no database either — same reasoning as the two tests above.
+func TestEditRejectsEmptyContent(t *testing.T) {
+	svc := NewService(nil, nil)
+
+	_, err := svc.Edit(context.Background(), 1, "user-1", "")
+
+	assert.True(t, errors.Is(err, ErrEmptyContent))
+}
+
+func TestEditRejectsContentOverMaxLength(t *testing.T) {
+	svc := NewService(nil, nil)
+	tooLong := strings.Repeat("a", MaxContentLength+1)
+
+	_, err := svc.Edit(context.Background(), 1, "user-1", tooLong)
+
+	assert.True(t, errors.Is(err, ErrContentTooLong))
+}

@@ -46,7 +46,7 @@ original filing's open questions have already been answered.
 | 3 | CHAT-7 | Chat API client + data hooks scaffold (client) | `DONE` |
 | 4 | CHAT-8 | Wire `GroupChatTab` to the real chat service | `DONE` |
 | 5 | CHAT-9 | Wire `FriendChatPanel` to the real chat service (1:1 DMs) | `DONE` |
-| 6 | CHAT-13 | Editing and deleting messages | `TODO` |
+| 6 | CHAT-13 | Editing and deleting messages | `DONE` |
 | 7 | CHAT-14 | Read receipts | `TODO` |
 | 8 | CHAT-15 | Typing indicators | `TODO` |
 | 9 | CHAT-16 | File/image attachments | `TODO` |
@@ -353,7 +353,8 @@ in a live browser. Full detail: `services/chat/docs/CHAT-9_WIRE_FRIEND_CHAT_PANE
 ---
 
 ### CHAT-13 · Editing and deleting messages
-**Status:** `TODO` · **Type:** Feature (unscoped) · **Dependency:** CHAT-8, CHAT-9
+**Status:** `DONE` (2026-07-28) · **Type:** Feature (client + chat service) · **Dependency:** CHAT-8,
+CHAT-9 · **Summary:** `services/chat/docs/CHAT-13_EDIT_DELETE_MESSAGES.md`
 **Filed:** 2026-07-27, initially as a deferred `BACKLOG_V1.md` ticket, moved into this MVP backlog
 the same day (user decision) — not re-scoped in the move; the open questions below are unchanged.
 
@@ -382,6 +383,25 @@ the same day (user decision) — not re-scoped in the move; the open questions b
 
 Any actual implementation, schema migration, or API design — needs its own Phase 1/2/3 pass at
 pickup (per root `CLAUDE.md`'s ticket-writing convention).
+
+#### Resolved at pickup (2026-07-28, user decisions)
+
+1. **Edit:** replace content in place + a nullable `edited_at` timestamp — no edit-history table.
+2. **Delete:** soft-delete (`deleted_at`), content also scrubbed to `''` server-side so a deleted
+   message's original text is never re-served.
+3. **Authorization:** sender only. No group-admin moderation — the role-sync gap this question
+   flagged stays open, deliberately not closed by this ticket.
+4. **Real-time propagation:** every WebSocket broadcast now wraps in a `{type, message}` envelope
+   (`MESSAGE_CREATED`/`MESSAGE_EDITED`/`MESSAGE_DELETED`) — a breaking change to the bare-message
+   shape CHAT-7/8/9 shipped, updated in lockstep on both ends in this same ticket.
+5. **Time window:** none — editable/deletable indefinitely.
+
+**Delta (UI scope added mid-ticket, user request):** both `GroupChatTabView`/`FriendChatPanelView`
+reversed their message alignment (own messages now left, others' right — a deliberate reversal of
+the usual convention) and `GroupChatTabView` (group chat only, not 1:1 DMs) added a circular avatar
+next to other members' messages, reusing the existing `Avatar` component (`FriendRail`/`PostCard`'s
+pattern). Neither was in this ticket's original scope. Full detail:
+`services/chat/docs/CHAT-13_EDIT_DELETE_MESSAGES.md`.
 
 ---
 

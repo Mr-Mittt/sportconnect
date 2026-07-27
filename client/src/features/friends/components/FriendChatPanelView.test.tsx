@@ -23,6 +23,8 @@ const ownMessage: ChatMessage = {
   senderAvatarUrl: null,
   content: 'Pickup game Sunday, you in?',
   createdAt: '2026-07-26T10:15:00Z',
+  editedAt: null,
+  deletedAt: null,
 };
 
 const otherMessage: ChatMessage = {
@@ -33,6 +35,8 @@ const otherMessage: ChatMessage = {
   senderAvatarUrl: null,
   content: "I'm in, what time?",
   createdAt: '2026-07-26T10:16:00Z',
+  editedAt: null,
+  deletedAt: null,
 };
 
 function baseProps(overrides: Partial<FriendChatPanelViewProps> = {}): FriendChatPanelViewProps {
@@ -43,6 +47,10 @@ function baseProps(overrides: Partial<FriendChatPanelViewProps> = {}): FriendCha
     isError: false,
     sendMessage: vi.fn(),
     isSending: false,
+    editMessage: vi.fn(),
+    isEditing: false,
+    deleteMessage: vi.fn(),
+    isDeleting: false,
     hasOlderMessages: false,
     isLoadingOlderMessages: false,
     isLoadOlderMessagesError: false,
@@ -77,6 +85,14 @@ describe('FriendChatPanelView', () => {
     expect(screen.getByText("I'm in, what time?")).toBeInTheDocument();
     expect(screen.getByText('Pickup game Sunday, you in?')).toBeInTheDocument();
     expect(screen.queryByText('Ben Nyx')).not.toBeInTheDocument();
+  });
+
+  it('aligns the caller\'s own messages left and the other person\'s right (CHAT-13 reversed convention)', () => {
+    render(<FriendChatPanelView {...baseProps({ messages: [otherMessage, ownMessage] })} />);
+    const ownRow = screen.getByText('Pickup game Sunday, you in?').closest('.flex.flex-col');
+    const otherRow = screen.getByText("I'm in, what time?").closest('.flex.flex-col');
+    expect(ownRow).toHaveClass('items-start');
+    expect(otherRow).toHaveClass('items-end');
   });
 
   it('sends a message and clears the draft', async () => {
@@ -157,5 +173,66 @@ describe('FriendChatPanelView', () => {
     expect(screen.getByText("Couldn't load earlier messages.")).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(loadOlderMessages).toHaveBeenCalled();
+  });
+
+  it('shows edit/delete affordances only on the caller\'s own messages', () => {
+    render(<FriendChatPanelView {...baseProps({ messages: [otherMessage, ownMessage] })} />);
+    expect(screen.getAllByRole('button', { name: 'Edit message' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Delete message' })).toHaveLength(1);
+  });
+
+  it('editing a message shows a prefilled inline input, and Save calls editMessage', async () => {
+    const editMessage = vi.fn();
+    const user = userEvent.setup();
+    render(<FriendChatPanelView {...baseProps({ messages: [ownMessage], editMessage })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit message' }));
+
+    const editInput = screen.getByLabelText('Edit message content');
+    expect(editInput).toHaveValue('Pickup game Sunday, you in?');
+
+    await user.clear(editInput);
+    await user.type(editInput, 'Pickup game Monday, you in?');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(editMessage).toHaveBeenCalledWith(1, 'Pickup game Monday, you in?');
+    expect(screen.queryByLabelText('Edit message content')).not.toBeInTheDocument();
+  });
+
+  it('Cancel restores the original message without calling editMessage', async () => {
+    const editMessage = vi.fn();
+    const user = userEvent.setup();
+    render(<FriendChatPanelView {...baseProps({ messages: [ownMessage], editMessage })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit message' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(editMessage).not.toHaveBeenCalled();
+    expect(screen.getByText('Pickup game Sunday, you in?')).toBeInTheDocument();
+  });
+
+  it('clicking Delete calls deleteMessage immediately, with no confirmation step', async () => {
+    const deleteMessage = vi.fn();
+    const user = userEvent.setup();
+    render(<FriendChatPanelView {...baseProps({ messages: [ownMessage], deleteMessage })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Delete message' }));
+
+    expect(deleteMessage).toHaveBeenCalledWith(1);
+  });
+
+  it('shows an "(edited)" tag for an edited message', () => {
+    const edited = { ...ownMessage, editedAt: '2026-07-26T10:20:00Z' };
+    render(<FriendChatPanelView {...baseProps({ messages: [edited] })} />);
+    expect(screen.getByText('(edited)')).toBeInTheDocument();
+  });
+
+  it('renders a deleted message as a placeholder with no edit/delete affordance', () => {
+    const deleted = { ...ownMessage, content: '', deletedAt: '2026-07-26T10:25:00Z' };
+    render(<FriendChatPanelView {...baseProps({ messages: [deleted] })} />);
+
+    expect(screen.getByText('Message deleted')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit message' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete message' })).not.toBeInTheDocument();
   });
 });
