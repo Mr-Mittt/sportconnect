@@ -1,4 +1,8 @@
-# Chat Module — Feature Backlog
+# Chat Module — Feature Backlog (ARCHIVED)
+
+**ARCHIVED 2026-07-26 (user decision):** superseded by a fresh chat re-plan — do not pick up CHAT-1
+or CHAT-3 from here. Neither had any code written (`modules/social/chat-impl` never existed beyond
+this docs folder, since deleted). Kept for historical context only.
 
 **Version:** V1
 **Module:** `modules/social/chat-impl` (new — does not exist yet; CHAT-1 scaffolds it)

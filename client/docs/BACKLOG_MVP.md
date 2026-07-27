@@ -117,10 +117,8 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 46 | GRP-5 | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
 | 51 | GRP-7 | Wire the invitation approve/accept lifecycle — owner/admin approval + invitee acceptance — **new ticket, not in either epic, found while closing out GRP-4** (2026-07-23) — blocked on backend B11 | `DONE` |
 | 52 | GRP-8 | Sport pill follows an opened group + merged multi-inviter display (invitee + owner/admin views) + reason-gated invitation reject + join-request withdraw + sport-add confirmation on accept — **new ticket, not in either epic, filed while using GRP-7's shipped lifecycle, amended same day** (2026-07-24) — backend B13/B14/B15 all shipped, no longer blocking | `DONE` |
-| **Phase 8 — Chat — MOVED TO V1 (2026-07-26, user decision, see `client/docs/BACKLOG_V1.md`)** | | | |
-| **Phase 9 — Direct messaging (new, filed alongside FRIEND-1 — same CHAT-1/CHAT-2 lineage, applied to 1:1 chat)** | | | |
-| 49 | DM-1 | Direct-message backend — conversations/messages module scaffold + endpoints (backend, `modules/user` or new module TBD at pickup) | `TODO` |
-| 50 | DM-2 | Wire FRIEND-1's local-state mock chat panel to DM-1 — blocked on DM-1, FRIEND-1 | `TODO` |
+| **Phase 8 — Chat — ARCHIVED (2026-07-26, user decision, see `documentation/md/archive/chat/`) — fresh re-plan pending** | | | |
+| **Phase 9 — Direct messaging — ARCHIVED (2026-07-26, user decision, see `documentation/md/archive/chat/DM-1_DM-2_TICKETS.md`) — folded into the fresh chat re-plan** | | | |
 
 **Dependencies:**
 ```
@@ -151,8 +149,8 @@ GRP-6 → was blocked on A10 (modules/social/group-impl/docs/BACKLOG_MVP.md — 
   original plan (fan out one request per selected sport) was reversed by user decision in favor of
   a real backend multi-sportIds filter — simpler client state (one query, one loading/error pair)
   at the cost of a small additive backend change. A10 shipped 2026-07-21 — GRP-6 is unblocked.
-CHAT-1/CHAT-2/CHAT-3/CHAT-4 — **moved to V1 in full (2026-07-26, user decision)**, see
-  `client/docs/BACKLOG_V1.md` and `modules/social/chat-impl/docs/BACKLOG_V1.md`. No MVP ticket
+CHAT-1/CHAT-2/CHAT-3/CHAT-4 — moved to V1 in full 2026-07-26, then **archived in full 2026-07-26**
+  (user decision) pending a fresh chat re-plan, see `documentation/md/archive/chat/`. No MVP ticket
   depends on any of them — GroupChatTab already ships (GRP-1) as a local-state-only mock with an
   explicit "not saved" disclaimer, which is sufficient for MVP.
 FRIEND-1 (new, filed 2026-07-22) has no hard code dependency — U1 (friendship system) and U6 (user
@@ -162,11 +160,10 @@ FRIEND-1 (new, filed 2026-07-22) has no hard code dependency — U1 (friendship 
   (A6's areFriends gate), and there was no client-side way to become someone's friend at all before
   this ticket — GRP-4 was reverted from IN PROGRESS back to TODO once this gap surfaced mid-pickup.
   GRP-4 should be picked up only after FRIEND-1 ships.
-DM-1 (backend, new)/DM-2 (client, new) filed alongside FRIEND-1, same lineage as CHAT-1/CHAT-2 but
-  for 1:1 chat instead of group chat: FRIEND-1 ships its chat panel as a local-state-only mock (no
-  backend at all, not even a filed ticket, unlike group chat's CHAT-1) — DM-1 scopes and builds the
-  real conversations/messages backend, DM-2 wires FRIEND-1's chat panel to it. Neither blocks
-  FRIEND-1 or anything else in this backlog.
+DM-1 (backend)/DM-2 (client) were filed alongside FRIEND-1, same lineage as CHAT-1/CHAT-2 but for
+  1:1 chat instead of group chat — **archived in full 2026-07-26** (user decision) alongside
+  CHAT-1..4, see `documentation/md/archive/chat/DM-1_DM-2_TICKETS.md`. Neither had any code written;
+  FRIEND-1's `FriendChatPanel` keeps shipping as a local-state mock unaffected by the archival.
 GRP-7 (new, filed 2026-07-23) — GRP-3, GRP-4 (both DONE). Discovered while closing out GRP-4: an
   invitation GRP-4 sends can never be approved/accepted through the app today (the create step is
   the only one wired) — this ticket wires the remaining owner-approval + invitee-acceptance steps.
@@ -203,7 +200,7 @@ GRP-8 (new, filed 2026-07-24, amended same day) — GRP-3, GRP-4, GRP-7 (all DON
 | BE-2: logout derives user from principal | `modules/auth/docs/BACKLOG_MVP.md` · A3 | AUTH-4 (production) | `DONE` (2026-07-08) |
 | BE-3: login/registration rate limiting | `modules/auth/docs/BACKLOG_MVP.md` · A5 | a future client ticket (not yet filed) for rate-limit error surfacing, split out of AUTH-6 on 2026-07-12 | `TODO` |
 | Matches/tournaments module | Nowhere yet — needs its own design pass | de-mocking HF-4 |
-| ~~Chat module (new `modules/social/chat-impl`, doesn't exist yet)~~ | MOVED TO V1 (2026-07-26) — see `modules/social/chat-impl/docs/BACKLOG_V1.md` · CHAT-1, CHAT-3 | ~~CHAT-2, CHAT-4~~ | `N/A` |
+| ~~Chat module (new `modules/social/chat-impl`, never existed beyond a docs folder, since deleted)~~ | ARCHIVED (2026-07-26) — see `documentation/md/archive/chat/` — fresh chat re-plan pending | ~~CHAT-2, CHAT-4~~ | `N/A` |
 
 ---
 
@@ -1945,7 +1942,9 @@ GRP-4's own delta entry.
   - **Bottom half — chat panel:** local component state only, same precedent as `GroupChatTab`
     before CHAT-2 (message list + input + Send button, a "not saved"-style disclaimer, nothing
     persisted, no backend call at all) — **per user decision, this ships as a working UI now, real
-    wiring is a separate follow-up** (see DM-1/DM-2 below), not a placeholder.
+    wiring is a separate follow-up** (filed as DM-1/DM-2, since archived — see
+    `documentation/md/archive/chat/DM-1_DM-2_TICKETS.md` — pending a fresh chat re-plan), not a
+    placeholder.
 
 **Design decisions resolved before pickup (2026-07-22, user decisions):**
 - **Online/Offline:** no presence system exists anywhere in the backend (no heartbeat, session
@@ -1956,7 +1955,8 @@ GRP-4's own delta entry.
 - **Blocked:** no block/unblock endpoint, schema, or repository concept exists at all (confirmed,
   same gap class as GRP-3's Blacklist). Ships as a permanent "Coming soon" empty section.
 - **Chat:** ships as a fully working local-state mock now (not deferred/placeholder-only) — real
-  backend wiring is out of scope for this ticket, filed as DM-1 (backend)/DM-2 (client) below.
+  backend wiring is out of scope for this ticket, filed as DM-1 (backend)/DM-2 (client), since
+  archived pending a fresh chat re-plan (`documentation/md/archive/chat/DM-1_DM-2_TICKETS.md`).
 
 **Backend mapping:**
 
@@ -1970,11 +1970,11 @@ GRP-4's own delta entry.
 | Full profile (bio/cover) | Real — `GET /api/users/{userId}` (public) | Needed for search-result rows only |
 | Online/offline presence | **No backend concept exists** | Online ships permanently empty; all friends render under Offline |
 | Block/blacklist | **No backend concept exists** | Same treatment as GRP-3's Blacklist — permanent "Coming soon" |
-| Direct-message chat | **No backend concept exists at all** (not even a filed ticket, unlike group chat's CHAT-1) | Ships as local-state mock only; real wiring filed as DM-1 (backend)/DM-2 (client) |
+| Direct-message chat | **No backend concept exists at all** (not even a filed ticket, unlike group chat's CHAT-1) | Ships as local-state mock only; real wiring filed as DM-1/DM-2, since archived (`documentation/md/archive/chat/DM-1_DM-2_TICKETS.md`) pending a fresh chat re-plan |
 
 **Out of scope:**
 - Real-time presence/online status — needs its own backend design pass before a follow-up ticket.
-- Real direct messaging — filed as DM-1/DM-2.
+- Real direct messaging — filed as DM-1/DM-2, since archived pending a fresh chat re-plan.
 - Unfriending (`DELETE /api/users/friends/{friendId}` exists server-side) and blocking — neither
   appears in the reference's action bar; not built here. Flag at pickup if this feels wrong.
 - Achievements — permanent "Coming soon", no backend, no follow-up filed.
@@ -2019,27 +2019,8 @@ no visual-regression harness was in this ticket's own scope. Full writeup:
 
 ---
 
-### DM-1 · Direct-message backend — conversations/messages module scaffold + endpoints
-**Status:** `TODO` · **Type:** Feature (backend) · **Dependency:** FRIEND-1 (client half needs this,
-not the reverse)
-**Origin:** filed alongside FRIEND-1 — FRIEND-1's chat panel ships as a local-state mock on purpose
-(no backend exists for 1:1 messaging at all, unlike group chat which at least has CHAT-1 filed).
-Same "smallest shippable slice" sequencing this backlog already uses for CHAT-1/CHAT-2.
-
-**Not yet scoped in detail** — needs its own design pass (schema, real-time transport — reuse
-PubNub per-pair channels like the chat architecture doc, or a simpler polled/REST approach; module
-placement, e.g. extending `modules/social/chat-impl` once CHAT-1 creates it, vs. a new module)
-before pickup. See `documentation/md/CHAT_SERVICE_INTEGRATION.md` for the group-chat precedent this
-would likely follow.
-
----
-
-### DM-2 · Wire FRIEND-1's chat panel to the real backend
-**Status:** `TODO` · **Type:** Feature (client) · **Dependency:** DM-1, FRIEND-1
-**Origin:** filed alongside DM-1 and FRIEND-1 — same CHAT-2-after-CHAT-1 pattern applied to 1:1 chat.
-
-**Not yet scoped in detail** — full acceptance criteria to be written once DM-1 exists to build
-against.
+**DM-1/DM-2 archived 2026-07-26** (user decision) — full text moved to
+`documentation/md/archive/chat/DM-1_DM-2_TICKETS.md`, folded into the fresh chat re-plan.
 
 ---
 

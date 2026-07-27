@@ -1,14 +1,20 @@
 # Chat service integration — PubNub
 
 **Date:** 2026-07-22
-**Status:** Agreed (discussion between repo owner + Claude)
+**Status:** ARCHIVED (2026-07-26, user decision) — superseded by a fresh chat re-plan. Kept for
+historical context only; do not treat anything below as the active plan. The tickets this doc
+unblocked (CHAT-1..4) and the direct-message tickets that followed the same lineage (DM-1/DM-2) were
+archived alongside it — see `documentation/md/archive/chat/` for the full set and
+`documentation/md/CHAT_SERVICE_INTEGRATION.md`'s replacement (once written) for the current plan.
+**Status (historical):** Agreed (discussion between repo owner + Claude)
 **Supersedes:** `PROGRESS.md`'s "Real-Time Chat (designed, not implemented)" entry, which previously
 planned self-hosted WebSocket/Spring STOMP (dependency already sitting unused in
 `server/build.gradle`) — see "Why not self-host" below for why that plan changed.
-**Unblocks:** `modules/social/chat-impl/docs/BACKLOG_V1.md` (CHAT-1, CHAT-3),
-`client/docs/BACKLOG_V1.md` (CHAT-2, CHAT-4)
-**Moved to V1 (2026-07-26, user decision):** all four tickets deprioritized out of the MVP release —
-see the backlog files above for the current queue location.
+**Unblocked (historical):** `modules/social/chat-impl/docs/BACKLOG_V1.md` (CHAT-1, CHAT-3),
+`client/docs/BACKLOG_V1.md` (CHAT-2, CHAT-4) — both now archived alongside this doc.
+**Moved to V1 (2026-07-26, user decision):** all four tickets deprioritized out of the MVP release.
+**Archived (2026-07-26, user decision):** moved here in full from `documentation/md/` for a fresh
+chat re-plan.
 
 ---
 
