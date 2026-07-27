@@ -44,7 +44,7 @@ original filing's open questions have already been answered.
 | 1 | CHAT-5 | Repository/cache integration tests (DB-backed) | `DONE` |
 | 2 | CHAT-6 | WebSocket broadcast + sync resilience tests | `DONE` |
 | 3 | CHAT-7 | Chat API client + data hooks scaffold (client) | `DONE` |
-| 4 | CHAT-8 | Wire `GroupChatTab` to the real chat service | `TODO` |
+| 4 | CHAT-8 | Wire `GroupChatTab` to the real chat service | `DONE` |
 | 5 | CHAT-9 | Wire `FriendChatPanel` to the real chat service (1:1 DMs) | `TODO` |
 | 6 | CHAT-13 | Editing and deleting messages | `TODO` |
 | 7 | CHAT-14 | Read receipts | `TODO` |
@@ -251,7 +251,8 @@ confirmed: `services/chat/docs/CHAT-7_CHAT_API_CLIENT_AND_DATA_HOOKS_SCAFFOLD.md
 ---
 
 ### CHAT-8 · Wire `GroupChatTab` to the real chat service
-**Status:** `TODO` · **Type:** Feature (client) · **Dependency:** CHAT-7
+**Status:** `DONE` (2026-07-27) · **Type:** Feature (client) · **Dependency:** CHAT-7 ·
+**Summary:** `services/chat/docs/CHAT-8_WIRE_GROUP_CHAT_TAB.md`
 **Spec:** `client/design-reference/design-reference-group-feed.html`'s Chat tab (already the
 implemented reference — this ticket is wiring, not new UI design)
 
@@ -273,6 +274,42 @@ chat isn't built yet" disclaimer — this is the ticket that disclaimer was alwa
   without a page reload (real WebSocket delivery, not polling).
 - Reopening the tab or switching groups and back shows real persisted history, not an empty list.
 - `tsc -b`/`eslint`/Vitest all clean.
+
+**Delta (scope addition, user decision):** older chat history (scrolling past the initial 50
+messages) was not in this ticket's original acceptance criteria, but added mid-pickup at the user's
+request — `useChatConversation` (CHAT-7) switched from `useQuery` to `useInfiniteQuery`, reusing
+`Feed.tsx`'s existing `useInfiniteScrollSentinel` pagination pattern rather than a new one. Any
+future chat ticket building on `useGroupChatData`/`useDirectChatData` should assume
+`hasOlderMessages`/`isLoadingOlderMessages`/`isLoadOlderMessagesError`/`loadOlderMessages()` exist on
+the hook's return shape now, not just `{ data, isLoading, isError, sendMessage }`.
+
+**Delta (structural, found at pickup):** no existing infrastructure in this repo mocks a real
+network+WebSocket-backed hook inside Storybook (every other tab avoids the problem by having the
+*page* own the data hook — the one thing this ticket's WebSocket-lifecycle design explicitly
+couldn't do, see the ticket's own design note above). Split `GroupChatTab` into a thin container
+(calls `useGroupChatData`) and a new presentational `GroupChatTabView` (everything visual, plain
+props) — CHAT-9 will likely want the same split for `FriendChatPanel`. Full detail:
+`services/chat/docs/CHAT-8_WIRE_GROUP_CHAT_TAB.md`.
+
+**Delta (verification gap, flagged not hidden):** no browser tooling was connected this session, so
+the actual rendered UI and the real two-browser-session delivery check were not performed — only the
+underlying HTTP/WebSocket mechanics were live-verified (already proven at CHAT-7, re-confirmed here
+at the pagination level). A manual browser pass is recommended before treating this as fully proven
+in practice, not just in tests.
+
+**Delta (real bug found via the user's own manual browser check, resolved same day):** exactly the
+gap the delta above flagged turned up a real bug on first try — `GroupChatTab` failed immediately
+with "Couldn't load this group's chat." Root cause: `vite.config.ts`'s `/api/chat` proxy had no
+`rewrite`, so the full `/api/chat/conversations/**` path reached the Go service unchanged, but its
+router registers routes with no such prefix — every proxied request 404'd. **Predates CHAT-8**
+(present since the proxy entry was first added, at latest CHAT-7) and was masked because every prior
+"live verification" in this backlog called the chat service directly at `:8081`, never through
+`:5173`'s actual dev proxy — the only path a real browser uses. Fixed
+(`rewrite: (path) => path.replace(/^\/api\/chat/, '')`) and re-verified the full open/connect/send/
+receive/history flow through the real proxy path this time. **Binding note for CHAT-9 and beyond:**
+a "live-verified" claim in this file must say whether it went through `:5173` or direct to `:8081` —
+they are not equivalent, and only the former proves the browser-facing path actually works. Full
+detail: `services/chat/docs/CHAT-8_WIRE_GROUP_CHAT_TAB.md`.
 
 ---
 
