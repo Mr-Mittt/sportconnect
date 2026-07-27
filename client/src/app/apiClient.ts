@@ -1,4 +1,9 @@
-import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  type AxiosError,
+  type AxiosInstance,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from 'axios';
 import { useAuthStore } from '@/app/authStore';
 import type { ApiResponse } from '@/shared/types/api';
 import type { AuthResult } from '@/features/auth/types';
@@ -16,19 +21,35 @@ export function attachAuthHeader(config: InternalAxiosRequestConfig): InternalAx
   return config;
 }
 
-// `/api` is proxied to the Spring Boot backend at :8080 in dev (vite.config.ts).
-// withCredentials is required so the httpOnly refresh cookie is sent/received.
+// Shared factory so a second backend (chat's own service, CHAT-7) gets the
+// same auth-attach + 401-silent-refresh-and-retry behavior without
+// duplicating it — the only thing that varies per client is baseURL and,
+// on a 401, which client the original request gets replayed on.
+// withCredentials is required so the httpOnly refresh cookie is sent/received
+// (the refresh cookie itself is Path-scoped to /api/auth, so this is a no-op
+// for any client other than the default one, but harmless to set uniformly).
 // paramsSerializer.indexes: null makes an array-valued param (e.g. sportIds: [1, 2])
 // serialize as repeated bare keys (?sportIds=1&sportIds=2) instead of axios's default
 // bracket notation (?sportIds[]=1&sportIds[]=2) — Spring's List<Long> @RequestParam
 // binding only understands the bare-repeated-key form (verified live against A10).
-export const apiClient = axios.create({
-  baseURL: '/api',
-  withCredentials: true,
-  paramsSerializer: { indexes: null },
-});
+export function createAuthenticatedClient(baseURL: string): AxiosInstance {
+  const client = axios.create({
+    baseURL,
+    withCredentials: true,
+    paramsSerializer: { indexes: null },
+  });
 
-apiClient.interceptors.request.use(attachAuthHeader);
+  client.interceptors.request.use(attachAuthHeader);
+  client.interceptors.response.use(
+    (response) => response,
+    (error: AxiosError) => handleResponseError(error, client),
+  );
+
+  return client;
+}
+
+// `/api` is proxied to the Spring Boot backend at :8080 in dev (vite.config.ts).
+export const apiClient = createAuthenticatedClient('/api');
 
 type RetryableRequestConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
@@ -67,8 +88,17 @@ async function refreshAccessToken(): Promise<string> {
  * the session and rejects with the *original* error — no manual redirect
  * here; ProtectedRoute already redirects to /login reactively once
  * authStore.user goes null (same pattern useLogout uses).
+ *
+ * `client` is which axios instance the original request gets replayed on
+ * once refreshed — defaults to `apiClient` since that's this function's only
+ * caller until CHAT-7 added a second one (`chatApiClient`); refreshing itself
+ * always goes through `apiClient` regardless (the refresh endpoint only
+ * exists on the monolith).
  */
-export async function handleResponseError(error: AxiosError): Promise<AxiosResponse> {
+export async function handleResponseError(
+  error: AxiosError,
+  client: AxiosInstance = apiClient,
+): Promise<AxiosResponse> {
   const originalRequest = error.config as RetryableRequestConfig | undefined;
 
   if (
@@ -91,11 +121,9 @@ export async function handleResponseError(error: AxiosError): Promise<AxiosRespo
   try {
     const accessToken = await refreshPromise;
     originalRequest.headers.set('Authorization', `Bearer ${accessToken}`);
-    return apiClient.request(originalRequest);
+    return client.request(originalRequest);
   } catch {
     useAuthStore.getState().clearSession();
     return Promise.reject(error);
   }
 }
-
-apiClient.interceptors.response.use((response) => response, handleResponseError);

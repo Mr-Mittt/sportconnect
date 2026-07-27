@@ -43,7 +43,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.Handle("POST /conversations/open/direct/{userId}", deps.Verifier.Middleware(http.HandlerFunc(h.openDirectConversation)))
 	mux.Handle("GET /conversations/{id}/messages", deps.Verifier.Middleware(http.HandlerFunc(h.messageHistory)))
 	mux.Handle("POST /conversations/{id}/messages", deps.Verifier.Middleware(http.HandlerFunc(h.sendMessage)))
-	mux.Handle("GET /conversations/{id}/ws", deps.Verifier.Middleware(http.HandlerFunc(h.connectWebSocket)))
+	mux.Handle("GET /conversations/{id}/ws", deps.Verifier.MiddlewareWS(http.HandlerFunc(h.connectWebSocket)))
 
 	return corsMiddleware(deps.AllowedOrigin, mux)
 }

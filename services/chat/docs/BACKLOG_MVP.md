@@ -43,7 +43,7 @@ original filing's open questions have already been answered.
 |---|---|---|---|
 | 1 | CHAT-5 | Repository/cache integration tests (DB-backed) | `DONE` |
 | 2 | CHAT-6 | WebSocket broadcast + sync resilience tests | `DONE` |
-| 3 | CHAT-7 | Chat API client + data hooks scaffold (client) | `TODO` |
+| 3 | CHAT-7 | Chat API client + data hooks scaffold (client) | `DONE` |
 | 4 | CHAT-8 | Wire `GroupChatTab` to the real chat service | `TODO` |
 | 5 | CHAT-9 | Wire `FriendChatPanel` to the real chat service (1:1 DMs) | `TODO` |
 | 6 | CHAT-13 | Editing and deleting messages | `TODO` |
@@ -191,8 +191,10 @@ locally (fresh containers, `.env` hidden) — not assumed correct from local `go
 ---
 
 ### CHAT-7 · Chat API client + data hooks scaffold (client)
-**Status:** `TODO` · **Type:** Feature (Foundation, client) · **Dependency:** none (backend already
-live and stable)
+**Status:** `DONE` (2026-07-27) · **Type:** Feature (Foundation, client) · **Dependency:** none
+(backend was assumed already live and stable — see Delta below, this turned out to be only
+partially true) · **Summary:**
+`services/chat/docs/CHAT-7_CHAT_API_CLIENT_AND_DATA_HOOKS_SCAFFOLD.md`
 **Spec:** `services/chat/README.md` §7 (full API reference) — the DTOs/endpoints this ticket wraps
 already exist and are documented there; this ticket is client-side only.
 
@@ -226,6 +228,25 @@ yet, needs a decision here since both CHAT-8 and CHAT-9 depend on whatever this 
   WebSocket connection, matching the same live-verification bar `PROGRESS.md`'s backend entries
   already held themselves to.
 - No component wiring yet — that's CHAT-8/CHAT-9.
+
+**Delta (WebSocket auth, resolved at pickup):** browsers' native `WebSocket` can't set an
+`Authorization` header during the handshake, so `GET /conversations/{id}/ws` needed a fallback —
+added `Verifier.MiddlewareWS` (header first, `?token=` query param second, scoped to this one
+route). User chose the raw query-param token over a `Sec-WebSocket-Protocol` subprotocol or a
+short-lived single-use ticket endpoint, after a security tradeoff discussion. `vite.config.ts`'s
+`/api/chat` proxy entry also needed `ws: true` (the string-shorthand form doesn't proxy WebSocket
+upgrades) — full detail:
+`services/chat/docs/CHAT-7_CHAT_API_CLIENT_AND_DATA_HOOKS_SCAFFOLD.md`.
+
+**Delta (real bug found during required live verification, not a pre-existing-and-known gap):** the
+chat service's JWT verification had never actually worked against a real monolith-issued token in
+this dev environment — `internal/auth.Verifier.Parse` only accepted `HS256`, but JJWT 0.12.x's
+`signWith(key)` (the monolith's own signing call site) auto-selects the strongest HMAC-SHA variant
+the key's byte length supports, and the real dev `JWT_SECRET` is long enough to produce HS512
+tokens. Only this package's own tests (which mint HS256 tokens themselves) masked it. Fixed by
+widening accepted algorithms to HS256/HS384/HS512 (same secret bytes, equally secure). User asked
+for this to be fixed as part of this ticket rather than filed separately. Full detail + how it was
+confirmed: `services/chat/docs/CHAT-7_CHAT_API_CLIENT_AND_DATA_HOOKS_SCAFFOLD.md`.
 
 ---
 
