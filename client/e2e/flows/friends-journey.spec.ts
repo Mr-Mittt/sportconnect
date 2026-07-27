@@ -68,14 +68,12 @@ test('Friends page — rail sections, search, directory search + send request, a
     await expect(offlineSection.getByText('Hana Kim')).toBeVisible();
   });
 
-  await test.step('7. sending a mock chat message renders it, but nothing persists past a re-selection', async () => {
-    await offlineSection.getByText('Priya Shah').click();
-    await page.getByLabel('Message').fill('Pickup game Sunday, you in?');
-    await page.getByRole('button', { name: 'Send' }).click();
-    await expect(page.getByText('Pickup game Sunday, you in?')).toBeVisible();
-
-    await offlineSection.getByText('Hana Kim').click();
-    await expect(page.getByText('Pickup game Sunday, you in?')).not.toBeVisible();
-    await expect(page.getByText('No messages yet.')).toBeVisible();
-  });
+  // A 7th step here used to send a message through FriendChatPanel's old
+  // local-state-only mock and assert it didn't persist past a re-selection.
+  // CHAT-9 wired the panel to the real chat service (useDirectChatData), so
+  // that premise is no longer true — and there's no /api/chat/** MSW
+  // handler yet for this mock server to answer with, so the panel's input
+  // now stays correctly disabled (isLoading/isError) rather than fill-able.
+  // Real, MSW-backed chat e2e coverage is CHAT-10's explicit scope, not
+  // built yet — see services/chat/docs/BACKLOG_MVP.md.
 });

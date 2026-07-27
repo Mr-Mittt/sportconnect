@@ -413,7 +413,7 @@ owner/admin approval-queue journey, and `mockPublicGroup` ("Riverside Hoopers", 
 | Join requests section withdraws the current user's own pending request | `mockJoinRequest` seeded via a new admin route (`seed-join-requests` — no existing e2e coverage of `JoinGroupModal`'s search UI to drive instead) → "Riverside Hoopers" row visible with a "Withdraw" button → clicking it empties the section | **GRP-8 part 3** |
 | Accepting an invitation for a sport the invitee lacks offers to add it first | Test user's sport profiles zeroed via `seedZeroSportProfilesOnNextLoad` → Accept → `AddSportIntroDialog` ("This Basketball group…", OK button) → `AddSportModal` pre-selected to Basketball → submitting adds the profile then accepts the invitation, landing on the new group's Posts tab | **GRP-8 part 5** |
 
-### `e2e/flows/friends-journey.spec.ts` (FRIEND-1, one `test()` with 7 steps)
+### `e2e/flows/friends-journey.spec.ts` (FRIEND-1, one `test()` with 6 steps)
 
 Uses `mockFriend` ("Priya Shah", Offline), `mockIncomingFriendRequest` ("Hana Kim" → the test user,
 Friend Requests), `mockSentFriendRequest` ("Diego Alvarez", outgoing, also Friend Requests), and
@@ -427,7 +427,12 @@ Friend Requests), `mockSentFriendRequest` ("Diego Alvarez", outgoing, also Frien
 | 4. Add friend searches the real directory + sends a request | "Add friend" → type "Owen" → `Matches for "Owen"` → select → real `POST /users/friends/requests` → button flips to disabled "Waiting for response" | Exercises the debounced `GET /users/search` end-to-end, not MSW-bypassed |
 | 5. clearing the search returns to the default list | "x" clear button exits Add mode, restores the unfiltered Offline section | |
 | 6. accept moves the request | Select Hana Kim (Accept/Decline visible) → Accept → disappears from Friend Requests, appears in Offline | Exercises the stateful MSW accept handler (moves the row from `receivedRequestsState` into `friendsState`) |
-| 7. mock chat doesn't persist across a selection | Send a message while Priya selected → visible; switch to Hana → message gone, "No messages yet." | `FriendChatPanel` remounts via `key={selectedPerson.id}` |
+
+**Removed (CHAT-9, 2026-07-28):** a 7th step asserted `FriendChatPanel`'s old local-state-only mock
+chat didn't persist across a re-selection. CHAT-9 wired the panel to the real chat service
+(`useDirectChatData`), so that premise is no longer true, and there's no `/api/chat/**` MSW handler
+yet for this mock server to answer with — real, MSW-backed chat e2e coverage is `CHAT-10`'s explicit
+scope (`services/chat/docs/BACKLOG_MVP.md`), not built yet.
 
 ### `e2e/flows/msw-setup.spec.ts` (proves the mock server itself works)
 
