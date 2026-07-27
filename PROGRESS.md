@@ -1777,6 +1777,22 @@ uses. Fixed with `rewrite: (path) => path.replace(/^\/api\/chat/, '')`; re-verif
 **Lesson recorded for future chat tickets:** a "live-verified" claim must specify whether it went
 through the real dev proxy (`:5173`) or direct to the service (`:8081`) — they are not equivalent.
 
+**CHAT-9 — Wire `FriendChatPanel` to the real chat service, 1:1 DMs (2026-07-27,
+`services/chat/docs/CHAT-9_WIRE_FRIEND_CHAT_PANEL.md`):** `FriendChatPanel`'s local-state-only mock
+swapped for CHAT-7's `useDirectChatData(userId)`, applying CHAT-8's exact pattern (thin container +
+new presentational `FriendChatPanelView`, same reason: no Storybook infra for a real
+network+WebSocket hook, and the panel needs to own the hook call so `FriendsPage`'s existing
+`key={selectedPerson.id}` remount drives the WebSocket lifecycle) to the Friends page's chat panel.
+Friends-only gate (`conversation.ErrNotFriends`) intentionally not re-implemented client-side — the
+hook is always called, the server's real 403 drives the same generic error state a loading failure
+would. Full client suite green: 97 test files / 560 tests. **Live-verified through the real dev
+proxy (`:5173`) this time, per the binding note CHAT-8 left** — three users registered, two made
+real friends via the monolith's friend-request/accept flow, a third left a stranger: the stranger's
+`open/direct/{id}` correctly `403`s through the proxy, the real friend's succeeds (`200`), a
+WebSocket opened through the proxy receives a REST-sent message, and 56 sent messages correctly
+split across a 50/6 two-page fetch matching the client hook's pagination logic. Not verified this
+session (same limitation as CHAT-8): the actual rendered UI in a live browser — flagged, not hidden.
+
 **Friends page rail state persistence (2026-07-25, user-requested,
 `client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
 rail's mode (friend list vs. directory search), search text, and selected person — previously all
@@ -1943,8 +1959,10 @@ explicit go-ahead at each step (full story in A3's summary doc):
   API client + `useGroupChatData`/`useDirectChatData` data hooks. CHAT-8 (`DONE`) wired
   `GroupChatTab.tsx` to `useGroupChatData` for real (split into a thin container + a presentational
   `GroupChatTabView`, plus older-history pagination) — group chat is real and live now, not a mock.
-  `FriendChatPanel` is still a local-state mock, not yet wired (`CHAT-9`, `TODO`). Full remaining
-  breakdown: `services/chat/docs/BACKLOG_MVP.md`.
+  CHAT-9 (`DONE`) gave `FriendChatPanel.tsx` the same treatment for 1:1 DMs
+  (`useDirectChatData`/`FriendChatPanelView`) — both chat surfaces are now real and live, neither is
+  a mock anymore. Full remaining breakdown (edit/delete, read receipts, typing, attachments, E2E,
+  hardening, QA): `services/chat/docs/BACKLOG_MVP.md`.
 - History: originally scoped as self-hosted WebSocket/Spring STOMP (dependency still sits unused in
   `server/build.gradle`), superseded 2026-07-22 by a PubNub-based plan
   (`documentation/md/archive/chat/CHAT_SERVICE_INTEGRATION.md`, scoped as CHAT-1..4 + DM-1/DM-2),
