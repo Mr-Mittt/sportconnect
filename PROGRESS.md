@@ -1709,6 +1709,37 @@ proved otherwise). `go build`/`go vet`/`go test ./...` green locally and in the 
 environment, including confirming the monolith-dependent test SKIPs (not fails) exactly the way
 `chat-ci.yml` will hit it.
 
+**CHAT-7 — Chat API client + data hooks scaffold, client side (2026-07-27,
+`services/chat/docs/CHAT-7_CHAT_API_CLIENT_AND_DATA_HOOKS_SCAFFOLD.md`):** first client-side chat
+code — `client/src/features/chat/` (`types.ts`, `chatApiClient.ts`, `queryKeys.ts`,
+`useChatConversation`/`useGroupChatData`/`useDirectChatData`). Refactored `apiClient.ts` into a
+shared `createAuthenticatedClient(baseURL)` factory (same auth-attach + 401-refresh-retry behavior
+for both the monolith client and the new chat client) — existing `apiClient` tests unchanged.
+**Found and fixed a real, previously-undiscovered bug while live-verifying:** the chat service's
+`internal/auth.Verifier` only ever accepted HS256-signed JWTs, but JJWT 0.12.x's
+`signWith(key)` (the monolith's own call site) auto-selects the strongest HMAC-SHA variant the
+key's byte length supports — the actual dev `JWT_SECRET` is long enough to produce **HS512**
+tokens, which the verifier had been rejecting outright. This meant the chat service's JWT
+verification had never actually worked against a real monolith-issued token in this environment;
+only this package's own tests (which mint their own HS256 tokens) masked it, and CHAT-5/CHAT-6's
+prior "live-verified" claims either predate this secret's length or only exercised token-less
+paths. Widened `jwt.WithValidMethods` to accept HS256/HS384/HS512. Also found (not a pre-existing
+bug, a genuine gap in the ticket's own premise): a browser's native `WebSocket` cannot set an
+`Authorization` header during the handshake, so `GET /conversations/{id}/ws` was unreachable from
+a real client — added `Verifier.MiddlewareWS` (header first, falls back to a `?token=` query
+param, scoped to this one route only) plus a `vite.config.ts` fix (`/api/chat`'s proxy entry needed
+`ws: true`, which the string-shorthand form doesn't provide). User chose the query-param approach
+over a `Sec-WebSocket-Protocol` subprotocol or a short-lived ticket endpoint, after a security
+tradeoff discussion (query strings can land in default access-log formats; headers/subprotocols
+generally don't). Live-verified end to end against the real running monolith + chat service: a
+freshly registered user's real HS512 access token, two independent WebSocket connections opened
+with the query-param token, a REST-sent message broadcast to and received by both. Reconnect policy
+(user decision): auto-retry with capped exponential backoff, refetching history on reconnect to
+fill any gap; sent messages and WebSocket-pushed messages merge into the same TanStack Query cache
+deduped by message id (the backend broadcasts a sent message back to the sender's own open
+connection too, not just other participants). No component wiring in this ticket — `GroupChatTab`/
+`FriendChatPanel` remain local-state mocks until CHAT-8/CHAT-9.
+
 **Friends page rail state persistence (2026-07-25, user-requested,
 `client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
 rail's mode (friend list vs. directory search), search text, and selected person — previously all
@@ -1864,21 +1895,22 @@ explicit go-ahead at each step (full story in A3's summary doc):
 - Escrow-backed transactions
 - Seller ratings and reviews
 
-### Real-Time Chat (structural scaffold landed 2026-07-26 — Go service, feature tickets not yet scoped)
+### Real-Time Chat (backend live-verified + regression-tested; client foundation landed 2026-07-27)
 - **Status:** the vendor-based (PubNub) plan was archived 2026-07-26 (user decision) to
   `documentation/md/archive/chat/`; the replacement is a **self-hosted Go + Postgres service**
   (`services/chat/`, the first non-Java-module/non-client service in this repo) — see
-  `services/chat/CLAUDE.md` and `services/chat/docs/SYNC_DESIGN.md`. What exists so far is
-  structural only (module skeleton, migrations, cross-service sync mechanism, auth) — no feature
-  ticket breakdown yet (which endpoints ship first, group-vs-DM sequencing), and the Go code itself
-  is unverified (no Go toolchain was available when it was scaffolded — see this file's dated entry
-  above for the full punch list and required first-pickup verification steps).
+  `services/chat/CLAUDE.md` and `services/chat/docs/SYNC_DESIGN.md`. Backend: live-verified
+  end to end (real Redis Stream sync, real HTTP/WebSocket API) and now has automated regression
+  coverage (CHAT-5 repository/cache integration tests, CHAT-6 WebSocket broadcast + sync resilience
+  tests, both `DONE`), plus its own CI pipeline (`chat-ci.yml`). Client: CHAT-7 (`DONE`) landed the
+  API client + `useGroupChatData`/`useDirectChatData` data hooks, live-verified against the real
+  running services — `GroupChatTab.tsx`/`FriendChatPanel` themselves are still local-state mocks,
+  not yet wired to these hooks (`CHAT-8`/`CHAT-9`, `TODO`). Full remaining breakdown:
+  `services/chat/docs/BACKLOG_MVP.md`.
 - History: originally scoped as self-hosted WebSocket/Spring STOMP (dependency still sits unused in
   `server/build.gradle`), superseded 2026-07-22 by a PubNub-based plan
   (`documentation/md/archive/chat/CHAT_SERVICE_INTEGRATION.md`, scoped as CHAT-1..4 + DM-1/DM-2),
   archived in turn 2026-07-26 in favor of the Go service above.
-- `GroupChatTab.tsx` (group) and `FriendChatPanel` (1:1, part of FRIEND-1) both still ship as
-  working local-state-only mocks — real code, not yet wired to the new Go service.
 
 ### Group Advanced Features (not implemented)
 - System posts (auto-generated for admin actions)

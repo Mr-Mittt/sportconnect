@@ -210,11 +210,23 @@ reachable from the internet only at `/api/chat/**` via whatever reverse proxy fr
 
 ### 6.1 Authentication — independent, not delegated
 
-Every request to this service (except `GET /healthz`) must carry `Authorization: Bearer <token>`.
-The token is the exact same JWT the monolith's login/refresh endpoints issue. This service verifies
-its signature and expiry itself, using the shared `JWT_SECRET` — it never calls Spring to check if a
-token is valid. That's what makes "the client talks to this service directly" workable: there's no
-single point that both services depend on to answer "who is this."
+Every request to this service (except `GET /healthz`) must carry `Authorization: Bearer <token>`,
+**except** `GET /conversations/{id}/ws` (§7), which also accepts the token as a `?token=` query
+parameter — a browser's native `WebSocket` API cannot set custom headers during the handshake, so
+that one route needs a fallback the rest don't. The token is the exact same JWT the monolith's
+login/refresh endpoints issue. This service verifies its signature and expiry itself, using the
+shared `JWT_SECRET` — it never calls Spring to check if a token is valid. That's what makes "the
+client talks to this service directly" workable: there's no single point that both services depend
+on to answer "who is this."
+
+Signature verification accepts HS256, HS384, *and* HS512 — not just HS256. JJWT 0.12.x's
+`Jwts.builder().signWith(key)` (the monolith's own signing call site, `JwtTokenServiceImpl`) picks
+the strongest HMAC-SHA variant the *key's byte length* supports, not a fixed algorithm; a long
+enough `JWT_SECRET` (as the real dev value is) actually produces HS512 tokens. All three variants
+verify against the same secret bytes, so accepting all three is exactly as secure as accepting one
+— CHAT-7 found and fixed this after every real monolith-issued token was being rejected by a
+verifier that only allowed HS256 (`internal/auth`'s own tests never caught it, since they mint
+HS256 tokens themselves).
 
 ### 6.2 Authorization — reads a local cache, never a live call
 
@@ -360,9 +372,14 @@ Paginated message history, newest first.
 ### `GET /conversations/{id}/ws`
 
 Upgrades the connection to a WebSocket. Same authorization check as the endpoints above. Once
-connected, the server pushes every new message sent to this conversation (by anyone) as a JSON text
-frame, in the exact shape shown under `POST .../messages` above. See §6.4 — this connection is
-receive-only from the client's perspective.
+connected, the server pushes every new message sent to this conversation (by anyone, including the
+caller's own other connections) as a JSON text frame, in the exact shape shown under
+`POST .../messages` above. See §6.4 — this connection is receive-only from the client's
+perspective.
+
+**Auth on this route only:** in addition to `Authorization: Bearer <token>`, also accepts
+`?token=<token>` as a query parameter (§6.1) — the one concession to browsers' native `WebSocket`
+API not supporting custom handshake headers. The header wins if both are present.
 
 ---
 
@@ -389,8 +406,14 @@ up-to-the-day ticket state if this drifts):
   consumer tests). It does not run the monolith-dependent bootstrap pagination test (see that test's
   own skip condition) — a full Java+Gradle+Postgres stack inside a Go-only CI job isn't worth the
   weight; that one test is a local/pre-release check only.
-- **Client side is untouched so far** — `GroupChatTab.tsx`/`FriendChatPanel.tsx` are still
-  local-state mocks. That's `CHAT-7` onward (`docs/BACKLOG_MVP.md`), not started yet.
+- **Client foundation exists:** `CHAT-7` (`DONE`) added `client/src/features/chat/` — a chat-scoped
+  API client (`chatApiClient`, targeting `/api/chat`) and `useGroupChatData`/`useDirectChatData`
+  data hooks (open-or-resume conversation, history, send, a real-time WebSocket connection with
+  backoff reconnect), live-verified against these real running services. `GroupChatTab.tsx`/
+  `FriendChatPanel.tsx` themselves are still local-state mocks, not yet wired to these hooks — that's
+  `CHAT-8`/`CHAT-9` (`docs/BACKLOG_MVP.md`). CHAT-7 also found and fixed two things this section
+  used to gloss over: the JWT-algorithm bug described in §6.1, and `vite.config.ts`'s `/api/chat`
+  proxy entry needed `ws: true` added (the string-shorthand form doesn't proxy WebSocket upgrades).
 - **No production reverse-proxy config exists yet** for this or any other service in the repo —
   tracked as `INFRA-7` (`infra/documentation/BACKLOG_MVP.md`).
 - **`/internal/sync/**` network isolation** (must be unreachable from outside the server's network)

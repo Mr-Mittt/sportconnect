@@ -14,8 +14,14 @@ export default defineConfig({
     proxy: {
       // Chat is a separate service (services/chat, Go + Postgres) the client talks to
       // directly — not proxied through Spring. Registered before the broader '/api' entry
-      // below so it wins the match for this one path prefix.
-      '/api/chat': process.env.VITE_CHAT_PROXY_TARGET ?? 'http://localhost:8081',
+      // below so it wins the match for this one path prefix. ws: true is required (the
+      // string-shorthand form doesn't proxy WebSocket upgrades) — CHAT-7 needs it for
+      // GET /api/chat/conversations/{id}/ws.
+      '/api/chat': {
+        target: process.env.VITE_CHAT_PROXY_TARGET ?? 'http://localhost:8081',
+        changeOrigin: true,
+        ws: true,
+      },
 
       // Forward API calls to the Spring Boot backend during development.
       // MSW-1: Playwright's webServer array sets VITE_API_PROXY_TARGET to
