@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useAuthStore } from '@/app/authStore';
 import { GroupBroadcasts } from '@/shared/components/GroupBroadcasts';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
@@ -29,12 +30,13 @@ const noop = () => {};
  *
  * `FriendContent` (profile + chat) is keyed by `selectedPersonId` so both
  * panels remount on every selection change — resets `FriendProfilePanel`'s
- * local Achievements-collapsed toggle and `FriendChatPanel`'s local mock
- * message list per person, same "remount via key" precedent `GroupChatTab`
- * already uses per selected group.
+ * local Achievements-collapsed toggle, and (since CHAT-9) is what drives
+ * `FriendChatPanel`'s `useDirectChatData` WebSocket connect/disconnect per
+ * person, same "remount via key" precedent `GroupChatTab` uses per group.
  */
 export function FriendsPage() {
   const data = useFriendsPageData();
+  const user = useAuthStore((state) => state.user)!;
 
   const upcomingMatchesQuery = useUpcomingMatches();
   const hashtagsQuery = useTrendingHashtags();
@@ -102,9 +104,7 @@ export function FriendsPage() {
                     />
                   </div>
                   <div className="h-1/2 min-h-0">
-                    <FriendChatPanel
-                      otherPersonFirstName={selectedPerson.fullName.split(' ')[0] ?? selectedPerson.fullName}
-                    />
+                    <FriendChatPanel userId={selectedPerson.id} currentUserId={user.id} />
                   </div>
                 </div>
               );

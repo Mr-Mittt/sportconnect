@@ -45,7 +45,7 @@ original filing's open questions have already been answered.
 | 2 | CHAT-6 | WebSocket broadcast + sync resilience tests | `DONE` |
 | 3 | CHAT-7 | Chat API client + data hooks scaffold (client) | `DONE` |
 | 4 | CHAT-8 | Wire `GroupChatTab` to the real chat service | `DONE` |
-| 5 | CHAT-9 | Wire `FriendChatPanel` to the real chat service (1:1 DMs) | `TODO` |
+| 5 | CHAT-9 | Wire `FriendChatPanel` to the real chat service (1:1 DMs) | `DONE` |
 | 6 | CHAT-13 | Editing and deleting messages | `TODO` |
 | 7 | CHAT-14 | Read receipts | `TODO` |
 | 8 | CHAT-15 | Typing indicators | `TODO` |
@@ -314,7 +314,8 @@ detail: `services/chat/docs/CHAT-8_WIRE_GROUP_CHAT_TAB.md`.
 ---
 
 ### CHAT-9 · Wire `FriendChatPanel` to the real chat service (1:1 DMs)
-**Status:** `TODO` · **Type:** Feature (client) · **Dependency:** CHAT-7
+**Status:** `DONE` (2026-07-27) · **Type:** Feature (client) · **Dependency:** CHAT-7 ·
+**Summary:** `services/chat/docs/CHAT-9_WIRE_FRIEND_CHAT_PANEL.md`
 **Spec:** `client/design-reference/design-reference-friend.html`'s chat panel (already the
 implemented reference)
 
@@ -334,6 +335,20 @@ separate 1:1-only backend.
 **Acceptance criteria:**
 - Same as CHAT-8's, applied to the friends panel: real-time delivery across two sessions, real
   persisted history on reopen, clean UI behavior when the friendship gate fails.
+
+**Delta (structural, same as CHAT-8):** applied CHAT-8's container/presentational split here too —
+`FriendChatPanel` (thin container, calls `useDirectChatData`) + new `FriendChatPanelView`
+(presentational, everything visual). Same reason: no Storybook infra for a real network+WebSocket
+hook, and the panel needs to own the hook call so `FriendsPage`'s `key={selectedPerson.id}` remount
+drives the WebSocket lifecycle.
+
+**Delta (verification, applying CHAT-8's lesson):** live-verified through the real dev proxy
+(`localhost:5173`), not direct to the chat service — three users registered, two made real friends
+via the monolith's request/accept flow, a third left a stranger; the stranger's `open/direct/{id}`
+correctly `403`s through the proxy, the real friend's succeeds, a WebSocket opened through the proxy
+receives a REST-sent message, and pagination (56 messages, 50/6 split) works through the proxy too.
+Not verified this session (no browser tooling connected, same gap as CHAT-8): the actual rendered UI
+in a live browser. Full detail: `services/chat/docs/CHAT-9_WIRE_FRIEND_CHAT_PANEL.md`.
 
 ---
 
