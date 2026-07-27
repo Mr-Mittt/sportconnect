@@ -41,7 +41,7 @@ original filing's open questions have already been answered.
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | CHAT-5 | Repository/cache integration tests (DB-backed) | `TODO` |
+| 1 | CHAT-5 | Repository/cache integration tests (DB-backed) | `DONE` |
 | 2 | CHAT-6 | WebSocket broadcast + sync resilience tests | `TODO` |
 | 3 | CHAT-7 | Chat API client + data hooks scaffold (client) | `TODO` |
 | 4 | CHAT-8 | Wire `GroupChatTab` to the real chat service | `TODO` |
@@ -80,7 +80,8 @@ CHAT-8, CHAT-9, CHAT-13, CHAT-14, CHAT-15, CHAT-16 → CHAT-10 → CHAT-11 → C
 ## Tickets
 
 ### CHAT-5 · Repository/cache integration tests (DB-backed)
-**Status:** `TODO` · **Type:** Testing (backend) · **Dependency:** none
+**Status:** `DONE` (2026-07-27) · **Type:** Testing (backend) · **Dependency:** none ·
+**Summary:** `services/chat/docs/CHAT-5_REPOSITORY_CACHE_INTEGRATION_TESTS.md`
 
 **Origin:** the structural scaffold's `conversation.Repository`, `message.Repository`, and
 `sync.CacheStore` all have real, hand-written SQL, but the only tests that exist
@@ -102,11 +103,36 @@ manual live-verification session recorded in `PROGRESS.md`.
 - Per `services/chat/CLAUDE.md`'s testing convention: run against the real dev Postgres
   (`sportconnect_chat_dev` via the dev compose stack), not a hand-rolled mock — these are
   DB-touching by nature and a mock repository would just test the mock.
+- A `.github/workflows/chat-ci.yml`, this service's first CI pipeline (there is none today —
+  only `server-ci.yml` and `client-ci.yml` exist). Trigger on `services/chat/**` path changes,
+  mirroring `server-ci.yml`'s shape: `actions/setup-go`, then `go build ./...`, `go vet ./...`,
+  `go test ./...`. Unlike `server-ci.yml` (H2 + Testcontainers), this service's new DB-backed
+  tests need a real Postgres, so the workflow needs a `postgres:` service container (with PostGIS
+  if any cache table needs it, plain `postgres:` image otherwise) and the migrations applied
+  before `go test ./...` runs.
 
 **Acceptance criteria:**
 - `go test ./...` green, including these new DB-backed tests, against a running dev Postgres.
 - Each test cleans up its own rows (or runs in a transaction rolled back at the end) — tests must
   not depend on run order or leave state for the next run.
+- `chat-ci.yml` green on a PR touching `services/chat/**`, running build + vet + test against a
+  Postgres service container in the workflow (not just documented as a local manual step).
+
+**Delta (found at pickup):** transactional per-test isolation (the acceptance criteria's "or runs in
+a transaction rolled back at the end") required a small production-code change not spelled out
+above: `conversation.Repository`/`message.Repository`/`sync.CacheStore` held a concrete
+`*pgxpool.Pool` field, which can't be swapped for an open `pgx.Tx` in tests without an interface in
+between. Added `internal/db.Querier`/`TxQuerier` (both already satisfied structurally by
+`*pgxpool.Pool` and `pgx.Tx` — same method signatures) and changed the three repositories' field/
+constructor types to depend on the interface instead of the concrete pool. No behavior change, no
+call-site change in `cmd/chat/main.go`. Full detail:
+`services/chat/docs/CHAT-5_REPOSITORY_CACHE_INTEGRATION_TESTS.md`.
+
+**Delta (H2 question, asked and resolved at pickup):** considered and ruled out — H2 is JVM/JDBC-only
+and this service's driver (`pgx`) speaks Postgres's wire protocol natively with no JDBC bridge;
+`embedded-postgres` (a real-Postgres-binary-per-run library) was also considered as a Docker-free
+alternative but not adopted — kept the real dev-compose Postgres locally / `postgres:16-alpine`
+service container in CI, no new dependency.
 
 ---
 

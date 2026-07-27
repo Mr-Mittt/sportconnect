@@ -5,7 +5,8 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/Mr-Mittt/sportconnect/services/chat/internal/db"
 )
 
 // CacheStore is the only thing in this service allowed to write the
@@ -14,10 +15,10 @@ import (
 // both write through it; internal/conversation and internal/message only
 // ever read through it (see UserProfiles/IsGroupMember/AreFriends below).
 type CacheStore struct {
-	pool *pgxpool.Pool
+	pool db.Querier
 }
 
-func NewCacheStore(pool *pgxpool.Pool) *CacheStore {
+func NewCacheStore(pool db.Querier) *CacheStore {
 	return &CacheStore{pool: pool}
 }
 

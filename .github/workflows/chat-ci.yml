@@ -1,0 +1,77 @@
+# Chat service CI — build + vet + test for the Go chat service (CHAT-5).
+#
+# Deliberately scoped to services/chat/** only, mirroring server-ci.yml and
+# client-ci.yml's per-artifact separation — this workflow never touches
+# modules/ or client/.
+#
+# Unlike server-ci.yml (H2 + Testcontainers), this service's new DB-backed
+# repository/cache tests (internal/conversation, internal/message,
+# internal/sync) need a real Postgres reachable over the actual wire
+# protocol: this service's only driver is pgx, which speaks Postgres
+# natively and has no JDBC/H2 equivalent to fall back to (see
+# services/chat/docs/CHAT-5_REPOSITORY_CACHE_INTEGRATION_TESTS.md). A
+# postgres service container plus golang-migrate provides that real
+# database, matching the same sportconnect_chat_dev name/schema the local
+# dev compose stack seeds.
+
+name: chat-ci
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'services/chat/**'
+      - '.github/workflows/chat-ci.yml'
+  pull_request:
+    paths:
+      - 'services/chat/**'
+      - '.github/workflows/chat-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/chat
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sportconnect_chat_dev
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: sa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      CHAT_DATABASE_URL: postgres://postgres:sa@localhost:5432/sportconnect_chat_dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/chat/go.mod
+          cache-dependency-path: services/chat/go.sum
+
+      - name: Add go install's bin dir to PATH
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install golang-migrate (postgres driver only)
+        run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
+      - name: Apply migrations
+        run: migrate -path migrations -database "${CHAT_DATABASE_URL}?sslmode=disable" up
+
+      - run: go build ./...
+
+      - run: go vet ./...
+
+      - run: go test ./... -v

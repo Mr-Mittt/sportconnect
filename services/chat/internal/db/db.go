@@ -8,8 +8,32 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// Querier is the subset of *pgxpool.Pool's API a repository actually needs.
+// *pgxpool.Pool and pgx.Tx both satisfy it already (same method signatures),
+// so a repository built against Querier instead of the concrete pool type
+// can be handed either the real pool (production) or an open transaction
+// (tests, for cheap per-test rollback isolation — see internal/testdb) with
+// no change to the repository's own code.
+type Querier interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// TxQuerier is Querier plus Begin, for the one repository (conversation) that
+// opens its own nested transaction. pgx.Tx implements Begin as a savepoint,
+// so a TxQuerier backed by an outer test transaction still works correctly:
+// the repository's internal Begin/Commit becomes a savepoint that rolls up
+// into the outer transaction's eventual rollback.
+type TxQuerier interface {
+	Querier
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
 
 // NewPool opens a connection pool sized deliberately small — this service
 // shares a 1GB-RAM production box with the Spring monolith (whose own Hikari

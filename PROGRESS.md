@@ -1661,6 +1661,28 @@ CHAT-15's likely-Redis-not-Postgres design for ephemeral typing state) and needs
 1/2/3 pass at pickup, per root `CLAUDE.md`'s ticket-writing convention. `services/chat/docs/
 BACKLOG_V1.md` is now empty (kept as a file for future deferred ideas, per convention).
 
+**CHAT-5 — Repository/cache integration tests + this service's first CI pipeline (2026-07-27,
+`services/chat/docs/CHAT-5_REPOSITORY_CACHE_INTEGRATION_TESTS.md`):** `internal/conversation`'s,
+`internal/message`'s, and `internal/sync`'s hand-written SQL now has real DB-backed test coverage
+(previously only pure-validation unit tests existed) — idempotent `GetOrCreate*Conversation`,
+`IsActiveParticipant`, `AuthorizeByID`'s three outcomes, keyset pagination, batched sender-profile
+resolution (with an explicit one-query assertion), and every `CacheStore` upsert/delete. Required a
+small, behavior-preserving refactor first: the three repositories now depend on a new
+`internal/db.Querier`/`TxQuerier` interface instead of the concrete `*pgxpool.Pool`, so tests can
+hand them an open `pgx.Tx` (rolled back via `t.Cleanup` after every test, full isolation, verified
+via direct `psql` counts afterward — zero leaked rows) instead of the real pool — no production
+call site changed. Also added `.github/workflows/chat-ci.yml`, this service's first CI pipeline
+(build/vet/test against a `postgres:16-alpine` service container), added mid-ticket after the user
+asked whether chat had CI parity with `server-ci.yml`/`client-ci.yml` (it didn't). H2 was
+considered and ruled out for this service specifically — it's a JVM/JDBC-only database and this
+service's driver (`pgx`) only speaks Postgres's native wire protocol, with no ORM here to abstract
+the gap the way Hibernate does for the monolith's own H2 test profile. `go build`/`go vet`/
+`go test ./...` all green locally. `chat-ci.yml`'s own steps (not just the tests) were separately
+verified by reproducing them locally end to end — a throwaway fresh `postgres:16-alpine` container,
+`golang-migrate` installed and run against it from empty, then build/vet/test — all green; only the
+GitHub-Actions-specific mechanics remain unverified until a real PR runs it (same HF-12-style
+conditional as every other CI ticket in this repo).
+
 **Friends page rail state persistence (2026-07-25, user-requested,
 `client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
 rail's mode (friend list vs. directory search), search text, and selected person — previously all
