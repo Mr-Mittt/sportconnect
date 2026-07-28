@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '@/features/chat/types';
 import { FriendChatPanelView, type FriendChatPanelViewProps } from './FriendChatPanelView';
 
@@ -55,6 +55,8 @@ function baseProps(overrides: Partial<FriendChatPanelViewProps> = {}): FriendCha
     isLoadingOlderMessages: false,
     isLoadOlderMessagesError: false,
     loadOlderMessages: vi.fn(),
+    typingUsers: [],
+    sendTyping: vi.fn(),
     ...overrides,
   };
 }
@@ -87,7 +89,7 @@ describe('FriendChatPanelView', () => {
     expect(screen.queryByText('Ben Nyx')).not.toBeInTheDocument();
   });
 
-  it('aligns the caller\'s own messages left and the other person\'s right (CHAT-13 reversed convention)', () => {
+  it("aligns the caller's own messages left and the other person's right (CHAT-13 reversed convention)", () => {
     render(<FriendChatPanelView {...baseProps({ messages: [otherMessage, ownMessage] })} />);
     const ownRow = screen.getByText('Pickup game Sunday, you in?').closest('.flex.flex-col');
     const otherRow = screen.getByText("I'm in, what time?").closest('.flex.flex-col');
@@ -131,7 +133,11 @@ describe('FriendChatPanelView', () => {
     const user = userEvent.setup();
     render(
       <FriendChatPanelView
-        {...baseProps({ messages: [otherMessage, ownMessage], hasOlderMessages: true, loadOlderMessages })}
+        {...baseProps({
+          messages: [otherMessage, ownMessage],
+          hasOlderMessages: true,
+          loadOlderMessages,
+        })}
       />,
     );
 
@@ -142,14 +148,20 @@ describe('FriendChatPanelView', () => {
   });
 
   it('does not show "Load earlier messages" when no older page exists', () => {
-    render(<FriendChatPanelView {...baseProps({ messages: [ownMessage], hasOlderMessages: false })} />);
+    render(
+      <FriendChatPanelView {...baseProps({ messages: [ownMessage], hasOlderMessages: false })} />,
+    );
     expect(screen.queryByRole('button', { name: 'Load earlier messages' })).not.toBeInTheDocument();
   });
 
   it('shows a disabled "Loading…" affordance while fetching an older page', () => {
     render(
       <FriendChatPanelView
-        {...baseProps({ messages: [ownMessage], hasOlderMessages: true, isLoadingOlderMessages: true })}
+        {...baseProps({
+          messages: [ownMessage],
+          hasOlderMessages: true,
+          isLoadingOlderMessages: true,
+        })}
       />,
     );
     const button = screen.getByRole('button', { name: 'Loading…' });
@@ -175,10 +187,21 @@ describe('FriendChatPanelView', () => {
     expect(loadOlderMessages).toHaveBeenCalled();
   });
 
-  it('shows edit/delete affordances only on the caller\'s own messages', () => {
+  it("shows edit/delete affordances only on the caller's own messages", () => {
     render(<FriendChatPanelView {...baseProps({ messages: [otherMessage, ownMessage] })} />);
     expect(screen.getAllByRole('button', { name: 'Edit message' })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: 'Delete message' })).toHaveLength(1);
+  });
+
+  it('the edit/delete affordance is hidden until hover/focus, positioned at the bottom-right of the bubble', () => {
+    render(<FriendChatPanelView {...baseProps({ messages: [ownMessage] })} />);
+    const editButton = screen.getByRole('button', { name: 'Edit message' });
+    const overlay = editButton.parentElement;
+    expect(overlay).toHaveClass('opacity-0');
+    expect(overlay).toHaveClass('group-hover:opacity-100');
+    expect(overlay).toHaveClass('focus-within:opacity-100');
+    expect(overlay).toHaveClass('absolute');
+    expect(overlay).toHaveClass('right-1');
   });
 
   it('editing a message shows a prefilled inline input, and Save calls editMessage', async () => {
@@ -234,5 +257,64 @@ describe('FriendChatPanelView', () => {
     expect(screen.getByText('Message deleted')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit message' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete message' })).not.toBeInTheDocument();
+  });
+
+  describe('typing indicator (CHAT-15)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('shows nothing when no one is typing', () => {
+      render(<FriendChatPanelView {...baseProps()} />);
+      expect(screen.queryByText(/typing/)).not.toBeInTheDocument();
+    });
+
+    it('shows the other person is typing', () => {
+      render(
+        <FriendChatPanelView
+          {...baseProps({ typingUsers: [{ userId: 'user-2', displayName: 'Priya Shah' }] })}
+        />,
+      );
+      expect(screen.getByText('Priya Shah is typing…')).toBeInTheDocument();
+    });
+
+    it("never shows the caller's own id, even if the (theoretically impossible) server echo happened", () => {
+      render(
+        <FriendChatPanelView
+          {...baseProps({ typingUsers: [{ userId: currentUserId, displayName: 'Ben Nyx' }] })}
+        />,
+      );
+      expect(screen.queryByText(/typing/)).not.toBeInTheDocument();
+    });
+
+    it('sends a start signal once per idle→typing transition, then a stop signal after 5s of no further keystrokes', async () => {
+      vi.useFakeTimers();
+      const sendTyping = vi.fn();
+      render(<FriendChatPanelView {...baseProps({ sendTyping })} />);
+
+      const input = screen.getByLabelText('Message');
+      fireEvent.change(input, { target: { value: 'a' } });
+      expect(sendTyping).toHaveBeenCalledTimes(1);
+      expect(sendTyping).toHaveBeenNthCalledWith(1, true);
+
+      fireEvent.change(input, { target: { value: 'ab' } });
+      expect(sendTyping).toHaveBeenCalledTimes(1); // still just the one start signal
+
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(sendTyping).toHaveBeenCalledTimes(2);
+      expect(sendTyping).toHaveBeenNthCalledWith(2, false);
+    });
+
+    it('sends a stop signal immediately on send, not waiting for the idle timeout', () => {
+      const sendTyping = vi.fn();
+      render(<FriendChatPanelView {...baseProps({ sendTyping })} />);
+
+      const input = screen.getByLabelText('Message');
+      fireEvent.change(input, { target: { value: 'hi' } });
+      expect(sendTyping).toHaveBeenNthCalledWith(1, true);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      expect(sendTyping).toHaveBeenNthCalledWith(2, false);
+    });
   });
 });

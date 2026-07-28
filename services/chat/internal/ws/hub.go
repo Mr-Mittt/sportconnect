@@ -29,7 +29,12 @@ func NewHub() *Hub {
 type Client struct {
 	conn           *websocket.Conn
 	conversationID int64
-	send           chan []byte
+	// UserID identifies which participant this connection belongs to (CHAT-15)
+	// — used by BroadcastExcept to skip every connection of a given user (a
+	// sender's own typing indicator, across however many tabs they have open),
+	// not just one Client instance.
+	UserID string
+	send   chan []byte
 }
 
 // Accept upgrades an HTTP request to a WebSocket connection. allowedOrigin
@@ -44,8 +49,8 @@ func Accept(w http.ResponseWriter, r *http.Request, allowedOrigin string) (*webs
 
 // Join registers a connection as subscribed to conversationID and returns
 // the Client handle used to broadcast to / unregister it.
-func (h *Hub) Join(conversationID int64, conn *websocket.Conn) *Client {
-	c := &Client{conn: conn, conversationID: conversationID, send: make(chan []byte, 16)}
+func (h *Hub) Join(conversationID int64, userID string, conn *websocket.Conn) *Client {
+	c := &Client{conn: conn, conversationID: conversationID, UserID: userID, send: make(chan []byte, 16)}
 
 	h.mu.Lock()
 	if h.rooms[conversationID] == nil {
@@ -77,6 +82,26 @@ func (h *Hub) Broadcast(conversationID int64, payload []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for c := range h.rooms[conversationID] {
+		select {
+		case c.send <- payload:
+		default:
+		}
+	}
+}
+
+// BroadcastExcept is Broadcast's CHAT-15 sibling — fans a payload out to
+// every client subscribed to conversationID except those belonging to
+// excludeUserID (a typing indicator shouldn't echo back to its own sender,
+// unlike a sent message, which Broadcast still does deliberately). Skips
+// every connection of that user, not just one, since the same user can have
+// more than one tab/connection open on the same conversation.
+func (h *Hub) BroadcastExcept(conversationID int64, excludeUserID string, payload []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.rooms[conversationID] {
+		if c.UserID == excludeUserID {
+			continue
+		}
 		select {
 		case c.send <- payload:
 		default:

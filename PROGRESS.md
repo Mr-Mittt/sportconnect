@@ -1835,6 +1835,56 @@ close a second time). Client suite now 97/580, Go `internal/api` +1. Live-reveri
 real proxy: a fresh sent message's raw JSON response now reads `"editedAt":null,"deletedAt":null`
 explicitly.
 
+**CHAT-14 moved back to `BACKLOG_V1.md` (2026-07-28, user decision, at pickup):** read receipts was
+picked up first among the four unscoped CHAT-13..16 tickets, then moved back out of MVP scope before
+any of its open questions were resolved — MVP now ships CHAT-13, CHAT-15, CHAT-16 only from that
+original set of four. No code changed, backlog housekeeping only.
+
+**CHAT-15 — Typing indicators (2026-07-28,
+`services/chat/docs/CHAT-15_TYPING_INDICATORS.md`):** filed unscoped with 3 open questions; resolved
+with the user before any code: purely in-memory/ephemeral (no schema change, no Redis key — a live
+relay through the existing `internal/ws.Hub`), client-driven debounce (5s idle timeout after the last
+keystroke, plus immediate stop on send/blur), group display shows name(s) up to a cap of two then a
+count ("3 people are typing…"), never echoed back to the sender's own connection(s), no privacy
+opt-out. New `Hub.BroadcastExcept` (skips every connection of a given user, not just one, covering
+multiple open tabs) and `POST /conversations/{id}/typing` (reuses the existing membership/friendship
+authorization, resolves the display name from the existing cache, no persistence). Client:
+`useChatConversation` tracks `typingUsers` with a client-side ~8s safety-net expiry per user (guards
+against a dropped stop signal or a mid-typing disconnect); both `GroupChatTabView`/
+`FriendChatPanelView` got the debounce logic and a shared `formatTypingLabel` helper. Go suite green
+(1 new integration test, real two-WS-client setup proving the exclusion). Full client suite green:
+97 test files / 596 tests (17 new). `tsc -b`/`eslint`/`storybook build` all clean. **Not verified this
+session:** a live two-browser-tab check through the real `:5173` dev proxy (no browser tooling
+connected) — the new route follows the exact already-proxied `/conversations/{id}/...` shape, so the
+risk is lower than CHAT-8's own discovered proxy bug, but it hasn't been re-confirmed with a real
+browser; flagged in the ticket doc, not hidden.
+
+**Real bug found via the user's own live testing of CHAT-15, same day:** a long unbroken run of
+characters (e.g. digits with no spaces) in a message overflowed the chat bubble's background instead
+of wrapping — pre-existing since CHAT-8/CHAT-13, not introduced by CHAT-15, just noticed while
+testing it. Root cause: the bubble `<div>` in `GroupChatTabView.tsx`/`FriendChatPanelView.tsx` had
+`max-w-[75%]` but no `overflow-wrap`, so a single "word" too long to fit rendered past the box's right
+edge rather than breaking. Fixed by adding Tailwind's `break-words` to both bubbles. `tsc -b`/`eslint`/
+Vitest (both view test files, 51 tests) all clean.
+
+**Second real bug in the same bubbles, same day (user request → widen, then user-reported regression):**
+asked to widen the bubble from 75% to ~85-90%; changing it to `max-w-[88%]` instead surfaced a
+pre-existing, worse bug — short multi-word messages (e.g. `"sd s"`) started wrapping one word per line
+even though nowhere near the intended width. Root cause: a percentage `max-width` has no reliable
+containing-block width to resolve against in this component's nested flex-column layout (each message
+row shrink-wraps to its own content rather than stretching to the panel's width), so the percentage
+falls back to being sized by the bubble's *longest single word* rather than its actual line width —
+the same ambiguity that (in a different manifestation) let the earlier long-digit-string bug through
+too. Fixed by dropping the percentage entirely in favor of a fixed `max-w-sm` (384px, standard
+Tailwind token) on both bubbles — the same fixed-cap pattern real chat UIs (WhatsApp Web, Slack, etc.)
+already use, and one that has no containing-block ambiguity to resolve. `tsc -b`/`eslint`/Vitest (53
+tests across both view files) all clean.
+
+**Also grouped consecutive same-sender avatars (2026-07-28, user request):** `GroupChatTabView`'s
+avatar now renders only on the last message of a consecutive run from the same sender (the earlier
+messages in that run get an invisible same-size spacer instead, to keep bubble alignment stable) —
+`FriendChatPanelView` untouched (a 1:1 DM never shows an avatar at all). 2 new tests.
+
 **Friends page rail state persistence (2026-07-25, user-requested,
 `client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
 rail's mode (friend list vs. directory search), search text, and selected person — previously all

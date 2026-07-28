@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `services/chat` (Go + Postgres — see `services/chat/CLAUDE.md`)
-**Last updated:** 2026-07-27
+**Last updated:** 2026-07-28
 
 ---
 
@@ -29,11 +29,14 @@ client side (`GroupChatTab.tsx`/`FriendChatPanel.tsx` are still local-state mock
 1:1 direct messages ship, backed by the one already-built schema (`conversations`/`chat_messages`
 cover both in one lineage, see `SYNC_DESIGN.md`). Editing/deleting messages, read receipts, typing
 indicators, and file attachments were initially filed as deferred `BACKLOG_V1.md` tickets, then
-pulled into this MVP the same day (CHAT-13..16 below) — `services/chat/docs/BACKLOG_V1.md` is
-currently empty as a result. None of the four were scoped in detail before this move (each still
-carries open questions to resolve at pickup, same as when filed) — moving them to MVP is a
-priority/sequencing decision, not a design pass; do that work at pickup, not by assuming the
-original filing's open questions have already been answered.
+pulled into this MVP the same day (CHAT-13..16 below). None of the four were scoped in detail
+before this move (each still carries open questions to resolve at pickup, same as when filed) —
+moving them to MVP is a priority/sequencing decision, not a design pass; do that work at pickup, not
+by assuming the original filing's open questions have already been answered.
+
+**Delta (2026-07-28, user decision):** CHAT-14 (read receipts) was moved back out to
+`BACKLOG_V1.md` at pickup, before any of its open questions were resolved — MVP now ships CHAT-13,
+CHAT-15, CHAT-16 only from the original four. `BACKLOG_V1.md` is no longer empty as a result.
 
 ---
 
@@ -47,12 +50,11 @@ original filing's open questions have already been answered.
 | 4 | CHAT-8 | Wire `GroupChatTab` to the real chat service | `DONE` |
 | 5 | CHAT-9 | Wire `FriendChatPanel` to the real chat service (1:1 DMs) | `DONE` |
 | 6 | CHAT-13 | Editing and deleting messages | `DONE` |
-| 7 | CHAT-14 | Read receipts | `TODO` |
-| 8 | CHAT-15 | Typing indicators | `TODO` |
-| 9 | CHAT-16 | File/image attachments | `TODO` |
-| 10 | CHAT-10 | E2E + MSW handlers for chat | `TODO` |
-| 11 | CHAT-11 | Hardening — loading/error/sending states, a11y, visual regression | `TODO` |
-| 12 | CHAT-12 | QA / acceptance checklist (chat) | `TODO` |
+| 7 | CHAT-15 | Typing indicators | `DONE` |
+| 8 | CHAT-16 | File/image attachments | `TODO` |
+| 9 | CHAT-10 | E2E + MSW handlers for chat | `TODO` |
+| 10 | CHAT-11 | Hardening — loading/error/sending states, a11y, visual regression | `TODO` |
+| 11 | CHAT-12 | QA / acceptance checklist (chat) | `TODO` |
 
 **Dependencies:**
 ```
@@ -64,14 +66,14 @@ CHAT-8 ∥ CHAT-9 — no code dependency between them (group chat and direct mes
   longer-standing design reference (design-reference-group-feed.html, since GRP-1) and was the
   original CHAT-1..4 plan's sequencing precedent — pick up CHAT-9 first only if there's a specific
   reason to prioritize direct messages instead.
-CHAT-8, CHAT-9 → CHAT-13, CHAT-14, CHAT-15, CHAT-16 — each of these four builds on top of basic
-  send/receive existing on both surfaces; each needs its own Phase 1/2/3 scoping pass at pickup
-  (per root CLAUDE.md's ticket-writing convention) since none were designed in detail before being
-  moved here, only filed with open questions. No dependency among the four themselves — pick up in
-  any order.
-CHAT-8, CHAT-9, CHAT-13, CHAT-14, CHAT-15, CHAT-16 → CHAT-10 → CHAT-11 → CHAT-12 (E2E/hardening/QA
-  now needs to cover the full feature set, not just basic messaging — sequenced last for that
-  reason, same "wire → test → harden → QA" shape every other client feature in this repo's
+CHAT-8, CHAT-9 → CHAT-15, CHAT-16 — each of these two builds on top of basic send/receive existing
+  on both surfaces; each needs its own Phase 1/2/3 scoping pass at pickup (per root CLAUDE.md's
+  ticket-writing convention) since neither was designed in detail before being moved here, only
+  filed with open questions. No dependency between the two — pick up in any order. (CHAT-14 was
+  moved back to `BACKLOG_V1.md` on 2026-07-28, at pickup, before being scoped — see that file.)
+CHAT-8, CHAT-9, CHAT-13, CHAT-15, CHAT-16 → CHAT-10 → CHAT-11 → CHAT-12 (E2E/hardening/QA
+  now needs to cover the full feature set shipped in MVP, not just basic messaging — sequenced last
+  for that reason, same "wire → test → harden → QA" shape every other client feature in this repo's
   backlogs already follows)
 ```
 
@@ -406,34 +408,14 @@ pattern). Neither was in this ticket's original scope. Full detail:
 ---
 
 ### CHAT-14 · Read receipts
-**Status:** `TODO` · **Type:** Feature (unscoped) · **Dependency:** CHAT-8, CHAT-9
-**Filed:** 2026-07-27, initially as a deferred `BACKLOG_V1.md` ticket, moved into this MVP backlog
-the same day (user decision) — not re-scoped in the move.
-
-#### Questions to resolve when picked up
-
-1. Per-message ("seen by X, Y") or per-conversation ("read up to message N")? The latter is
-   dramatically simpler to store (one `last_read_message_id` per `conversation_participants` row —
-   that table already exists and already has a natural place for this column) and is what most
-   chat products actually show for group conversations; per-message read state is the more complex,
-   Instagram-DM-style option.
-2. Does this need a new real-time event (broadcast "user X has read up to message N" over the
-   existing WebSocket hub), or is a periodic/on-demand fetch enough?
-3. Any privacy control (some products let a user disable sending read receipts while still seeing
-   others') — decide if that's in scope at all before designing storage for it.
-4. Group chat specifically: showing "seen by 8 of 12 members" doesn't scale visually to large
-   groups the same way it does for a 1:1 DM — needs its own design decision, not an assumption that
-   1:1 and group read receipts look the same.
-
-#### Out of scope for this filing
-
-Any actual implementation, schema migration, or API design — needs its own Phase 1/2/3 pass at
-pickup.
+**Moved to `services/chat/docs/BACKLOG_V1.md` on 2026-07-28** (user decision, at pickup, before any
+of its open questions were resolved) — see that file for the ticket in full.
 
 ---
 
 ### CHAT-15 · Typing indicators
-**Status:** `TODO` · **Type:** Feature (unscoped) · **Dependency:** CHAT-8, CHAT-9
+**Status:** `DONE` (2026-07-28) · **Type:** Feature (client + chat service) · **Dependency:** CHAT-8,
+CHAT-9 · **Summary:** `services/chat/docs/CHAT-15_TYPING_INDICATORS.md`
 **Filed:** 2026-07-27, initially as a deferred `BACKLOG_V1.md` ticket, moved into this MVP backlog
 the same day (user decision) — not re-scoped in the move.
 
@@ -453,6 +435,26 @@ the same day (user decision) — not re-scoped in the move.
 #### Out of scope for this filing
 
 Any actual implementation or transport design — needs its own Phase 1/2/3 pass at pickup.
+
+#### Resolved at pickup (2026-07-28, user decisions)
+
+1. **Persistence:** pure in-memory relay through `internal/ws.Hub` — no schema change, no Redis key.
+2. **Debounce/timeout:** client-driven — a 5s idle timeout after the last keystroke, plus an
+   immediate stop on send/blur. No server-side timer.
+3. **Group display:** name(s) up to a cap of two, then a count ("3 people are typing…"). A 1:1 DM
+   only ever shows the single-name case.
+4. **Self-echo:** never — relayed only to the *other* connections on the conversation, unlike
+   message send/edit/delete (which deliberately echo to the sender).
+5. **Privacy opt-out:** out of scope for this ticket.
+
+**Delta (verification gap, flagged not hidden):** no browser tooling was connected this session, so
+the real two-browser-tab check through the actual Vite dev proxy (`:5173`) — the bar CHAT-8/CHAT-9
+established — was not performed. Backend correctness (relay + sender-exclusion + authorization) is
+proven by a real router/real-WebSocket-clients integration test; the client's event handling and
+debounce logic are proven by unit tests. The new REST route follows the exact already-proxied
+`/conversations/{id}/...` shape, so the proxy risk is lower than CHAT-8's own discovered bug (a
+missing path-prefix rewrite entirely), but a manual two-tab pass is still recommended before treating
+this as fully proven in practice. Full detail: `services/chat/docs/CHAT-15_TYPING_INDICATORS.md`.
 
 ---
 
@@ -507,9 +509,10 @@ real this time, in this ticket, not as a deferred footnote.
   Record whichever is chosen and why, so the next chat ticket doesn't re-litigate it.
 - `e2e/flows/group-chat.spec.ts` and `e2e/flows/direct-chat.spec.ts` (one spec per surface, this
   repo's established one-spec-per-feature convention) — send a message, reload, confirm it
-  persisted via the real (mocked) history endpoint; extend to cover whichever of CHAT-13..16
-  actually shipped by the time this ticket is picked up (edit/delete, read receipts, typing,
-  attachments) rather than testing only the original send/receive flow.
+  persisted via the real (mocked) history endpoint; extend to cover whichever of CHAT-13, CHAT-15,
+  CHAT-16 actually shipped by the time this ticket is picked up (edit/delete, typing, attachments —
+  CHAT-14/read receipts is out of MVP scope, moved to `BACKLOG_V1.md`) rather than testing only the
+  original send/receive flow.
 - `client/docs/E2E_OVERVIEW.md` updated (directory listing + per-file test table) per this repo's
   existing convention for every new spec file.
 
@@ -522,12 +525,13 @@ real this time, in this ticket, not as a deferred footnote.
 
 ### CHAT-11 · Hardening — loading/error/sending states, a11y, visual regression
 **Status:** `TODO` · **Type:** Hardening (client) · **Dependency:** CHAT-8, CHAT-9, CHAT-13,
-CHAT-14, CHAT-15, CHAT-16
+CHAT-15, CHAT-16
 
 Same shape as every other feature's hardening ticket in this repo's backlogs (e.g. `FEED-8`,
 `HF-8`): responsive check at 375/768/1280px, keyboard/focus/screen-reader pass on both chat
-surfaces and every new affordance CHAT-13..16 added (edit/delete menu, receipt indicators, typing
-state, attachment picker/preview), a "sending" pending state if `useGroupChatData`/
+surfaces and every new affordance CHAT-13, CHAT-15, CHAT-16 added (edit/delete menu, typing state,
+attachment picker/preview — no receipt indicators, CHAT-14 is out of MVP scope), a "sending"
+pending state if `useGroupChatData`/
 `useDirectChatData` expose one, retry affordance on a failed send/load rather than a dead end.
 Full visual-regression baselines only if these changes visibly alter either design reference beyond
 what CHAT-8/CHAT-9 already captured in their own Storybook updates.
@@ -541,10 +545,12 @@ what CHAT-8/CHAT-9 already captured in their own Storybook updates.
 ---
 
 ### CHAT-12 · QA / acceptance checklist (chat)
-**Status:** `TODO` · **Type:** QA · **Dependency:** CHAT-5 through CHAT-11, CHAT-13 through CHAT-16
+**Status:** `TODO` · **Type:** QA · **Dependency:** CHAT-5 through CHAT-11, CHAT-13, CHAT-15,
+CHAT-16
 
 Full walkthrough checklist before calling the chat feature (not just the service) done — mirrors
 `HF-9`/`FEED-9`'s role in their respective epics: manual pass through both chat surfaces (and every
-feature CHAT-13..16 added) against the real running backend (not just MSW), confirm every
-acceptance criterion across every prior chat ticket is still true together (not just individually,
-per-ticket), and a final `PROGRESS.md` entry closing out the epic.
+feature CHAT-13, CHAT-15, CHAT-16 added — CHAT-14/read receipts is out of MVP scope) against the
+real running backend (not just MSW), confirm every acceptance criterion across every prior chat
+ticket is still true together (not just individually, per-ticket), and a final `PROGRESS.md` entry
+closing out the epic.

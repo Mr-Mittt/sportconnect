@@ -34,16 +34,25 @@ export interface ChatMessage {
   deletedAt: string | null;
 }
 
-// The exact JSON frame pushed over the WebSocket (CHAT-13) — every
-// broadcast is one of these three, telling the client whether `message` is
-// brand new (append) or an edit/delete to something already rendered
-// (find-and-replace in place). Older tickets (CHAT-7/8/9) assumed a bare
-// ChatMessage over the wire; this envelope superseded that in lockstep with
-// the same backend change, see services/chat/internal/api's wsEvent.
-export interface ChatWebSocketEvent {
-  type: 'MESSAGE_CREATED' | 'MESSAGE_EDITED' | 'MESSAGE_DELETED';
-  message: ChatMessage;
+// CHAT-15's typing payload — never persisted, only ever relayed live.
+// displayName is resolved server-side the same way ChatMessage's
+// senderFullName is (never taken from client input).
+export interface TypingEventPayload {
+  conversationId: number;
+  userId: string;
+  displayName: string;
+  isTyping: boolean;
 }
+
+// The exact JSON frame pushed over the WebSocket. MESSAGE_CREATED/EDITED/
+// DELETED (CHAT-13) tell the client whether `message` is brand new (append)
+// or an edit/delete to something already rendered (find-and-replace in
+// place). USER_TYPING (CHAT-15) is a sibling variant with an unrelated
+// `typing` payload, not a fourth message-shaped event — see
+// services/chat/internal/api's wsEvent/wsTypingEvent split.
+export type ChatWebSocketEvent =
+  | { type: 'MESSAGE_CREATED' | 'MESSAGE_EDITED' | 'MESSAGE_DELETED'; message: ChatMessage }
+  | { type: 'USER_TYPING'; typing: TypingEventPayload };
 
 // Not part of the backend contract — local-only state describing the
 // WebSocket connection's lifecycle, exposed by useChatConversation so a

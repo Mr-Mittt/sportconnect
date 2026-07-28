@@ -77,3 +77,24 @@ const (
 	wsEventMessageEdited  = "MESSAGE_EDITED"
 	wsEventMessageDeleted = "MESSAGE_DELETED"
 )
+
+// typingBody is CHAT-15's payload — never persisted, only ever relayed
+// through Hub.BroadcastExcept. DisplayName is resolved server-side the same
+// way messageBody's SenderFullName is (never taken from client input).
+type typingBody struct {
+	ConversationID int64  `json:"conversationId"`
+	UserID         string `json:"userId"`
+	DisplayName    string `json:"displayName"`
+	IsTyping       bool   `json:"isTyping"`
+}
+
+// wsTypingEvent is a sibling envelope to wsEvent, not a variant of it —
+// Message and Typing carry unrelated shapes, and wsEvent's Message field is
+// deliberately left alone (untouched since CHAT-13) rather than made
+// polymorphic for a second event family.
+type wsTypingEvent struct {
+	Type   string     `json:"type"`
+	Typing typingBody `json:"typing"`
+}
+
+const wsEventUserTyping = "USER_TYPING"

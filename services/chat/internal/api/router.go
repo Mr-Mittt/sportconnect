@@ -11,6 +11,7 @@ import (
 	"github.com/Mr-Mittt/sportconnect/services/chat/internal/auth"
 	"github.com/Mr-Mittt/sportconnect/services/chat/internal/conversation"
 	"github.com/Mr-Mittt/sportconnect/services/chat/internal/message"
+	"github.com/Mr-Mittt/sportconnect/services/chat/internal/sync"
 	"github.com/Mr-Mittt/sportconnect/services/chat/internal/ws"
 )
 
@@ -20,6 +21,10 @@ type Dependencies struct {
 	Verifier      *auth.Verifier
 	Conversations *conversation.Service
 	Messages      *message.Service
+	// Cache resolves display names for CHAT-15's typing relay — the same
+	// CacheStore instance message.Service already reads through, just also
+	// handed to the API layer since typing has no message.Service of its own.
+	Cache         *sync.CacheStore
 	Hub           *ws.Hub
 	AllowedOrigin string
 	Logger        *slog.Logger
@@ -48,6 +53,10 @@ func NewRouter(deps Dependencies) http.Handler {
 	// repeat of that comment's wildcard/literal ambiguity to worry about.
 	mux.Handle("PATCH /conversations/{id}/messages/{messageId}", deps.Verifier.Middleware(http.HandlerFunc(h.editMessage)))
 	mux.Handle("DELETE /conversations/{id}/messages/{messageId}", deps.Verifier.Middleware(http.HandlerFunc(h.deleteMessage)))
+	// CHAT-15: distinct 3rd-segment literal ("typing" vs "messages"), same
+	// wildcard position as every other {id}-scoped route above — no repeat of
+	// this file's earlier wildcard/literal-collision comment to worry about.
+	mux.Handle("POST /conversations/{id}/typing", deps.Verifier.Middleware(http.HandlerFunc(h.typing)))
 	mux.Handle("GET /conversations/{id}/ws", deps.Verifier.MiddlewareWS(http.HandlerFunc(h.connectWebSocket)))
 
 	return corsMiddleware(deps.AllowedOrigin, mux)

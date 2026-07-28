@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chatApiClient } from './chatApiClient';
-import type { ChatMessage, ChatWebSocketEvent, Conversation } from './types';
+import type { ChatMessage, ChatWebSocketEvent, Conversation, TypingEventPayload } from './types';
 import { useGroupChatData } from './useGroupChatData';
 
 // Hand-rolled fake — no mock-socket dependency, matches this repo's "don't
@@ -35,12 +35,19 @@ class FakeWebSocket {
     this.onopen?.();
   }
 
-  // Wraps in the {type, message} envelope every real broadcast uses
+  // Wraps in the {type, message} envelope every real message broadcast uses
   // (CHAT-13) — defaults to MESSAGE_CREATED, the shape both existing
   // call sites need (a new message arriving, whether from another
   // participant or echoed back to the sender's own connection).
-  triggerMessage(message: ChatMessage, type: ChatWebSocketEvent['type'] = 'MESSAGE_CREATED'): void {
+  triggerMessage(message: ChatMessage, type: 'MESSAGE_CREATED' | 'MESSAGE_EDITED' | 'MESSAGE_DELETED' = 'MESSAGE_CREATED'): void {
     const event: ChatWebSocketEvent = { type, message };
+    this.onmessage?.({ data: JSON.stringify(event) });
+  }
+
+  // CHAT-15's sibling envelope — a USER_TYPING event never carries a
+  // `message`, only a `typing` payload.
+  triggerTyping(typing: TypingEventPayload): void {
+    const event: ChatWebSocketEvent = { type: 'USER_TYPING', typing };
     this.onmessage?.({ data: JSON.stringify(event) });
   }
 
@@ -335,5 +342,84 @@ describe('useGroupChatData (via useChatConversation)', () => {
     expect(result.current.connectionStatus).toBe('open');
     expect(FakeWebSocket.instances).toHaveLength(2);
     expect(getSpy).toHaveBeenCalledTimes(2);
+  });
+
+  describe('typing indicator (CHAT-15)', () => {
+    it('adds a user to typingUsers on a USER_TYPING start event', async () => {
+      vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+      vi.spyOn(chatApiClient, 'get').mockResolvedValueOnce({ data: [] } as never);
+
+      const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+      await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+      FakeWebSocket.latest().triggerOpen();
+
+      FakeWebSocket.latest().triggerTyping({
+        conversationId: 7,
+        userId: 'user-2',
+        displayName: 'Priya Shah',
+        isTyping: true,
+      });
+
+      await waitFor(() =>
+        expect(result.current.typingUsers).toEqual([{ userId: 'user-2', displayName: 'Priya Shah' }]),
+      );
+    });
+
+    it('removes a user from typingUsers on an explicit stop event', async () => {
+      vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+      vi.spyOn(chatApiClient, 'get').mockResolvedValueOnce({ data: [] } as never);
+
+      const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+      await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+      FakeWebSocket.latest().triggerOpen();
+
+      const typing: TypingEventPayload = {
+        conversationId: 7,
+        userId: 'user-2',
+        displayName: 'Priya Shah',
+        isTyping: true,
+      };
+      FakeWebSocket.latest().triggerTyping(typing);
+      await waitFor(() => expect(result.current.typingUsers).toHaveLength(1));
+
+      FakeWebSocket.latest().triggerTyping({ ...typing, isTyping: false });
+      await waitFor(() => expect(result.current.typingUsers).toEqual([]));
+    });
+
+    it('auto-expires a stale typing entry if no refresh/stop arrives within the safety window', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+      vi.spyOn(chatApiClient, 'get').mockResolvedValueOnce({ data: [] } as never);
+
+      const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+      await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+      FakeWebSocket.latest().triggerOpen();
+
+      FakeWebSocket.latest().triggerTyping({
+        conversationId: 7,
+        userId: 'user-2',
+        displayName: 'Priya Shah',
+        isTyping: true,
+      });
+      await vi.waitFor(() => expect(result.current.typingUsers).toHaveLength(1));
+
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(result.current.typingUsers).toEqual([]);
+    });
+
+    it('sendTyping POSTs to the typing endpoint for the open conversation', async () => {
+      vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+      vi.spyOn(chatApiClient, 'get').mockResolvedValueOnce({ data: [] } as never);
+      const postSpy = vi.spyOn(chatApiClient, 'post');
+
+      const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+      await waitFor(() => expect(result.current.data).toEqual([]));
+
+      result.current.sendTyping(true);
+
+      await waitFor(() =>
+        expect(postSpy).toHaveBeenCalledWith('/conversations/7/typing', { isTyping: true }),
+      );
+    });
   });
 });

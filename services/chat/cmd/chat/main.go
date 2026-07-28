@@ -85,6 +85,7 @@ func main() {
 		Verifier:      verifier,
 		Conversations: convService,
 		Messages:      msgService,
+		Cache:         cache,
 		Hub:           hub,
 		AllowedOrigin: cfg.CORSAllowedOrigin,
 		Logger:        logger,

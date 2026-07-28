@@ -1,9 +1,15 @@
 import { IconPencil, IconTrash } from '@tabler/icons-react';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage } from '@/features/chat/types';
+import { formatTypingLabel, type TypingUser } from '@/features/chat/typingLabel';
+import { useAutoResizeTextarea } from '@/shared/lib/useAutoResizeTextarea';
 import { useInfiniteScrollSentinel } from '@/shared/lib/useInfiniteScrollSentinel';
 import { Button } from '@/shared/ui/button';
-import { Input } from '@/shared/ui/input';
+import { Textarea } from '@/shared/ui/textarea';
+
+// How long after the last keystroke before a "stopped typing" signal is sent
+// automatically (CHAT-15, user decision) — client-driven, no server timer.
+const TYPING_STOP_DELAY_MS = 5000;
 
 export interface FriendChatPanelViewProps {
   /** The signed-in user's id — flags their own messages for the accent
@@ -26,6 +32,10 @@ export interface FriendChatPanelViewProps {
   isLoadingOlderMessages: boolean;
   isLoadOlderMessagesError: boolean;
   loadOlderMessages: () => void;
+  /** The other person, if currently typing (CHAT-15) — will only ever have
+   * at most one entry, a 1:1 DM having exactly one other participant. */
+  typingUsers: TypingUser[];
+  sendTyping: (isTyping: boolean) => void;
 }
 
 /**
@@ -56,14 +66,55 @@ export function FriendChatPanelView({
   isLoadingOlderMessages,
   isLoadOlderMessagesError,
   loadOlderMessages,
+  typingUsers,
+  sendTyping,
 }: FriendChatPanelViewProps) {
   const [draft, setDraft] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
+  const composeTextareaRef = useAutoResizeTextarea(draft);
+  const editTextareaRef = useAutoResizeTextarea(editDraft);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const previousScrollHeightRef = useRef<number | null>(null);
   const previousOldestIdRef = useRef<number | null>(null);
   const previousNewestIdRef = useRef<number | null>(null);
+  const isTypingRef = useRef(false);
+  const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sends TYPING_START once per idle→typing transition (not on every
+  // keystroke) and restarts a 5s idle timer that sends TYPING_STOP — the
+  // client-driven debounce, per CHAT-15's design decision.
+  const notifyTyping = () => {
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      sendTyping(true);
+    }
+    if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+    typingStopTimerRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+      sendTyping(false);
+    }, TYPING_STOP_DELAY_MS);
+  };
+
+  const stopTypingNow = () => {
+    if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      sendTyping(false);
+    }
+  };
+
+  // Signal a stop on unmount (switching panels) rather than leaving the
+  // other side's indicator to expire only via its own timeout.
+  useEffect(() => {
+    return () => {
+      if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        sendTyping(false);
+      }
+    };
+  }, [sendTyping]);
 
   const canLoadOlder = hasOlderMessages && !isLoadingOlderMessages;
   const sentinelRef = useInfiniteScrollSentinel(loadOlderMessages, canLoadOlder);
@@ -91,7 +142,8 @@ export function FriendChatPanelView({
       previousOldestIdRef.current !== null &&
       oldestId !== previousOldestIdRef.current &&
       newestId === previousNewestIdRef.current;
-    const isNewMessage = previousNewestIdRef.current !== null && newestId !== previousNewestIdRef.current;
+    const isNewMessage =
+      previousNewestIdRef.current !== null && newestId !== previousNewestIdRef.current;
 
     if (isInitialLoad || isNewMessage) {
       container.scrollTop = container.scrollHeight;
@@ -109,6 +161,7 @@ export function FriendChatPanelView({
     if (!text) return;
     sendMessage(text);
     setDraft('');
+    stopTypingNow();
   };
 
   const startEditing = (message: ChatMessage) => {
@@ -130,6 +183,7 @@ export function FriendChatPanelView({
   };
 
   const inputDisabled = isLoading || isError;
+  const typingLabel = formatTypingLabel(typingUsers.filter((u) => u.userId !== currentUserId));
 
   return (
     <div className="flex h-full flex-col">
@@ -178,22 +232,32 @@ export function FriendChatPanelView({
                     return (
                       <div
                         key={message.id}
-                        className={`flex flex-col ${isOwn ? 'items-start' : 'items-end'}`}
+                        className={`group flex flex-col ${isOwn ? 'items-start' : 'items-end'}`}
                       >
                         <div
-                          className={`max-w-[75%] rounded-lg px-2.75 py-1.75 text-2sm ${
-                            isOwn ? 'bg-bg-accent text-text-primary' : 'bg-surface-1 text-text-primary'
+                          className={`relative break-words rounded-lg px-2.75 py-1.75 text-2sm ${
+                            isEditingThis ? 'w-[24rem]' : 'max-w-sm'
+                          } ${
+                            isOwn
+                              ? 'bg-bg-accent text-text-primary'
+                              : 'bg-surface-1 text-text-primary'
                           }`}
                         >
                           {isEditingThis ? (
                             <div className="flex flex-col gap-1.5">
-                              <Input
+                              <Textarea
+                                ref={editTextareaRef}
                                 value={editDraft}
                                 onChange={(event) => setEditDraft(event.target.value)}
                                 onKeyDown={(event) => {
-                                  if (event.key === 'Enter') saveEdit();
+                                  if (event.key === 'Enter' && !event.shiftKey) {
+                                    event.preventDefault();
+                                    saveEdit();
+                                  }
                                   if (event.key === 'Escape') cancelEditing();
                                 }}
+                                rows={1}
+                                className="min-h-0 resize-none py-1.5 text-2sm"
                                 aria-label="Edit message content"
                               />
                               <div className="flex gap-1.5">
@@ -233,29 +297,29 @@ export function FriendChatPanelView({
                               )}
                             </>
                           )}
+                          {isOwn && !isDeleted && !isEditingThis && (
+                            <div className="absolute -bottom-2.5 right-1 z-10 flex gap-0.5 rounded-full border-hairline border-border bg-surface-2 px-1 py-0.5 opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                              <button
+                                type="button"
+                                onClick={() => startEditing(message)}
+                                disabled={isEditing || isDeleting}
+                                aria-label="Edit message"
+                                className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
+                              >
+                                <IconPencil className="size-3" aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteMessage(message.id)}
+                                disabled={isEditing || isDeleting}
+                                aria-label="Delete message"
+                                className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
+                              >
+                                <IconTrash className="size-3" aria-hidden="true" />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        {isOwn && !isDeleted && !isEditingThis && (
-                          <div className="mt-0.5 flex gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => startEditing(message)}
-                              disabled={isEditing || isDeleting}
-                              aria-label="Edit message"
-                              className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
-                            >
-                              <IconPencil className="size-3" aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => deleteMessage(message.id)}
-                              disabled={isEditing || isDeleting}
-                              aria-label="Delete message"
-                              className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
-                            >
-                              <IconTrash className="size-3" aria-hidden="true" />
-                            </button>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -264,16 +328,31 @@ export function FriendChatPanelView({
             </>
           )}
         </div>
-        <div className="border-hairline-t flex gap-2 border-border p-2.5">
-          <Input
+        {typingLabel && (
+          <p className="px-3.5 pb-1 text-2xs text-text-muted" aria-live="polite">
+            {typingLabel}
+          </p>
+        )}
+        <div className="border-hairline-t flex items-end gap-2 border-border p-2.5">
+          <Textarea
+            ref={composeTextareaRef}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') send();
+            onChange={(event) => {
+              setDraft(event.target.value);
+              notifyTyping();
             }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                send();
+              }
+            }}
+            onBlur={stopTypingNow}
             placeholder="Message…"
             aria-label="Message"
             disabled={inputDisabled}
+            rows={1}
+            className="min-h-0 resize-none py-2"
           />
           <Button
             variant="primary"
