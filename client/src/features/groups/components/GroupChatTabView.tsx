@@ -1,5 +1,6 @@
-import { IconPencil, IconTrash } from '@tabler/icons-react';
+import { IconCheck, IconPencil, IconTrash, IconX } from '@tabler/icons-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { EmojiPickerButton } from '@/features/chat/components/EmojiPickerButton';
 import type { ChatMessage } from '@/features/chat/types';
 import { formatTypingLabel, type TypingUser } from '@/features/chat/typingLabel';
 import { useAutoResizeTextarea } from '@/shared/lib/useAutoResizeTextarea';
@@ -169,6 +170,19 @@ export function GroupChatTabView({
     previousScrollHeightRef.current = null;
   }, [messages]);
 
+  // Entering edit mode adds brand-new height (the edit box + its Save/
+  // Cancel actions don't exist in the DOM until then) that the scroll
+  // effect above has no reason to re-run for (it's keyed on `messages`,
+  // not editing state) — scroll the newly-appeared actions into view so
+  // editing the last message in a scrolled list doesn't leave them just
+  // below the visible area (found live).
+  useLayoutEffect(() => {
+    if (editingMessageId === null) return;
+    containerRef.current
+      ?.querySelector('[data-edit-actions]')
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [editingMessageId]);
+
   const send = () => {
     const text = draft.trim();
     if (!text) return;
@@ -199,7 +213,7 @@ export function GroupChatTabView({
   const typingLabel = formatTypingLabel(typingUsers.filter((u) => u.userId !== currentUserId));
 
   return (
-    <div className="flex h-105 flex-col">
+    <div className="flex h-full min-h-105 flex-col">
       <div className="border-hairline flex flex-1 flex-col overflow-hidden rounded-xl border-border bg-surface-2">
         <div ref={containerRef} className="flex-1 overflow-y-auto p-3.5">
           {isLoading && <p className="text-2sm text-text-muted">Loading…</p>}
@@ -274,93 +288,98 @@ export function GroupChatTabView({
                             {!isOwn && !isLastOfConsecutiveRun && (
                               <div className="size-6 shrink-0" aria-hidden="true" />
                             )}
-                            <div
-                              className={`relative break-words rounded-lg px-2.75 py-1.75 text-2sm ${
-                                isEditingThis ? 'w-[24rem]' : 'max-w-sm'
-                              } ${
-                                isOwn
-                                  ? 'bg-bg-accent text-text-primary'
-                                  : 'bg-surface-1 text-text-primary'
-                              }`}
-                            >
-                              {isEditingThis ? (
-                                <div className="flex flex-col gap-1.5">
-                                  <Textarea
-                                    ref={editTextareaRef}
-                                    value={editDraft}
-                                    onChange={(event) => setEditDraft(event.target.value)}
-                                    onKeyDown={(event) => {
-                                      if (event.key === 'Enter' && !event.shiftKey) {
-                                        event.preventDefault();
-                                        saveEdit();
-                                      }
-                                      if (event.key === 'Escape') cancelEditing();
-                                    }}
-                                    rows={1}
-                                    className="min-h-0 resize-none py-1.5 text-2sm"
-                                    aria-label="Edit message content"
-                                  />
-                                  <div className="flex gap-1.5">
+                            <div className={`flex flex-col ${isOwn ? 'items-start' : 'items-end'}`}>
+                              {!isOwn && (
+                                <div className="mb-0.5 text-2xs font-medium text-text-primary">
+                                  {message.senderFullName}
+                                </div>
+                              )}
+                              <div
+                                className={`relative break-words rounded-lg px-2.75 py-1.75 text-2sm ${
+                                  isEditingThis ? 'w-[24rem]' : 'max-w-sm'
+                                } ${
+                                  isOwn
+                                    ? 'bg-bg-accent text-text-primary'
+                                    : 'bg-surface-1 text-text-primary'
+                                }`}
+                              >
+                                {isEditingThis ? (
+                                  <div className="flex flex-col gap-1.5">
+                                    <Textarea
+                                      ref={editTextareaRef}
+                                      value={editDraft}
+                                      onChange={(event) => setEditDraft(event.target.value)}
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter' && !event.shiftKey) {
+                                          event.preventDefault();
+                                          saveEdit();
+                                        }
+                                        if (event.key === 'Escape') cancelEditing();
+                                      }}
+                                      rows={1}
+                                      className="min-h-0 resize-none break-words py-1.5 text-2sm"
+                                      aria-label="Edit message content"
+                                    />
+                                    <div
+                                      className="absolute bottom-0 right-0.5 z-10 flex translate-y-1/2 gap-0.5"
+                                      data-edit-actions
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={saveEdit}
+                                        disabled={editDraft.trim().length === 0}
+                                        aria-label="Save edit"
+                                        title="Save"
+                                        className="cursor-pointer rounded p-0.5 text-text-accent hover:text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
+                                      >
+                                        <IconCheck className="size-4.5" aria-hidden="true" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={cancelEditing}
+                                        aria-label="Cancel edit"
+                                        title="Cancel"
+                                        className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                                      >
+                                        <IconX className="size-4.5" aria-hidden="true" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : isDeleted ? (
+                                  <span className="italic text-text-muted">Message deleted</span>
+                                ) : (
+                                  <>
+                                    {message.content}
+                                    {message.editedAt !== null && (
+                                      <span className="ml-1 text-2xs text-text-muted">
+                                        (edited)
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                                {isOwn && !isDeleted && !isEditingThis && (
+                                  <div className="absolute bottom-0 right-0.5 z-10 flex translate-y-1/2 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
                                     <button
                                       type="button"
-                                      onClick={saveEdit}
-                                      disabled={editDraft.trim().length === 0}
-                                      className="cursor-pointer text-2xs font-medium text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
+                                      onClick={() => startEditing(message)}
+                                      disabled={isEditing || isDeleting}
+                                      aria-label="Edit message"
+                                      className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                                     >
-                                      Save
+                                      <IconPencil className="size-4.5" aria-hidden="true" />
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={cancelEditing}
-                                      className="cursor-pointer text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                                      onClick={() => deleteMessage(message.id)}
+                                      disabled={isEditing || isDeleting}
+                                      aria-label="Delete message"
+                                      className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                                     >
-                                      Cancel
+                                      <IconTrash className="size-4.5" aria-hidden="true" />
                                     </button>
                                   </div>
-                                </div>
-                              ) : (
-                                <>
-                                  {!isOwn && (
-                                    <div className="mb-0.5 text-2xs font-medium text-text-primary">
-                                      {message.senderFullName}
-                                    </div>
-                                  )}
-                                  {isDeleted ? (
-                                    <span className="italic text-text-muted">Message deleted</span>
-                                  ) : (
-                                    <>
-                                      {message.content}
-                                      {message.editedAt !== null && (
-                                        <span className="ml-1 text-2xs text-text-muted">
-                                          (edited)
-                                        </span>
-                                      )}
-                                    </>
-                                  )}
-                                </>
-                              )}
-                              {isOwn && !isDeleted && !isEditingThis && (
-                                <div className="absolute -bottom-2.5 right-1 z-10 flex gap-0.5 rounded-full border-hairline border-border bg-surface-2 px-1 py-0.5 opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-                                  <button
-                                    type="button"
-                                    onClick={() => startEditing(message)}
-                                    disabled={isEditing || isDeleting}
-                                    aria-label="Edit message"
-                                    className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
-                                  >
-                                    <IconPencil className="size-3" aria-hidden="true" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteMessage(message.id)}
-                                    disabled={isEditing || isDeleting}
-                                    aria-label="Delete message"
-                                    className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
-                                  >
-                                    <IconTrash className="size-3" aria-hidden="true" />
-                                  </button>
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -378,26 +397,37 @@ export function GroupChatTabView({
           </p>
         )}
         <div className="border-hairline-t flex items-end gap-2 border-border p-2.5">
-          <Textarea
-            ref={composeTextareaRef}
-            value={draft}
-            onChange={(event) => {
-              setDraft(event.target.value);
-              notifyTyping();
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                send();
-              }
-            }}
-            onBlur={stopTypingNow}
-            placeholder="Message the group…"
-            aria-label="Message the group"
-            disabled={inputDisabled}
-            rows={1}
-            className="min-h-0 resize-none py-2"
-          />
+          <div className="relative min-w-0 flex-1">
+            <Textarea
+              ref={composeTextareaRef}
+              value={draft}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                notifyTyping();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  send();
+                }
+              }}
+              onBlur={stopTypingNow}
+              placeholder="Message the group…"
+              aria-label="Message the group"
+              disabled={inputDisabled}
+              rows={1}
+              className="min-h-0 resize-none break-words py-2 pr-9"
+            />
+            <div className="absolute bottom-1.5 right-1.5">
+              <EmojiPickerButton
+                textareaRef={composeTextareaRef}
+                value={draft}
+                onChange={setDraft}
+                onInsert={notifyTyping}
+                disabled={inputDisabled}
+              />
+            </div>
+          </div>
           <Button
             variant="primary"
             size="sm"

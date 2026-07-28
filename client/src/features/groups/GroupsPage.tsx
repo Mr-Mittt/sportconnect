@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useGroupsPageStore } from '@/app/groupsPageStore';
 import { useCancelJoinRequest } from '@/features/feed/hooks/useCancelJoinRequest';
@@ -373,6 +373,34 @@ export function GroupsPage() {
 
   const modalAnchorRef = useRef<HTMLDivElement>(null);
   const modalAnchorBottom = useAnchorBottom(modalAnchorRef);
+  // Chat only (user decision, after Members/Settings/Posts all being forced
+  // to the same viewport-derived height left short tabs with a large empty
+  // gap below them — found live): the group box's height reaches the
+  // browser's bottom edge, so the compose input never needs a page scroll to
+  // reach, but only while the Chat tab is active. A hard `height`, not
+  // `min-height` — GroupChatTabView already scrolls its own message list
+  // internally (unlike Members/Posts), so there's no risk of clipping a
+  // long conversation the way a min-height tab without that internal
+  // scroll would just grow past the viewport instead.
+  const groupChatBoxHeight =
+    modalAnchorBottom !== null ? `calc(100vh - ${modalAnchorBottom}px - 1.5rem)` : undefined;
+
+  // The height above is measured via getBoundingClientRect(), which is
+  // viewport-relative — if the page itself can still scroll, scrolling it
+  // moves the anchor element up, shrinking `modalAnchorBottom` and growing
+  // the computed chat height without bound (found live: "the chat content
+  // keeps extending" while scrolling). Freezing page scroll while Chat is
+  // active removes the only thing that could move the anchor, keeping the
+  // height stable — the message list's own internal scroll (already
+  // present) is what the user actually scrolls at that point.
+  useEffect(() => {
+    if (activeGroupTab !== 'chat' || selectedGroupId === null) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [activeGroupTab, selectedGroupId]);
 
   return (
     <ModalAnchorProvider value={modalAnchorBottom}>
@@ -444,7 +472,10 @@ export function GroupsPage() {
                 isWithdrawingJoinRequest={cancelJoinRequestMutation.isPending}
               />
             ) : (
-              <div className="border-hairline flex gap-3.5 rounded-xl border-border bg-surface-2 p-3.5">
+              <div
+                className="border-hairline flex gap-3.5 rounded-xl border-border bg-surface-2 p-3.5"
+                style={activeGroupTab === 'chat' ? { height: groupChatBoxHeight } : undefined}
+              >
                 <GroupTabs activeTab={activeGroupTab} onChange={guardedSetActiveGroupTab} />
                 <div className="min-w-0 flex-1">
                   {activeGroupTab === 'posts' && (
@@ -707,7 +738,8 @@ export function GroupsPage() {
           onSubmit={(payload) =>
             addSportMutation.mutate(payload, {
               onSuccess: () => {
-                if (sportGate !== null) groupInvitationsData.acceptInvitation(sportGate.invitationId);
+                if (sportGate !== null)
+                  groupInvitationsData.acceptInvitation(sportGate.invitationId);
                 setSportGate(null);
               },
             })

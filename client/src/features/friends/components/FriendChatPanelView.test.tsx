@@ -89,6 +89,15 @@ describe('FriendChatPanelView', () => {
     expect(screen.queryByText('Ben Nyx')).not.toBeInTheDocument();
   });
 
+  it('renders the sender name above the colored bubble, not inside it', () => {
+    render(<FriendChatPanelView {...baseProps({ messages: [otherMessage] })} />);
+    const name = screen.getByText('Priya Shah');
+    const content = screen.getByText("I'm in, what time?");
+    const bubble = content.closest('.rounded-lg');
+    expect(bubble).not.toBeNull();
+    expect(bubble?.contains(name)).toBe(false);
+  });
+
   it("aligns the caller's own messages left and the other person's right (CHAT-13 reversed convention)", () => {
     render(<FriendChatPanelView {...baseProps({ messages: [otherMessage, ownMessage] })} />);
     const ownRow = screen.getByText('Pickup game Sunday, you in?').closest('.flex.flex-col');
@@ -193,7 +202,7 @@ describe('FriendChatPanelView', () => {
     expect(screen.getAllByRole('button', { name: 'Delete message' })).toHaveLength(1);
   });
 
-  it('the edit/delete affordance is hidden until hover/focus, positioned at the bottom-right of the bubble', () => {
+  it("the edit/delete affordance is hidden until hover/focus, positioned inside the bubble's bottom-right corner with no background of its own", () => {
     render(<FriendChatPanelView {...baseProps({ messages: [ownMessage] })} />);
     const editButton = screen.getByRole('button', { name: 'Edit message' });
     const overlay = editButton.parentElement;
@@ -201,7 +210,47 @@ describe('FriendChatPanelView', () => {
     expect(overlay).toHaveClass('group-hover:opacity-100');
     expect(overlay).toHaveClass('focus-within:opacity-100');
     expect(overlay).toHaveClass('absolute');
-    expect(overlay).toHaveClass('right-1');
+    // Half inside/half outside the colored box — anchored exactly on the
+    // bubble's border (bottom-0) then shifted down by half its own height
+    // (translate-y-1/2), the standard "straddle an edge" technique (user
+    // preference). The hover-reveal version is safe to straddle: it's
+    // always present in the DOM (opacity-0 by default), so its protrusion
+    // is already baked into the container's scroll height from first
+    // render — unlike the edit-mode Save/Cancel below, which only appears
+    // once editing starts and needs its own scroll-into-view fix.
+    expect(overlay).toHaveClass('bottom-0');
+    expect(overlay).toHaveClass('translate-y-1/2');
+    expect(overlay).toHaveClass('right-0.5');
+    expect(overlay).not.toHaveClass('-bottom-2.5');
+    // No pill background/border behind the icons (user request) — they
+    // overlay the bubble's own corner directly instead.
+    expect(overlay).not.toHaveClass('bg-surface-2');
+    expect(overlay).not.toHaveClass('rounded-full');
+  });
+
+  it('does not reserve extra bottom padding on own bubbles just to make room for the (hover-only) overlay', () => {
+    render(<FriendChatPanelView {...baseProps({ messages: [ownMessage] })} />);
+    const bubble = screen.getByText('Pickup game Sunday, you in?').closest('.rounded-lg');
+    expect(bubble).toHaveClass('py-1.75');
+    expect(bubble).not.toHaveClass('pb-8');
+  });
+
+  it("the edit box's Save/Cancel overlay also straddles the bubble's border, and scrolls itself into view when editing starts (guards the last-message clipping bug)", async () => {
+    const user = userEvent.setup();
+    const scrollIntoViewSpy = vi.fn();
+    // jsdom has no real layout, so scrollIntoView is a no-op stub there —
+    // spy on it to prove the effect actually calls it, not just that the
+    // markup/positioning looks right.
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewSpy;
+    render(<FriendChatPanelView {...baseProps({ messages: [ownMessage] })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit message' }));
+    const overlay = screen.getByRole('button', { name: 'Save edit' }).parentElement;
+    expect(overlay).toHaveClass('bottom-0');
+    expect(overlay).toHaveClass('translate-y-1/2');
+    expect(overlay).not.toHaveClass('-bottom-2.5');
+    expect(scrollIntoViewSpy).toHaveBeenCalledWith({ block: 'nearest' });
+    expect(overlay).not.toHaveClass('bg-surface-2');
   });
 
   it('editing a message shows a prefilled inline input, and Save calls editMessage', async () => {
@@ -216,7 +265,7 @@ describe('FriendChatPanelView', () => {
 
     await user.clear(editInput);
     await user.type(editInput, 'Pickup game Monday, you in?');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save edit' }));
 
     expect(editMessage).toHaveBeenCalledWith(1, 'Pickup game Monday, you in?');
     expect(screen.queryByLabelText('Edit message content')).not.toBeInTheDocument();
@@ -228,10 +277,32 @@ describe('FriendChatPanelView', () => {
     render(<FriendChatPanelView {...baseProps({ messages: [ownMessage], editMessage })} />);
 
     await user.click(screen.getByRole('button', { name: 'Edit message' }));
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel edit' }));
 
     expect(editMessage).not.toHaveBeenCalled();
     expect(screen.getByText('Pickup game Sunday, you in?')).toBeInTheDocument();
+  });
+
+  it('Save/Cancel are icon-only, with the label available on hover via title', async () => {
+    const user = userEvent.setup();
+    render(<FriendChatPanelView {...baseProps({ messages: [ownMessage] })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit message' }));
+
+    expect(screen.queryByText('Save')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cancel')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save edit' })).toHaveAttribute('title', 'Save');
+    expect(screen.getByRole('button', { name: 'Cancel edit' })).toHaveAttribute('title', 'Cancel');
+  });
+
+  it('wraps unbroken long text instead of overflowing, in both the compose box and the edit box', async () => {
+    const user = userEvent.setup();
+    render(<FriendChatPanelView {...baseProps({ messages: [ownMessage] })} />);
+
+    expect(screen.getByLabelText('Message')).toHaveClass('break-words');
+
+    await user.click(screen.getByRole('button', { name: 'Edit message' }));
+    expect(screen.getByLabelText('Edit message content')).toHaveClass('break-words');
   });
 
   it('clicking Delete calls deleteMessage immediately, with no confirmation step', async () => {
