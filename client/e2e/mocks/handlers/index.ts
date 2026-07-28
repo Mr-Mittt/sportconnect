@@ -1,5 +1,6 @@
 import type { HttpHandler } from 'msw';
 import { authHandlers } from './auth.ts';
+import { chatHandlers } from './chat.ts';
 import { feedHandlers } from './feed.ts';
 import { friendHandlers } from './friends.ts';
 import { groupHandlers } from './groups.ts';
@@ -11,4 +12,5 @@ export const handlers: HttpHandler[] = [
   ...groupHandlers,
   ...sportHandlers,
   ...friendHandlers,
+  ...chatHandlers,
 ];

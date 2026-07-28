@@ -51,8 +51,8 @@ CHAT-15, CHAT-16 only from the original four. `BACKLOG_V1.md` is no longer empty
 | 5 | CHAT-9 | Wire `FriendChatPanel` to the real chat service (1:1 DMs) | `DONE` |
 | 6 | CHAT-13 | Editing and deleting messages | `DONE` |
 | 7 | CHAT-15 | Typing indicators | `DONE` |
-| 8 | CHAT-16 | File/image attachments | `TODO` |
-| 9 | CHAT-10 | E2E + MSW handlers for chat | `TODO` |
+| 8 | CHAT-10 | E2E + MSW handlers for chat | `DONE` |
+| 9 | CHAT-16 | File/image attachments | `TODO` |
 | 10 | CHAT-11 | Hardening — loading/error/sending states, a11y, visual regression | `TODO` |
 | 11 | CHAT-12 | QA / acceptance checklist (chat) | `TODO` |
 
@@ -76,6 +76,17 @@ CHAT-8, CHAT-9, CHAT-13, CHAT-15, CHAT-16 → CHAT-10 → CHAT-11 → CHAT-12 (E
   for that reason, same "wire → test → harden → QA" shape every other client feature in this repo's
   backlogs already follows)
 ```
+
+**Delta (reorder, 2026-07-28, user decision):** CHAT-16 was picked up first per the table order above,
+but its Phase 1 research (see its ticket entry below) found the "reuse the existing media-upload
+path" premise false — there is no working upload pipeline anywhere in this app to wire into, only a
+URL-string field on posts with no upload service behind it. That makes CHAT-16 a materially bigger,
+still-undecided piece of work, so the user chose to swap it with CHAT-10 in the implementation order
+and finish CHAT-10 first instead — CHAT-10's own dependency list (CHAT-8, CHAT-9, CHAT-13, CHAT-15,
+CHAT-16) is unaffected by this reorder except that CHAT-16 hasn't shipped yet at CHAT-10's pickup;
+CHAT-10 picked up now covers CHAT-8/9/13/15's already-shipped surfaces only, and will need a small
+follow-up to extend coverage once CHAT-16 eventually ships (same as how CHAT-14 being out of MVP
+scope already narrows this ticket).
 
 ---
 
@@ -470,16 +481,35 @@ the same day (user decision) — not re-scoped in the move.
    recorded in the archived PubNub plan (`documentation/md/archive/chat/CHAT_SERVICE_INTEGRATION.md`)
    when this was first considered and explicitly scoped out. Confirm that upload path still exists
    and works the same way before assuming it's reusable as-is.
+
+   **Delta (found at first pickup attempt, 2026-07-28):** false premise — confirmed by exhaustive
+   search, there is no working upload pipeline anywhere in this app. `CreatePostRequest.mediaUrls`
+   is a bare `List<String>` field; `PostServiceImpl` just stores whatever URL strings the client
+   already has (inferring `image`/`video` by a `contains("video")` string check) — no
+   `MultipartFile` controller, no storage service, no S3/object-storage bucket for user content
+   exists (`infra/docker-compose.dev.yml` runs only Postgres/PostGIS + Redis; the only S3 in
+   `infra/documentation/INFRA-3_HOSTING_DECISION.md` hosts the client's static build, not user
+   uploads). The client has no upload hook/component either (`CreatePostForm.tsx` is text-only,
+   `CreatePostPayload.mediaUrls` is never populated). This ticket therefore requires building this
+   app's *first* file-upload pipeline (e.g. presigned S3 PUT or a small multipart endpoint), not
+   wiring into an existing one — materially bigger than filed. User chose to defer re-scoping and
+   pick up CHAT-10 first instead (see that ticket's entry and the Dependencies section's reorder
+   Delta above); this question is still open for whoever picks CHAT-16 up next.
+
 2. `chat_messages.content` is `VARCHAR(1000)` with no concept of a non-text payload today — this
    needs either a new nullable `attachment_url`/`attachment_type` column, or a rethink of the
    message shape (e.g. a `type` discriminator: `TEXT` vs `IMAGE` vs `FILE`), which is itself a
    migration and a client-rendering decision, not just a column add.
 3. File size/type limits, and whether attachments get scanned/validated the same way any other
    user-uploaded media in this app already is (if that exists) — don't build a second, weaker
-   upload path.
+   upload path. (Per the delta above: no such existing validation exists to match either — only
+   text-length `@Size` validation exists anywhere in the app today.)
 4. Storage cost/location — same S3 (or wherever this app already stores post images) or something
    chat-specific? Given this project's stated cost-avoidance posture (`infra/documentation/`), reuse
-   existing infrastructure rather than adding a new storage bucket/service.
+   existing infrastructure rather than adding a new storage bucket/service. Per the delta above,
+   "existing infrastructure" means the already-provisioned RDS/EC2/S3(-for-client-build) from
+   INFRA-3, not a working upload feature — decide whether the new upload endpoint targets the
+   existing S3 bucket (new prefix/policy) or something else, at next pickup.
 
 #### Out of scope for this filing
 
@@ -489,8 +519,11 @@ pass at pickup.
 ---
 
 ### CHAT-10 · E2E + MSW handlers for chat
-**Status:** `TODO` · **Type:** Testing (client) · **Dependency:** CHAT-8, CHAT-9, CHAT-13, CHAT-14,
-CHAT-15, CHAT-16
+**Status:** `DONE` (2026-07-28) · **Type:** Testing (client) · **Dependency:** CHAT-8, CHAT-9,
+CHAT-13, CHAT-15 (CHAT-14 moved to `BACKLOG_V1.md`, out of MVP scope; CHAT-16 not yet shipped — see
+the reorder Delta in the Dependencies section above and CHAT-16's own entry. This pickup's E2E scope
+covers CHAT-8/9/13/15's already-shipped surfaces only; CHAT-16 coverage is a follow-up once it ships) ·
+**Summary:** `services/chat/docs/CHAT-10_E2E_MSW_HANDLERS.md`
 
 **Origin:** this repo's E2E convention (`client/CLAUDE.md`) runs entirely against MSW-mocked
 `/api/**` calls, never a live backend — but the chat service is a second host
@@ -520,6 +553,24 @@ real this time, in this ticket, not as a deferred footnote.
 - New specs green under `pnpm e2e`.
 - `a11y.spec.ts` extended if either chat surface introduces new violations at whatever breakpoint
   the existing Groups/Friends page checks already cover — extend only if it actually does.
+
+**Resolved at pickup (2026-07-28, user decisions):**
+1. **WebSocket coverage:** inject a fake, in-page `WebSocket` (`e2e/mocks/fakeChatSocket.ts`), not
+   REST-only scope — a clean fit specifically because the chat client's socket is receive-only
+   (every mutation is REST, see `useChatConversation.ts`), so a fake that fires `onopen` and lets the
+   test drive `onmessage` is a complete substitute for a live second client, not a partial one.
+2. **Feature coverage:** both specs cover every chat feature shipped to date — CHAT-8/9 (send +
+   reload-persisted history), CHAT-13 (edit/delete), CHAT-15 (typing) — not just basic send/receive.
+3. **Error/edge states:** happy-path only in this ticket; failed-send/403-gate coverage is CHAT-11's
+   scope.
+
+**Delta (a11y, found at verify):** a temporary (not committed) axe probe against both the Groups Chat
+tab and an active direct-chat panel, after sending a message, found zero critical/serious violations
+on either — `a11y.spec.ts` itself was **not** extended, consistent with its own "only if it actually
+does" acceptance criterion. CHAT-11 still owns the full a11y/hardening pass for every affordance
+CHAT-13/CHAT-15 added.
+
+Full detail: `services/chat/docs/CHAT-10_E2E_MSW_HANDLERS.md`.
 
 ---
 
