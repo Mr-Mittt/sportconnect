@@ -71,9 +71,9 @@ test('Friends page — rail sections, search, directory search + send request, a
   // A 7th step here used to send a message through FriendChatPanel's old
   // local-state-only mock and assert it didn't persist past a re-selection.
   // CHAT-9 wired the panel to the real chat service (useDirectChatData), so
-  // that premise is no longer true — and there's no /api/chat/** MSW
-  // handler yet for this mock server to answer with, so the panel's input
-  // now stays correctly disabled (isLoading/isError) rather than fill-able.
-  // Real, MSW-backed chat e2e coverage is CHAT-10's explicit scope, not
-  // built yet — see services/chat/docs/BACKLOG_MVP.md.
+  // that premise is no longer true. Real, MSW-backed chat e2e coverage
+  // (including a full direct-chat send/edit/delete/real-time journey) is now
+  // `e2e/flows/direct-chat.spec.ts` (CHAT-10) — not duplicated here, per this
+  // repo's one-spec-per-feature convention (e.g. post-deep-link.spec.ts vs.
+  // the feed spec).
 });

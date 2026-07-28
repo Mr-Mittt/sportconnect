@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { getResponse } from 'msw';
 import { handlers } from './handlers/index.ts';
+import { resetChatHandlersState } from './handlers/chat.ts';
 import { resetFeedSession, seedPostsState } from './handlers/feed.ts';
 import { resetFriendHandlersState } from './handlers/friends.ts';
 import { resetGroupHandlersState, seedJoinRequestsState } from './handlers/groups.ts';
@@ -58,6 +59,7 @@ function resetSession(sessionId: string): void {
   resetGroupHandlersState(sessionId);
   resetSportHandlersState(sessionId);
   resetFriendHandlersState(sessionId);
+  resetChatHandlersState(sessionId);
   resetOverrides(sessionId);
   requestLogs.delete(sessionId);
 }

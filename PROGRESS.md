@@ -1895,6 +1895,24 @@ already (TanStack Query's default `staleTime: 0`, shared cache across route chan
 wiring needed there. A restored selection that no longer resolves to anyone once the reloaded lists
 settle clears back to "no selection" rather than lingering. `pnpm test` 529 green, `tsc -b`/lint clean.
 
+**CHAT-10 — E2E + MSW handlers for chat (2026-07-28,
+`services/chat/docs/CHAT-10_E2E_MSW_HANDLERS.md`):** picked up ahead of its listed order — CHAT-16
+(file/image attachments) was picked up first per the backlog table, but its Phase 1 research found the
+"reuse the existing media-upload path" premise false (no such pipeline exists anywhere in this app);
+the user chose to swap CHAT-10 and CHAT-16's order rather than block on that. Resolved this repo's
+first WebSocket-vs-MSW gap: `useChatConversation`'s socket is receive-only (every mutation is REST), so
+a fake, in-page `WebSocket` (`e2e/mocks/fakeChatSocket.ts`, overrides `window.WebSocket` via
+`page.addInitScript`) is a complete substitute for a live second client, not a partial one — the mock
+server itself needed no WebSocket support. New `e2e/mocks/handlers/chat.ts` (stateful, raw JSON, no
+`ApiResponse<T>` — chat is a separate backend) plus `group-chat.spec.ts`/`direct-chat.spec.ts` (7 steps
+each: empty state, send, reload-persists, edit, delete, simulated real-time push, simulated typing).
+Happy-path only (user decision) — error/edge states are CHAT-11's scope. `playwright.config.ts` also
+gained `VITE_CHAT_PROXY_TARGET` for the mock server's dev-server webServer entry — without it,
+`/api/chat/**` e2e requests silently targeted a real, absent `:8081` chat service. Full e2e suite green
+(48 tests), `tsc -b`/`eslint`/Vitest all clean. A manual (uncommitted) axe probe found zero critical/
+serious violations on either chat surface — `a11y.spec.ts` itself not extended, per its own
+"only if it actually does" criterion; CHAT-11 still owns the full a11y pass.
+
 **Chat service decision** (2026-07-22, archived 2026-07-26 —
 `documentation/md/archive/chat/CHAT_SERVICE_INTEGRATION.md`): **PubNub**
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
@@ -2058,8 +2076,12 @@ explicit go-ahead at each step (full story in A3's summary doc):
   WebSocket broadcast now wraps in a `{type, message}` envelope
   (`MESSAGE_CREATED`/`MESSAGE_EDITED`/`MESSAGE_DELETED`) to support it. Also reversed both surfaces'
   message alignment (own left, others' right) and added a circular avatar for other group members'
-  messages (group chat only), per user request. Full remaining breakdown (read receipts, typing,
-  attachments, E2E, hardening, QA): `services/chat/docs/BACKLOG_MVP.md`.
+  messages (group chat only), per user request. CHAT-15 (`DONE`) added typing indicators (in-memory
+  WebSocket relay, no persistence, client-driven 5s debounce). CHAT-10 (`DONE`, picked up ahead of
+  CHAT-16 — see that entry above) gave both chat surfaces real e2e coverage (`group-chat.spec.ts`/
+  `direct-chat.spec.ts`) against a new MSW backend (`e2e/mocks/handlers/chat.ts`) and resolved the
+  WebSocket-vs-MSW gap via a fake in-page `WebSocket`. Full remaining breakdown (attachments,
+  hardening, QA): `services/chat/docs/BACKLOG_MVP.md`.
 - History: originally scoped as self-hosted WebSocket/Spring STOMP (dependency still sits unused in
   `server/build.gradle`), superseded 2026-07-22 by a PubNub-based plan
   (`documentation/md/archive/chat/CHAT_SERVICE_INTEGRATION.md`, scoped as CHAT-1..4 + DM-1/DM-2),

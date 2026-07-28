@@ -55,8 +55,15 @@ export default defineConfig({
       // MSW-1: routes the app's own /api calls to the mock server instead of
       // the real backend, only for this Playwright-managed dev server —
       // plain `pnpm dev` run standalone never sets this, so it keeps
-      // targeting :8080 (vite.config.ts's own fallback).
-      env: { VITE_API_PROXY_TARGET: MOCK_SERVER_URL },
+      // targeting :8080 (vite.config.ts's own fallback). CHAT-10: same
+      // treatment for the separate /api/chat proxy entry — without this it
+      // silently targeted a real chat service on :8081 that doesn't exist in
+      // CI, so every chat request 404'd/connection-refused before this fix.
+      // The chat MSW handlers (handlers/chat.ts) expect the bare,
+      // prefix-stripped paths vite.config.ts's rewrite already produces —
+      // the same shape whether the target is this mock server or the real
+      // Go service.
+      env: { VITE_API_PROXY_TARGET: MOCK_SERVER_URL, VITE_CHAT_PROXY_TARGET: MOCK_SERVER_URL },
     },
   ],
 });

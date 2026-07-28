@@ -13,7 +13,10 @@ is the living reference, that one is the point-in-time implementation record), `
 (replaces `group-members.spec.ts`'s step 3 with a real search + invite), `GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`
 (new `group-invitations.spec.ts` — the merged approval queue + the Invitations section's accept/reject),
 `GRP-8_INVITATION_LIFECYCLE_POLISH.md` (extends `group-invitations.spec.ts` with 2 new tests + a new
-`seed-join-requests` admin route).
+`seed-join-requests` admin route), `services/chat/docs/CHAT-10_E2E_MSW_HANDLERS.md` (new
+`group-chat.spec.ts`/`direct-chat.spec.ts`, `mocks/handlers/chat.ts`, `mocks/fakeChatSocket.ts` — real,
+MSW-backed e2e coverage for the two chat surfaces CHAT-8/CHAT-9 wired up, including the WebSocket-vs-MSW
+resolution `friends-journey.spec.ts` had flagged as still open).
 
 ---
 
@@ -58,7 +61,14 @@ webServer: [
 2. **Vite dev server** (`pnpm dev`) — same dev server a developer would run by hand, except Playwright
    passes it `VITE_API_PROXY_TARGET` pointing at the mock server. `vite.config.ts` reads that env var
    for its `/api` proxy target, falling back to `http://localhost:8080` (the real backend) when unset —
-   so a bare `pnpm dev` run outside Playwright is completely unaffected by any of this.
+   so a bare `pnpm dev` run outside Playwright is completely unaffected by any of this. **CHAT-10:**
+   also passes `VITE_CHAT_PROXY_TARGET`, the equivalent for the separate `/api/chat` proxy entry
+   (chat is its own backend, `services/chat`, normally `:8081` — without this it silently targeted a
+   real chat service that doesn't exist in CI/most local setups, and every `/api/chat/**` e2e request
+   404'd or connection-refused). Both env vars point at the **same** mock server process — the chat
+   MSW handlers (`handlers/chat.ts`) are matched against bare paths (`/conversations/...`), the same
+   prefix-stripped shape `vite.config.ts`'s `/api/chat` rewrite already produces for the real service,
+   so no separate mock-server instance or route-prefix special-casing is needed.
 
 `reuseExistingServer: !process.env.CI` — locally, if something is already answering on that URL (a
 mock server you started by hand, or a leftover process from an earlier interrupted run), Playwright
@@ -152,6 +162,8 @@ e2e/
     friends-journey.spec.ts
     msw-setup.spec.ts
     post-deep-link.spec.ts
+    group-chat.spec.ts        # CHAT-10
+    direct-chat.spec.ts       # CHAT-10
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
@@ -163,6 +175,7 @@ e2e/
     paginatedFeedFixture.ts   # the 21-post pagination fixture builder
     test.ts                   # custom `test` — session header wiring
     fixtures.ts                # shared mock data + spec-facing helper functions
+    fakeChatSocket.ts          # CHAT-10: fake in-page WebSocket for chat's real-time push
     handlers/
       index.ts                 # combines all handler arrays
       auth.ts
@@ -170,6 +183,7 @@ e2e/
       groups.ts
       sport.ts
       friends.ts
+      chat.ts                   # CHAT-10 — a separate backend (services/chat), bare paths, no ApiResponse<T> envelope
 ```
 
 ---
@@ -430,9 +444,52 @@ Friend Requests), `mockSentFriendRequest` ("Diego Alvarez", outgoing, also Frien
 
 **Removed (CHAT-9, 2026-07-28):** a 7th step asserted `FriendChatPanel`'s old local-state-only mock
 chat didn't persist across a re-selection. CHAT-9 wired the panel to the real chat service
-(`useDirectChatData`), so that premise is no longer true, and there's no `/api/chat/**` MSW handler
-yet for this mock server to answer with — real, MSW-backed chat e2e coverage is `CHAT-10`'s explicit
-scope (`services/chat/docs/BACKLOG_MVP.md`), not built yet.
+(`useDirectChatData`), so that premise is no longer true. Real, MSW-backed chat e2e coverage now lives
+in its own spec — `direct-chat.spec.ts` below (CHAT-10) — not folded back into this file, per this
+repo's one-spec-per-feature convention.
+
+### `e2e/flows/group-chat.spec.ts` (CHAT-10, one `test()` with 7 steps)
+
+Covers `GroupChatTab` (CHAT-8), wired to a new MSW backend for chat (`mocks/handlers/chat.ts` — a
+separate, unwrapped-JSON backend, not the monolith's `ApiResponse<T>`) plus editing/deleting
+(CHAT-13) and typing indicators (CHAT-15). Real-time push is proven via a fake, in-page `WebSocket`
+(`mocks/fakeChatSocket.ts`) rather than a second real browser client — the app's chat socket is
+receive-only (every mutation is REST, see `useChatConversation.ts`), so a fake that fires `onopen`
+and lets the test drive `onmessage` is a complete substitute, not a partial one; the mock server
+itself has no WebSocket support and doesn't need any. Uses `mockGroup` ("Friday Night Football").
+Happy-path only (user decision, 2026-07-28) — failed-send/403-membership-gate states are `CHAT-11`'s
+scope. Attachments (CHAT-16) aren't shipped yet, not covered.
+
+| Step | What it checks | Notes |
+|---|---|---|
+| 1. empty state | "No messages yet." renders | |
+| 2. send | Message appears, composer clears | Real `POST /conversations/:id/messages` against the mock |
+| 3. reload persists | Reload + re-select group + Chat tab → message still there | Proves `GET /conversations/:id/messages` history, not local-only state |
+| 4. edit | Own message's "Edit message" button → edit box → Save → new content + "(edited)" marker | `PATCH /conversations/:id/messages/:messageId` |
+| 5. delete | "Delete message" → "Message deleted" placeholder, original text gone | `DELETE /conversations/:id/messages/:messageId`, content scrubbed |
+| 6. real-time push | `pushChatEvent` simulates a `MESSAGE_CREATED` frame from "Priya Shah" → appears with no reload | Exercises the fake WebSocket, not a REST round trip |
+| 7. typing indicator | `pushChatEvent` simulates `USER_TYPING` start → "Priya Shah is typing…" appears; stop → clears | |
+
+### `e2e/flows/direct-chat.spec.ts` (CHAT-10, one `test()` with 7 steps)
+
+Same shape and scope as `group-chat.spec.ts` above, for `FriendChatPanel` (CHAT-9) instead — see that
+entry for the shared design notes (fake WebSocket, happy-path-only scope, mock chat backend). Uses
+`mockFriend` ("Priya Shah", id `priya-shah`), selected via the Offline section rather than a group
+switcher + tab click.
+
+| Step | What it checks | Notes |
+|---|---|---|
+| 1. empty state | "No messages yet." renders | |
+| 2. send | Message appears, composer clears | |
+| 3. reload persists | Reload + re-select Priya Shah → message still there | |
+| 4. edit | "Edit message" → edit box → Save → new content + "(edited)" marker | |
+| 5. delete | "Delete message" → "Message deleted" placeholder | |
+| 6. real-time push | Simulated `MESSAGE_CREATED` from Priya Shah appears with no reload | |
+| 7. typing indicator | Simulated `USER_TYPING` start/stop shows and clears "Priya Shah is typing…" | |
+
+**Conversation id note (both specs above):** the mock chat session (`handlers/chat.ts`) assigns
+conversation ids starting at `90001`; each test gets a fresh session with exactly one conversation
+opened, so `90001` is deterministic in step 6/7's `pushChatEvent` calls, not a hardcoded guess.
 
 ### `e2e/flows/msw-setup.spec.ts` (proves the mock server itself works)
 
