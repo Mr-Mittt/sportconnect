@@ -60,6 +60,8 @@ const meta = {
     isLoadingOlderMessages: false,
     isLoadOlderMessagesError: false,
     loadOlderMessages: () => {},
+    typingUsers: [],
+    sendTyping: () => {},
   },
 } satisfies Meta<typeof FriendChatPanelView>;
 
@@ -112,4 +114,12 @@ export const LoadOlderMessagesError: Story = {
 /** A send is in flight — Send button reads "Sending…" and is disabled. */
 export const Sending: Story = {
   args: { messages: [otherMessage, ownMessage], isSending: true },
+};
+
+/** The other person is typing. */
+export const OtherPersonTyping: Story = {
+  args: {
+    messages: [otherMessage, ownMessage],
+    typingUsers: [{ userId: 'user-2', displayName: 'Priya Shah' }],
+  },
 };

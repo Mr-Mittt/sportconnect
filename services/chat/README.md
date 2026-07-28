@@ -290,6 +290,17 @@ always the same shape shown under §7's message endpoints, current as of whichev
 happened. This is the wire contract every client must parse; there is no bare-message form anymore
 (CHAT-7/8/9 originally shipped one, superseded in the same change that added edit/delete).
 
+`USER_TYPING` (CHAT-15) is a sibling envelope with an unrelated `typing` payload, not a fourth
+message-shaped variant:
+
+```json
+{ "type": "USER_TYPING", "typing": { "conversationId": 1, "userId": "...", "displayName": "Jordan Lee", "isTyping": true } }
+```
+
+Unlike every other broadcast, this one is **not** sent back to the sender's own connection(s) — see
+`POST /conversations/{id}/typing` below. It's also never persisted; there is no `chat_messages`-style
+row backing it, purely a live relay through `internal/ws.Hub`.
+
 ---
 
 ## 7. API reference
@@ -435,6 +446,28 @@ in §6.4. See §6.4 — this connection is receive-only from the client's perspe
 `?token=<token>` as a query parameter (§6.1) — the one concession to browsers' native `WebSocket`
 API not supporting custom handshake headers. The header wins if both are present.
 
+### `POST /conversations/{id}/typing` (CHAT-15)
+
+Signals that the caller started or stopped typing in conversation `id`. Same conversation-scoped
+authorization as every other endpoint above (re-checked on every call, not cached from when the
+conversation was opened). Purely a live relay — nothing is persisted, and there is no `GET`
+counterpart; a client that reconnects mid-typing simply sees nothing until the next signal arrives.
+
+**Request body:**
+```json
+{ "isTyping": true }
+```
+
+**Response `204 No Content`** — nothing to return.
+
+Broadcasts a `{"type": "USER_TYPING", "typing": {...}}` envelope (§6.4) to every *other* connection
+on the conversation — deliberately excluding every connection belonging to the caller themselves
+(unlike message send/edit/delete, which do echo back to the sender). `displayName` is resolved
+server-side from `user_profiles_cache`, same as `senderFullName` on a message — never taken from the
+request body.
+
+**Errors:** `403 Forbidden` — caller no longer allowed in this conversation.
+
 ---
 
 ## 8. Current status
@@ -471,7 +504,9 @@ up-to-the-day ticket state if this drifts):
   found and fixed two things this section used to gloss over: the JWT-algorithm bug described in
   §6.1, and `vite.config.ts`'s `/api/chat` proxy entry needed `ws: true` added (the string-shorthand
   form doesn't proxy WebSocket upgrades) — a further proxy bug (missing path-prefix `rewrite`) was
-  found and fixed at CHAT-8.
+  found and fixed at CHAT-8. `CHAT-15` (`DONE`) added typing indicators on both surfaces — ephemeral,
+  in-memory only (no schema change, no Redis), client-driven 5s idle timeout plus a client-side
+  safety-net expiry for a dropped stop signal/disconnect, "name(s), then a count" group display.
 - **No production reverse-proxy config exists yet** for this or any other service in the repo —
   tracked as `INFRA-7` (`infra/documentation/BACKLOG_MVP.md`).
 - **`/internal/sync/**` network isolation** (must be unreachable from outside the server's network)

@@ -10,7 +10,7 @@ const ownMessage: ChatMessage = {
   senderId: currentUserId,
   senderFullName: 'Ben Nyx',
   senderAvatarUrl: null,
-  content: "Hey team, ready for Sunday?",
+  content: 'Hey team, ready for Sunday?',
   createdAt: '2026-07-26T10:15:00Z',
   editedAt: null,
   deletedAt: null,
@@ -22,7 +22,7 @@ const otherMessage: ChatMessage = {
   senderId: 'user-2',
   senderFullName: 'Priya Shah',
   senderAvatarUrl: null,
-  content: "Yep, see you at 9!",
+  content: 'Yep, see you at 9!',
   createdAt: '2026-07-26T10:16:00Z',
   editedAt: null,
   deletedAt: null,
@@ -60,6 +60,8 @@ const meta = {
     isLoadingOlderMessages: false,
     isLoadOlderMessagesError: false,
     loadOlderMessages: () => {},
+    typingUsers: [],
+    sendTyping: () => {},
   },
 } satisfies Meta<typeof GroupChatTabView>;
 
@@ -101,15 +103,59 @@ export const HasOlderMessages: Story = {
 
 /** Loading an older page after clicking "Load earlier messages". */
 export const LoadingOlderMessages: Story = {
-  args: { messages: [otherMessage, ownMessage], hasOlderMessages: true, isLoadingOlderMessages: true },
+  args: {
+    messages: [otherMessage, ownMessage],
+    hasOlderMessages: true,
+    isLoadingOlderMessages: true,
+  },
 };
 
 /** Loading an older page failed — a Retry affordance replaces the button. */
 export const LoadOlderMessagesError: Story = {
-  args: { messages: [otherMessage, ownMessage], hasOlderMessages: true, isLoadOlderMessagesError: true },
+  args: {
+    messages: [otherMessage, ownMessage],
+    hasOlderMessages: true,
+    isLoadOlderMessagesError: true,
+  },
 };
 
 /** A send is in flight — Send button reads "Sending…" and is disabled. */
 export const Sending: Story = {
   args: { messages: [otherMessage, ownMessage], isSending: true },
+};
+
+/** One other member is typing. */
+export const OneMemberTyping: Story = {
+  args: {
+    messages: [otherMessage, ownMessage],
+    typingUsers: [{ userId: 'user-2', displayName: 'Priya Shah' }],
+  },
+};
+
+/** Three or more members typing at once collapses to a count instead of listing every name. */
+export const MultipleMembersTyping: Story = {
+  args: {
+    messages: [otherMessage, ownMessage],
+    typingUsers: [
+      { userId: 'user-2', displayName: 'Priya Shah' },
+      { userId: 'user-3', displayName: 'Jordan Lee' },
+      { userId: 'user-4', displayName: 'Sam Ortiz' },
+    ],
+  },
+};
+
+/** Two consecutive messages from the same member show one avatar, on the last message only. */
+export const ConsecutiveMessagesFromSameSender: Story = {
+  args: {
+    messages: [
+      otherMessage,
+      {
+        ...otherMessage,
+        id: 5,
+        content: 'Also bring a ball if you have one',
+        createdAt: '2026-07-26T10:16:30Z',
+      },
+      ownMessage,
+    ],
+  },
 };

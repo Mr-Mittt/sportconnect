@@ -242,6 +242,63 @@ func (h *handlers) messageHistory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, responses)
 }
 
+type typingRequest struct {
+	IsTyping bool `json:"isTyping"`
+}
+
+// typing is CHAT-15's relay: no persistence, no message.Service involvement
+// — just re-checks conversation membership (same reasoning as every other
+// handler here), resolves the caller's display name, and fans the signal out
+// to every *other* connection on the conversation via BroadcastExcept, never
+// back to the sender's own connection(s).
+func (h *handlers) typing(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthenticated", http.StatusUnauthorized)
+		return
+	}
+
+	conversationID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid conversation id", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := h.deps.Conversations.AuthorizeByID(r.Context(), conversationID, claims.Subject); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	var body typingRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	profiles, err := h.deps.Cache.UserProfiles(r.Context(), []string{claims.Subject})
+	if err != nil {
+		h.deps.Logger.Error("failed to resolve display name for typing event", "error", err)
+	}
+
+	payload, err := json.Marshal(wsTypingEvent{
+		Type: wsEventUserTyping,
+		Typing: typingBody{
+			ConversationID: conversationID,
+			UserID:         claims.Subject,
+			DisplayName:    profiles[claims.Subject].FullName,
+			IsTyping:       body.IsTyping,
+		},
+	})
+	if err != nil {
+		h.deps.Logger.Error("failed to marshal typing event for broadcast", "error", err)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	h.deps.Hub.BroadcastExcept(conversationID, claims.Subject, payload)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *handlers) connectWebSocket(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.FromContext(r.Context())
 	if !ok {
@@ -267,7 +324,7 @@ func (h *handlers) connectWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.CloseNow()
 
-	client := h.deps.Hub.Join(conversationID, conn)
+	client := h.deps.Hub.Join(conversationID, claims.Subject, conn)
 	defer h.deps.Hub.Leave(client)
 
 	ctx, cancel := context.WithCancel(r.Context())

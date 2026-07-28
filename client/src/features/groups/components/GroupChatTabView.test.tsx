@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '@/features/chat/types';
 import { GroupChatTabView, type GroupChatTabViewProps } from './GroupChatTabView';
 
@@ -55,6 +55,8 @@ function baseProps(overrides: Partial<GroupChatTabViewProps> = {}): GroupChatTab
     isLoadingOlderMessages: false,
     isLoadOlderMessagesError: false,
     loadOlderMessages: vi.fn(),
+    typingUsers: [],
+    sendTyping: vi.fn(),
     ...overrides,
   };
 }
@@ -87,7 +89,28 @@ describe('GroupChatTabView', () => {
     expect(screen.queryByText('Ben Nyx')).not.toBeInTheDocument();
   });
 
-  it('aligns the caller\'s own messages left and other members\' right (CHAT-13 reversed convention)', () => {
+  it('renders the sender name above the colored bubble, not inside it', () => {
+    render(<GroupChatTabView {...baseProps({ messages: [otherMessage] })} />);
+    const name = screen.getByText('Priya Shah');
+    const content = screen.getByText('Yep, see you at 9!');
+    const bubble = content.closest('.rounded-lg');
+    expect(bubble).not.toBeNull();
+    expect(bubble?.contains(name)).toBe(false);
+  });
+
+  it('aligns the sender name with the bubble specifically, not with the avatar sitting further right', () => {
+    render(<GroupChatTabView {...baseProps({ messages: [otherMessage] })} />);
+    const name = screen.getByText('Priya Shah');
+    const bubble = screen.getByText('Yep, see you at 9!').closest('.rounded-lg');
+    const avatarInitials = screen.getByText('PS');
+
+    const nameColumn = name.parentElement;
+    expect(nameColumn).toHaveClass('items-end');
+    expect(bubble && nameColumn?.contains(bubble)).toBe(true);
+    expect(nameColumn?.contains(avatarInitials)).toBe(false);
+  });
+
+  it("aligns the caller's own messages left and other members' right (CHAT-13 reversed convention)", () => {
     render(<GroupChatTabView {...baseProps({ messages: [otherMessage, ownMessage] })} />);
     const ownRow = screen.getByText('Hey team, ready for Sunday?').closest('.flex.flex-col');
     const otherRow = screen.getByText('Yep, see you at 9!').closest('.flex.flex-col');
@@ -95,13 +118,87 @@ describe('GroupChatTabView', () => {
     expect(otherRow).toHaveClass('items-end');
   });
 
-  it('shows an avatar for other members\' messages but not the caller\'s own', () => {
+  it("shows an avatar for other members' messages but not the caller's own", () => {
     render(<GroupChatTabView {...baseProps({ messages: [otherMessage, ownMessage] })} />);
     // Radix Avatar's <img> never fires a real load event in jsdom, so the
     // fallback (initials) is what actually renders — a reliable proxy for
     // "an avatar is present here" without depending on image loading.
     expect(screen.getByText('PS')).toBeInTheDocument();
     expect(screen.queryByText('BN')).not.toBeInTheDocument();
+  });
+
+  it('shows an avatar only on the last message of a consecutive run from the same sender', () => {
+    const firstOfRun = otherMessage;
+    const secondOfRun: ChatMessage = { ...otherMessage, id: 5, content: 'One more thing' };
+    render(<GroupChatTabView {...baseProps({ messages: [firstOfRun, secondOfRun] })} />);
+
+    expect(screen.getByText('Yep, see you at 9!')).toBeInTheDocument();
+    expect(screen.getByText('One more thing')).toBeInTheDocument();
+    expect(screen.getAllByText('PS')).toHaveLength(1); // one avatar, not two
+  });
+
+  it('gives each sender their own avatar once a different sender interrupts the run', () => {
+    const fromPriya = otherMessage;
+    const fromJordan: ChatMessage = {
+      ...otherMessage,
+      id: 6,
+      senderId: 'user-3',
+      senderFullName: 'Jordan Lee',
+      content: 'Count me in too',
+    };
+    render(<GroupChatTabView {...baseProps({ messages: [fromPriya, fromJordan] })} />);
+
+    expect(screen.getByText('PS')).toBeInTheDocument();
+    expect(screen.getByText('JL')).toBeInTheDocument();
+  });
+
+  it('shows the sender name only on the first message of a consecutive run', () => {
+    const firstOfRun = otherMessage;
+    const secondOfRun: ChatMessage = { ...otherMessage, id: 5, content: 'One more thing' };
+    render(<GroupChatTabView {...baseProps({ messages: [firstOfRun, secondOfRun] })} />);
+
+    expect(screen.getAllByText('Priya Shah')).toHaveLength(1); // one name label, not two
+  });
+
+  it('shows a new name label once a different sender interrupts the run', () => {
+    const fromPriya = otherMessage;
+    const fromJordan: ChatMessage = {
+      ...otherMessage,
+      id: 6,
+      senderId: 'user-3',
+      senderFullName: 'Jordan Lee',
+      content: 'Count me in too',
+    };
+    render(<GroupChatTabView {...baseProps({ messages: [fromPriya, fromJordan] })} />);
+
+    expect(screen.getByText('Priya Shah')).toBeInTheDocument();
+    expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
+  });
+
+  it('adds extra top margin only when a new run starts, not between messages within the same run', () => {
+    const firstOfRun = otherMessage;
+    const secondOfRun: ChatMessage = { ...otherMessage, id: 5, content: 'One more thing' };
+    render(<GroupChatTabView {...baseProps({ messages: [firstOfRun, secondOfRun] })} />);
+
+    const firstRow = screen.getByText('Yep, see you at 9!').closest('.group');
+    const secondRow = screen.getByText('One more thing').closest('.group');
+    expect(firstRow).not.toHaveClass('mt-2'); // very first message overall, no extra margin
+    expect(secondRow).not.toHaveClass('mt-2'); // continues the same run
+  });
+
+  it('adds extra top margin on the first message of a new run (not the very first message overall)', () => {
+    const fromPriya = otherMessage;
+    const fromJordan: ChatMessage = {
+      ...otherMessage,
+      id: 6,
+      senderId: 'user-3',
+      senderFullName: 'Jordan Lee',
+      content: 'Count me in too',
+    };
+    render(<GroupChatTabView {...baseProps({ messages: [fromPriya, fromJordan] })} />);
+
+    const jordanRow = screen.getByText('Count me in too').closest('.group');
+    expect(jordanRow).toHaveClass('mt-2');
   });
 
   it('sends a message and clears the draft', async () => {
@@ -140,7 +237,11 @@ describe('GroupChatTabView', () => {
     const user = userEvent.setup();
     render(
       <GroupChatTabView
-        {...baseProps({ messages: [otherMessage, ownMessage], hasOlderMessages: true, loadOlderMessages })}
+        {...baseProps({
+          messages: [otherMessage, ownMessage],
+          hasOlderMessages: true,
+          loadOlderMessages,
+        })}
       />,
     );
 
@@ -151,14 +252,20 @@ describe('GroupChatTabView', () => {
   });
 
   it('does not show "Load earlier messages" when no older page exists', () => {
-    render(<GroupChatTabView {...baseProps({ messages: [ownMessage], hasOlderMessages: false })} />);
+    render(
+      <GroupChatTabView {...baseProps({ messages: [ownMessage], hasOlderMessages: false })} />,
+    );
     expect(screen.queryByRole('button', { name: 'Load earlier messages' })).not.toBeInTheDocument();
   });
 
   it('shows a disabled "Loading…" affordance while fetching an older page', () => {
     render(
       <GroupChatTabView
-        {...baseProps({ messages: [ownMessage], hasOlderMessages: true, isLoadingOlderMessages: true })}
+        {...baseProps({
+          messages: [ownMessage],
+          hasOlderMessages: true,
+          isLoadingOlderMessages: true,
+        })}
       />,
     );
     const button = screen.getByRole('button', { name: 'Loading…' });
@@ -184,10 +291,61 @@ describe('GroupChatTabView', () => {
     expect(loadOlderMessages).toHaveBeenCalled();
   });
 
-  it('shows edit/delete affordances only on the caller\'s own messages', () => {
+  it("shows edit/delete affordances only on the caller's own messages", () => {
     render(<GroupChatTabView {...baseProps({ messages: [otherMessage, ownMessage] })} />);
     expect(screen.getAllByRole('button', { name: 'Edit message' })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: 'Delete message' })).toHaveLength(1);
+  });
+
+  it("the edit/delete affordance is hidden until hover/focus, positioned inside the bubble's bottom-right corner with no background of its own", () => {
+    render(<GroupChatTabView {...baseProps({ messages: [ownMessage] })} />);
+    const editButton = screen.getByRole('button', { name: 'Edit message' });
+    const overlay = editButton.parentElement;
+    expect(overlay).toHaveClass('opacity-0');
+    expect(overlay).toHaveClass('group-hover:opacity-100');
+    expect(overlay).toHaveClass('focus-within:opacity-100');
+    expect(overlay).toHaveClass('absolute');
+    // Half inside/half outside the colored box — anchored exactly on the
+    // bubble's border (bottom-0) then shifted down by half its own height
+    // (translate-y-1/2), the standard "straddle an edge" technique (user
+    // preference). The hover-reveal version is safe to straddle: it's
+    // always present in the DOM (opacity-0 by default), so its protrusion
+    // is already baked into the container's scroll height from first
+    // render — unlike the edit-mode Save/Cancel below, which only appears
+    // once editing starts and needs its own scroll-into-view fix.
+    expect(overlay).toHaveClass('bottom-0');
+    expect(overlay).toHaveClass('translate-y-1/2');
+    expect(overlay).toHaveClass('right-0.5');
+    expect(overlay).not.toHaveClass('-bottom-2.5');
+    // No pill background/border behind the icons (user request) — they
+    // overlay the bubble's own corner directly instead.
+    expect(overlay).not.toHaveClass('bg-surface-2');
+    expect(overlay).not.toHaveClass('rounded-full');
+  });
+
+  it('does not reserve extra bottom padding on own bubbles just to make room for the (hover-only) overlay', () => {
+    render(<GroupChatTabView {...baseProps({ messages: [ownMessage] })} />);
+    const bubble = screen.getByText('Hey team, ready for Sunday?').closest('.rounded-lg');
+    expect(bubble).toHaveClass('py-1.75');
+    expect(bubble).not.toHaveClass('pb-8');
+  });
+
+  it("the edit box's Save/Cancel overlay also straddles the bubble's border, and scrolls itself into view when editing starts (guards the last-message clipping bug)", async () => {
+    const user = userEvent.setup();
+    const scrollIntoViewSpy = vi.fn();
+    // jsdom has no real layout, so scrollIntoView is a no-op stub there —
+    // spy on it to prove the effect actually calls it, not just that the
+    // markup/positioning looks right.
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewSpy;
+    render(<GroupChatTabView {...baseProps({ messages: [ownMessage] })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit message' }));
+    const overlay = screen.getByRole('button', { name: 'Save edit' }).parentElement;
+    expect(overlay).toHaveClass('bottom-0');
+    expect(overlay).toHaveClass('translate-y-1/2');
+    expect(overlay).not.toHaveClass('-bottom-2.5');
+    expect(scrollIntoViewSpy).toHaveBeenCalledWith({ block: 'nearest' });
+    expect(overlay).not.toHaveClass('bg-surface-2');
   });
 
   it('editing a message shows a prefilled inline input, and Save calls editMessage', async () => {
@@ -202,7 +360,7 @@ describe('GroupChatTabView', () => {
 
     await user.clear(editInput);
     await user.type(editInput, 'Hey team, ready for Monday?');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save edit' }));
 
     expect(editMessage).toHaveBeenCalledWith(1, 'Hey team, ready for Monday?');
     expect(screen.queryByLabelText('Edit message content')).not.toBeInTheDocument();
@@ -214,10 +372,32 @@ describe('GroupChatTabView', () => {
     render(<GroupChatTabView {...baseProps({ messages: [ownMessage], editMessage })} />);
 
     await user.click(screen.getByRole('button', { name: 'Edit message' }));
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel edit' }));
 
     expect(editMessage).not.toHaveBeenCalled();
     expect(screen.getByText('Hey team, ready for Sunday?')).toBeInTheDocument();
+  });
+
+  it('Save/Cancel are icon-only, with the label available on hover via title', async () => {
+    const user = userEvent.setup();
+    render(<GroupChatTabView {...baseProps({ messages: [ownMessage] })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit message' }));
+
+    expect(screen.queryByText('Save')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cancel')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save edit' })).toHaveAttribute('title', 'Save');
+    expect(screen.getByRole('button', { name: 'Cancel edit' })).toHaveAttribute('title', 'Cancel');
+  });
+
+  it('wraps unbroken long text instead of overflowing, in both the compose box and the edit box', async () => {
+    const user = userEvent.setup();
+    render(<GroupChatTabView {...baseProps({ messages: [ownMessage] })} />);
+
+    expect(screen.getByLabelText('Message the group')).toHaveClass('break-words');
+
+    await user.click(screen.getByRole('button', { name: 'Edit message' }));
+    expect(screen.getByLabelText('Edit message content')).toHaveClass('break-words');
   });
 
   it('clicking Delete calls deleteMessage immediately, with no confirmation step', async () => {
@@ -243,5 +423,93 @@ describe('GroupChatTabView', () => {
     expect(screen.getByText('Message deleted')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit message' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete message' })).not.toBeInTheDocument();
+  });
+
+  describe('typing indicator (CHAT-15)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('shows nothing when no one is typing', () => {
+      render(<GroupChatTabView {...baseProps()} />);
+      expect(screen.queryByText(/typing/)).not.toBeInTheDocument();
+    });
+
+    it("shows one other member's name", () => {
+      render(
+        <GroupChatTabView
+          {...baseProps({ typingUsers: [{ userId: 'user-2', displayName: 'Priya Shah' }] })}
+        />,
+      );
+      expect(screen.getByText('Priya Shah is typing…')).toBeInTheDocument();
+    });
+
+    it('shows both names for two typing members', () => {
+      render(
+        <GroupChatTabView
+          {...baseProps({
+            typingUsers: [
+              { userId: 'user-2', displayName: 'Priya Shah' },
+              { userId: 'user-3', displayName: 'Jordan Lee' },
+            ],
+          })}
+        />,
+      );
+      expect(screen.getByText('Priya Shah and Jordan Lee are typing…')).toBeInTheDocument();
+    });
+
+    it('collapses to a count for three or more typing members', () => {
+      render(
+        <GroupChatTabView
+          {...baseProps({
+            typingUsers: [
+              { userId: 'user-2', displayName: 'Priya Shah' },
+              { userId: 'user-3', displayName: 'Jordan Lee' },
+              { userId: 'user-4', displayName: 'Sam Ortiz' },
+            ],
+          })}
+        />,
+      );
+      expect(screen.getByText('3 people are typing…')).toBeInTheDocument();
+    });
+
+    it("never shows the caller's own id, even if the (theoretically impossible) server echo happened", () => {
+      render(
+        <GroupChatTabView
+          {...baseProps({ typingUsers: [{ userId: currentUserId, displayName: 'Ben Nyx' }] })}
+        />,
+      );
+      expect(screen.queryByText(/typing/)).not.toBeInTheDocument();
+    });
+
+    it('sends a start signal once per idle→typing transition, then a stop signal after 5s of no further keystrokes', async () => {
+      vi.useFakeTimers();
+      const sendTyping = vi.fn();
+      render(<GroupChatTabView {...baseProps({ sendTyping })} />);
+
+      const input = screen.getByLabelText('Message the group');
+      fireEvent.change(input, { target: { value: 'a' } });
+      expect(sendTyping).toHaveBeenCalledTimes(1);
+      expect(sendTyping).toHaveBeenNthCalledWith(1, true);
+
+      fireEvent.change(input, { target: { value: 'ab' } });
+      expect(sendTyping).toHaveBeenCalledTimes(1); // still just the one start signal
+
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(sendTyping).toHaveBeenCalledTimes(2);
+      expect(sendTyping).toHaveBeenNthCalledWith(2, false);
+    });
+
+    it('sends a stop signal immediately on send, not waiting for the idle timeout', () => {
+      const sendTyping = vi.fn();
+      render(<GroupChatTabView {...baseProps({ sendTyping })} />);
+
+      const input = screen.getByLabelText('Message the group');
+      fireEvent.change(input, { target: { value: 'hi' } });
+      expect(sendTyping).toHaveBeenNthCalledWith(1, true);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      expect(sendTyping).toHaveBeenNthCalledWith(2, false);
+    });
   });
 });

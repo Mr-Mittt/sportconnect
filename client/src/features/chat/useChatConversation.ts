@@ -8,11 +8,17 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { chatApiClient, buildChatWebSocketUrl } from './chatApiClient';
 import { chatKeys } from './queryKeys';
-import type { ChatMessage, ChatWebSocketEvent, ConnectionStatus, Conversation } from './types';
+import type { ChatMessage, ChatWebSocketEvent, ConnectionStatus, Conversation, TypingEventPayload } from './types';
+import type { TypingUser } from './typingLabel';
 
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30000;
 const MESSAGES_PAGE_SIZE = 50;
+// Safety net for a dropped TYPING_STOP signal or a sender disconnecting
+// mid-typing (this feature has no persistence to fall back on) — a typing
+// user is cleared locally if no refresh arrives within this window, well
+// past the 5s idle timeout the sender side uses to send its own stop signal.
+const TYPING_EXPIRY_MS = 8000;
 
 type MessagesPage = ChatMessage[];
 type MessagesData = InfiniteData<MessagesPage, number | undefined>;
@@ -35,6 +41,14 @@ interface UseChatConversationResult {
   isLoadOlderMessagesError: boolean;
   /** Fetches the next (older) page of history — a no-op if none remains or one is already in flight. */
   loadOlderMessages: () => void;
+  /** Other participants currently typing (CHAT-15) — never includes the
+   * caller's own id, and a stale entry (dropped stop signal, disconnect
+   * mid-typing) clears itself after a few seconds even with no explicit stop. */
+  typingUsers: TypingUser[];
+  /** Fire-and-forget signal to the other participant(s) that the caller
+   * started/stopped typing — best-effort, no loading/error state exposed
+   * (a dropped signal has no user-visible consequence worth surfacing). */
+  sendTyping: (isTyping: boolean) => void;
 }
 
 /**
@@ -175,6 +189,54 @@ export function useChatConversation(
   const reconnectDelayRef = useRef(RECONNECT_BASE_DELAY_MS);
   const unmountedRef = useRef(false);
 
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  const clearTypingTimers = useCallback(() => {
+    for (const timer of typingTimersRef.current.values()) clearTimeout(timer);
+    typingTimersRef.current.clear();
+  }, []);
+
+  // Handles one USER_TYPING frame: upserts the sender into typingUsers (or
+  // removes them on an explicit stop) and (re)starts their per-user expiry
+  // timer — a dropped stop signal or a sender that disconnects mid-typing
+  // must not leave a stale "X is typing…" on screen forever, since this
+  // feature has no persistence to reconcile against later.
+  const handleTypingEvent = useCallback((typing: TypingEventPayload) => {
+    const existingTimer = typingTimersRef.current.get(typing.userId);
+    if (existingTimer) clearTimeout(existingTimer);
+
+    if (!typing.isTyping) {
+      typingTimersRef.current.delete(typing.userId);
+      setTypingUsers((prev) => prev.filter((u) => u.userId !== typing.userId));
+      return;
+    }
+
+    setTypingUsers((prev) => {
+      const next = prev.filter((u) => u.userId !== typing.userId);
+      return [...next, { userId: typing.userId, displayName: typing.displayName }];
+    });
+
+    typingTimersRef.current.set(
+      typing.userId,
+      setTimeout(() => {
+        typingTimersRef.current.delete(typing.userId);
+        setTypingUsers((prev) => prev.filter((u) => u.userId !== typing.userId));
+      }, TYPING_EXPIRY_MS),
+    );
+  }, []);
+
+  const sendTyping = useCallback(
+    (isTyping: boolean) => {
+      if (conversationId === undefined) return;
+      chatApiClient.post(`/conversations/${conversationId}/typing`, { isTyping }).catch(() => {
+        // Best-effort — a dropped typing signal has no user-visible
+        // consequence worth surfacing (ephemeral by design).
+      });
+    },
+    [conversationId],
+  );
+
   useEffect(() => {
     if (conversationId === undefined) return undefined;
 
@@ -214,7 +276,9 @@ export function useChatConversation(
         if (socketRef.current !== socket) return;
         try {
           const wsEvent = JSON.parse(event.data) as ChatWebSocketEvent;
-          if (wsEvent.type === 'MESSAGE_CREATED') {
+          if (wsEvent.type === 'USER_TYPING') {
+            handleTypingEvent(wsEvent.typing);
+          } else if (wsEvent.type === 'MESSAGE_CREATED') {
             mergeMessage(wsEvent.message);
           } else {
             replaceMessage(wsEvent.message);
@@ -242,8 +306,10 @@ export function useChatConversation(
       socketRef.current?.close();
       socketRef.current = null;
       setConnectionStatus('closed');
+      clearTypingTimers();
+      setTypingUsers([]);
     };
-  }, [conversationId, mergeMessage, replaceMessage, queryClient]);
+  }, [conversationId, mergeMessage, replaceMessage, queryClient, handleTypingEvent, clearTypingTimers]);
 
   return {
     data: messages,
@@ -263,5 +329,7 @@ export function useChatConversation(
     loadOlderMessages: () => {
       void messagesQuery.fetchNextPage();
     },
+    typingUsers,
+    sendTyping,
   };
 }

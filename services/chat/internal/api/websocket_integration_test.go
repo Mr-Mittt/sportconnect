@@ -66,6 +66,7 @@ func newTestRouterServer(t *testing.T) (*httptest.Server, string, *sync.CacheSto
 		Verifier:      auth.NewVerifier(secret),
 		Conversations: convService,
 		Messages:      msgService,
+		Cache:         cache,
 		Hub:           ws.NewHub(),
 		AllowedOrigin: "http://localhost:5173",
 		Logger:        slog.New(slog.NewTextHandler(os.Stderr, nil)),
@@ -139,6 +140,22 @@ func deleteTestMessage(t *testing.T, baseURL, authHeader string, conversationID,
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func sendTypingSignal(t *testing.T, baseURL, authHeader string, conversationID int64, isTyping bool) {
+	t.Helper()
+	payload, err := json.Marshal(map[string]bool{"isTyping": isTyping})
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/conversations/%d/typing", baseURL, conversationID), bytes.NewReader(payload))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 }
 
 func dialWS(t *testing.T, wsBaseURL, authHeader string, conversationID int64) *websocket.Conn {
@@ -319,4 +336,64 @@ func TestEditDeleteMessage_HTTPStatusCodes(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, doRequest(http.MethodDelete, nonexistentPath, authHeader, ""))
 	assert.Equal(t, http.StatusOK, doRequest(http.MethodPatch, editPath, authHeader, "actually mine"))
 	assert.Equal(t, http.StatusOK, doRequest(http.MethodDelete, deletePath, authHeader, ""))
+}
+
+// TestWebSocketBroadcast_TypingIndicatorExcludesSender is CHAT-15's proof
+// that Hub.BroadcastExcept actually excludes the sender's own connection (not
+// just that it reaches everyone else) — the one behavior genuinely new to
+// this ticket, unlike message send/edit/delete which deliberately echo back.
+func TestWebSocketBroadcast_TypingIndicatorExcludesSender(t *testing.T) {
+	server, secret, cache := newTestRouterServer(t)
+	ctx := context.Background()
+
+	const groupID int64 = 91005
+	const otherMemberID = "55555555-5555-5555-5555-555555555555"
+	const strangerID = "66666666-6666-6666-6666-666666666666"
+
+	require.NoError(t, cache.UpsertGroupMember(ctx, groupID, wsUserID, "MEMBER"))
+	require.NoError(t, cache.UpsertGroupMember(ctx, groupID, otherMemberID, "MEMBER"))
+	require.NoError(t, cache.UpsertUserProfile(ctx, sync.UserProfile{UserID: wsUserID, FullName: "Typing Person"}))
+
+	authHeader := "Bearer " + mintTestToken(t, secret, wsUserID)
+	otherAuthHeader := "Bearer " + mintTestToken(t, secret, otherMemberID)
+
+	convID := openGroupConversation(t, server.URL, authHeader, groupID)
+	wsBaseURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+	// sender and receiver are two distinct users (not two tabs of the same
+	// user) — BroadcastExcept excludes every connection belonging to the
+	// sender's own user id, so this must be a genuinely different
+	// participant to prove the event actually reaches someone.
+	sender := dialWS(t, wsBaseURL, authHeader, convID)
+	receiver := dialWS(t, wsBaseURL, otherAuthHeader, convID)
+	time.Sleep(registrationSettleDelay)
+
+	sendTypingSignal(t, server.URL, authHeader, convID, true)
+
+	event := readWSMessage(t, receiver, 3*time.Second)
+	assert.Equal(t, wsEventUserTyping, event["type"])
+	typing, ok := event["typing"].(map[string]any)
+	require.True(t, ok, "expected event to have a \"typing\" object, got: %#v", event)
+	assert.Equal(t, wsUserID, typing["userId"])
+	assert.Equal(t, "Typing Person", typing["displayName"])
+	assert.Equal(t, true, typing["isTyping"])
+
+	// Same connection that sent the signal never receives it back — the
+	// one behavior this ticket adds that message send/edit/delete don't have
+	// (those deliberately echo to the sender's own connection).
+	assertNoWSMessage(t, sender, 500*time.Millisecond)
+
+	// A stranger (not a member of this group) gets a plain 403 — same
+	// AuthorizeByID gate every other conversation-scoped endpoint enforces,
+	// typing isn't a separate authorization path.
+	payload, err := json.Marshal(map[string]bool{"isTyping": true})
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/conversations/%d/typing", server.URL, convID), bytes.NewReader(payload))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+mintTestToken(t, secret, strangerID))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 }
