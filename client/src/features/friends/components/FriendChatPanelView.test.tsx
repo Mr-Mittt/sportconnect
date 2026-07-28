@@ -106,6 +106,21 @@ describe('FriendChatPanelView', () => {
     expect(otherRow).toHaveClass('items-end');
   });
 
+  it("shows the other person's name only on the first message of a consecutive run, with extra top margin marking a new run", () => {
+    const firstOfRun = otherMessage;
+    const secondOfRun: ChatMessage = { ...otherMessage, id: 5, content: 'One more thing' };
+    render(
+      <FriendChatPanelView {...baseProps({ messages: [ownMessage, firstOfRun, secondOfRun] })} />,
+    );
+
+    expect(screen.getAllByText('Priya Shah')).toHaveLength(1); // one name label, not two
+
+    const firstRow = screen.getByText("I'm in, what time?").closest('.flex.flex-col.items-end');
+    const secondRow = screen.getByText('One more thing').closest('.flex.flex-col.items-end');
+    expect(firstRow).toHaveClass('mt-2'); // starts a new run after the own message
+    expect(secondRow).not.toHaveClass('mt-2'); // continues the same run
+  });
+
   it('sends a message and clears the draft', async () => {
     const sendMessage = vi.fn();
     const user = userEvent.setup();

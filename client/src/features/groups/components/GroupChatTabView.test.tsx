@@ -152,6 +152,55 @@ describe('GroupChatTabView', () => {
     expect(screen.getByText('JL')).toBeInTheDocument();
   });
 
+  it('shows the sender name only on the first message of a consecutive run', () => {
+    const firstOfRun = otherMessage;
+    const secondOfRun: ChatMessage = { ...otherMessage, id: 5, content: 'One more thing' };
+    render(<GroupChatTabView {...baseProps({ messages: [firstOfRun, secondOfRun] })} />);
+
+    expect(screen.getAllByText('Priya Shah')).toHaveLength(1); // one name label, not two
+  });
+
+  it('shows a new name label once a different sender interrupts the run', () => {
+    const fromPriya = otherMessage;
+    const fromJordan: ChatMessage = {
+      ...otherMessage,
+      id: 6,
+      senderId: 'user-3',
+      senderFullName: 'Jordan Lee',
+      content: 'Count me in too',
+    };
+    render(<GroupChatTabView {...baseProps({ messages: [fromPriya, fromJordan] })} />);
+
+    expect(screen.getByText('Priya Shah')).toBeInTheDocument();
+    expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
+  });
+
+  it('adds extra top margin only when a new run starts, not between messages within the same run', () => {
+    const firstOfRun = otherMessage;
+    const secondOfRun: ChatMessage = { ...otherMessage, id: 5, content: 'One more thing' };
+    render(<GroupChatTabView {...baseProps({ messages: [firstOfRun, secondOfRun] })} />);
+
+    const firstRow = screen.getByText('Yep, see you at 9!').closest('.group');
+    const secondRow = screen.getByText('One more thing').closest('.group');
+    expect(firstRow).not.toHaveClass('mt-2'); // very first message overall, no extra margin
+    expect(secondRow).not.toHaveClass('mt-2'); // continues the same run
+  });
+
+  it('adds extra top margin on the first message of a new run (not the very first message overall)', () => {
+    const fromPriya = otherMessage;
+    const fromJordan: ChatMessage = {
+      ...otherMessage,
+      id: 6,
+      senderId: 'user-3',
+      senderFullName: 'Jordan Lee',
+      content: 'Count me in too',
+    };
+    render(<GroupChatTabView {...baseProps({ messages: [fromPriya, fromJordan] })} />);
+
+    const jordanRow = screen.getByText('Count me in too').closest('.group');
+    expect(jordanRow).toHaveClass('mt-2');
+  });
+
   it('sends a message and clears the draft', async () => {
     const sendMessage = vi.fn();
     const user = userEvent.setup();

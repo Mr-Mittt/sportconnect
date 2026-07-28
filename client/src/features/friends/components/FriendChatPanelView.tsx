@@ -237,109 +237,121 @@ export function FriendChatPanelView({
               {(messages?.length ?? 0) === 0 ? (
                 <p className="text-2sm text-text-muted">No messages yet.</p>
               ) : (
-                <div className="flex flex-col gap-2.5">
-                  {(messages ?? []).map((message) => {
-                    const isOwn = message.senderId === currentUserId;
-                    const isDeleted = message.deletedAt !== null;
-                    const isEditingThis = editingMessageId === message.id;
+                <div className="flex flex-col gap-1">
+                  {(() => {
+                    const messageList = messages ?? [];
+                    return messageList.map((message, index) => {
+                      const isOwn = message.senderId === currentUserId;
+                      const isDeleted = message.deletedAt !== null;
+                      const isEditingThis = editingMessageId === message.id;
+                      // Sender name only on the first message of a
+                      // consecutive run from the same sender — a DM only
+                      // ever has one other participant, so a "run" here
+                      // just means "not immediately preceded by another
+                      // message from them," same rule as group chat's.
+                      const isFirstOfConsecutiveRun =
+                        index === 0 || messageList[index - 1].senderId !== message.senderId;
 
-                    return (
-                      <div
-                        key={message.id}
-                        className={`group flex flex-col ${isOwn ? 'items-start' : 'items-end'}`}
-                      >
-                        {!isOwn && (
-                          <div className="mb-0.5 text-2xs font-medium text-text-primary">
-                            {message.senderFullName}
-                          </div>
-                        )}
+                      return (
                         <div
-                          className={`relative break-words rounded-lg px-2.75 py-1.75 text-2sm ${
-                            isEditingThis ? 'w-[24rem]' : 'max-w-sm'
-                          } ${
-                            isOwn
-                              ? 'bg-bg-accent text-text-primary'
-                              : 'bg-surface-1 text-text-primary'
+                          key={message.id}
+                          className={`group flex flex-col ${isOwn ? 'items-start' : 'items-end'} ${
+                            isFirstOfConsecutiveRun && index !== 0 ? 'mt-2' : ''
                           }`}
                         >
-                          {isEditingThis ? (
-                            <div className="flex flex-col gap-1.5">
-                              <Textarea
-                                ref={editTextareaRef}
-                                value={editDraft}
-                                onChange={(event) => setEditDraft(event.target.value)}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Enter' && !event.shiftKey) {
-                                    event.preventDefault();
-                                    saveEdit();
-                                  }
-                                  if (event.key === 'Escape') cancelEditing();
-                                }}
-                                rows={1}
-                                className="min-h-0 resize-none break-words py-1.5 text-2sm"
-                                aria-label="Edit message content"
-                              />
-                              <div
-                                className="absolute bottom-0 right-0.5 z-10 flex translate-y-1/2 gap-0.5"
-                                data-edit-actions
-                              >
+                          {!isOwn && isFirstOfConsecutiveRun && (
+                            <div className="mb-0.5 text-2xs font-medium text-text-primary">
+                              {message.senderFullName}
+                            </div>
+                          )}
+                          <div
+                            className={`relative break-words rounded-lg px-2.75 py-1.75 text-2sm ${
+                              isEditingThis ? 'w-[24rem]' : 'max-w-sm'
+                            } ${
+                              isOwn
+                                ? 'bg-bg-accent text-text-primary'
+                                : 'bg-surface-1 text-text-primary'
+                            }`}
+                          >
+                            {isEditingThis ? (
+                              <div className="flex flex-col gap-1.5">
+                                <Textarea
+                                  ref={editTextareaRef}
+                                  value={editDraft}
+                                  onChange={(event) => setEditDraft(event.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter' && !event.shiftKey) {
+                                      event.preventDefault();
+                                      saveEdit();
+                                    }
+                                    if (event.key === 'Escape') cancelEditing();
+                                  }}
+                                  rows={1}
+                                  className="min-h-0 resize-none break-words py-1.5 text-2sm"
+                                  aria-label="Edit message content"
+                                />
+                                <div
+                                  className="absolute bottom-0 right-0.5 z-10 flex translate-y-1/2 gap-0.5"
+                                  data-edit-actions
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={saveEdit}
+                                    disabled={editDraft.trim().length === 0}
+                                    aria-label="Save edit"
+                                    title="Save"
+                                    className="cursor-pointer rounded p-0.5 text-text-accent hover:text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
+                                  >
+                                    <IconCheck className="size-4.5" aria-hidden="true" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={cancelEditing}
+                                    aria-label="Cancel edit"
+                                    title="Cancel"
+                                    className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                                  >
+                                    <IconX className="size-4.5" aria-hidden="true" />
+                                  </button>
+                                </div>
+                              </div>
+                            ) : isDeleted ? (
+                              <span className="italic text-text-muted">Message deleted</span>
+                            ) : (
+                              <>
+                                {message.content}
+                                {message.editedAt !== null && (
+                                  <span className="ml-1 text-2xs text-text-muted">(edited)</span>
+                                )}
+                              </>
+                            )}
+                            {isOwn && !isDeleted && !isEditingThis && (
+                              <div className="absolute bottom-0 right-0.5 z-10 flex translate-y-1/2 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
                                 <button
                                   type="button"
-                                  onClick={saveEdit}
-                                  disabled={editDraft.trim().length === 0}
-                                  aria-label="Save edit"
-                                  title="Save"
-                                  className="cursor-pointer rounded p-0.5 text-text-accent hover:text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
+                                  onClick={() => startEditing(message)}
+                                  disabled={isEditing || isDeleting}
+                                  aria-label="Edit message"
+                                  className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                                 >
-                                  <IconCheck className="size-4.5" aria-hidden="true" />
+                                  <IconPencil className="size-4.5" aria-hidden="true" />
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={cancelEditing}
-                                  aria-label="Cancel edit"
-                                  title="Cancel"
-                                  className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                                  onClick={() => deleteMessage(message.id)}
+                                  disabled={isEditing || isDeleting}
+                                  aria-label="Delete message"
+                                  className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                                 >
-                                  <IconX className="size-4.5" aria-hidden="true" />
+                                  <IconTrash className="size-4.5" aria-hidden="true" />
                                 </button>
                               </div>
-                            </div>
-                          ) : isDeleted ? (
-                            <span className="italic text-text-muted">Message deleted</span>
-                          ) : (
-                            <>
-                              {message.content}
-                              {message.editedAt !== null && (
-                                <span className="ml-1 text-2xs text-text-muted">(edited)</span>
-                              )}
-                            </>
-                          )}
-                          {isOwn && !isDeleted && !isEditingThis && (
-                            <div className="absolute bottom-0 right-0.5 z-10 flex translate-y-1/2 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-                              <button
-                                type="button"
-                                onClick={() => startEditing(message)}
-                                disabled={isEditing || isDeleting}
-                                aria-label="Edit message"
-                                className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
-                              >
-                                <IconPencil className="size-4.5" aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => deleteMessage(message.id)}
-                                disabled={isEditing || isDeleting}
-                                aria-label="Delete message"
-                                className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
-                              >
-                                <IconTrash className="size-4.5" aria-hidden="true" />
-                              </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </>

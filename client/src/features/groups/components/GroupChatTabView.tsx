@@ -250,7 +250,7 @@ export function GroupChatTabView({
               {(messages?.length ?? 0) === 0 ? (
                 <p className="text-2sm text-text-muted">No messages yet.</p>
               ) : (
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-1">
                   {(() => {
                     const messageList = messages ?? [];
                     return messageList.map((message, index) => {
@@ -266,11 +266,20 @@ export function GroupChatTabView({
                       const isLastOfConsecutiveRun =
                         index === messageList.length - 1 ||
                         messageList[index + 1].senderId !== message.senderId;
+                      // Sender name only on the first message of that same
+                      // run (the mirror image of the avatar rule above) —
+                      // repeating it above every message in a run was
+                      // redundant once the avatar already marks the run's
+                      // end.
+                      const isFirstOfConsecutiveRun =
+                        index === 0 || messageList[index - 1].senderId !== message.senderId;
 
                       return (
                         <div
                           key={message.id}
-                          className={`group flex flex-col ${isOwn ? 'items-start' : 'items-end'}`}
+                          className={`group flex flex-col ${isOwn ? 'items-start' : 'items-end'} ${
+                            isFirstOfConsecutiveRun && index !== 0 ? 'mt-2' : ''
+                          }`}
                         >
                           <div
                             className={`flex items-end gap-1.5 ${isOwn ? 'flex-row' : 'flex-row-reverse'}`}
@@ -289,7 +298,7 @@ export function GroupChatTabView({
                               <div className="size-6 shrink-0" aria-hidden="true" />
                             )}
                             <div className={`flex flex-col ${isOwn ? 'items-start' : 'items-end'}`}>
-                              {!isOwn && (
+                              {!isOwn && isFirstOfConsecutiveRun && (
                                 <div className="mb-0.5 text-2xs font-medium text-text-primary">
                                   {message.senderFullName}
                                 </div>
