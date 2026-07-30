@@ -1,0 +1,18 @@
+dependencies {
+    // Common module
+    implementation project(':modules:common')
+
+    // LocationResponse is embedded directly in SessionResponse
+    implementation project(':modules:location:location-api')
+
+    // Spring Web
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Spring Data (for Page and Pageable)
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+}

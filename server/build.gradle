@@ -34,6 +34,8 @@ dependencies {
     implementation project(':modules:social:group-api')
     implementation project(':modules:location:location-impl')
     implementation project(':modules:location:location-api')
+    implementation project(':modules:session:session-impl')
+    implementation project(':modules:session:session-api')
     implementation project(':modules:common')
     
     // Spring Boot Starters

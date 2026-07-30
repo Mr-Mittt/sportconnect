@@ -76,4 +76,9 @@
     <!-- LOC-1: Shared, sport-scoped venue directory -->
     <include file="db/changelog/changes/V030__create_locations_table.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-1: Scheduled sports activities (group-linked or standalone) -->
+    <include file="db/changelog/changes/V031__create_sessions_table.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V032__create_session_participants_table.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V035__add_location_note_to_sessions.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

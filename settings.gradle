@@ -22,6 +22,8 @@ include 'modules:social:group-api'
 include 'modules:social:group-impl'
 include 'modules:location:location-api'
 include 'modules:location:location-impl'
+include 'modules:session:session-api'
+include 'modules:session:session-impl'
 
 // Frontend (pnpm/Vite project wrapped by the node-gradle plugin)
 include 'client'
