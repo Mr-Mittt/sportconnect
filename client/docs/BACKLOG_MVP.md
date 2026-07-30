@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-07-25
+**Last updated:** 2026-07-30
 
 ---
 
@@ -119,6 +119,9 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 52 | GRP-8 | Sport pill follows an opened group + merged multi-inviter display (invitee + owner/admin views) + reason-gated invitation reject + join-request withdraw + sport-add confirmation on accept — **new ticket, not in either epic, filed while using GRP-7's shipped lifecycle, amended same day** (2026-07-24) — backend B13/B14/B15 all shipped, no longer blocking | `DONE` |
 | **Phase 8 — Chat — ARCHIVED (2026-07-26, user decision, see `documentation/md/archive/chat/`) — fresh re-plan pending** | | | |
 | **Phase 9 — Direct messaging — ARCHIVED (2026-07-26, user decision, see `documentation/md/archive/chat/DM-1_DM-2_TICKETS.md`) — folded into the fresh chat re-plan** | | | |
+| **Phase 10 — Session & Location UI (new, not in either epic — backend done 2026-07-30, see `documentation/md/SESSION_LOCATION_DESIGN.md`)** | | | |
+| 53 | CLIENT-LOC-1 | `LocationPicker` component — search, Google-Maps-link paste-and-resolve, OSM/Leaflet preview pin, Get Directions | `TODO` |
+| 54 | CLIENT-SESSION-1 | Session create/list/join/leave/cancel UI, de-mocks HF-4 (`UpcomingMatches`) | `TODO` |
 
 **Dependencies:**
 ```
@@ -136,7 +139,11 @@ FEED-2 → FEED-12 → FEED-11 (FEED-12 decouples the comment modal from the fee
   and makes it URL-addressable; FEED-11's visual-regression spec is simpler once it can just
   page.goto() a post URL instead of clicking through the feed — sequence FEED-12 before FEED-11,
   though FEED-11 doesn't hard-block on it if picked up first).
-HF-4 (matches) is NOT de-mocked in this MVP — no backend module exists.
+HF-4 (matches) is NOT de-mocked by any Phase 0–9 ticket — see Phase 10 below, added once the
+  Session/Location backend shipped (2026-07-30).
+CLIENT-LOC-1 → CLIENT-SESSION-1 (session forms need the location picker before they can go real).
+  Both depend on the now-`DONE` backend: `modules/location`, `modules/session`
+  (`docs/BACKLOG_MVP.md` in each) and GROUP-RECUR-1 (`modules/social/group-impl/docs/BACKLOG_MVP.md`).
 FEED-4, FEED-5 → GRP-1 (Groups page epic; independent of Phase 6's other tickets).
 GRP-1, B7 (modules/social/group-impl/docs/BACKLOG_MVP.md) → GRP-2.
 GRP-1 → GRP-3 → GRP-4. GRP-3's "Waiting for user accept" section was blocked on B8
@@ -199,7 +206,7 @@ GRP-8 (new, filed 2026-07-24, amended same day) — GRP-3, GRP-4, GRP-7 (all DON
 | BE-1: refresh token → httpOnly cookie | `modules/auth/docs/BACKLOG_MVP.md` · A2 | AUTH-3, AUTH-5 | `DONE` (2026-07-08) |
 | BE-2: logout derives user from principal | `modules/auth/docs/BACKLOG_MVP.md` · A3 | AUTH-4 (production) | `DONE` (2026-07-08) |
 | BE-3: login/registration rate limiting | `modules/auth/docs/BACKLOG_MVP.md` · A5 | a future client ticket (not yet filed) for rate-limit error surfacing, split out of AUTH-6 on 2026-07-12 | `TODO` |
-| Matches/tournaments module | Nowhere yet — needs its own design pass | de-mocking HF-4 |
+| Matches/tournaments module — `modules/session` + `modules/location` | `modules/session/docs/BACKLOG_MVP.md` (SESSION-1/2/3), `modules/location/docs/BACKLOG_MVP.md` (LOC-1), `modules/social/group-impl/docs/BACKLOG_MVP.md` (GROUP-RECUR-1) | de-mocking HF-4 | `DONE` (2026-07-30) |
 | ~~Chat module (new `modules/social/chat-impl`, never existed beyond a docs folder, since deleted)~~ | ARCHIVED (2026-07-26) — see `documentation/md/archive/chat/` — fresh chat re-plan pending | ~~CHAT-2, CHAT-4~~ | `N/A` |
 
 ---
@@ -2459,9 +2466,67 @@ pattern.
 
 | Item | Decision |
 |---|---|
-| De-mock HF-4 (UpcomingMatches) | Deferred — no matches/tournaments backend module exists; needs its own backend design pass first. HF-4 ships mock-backed in this MVP. |
+| De-mock HF-4 (UpcomingMatches) | No longer deferred — the Session/Location backend shipped 2026-07-30 (`modules/session`, `modules/location`, GROUP-RECUR-1). Filed as **CLIENT-LOC-1**/**CLIENT-SESSION-1** (Phase 10, `TODO`), see entries below. |
 | Forgot/reset password screens | Deferred — `POST /api/auth/forgot-password` is a non-functional server-side placeholder; building UI against it now would do nothing. |
 | OAuth2 social login (Google/Facebook) | Deferred — scaffolded server-side but unverified; own ticket if prioritized. |
 | Group invitations / pinned posts / ownership transfer UI | Deferred — real endpoints exist; **GRP-1 is the Groups-page epic's first ticket, but does not itself cover invitations, pinned posts, or ownership transfer** — those remain deferred beyond GRP-1. |
 | Add-sport flow screen | Deferred — only the entry-point callback is wired (HF-2/SPORT-1); `POST /api/sports/profiles` is ready when this gets scoped. |
 | Group member blacklist/ban | Deferred — no schema, repository query, or endpoint exists for banning/blocking a group member. GRP-3 ships its Blacklist section as a permanent "coming soon" empty state; real functionality needs a backend design pass before a follow-up client ticket. |
+
+---
+
+### CLIENT-LOC-1 · `LocationPicker` component
+**Status:** `TODO` · **Type:** Feature · **Filed:** 2026-07-30, alongside CLIENT-SESSION-1 once the
+Session/Location backend shipped
+**Dependency:** `modules/location` LOC-1 (`DONE`) — no client code dependency otherwise; this is a
+self-contained component, buildable before CLIENT-SESSION-1 has anywhere to use it (Storybook-testable
+standalone, same "components ship ahead of page integration" precedent as Phase 1's HF-1..HF-6).
+
+**What ships:** the shared location-picking widget both session create/edit (CLIENT-SESSION-1) and,
+later, group recurrence config will use. Types + `use<Feature>Data`-style hook (`useLocationPickerData`,
+composing `useLocationSearch`/`useResolveMapsUrl`/`useCreateLocation`) against the real backend:
+- Sport-scoped typeahead search (`GET /api/locations/search?sportId=&q=`) — a `Location` is always
+  specific to one sport (LOC-1 decision), so this component always takes a `sportId` prop from
+  whatever form opens it.
+- "Add a new location" flow with **no paid/keyed map API** (`documentation/md/SESSION_LOCATION_DESIGN.md`
+  decision): a "Find on Google Maps" link-out button, a paste-the-share-link-back field wired to
+  `POST /api/locations/resolve-maps-url` (coordinates may come back `null` for an unresolvable
+  link — not an error, falls back to manual entry), and a free **OpenStreetMap/Leaflet** preview pin
+  (draggable, for fine-tuning) once coordinates are known.
+- Confirm calls `POST /api/locations` and returns the chosen `Location` to the parent form.
+- "Get Directions" link (deep-links to the user's own maps app) once a `Location` has coordinates —
+  no in-app routing.
+
+**New dependency, flagged per `client/CLAUDE.md`'s "that's a conversation to have and record, not a
+silent per-page exception" rule:** `leaflet` + `react-leaflet`. Must be **`react-leaflet` v4.x, not
+v5** — v5 requires React 19, this app is pinned to React 18.3.1. No `Command`/Combobox primitive
+exists yet in this codebase for the search-as-you-type input; follow `JoinGroupModal`'s existing
+`Input` + custom result-row pattern (submit-triggered search, not live-as-you-type) rather than
+introducing a second new dependency (`cmdk`) in the same ticket.
+
+**Explicitly out of scope:** page-level integration (CLIENT-SESSION-1), geo-proximity/nearby search
+(no such backend endpoint exists — LOC-1 deliberately didn't build one), editing/moderating an
+existing `Location` (LOC-1's backend is create-only).
+
+---
+
+### CLIENT-SESSION-1 · Session create/list/join/leave/cancel UI
+**Status:** `TODO` · **Type:** Feature · **Filed:** 2026-07-30, alongside CLIENT-LOC-1
+**Dependency:** CLIENT-LOC-1 (`TODO`, needed for the location field on create/edit) · backend
+`modules/session` SESSION-1/SESSION-2/SESSION-3 (all `DONE`) — full status lifecycle
+(`SCHEDULED`/`ONGOING`/`COMPLETED`/`CANCELLED`) and `POST /api/sessions/{id}/cancel` already exist,
+build against that contract directly rather than an earlier hard-delete shape.
+
+**What ships:** de-mocks HF-4's `UpcomingMatches` (`client/docs/HF-4_UPCOMINGMATCHES.md`, currently
+`mockData.ts`-backed per the data layer convention) against the real `/api/sessions/**` endpoints —
+group-linked (owner/admin-gated) or standalone (open to any user) sessions, using `LocationPicker`
+for the required `locationId` field. Types + data hook(s) wrapping create/get/list-by-group/
+list-mine/update/cancel/join/leave/participants. Status badges must reflect the real 4-state lifecycle
+(including the automatic `ONGOING` transition, not just create-time `SCHEDULED`), and cancelling
+must surface `cancelReason` where shown, matching the backend's soft-cancel-only model (there is no
+delete endpoint — `SessionServiceImpl` removed it entirely in SESSION-3).
+
+**Explicitly out of scope (may need its own follow-up ticket, not yet filed):** wiring a group's
+recurring-session schedule config (`GET`/`PUT /api/groups/{id}/recurrence`, `autoGenerateSessions`
+toggle) into the Groups page Settings tab — that's a separate owner-facing surface from the
+session list/create/join flow this ticket covers.
