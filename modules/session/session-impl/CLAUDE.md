@@ -23,6 +23,8 @@ fields. See `modules/location/location-impl/CLAUDE.md` for that side of the boun
 | `Session` | `groupId` nullable (null = standalone), `sessionType` discriminator, `locationId` (NOT NULL, references `locations`), `locationNote` (nullable free text, e.g. "Court 3" — scoped to this session, never written back to the shared `Location`), `status` (`SCHEDULED`/`COMPLETED`) |
 | `SessionParticipant` | Join/leave; row kept (status flipped) on leave, not deleted |
 | `SessionServiceImpl` | All business rules below; batch-resolves creator/sport/location/participant-count in `mapToResponses` — never per-row |
+| `SessionGenerationService` | Internal only (not on `session-api`) — generates the next occurrence per group, closes past sessions. See SESSION-2 in `docs/BACKLOG_MVP.md`. |
+| `SessionGenerationJob` | `@Scheduled`: hourly `generateUpcomingSessions`, every-15-min `closePastSessions` |
 
 ## Endpoints
 
@@ -67,5 +69,13 @@ GET    /api/sessions/{sessionId}/participants  paginated, JOINED-only
 - `getSessionsCreatedByUser` (`GET /api/sessions/mine`) only returns **standalone** sessions
   (`findByCreatedByAndGroupIdIsNull`) — a group owner's group-linked sessions are visible via
   `getGroupSessions` instead, not here.
-- Recurrence/auto-generation does **not** live in this class — see SESSION-2 in
-  `docs/BACKLOG_MVP.md` (not yet built) for `SessionGenerationService`/`SessionGenerationJob`.
+- Recurrence/auto-generation does **not** live in `SessionServiceImpl` — it's
+  `SessionGenerationService`/`SessionGenerationJob` (SESSION-2), which never re-validates a
+  `recurrenceLocationId`'s sport match — that's checked once when the group's recurrence is
+  configured (`GroupServiceImpl.updateGroupRecurrence`), not on every generated occurrence.
+- `SchedulingConfig` (`@EnableScheduling`) lives in `server/src/main/java/com/sportconnect/config/`,
+  not in this module — app-wide `@EnableX` toggles are bootstrap-level config owned by the
+  assembly module, while the `@Scheduled` job class itself lives here.
+- `SessionGenerationService.generateUpcomingSessions()` always computes exactly the single next
+  occurrence (`TemporalAdjusters.nextOrSame`, rolling forward a week if today's slot already
+  passed) — there's no "generate N weeks ahead" window, by design.

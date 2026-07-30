@@ -20,7 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | SESSION-1 | Session domain core — manual create/join/leave, group or standalone | `DONE` |
-| 2 | SESSION-2 | Scheduled auto-generation job for group-recurring sessions | `TODO` |
+| 2 | SESSION-2 | Scheduled auto-generation job for group-recurring sessions | `DONE` |
 
 ---
 
@@ -52,8 +52,11 @@ capacity/waitlist, geo-proximity/nearby session search.
 
 ## SESSION-2 — Scheduled auto-generation job
 
-Not started. Depends on SESSION-1 (this ticket) and GROUP-RECUR-1
-(`modules/social/group-impl/docs/BACKLOG_MVP.md`) both landing first. Adds `SchedulingConfig`
-(`@EnableScheduling`, in `server/`), `SessionGenerationService` (generates the single next
-occurrence per group with `autoGenerateSessions` enabled, closes past `SCHEDULED` sessions to
-`COMPLETED`), and `SessionGenerationJob` (`@Scheduled`, hourly generate / 15-min close).
+Adds `SchedulingConfig` (`@EnableScheduling`, in `server/`, sibling to the existing
+`AsyncConfig`), `SessionGenerationService` (internal, not exposed via `session-api` — generates
+the single next occurrence per group with `autoGenerateSessions` enabled via
+`GroupService.getGroupsWithAutoGenerateSessionsEnabled()`, copying `recurrenceLocationNote` into
+the new `Session.locationNote`, and closes past `SCHEDULED` sessions to `COMPLETED`), and
+`SessionGenerationJob` (`@Scheduled`: hourly generate, every-15-min close). No distributed lock
+— single-instance deployment today; the `unique_group_session_start` DB constraint is the
+idempotency backstop for a race.
