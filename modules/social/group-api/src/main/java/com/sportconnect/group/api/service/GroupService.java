@@ -6,11 +6,14 @@ import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
 import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
+import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
+import com.sportconnect.group.api.dto.GroupRecurrenceResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.dto.GroupSearchResponse;
 import com.sportconnect.group.api.dto.GroupSettingsResponse;
 import com.sportconnect.group.api.dto.JoinRequestResponse;
 import com.sportconnect.group.api.dto.PinnedPostResponse;
+import com.sportconnect.group.api.dto.UpdateGroupRecurrenceRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import org.springframework.data.domain.Page;
@@ -100,8 +103,27 @@ public interface GroupService {
 
     // Group Settings
     GroupSettingsResponse getGroupSettings(Long groupId, UUID userId);
-    
+
     GroupSettingsResponse updateGroupSettings(Long groupId, UUID userId, UpdateGroupSettingsRequest request);
+
+    // Recurring Session Schedule
+    /** Member-read gate, mirroring getGroupSettings. */
+    GroupRecurrenceResponse getGroupRecurrence(Long groupId, UUID userId);
+
+    /**
+     * Owner-write gate, mirroring updateGroupSettings. Validates (via LocationService) that
+     * recurrenceLocationId's sport matches the group's sportId when a non-null locationId is
+     * given — a BadRequestException otherwise. The session-generation job trusts an
+     * already-validated recurrenceLocationId and never re-checks it.
+     */
+    GroupRecurrenceResponse updateGroupRecurrence(Long groupId, UUID userId, UpdateGroupRecurrenceRequest request);
+
+    /**
+     * Groups with GroupSettings.autoGenerateSessions=true and a complete recurrence rule.
+     * Used exclusively by the session domain's scheduled generation job — never call this
+     * per-row in a loop from elsewhere; it already does its own batch resolution internally.
+     */
+    List<GroupRecurrenceConfigResponse> getGroupsWithAutoGenerateSessionsEnabled();
 
     // Permission Checks
     boolean isGroupOwner(Long groupId, UUID userId);

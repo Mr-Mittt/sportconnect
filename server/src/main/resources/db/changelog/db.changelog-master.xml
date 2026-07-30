@@ -81,4 +81,9 @@
     <include file="db/changelog/changes/V032__create_session_participants_table.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/changes/V035__add_location_note_to_sessions.sql" relativeToChangelogFile="false"/>
 
+    <!-- GROUP-RECUR-1: Group recurring-session schedule config -->
+    <include file="db/changelog/changes/V033__add_recurrence_fields_to_groups.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V034__add_auto_generate_sessions_to_group_settings.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V036__add_recurrence_location_note_to_groups.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

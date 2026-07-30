@@ -9,11 +9,14 @@ import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
 import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
+import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
+import com.sportconnect.group.api.dto.GroupRecurrenceResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.dto.GroupSearchResponse;
 import com.sportconnect.group.api.dto.GroupSettingsResponse;
 import com.sportconnect.group.api.dto.JoinRequestResponse;
 import com.sportconnect.group.api.dto.PinnedPostResponse;
+import com.sportconnect.group.api.dto.UpdateGroupRecurrenceRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import com.sportconnect.group.api.service.GroupService;
@@ -35,6 +38,8 @@ import com.sportconnect.group.repository.GroupRepository;
 import com.sportconnect.group.repository.GroupRoleRepository;
 import com.sportconnect.group.repository.GroupSettingsRepository;
 import com.sportconnect.group.repository.GroupTypeRepository;
+import com.sportconnect.location.api.dto.LocationResponse;
+import com.sportconnect.location.api.service.LocationService;
 import com.sportconnect.social.post.api.dto.PostResponse;
 import com.sportconnect.social.post.api.dto.PostType;
 import com.sportconnect.social.post.api.service.PostService;
@@ -57,6 +62,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -85,6 +91,7 @@ public class GroupServiceImpl implements GroupService {
     private final GroupInvitationInviterRepository invitationInviterRepository;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    private final LocationService locationService;
 
     // services/chat (the first non-Java service in this repo) consumes this stream to keep its
     // own local authorization cache in sync — see services/chat/docs/SYNC_DESIGN.md for the full
@@ -117,7 +124,8 @@ public class GroupServiceImpl implements GroupService {
             GroupInvitationRepository invitationRepository,
             GroupInvitationInviterRepository invitationInviterRepository,
             StringRedisTemplate stringRedisTemplate,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            LocationService locationService) {
         this.groupRepository = groupRepository;
         this.groupMemberRepository = groupMemberRepository;
         this.joinRequestRepository = joinRequestRepository;
@@ -133,6 +141,7 @@ public class GroupServiceImpl implements GroupService {
         this.invitationInviterRepository = invitationInviterRepository;
         this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
+        this.locationService = locationService;
     }
 
     /**
@@ -876,11 +885,118 @@ public class GroupServiceImpl implements GroupService {
         if (request.getAllowMemberInvites() != null) {
             settings.setAllowMemberInvites(request.getAllowMemberInvites());
         }
+        if (request.getAutoGenerateSessions() != null) {
+            settings.setAutoGenerateSessions(request.getAutoGenerateSessions());
+        }
 
         settings = groupSettingsRepository.save(settings);
         log.info("Updated settings for group {} by owner {}", groupId, userId);
 
         return mapToGroupSettingsResponse(settings);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public GroupRecurrenceResponse getGroupRecurrence(Long groupId, UUID userId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("Group not found"));
+
+        if (!isGroupMember(groupId, userId)) {
+            throw new BadRequestException("Only group members can view the recurring session schedule");
+        }
+
+        return mapToRecurrenceResponse(group);
+    }
+
+    @Override
+    @Transactional
+    public GroupRecurrenceResponse updateGroupRecurrence(Long groupId, UUID userId, UpdateGroupRecurrenceRequest request) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new NotFoundException("Group not found"));
+
+        if (!isGroupOwner(groupId, userId)) {
+            throw new BadRequestException("Only group owner can update the recurring session schedule");
+        }
+
+        if (request.getRecurrenceLocationId() != null) {
+            if (group.getSportId() == null) {
+                throw new BadRequestException("Group has no sport set — cannot validate a sport-specific location");
+            }
+            LocationResponse location = locationService.getLocation(request.getRecurrenceLocationId());
+            if (!group.getSportId().equals(location.getSportId())) {
+                throw new BadRequestException("recurrenceLocationId does not match this group's sport");
+            }
+            group.setRecurrenceLocationId(request.getRecurrenceLocationId());
+        }
+        if (request.getRecurrenceLocationNote() != null) {
+            group.setRecurrenceLocationNote(request.getRecurrenceLocationNote());
+        }
+        if (request.getRecurrenceDayOfWeek() != null) {
+            group.setRecurrenceDayOfWeek(request.getRecurrenceDayOfWeek());
+        }
+        if (request.getRecurrenceTime() != null) {
+            group.setRecurrenceTime(request.getRecurrenceTime());
+        }
+        if (request.getRecurrenceDurationMinutes() != null) {
+            group.setRecurrenceDurationMinutes(request.getRecurrenceDurationMinutes());
+        }
+
+        group = groupRepository.save(group);
+        log.info("Updated recurrence schedule for group {} by owner {}", groupId, userId);
+
+        return mapToRecurrenceResponse(group);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupRecurrenceConfigResponse> getGroupsWithAutoGenerateSessionsEnabled() {
+        List<GroupSettings> enabledSettings = groupSettingsRepository.findByAutoGenerateSessionsTrue();
+        if (enabledSettings.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> groupIds = enabledSettings.stream()
+                .map(GroupSettings::getGroupId)
+                .collect(Collectors.toList());
+        Map<Long, Group> groupsById = groupRepository.findAllById(groupIds).stream()
+                .collect(Collectors.toMap(Group::getId, g -> g));
+
+        GroupRole ownerRole = groupRoleRepository.findByRoleName("group_owner").orElse(null);
+        Map<Long, UUID> ownerIdsByGroupId = ownerRole == null
+                ? Collections.emptyMap()
+                : groupMemberRepository.findByGroupIdInAndRoleId(groupIds, ownerRole.getId()).stream()
+                        .collect(Collectors.toMap(GroupMember::getGroupId, GroupMember::getUserId, (a, b) -> a));
+
+        List<GroupRecurrenceConfigResponse> result = new ArrayList<>();
+        for (GroupSettings settings : enabledSettings) {
+            Group group = groupsById.get(settings.getGroupId());
+            UUID ownerId = ownerIdsByGroupId.get(settings.getGroupId());
+            if (group == null || ownerId == null) {
+                continue;
+            }
+            result.add(GroupRecurrenceConfigResponse.builder()
+                    .groupId(group.getId())
+                    .sportId(group.getSportId())
+                    .ownerId(ownerId)
+                    .recurrenceDayOfWeek(group.getRecurrenceDayOfWeek())
+                    .recurrenceTime(group.getRecurrenceTime())
+                    .recurrenceDurationMinutes(group.getRecurrenceDurationMinutes())
+                    .recurrenceLocationId(group.getRecurrenceLocationId())
+                    .recurrenceLocationNote(group.getRecurrenceLocationNote())
+                    .build());
+        }
+        return result;
+    }
+
+    private GroupRecurrenceResponse mapToRecurrenceResponse(Group group) {
+        return GroupRecurrenceResponse.builder()
+                .groupId(group.getId())
+                .recurrenceDayOfWeek(group.getRecurrenceDayOfWeek())
+                .recurrenceTime(group.getRecurrenceTime())
+                .recurrenceDurationMinutes(group.getRecurrenceDurationMinutes())
+                .recurrenceLocationId(group.getRecurrenceLocationId())
+                .recurrenceLocationNote(group.getRecurrenceLocationNote())
+                .build();
     }
 
     @Override
@@ -1672,6 +1788,7 @@ public class GroupServiceImpl implements GroupService {
                 .allowMemberInvites(settings.getAllowMemberInvites())
                 .groupTypeName(groupType.getTypeName())
                 .maxMembers(groupType.getMaxMembers())
+                .autoGenerateSessions(settings.getAutoGenerateSessions())
                 .createdAt(settings.getCreatedAt())
                 .updatedAt(settings.getUpdatedAt())
                 .build();

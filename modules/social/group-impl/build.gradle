@@ -9,6 +9,9 @@ dependencies {
     implementation project(':modules:user:user-api')
     implementation project(':modules:sport:sport-api')
     implementation project(':modules:social:post-api')
+    // Narrow dependency: only used to validate recurrenceLocationId's sport in
+    // updateGroupRecurrence (GROUP-RECUR-1) — display-time enrichment stays client-side.
+    implementation project(':modules:location:location-api')
 
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'

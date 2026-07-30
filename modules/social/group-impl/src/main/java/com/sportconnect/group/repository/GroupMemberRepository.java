@@ -37,6 +37,10 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     @Query("SELECT gm FROM GroupMember gm WHERE gm.groupId = :groupId AND gm.roleId = :roleId")
     List<GroupMember> findByGroupIdAndRoleId(@Param("groupId") Long groupId, @Param("roleId") Integer roleId);
 
+    /** Batch owner resolution for multiple groups at once — avoids one query per group. */
+    @Query("SELECT gm FROM GroupMember gm WHERE gm.groupId IN :groupIds AND gm.roleId = :roleId")
+    List<GroupMember> findByGroupIdInAndRoleId(@Param("groupIds") List<Long> groupIds, @Param("roleId") Integer roleId);
+
     @Query("SELECT gm FROM GroupMember gm WHERE gm.userId = :userId")
     List<GroupMember> findAllByUserId(@Param("userId") UUID userId);
 
