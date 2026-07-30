@@ -47,6 +47,10 @@ public class GroupSettings {
     @Column(name = "group_type_id", nullable = false)
     private Long groupTypeId;
 
+    @Column(name = "auto_generate_sessions")
+    @Builder.Default
+    private Boolean autoGenerateSessions = false;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

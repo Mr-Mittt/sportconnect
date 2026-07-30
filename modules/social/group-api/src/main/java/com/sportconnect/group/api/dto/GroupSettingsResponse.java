@@ -19,6 +19,7 @@ public class GroupSettingsResponse {
     private Boolean allowMemberInvites;
     private String groupTypeName;
     private Integer maxMembers;
+    private Boolean autoGenerateSessions;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

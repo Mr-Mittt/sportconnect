@@ -2031,6 +2031,30 @@ explicit go-ahead at each step (full story in A3's summary doc):
 - **Complete forgot-password** — wire up UserService lookup in `AuthController`
 - **Notifications service** — in-app notifications for likes, comments, friend requests, group events
 
+### Session & Location System (backend implemented 2026-07-30, client not started)
+- Full design: `documentation/md/SESSION_LOCATION_DESIGN.md`. Two new domains:
+  **`modules/location`** (LOC-1, `DONE`) — a shared, crowdsourced, sport-scoped venue directory.
+  Any authenticated user can add a `Location` (name, address, optional PostGIS point). No paid
+  map API: a "Find on Google Maps" link-out button + paste-the-share-link-back flow, with the
+  backend parsing (or, for short `maps.app.goo.gl` links, resolving via an SSRF-guarded
+  domain-allowlisted redirect follow) coordinates out of the pasted URL — rendering is a free
+  OpenStreetMap/Leaflet preview on the client (not yet built). `claimedByVendorId` is a bare
+  placeholder for a future Vendor/Facility feature to claim a `Location`.
+  **`modules/session`** (SESSION-1 + SESSION-2, both `DONE`) — scheduled sports activities,
+  group-linked (owner/admin-gated) or standalone (open to any user), always referencing a
+  `Location` by id validated to match the session's sport. Minimal join/leave participation.
+  `GROUP-RECUR-1` (`DONE`, in `group-impl`) added structured recurring-session-schedule fields to
+  `Group` (day-of-week/time/duration/`recurrenceLocationId`, alongside the untouched free-text
+  `schedule`) and an `autoGenerateSessions` toggle on `GroupSettings`; SESSION-2 added this repo's
+  first scheduled-job infrastructure (`SchedulingConfig` + `SessionGenerationJob`, hourly generate
+  the next occurrence / 15-min close past sessions past their scheduled time).
+- New endpoints: `/api/locations/**`, `/api/sessions/**`, `GET`/`PUT /api/groups/{id}/recurrence`.
+- Deferred: full Calling System (Session Calling/Game Calling posts, slot-filling),
+  geo-proximity/nearby search, Vendor/Facility claiming, `Location` editing, in-app routing,
+  `TOURNAMENT`/`TRAINING` session types (enum reserved only), `CANCELLED` status, capacity/waitlist.
+- **Next:** CLIENT-LOC-1 (`LocationPicker` component) and CLIENT-SESSION-1 (session UI wiring,
+  replacing the mock `UpcomingMatches`) — not started, no client ticket filed yet.
+
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
 - `partner_matches` table: match score (0–100), accept/decline workflow

@@ -8,6 +8,7 @@ import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
 import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
+import com.sportconnect.group.api.dto.GroupRecurrenceResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.dto.GroupSearchResponse;
 import com.sportconnect.group.api.dto.GroupSettingsResponse;
@@ -15,6 +16,7 @@ import com.sportconnect.group.api.dto.JoinRequestResponse;
 import com.sportconnect.group.api.dto.PinPostRequest;
 import com.sportconnect.group.api.dto.PinnedPostResponse;
 import com.sportconnect.group.api.dto.RejectInvitationRequest;
+import com.sportconnect.group.api.dto.UpdateGroupRecurrenceRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import com.sportconnect.group.api.service.GroupService;
@@ -407,6 +409,41 @@ public class GroupController {
             @Valid @RequestBody UpdateGroupSettingsRequest request) {
         GroupSettingsResponse response = groupService.updateGroupSettings(groupId, UUID.fromString(userIdStr), request);
         return ResponseEntity.ok(ApiResponse.success("Settings updated successfully", response));
+    }
+
+    // Recurring Session Schedule
+
+    @Operation(summary = "Get a group's recurring session schedule", description = "Member only. recurrenceLocationId is a bare id — resolve display details via GET /api/locations/{id}.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Recurrence schedule (fields may be null if not configured)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not a member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
+    })
+    @GetMapping("/{groupId}/recurrence")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<GroupRecurrenceResponse>> getGroupRecurrence(
+            @PathVariable Long groupId,
+            @AuthenticationPrincipal String userIdStr) {
+        GroupRecurrenceResponse response = groupService.getGroupRecurrence(groupId, UUID.fromString(userIdStr));
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "Update a group's recurring session schedule", description = "Owner only. Partial update. recurrenceLocationId must resolve to a Location for this group's sport.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Recurrence schedule updated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not the owner, group has no sport set, or recurrenceLocationId's sport doesn't match"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
+    })
+    @PutMapping("/{groupId}/recurrence")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<GroupRecurrenceResponse>> updateGroupRecurrence(
+            @PathVariable Long groupId,
+            @AuthenticationPrincipal String userIdStr,
+            @Valid @RequestBody UpdateGroupRecurrenceRequest request) {
+        GroupRecurrenceResponse response = groupService.updateGroupRecurrence(groupId, UUID.fromString(userIdStr), request);
+        return ResponseEntity.ok(ApiResponse.success("Recurrence schedule updated successfully", response));
     }
 
     // Pinned Posts
