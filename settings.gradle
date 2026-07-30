@@ -20,6 +20,8 @@ include 'modules:social:post-api'
 include 'modules:social:post-impl'
 include 'modules:social:group-api'
 include 'modules:social:group-impl'
+include 'modules:location:location-api'
+include 'modules:location:location-impl'
 
 // Frontend (pnpm/Vite project wrapped by the node-gradle plugin)
 include 'client'

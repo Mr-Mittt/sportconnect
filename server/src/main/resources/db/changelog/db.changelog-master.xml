@@ -73,4 +73,7 @@
     <!-- B14: Track every co-inviter on a single group invitation -->
     <include file="db/changelog/changes/V029__create_group_invitation_inviters.sql" relativeToChangelogFile="false"/>
 
+    <!-- LOC-1: Shared, sport-scoped venue directory -->
+    <include file="db/changelog/changes/V030__create_locations_table.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
