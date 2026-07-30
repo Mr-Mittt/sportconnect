@@ -120,7 +120,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | **Phase 8 — Chat — ARCHIVED (2026-07-26, user decision, see `documentation/md/archive/chat/`) — fresh re-plan pending** | | | |
 | **Phase 9 — Direct messaging — ARCHIVED (2026-07-26, user decision, see `documentation/md/archive/chat/DM-1_DM-2_TICKETS.md`) — folded into the fresh chat re-plan** | | | |
 | **Phase 10 — Session & Location UI (new, not in either epic — backend done 2026-07-30, see `documentation/md/SESSION_LOCATION_DESIGN.md`)** | | | |
-| 53 | CLIENT-LOC-1 | `LocationPicker` component — search, Google-Maps-link paste-and-resolve, OSM/Leaflet preview pin, Get Directions | `TODO` |
+| 53 | CLIENT-LOC-1 | `LocationPicker` component — search, Google-Maps-link paste-and-resolve, OSM/Leaflet preview pin, Get Directions | `DONE` |
 | 54 | CLIENT-SESSION-1 | Session create/list/join/leave/cancel UI, de-mocks HF-4 (`UpcomingMatches`) | `TODO` |
 
 **Dependencies:**
@@ -2476,7 +2476,7 @@ pattern.
 ---
 
 ### CLIENT-LOC-1 · `LocationPicker` component
-**Status:** `TODO` · **Type:** Feature · **Filed:** 2026-07-30, alongside CLIENT-SESSION-1 once the
+**Status:** `DONE` (2026-07-31, `client/docs/CLIENT-LOC-1_LOCATIONPICKER_COMPONENT.md`) · **Type:** Feature · **Filed:** 2026-07-30, alongside CLIENT-SESSION-1 once the
 Session/Location backend shipped
 **Dependency:** `modules/location` LOC-1 (`DONE`) — no client code dependency otherwise; this is a
 self-contained component, buildable before CLIENT-SESSION-1 has anywhere to use it (Storybook-testable
