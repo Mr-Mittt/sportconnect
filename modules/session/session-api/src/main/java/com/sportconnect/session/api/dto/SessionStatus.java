@@ -1,10 +1,16 @@
 package com.sportconnect.session.api.dto;
 
 /**
- * No {@code CANCELLED} status — manual cancellation wasn't requested and there's no
- * notification/cleanup flow to back it, so it's deliberately left out rather than half-built.
+ * {@code SCHEDULED} → {@code ONGOING} → {@code COMPLETED} is driven automatically by
+ * {@code SessionGenerationJob} based on {@code scheduledStart}/{@code scheduledEndAt} — a
+ * session with no {@code scheduledEndAt} skips {@code ONGOING} entirely (goes straight to
+ * {@code COMPLETED} once {@code scheduledStart} passes, since there's no known end to be
+ * "ongoing" until). {@code CANCELLED} is the only status set by a user action
+ * ({@code SessionService.cancelSession}), never by the job.
  */
 public enum SessionStatus {
     SCHEDULED,
-    COMPLETED
+    ONGOING,
+    COMPLETED,
+    CANCELLED
 }

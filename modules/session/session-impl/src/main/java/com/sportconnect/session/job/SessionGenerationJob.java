@@ -25,6 +25,11 @@ public class SessionGenerationJob {
     }
 
     @Scheduled(cron = "0 */15 * * * *") // every 15 minutes
+    public void startOngoingSessions() {
+        sessionGenerationService.startOngoingSessions();
+    }
+
+    @Scheduled(cron = "0 */15 * * * *") // every 15 minutes
     public void closePastSessions() {
         sessionGenerationService.closePastSessions();
     }

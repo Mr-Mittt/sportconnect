@@ -1,5 +1,6 @@
 package com.sportconnect.session.api.service;
 
+import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
@@ -32,8 +33,12 @@ public interface SessionService {
     /** Standalone → creator-only. Group-linked → owner/admin via canManageMembers. */
     SessionResponse updateSession(Long sessionId, UUID userId, UpdateSessionRequest request);
 
-    /** Same gating as updateSession. Rejected with BadRequestException if status == COMPLETED. */
-    void deleteSession(Long sessionId, UUID userId);
+    /**
+     * Same gating as updateSession. A soft action — the row is kept with status=CANCELLED plus
+     * cancelReason/cancelledBy/cancelledAt, never deleted. Rejected with BadRequestException if
+     * the session is already COMPLETED or CANCELLED.
+     */
+    SessionResponse cancelSession(Long sessionId, UUID userId, CancelSessionRequest request);
 
     /**
      * Group-linked requires GroupService.isGroupMember; standalone is open to any caller.

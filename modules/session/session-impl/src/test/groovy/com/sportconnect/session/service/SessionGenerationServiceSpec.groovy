@@ -139,10 +139,10 @@ class SessionGenerationServiceSpec extends Specification {
         !result.toLocalDate().isBefore(LocalDate.now())
     }
 
-    def "closePastSessions flips SCHEDULED sessions past their end time to COMPLETED, looping until empty"() {
+    def "closePastSessions flips SCHEDULED/ONGOING sessions past their end time to COMPLETED, looping until empty"() {
         given:
         def pageable = PageRequest.of(0, 200)
-        def session1 = Session.builder().id(1L).status(SessionStatus.SCHEDULED).build()
+        def session1 = Session.builder().id(1L).status(SessionStatus.ONGOING).build()
         // total=201 with page size 200 forces hasNext()==true, so the loop re-queries once more
         def firstBatch = new PageImpl([session1], pageable, 201)
         def secondBatch = new PageImpl([], pageable, 0)
@@ -151,12 +151,13 @@ class SessionGenerationServiceSpec extends Specification {
         service.closePastSessions()
 
         then:
-        2 * sessionRepository.findPastScheduledSessions(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >>>
+        2 * sessionRepository.findSessionsToComplete(
+                [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as LocalDateTime, pageable) >>>
                 [firstBatch, secondBatch]
         1 * sessionRepository.saveAll({ List sessions -> sessions[0].status == SessionStatus.COMPLETED })
     }
 
-    def "closePastSessions does nothing when there are no past-scheduled sessions"() {
+    def "closePastSessions does nothing when there are no past-due sessions"() {
         given:
         def pageable = PageRequest.of(0, 200)
 
@@ -164,7 +165,36 @@ class SessionGenerationServiceSpec extends Specification {
         service.closePastSessions()
 
         then:
-        1 * sessionRepository.findPastScheduledSessions(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >> new PageImpl([])
+        1 * sessionRepository.findSessionsToComplete(
+                [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as LocalDateTime, pageable) >> new PageImpl([])
+        0 * sessionRepository.saveAll(_)
+    }
+
+    def "startOngoingSessions flips SCHEDULED sessions whose start has arrived to ONGOING, looping until empty"() {
+        given:
+        def pageable = PageRequest.of(0, 200)
+        def session1 = Session.builder().id(1L).status(SessionStatus.SCHEDULED).build()
+        def firstBatch = new PageImpl([session1], pageable, 201)
+        def secondBatch = new PageImpl([], pageable, 0)
+
+        when:
+        service.startOngoingSessions()
+
+        then:
+        2 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >>>
+                [firstBatch, secondBatch]
+        1 * sessionRepository.saveAll({ List sessions -> sessions[0].status == SessionStatus.ONGOING })
+    }
+
+    def "startOngoingSessions does nothing when nothing is ready to start"() {
+        given:
+        def pageable = PageRequest.of(0, 200)
+
+        when:
+        service.startOngoingSessions()
+
+        then:
+        1 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >> new PageImpl([])
         0 * sessionRepository.saveAll(_)
     }
 }

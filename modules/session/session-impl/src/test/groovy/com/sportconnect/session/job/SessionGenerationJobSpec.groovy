@@ -19,6 +19,14 @@ class SessionGenerationJobSpec extends Specification {
         1 * sessionGenerationService.generateUpcomingSessions()
     }
 
+    def "startOngoingSessions delegates to the service"() {
+        when:
+        job.startOngoingSessions()
+
+        then:
+        1 * sessionGenerationService.startOngoingSessions()
+    }
+
     def "closePastSessions delegates to the service"() {
         when:
         job.closePastSessions()

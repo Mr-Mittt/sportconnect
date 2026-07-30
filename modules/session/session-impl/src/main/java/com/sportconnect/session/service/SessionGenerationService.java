@@ -33,6 +33,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SessionGenerationService {
 
+    private static final int START_BATCH_SIZE = 200;
     private static final int CLOSE_BATCH_SIZE = 200;
 
     private final SessionRepository sessionRepository;
@@ -80,22 +81,45 @@ public class SessionGenerationService {
         }
     }
 
+    /** SCHEDULED → ONGOING once scheduledStart arrives (only for sessions with a scheduledEndAt
+     * — see {@link SessionRepository#findSessionsToStart}). */
+    @Transactional
+    public void startOngoingSessions() {
+        LocalDateTime now = LocalDateTime.now();
+        Pageable pageable = PageRequest.of(0, START_BATCH_SIZE);
+        Slice<Session> batch;
+        do {
+            // Always re-query page 0 — rows flipped to ONGOING below drop out of this
+            // SCHEDULED-status filter, so the "next" batch is always page 0 again.
+            batch = sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, now, pageable);
+            if (batch.isEmpty()) {
+                break;
+            }
+            List<Session> sessions = batch.getContent();
+            sessions.forEach(s -> s.setStatus(SessionStatus.ONGOING));
+            sessionRepository.saveAll(sessions);
+            log.info("Started {} session(s)", sessions.size());
+        } while (batch.hasNext());
+    }
+
+    /** SCHEDULED or ONGOING → COMPLETED once the session's effective end has passed. */
     @Transactional
     public void closePastSessions() {
         LocalDateTime cutoff = LocalDateTime.now();
         Pageable pageable = PageRequest.of(0, CLOSE_BATCH_SIZE);
+        List<SessionStatus> openStatuses = List.of(SessionStatus.SCHEDULED, SessionStatus.ONGOING);
         Slice<Session> batch;
         do {
             // Always re-query page 0 — rows flipped to COMPLETED below drop out of this
-            // SCHEDULED-status filter, so the "next" batch is always page 0 again.
-            batch = sessionRepository.findPastScheduledSessions(SessionStatus.SCHEDULED, cutoff, pageable);
+            // status filter, so the "next" batch is always page 0 again.
+            batch = sessionRepository.findSessionsToComplete(openStatuses, cutoff, pageable);
             if (batch.isEmpty()) {
                 break;
             }
             List<Session> sessions = batch.getContent();
             sessions.forEach(s -> s.setStatus(SessionStatus.COMPLETED));
             sessionRepository.saveAll(sessions);
-            log.info("Closed {} past-scheduled session(s)", sessions.size());
+            log.info("Closed {} past session(s)", sessions.size());
         } while (batch.hasNext());
     }
 

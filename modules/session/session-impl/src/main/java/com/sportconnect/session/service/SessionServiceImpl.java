@@ -6,6 +6,7 @@ import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.location.api.dto.LocationResponse;
 import com.sportconnect.location.api.service.LocationService;
+import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
@@ -38,6 +39,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -155,19 +157,28 @@ public class SessionServiceImpl implements SessionService {
 
     @Override
     @Transactional
-    public void deleteSession(Long sessionId, UUID userId) {
+    public SessionResponse cancelSession(Long sessionId, UUID userId, CancelSessionRequest request) {
         Session session = findSessionOrThrow(sessionId);
         requireCanModify(session, userId);
-        if (session.getStatus() == SessionStatus.COMPLETED) {
-            throw new BadRequestException("Cannot delete a completed session");
+        if (session.getStatus() == SessionStatus.COMPLETED || session.getStatus() == SessionStatus.CANCELLED) {
+            throw new BadRequestException("Cannot cancel a session that is already " + session.getStatus());
         }
-        sessionRepository.delete(session);
+
+        session.setStatus(SessionStatus.CANCELLED);
+        session.setCancelReason(request != null ? request.getReason() : null);
+        session.setCancelledBy(userId);
+        session.setCancelledAt(LocalDateTime.now());
+
+        return toResponse(sessionRepository.save(session));
     }
 
     @Override
     @Transactional
     public void joinSession(Long sessionId, UUID userId) {
         Session session = findSessionOrThrow(sessionId);
+        if (session.getStatus() == SessionStatus.CANCELLED) {
+            throw new BadRequestException("Cannot join a cancelled session");
+        }
         if (session.getGroupId() != null && !groupService.isGroupMember(session.getGroupId(), userId)) {
             throw new BadRequestException("Only group members can join this session");
         }
@@ -252,12 +263,16 @@ public class SessionServiceImpl implements SessionService {
             return Collections.emptyList();
         }
 
-        List<UUID> creatorIds = sessions.stream().map(Session::getCreatedBy).distinct().collect(Collectors.toList());
+        List<UUID> userIds = sessions.stream()
+                .flatMap(s -> Stream.of(s.getCreatedBy(), s.getCancelledBy()))
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
         List<Long> sportIds = sessions.stream().map(Session::getSportId).filter(Objects::nonNull).distinct().collect(Collectors.toList());
         List<Long> locationIds = sessions.stream().map(Session::getLocationId).distinct().collect(Collectors.toList());
         List<Long> sessionIds = sessions.stream().map(Session::getId).collect(Collectors.toList());
 
-        Map<UUID, UserResponse> users = userService.getUsersByIds(creatorIds);
+        Map<UUID, UserResponse> users = userService.getUsersByIds(userIds);
         Map<Long, SportResponse> sports = sportIds.isEmpty() ? Collections.emptyMap() : sportService.getSportsByIds(sportIds);
         Map<Long, LocationResponse> locations = locationService.getLocationsByIds(locationIds);
         Map<Long, Long> participantCounts = sessionParticipantRepository
@@ -284,6 +299,11 @@ public class SessionServiceImpl implements SessionService {
                         .scheduledStart(session.getScheduledStart())
                         .scheduledEndAt(session.getScheduledEndAt())
                         .status(session.getStatus())
+                        .cancelReason(session.getCancelReason())
+                        .cancelledBy(session.getCancelledBy())
+                        .cancelledByFullName(Optional.ofNullable(session.getCancelledBy())
+                                .map(users::get).map(UserResponse::getFullName).orElse(null))
+                        .cancelledAt(session.getCancelledAt())
                         .participantCount(participantCounts.getOrDefault(session.getId(), 0L))
                         .createdAt(session.getCreatedAt())
                         .updatedAt(session.getUpdatedAt())

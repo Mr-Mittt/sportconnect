@@ -1,6 +1,7 @@
 package com.sportconnect.session.controller;
 
 import com.sportconnect.common.dto.ApiResponse;
+import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
@@ -112,21 +113,22 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Session updated successfully", response));
     }
 
-    @Operation(summary = "Delete a session", description = "Same gating as update. Rejected if the session is already completed.")
+    @Operation(summary = "Cancel a session", description = "Same gating as update. Soft action — the row is kept with status=CANCELLED. Rejected if already completed or cancelled.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session deleted"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not permitted, or already completed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session cancelled"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not permitted, or already completed/cancelled"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
     })
-    @DeleteMapping("/{sessionId}")
+    @PostMapping("/{sessionId}/cancel")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<ApiResponse<Void>> deleteSession(
+    public ResponseEntity<ApiResponse<SessionResponse>> cancelSession(
             @PathVariable Long sessionId,
-            @AuthenticationPrincipal String userIdStr) {
+            @AuthenticationPrincipal String userIdStr,
+            @Valid @RequestBody(required = false) CancelSessionRequest request) {
         UUID userId = UUID.fromString(userIdStr);
-        sessionService.deleteSession(sessionId, userId);
-        return ResponseEntity.ok(ApiResponse.success("Session deleted successfully", null));
+        SessionResponse response = sessionService.cancelSession(sessionId, userId, request);
+        return ResponseEntity.ok(ApiResponse.success("Session cancelled successfully", response));
     }
 
     @Operation(summary = "Join a session", description = "Group-linked sessions require group membership; standalone is open.")

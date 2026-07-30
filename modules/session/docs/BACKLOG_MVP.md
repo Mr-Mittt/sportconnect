@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | SESSION-1 | Session domain core — manual create/join/leave, group or standalone | `DONE` |
 | 2 | SESSION-2 | Scheduled auto-generation job for group-recurring sessions | `DONE` |
+| 3 | SESSION-3 | Full status lifecycle (ONGOING, CANCELLED) + cancel reason/who/when | `DONE` |
 
 ---
 
@@ -40,15 +41,15 @@ GET    /api/sessions/{id}
 GET    /api/sessions/group/{groupId}          paginated, private-group visibility enforced
 GET    /api/sessions/mine                     paginated, caller's standalone sessions
 PUT    /api/sessions/{id}                     creator (standalone) or owner/admin (group)
-DELETE /api/sessions/{id}                     same gating; rejected if already COMPLETED
+POST   /api/sessions/{id}/cancel               same gating; soft — see SESSION-3
 POST   /api/sessions/{id}/join
 DELETE /api/sessions/{id}/leave
 GET    /api/sessions/{id}/participants        paginated, JOINED-only
 ```
 
-**Deferred (not part of SESSION-1):** recurrence/auto-generation (SESSION-2), `TOURNAMENT`/
-`TRAINING` session types (enum values reserved only), `CANCELLED` status, session
-capacity/waitlist, geo-proximity/nearby session search.
+**Deferred (not part of SESSION-1):** recurrence/auto-generation (SESSION-2), full status
+lifecycle/cancellation (SESSION-3), `TOURNAMENT`/`TRAINING` session types (enum values reserved
+only), session capacity/waitlist, geo-proximity/nearby session search.
 
 ## SESSION-2 — Scheduled auto-generation job
 
@@ -60,3 +61,15 @@ the new `Session.locationNote`, and closes past `SCHEDULED` sessions to `COMPLET
 `SessionGenerationJob` (`@Scheduled`: hourly generate, every-15-min close). No distributed lock
 — single-instance deployment today; the `unique_group_session_start` DB constraint is the
 idempotency backstop for a race.
+
+## SESSION-3 — Full status lifecycle (ONGOING, CANCELLED)
+
+`SessionStatus` gains `ONGOING` (automatic, via `SessionGenerationJob.startOngoingSessions`,
+every 15 min — `SCHEDULED` → `ONGOING` once `scheduledStart` arrives, only for sessions with a
+`scheduledEndAt`; no-duration sessions skip straight to `COMPLETED` as before) and `CANCELLED`
+(manual only, via the new `POST /api/sessions/{id}/cancel`, same creator/owner-admin gating as
+`updateSession`). `Session` gains `cancelReason` (optional free text), `cancelledBy`,
+`cancelledAt`. **`deleteSession`/`DELETE /api/sessions/{id}` was removed entirely** — cancel is
+now the only way to remove a session from active use, always soft (row kept). `joinSession`
+rejects joining a `CANCELLED` session. No notification/cleanup flow on cancel (joined
+participants aren't told) — not requested, not built.

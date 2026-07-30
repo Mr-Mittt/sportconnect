@@ -86,4 +86,7 @@
     <include file="db/changelog/changes/V034__add_auto_generate_sessions_to_group_settings.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/changes/V036__add_recurrence_location_note_to_groups.sql" relativeToChangelogFile="false"/>
 
+    <!-- Session ONGOING/CANCELLED status lifecycle -->
+    <include file="db/changelog/changes/V037__add_status_lifecycle_to_sessions.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

@@ -6,6 +6,7 @@ import com.sportconnect.group.api.dto.GroupResponse
 import com.sportconnect.group.api.service.GroupService
 import com.sportconnect.location.api.dto.LocationResponse
 import com.sportconnect.location.api.service.LocationService
+import com.sportconnect.session.api.dto.CancelSessionRequest
 import com.sportconnect.session.api.dto.CreateSessionRequest
 import com.sportconnect.session.api.dto.ParticipantStatus
 import com.sportconnect.session.api.dto.SessionStatus
@@ -193,18 +194,69 @@ class SessionServiceImplSpec extends Specification {
         thrown(BadRequestException)
     }
 
-    def "deleteSession rejects deleting a completed session"() {
+    def "cancelSession rejects cancelling a completed session"() {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).status(SessionStatus.COMPLETED).build()
 
         when:
-        sessionService.deleteSession(1L, userId)
+        sessionService.cancelSession(1L, userId, CancelSessionRequest.builder().build())
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         thrown(BadRequestException)
-        0 * sessionRepository.delete(_)
+        0 * sessionRepository.save(_)
+    }
+
+    def "cancelSession rejects cancelling an already-cancelled session"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).status(SessionStatus.CANCELLED).build()
+
+        when:
+        sessionService.cancelSession(1L, userId, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        thrown(BadRequestException)
+        0 * sessionRepository.save(_)
+    }
+
+    def "cancelSession sets status/reason/cancelledBy/cancelledAt for the creator of a standalone session"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).status(SessionStatus.SCHEDULED).build()
+        def request = CancelSessionRequest.builder().reason("Rained out").build()
+
+        when:
+        def result = sessionService.cancelSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s ->
+            s.status == SessionStatus.CANCELLED &&
+            s.cancelReason == "Rained out" &&
+            s.cancelledBy == userId &&
+            s.cancelledAt != null
+        }) >> { Session s -> s }
+        interaction { stubBatchEnrichment() }
+        result.status == SessionStatus.CANCELLED
+        result.cancelReason == "Rained out"
+    }
+
+    def "cancelSession for a group-linked session requires canManageMembers"() {
+        given:
+        def session = Session.builder().id(1L).groupId(5L).createdBy(UUID.randomUUID()).status(SessionStatus.SCHEDULED).build()
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.cancelSession(1L, userId, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * groupService.canManageMembers(5L, userId) >> false
+        thrown(BadRequestException)
+        0 * sessionRepository.save(_)
     }
 
     def "getSession throws ResourceNotFoundException when missing"() {
@@ -214,6 +266,21 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(99L) >> Optional.empty()
         thrown(ResourceNotFoundException)
+    }
+
+    def "joinSession rejects joining a cancelled session"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).status(SessionStatus.CANCELLED).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        0 * groupService._
+        thrown(BadRequestException)
+        0 * sessionParticipantRepository.save(_)
     }
 
     def "joinSession requires group membership for a group-linked session"() {

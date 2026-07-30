@@ -43,6 +43,14 @@ public class SessionResponse {
 
     private SessionStatus status;
 
+    private String cancelReason;
+
+    private UUID cancelledBy;
+
+    private String cancelledByFullName;
+
+    private LocalDateTime cancelledAt;
+
     private Long participantCount;
 
     private LocalDateTime createdAt;
