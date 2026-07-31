@@ -45,10 +45,10 @@ describe('useLocationPickerData', () => {
     const { result } = renderHook(() => useLocationPickerData(1, true, vi.fn(), vi.fn()), { wrapper });
     expect(result.current.mode).toBe('search');
 
-    act(() => result.current.switchToCreate());
+    act(() => result.current.onSwitchToCreate());
     expect(result.current.mode).toBe('create');
 
-    act(() => result.current.switchToSearch());
+    act(() => result.current.onSwitchToSearch());
     expect(result.current.mode).toBe('search');
   });
 
@@ -58,8 +58,8 @@ describe('useLocationPickerData', () => {
     });
     const { result } = renderHook(() => useLocationPickerData(1, true, vi.fn(), vi.fn()), { wrapper });
 
-    act(() => result.current.setInputValue('  riverside  '));
-    act(() => result.current.submitSearch());
+    act(() => result.current.onInputChange('  riverside  '));
+    act(() => result.current.onSearch());
 
     await waitFor(() =>
       expect(apiClient.get).toHaveBeenCalledWith('/locations/search', {
@@ -73,7 +73,7 @@ describe('useLocationPickerData', () => {
     const onClose = vi.fn();
     const { result } = renderHook(() => useLocationPickerData(1, true, onSelect, onClose), { wrapper });
 
-    act(() => result.current.selectResult(location));
+    act(() => result.current.onSelectResult(location));
     expect(onSelect).toHaveBeenCalledWith(location);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -89,8 +89,8 @@ describe('useLocationPickerData', () => {
     });
     const { result } = renderHook(() => useLocationPickerData(1, true, vi.fn(), vi.fn()), { wrapper });
 
-    act(() => result.current.setMapsUrlInput('https://maps.app.goo.gl/abc'));
-    act(() => result.current.resolveUrl());
+    act(() => result.current.onMapsUrlChange('https://maps.app.goo.gl/abc'));
+    act(() => result.current.onResolveUrl());
 
     await waitFor(() => expect(result.current.coordinates).toEqual({ latitude: 21.0285, longitude: 105.8542 }));
     expect(result.current.mapSeed).toBe(1);
@@ -108,9 +108,9 @@ describe('useLocationPickerData', () => {
     });
     const { result } = renderHook(() => useLocationPickerData(1, true, vi.fn(), vi.fn()), { wrapper });
 
-    act(() => result.current.setName('My Own Name'));
-    act(() => result.current.setMapsUrlInput('https://maps.app.goo.gl/abc'));
-    act(() => result.current.resolveUrl());
+    act(() => result.current.onNameChange('My Own Name'));
+    act(() => result.current.onMapsUrlChange('https://maps.app.goo.gl/abc'));
+    act(() => result.current.onResolveUrl());
 
     await waitFor(() => expect(result.current.coordinates).not.toBeNull());
     expect(result.current.name).toBe('My Own Name');
@@ -122,8 +122,8 @@ describe('useLocationPickerData', () => {
     });
     const { result } = renderHook(() => useLocationPickerData(1, true, vi.fn(), vi.fn()), { wrapper });
 
-    act(() => result.current.setMapsUrlInput('https://maps.app.goo.gl/unresolvable'));
-    act(() => result.current.resolveUrl());
+    act(() => result.current.onMapsUrlChange('https://maps.app.goo.gl/unresolvable'));
+    act(() => result.current.onResolveUrl());
 
     await waitFor(() => expect(result.current.resolvedNoCoordinates).toBe(true));
     expect(result.current.coordinates).toBeNull();
@@ -131,7 +131,7 @@ describe('useLocationPickerData', () => {
 
   it('moving the pin updates coordinates without bumping mapSeed', () => {
     const { result } = renderHook(() => useLocationPickerData(1, true, vi.fn(), vi.fn()), { wrapper });
-    act(() => result.current.movePin(10, 20));
+    act(() => result.current.onMovePin(10, 20));
     expect(result.current.coordinates).toEqual({ latitude: 10, longitude: 20 });
     expect(result.current.mapSeed).toBe(0);
   });
@@ -139,9 +139,9 @@ describe('useLocationPickerData', () => {
   it('canSave is false until a name is entered', () => {
     const { result } = renderHook(() => useLocationPickerData(1, true, vi.fn(), vi.fn()), { wrapper });
     expect(result.current.canSave).toBe(false);
-    act(() => result.current.setName('Riverside Sports Complex'));
+    act(() => result.current.onNameChange('Riverside Sports Complex'));
     expect(result.current.canSave).toBe(true);
-    act(() => result.current.setName('   '));
+    act(() => result.current.onNameChange('   '));
     expect(result.current.canSave).toBe(false);
   });
 
@@ -153,10 +153,10 @@ describe('useLocationPickerData', () => {
     const onClose = vi.fn();
     const { result } = renderHook(() => useLocationPickerData(1, true, onSelect, onClose), { wrapper });
 
-    act(() => result.current.setName('Riverside Sports Complex'));
-    act(() => result.current.setAddress('123 Main St'));
-    act(() => result.current.movePin(21.0285, 105.8542));
-    act(() => result.current.saveNewLocation());
+    act(() => result.current.onNameChange('Riverside Sports Complex'));
+    act(() => result.current.onAddressChange('123 Main St'));
+    act(() => result.current.onMovePin(21.0285, 105.8542));
+    act(() => result.current.onSave());
 
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith(location));
     expect(apiClient.post).toHaveBeenCalledWith('/locations', {
@@ -176,8 +176,8 @@ describe('useLocationPickerData', () => {
       { wrapper, initialProps: { isOpen: true } },
     );
 
-    act(() => result.current.switchToCreate());
-    act(() => result.current.setName('Draft Name'));
+    act(() => result.current.onSwitchToCreate());
+    act(() => result.current.onNameChange('Draft Name'));
     expect(result.current.mode).toBe('create');
     expect(result.current.name).toBe('Draft Name');
 

@@ -3,20 +3,9 @@
 // Id types mirror the backend's generation strategy: Location.id is a JPA Long/Postgres
 // BIGSERIAL, so `number` is correct here (same reasoning as feed/types.ts).
 
-export interface Location {
-  id: number;
-  sportId: number;
-  sportName: string;
-  name: string;
-  address: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  sourceMapsUrl: string | null;
-  claimedByVendorId: number | null;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-}
+// Moved to shared/types/location.ts (CLIENT-SESSION-1 — shared/types/session.ts needs it
+// too), re-exported here so this feature's own imports don't change.
+export type { Location } from '@/shared/types/location';
 
 export interface CreateLocationPayload {
   sportId: number;

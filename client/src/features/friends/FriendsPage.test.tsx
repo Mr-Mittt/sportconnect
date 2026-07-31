@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
@@ -22,7 +23,11 @@ const testUser = {
 
 function wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 function apiResponse<T>(data: T) {
@@ -55,12 +60,14 @@ const receivedRequest: FriendRequest = {
   createdAt: '2026-07-20T00:00:00',
 };
 
-/** Static (test-invariant) GET responses — right rail's page-independent
- * hooks (matches stays mock, no HTTP call at all). */
+/** Static (test-invariant) GET responses — right rail's page-independent hooks.
+ * CLIENT-SESSION-1: useUpcomingMatches (matches rail) is real now — /groups/user/
+ * returning empty means no group-session fan-out, but /sessions/mine still fires. */
 function staticGetResponse(url: string): { data: unknown } | undefined {
   if (url === '/hashtags/trending') return emptyPage();
   if (url === '/posts/broadcast') return emptyPage();
   if (url.startsWith('/groups/user/')) return emptyPage();
+  if (url === '/sessions/mine') return emptyPage();
   if (url === '/sports/profiles/user/me') return apiResponse([]);
   return undefined;
 }

@@ -1,18 +1,13 @@
-import type { SportKey } from './sport';
-
 // Right-rail content types (UpcomingMatches/TrendingHashtags/GroupBroadcasts) —
 // moved out of home-feed/types.ts (FEED-5) once the Groups page needed the
 // same rail as Home Feed. Mirrors HF-2's SportKey/SportProfile relocation:
 // shared code never imports from features.
-
-export interface UpcomingMatch {
-  id: string;
-  sport: SportKey;
-  title: string;
-  startsAt: string; // ISO timestamp
-  location: string;
-  spotsLeft: number; // 0 = full
-}
+//
+// UpcomingMatches' own data type is `Session` (shared/types/session.ts), not a
+// bespoke projection here — CLIENT-SESSION-1 de-mocked it against the real
+// `modules/session` domain, and the full Session shape (status, group vs.
+// standalone, location) is exactly what the card and the Matches page both need,
+// so there's no lighter projection worth introducing.
 
 export interface TrendingHashtag {
   tag: string;

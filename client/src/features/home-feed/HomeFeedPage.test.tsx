@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
 import type { PageResponse, Post } from '@/features/feed/types';
+import type { Location } from '@/shared/types/location';
+import type { Session } from '@/shared/types/session';
 import { HomeFeedPage } from './HomeFeedPage';
 
 const testUser = {
@@ -99,7 +101,7 @@ function wrapperFor(initialPath: string) {
 }
 const wrapper = wrapperFor('/');
 
-const getMatchCtas = () => screen.getAllByRole('button', { name: /join|view details/ });
+const getMatchCtas = () => screen.getAllByRole('button', { name: /view details/i });
 // #fridayrun exists both as a post hashtag and a trending row — scope to the rail cards
 const trendingCard = () => within(screen.getByRole('region', { name: 'Trending hashtags' }));
 const broadcastsCard = () => within(screen.getByRole('region', { name: 'Group broadcasts' }));
@@ -174,6 +176,69 @@ function fixtureBroadcastPost(overrides: Partial<Post> = {}): Post {
   });
 }
 
+// CLIENT-SESSION-1: real session fixtures replacing the old mockUpcomingMatches array
+// (football/basketball/tennis, matching the old mock's 3-row/1-per-sport shape 1:1 so
+// existing "3 rail cards" / "filters to 1" assertions keep passing unchanged).
+function sessionLocation(name: string): Location {
+  return {
+    id: 1,
+    sportId: 5,
+    sportName: 'Soccer',
+    name,
+    address: null,
+    latitude: null,
+    longitude: null,
+    sourceMapsUrl: null,
+    claimedByVendorId: null,
+    createdBy: 'user-1',
+    createdAt: '2026-06-01T10:00:00',
+    updatedAt: '2026-06-01T10:00:00',
+  };
+}
+
+function sessionFixture(overrides: Partial<Session> & Pick<Session, 'id' | 'sportId'>): Session {
+  return {
+    groupId: null,
+    sessionType: 'STANDALONE',
+    createdBy: 'user-1',
+    createdByFullName: 'Jordan Lee',
+    sportName: 'Soccer',
+    title: 'Session',
+    description: null,
+    location: sessionLocation('Central Turf Park'),
+    locationNote: null,
+    scheduledStart: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    scheduledEndAt: null,
+    status: 'SCHEDULED',
+    cancelReason: null,
+    cancelledBy: null,
+    cancelledByFullName: null,
+    cancelledAt: null,
+    participantCount: 1,
+    createdAt: '2026-06-01T10:00:00',
+    updatedAt: '2026-06-01T10:00:00',
+    ...overrides,
+  };
+}
+
+const sessionFixtures: Session[] = [
+  sessionFixture({ id: 1, sportId: 5, sportName: 'Soccer', title: 'Warriors vs Riverside FC' }),
+  sessionFixture({
+    id: 2,
+    sportId: 6,
+    sportName: 'Basketball',
+    title: 'Sunday pickup run',
+    location: sessionLocation('Riverside Courts'),
+  }),
+  sessionFixture({
+    id: 3,
+    sportId: 2,
+    sportName: 'Tennis',
+    title: 'Singles ladder match',
+    location: sessionLocation('Greenwood Club'),
+  }),
+];
+
 /** Static (test-invariant) GET responses shared by every mock below —
  * /sports/profiles, /hashtags/trending, /posts/broadcast, /groups/user all
  * return the same fixtures regardless of which test/scenario is running.
@@ -191,6 +256,15 @@ function staticGetResponse(url: string): { data: unknown } | undefined {
   }
   if (url === '/groups/user/user-1') {
     return { data: { success: true, message: '', data: feedPage([fixtureGroup]), timestamp: '' } };
+  }
+  // CLIENT-SESSION-1: useUpcomingMatches is real now — fans out to every group the user
+  // belongs to (just fixtureGroup here, empty) plus the caller's own standalone sessions
+  // (sessionFixtures, matching the old mock's 3-row shape).
+  if (url === `/sessions/group/${fixtureGroup.id}`) {
+    return { data: { success: true, message: '', data: feedPage([]), timestamp: '' } };
+  }
+  if (url === '/sessions/mine') {
+    return { data: { success: true, message: '', data: feedPage(sessionFixtures), timestamp: '' } };
   }
   return undefined;
 }

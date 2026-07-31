@@ -16,7 +16,9 @@ is the living reference, that one is the point-in-time implementation record), `
 `seed-join-requests` admin route), `services/chat/docs/CHAT-10_E2E_MSW_HANDLERS.md` (new
 `group-chat.spec.ts`/`direct-chat.spec.ts`, `mocks/handlers/chat.ts`, `mocks/fakeChatSocket.ts` — real,
 MSW-backed e2e coverage for the two chat surfaces CHAT-8/CHAT-9 wired up, including the WebSocket-vs-MSW
-resolution `friends-journey.spec.ts` had flagged as still open).
+resolution `friends-journey.spec.ts` had flagged as still open), `CLIENT-SESSION-1_SESSION_UI.md` (new
+`matches-journey.spec.ts`, `mocks/handlers/{locations,sessions}.ts` — the real `/matches` page's
+create/list/join/leave/cancel journey).
 
 ---
 
@@ -164,6 +166,7 @@ e2e/
     post-deep-link.spec.ts
     group-chat.spec.ts        # CHAT-10
     direct-chat.spec.ts       # CHAT-10
+    matches-journey.spec.ts   # CLIENT-SESSION-1
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
@@ -184,6 +187,8 @@ e2e/
       sport.ts
       friends.ts
       chat.ts                   # CHAT-10 — a separate backend (services/chat), bare paths, no ApiResponse<T> envelope
+      locations.ts               # CLIENT-SESSION-1
+      sessions.ts                # CLIENT-SESSION-1
 ```
 
 ---
@@ -300,7 +305,7 @@ helpers called.
 | 3. "All" | Filters clear back to 3 | |
 | 4. like toggle | `likeCount` 3→4→3, `aria-pressed` flips | Optimistic — no network wait asserted |
 | 5. hashtag click | Opens `HashtagPostsModal` with 2 matching posts (`mockPost`+`mockGroupPost`, both tagged `fridayrun`); reachable from both an inline post tag and the Trending row; Escape closes it; **no URL change** | Modal, not a route — user decision, see FEED-6's delta |
-| 6. match CTAs | Both "open" and "full" variants clickable and distinguishable | No destination screen — matches backend doesn't exist yet, deliberate no-op |
+| 6. match CTA | "View details" navigates to `/matches?session={id}` with the detail dialog pre-opened, then returns to `/` for the remaining steps | CLIENT-SESSION-1: real destination now (was a deliberate no-op before the session backend existed); matches come from `mocks/handlers/sessions.ts`'s default 3-session fixture set (one per sport) |
 | 7. "Add sport" | `aria-disabled="true"` | Relies on the fixture user being **at** the 3-sport cap |
 | 8. delete | "..." menu only on the caller's own post (not Priya Shah's); delete removes it, count 3→2 | |
 
@@ -513,6 +518,24 @@ path other specs already exercise incidentally.
 |---|---|---|
 | `loading a shared post link directly renders the post + comments, even outside the feed's first page` | `seedPaginatedFeedOnNextLoad(mockSessionId)` (21-post fixture) → direct `seedAuthenticatedSession(page, '/posts/1020')` (post **1020**, index 20 — only reachable via "Load more" on page 0) → dialog renders the right post/comments on a cold load; closing returns to `/` with the normal Home Feed visible | Drives the real "shared link, not logged in yet" flow end-to-end (redirect to `/login`, bounce back) — the same generic mechanism AUTH-8's step 7 already covers, not something FEED-12 built itself. Proves the dialog doesn't depend on the feed having paginated the post into view first. |
 | `opening comments from the feed updates the URL, and closing returns to it` | Click a post's "View comments" from `/` → URL becomes `/posts/{id}` → Close → URL back to `/` | Confirms the in-feed path is also URL-addressable now (`navigate` push on open, `replace` on close), not just the direct-load path above |
+
+### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1, one `test()` with 6 steps)
+
+`/matches` (real page, replacing `ComingSoonPage`) — list/create/join/leave/cancel. Fixtures:
+`mockSession` (standalone, created by the test user, `participantCount: 0`) and `mockGroupSession`
+(linked to `mockGroup`, created by someone else — the test user is only a `group_member`, proving
+Cancel stays hidden). The create step searches the pre-seeded `mockLocation` rather than exercising
+`LocationPicker`'s paste-a-link/resolve flow — that's covered by `LocationPicker`'s own
+component/Storybook tests, not e2e.
+
+| Step | What it checks | Notes |
+|---|---|---|
+| 1. load | Both sessions render with the correct "Standalone" / group-name label | |
+| 2. sport filter | Filtering to Basketball narrows to `mockSession`; "All" restores both | |
+| 3. join/leave | Open `mockSession`'s detail → Join → "Leave" appears, participant count 0→1 → Leave → back to "Join", count 1→0 | |
+| 4. cancel | Cancel session → reason field → Confirm cancel → "Cancelled" + reason shown; list card reflects it without a reload | Creator of a standalone session can manage it |
+| 5. group session, member-only | Open `mockGroupSession`'s detail → no "Cancel session" button, Join still available | The test user is a `group_member`, not owner/admin, and didn't create it |
+| 6. create | "Create session" → pick Basketball → "Choose location" → search "Riverside" → select `mockLocation` → fill start time/title → submit → dialog closes, new session appears in the list | Two dialogs open simultaneously (`CreateSessionModal` + nested `LocationPicker`) — scoped via `getByRole('dialog', { name: ... })` on each |
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 

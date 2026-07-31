@@ -121,7 +121,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | **Phase 9 — Direct messaging — ARCHIVED (2026-07-26, user decision, see `documentation/md/archive/chat/DM-1_DM-2_TICKETS.md`) — folded into the fresh chat re-plan** | | | |
 | **Phase 10 — Session & Location UI (new, not in either epic — backend done 2026-07-30, see `documentation/md/SESSION_LOCATION_DESIGN.md`)** | | | |
 | 53 | CLIENT-LOC-1 | `LocationPicker` component — search, Google-Maps-link paste-and-resolve, OSM/Leaflet preview pin, Get Directions | `DONE` |
-| 54 | CLIENT-SESSION-1 | Session create/list/join/leave/cancel UI, de-mocks HF-4 (`UpcomingMatches`) | `TODO` |
+| 54 | CLIENT-SESSION-1 | Session create/list/join/leave/cancel UI, de-mocks HF-4 (`UpcomingMatches`) | `DONE` |
 
 **Dependencies:**
 ```
@@ -2511,8 +2511,8 @@ existing `Location` (LOC-1's backend is create-only).
 ---
 
 ### CLIENT-SESSION-1 · Session create/list/join/leave/cancel UI
-**Status:** `TODO` · **Type:** Feature · **Filed:** 2026-07-30, alongside CLIENT-LOC-1
-**Dependency:** CLIENT-LOC-1 (`TODO`, needed for the location field on create/edit) · backend
+**Status:** `DONE` (2026-07-31, `client/docs/CLIENT-SESSION-1_SESSION_UI.md`) · **Type:** Feature · **Filed:** 2026-07-30, alongside CLIENT-LOC-1
+**Dependency:** CLIENT-LOC-1 (`DONE`, needed for the location field on create/edit) · backend
 `modules/session` SESSION-1/SESSION-2/SESSION-3 (all `DONE`) — full status lifecycle
 (`SCHEDULED`/`ONGOING`/`COMPLETED`/`CANCELLED`) and `POST /api/sessions/{id}/cancel` already exist,
 build against that contract directly rather than an earlier hard-delete shape.
@@ -2529,4 +2529,15 @@ delete endpoint — `SessionServiceImpl` removed it entirely in SESSION-3).
 **Explicitly out of scope (may need its own follow-up ticket, not yet filed):** wiring a group's
 recurring-session schedule config (`GET`/`PUT /api/groups/{id}/recurrence`, `autoGenerateSessions`
 toggle) into the Groups page Settings tab — that's a separate owner-facing surface from the
-session list/create/join flow this ticket covers.
+session list/create/join flow this ticket covers. Also out of scope: an edit-session UI
+(`useUpdateSession` hook exists, no UI consumes it — the ticket title only lists create/list/
+join/leave/cancel).
+
+**Delta (resolved during implementation, see `client/docs/CLIENT-SESSION-1_SESSION_UI.md` for the
+full writeup):** `/matches` already had a real, reserved route (`ComingSoonPage`) and nav tab — this
+ticket built the real page there rather than a modal-only flow. The real `Session` has no capacity/
+max-participants field, so HF-4's "N spots left, join / Full" CTA has no equivalent — replaced with
+a status badge + a single "View details" CTA; join/leave moved into the detail dialog. There is no
+batch "sessions across my groups" endpoint and no way to discover a standalone session someone else
+created (only `GET /sessions/mine` = caller's own, `GET /sessions/group/{id}` = one group) — a real
+backend gap, not solved here, worth its own follow-up ticket if session discovery needs to widen.

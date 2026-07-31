@@ -5,6 +5,8 @@ import { resetChatHandlersState } from './handlers/chat.ts';
 import { resetFeedSession, seedPostsState } from './handlers/feed.ts';
 import { resetFriendHandlersState } from './handlers/friends.ts';
 import { resetGroupHandlersState, seedJoinRequestsState } from './handlers/groups.ts';
+import { resetLocationHandlersState } from './handlers/locations.ts';
+import { resetSessionHandlersState } from './handlers/sessions.ts';
 import { resetSportHandlersState, seedZeroSportProfilesState } from './handlers/sport.ts';
 import { mockJoinRequest } from './fixtures.ts';
 import { buildPaginatedFeed } from './paginatedFeedFixture.ts';
@@ -60,6 +62,8 @@ function resetSession(sessionId: string): void {
   resetSportHandlersState(sessionId);
   resetFriendHandlersState(sessionId);
   resetChatHandlersState(sessionId);
+  resetLocationHandlersState(sessionId);
+  resetSessionHandlersState(sessionId);
   resetOverrides(sessionId);
   requestLogs.delete(sessionId);
 }

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { GroupBroadcasts } from '@/shared/components/GroupBroadcasts';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
@@ -35,6 +36,7 @@ const noop = () => {};
  * person, same "remount via key" precedent `GroupChatTab` uses per group.
  */
 export function FriendsPage() {
+  const navigate = useNavigate();
   const data = useFriendsPageData();
   const user = useAuthStore((state) => state.user)!;
 
@@ -116,8 +118,8 @@ export function FriendsPage() {
             matches={upcomingMatchesQuery.data}
             activeSport="all"
             sportsByKey={sportsByKey}
-            onSeeAll={noop}
-            onSelectMatch={noop}
+            onSeeAll={() => navigate('/matches')}
+            onSelectMatch={(sessionId) => navigate(`/matches?session=${sessionId}`)}
           />
           <TrendingHashtags
             hashtags={hashtagsQuery.data}

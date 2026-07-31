@@ -1,18 +1,20 @@
 import { IconClock, IconMapPin } from '@tabler/icons-react';
 import { createElement } from 'react';
+import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
+import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
 import { getSportIcon } from '@/shared/lib/sportIcons';
 import { formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import type { UpcomingMatch } from '@/shared/types/rail';
+import type { Session } from '@/shared/types/session';
 
 interface UpcomingMatchesProps {
-  matches: UpcomingMatch[];
+  matches: Session[];
   activeSport: SportKey | 'all';
   sportsByKey: Record<SportKey, SportProfile>;
   onSeeAll: () => void;
-  onSelectMatch: (matchId: string) => void;
+  onSelectMatch: (sessionId: number) => void;
   /**
    * Max matches rendered after the sport filter; the rest live behind
    * "See all" (cap of 4 decided on the HF-4 backlog entry — the epic left it open).
@@ -21,11 +23,13 @@ interface UpcomingMatchesProps {
 }
 
 /**
- * Right-rail card listing the user's upcoming matches, filtered by the same
- * activeSport as the Feed (HF-7 shares the state). Presentational: both CTA
- * variants ("N spots left, join" / "Full, view details") only report the match
- * via onSelectMatch — no join logic or destination screen exists in this MVP,
- * and the data stays mock throughout (no matches backend).
+ * Right-rail card listing the user's upcoming sessions, filtered by the same
+ * activeSport as the Feed (HF-7 shares the state). Presentational: the single
+ * "View details" CTA only reports the session via onSelectMatch — join/leave/
+ * cancel live in the Matches page's detail dialog, not here (CLIENT-SESSION-1:
+ * the real Session has no capacity/spots-left concept, and cheaply knowing
+ * "have I joined" per card isn't available without fetching each session's
+ * participants, so this card shows a status badge instead of a join button).
  */
 export function UpcomingMatches({
   matches,
@@ -36,7 +40,9 @@ export function UpcomingMatches({
   maxVisible = 4,
 }: UpcomingMatchesProps) {
   const filtered =
-    activeSport === 'all' ? matches : matches.filter((match) => match.sport === activeSport);
+    activeSport === 'all'
+      ? matches
+      : matches.filter((match) => sportKeyForId(match.sportId) === activeSport);
   const visible = filtered.slice(0, maxVisible);
 
   return (
@@ -61,14 +67,12 @@ export function UpcomingMatches({
         <div className="flex flex-col gap-2.5">
           {visible.map((match) => {
             // Real sportProfiles (SPORT-1) doesn't guarantee coverage of every
-            // mock match's sport the way the old always-3-sport mock did — same
+            // session's sport the way the old always-3-sport mock did — same
             // "render without a badge rather than crash" fallback PostCard uses
             // for an unresolved SportProfile.
-            const sport = sportsByKey[match.sport] as SportProfile | undefined;
-            const isFull = match.spotsLeft === 0;
-            const ctaText = isFull
-              ? 'Full, view details'
-              : `${match.spotsLeft} spots left, join`;
+            const sportKey = sportKeyForId(match.sportId);
+            const sport = sportKey !== undefined ? sportsByKey[sportKey] : undefined;
+            const title = match.title ?? `${match.sportName} session`;
             return (
               <div key={match.id} className="border-hairline rounded-lg border-border p-2.5">
                 <div className="mb-1 flex items-center gap-1.5">
@@ -87,30 +91,33 @@ export function UpcomingMatches({
                       })}
                     </span>
                   )}
-                  <div className="text-xs font-medium leading-snug text-text-primary">
-                    {match.title}
-                  </div>
+                  <div className="text-xs font-medium leading-snug text-text-primary">{title}</div>
+                  <span
+                    className={cn(
+                      'ml-auto shrink-0 text-2xs font-medium',
+                      SESSION_STATUS_CLASSES[match.status],
+                    )}
+                  >
+                    {SESSION_STATUS_LABEL[match.status]}
+                  </span>
                 </div>
                 <div className="mb-0.5 flex items-center gap-1 text-2xs text-text-secondary">
                   <IconClock className="size-3 shrink-0" aria-hidden="true" />
-                  {formatStartTime(match.startsAt)}
+                  {formatStartTime(match.scheduledStart)}
                 </div>
                 <div className="mb-2 flex items-center gap-1 text-2xs text-text-secondary">
                   <IconMapPin className="size-3 shrink-0" aria-hidden="true" />
-                  {match.location}
+                  {match.location.name}
                 </div>
                 <button
                   type="button"
                   // Three sibling cards would otherwise expose identical
-                  // "2 spots left, join" names to a screen reader
-                  aria-label={`${match.title} — ${ctaText}`}
+                  // "View details" names to a screen reader
+                  aria-label={`${title} — View details`}
                   onClick={() => onSelectMatch(match.id)}
-                  className={cn(
-                    'border-hairline w-full cursor-pointer rounded-lg border-border-strong py-1.25 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
-                    isFull ? 'text-text-muted' : 'text-text-primary',
-                  )}
+                  className="border-hairline w-full cursor-pointer rounded-lg border-border-strong py-1.25 text-xs text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                 >
-                  {ctaText}
+                  View details
                 </button>
               </div>
             );

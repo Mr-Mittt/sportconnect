@@ -2,7 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import type { UpcomingMatch } from '@/shared/types/rail';
+import type { Location } from '@/shared/types/location';
+import type { Session, SessionStatus } from '@/shared/types/session';
 import { UpcomingMatches } from './UpcomingMatches';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
@@ -16,24 +17,58 @@ const sportsByKey: Record<SportKey, SportProfile> = {
   tennis: { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' },
 };
 
+const SPORT_ID: Record<SportKey, number> = { football: 5, basketball: 6, tennis: 2 };
+
+function makeLocation(name: string): Location {
+  return {
+    id: 1,
+    sportId: 5,
+    sportName: 'Football',
+    name,
+    address: null,
+    latitude: null,
+    longitude: null,
+    sourceMapsUrl: null,
+    claimedByVendorId: null,
+    createdBy: 'user-1',
+    createdAt: '2026-06-01T10:00:00',
+    updatedAt: '2026-06-01T10:00:00',
+  };
+}
+
 const makeMatch = (
-  id: string,
+  id: number,
   sport: SportKey,
   title: string,
-  spotsLeft: number,
-): UpcomingMatch => ({
-  id,
-  sport,
+  status: SessionStatus = 'SCHEDULED',
+): Session => ({
+  groupId: null,
+  sessionType: 'STANDALONE',
+  createdBy: 'user-1',
+  createdByFullName: 'Jordan Lee',
+  sportId: SPORT_ID[sport],
+  sportName: sport,
   title,
-  startsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-  location: 'Central Turf Park',
-  spotsLeft,
+  description: null,
+  location: makeLocation('Central Turf Park'),
+  locationNote: null,
+  scheduledStart: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  scheduledEndAt: null,
+  status,
+  cancelReason: null,
+  cancelledBy: null,
+  cancelledByFullName: null,
+  cancelledAt: null,
+  participantCount: 1,
+  createdAt: '2026-06-01T10:00:00',
+  updatedAt: '2026-06-01T10:00:00',
+  id,
 });
 
 const matches = [
-  makeMatch('match-1', 'football', 'Warriors vs Riverside', 2),
-  makeMatch('match-2', 'basketball', 'Sunday pickup run', 4),
-  makeMatch('match-3', 'tennis', 'Singles ladder match', 0),
+  makeMatch(1, 'football', 'Warriors vs Riverside'),
+  makeMatch(2, 'basketball', 'Sunday pickup run', 'ONGOING'),
+  makeMatch(3, 'tennis', 'Singles ladder match', 'CANCELLED'),
 ];
 
 const renderMatches = (
@@ -50,8 +85,7 @@ const renderMatches = (
     />,
   );
 
-// One CTA per visible match, so its count is the visible-row count
-const getCtas = () => screen.getAllByRole('button', { name: /join|view details/ });
+const getCtas = () => screen.getAllByRole('button', { name: /View details/ });
 
 describe('UpcomingMatches', () => {
   it('shows all matches when activeSport is "all"', () => {
@@ -68,30 +102,31 @@ describe('UpcomingMatches', () => {
   });
 
   it('renders the empty state for a sport with no matches', () => {
-    renderMatches({ matches: matches.filter((m) => m.sport !== 'tennis'), activeSport: 'tennis' });
+    renderMatches({ matches: matches.filter((m) => m.sportId !== SPORT_ID.tennis), activeSport: 'tennis' });
     expect(screen.getByText('No upcoming matches for this sport.')).toBeInTheDocument();
-    expect(screen.queryAllByRole('button', { name: /join|view details/ })).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: /View details/ })).toHaveLength(0);
     // Header and "See all" survive the empty state (mockup parity)
     expect(screen.getByText('Upcoming')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'See all' })).toBeInTheDocument();
   });
 
-  it('labels open and full matches with distinct CTA text', () => {
+  it('shows a distinct status label per session status', () => {
     renderMatches();
-    expect(screen.getByText('2 spots left, join')).toBeInTheDocument();
-    expect(screen.getByText('Full, view details')).toBeInTheDocument();
+    expect(screen.getByText('Scheduled')).toBeInTheDocument();
+    expect(screen.getByText('Ongoing')).toBeInTheDocument();
+    expect(screen.getByText('Cancelled')).toBeInTheDocument();
   });
 
-  it('reports the match id from both the open and the full CTA', async () => {
+  it('reports the session id from the "View details" CTA', async () => {
     const user = userEvent.setup();
     const onSelectMatch = vi.fn();
     renderMatches({ onSelectMatch });
 
     await user.click(screen.getByRole('button', { name: /Warriors vs Riverside/ }));
-    expect(onSelectMatch).toHaveBeenCalledWith('match-1');
+    expect(onSelectMatch).toHaveBeenCalledWith(1);
 
     await user.click(screen.getByRole('button', { name: /Singles ladder match/ }));
-    expect(onSelectMatch).toHaveBeenCalledWith('match-3');
+    expect(onSelectMatch).toHaveBeenCalledWith(3);
   });
 
   it('"See all" calls onSeeAll', async () => {
@@ -102,9 +137,7 @@ describe('UpcomingMatches', () => {
     expect(onSeeAll).toHaveBeenCalledTimes(1);
   });
 
-  const six = Array.from({ length: 6 }, (_, i) =>
-    makeMatch(`match-f${i}`, 'football', `Round ${i}`, 2),
-  );
+  const six = Array.from({ length: 6 }, (_, i) => makeMatch(100 + i, 'football', `Round ${i}`));
 
   it('caps visible matches at 4 by default', () => {
     renderMatches({ matches: six });
@@ -123,5 +156,10 @@ describe('UpcomingMatches', () => {
     renderMatches({ sportsByKey: {} as Record<SportKey, SportProfile> });
     expect(getCtas()).toHaveLength(3);
     expect(screen.getByText('Warriors vs Riverside')).toBeInTheDocument();
+  });
+
+  it('falls back to "{sportName} session" when title is null', () => {
+    renderMatches({ matches: [{ ...matches[0], title: null }] });
+    expect(screen.getByText('football session')).toBeInTheDocument();
   });
 });

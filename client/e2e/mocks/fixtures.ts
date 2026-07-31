@@ -15,6 +15,8 @@ import type {
 } from '../../src/features/feed/types.ts';
 import type { FriendRequest, FriendUser, UserSearchResult } from '../../src/features/friends/types.ts';
 import { hoursAgo, hoursFromNow } from '../../src/shared/lib/mockClock.ts';
+import type { Location } from '../../src/shared/types/location.ts';
+import type { Session } from '../../src/shared/types/session.ts';
 import type { UserSportProfileResponse } from '../../src/shared/types/sport.ts';
 import { MOCK_SERVER_URL } from './mockServerConfig.ts';
 
@@ -485,6 +487,108 @@ export const mockSearchResultUser: UserSearchResult = {
   city: null,
   country: null,
   friendshipStatus: 'NONE',
+};
+
+// CLIENT-SESSION-1: a shared, sport-scoped venue — sportId 6 (Basketball),
+// matching mockSession below. Reused by the Matches page's "search existing
+// location" step in the create-session flow.
+export const mockLocation: Location = {
+  id: 1,
+  sportId: 6,
+  sportName: 'Basketball',
+  name: 'Riverside Courts',
+  address: '12 River Rd',
+  latitude: 21.0285,
+  longitude: 105.8542,
+  sourceMapsUrl: null,
+  claimedByVendorId: null,
+  createdBy: mockUser.id,
+  createdAt: '2026-06-01T10:00:00',
+  updatedAt: '2026-06-01T10:00:00',
+};
+
+// A standalone session mockUser created themselves (Basketball, sportId 6) —
+// not yet joined by mockUser (participantCount 0), so the journey can
+// exercise Join -> Leave -> Cancel on one fixture.
+export const mockSession: Session = {
+  id: 1,
+  groupId: null,
+  sessionType: 'STANDALONE',
+  createdBy: mockUser.id,
+  createdByFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  sportId: 6,
+  sportName: 'Basketball',
+  title: 'Sunday pickup run',
+  description: 'Casual 5v5, all levels welcome.',
+  location: mockLocation,
+  locationNote: 'Court 3',
+  scheduledStart: hoursFromNow(24),
+  scheduledEndAt: null,
+  status: 'SCHEDULED',
+  cancelReason: null,
+  cancelledBy: null,
+  cancelledByFullName: null,
+  cancelledAt: null,
+  participantCount: 0,
+  createdAt: '2026-06-20T10:00:00',
+  updatedAt: '2026-06-20T10:00:00',
+};
+
+// A group-linked session for mockGroup (id 1, Soccer, currentUserRole
+// group_member — mockUser is a member, not owner/admin) — created by someone
+// else, so canManage is false for mockUser: proves the Cancel button is
+// correctly hidden for a session the caller can only join/leave, not manage.
+export const mockGroupSession: Session = {
+  id: 2,
+  groupId: mockGroup.id,
+  sessionType: 'GROUP_RECURRING',
+  createdBy: 'other-user-id',
+  createdByFullName: 'Priya Shah',
+  sportId: mockGroup.sportId,
+  sportName: 'Soccer',
+  title: 'Friday 5-a-side',
+  description: null,
+  location: { ...mockLocation, id: 2, sportId: mockGroup.sportId, sportName: 'Soccer' },
+  locationNote: null,
+  scheduledStart: hoursFromNow(48),
+  scheduledEndAt: null,
+  status: 'SCHEDULED',
+  cancelReason: null,
+  cancelledBy: null,
+  cancelledByFullName: null,
+  cancelledAt: null,
+  participantCount: 3,
+  createdAt: '2026-06-21T10:00:00',
+  updatedAt: '2026-06-21T10:00:00',
+};
+
+// A group-linked session for mockOwnedGroup (id 3, Tennis, currentUserRole
+// group_owner) — gives the Home Feed rail's default 3-session fixture set
+// (Basketball/mockSession, Soccer/mockGroupSession, Tennis/this one) so
+// home-feed-journey.spec.ts's pre-existing "3 rail matches, 1 basketball"
+// assertions keep holding without that spec seeding its own session state.
+export const mockOwnedGroupSession: Session = {
+  id: 3,
+  groupId: mockOwnedGroup.id,
+  sessionType: 'GROUP_RECURRING',
+  createdBy: mockUser.id,
+  createdByFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  sportId: mockOwnedGroup.sportId,
+  sportName: 'Tennis',
+  title: 'Ladder night',
+  description: null,
+  location: { ...mockLocation, id: 3, sportId: mockOwnedGroup.sportId, sportName: 'Tennis' },
+  locationNote: null,
+  scheduledStart: hoursFromNow(72),
+  scheduledEndAt: null,
+  status: 'SCHEDULED',
+  cancelReason: null,
+  cancelledBy: null,
+  cancelledByFullName: null,
+  cancelledAt: null,
+  participantCount: 4,
+  createdAt: '2026-06-22T10:00:00',
+  updatedAt: '2026-06-22T10:00:00',
 };
 
 /** Builds a Spring Data `Page<T>`-shaped response from a full content array. */
