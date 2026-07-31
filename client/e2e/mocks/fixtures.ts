@@ -522,7 +522,13 @@ export const mockSession: Session = {
   description: 'Casual 5v5, all levels welcome.',
   location: mockLocation,
   locationNote: 'Court 3',
-  scheduledStart: hoursFromNow(24),
+  // Fixed, not hoursFromNow() — this is computed server-side (mock server's own real
+  // wall-clock time at process start), which Playwright's page.clock.setFixedTime() (browser-
+  // only) never affects. A relative "hours from now" value here drifted between every mock
+  // server restart, silently changing app-home-feed.spec.ts's rendered relative-time text and
+  // causing its baselines to look randomly stale (same class of bug HF-11's fixtures already
+  // avoid — every other timestamp in this file is a literal string for the same reason).
+  scheduledStart: '2026-08-01T19:00:00',
   scheduledEndAt: null,
   status: 'SCHEDULED',
   cancelReason: null,
@@ -550,7 +556,7 @@ export const mockGroupSession: Session = {
   description: null,
   location: { ...mockLocation, id: 2, sportId: mockGroup.sportId, sportName: 'Soccer' },
   locationNote: null,
-  scheduledStart: hoursFromNow(48),
+  scheduledStart: '2026-08-02T19:00:00', // fixed — see mockSession's note on hoursFromNow()
   scheduledEndAt: null,
   status: 'SCHEDULED',
   cancelReason: null,
@@ -579,7 +585,7 @@ export const mockOwnedGroupSession: Session = {
   description: null,
   location: { ...mockLocation, id: 3, sportId: mockOwnedGroup.sportId, sportName: 'Tennis' },
   locationNote: null,
-  scheduledStart: hoursFromNow(72),
+  scheduledStart: '2026-08-03T19:00:00', // fixed — see mockSession's note on hoursFromNow()
   scheduledEndAt: null,
   status: 'SCHEDULED',
   cancelReason: null,
