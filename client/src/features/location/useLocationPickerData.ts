@@ -139,23 +139,25 @@ export function useLocationPickerData(
     [onSelect, onClose],
   );
 
+  // Field names match LocationPickerProps 1:1 (mostly aliases of the local state/callbacks
+  // above) so every caller can spread this return value directly into <LocationPicker />.
   return {
     mode,
-    switchToCreate,
-    switchToSearch,
+    onSwitchToCreate: switchToCreate,
+    onSwitchToSearch: switchToSearch,
 
     inputValue,
-    setInputValue,
-    submitSearch,
+    onInputChange: setInputValue,
+    onSearch: submitSearch,
     results: searchQuery.data?.content ?? [],
     isSearching: searchQuery.isLoading,
     isSearchError: searchQuery.isError,
-    selectResult,
+    onSelectResult: selectResult,
 
-    openGoogleMaps,
+    onOpenGoogleMaps: openGoogleMaps,
     mapsUrlInput,
-    setMapsUrlInput,
-    resolveUrl,
+    onMapsUrlChange: setMapsUrlInput,
+    onResolveUrl: resolveUrl,
     isResolving: resolveMutation.isPending,
     isResolveError: resolveMutation.isError,
     resolvedNoCoordinates:
@@ -164,13 +166,13 @@ export function useLocationPickerData(
       resolveMutation.data.longitude === null,
     coordinates,
     mapSeed,
-    movePin,
+    onMovePin: movePin,
     name,
-    setName,
+    onNameChange: setName,
     address,
-    setAddress,
+    onAddressChange: setAddress,
     canSave,
-    saveNewLocation,
+    onSave: saveNewLocation,
     isSaving: createMutation.isPending,
     isSaveError: createMutation.isError,
   };

@@ -2031,7 +2031,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
 - **Complete forgot-password** — wire up UserService lookup in `AuthController`
 - **Notifications service** — in-app notifications for likes, comments, friend requests, group events
 
-### Session & Location System (backend implemented 2026-07-30; CLIENT-LOC-1 landed 2026-07-31)
+### Session & Location System (backend implemented 2026-07-30; client fully landed 2026-07-31)
 - Full design: `documentation/md/SESSION_LOCATION_DESIGN.md`. Two new domains:
   **`modules/location`** (LOC-1, `DONE`) — a shared, crowdsourced, sport-scoped venue directory.
   Any authenticated user can add a `Location` (name, address, optional PostGIS point). No paid
@@ -2055,14 +2055,20 @@ explicit go-ahead at each step (full story in A3's summary doc):
 - New endpoints: `/api/locations/**`, `/api/sessions/**`, `GET`/`PUT /api/groups/{id}/recurrence`.
 - **Client:** `CLIENT-LOC-1` (`DONE`, 2026-07-31, `client/docs/CLIENT-LOC-1_LOCATIONPICKER_COMPONENT.md`)
   — the shared `LocationPicker` component (search + Google-Maps-link paste-and-resolve +
-  draggable OSM/Leaflet preview pin + Get Directions deep-link), built standalone against the
-  real backend, no page consumes it yet. New client dependency: `leaflet` + `react-leaflet@^4`
-  (pinned to v4.x — v5 needs React 19, this app is on React 18.3.1).
+  draggable OSM/Leaflet preview pin + Get Directions deep-link). New client dependency:
+  `leaflet` + `react-leaflet@^4` (pinned to v4.x — v5 needs React 19, this app is on React 18.3.1).
+  `CLIENT-SESSION-1` (`DONE`, 2026-07-31, `client/docs/CLIENT-SESSION-1_SESSION_UI.md`) — the real
+  `/matches` page (replacing `ComingSoonPage`; nav tab was already wired to it), fully de-mocking
+  `UpcomingMatches`: list (caller's standalone sessions + every group they belong to's sessions —
+  no batch/discovery endpoint exists, a flagged backend gap), sport filter, create (standalone or
+  for a group the caller owns/admins, via `LocationPicker`), detail dialog with join/leave and
+  creator/owner/admin-gated cancel. Fixed a real integration bug found while wiring this up:
+  `useLocationPickerData`'s returned field names never matched `LocationPickerProps`' expected
+  names (CLIENT-LOC-1 shipped with no page consuming it, so nothing caught the mismatch).
 - Deferred: full Calling System (Session Calling/Game Calling posts, slot-filling),
   geo-proximity/nearby search, Vendor/Facility claiming, `Location` editing, in-app routing,
-  `TOURNAMENT`/`TRAINING` session types (enum reserved only), capacity/waitlist.
-- **Next:** `CLIENT-SESSION-1` (session create/list/join/leave/cancel UI, de-mocks
-  `UpcomingMatches`, uses `LocationPicker`) — `TODO`, depends on `CLIENT-LOC-1`.
+  `TOURNAMENT`/`TRAINING` session types (enum reserved only), capacity/waitlist, session edit UI
+  (hook exists, no UI), wiring group recurrence config into the Groups page Settings tab.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

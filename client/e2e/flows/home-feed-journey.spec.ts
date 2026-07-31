@@ -17,10 +17,15 @@ import { expect, test } from '../mocks/test.ts';
  * sleeps.
  *
  * Premise corrections vs the epic's literal steps (user-approved; see the
- * backlog entry's deltas): the match-CTA callback is still a deliberate no-op
- * until a matches backend exists, so step 6 asserts reachability and distinct
- * states rather than a fabricated side effect; the fixture user is AT the
- * 3-sport cap, so step 7 asserts HF-2's at-cap behavior (aria-disabled).
+ * backlog entry's deltas): the fixture user is AT the 3-sport cap, so step 7
+ * asserts HF-2's at-cap behavior (aria-disabled).
+ *
+ * CLIENT-SESSION-1 update: matches are real now (modules/session via
+ * e2e/mocks/handlers/sessions.ts's stateful fixtures — mockSession/Basketball,
+ * mockGroupSession/Soccer, mockOwnedGroupSession/Tennis, one per sport so
+ * step 1/2/3's "3 matches, 1 basketball" counts still hold). The old
+ * spots-left/full CTA is gone — every card shows a status badge + a single
+ * "View details" CTA, which now has a real destination (step 6, rewritten).
  *
  * AUTH-4 update: Home Feed now sits behind ProtectedRoute — step 1 seeds an
  * authenticated session (MSW-backed) instead of a bare page.goto('/').
@@ -52,7 +57,7 @@ test('Home Feed journey', async ({ page }) => {
   const upcoming = page.getByRole('region', { name: 'Upcoming matches' });
   const trending = page.getByRole('region', { name: 'Trending hashtags' });
   const broadcasts = page.getByRole('region', { name: 'Group broadcasts' });
-  const matchCtas = upcoming.getByRole('button', { name: /join|view details/ });
+  const matchCtas = upcoming.getByRole('button', { name: /view details/i });
 
   await test.step('1. load — shell, switcher, feed, and all three rail blocks render', async () => {
     await seedAuthenticatedSession(page);
@@ -122,14 +127,11 @@ test('Home Feed journey', async ({ page }) => {
     await expect(dialog).not.toBeVisible();
   });
 
-  await test.step('6. match CTAs — open and full variants both reachable and distinct', async () => {
-    const openCta = upcoming.getByRole('button', { name: /2 spots left, join/ });
-    const fullCta = upcoming.getByRole('button', { name: /Full, view details/ });
-    await expect(openCta).toBeEnabled();
-    await expect(fullCta).toBeEnabled();
-    await openCta.click();
-    await fullCta.click();
-    await expect(page).toHaveURL('/'); // no destination screen yet
+  await test.step('6. match CTA — "View details" navigates to the Matches page with the session pre-opened', async () => {
+    await matchCtas.first().click();
+    await expect(page).toHaveURL(/\/matches\?session=\d+/);
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.goto('/'); // back to Home Feed for the remaining steps
   });
 
   await test.step('7. "Add sport" — at the 3-sport cap (real SPORT-1 profiles) it renders aria-disabled (HF-2 behavior)', async () => {

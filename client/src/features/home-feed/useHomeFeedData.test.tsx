@@ -145,6 +145,58 @@ const broadcastsPage = {
   empty: false,
 };
 
+// CLIENT-SESSION-1: one standalone session, so tests asserting
+// `data.upcomingMatches.length` unchanged from before the real hook keep passing.
+const sessionLocation = {
+  id: 1,
+  sportId: 5,
+  sportName: 'Soccer',
+  name: 'Central Turf Park',
+  address: null,
+  latitude: null,
+  longitude: null,
+  sourceMapsUrl: null,
+  claimedByVendorId: null,
+  createdBy: 'user-1',
+  createdAt: '2026-06-01T10:00:00',
+  updatedAt: '2026-06-01T10:00:00',
+};
+const fixtureSession = {
+  id: 1,
+  groupId: null,
+  sessionType: 'STANDALONE',
+  createdBy: 'user-1',
+  createdByFullName: 'Jordan Lee',
+  sportId: 5,
+  sportName: 'Soccer',
+  title: 'Weekend pickup run',
+  description: null,
+  location: sessionLocation,
+  locationNote: null,
+  scheduledStart: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  scheduledEndAt: null,
+  status: 'SCHEDULED',
+  cancelReason: null,
+  cancelledBy: null,
+  cancelledByFullName: null,
+  cancelledAt: null,
+  participantCount: 1,
+  createdAt: '2026-07-01T10:00:00',
+  updatedAt: '2026-07-01T10:00:00',
+};
+const mySessionsPage = {
+  content: [fixtureSession],
+  totalPages: 1,
+  totalElements: 1,
+  number: 0,
+  size: 20,
+  first: true,
+  last: true,
+  numberOfElements: 1,
+  empty: false,
+};
+const emptySessionsPage = { ...mySessionsPage, content: [], totalElements: 0, numberOfElements: 0, empty: true };
+
 /**
  * Mocks GET /posts/feed with `feedPage`; GET /sports/profiles/user/{id},
  * GET /hashtags/trending, GET /posts/broadcast, and GET /groups/user/{id}
@@ -168,6 +220,8 @@ function mockFeedAndSportProfiles(feedPage: PageResponse<Post>) {
     if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
     if (url === '/posts/broadcast') return apiResponse(broadcastsPage);
     if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
+    if (url === `/sessions/group/${fixtureGroup.id}`) return apiResponse(emptySessionsPage);
+    if (url === '/sessions/mine') return apiResponse(mySessionsPage);
     throw new Error(`unexpected GET ${url}`);
   });
 }
@@ -292,6 +346,8 @@ describe('useHomeFeedData', () => {
       }
       if (url === '/posts/broadcast') return apiResponse(broadcastsPage);
       if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
+      if (url === `/sessions/group/${fixtureGroup.id}`) return apiResponse(emptySessionsPage);
+      if (url === '/sessions/mine') return apiResponse(mySessionsPage);
       throw new Error(`unexpected GET ${url}`);
     });
 
@@ -316,6 +372,8 @@ describe('useHomeFeedData', () => {
         return apiResponse(broadcastsPage);
       }
       if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
+      if (url === `/sessions/group/${fixtureGroup.id}`) return apiResponse(emptySessionsPage);
+      if (url === '/sessions/mine') return apiResponse(mySessionsPage);
       throw new Error(`unexpected GET ${url}`);
     });
 
@@ -339,6 +397,8 @@ describe('useHomeFeedData', () => {
       if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
       if (url === '/posts/broadcast') return apiResponse(broadcastsPage);
       if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
+      if (url === `/sessions/group/${fixtureGroup.id}`) return apiResponse(emptySessionsPage);
+      if (url === '/sessions/mine') return apiResponse(mySessionsPage);
       throw new Error(`unexpected GET ${url}`);
     });
 

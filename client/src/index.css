@@ -20,6 +20,10 @@
   --color-text-muted: #6e6d66;
   --color-text-accent: #185fa5;
   --color-text-danger: #a32d2d;
+  /* CLIENT-SESSION-1: an ONGOING session's status label — no green token existed
+     yet. Tailwind's green-700 (#15803d), chosen for its known >=4.5:1 contrast on
+     both surface-1/surface-2, same WCAG-AA bar text-danger/text-muted were tuned to. */
+  --color-text-success: #15803d;
 
   /* Accent background (chips, subtle highlights) */
   --color-bg-accent: #e6f1fb;

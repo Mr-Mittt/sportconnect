@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useGroupsPageStore } from '@/app/groupsPageStore';
 import { useCancelJoinRequest } from '@/features/feed/hooks/useCancelJoinRequest';
@@ -85,6 +86,7 @@ const noop = () => {};
  * open state, same `activeCommentsPostId`-style convention already used here.
  */
 export function GroupsPage() {
+  const navigate = useNavigate();
   const activeSport = useGroupsPageStore((state) => state.activeSport);
   const setActiveSport = useGroupsPageStore((state) => state.setActiveSport);
   // FEED-12: page-local only, unlike HomeFeedPage's URL-driven version —
@@ -585,8 +587,8 @@ export function GroupsPage() {
               matches={data.upcomingMatches}
               activeSport={activeSport}
               sportsByKey={sportsByKey}
-              onSeeAll={noop}
-              onSelectMatch={noop}
+              onSeeAll={() => navigate('/matches')}
+              onSelectMatch={(sessionId) => navigate(`/matches?session=${sessionId}`)}
             />
             <TrendingHashtags
               hashtags={data.hashtags}

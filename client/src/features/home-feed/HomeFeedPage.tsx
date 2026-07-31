@@ -229,8 +229,8 @@ export function HomeFeedPage() {
               matches={data.upcomingMatches}
               activeSport={activeSport}
               sportsByKey={sportsByKey}
-              onSeeAll={noop}
-              onSelectMatch={noop}
+              onSeeAll={() => navigate('/matches')}
+              onSelectMatch={(sessionId) => navigate(`/matches?session=${sessionId}`)}
             />
             <TrendingHashtags
               hashtags={data.hashtags}

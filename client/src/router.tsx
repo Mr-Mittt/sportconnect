@@ -4,6 +4,7 @@ import { RegisterPage } from './features/auth/RegisterPage';
 import { FriendsPage } from './features/friends/FriendsPage';
 import { GroupsPage } from './features/groups/GroupsPage';
 import { HomeFeedPage } from './features/home-feed/HomeFeedPage';
+import { MatchesPage } from './features/session/MatchesPage';
 import { RootLayout } from './RootLayout';
 import { AppShell } from './shared/components/AppShell';
 import { ComingSoonPage } from './shared/components/ComingSoonPage';
@@ -56,7 +57,7 @@ export const routes = createRoutesFromElements(
       <Route path="/posts/:postId" element={<HomeFeedPage />} />
       <Route path="/friends" element={<FriendsPage />} />
       <Route path="/groups" element={<GroupsPage />} />
-      <Route path="/matches" element={<ComingSoonPage title="Matches" />} />
+      <Route path="/matches" element={<MatchesPage />} />
       <Route path="/profile" element={<ComingSoonPage title="Profile" />} />
     </Route>
   </Route>,

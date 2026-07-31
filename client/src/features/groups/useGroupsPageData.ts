@@ -17,13 +17,14 @@ import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useTrendingHashtags } from '@/shared/hooks/useTrendingHashtags';
 import { useUpcomingMatches } from '@/shared/hooks/useUpcomingMatches';
 import type { SportProfile } from '@/shared/types/sport';
-import type { GroupBroadcast, TrendingHashtag, UpcomingMatch } from '@/shared/types/rail';
+import type { GroupBroadcast, TrendingHashtag } from '@/shared/types/rail';
+import type { Session } from '@/shared/types/session';
 
 export interface GroupsPageData {
   sportProfiles: SportProfile[];
   groups: Group[];
   posts: Post[];
-  upcomingMatches: UpcomingMatch[];
+  upcomingMatches: Session[];
   hashtags: TrendingHashtag[];
   broadcasts: GroupBroadcast[];
   /** post.groupId -> { groupName, sportId }, for each GROUP_POST/

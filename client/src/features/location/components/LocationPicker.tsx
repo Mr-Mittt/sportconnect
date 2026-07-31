@@ -1,13 +1,14 @@
 import { IconArrowLeft, IconExternalLink, IconMapPin, IconSearch } from '@tabler/icons-react';
 import type { Location } from '../types';
 import type { LocationPickerMode } from '../useLocationPickerData';
+import { directionsUrl } from '@/shared/lib/mapsLinks';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { LocationMapPreview } from './LocationMapPreview';
 
-interface LocationPickerProps {
+export interface LocationPickerProps {
   isOpen: boolean;
   onClose: () => void;
 
@@ -42,10 +43,6 @@ interface LocationPickerProps {
   onSave: () => void;
   isSaving: boolean;
   isSaveError: boolean;
-}
-
-function directionsUrl(latitude: number, longitude: number): string {
-  return `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
 }
 
 /**
