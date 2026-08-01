@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -89,5 +90,53 @@ public class LocationController {
             @Valid @RequestBody ResolveMapsUrlRequest request) {
         ResolvedMapsUrlResponse response = locationService.resolveGoogleMapsUrl(request.getUrl());
         return ResponseEntity.ok(ApiResponse.success("URL resolved", response));
+    }
+
+    @Operation(summary = "Favorite a location", description = "Requires an active sport profile for the location's sport.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Favorited"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Already favorited, or no active profile for this sport"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Location not found")
+    })
+    @PostMapping("/{locationId}/favorite")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> favoriteLocation(
+            @PathVariable Long locationId,
+            @AuthenticationPrincipal String userIdStr) {
+        locationService.favoriteLocation(UUID.fromString(userIdStr), locationId);
+        return ResponseEntity.ok(ApiResponse.success("Location favorited successfully", null));
+    }
+
+    @Operation(summary = "Unfavorite a location")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Unfavorited"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not currently favorited"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    @DeleteMapping("/{locationId}/favorite")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> unfavoriteLocation(
+            @PathVariable Long locationId,
+            @AuthenticationPrincipal String userIdStr) {
+        locationService.unfavoriteLocation(UUID.fromString(userIdStr), locationId);
+        return ResponseEntity.ok(ApiResponse.success("Location unfavorited successfully", null));
+    }
+
+    @Operation(summary = "List the caller's favorite locations for a sport")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Favorite locations (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "sportId is required"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    @GetMapping("/favorites")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Page<LocationResponse>>> getFavoriteLocations(
+            @AuthenticationPrincipal String userIdStr,
+            @RequestParam Long sportId,
+            Pageable pageable) {
+        Page<LocationResponse> response = locationService.getFavoriteLocations(
+                UUID.fromString(userIdStr), sportId, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Favorite locations retrieved successfully", response));
     }
 }

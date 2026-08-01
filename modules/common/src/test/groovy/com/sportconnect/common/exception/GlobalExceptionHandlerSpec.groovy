@@ -8,6 +8,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import spock.lang.Specification
 
@@ -49,6 +50,13 @@ class GlobalExceptionHandlerSpec extends Specification {
 
         @PostMapping("/test/validated")
         void validated(@Valid @RequestBody SampleRequest request) { }
+
+        // Named explicitly: Groovy-compiled classes don't retain parameter names the way javac
+        // does for the real controllers, so an unnamed @RequestParam here throws a different
+        // exception (IllegalArgumentException, not MissingServletRequestParameterException) than
+        // it does in production Java code — this would falsely fail through to the 500 catch-all.
+        @GetMapping("/test/required-param")
+        void requiredParam(@RequestParam("sportId") Long sportId) { }
     }
 
     MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new DummyController())
@@ -101,6 +109,14 @@ class GlobalExceptionHandlerSpec extends Specification {
                 .andExpect(jsonPath('$.success').value(false))
                 .andExpect(jsonPath('$.message').value("Validation failed"))
                 .andExpect(jsonPath('$.data.name').value("name must not be blank"))
+    }
+
+    def "MissingServletRequestParameterException maps to 400, not the 500 catch-all"() {
+        expect:
+        mockMvc.perform(get("/test/required-param"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath('$.success').value(false))
+                .andExpect(jsonPath('$.message').value("sportId is required"))
     }
 
     def "generic Exception maps to 500 without leaking the real message"() {
