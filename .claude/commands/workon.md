@@ -56,6 +56,8 @@ For client tickets the epic spec usually already answers most of these (componen
 
 For infra tickets, adapt the questions: "who" is the dev team/CI, "entry point" is the trigger (PR paths, manual dispatch, compose command), "inputs/outputs" are triggers → artifacts/checks/running services. The backlog entry + `INFRASTRUCTURE_LAYOUT_AND_CICD.md` are the spec; surface any blocked-on decisions (e.g. INFRA-3's hosting decision) and stop if unresolved rather than building on assumptions.
 
+For backend module tickets: if a field in scope overlaps a concept another domain already treats as first-class (e.g. `sportId`, `groupId`, `userId`), don't answer scoping/validation questions from this domain's own fields alone — do Phase 2's cross-domain concept precedent check (below) *before* locking in the answer, not after. (Concrete miss this rule exists to prevent: a "favorite locations, filter by sport" ticket was scoped with a bare `sportId` filter, with no connection to the fact that "sport" already means "a sport the user holds an active `UserSportProfile` for" everywhere else it's used as a gate — e.g. `GroupServiceImpl.createGroup`'s `hasProfileForSport` check. The precedent existed in the codebase the whole time; it just wasn't checked before proposing scope.)
+
 Do not proceed to Phase 2 until the user confirms the scope.
 
 ---
@@ -68,6 +70,7 @@ Do not proceed to Phase 2 until the user confirms the scope.
 - Which modules/domains this ticket touches
 - Existing patterns for similar features
 - Any cross-domain concerns — flag immediately if the ticket would require importing from another domain's `-impl` or creating a JPA relationship across domain boundaries
+- **Cross-domain concept precedent** — if this ticket's fields overlap a concept another domain already treats as first-class (`sportId`, `groupId`, `userId`, etc.), grep for that concept's existing `-api` interface usages across every module (e.g. `sport-api`'s `hasProfileForSport`, `getSportsByIds`) to find established validation/business-rule precedent, not just structural import violations — a new consumer of an existing concept should match how existing consumers already gate/validate it unless there's a real reason to diverge
 
 **Client:** explore to find:
 
