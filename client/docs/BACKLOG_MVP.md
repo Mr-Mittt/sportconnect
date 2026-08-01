@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-07-30
+**Last updated:** 2026-08-01
 
 ---
 
@@ -122,6 +122,9 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | **Phase 10 — Session & Location UI (new, not in either epic — backend done 2026-07-30, see `documentation/md/SESSION_LOCATION_DESIGN.md`)** | | | |
 | 53 | CLIENT-LOC-1 | `LocationPicker` component — search, Google-Maps-link paste-and-resolve, OSM/Leaflet preview pin, Get Directions | `DONE` |
 | 54 | CLIENT-SESSION-1 | Session create/list/join/leave/cancel UI, de-mocks HF-4 (`UpcomingMatches`) | `DONE` |
+| **Phase 11 — Session UX follow-ups (new, not in either epic, filed 2026-08-01)** | | | |
+| 55 | CLIENT-SESSION-2 | Upcoming rail create/join CTAs + standalone-only `CreateSessionModal` redesign | `TODO` |
+| 56 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 
 **Dependencies:**
 ```
@@ -144,6 +147,13 @@ HF-4 (matches) is NOT de-mocked by any Phase 0–9 ticket — see Phase 10 below
 CLIENT-LOC-1 → CLIENT-SESSION-1 (session forms need the location picker before they can go real).
   Both depend on the now-`DONE` backend: `modules/location`, `modules/session`
   (`docs/BACKLOG_MVP.md` in each) and GROUP-RECUR-1 (`modules/social/group-impl/docs/BACKLOG_MVP.md`).
+CLIENT-SESSION-1 → CLIENT-SESSION-2 (redesigns the modal CLIENT-SESSION-1 built). CLIENT-SESSION-2
+  itself has no backend dependency — see `client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`.
+  It splits out four backend-dependent follow-ups, none blocking it and none filed as client tickets
+  yet (file each once its backend lands, same SPORT-1/CLIENT-LOC-1 cadence): SESSION-4 (standalone
+  session discovery — real "Join a match"), SESSION-5 (capacity + fee/pricing), SESSION-6
+  (join-approval workflow + invite-friends-at-creation), LOC-2 (favorite locations) — all `TODO` in
+  their respective module backlogs.
 FEED-4, FEED-5 → GRP-1 (Groups page epic; independent of Phase 6's other tickets).
 GRP-1, B7 (modules/social/group-impl/docs/BACKLOG_MVP.md) → GRP-2.
 GRP-1 → GRP-3 → GRP-4. GRP-3's "Waiting for user accept" section was blocked on B8
@@ -207,6 +217,10 @@ GRP-8 (new, filed 2026-07-24, amended same day) — GRP-3, GRP-4, GRP-7 (all DON
 | BE-2: logout derives user from principal | `modules/auth/docs/BACKLOG_MVP.md` · A3 | AUTH-4 (production) | `DONE` (2026-07-08) |
 | BE-3: login/registration rate limiting | `modules/auth/docs/BACKLOG_MVP.md` · A5 | a future client ticket (not yet filed) for rate-limit error surfacing, split out of AUTH-6 on 2026-07-12 | `TODO` |
 | Matches/tournaments module — `modules/session` + `modules/location` | `modules/session/docs/BACKLOG_MVP.md` (SESSION-1/2/3), `modules/location/docs/BACKLOG_MVP.md` (LOC-1), `modules/social/group-impl/docs/BACKLOG_MVP.md` (GROUP-RECUR-1) | de-mocking HF-4 | `DONE` (2026-07-30) |
+| SESSION-4: standalone session discovery | `modules/session/docs/BACKLOG_MVP.md` · SESSION-4 | a future client ticket (not yet filed) — real "Join a match" | `TODO` |
+| SESSION-5: session capacity + fee/pricing | `modules/session/docs/BACKLOG_MVP.md` · SESSION-5 | a future client ticket (not yet filed) — capacity/fee fields in `CreateSessionModal` + display | `TODO` |
+| SESSION-6: join-approval workflow + invite-friends-at-creation | `modules/session/docs/BACKLOG_MVP.md` · SESSION-6 | a future client ticket (not yet filed) — invite/auto-approve UI + approval queue | `TODO` |
+| LOC-2: favorite locations | `modules/location/docs/BACKLOG_MVP.md` · LOC-2 | a future client ticket (not yet filed) — favorite heart toggle + `CreateSessionModal` favorites dropdown | `TODO` |
 | ~~Chat module (new `modules/social/chat-impl`, never existed beyond a docs folder, since deleted)~~ | ARCHIVED (2026-07-26) — see `documentation/md/archive/chat/` — fresh chat re-plan pending | ~~CHAT-2, CHAT-4~~ | `N/A` |
 
 ---
@@ -2541,3 +2555,46 @@ a status badge + a single "View details" CTA; join/leave moved into the detail d
 batch "sessions across my groups" endpoint and no way to discover a standalone session someone else
 created (only `GET /sessions/mine` = caller's own, `GET /sessions/group/{id}` = one group) — a real
 backend gap, not solved here, worth its own follow-up ticket if session discovery needs to widen.
+
+### CLIENT-SESSION-2 · Upcoming rail create/join CTAs + standalone-only `CreateSessionModal` redesign
+**Status:** `TODO` · **Type:** Feature · **Dependency:** none (frontend-only) · **Filed:** 2026-08-01
+· **Spec:** `client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`
+
+**What ships:** `UpcomingMatches`'s empty state drops "for this sport" from its copy and gains two
+controlled CTAs — "Create your match" (opens `CreateSessionModal` inline, anchored per-page; the
+modal's data hook is extracted out of `useMatchesPageData` so `HomeFeedPage`/`GroupsPage`/
+`FriendsPage`/`MatchesPage` share one create-session implementation) and "Join a match" (navigates to
+`/matches`, same as "See all", until SESSION-4 ships a real discovery endpoint). `FriendsPage` gains
+`ModalAnchorProvider` (the only rail-hosting page that didn't already have it).
+
+`CreateSessionModal` drops its standalone/group mode toggle (standalone-only from here on — group-
+linked session creation has no UI until the still-unbuilt group recurrence-config settings surface
+ships) and restructures into two collapsible sections: "Session basic information" (sport
+pre-selected from the active pill or the caller's sole sport profile, now-required title, a
+favorite-locations dropdown that ships as an empty shell pending LOC-2, a new wheel-picker
+start-time component, now-required duration) and "Session detail" (collapsed, "Coming soon"
+placeholder). Capacity/fee/invite-friends/auto-approve fields are explicitly **not** part of this
+ticket — see the four backend follow-ups below.
+
+**Why split this way:** every excluded field has zero backend support today (confirmed against
+`Session.java`/`CreateSessionRequest` while scoping) — shipping their inputs now would silently drop
+whatever the user entered on submit. Each moves into its paired backend ticket instead.
+
+### SPORT-2 · Static per-sport attribute config + `SportAttributesFields` component
+**Status:** `TODO` · **Type:** Component · **Dependency:** none · **Filed:** 2026-08-01 · **Spec:**
+`client/docs/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md`
+
+**What ships:** closes a gap backend ticket A3 (`modules/sport/sport-impl`, `DONE`) explicitly left
+open — `UserSportProfile.attributes` is a schema-less JSONB map by design (no backend schema table,
+a deliberate A3 decision), with "which keys render for which sport" assigned to a static
+frontend-side config. `shared/lib/sportAttributeConfig.ts` (sibling to the already-shipped
+`sportProfileConfig.ts`, which already followed this exact precedent for label/icon/colorRamp) adds
+`SPORT_ATTRIBUTE_CONFIG: Record<SportKey, SportAttributeField[]>`; `shared/components/
+SportAttributesFields.tsx` renders it (text/select inputs, controlled, same idiom `AddSportModal`
+already uses; renders nothing for a sport with an empty field list). No backend change — A3 already
+ships everything this needs.
+
+**Explicitly out of scope:** no page hosts this component yet. `AddSportModal` already deferred
+`bio`/`preferredPosition` to "a future profile-editing screen" that was never filed; `attributes`
+joins that same deferred list. This ticket only removes the "component doesn't exist yet" blocker,
+same "component ships ahead of the page" precedent `LocationPicker` set for `CreateSessionModal`.

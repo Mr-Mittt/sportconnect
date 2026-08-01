@@ -42,6 +42,7 @@
 | 21 | B14 | Track every co-inviter on a single group invitation — unblocks client GRP-8 | `DONE` |
 | 22 | B15 | Add sportId to GroupInvitationResponse — unblocks client GRP-8 | `DONE` |
 | 23 | GROUP-RECUR-1 | Recurring-session schedule config, alongside `modules/session` and `modules/location` | `DONE` |
+| 24 | B16 | Partial index on `groups.sport_id` for public-group search | `TODO` |
 
 ---
 
@@ -66,6 +67,38 @@ checked once at configuration time. `getGroupsWithAutoGenerateSessionsEnabled` i
 new `GroupMemberRepository.findByGroupIdInAndRoleId` batch method.
 
 ---
+
+### B16 · Partial index on `groups.sport_id` for public-group search
+**Status:** `TODO`
+**Type:** Performance (DB only — no service/entity/controller changes)
+
+**Filed:** 2026-08-01, found auditing `sport_id`-as-filter indexing across the app (client-side
+discussion, `client/docs/BACKLOG_MVP.md`). `V015__add_sport_id_to_groups.sql` added the column with
+**no index at all**, and it still has none today — confirmed by reading every migration touching
+`groups`, not assumed. Meanwhile every real consumer of it — `GroupRepository.searchPublicGroupsWithCounts`/
+`searchPublicGroupsAnon` (A10's `getPublicGroups`, both branches) — filters the exact same
+`g.isActive = true AND g.isPrivate = false AND (:sportIds IS NULL OR g.sportId IN :sportIds)` shape.
+(The older derived method `findByIsActiveTrueAndIsPrivateFalseAndSportId` still exists in the
+repository but appears superseded by A10's list-based queries — worth confirming/removing as dead
+code while in this file, not a required part of this ticket.)
+
+**Migration:**
+```sql
+CREATE INDEX idx_groups_sport_id_public_active ON groups(sport_id)
+    WHERE is_active = true AND is_private = false;
+```
+A **partial** index, not a plain one — it excludes private/inactive groups entirely rather than
+indexing every row and filtering afterward, matching the query's actual predicate exactly (same
+technique already precedented by `idx_sessions_status_scheduled_start`'s shape). Register in
+`db.changelog-master.xml` per the usual convention.
+
+**No code changes** — the query methods already filter exactly what the partial predicate covers;
+this is a pure index addition, nothing to change in `GroupRepository`/`GroupServiceImpl`.
+
+**Verification (no new Spock tests — there's no new logic to unit-test):** run against a real
+Postgres instance, `EXPLAIN ANALYZE` the actual `searchPublicGroupsWithCounts`/`searchPublicGroupsAnon`
+SQL with a populated `groups` table and confirm the planner picks the new index (bitmap or plain
+index scan) rather than a sequential scan.
 
 ## Tickets
 
