@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -58,6 +59,22 @@ public class GlobalExceptionHandler {
         }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error("Validation failed", fieldErrors));
+    }
+
+    /**
+     * A required {@code @RequestParam} (e.g. {@code sportId} on several endpoints across
+     * {@code location-impl}) was omitted entirely. Found while verifying LOC-2's
+     * {@code GET /api/locations/favorites} against a real running server: a missing required
+     * param was falling through to {@link #handleGeneric} (500), even though the controller's own
+     * Swagger docs promised 400 — this handler was simply never added when the endpoints that use
+     * a required {@code @RequestParam} were written, since only a direct service-layer unit test
+     * (never real HTTP request binding) had exercised the "missing param" case before now. Fixes
+     * every existing and future endpoint of this shape at once, not just LOC-2's new one.
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingParameter(MissingServletRequestParameterException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(e.getParameterName() + " is required"));
     }
 
     /**

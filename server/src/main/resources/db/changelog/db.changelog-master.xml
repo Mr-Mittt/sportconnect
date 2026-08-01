@@ -89,4 +89,7 @@
     <!-- Session ONGOING/CANCELLED status lifecycle -->
     <include file="db/changelog/changes/V037__add_status_lifecycle_to_sessions.sql" relativeToChangelogFile="false"/>
 
+    <!-- LOC-2: Favorite locations -->
+    <include file="db/changelog/changes/V038__create_user_favorite_locations.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

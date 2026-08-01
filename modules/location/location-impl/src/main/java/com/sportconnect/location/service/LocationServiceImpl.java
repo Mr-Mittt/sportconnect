@@ -7,9 +7,12 @@ import com.sportconnect.location.api.dto.LocationResponse;
 import com.sportconnect.location.api.dto.ResolvedMapsUrlResponse;
 import com.sportconnect.location.api.service.LocationService;
 import com.sportconnect.location.entity.Location;
+import com.sportconnect.location.entity.UserFavoriteLocation;
 import com.sportconnect.location.repository.LocationRepository;
+import com.sportconnect.location.repository.UserFavoriteLocationRepository;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.service.SportService;
+import com.sportconnect.sport.api.service.UserSportProfileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Coordinate;
@@ -32,7 +35,9 @@ import java.util.stream.Collectors;
 public class LocationServiceImpl implements LocationService {
 
     private final LocationRepository locationRepository;
+    private final UserFavoriteLocationRepository userFavoriteLocationRepository;
     private final SportService sportService;
+    private final UserSportProfileService userSportProfileService;
     private final GoogleMapsUrlResolver googleMapsUrlResolver;
 
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
@@ -101,6 +106,49 @@ public class LocationServiceImpl implements LocationService {
                 .longitude(resolved.longitude())
                 .suggestedName(resolved.suggestedName())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void favoriteLocation(UUID userId, Long locationId) {
+        Location location = locationRepository.findById(locationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Location", "id", locationId));
+
+        if (!userSportProfileService.hasProfileForSport(userId, location.getSportId())) {
+            throw new BadRequestException("You need an active profile for this location's sport to favorite it");
+        }
+        if (userFavoriteLocationRepository.existsByUserIdAndLocationId(userId, locationId)) {
+            throw new BadRequestException("You have already favorited this location");
+        }
+
+        UserFavoriteLocation favorite = UserFavoriteLocation.builder()
+                .userId(userId)
+                .locationId(locationId)
+                .build();
+        userFavoriteLocationRepository.save(favorite);
+        log.info("User {} favorited location {}", userId, locationId);
+    }
+
+    @Override
+    @Transactional
+    public void unfavoriteLocation(UUID userId, Long locationId) {
+        if (!userFavoriteLocationRepository.existsByUserIdAndLocationId(userId, locationId)) {
+            throw new BadRequestException("You have not favorited this location");
+        }
+        userFavoriteLocationRepository.deleteByUserIdAndLocationId(userId, locationId);
+        log.info("User {} unfavorited location {}", userId, locationId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<LocationResponse> getFavoriteLocations(UUID userId, Long sportId, Pageable pageable) {
+        if (sportId == null) {
+            throw new BadRequestException("sportId is required");
+        }
+        Page<Location> locations = userFavoriteLocationRepository.findFavoritesByUserIdAndSportId(
+                userId, sportId, pageable);
+        Map<Long, String> sportNames = resolveSportNames(locations.getContent());
+        return locations.map(l -> toResponse(l, sportNames.get(l.getSportId())));
     }
 
     private String resolveSportName(Long sportId) {

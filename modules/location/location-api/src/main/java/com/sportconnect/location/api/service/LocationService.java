@@ -38,4 +38,24 @@ public interface LocationService {
      * calls {@link #createLocation} separately.
      */
     ResolvedMapsUrlResponse resolveGoogleMapsUrl(String url);
+
+    /**
+     * Favorite a location (LOC-2). Requires the caller to hold an active {@code UserSportProfile}
+     * for the location's sport (checked via {@code sport-api}'s
+     * {@code UserSportProfileService.hasProfileForSport}, the same gate {@code createGroup} uses
+     * for group creation) — throws {@code BadRequestException} otherwise, or if already favorited.
+     * Throws {@code ResourceNotFoundException} if the location doesn't exist.
+     */
+    void favoriteLocation(UUID userId, Long locationId);
+
+    /**
+     * Unfavorite a location. Throws {@code BadRequestException} if the caller hasn't favorited it.
+     */
+    void unfavoriteLocation(UUID userId, Long locationId);
+
+    /**
+     * The caller's favorited locations for one sport, paginated. {@code sportId} is required —
+     * throws {@code BadRequestException} if null, same as {@link #searchLocations}.
+     */
+    Page<LocationResponse> getFavoriteLocations(UUID userId, Long sportId, Pageable pageable);
 }

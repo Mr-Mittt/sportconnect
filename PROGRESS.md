@@ -2069,6 +2069,16 @@ explicit go-ahead at each step (full story in A3's summary doc):
   geo-proximity/nearby search, Vendor/Facility claiming, `Location` editing, in-app routing,
   `TOURNAMENT`/`TRAINING` session types (enum reserved only), capacity/waitlist, session edit UI
   (hook exists, no UI), wiring group recurrence config into the Groups page Settings tab.
+- **`LOC-2` (`DONE`, 2026-08-02, `modules/location/location-impl/docs/LOC-2_FAVORITE_LOCATIONS.md`)**
+  — favorite/unfavorite a `Location` + list favorites by sport (`user_favorite_locations` join
+  table, no `sportId` column — always resolved via a join to `Location.sportId`). Favoriting
+  requires an active `UserSportProfile` for the location's sport (`hasProfileForSport`, the same
+  gate `createGroup` uses). Found and fixed a real pre-existing bug while verifying against a live
+  server: a missing required `@RequestParam` (e.g. `sportId`) fell through to the generic 500
+  handler instead of 400 — `GlobalExceptionHandler` had no `MissingServletRequestParameterException`
+  mapping; added one, which also fixes the same latent bug on `GET /api/locations/search`. Client
+  follow-up (favorites dropdown in `CreateSessionModal`, favorite-heart toggle in `LocationPicker`)
+  not filed yet.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
