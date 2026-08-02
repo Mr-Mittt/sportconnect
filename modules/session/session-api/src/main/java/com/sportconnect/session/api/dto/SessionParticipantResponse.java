@@ -26,5 +26,7 @@ public class SessionParticipantResponse {
 
     private ParticipantStatus status;
 
+    private String rejectReason;
+
     private LocalDateTime createdAt;
 }

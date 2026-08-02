@@ -9,6 +9,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -48,4 +50,13 @@ public class CreateSessionRequest {
 
     /** Required when feeType is FIXED, ignored otherwise — enforced in SessionServiceImpl. */
     private Long feeAmountVnd;
+
+    /** Omitted → false (not mandatory like capacity/feeType). false = non-invited joiners land
+     * in PENDING, awaiting creator/owner-admin approval. */
+    private Boolean autoApprove;
+
+    /** Pre-creates an INVITED SessionParticipant row per id — bypasses the autoApprove gate once
+     * that user calls joinSession (resolves straight to JOINED). The caller's own id and
+     * duplicates are silently ignored, not rejected. */
+    private List<UUID> inviteeIds;
 }

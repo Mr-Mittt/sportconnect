@@ -47,6 +47,10 @@ public class SessionParticipant {
     @Builder.Default
     private ParticipantStatus status = ParticipantStatus.JOINED;
 
+    /** Set only by SessionServiceImpl.rejectParticipant; null otherwise. */
+    @Column(name = "reject_reason", length = 500)
+    private String rejectReason;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

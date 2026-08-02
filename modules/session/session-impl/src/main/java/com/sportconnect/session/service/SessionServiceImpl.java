@@ -10,6 +10,7 @@ import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
+import com.sportconnect.session.api.dto.RejectParticipantRequest;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
@@ -35,6 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +91,7 @@ public class SessionServiceImpl implements SessionService {
                 : null;
 
         Long feeAmountVnd = resolveFeeAmountVnd(request.getFeeType(), request.getFeeAmountVnd());
+        boolean autoApprove = Boolean.TRUE.equals(request.getAutoApprove());
 
         Session session = Session.builder()
                 .groupId(groupId)
@@ -105,9 +108,35 @@ public class SessionServiceImpl implements SessionService {
                 .capacity(request.getCapacity())
                 .feeType(request.getFeeType())
                 .feeAmountVnd(feeAmountVnd)
+                .autoApprove(autoApprove)
                 .build();
 
         Session saved = sessionRepository.save(session);
+
+        List<SessionParticipant> seedParticipants = new ArrayList<>();
+        if (groupId == null) {
+            // Standalone only — a group-linked session's creator is already implicitly the
+            // group's owner/admin, not auto-added as a participant.
+            seedParticipants.add(SessionParticipant.builder()
+                    .sessionId(saved.getId())
+                    .userId(userId)
+                    .status(ParticipantStatus.JOINED)
+                    .build());
+        }
+        if (request.getInviteeIds() != null) {
+            request.getInviteeIds().stream()
+                    .filter(inviteeId -> !inviteeId.equals(userId))
+                    .distinct()
+                    .forEach(inviteeId -> seedParticipants.add(SessionParticipant.builder()
+                            .sessionId(saved.getId())
+                            .userId(inviteeId)
+                            .status(ParticipantStatus.INVITED)
+                            .build()));
+        }
+        if (!seedParticipants.isEmpty()) {
+            sessionParticipantRepository.saveAll(seedParticipants);
+        }
+
         log.info("Created session {} (type={}, group={})", saved.getId(), saved.getSessionType(), saved.getGroupId());
         return toResponse(saved);
     }
@@ -169,6 +198,9 @@ public class SessionServiceImpl implements SessionService {
         if (request.getFeeAmountVnd() != null) {
             session.setFeeAmountVnd(request.getFeeAmountVnd());
         }
+        if (request.getAutoApprove() != null) {
+            session.setAutoApprove(request.getAutoApprove());
+        }
         // Re-resolved unconditionally so the FIXED/feeAmountVnd invariant holds regardless of
         // which fee field (if either) this request touched — catches "switched to FIXED without
         // an amount" and clears a stale amount when switching away from FIXED.
@@ -223,7 +255,17 @@ public class SessionServiceImpl implements SessionService {
                         .sessionId(sessionId)
                         .userId(userId)
                         .build());
-        participant.setStatus(ParticipantStatus.JOINED);
+
+        // An INVITED row (from CreateSessionRequest.inviteeIds) always resolves straight to
+        // JOINED — the invitee's own call here IS their acceptance, no creator decision needed.
+        // Everything else goes through the autoApprove gate. Re-resolved fresh on every call, so
+        // re-clicking join while REQUESTED is a harmless no-op, and once a row leaves INVITED
+        // (accepted or otherwise) a later leave-and-rejoin goes through the normal gate.
+        ParticipantStatus targetStatus = participant.getStatus() == ParticipantStatus.INVITED
+                || Boolean.TRUE.equals(session.getAutoApprove())
+                ? ParticipantStatus.JOINED
+                : ParticipantStatus.REQUESTED;
+        participant.setStatus(targetStatus);
         sessionParticipantRepository.save(participant);
     }
 
@@ -240,9 +282,15 @@ public class SessionServiceImpl implements SessionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<SessionParticipantResponse> getSessionParticipants(Long sessionId, Pageable pageable) {
+    public Page<SessionParticipantResponse> getSessionParticipants(
+            Long sessionId, UUID callerId, ParticipantStatus status, Pageable pageable) {
+        ParticipantStatus effectiveStatus = status != null ? status : ParticipantStatus.JOINED;
+        if (effectiveStatus != ParticipantStatus.JOINED) {
+            requireCanModify(findSessionOrThrow(sessionId), callerId);
+        }
+
         Page<SessionParticipant> participants = sessionParticipantRepository
-                .findBySessionIdAndStatus(sessionId, ParticipantStatus.JOINED, pageable);
+                .findBySessionIdAndStatus(sessionId, effectiveStatus, pageable);
 
         List<UUID> userIds = participants.getContent().stream()
                 .map(SessionParticipant::getUserId)
@@ -259,9 +307,42 @@ public class SessionServiceImpl implements SessionService {
                     .userFullName(user != null ? user.getFullName() : null)
                     .userAvatarUrl(user != null ? user.getAvatarUrl() : null)
                     .status(p.getStatus())
+                    .rejectReason(p.getRejectReason())
                     .createdAt(p.getCreatedAt())
                     .build();
         });
+    }
+
+    @Override
+    @Transactional
+    public void approveParticipant(Long sessionId, UUID callerId, UUID userId) {
+        SessionParticipant participant = requireRequestedParticipant(sessionId, callerId, userId);
+        participant.setStatus(ParticipantStatus.JOINED);
+        sessionParticipantRepository.save(participant);
+    }
+
+    @Override
+    @Transactional
+    public void rejectParticipant(Long sessionId, UUID callerId, UUID userId, RejectParticipantRequest request) {
+        SessionParticipant participant = requireRequestedParticipant(sessionId, callerId, userId);
+        participant.setStatus(ParticipantStatus.LEFT);
+        participant.setRejectReason(request != null ? request.getReason() : null);
+        sessionParticipantRepository.save(participant);
+    }
+
+    /** Shared gating + lookup for approveParticipant/rejectParticipant: same creator/owner-admin
+     * gate as cancelSession/updateSession, rejects a CANCELLED session, and requires an existing
+     * REQUESTED row (an INVITED row isn't approvable here — only the invitee's own joinSession
+     * call resolves it). */
+    private SessionParticipant requireRequestedParticipant(Long sessionId, UUID callerId, UUID userId) {
+        Session session = findSessionOrThrow(sessionId);
+        requireCanModify(session, callerId);
+        if (session.getStatus() == SessionStatus.CANCELLED) {
+            throw new BadRequestException("Cannot approve or reject participants for a cancelled session");
+        }
+        return sessionParticipantRepository.findBySessionIdAndUserId(sessionId, userId)
+                .filter(p -> p.getStatus() == ParticipantStatus.REQUESTED)
+                .orElseThrow(() -> new BadRequestException("No pending join request for this user"));
     }
 
     @Override
@@ -371,6 +452,7 @@ public class SessionServiceImpl implements SessionService {
                         .capacity(session.getCapacity())
                         .feeType(session.getFeeType())
                         .feeAmountVnd(session.getFeeAmountVnd())
+                        .autoApprove(session.getAutoApprove())
                         .createdAt(session.getCreatedAt())
                         .updatedAt(session.getUpdatedAt())
                         .build())

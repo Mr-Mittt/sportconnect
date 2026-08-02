@@ -92,6 +92,13 @@ public class Session {
     @Column(name = "fee_amount_vnd")
     private Long feeAmountVnd;
 
+    /** false = joinSession puts non-invited joiners into PENDING, awaiting creator/owner-admin
+     * approval. Sessions predating this column backfilled to true (see V041 migration) so their
+     * existing instant-join behavior didn't silently change. */
+    @Column(name = "auto_approve", nullable = false)
+    @Builder.Default
+    private Boolean autoApprove = false;
+
     @Column(name = "cancel_reason", length = 500)
     private String cancelReason;
 

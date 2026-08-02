@@ -98,4 +98,7 @@
     <!-- SESSION-5: Session capacity + fee/pricing -->
     <include file="db/changelog/changes/V040__add_capacity_and_fee_to_sessions.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-6: Join-approval workflow + invite-friends-at-creation -->
+    <include file="db/changelog/changes/V041__add_session_join_approval.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

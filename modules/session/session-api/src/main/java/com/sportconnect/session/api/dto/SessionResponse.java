@@ -59,6 +59,8 @@ public class SessionResponse {
 
     private Long feeAmountVnd;
 
+    private Boolean autoApprove;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

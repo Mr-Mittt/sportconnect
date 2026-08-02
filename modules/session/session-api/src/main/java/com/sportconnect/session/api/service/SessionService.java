@@ -2,6 +2,8 @@ package com.sportconnect.session.api.service;
 
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
+import com.sportconnect.session.api.dto.ParticipantStatus;
+import com.sportconnect.session.api.dto.RejectParticipantRequest;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
@@ -51,8 +53,28 @@ public interface SessionService {
     /** Requires an existing JOINED row; flips it to LEFT. BadRequestException otherwise. */
     void leaveSession(Long sessionId, UUID userId);
 
-    /** JOINED participants only. */
-    Page<SessionParticipantResponse> getSessionParticipants(Long sessionId, Pageable pageable);
+    /**
+     * status omitted → JOINED, public (unchanged contract). Any other status (in practice
+     * REQUESTED, the approval queue, or INVITED) requires the caller to pass requireCanModify's
+     * gate — creator for standalone, owner/admin for group-linked — same as
+     * cancelSession/updateSession.
+     */
+    Page<SessionParticipantResponse> getSessionParticipants(
+            Long sessionId, UUID callerId, ParticipantStatus status, Pageable pageable);
+
+    /**
+     * Transitions a REQUESTED row to JOINED. Same gating as cancelSession/updateSession.
+     * BadRequestException if the session is CANCELLED or no REQUESTED row exists for userId
+     * (an INVITED row isn't approvable here — only the invitee's own joinSession call resolves
+     * it).
+     */
+    void approveParticipant(Long sessionId, UUID callerId, UUID userId);
+
+    /**
+     * Transitions a REQUESTED row to LEFT, persisting the optional reason. Same
+     * gating/exceptions as approveParticipant.
+     */
+    void rejectParticipant(Long sessionId, UUID callerId, UUID userId, RejectParticipantRequest request);
 
     /**
      * Standalone sessions (groupId null) the caller can discover and join: status SCHEDULED,

@@ -3,6 +3,8 @@ package com.sportconnect.session.controller;
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
+import com.sportconnect.session.api.dto.ParticipantStatus;
+import com.sportconnect.session.api.dto.RejectParticipantRequest;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
@@ -200,15 +202,54 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Left session successfully", null));
     }
 
-    @Operation(summary = "List a session's joined participants")
+    @Operation(summary = "List a session's participants", description = "status omitted defaults to JOINED and stays public. Any other status (e.g. REQUESTED, the approval queue) requires creator/owner-admin gating.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Participants (possibly empty)")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Participants (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not permitted to view a non-JOINED status")
     })
     @GetMapping("/{sessionId}/participants")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<SessionParticipantResponse>>> getSessionParticipants(
             @PathVariable Long sessionId,
+            @AuthenticationPrincipal String callerIdStr,
+            @RequestParam(required = false) ParticipantStatus status,
             Pageable pageable) {
-        Page<SessionParticipantResponse> response = sessionService.getSessionParticipants(sessionId, pageable);
+        UUID callerId = UUID.fromString(callerIdStr);
+        Page<SessionParticipantResponse> response =
+                sessionService.getSessionParticipants(sessionId, callerId, status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Participants retrieved successfully", response));
+    }
+
+    @Operation(summary = "Approve a REQUESTED participant", description = "Same gating as cancelSession/updateSession. Rejected if the session is CANCELLED or the user has no REQUESTED row.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Approved"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not permitted, session cancelled, or no pending request for this user")
+    })
+    @PostMapping("/{sessionId}/participants/{userId}/approve")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> approveParticipant(
+            @PathVariable Long sessionId,
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal String callerIdStr) {
+        UUID callerId = UUID.fromString(callerIdStr);
+        sessionService.approveParticipant(sessionId, callerId, userId);
+        return ResponseEntity.ok(ApiResponse.success("Participant approved successfully", null));
+    }
+
+    @Operation(summary = "Reject a REQUESTED participant", description = "Same gating/exceptions as approve. Optional reason persisted on the participant row.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Rejected"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not permitted, session cancelled, or no pending request for this user")
+    })
+    @PostMapping("/{sessionId}/participants/{userId}/reject")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> rejectParticipant(
+            @PathVariable Long sessionId,
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal String callerIdStr,
+            @Valid @RequestBody(required = false) RejectParticipantRequest request) {
+        UUID callerId = UUID.fromString(callerIdStr);
+        sessionService.rejectParticipant(sessionId, callerId, userId, request);
+        return ResponseEntity.ok(ApiResponse.success("Participant rejected successfully", null));
     }
 }
