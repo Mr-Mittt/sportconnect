@@ -4,6 +4,7 @@ import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
+import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -52,4 +53,21 @@ public interface SessionService {
 
     /** JOINED participants only. */
     Page<SessionParticipantResponse> getSessionParticipants(Long sessionId, Pageable pageable);
+
+    /**
+     * Standalone sessions (groupId null) the caller can discover and join: status SCHEDULED,
+     * restricted to sports the caller holds an active UserSportProfile for, excluding sessions
+     * the caller created (see getSessionsCreatedByUser) and sessions the caller currently has a
+     * JOINED participant row for. If sportId is given but isn't one of the caller's active
+     * sports, returns an empty page rather than throwing. A caller with zero active sport
+     * profiles also gets an empty page.
+     */
+    Page<SessionResponse> discoverSessions(UUID callerId, Long sportId, Pageable pageable);
+
+    /**
+     * Sessions (standalone or group-linked) the caller currently has a JOINED participant row
+     * for, restricted to a single status — backs per-status sections on the matches page (e.g.
+     * "joined + ongoing", "joined + completed").
+     */
+    Page<SessionResponse> getJoinedSessions(UUID userId, SessionStatus status, Pageable pageable);
 }

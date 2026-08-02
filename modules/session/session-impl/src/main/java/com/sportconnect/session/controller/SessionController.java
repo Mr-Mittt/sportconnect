@@ -5,6 +5,7 @@ import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
+import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.session.api.service.SessionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,6 +15,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -92,6 +96,38 @@ public class SessionController {
             Pageable pageable) {
         UUID userId = UUID.fromString(userIdStr);
         Page<SessionResponse> response = sessionService.getSessionsCreatedByUser(userId, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
+    }
+
+    @Operation(summary = "Discover joinable standalone sessions", description = "SCHEDULED, standalone sessions gated to sports the caller holds an active profile for, excluding sessions the caller created or currently has joined. Optional sportId narrows to one sport.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    @GetMapping("/discover")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Page<SessionResponse>>> discoverSessions(
+            @AuthenticationPrincipal String userIdStr,
+            @RequestParam(required = false) Long sportId,
+            @PageableDefault(sort = "scheduledStart", direction = Sort.Direction.ASC) Pageable pageable) {
+        UUID userId = UUID.fromString(userIdStr);
+        Page<SessionResponse> response = sessionService.discoverSessions(userId, sportId, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
+    }
+
+    @Operation(summary = "List the caller's joined sessions by status", description = "Standalone or group-linked sessions the caller currently has a JOINED participant row for, restricted to one status (e.g. ONGOING, COMPLETED).")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    @GetMapping("/joined")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Page<SessionResponse>>> getJoinedSessions(
+            @AuthenticationPrincipal String userIdStr,
+            @RequestParam SessionStatus status,
+            Pageable pageable) {
+        UUID userId = UUID.fromString(userIdStr);
+        Page<SessionResponse> response = sessionService.getJoinedSessions(userId, status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 

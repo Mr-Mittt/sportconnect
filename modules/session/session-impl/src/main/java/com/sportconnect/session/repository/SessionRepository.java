@@ -1,5 +1,6 @@
 package com.sportconnect.session.repository;
 
+import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.entity.Session;
 import org.springframework.data.domain.Page;
@@ -45,5 +46,36 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     Slice<Session> findSessionsToComplete(
             @Param("statuses") List<SessionStatus> statuses,
             @Param("cutoff") LocalDateTime cutoff,
+            Pageable pageable);
+
+    /**
+     * Joinable standalone sessions for discover: open (group_id IS NULL), in {@code status},
+     * restricted to {@code sportIds} (the caller's active-sport-profile gate, resolved by the
+     * caller), excluding sessions the caller created and sessions the caller currently has a
+     * JOINED participant row for (a session the caller left is eligible to reappear).
+     */
+    @Query("SELECT s FROM Session s WHERE s.groupId IS NULL AND s.status = :status "
+            + "AND s.sportId IN :sportIds AND s.createdBy <> :callerId "
+            + "AND s.id NOT IN (SELECT sp.sessionId FROM SessionParticipant sp "
+            + "    WHERE sp.userId = :callerId AND sp.status = :joinedStatus)")
+    Page<Session> findDiscoverSessions(
+            @Param("status") SessionStatus status,
+            @Param("sportIds") List<Long> sportIds,
+            @Param("callerId") UUID callerId,
+            @Param("joinedStatus") ParticipantStatus joinedStatus,
+            Pageable pageable);
+
+    /**
+     * Sessions (standalone or group-linked) the caller currently has a JOINED participant row
+     * for, restricted to a single {@code status} — backs the matches page's per-status sections
+     * (e.g. "joined + ongoing", "joined + completed").
+     */
+    @Query("SELECT s FROM Session s WHERE s.status = :status "
+            + "AND s.id IN (SELECT sp.sessionId FROM SessionParticipant sp "
+            + "    WHERE sp.userId = :userId AND sp.status = :joinedStatus)")
+    Page<Session> findJoinedSessionsByStatus(
+            @Param("status") SessionStatus status,
+            @Param("userId") UUID userId,
+            @Param("joinedStatus") ParticipantStatus joinedStatus,
             Pageable pageable);
 }
