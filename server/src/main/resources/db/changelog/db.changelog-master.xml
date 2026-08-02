@@ -95,4 +95,7 @@
     <!-- SESSION-4/SESSION-7: Enforce sportId NOT NULL + standalone discover index -->
     <include file="db/changelog/changes/V039__enforce_session_sport_id_and_add_standalone_index.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-5: Session capacity + fee/pricing -->
+    <include file="db/changelog/changes/V040__add_capacity_and_fee_to_sessions.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

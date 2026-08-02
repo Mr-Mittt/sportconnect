@@ -8,6 +8,7 @@ import com.sportconnect.location.api.dto.LocationResponse;
 import com.sportconnect.location.api.service.LocationService;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
+import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
@@ -87,6 +88,8 @@ public class SessionServiceImpl implements SessionService {
                 ? request.getScheduledStart().plusMinutes(request.getDurationMinutes())
                 : null;
 
+        Long feeAmountVnd = resolveFeeAmountVnd(request.getFeeType(), request.getFeeAmountVnd());
+
         Session session = Session.builder()
                 .groupId(groupId)
                 .sessionType(sessionType)
@@ -99,6 +102,9 @@ public class SessionServiceImpl implements SessionService {
                 .scheduledStart(request.getScheduledStart())
                 .scheduledEndAt(scheduledEndAt)
                 .status(SessionStatus.SCHEDULED)
+                .capacity(request.getCapacity())
+                .feeType(request.getFeeType())
+                .feeAmountVnd(feeAmountVnd)
                 .build();
 
         Session saved = sessionRepository.save(session);
@@ -154,8 +160,33 @@ public class SessionServiceImpl implements SessionService {
         if (request.getDurationMinutes() != null) {
             session.setScheduledEndAt(session.getScheduledStart().plusMinutes(request.getDurationMinutes()));
         }
+        if (request.getCapacity() != null) {
+            session.setCapacity(request.getCapacity());
+        }
+        if (request.getFeeType() != null) {
+            session.setFeeType(request.getFeeType());
+        }
+        if (request.getFeeAmountVnd() != null) {
+            session.setFeeAmountVnd(request.getFeeAmountVnd());
+        }
+        // Re-resolved unconditionally so the FIXED/feeAmountVnd invariant holds regardless of
+        // which fee field (if either) this request touched — catches "switched to FIXED without
+        // an amount" and clears a stale amount when switching away from FIXED.
+        session.setFeeAmountVnd(resolveFeeAmountVnd(session.getFeeType(), session.getFeeAmountVnd()));
 
         return toResponse(sessionRepository.save(session));
+    }
+
+    /** Enforces "feeAmountVnd is meaningful only when feeType is FIXED": returns candidateAmount
+     * for FIXED (rejecting a null candidate), null for FREE/SPLIT regardless of what was passed. */
+    private Long resolveFeeAmountVnd(FeeType feeType, Long candidateAmount) {
+        if (feeType == FeeType.FIXED) {
+            if (candidateAmount == null) {
+                throw new BadRequestException("feeAmountVnd is required when feeType is FIXED");
+            }
+            return candidateAmount;
+        }
+        return null;
     }
 
     @Override
@@ -337,6 +368,9 @@ public class SessionServiceImpl implements SessionService {
                                 .map(users::get).map(UserResponse::getFullName).orElse(null))
                         .cancelledAt(session.getCancelledAt())
                         .participantCount(participantCounts.getOrDefault(session.getId(), 0L))
+                        .capacity(session.getCapacity())
+                        .feeType(session.getFeeType())
+                        .feeAmountVnd(session.getFeeAmountVnd())
                         .createdAt(session.getCreatedAt())
                         .updatedAt(session.getUpdatedAt())
                         .build())

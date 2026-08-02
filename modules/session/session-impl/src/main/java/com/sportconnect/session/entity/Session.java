@@ -1,5 +1,6 @@
 package com.sportconnect.session.entity;
 
+import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import jakarta.persistence.Column;
@@ -74,6 +75,22 @@ public class Session {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private SessionStatus status = SessionStatus.SCHEDULED;
+
+    /** "Open slots" — informational/display only, never enforced by joinSession. 9999 is the
+     * backfill sentinel for sessions predating this column (and auto-generated recurring
+     * sessions, which have no capacity input) — see V040 migration. */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer capacity = 9999;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "fee_type", nullable = false, length = 10)
+    @Builder.Default
+    private FeeType feeType = FeeType.FREE;
+
+    /** Meaningful only when feeType == FIXED; SessionServiceImpl clears this to null otherwise. */
+    @Column(name = "fee_amount_vnd")
+    private Long feeAmountVnd;
 
     @Column(name = "cancel_reason", length = 500)
     private String cancelReason;

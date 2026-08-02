@@ -2089,6 +2089,14 @@ explicit go-ahead at each step (full story in A3's summary doc):
   at the app layer since SESSION-1. Also adds `GET /api/sessions/joined` (required `status` param,
   spans both session types) for a not-yet-built matches page's other two sections. Client
   follow-up (discover UI, matches page) not filed yet.
+- **`SESSION-5` (`DONE`, 2026-08-02, `modules/session/docs/SESSION-5_CAPACITY_AND_FEE.md`)** —
+  `Session` gains `capacity` (informational only — `joinSession` never enforces it, no waitlist)
+  and fee fields (`feeType` enum `FREE`/`SPLIT`/`FIXED`, `feeAmountVnd` required only when
+  `FIXED`, cross-field-validated in `SessionServiceImpl`). Both mandatory on
+  `CreateSessionRequest`, editable via `updateSession`. Existing rows and auto-generated
+  `GROUP_RECURRING` sessions (no capacity/fee input) backfill to `capacity=9999`
+  (sentinel = uncapped) / `feeType=FREE` via `@Builder.Default`. Client follow-up (capacity/fee
+  display + `CreateSessionModal` inputs) not filed yet.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

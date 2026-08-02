@@ -8,6 +8,7 @@ import com.sportconnect.location.api.dto.LocationResponse
 import com.sportconnect.location.api.service.LocationService
 import com.sportconnect.session.api.dto.CancelSessionRequest
 import com.sportconnect.session.api.dto.CreateSessionRequest
+import com.sportconnect.session.api.dto.FeeType
 import com.sportconnect.session.api.dto.ParticipantStatus
 import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.dto.SessionType
@@ -438,5 +439,116 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findJoinedSessionsByStatus(SessionStatus.ONGOING, userId, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
+    }
+
+    def "createSession sets capacity/feeType/feeAmountVnd from the request"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .capacity(12).feeType(FeeType.FIXED).feeAmountVnd(50000L)
+                .build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
+                .status(SessionStatus.SCHEDULED).capacity(12).feeType(FeeType.FIXED).feeAmountVnd(50000L).build()
+
+        when:
+        def result = sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s ->
+            s.capacity == 12 && s.feeType == FeeType.FIXED && s.feeAmountVnd == 50000L
+        }) >> saved
+        interaction { stubBatchEnrichment() }
+        result.capacity == 12
+        result.feeType == FeeType.FIXED
+        result.feeAmountVnd == 50000L
+    }
+
+    def "createSession rejects FIXED feeType with no feeAmountVnd"() {
+        given:
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now())
+                .capacity(10).feeType(FeeType.FIXED).build()
+
+        when:
+        sessionService.createSession(UUID.randomUUID(), request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        thrown(BadRequestException)
+        0 * sessionRepository.save(_)
+    }
+
+    def "createSession clears feeAmountVnd when feeType isn't FIXED"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .capacity(10).feeType(FeeType.FREE).feeAmountVnd(99999L)
+                .build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
+                .status(SessionStatus.SCHEDULED).capacity(10).feeType(FeeType.FREE).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.feeType == FeeType.FREE && s.feeAmountVnd == null }) >> saved
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession applies a partial capacity update"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .capacity(10).feeType(FeeType.FREE).build()
+        def request = UpdateSessionRequest.builder().capacity(20).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s -> s.capacity == 20 }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession rejects switching to FIXED without ever supplying a feeAmountVnd"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .capacity(10).feeType(FeeType.FREE).build()
+        def request = UpdateSessionRequest.builder().feeType(FeeType.FIXED).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        thrown(BadRequestException)
+        0 * sessionRepository.save(_)
+    }
+
+    def "updateSession clears a stale feeAmountVnd when switching away from FIXED"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .capacity(10).feeType(FeeType.FIXED).feeAmountVnd(30000L).build()
+        def request = UpdateSessionRequest.builder().feeType(FeeType.SPLIT).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s -> s.feeType == FeeType.SPLIT && s.feeAmountVnd == null }) >> session
+        interaction { stubBatchEnrichment() }
     }
 }
