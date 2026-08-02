@@ -10,6 +10,7 @@ import com.sportconnect.session.api.dto.CancelSessionRequest
 import com.sportconnect.session.api.dto.CreateSessionRequest
 import com.sportconnect.session.api.dto.FeeType
 import com.sportconnect.session.api.dto.ParticipantStatus
+import com.sportconnect.session.api.dto.RejectParticipantRequest
 import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.dto.SessionType
 import com.sportconnect.session.api.dto.UpdateSessionRequest
@@ -127,6 +128,78 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.save({ Session s -> s.sportId == 1L && s.sessionType == SessionType.GROUP_RECURRING }) >> saved
         interaction { stubBatchEnrichment() }
         result.sportId == 1L
+    }
+
+    def "createSession auto-joins the creator for a standalone session"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save(_) >> saved
+        1 * sessionParticipantRepository.saveAll({ List participants ->
+            participants.size() == 1 && participants[0].sessionId == 1L &&
+                    participants[0].userId == userId && participants[0].status == ParticipantStatus.JOINED
+        })
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession does not auto-join the creator for a group-linked session"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .groupId(5L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+        def group = GroupResponse.builder().id(5L).sportId(1L).build()
+        def saved = Session.builder().id(2L).groupId(5L).sessionType(SessionType.GROUP_RECURRING)
+                .createdBy(userId).sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
+                .status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * groupService.canManageMembers(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> group
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save(_) >> saved
+        0 * sessionParticipantRepository.saveAll(_)
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession pre-creates INVITED rows for inviteeIds, deduped and excluding the creator's own id"() {
+        given:
+        def userId = UUID.randomUUID()
+        def inviteeA = UUID.randomUUID()
+        def inviteeB = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .inviteeIds([inviteeA, inviteeB, inviteeA, userId])
+                .build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save(_) >> saved
+        1 * sessionParticipantRepository.saveAll({ List participants ->
+            def invited = participants.findAll { it.status == ParticipantStatus.INVITED }
+            def joined = participants.findAll { it.status == ParticipantStatus.JOINED }
+            participants.size() == 3 &&
+                    joined.size() == 1 && joined[0].userId == userId &&
+                    invited.size() == 2 &&
+                    invited*.userId.toSet() == [inviteeA, inviteeB].toSet()
+        })
+        interaction { stubBatchEnrichment() }
     }
 
     def "createSession rejects a locationId whose sport doesn't match"() {
@@ -303,10 +376,10 @@ class SessionServiceImplSpec extends Specification {
         0 * sessionParticipantRepository.save(_)
     }
 
-    def "joinSession is open for a standalone session"() {
+    def "joinSession is open for a standalone session, joining instantly when autoApprove is true"() {
         given:
         def userId = UUID.randomUUID()
-        def session = Session.builder().id(1L).build()
+        def session = Session.builder().id(1L).autoApprove(true).build()
 
         when:
         sessionService.joinSession(1L, userId)
@@ -318,11 +391,40 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.JOINED }) >> { SessionParticipant p -> p }
     }
 
-    def "joinSession flips an existing LEFT row back to JOINED instead of inserting a duplicate"() {
+    def "joinSession flips an existing LEFT row back to JOINED when autoApprove is true instead of inserting a duplicate"() {
         given:
         def userId = UUID.randomUUID()
-        def session = Session.builder().id(1L).build()
+        def session = Session.builder().id(1L).autoApprove(true).build()
         def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.LEFT).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        1 * sessionParticipantRepository.save({ SessionParticipant p -> p.id == 9L && p.status == ParticipantStatus.JOINED }) >> existing
+    }
+
+    def "joinSession puts a non-invited joiner into REQUESTED when autoApprove is false"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).autoApprove(false).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
+        1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.REQUESTED }) >> { SessionParticipant p -> p }
+    }
+
+    def "joinSession resolves an INVITED row straight to JOINED even when autoApprove is false"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).autoApprove(false).build()
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.INVITED).build()
 
         when:
         sessionService.joinSession(1L, userId)
@@ -358,15 +460,145 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
     }
 
-    def "getSessionParticipants returns only JOINED participants"() {
+    def "getSessionParticipants defaults to JOINED and stays public when status is omitted"() {
         given:
+        def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
 
         when:
-        sessionService.getSessionParticipants(1L, pageable)
+        sessionService.getSessionParticipants(1L, callerId, null, pageable)
 
         then:
+        0 * sessionRepository.findById(_)
         1 * sessionParticipantRepository.findBySessionIdAndStatus(1L, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
+    }
+
+    def "getSessionParticipants gates a non-JOINED status the same as cancelSession/updateSession"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(UUID.randomUUID()).status(SessionStatus.SCHEDULED).build()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        sessionService.getSessionParticipants(1L, callerId, ParticipantStatus.REQUESTED, pageable)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        thrown(BadRequestException)
+        0 * sessionParticipantRepository.findBySessionIdAndStatus(*_)
+    }
+
+    def "getSessionParticipants allows the creator to view a non-JOINED status"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(callerId).status(SessionStatus.SCHEDULED).build()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        sessionService.getSessionParticipants(1L, callerId, ParticipantStatus.REQUESTED, pageable)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndStatus(1L, ParticipantStatus.REQUESTED, pageable) >> new PageImpl([])
+    }
+
+    def "approveParticipant transitions a REQUESTED row to JOINED"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(callerId).status(SessionStatus.SCHEDULED).build()
+        def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.REQUESTED).build()
+
+        when:
+        sessionService.approveParticipant(1L, callerId, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(participant)
+        1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.JOINED }) >> participant
+    }
+
+    def "approveParticipant rejects when no REQUESTED row exists"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(callerId).status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.approveParticipant(1L, callerId, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
+        thrown(BadRequestException)
+        0 * sessionParticipantRepository.save(_)
+    }
+
+    def "approveParticipant rejects an INVITED row — only the invitee's own joinSession call resolves it"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(callerId).status(SessionStatus.SCHEDULED).build()
+        def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.INVITED).build()
+
+        when:
+        sessionService.approveParticipant(1L, callerId, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(participant)
+        thrown(BadRequestException)
+        0 * sessionParticipantRepository.save(_)
+    }
+
+    def "approveParticipant rejects for a cancelled session"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(callerId).status(SessionStatus.CANCELLED).build()
+
+        when:
+        sessionService.approveParticipant(1L, callerId, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        thrown(BadRequestException)
+        0 * sessionParticipantRepository.findBySessionIdAndUserId(_, _)
+    }
+
+    def "rejectParticipant transitions a REQUESTED row to LEFT and persists the optional reason"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(callerId).status(SessionStatus.SCHEDULED).build()
+        def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.REQUESTED).build()
+        def request = RejectParticipantRequest.builder().reason("Session is full").build()
+
+        when:
+        sessionService.rejectParticipant(1L, callerId, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(participant)
+        1 * sessionParticipantRepository.save({ SessionParticipant p ->
+            p.status == ParticipantStatus.LEFT && p.rejectReason == "Session is full"
+        }) >> participant
+    }
+
+    def "rejectParticipant for a group-linked session requires canManageMembers"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).groupId(5L).createdBy(UUID.randomUUID()).status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.rejectParticipant(1L, callerId, userId, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * groupService.canManageMembers(5L, callerId) >> false
+        thrown(BadRequestException)
+        0 * sessionParticipantRepository.findBySessionIdAndUserId(_, _)
     }
 
     def "discoverSessions with no sportId filter queries across all the caller's active sports"() {

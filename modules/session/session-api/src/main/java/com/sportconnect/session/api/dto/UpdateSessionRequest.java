@@ -39,4 +39,6 @@ public class UpdateSessionRequest {
     /** Meaningful only when the resolved feeType (after this update) is FIXED — see
      * SessionServiceImpl.updateSession. */
     private Long feeAmountVnd;
+
+    private Boolean autoApprove;
 }

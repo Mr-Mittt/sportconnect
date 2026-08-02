@@ -24,7 +24,7 @@
 | 3 | SESSION-3 | Full status lifecycle (ONGOING, CANCELLED) + cancel reason/who/when | `DONE` |
 | 4 | SESSION-4 | Standalone session discovery — browse/join sessions you didn't create | `DONE` |
 | 5 | SESSION-5 | Session capacity + fee/pricing | `DONE` |
-| 6 | SESSION-6 | Join-approval workflow + invite-friends-at-creation | `TODO` |
+| 6 | SESSION-6 | Join-approval workflow + invite-friends-at-creation | `DONE` |
 | 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `DONE` (bundled into SESSION-4) |
 
 ---
@@ -167,6 +167,20 @@ scoping CLIENT-SESSION-2) with dismissible-badge multi-select in `CreateSessionM
 approve join request" checkbox + confirm warning; and an approval queue surfaced for
 creators/managers, most likely in `SessionDetailModal` (mirroring how the Groups page's Members tab
 already surfaces its own join-request approval queue).
+
+**Delta (2026-08-02, at pickup):** invitee behavior resolved as **not** auto-`JOINED` — mirrors the
+group precedent, the invitee still calls `joinSession` themselves (that call *is* their
+acceptance; no separate accept endpoint). `ParticipantStatus` ended up with **two** new values,
+not one `PENDING` — `REQUESTED` (self-initiated, needs creator/owner-admin approval) and
+`INVITED` (pre-seeded from `inviteeIds`, bypasses approval, needs only the invitee's own
+`joinSession` call). No second table/reconciliation layer was needed unlike groups' — see
+`modules/session/docs/SESSION-6_JOIN_APPROVAL_AND_INVITES.md` for why. Approval queue reuses `GET
+.../participants?status=REQUESTED` rather than a new dedicated route. Added beyond the original
+sketch: the session creator is now auto-added as a `JOINED` participant at creation (standalone
+only), and reject carries an optional reason (`RejectParticipantRequest.reason`). `autoApprove` is
+optional (not mandatory like SESSION-5's `capacity`/`feeType`) and backfills existing sessions to
+`true` to preserve their pre-ticket instant-join behavior. Full writeup:
+`modules/session/docs/SESSION-6_JOIN_APPROVAL_AND_INVITES.md`.
 
 ## SESSION-7 — Partial index on `sessions.sport_id`
 

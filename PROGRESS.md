@@ -2097,6 +2097,19 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `GROUP_RECURRING` sessions (no capacity/fee input) backfill to `capacity=9999`
   (sentinel = uncapped) / `feeType=FREE` via `@Builder.Default`. Client follow-up (capacity/fee
   display + `CreateSessionModal` inputs) not filed yet.
+- **`SESSION-6` (`DONE`, 2026-08-02, `modules/session/docs/SESSION-6_JOIN_APPROVAL_AND_INVITES.md`)**
+  — `ParticipantStatus` gains `REQUESTED` (self-initiated join, awaiting creator/owner-admin
+  decision via new `POST /api/sessions/{id}/participants/{userId}/approve`|`reject`) and
+  `INVITED` (pre-seeded from `CreateSessionRequest.inviteeIds`, resolved only by the invitee's
+  own `joinSession` call, bypassing approval). `Session` gains `autoApprove` (existing sessions
+  backfilled to `true` to preserve their instant-join behavior; new sessions default `false`).
+  The session creator is now auto-added as a `JOINED` participant at creation for standalone
+  sessions (not group-linked). Approval queue reuses `GET .../participants` with a `status`
+  filter rather than a new route. No second table/reconciliation layer, unlike the group module's
+  join-request+invitation precedent this ticket was scoped against — justified since only one
+  table (`SessionParticipant`) can ever target a given (session, user) pair here. No
+  notifications, matching that same precedent's own unbuilt scope. Client follow-up (invite
+  search, auto-approve checkbox, approval queue UI) not filed yet.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
