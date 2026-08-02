@@ -1,5 +1,6 @@
 package com.sportconnect.session.api.dto;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -37,4 +38,14 @@ public class CreateSessionRequest {
     private LocalDateTime scheduledStart;
 
     private Integer durationMinutes;
+
+    @NotNull(message = "capacity is required")
+    @Min(value = 0, message = "capacity must be >= 0")
+    private Integer capacity;
+
+    @NotNull(message = "feeType is required")
+    private FeeType feeType;
+
+    /** Required when feeType is FIXED, ignored otherwise — enforced in SessionServiceImpl. */
+    private Long feeAmountVnd;
 }

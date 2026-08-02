@@ -53,6 +53,12 @@ public class SessionResponse {
 
     private Long participantCount;
 
+    private Integer capacity;
+
+    private FeeType feeType;
+
+    private Long feeAmountVnd;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

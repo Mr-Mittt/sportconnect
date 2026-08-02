@@ -23,7 +23,7 @@
 | 2 | SESSION-2 | Scheduled auto-generation job for group-recurring sessions | `DONE` |
 | 3 | SESSION-3 | Full status lifecycle (ONGOING, CANCELLED) + cancel reason/who/when | `DONE` |
 | 4 | SESSION-4 | Standalone session discovery — browse/join sessions you didn't create | `DONE` |
-| 5 | SESSION-5 | Session capacity + fee/pricing | `TODO` |
+| 5 | SESSION-5 | Session capacity + fee/pricing | `DONE` |
 | 6 | SESSION-6 | Join-approval workflow + invite-friends-at-creation | `TODO` |
 | 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `DONE` (bundled into SESSION-4) |
 
@@ -130,6 +130,15 @@ display/informational cap unless a hard join-reject is deliberately decided at p
 `SessionDetailModal`, and the "Taken slot"/"Open slot"/"Fee" inputs in `CreateSessionModal`'s
 "Session basic information" section (both excluded from CLIENT-SESSION-2 for lacking backend
 support).
+
+**Delta (2026-08-02, at pickup):** open design question resolved — capacity stays purely
+informational/display-only, `joinSession` never enforces it, no waitlist. Both `capacity` and
+`feeType` are **mandatory** on `CreateSessionRequest` (no default fallback for a missing field);
+`feeAmountVnd` is required only when `feeType=FIXED`, cross-field-validated in
+`SessionServiceImpl`, not the DTO. `capacity` bound is `>= 0` with no upper cap (the client's
+1–24 picker is a UI constraint only). Both fields are editable via `updateSession`. Pre-existing
+rows and auto-generated `GROUP_RECURRING` sessions backfill to `capacity=9999` (sentinel =
+uncapped) / `feeType=FREE`. Full writeup: `modules/session/docs/SESSION-5_CAPACITY_AND_FEE.md`.
 
 ## SESSION-6 — Join-approval workflow + invite-friends-at-creation
 

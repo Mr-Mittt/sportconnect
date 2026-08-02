@@ -1,5 +1,6 @@
 package com.sportconnect.session.api.dto;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,4 +30,13 @@ public class UpdateSessionRequest {
     private LocalDateTime scheduledStart;
 
     private Integer durationMinutes;
+
+    @Min(value = 0, message = "capacity must be >= 0")
+    private Integer capacity;
+
+    private FeeType feeType;
+
+    /** Meaningful only when the resolved feeType (after this update) is FIXED — see
+     * SessionServiceImpl.updateSession. */
+    private Long feeAmountVnd;
 }
