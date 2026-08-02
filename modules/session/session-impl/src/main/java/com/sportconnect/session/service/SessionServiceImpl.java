@@ -20,7 +20,9 @@ import com.sportconnect.session.entity.SessionParticipant;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
 import com.sportconnect.sport.api.dto.SportResponse;
+import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
+import com.sportconnect.sport.api.service.UserSportProfileService;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +54,7 @@ public class SessionServiceImpl implements SessionService {
     private final LocationService locationService;
     private final UserService userService;
     private final SportService sportService;
+    private final UserSportProfileService userSportProfileService;
 
     @Override
     @Transactional
@@ -230,6 +233,35 @@ public class SessionServiceImpl implements SessionService {
         });
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SessionResponse> discoverSessions(UUID callerId, Long sportId, Pageable pageable) {
+        List<Long> activeSportIds = userSportProfileService.getUserProfiles(callerId).stream()
+                .map(UserSportProfileResponse::getSportId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        List<Long> effectiveSportIds = sportId != null
+                ? (activeSportIds.contains(sportId) ? List.of(sportId) : List.of())
+                : activeSportIds;
+
+        if (effectiveSportIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        Page<Session> sessions = sessionRepository.findDiscoverSessions(
+                SessionStatus.SCHEDULED, effectiveSportIds, callerId, ParticipantStatus.JOINED, pageable);
+        return toResponsePage(sessions);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SessionResponse> getJoinedSessions(UUID userId, SessionStatus status, Pageable pageable) {
+        Page<Session> sessions = sessionRepository.findJoinedSessionsByStatus(
+                status, userId, ParticipantStatus.JOINED, pageable);
+        return toResponsePage(sessions);
+    }
+
     private Session findSessionOrThrow(Long sessionId) {
         return sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "id", sessionId));
@@ -268,7 +300,7 @@ public class SessionServiceImpl implements SessionService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
-        List<Long> sportIds = sessions.stream().map(Session::getSportId).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        List<Long> sportIds = sessions.stream().map(Session::getSportId).distinct().collect(Collectors.toList());
         List<Long> locationIds = sessions.stream().map(Session::getLocationId).distinct().collect(Collectors.toList());
         List<Long> sessionIds = sessions.stream().map(Session::getId).collect(Collectors.toList());
 

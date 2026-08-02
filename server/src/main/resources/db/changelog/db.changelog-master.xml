@@ -92,4 +92,7 @@
     <!-- LOC-2: Favorite locations -->
     <include file="db/changelog/changes/V038__create_user_favorite_locations.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-4/SESSION-7: Enforce sportId NOT NULL + standalone discover index -->
+    <include file="db/changelog/changes/V039__enforce_session_sport_id_and_add_standalone_index.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

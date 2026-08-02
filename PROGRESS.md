@@ -2079,6 +2079,16 @@ explicit go-ahead at each step (full story in A3's summary doc):
   mapping; added one, which also fixes the same latent bug on `GET /api/locations/search`. Client
   follow-up (favorites dropdown in `CreateSessionModal`, favorite-heart toggle in `LocationPicker`)
   not filed yet.
+- **`SESSION-4` (`DONE`, 2026-08-02, `modules/session/docs/SESSION-4_STANDALONE_DISCOVERY.md`)**
+  — `GET /api/sessions/discover`: standalone, `SCHEDULED` sessions the caller can browse and join,
+  gated to sports the caller holds an active `UserSportProfile` for (via `getUserProfiles`, not
+  the non-active-filtered `hasProfileForSport`), excluding sessions the caller created or
+  currently has joined. Bundles **`SESSION-7`** (`sport_id`/`status`/`scheduled_start` partial
+  index, its shape deliberately deferred until this query existed) in the same migration, which
+  also promotes `sessions.sport_id` to `NOT NULL` — an invariant `createSession` already enforced
+  at the app layer since SESSION-1. Also adds `GET /api/sessions/joined` (required `status` param,
+  spans both session types) for a not-yet-built matches page's other two sections. Client
+  follow-up (discover UI, matches page) not filed yet.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

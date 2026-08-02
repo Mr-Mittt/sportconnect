@@ -47,7 +47,7 @@ public class Session {
     @Column(name = "created_by", nullable = false)
     private UUID createdBy;
 
-    @Column(name = "sport_id")
+    @Column(name = "sport_id", nullable = false)
     private Long sportId;
 
     @Column(length = 200)

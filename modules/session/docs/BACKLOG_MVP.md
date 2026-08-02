@@ -22,10 +22,10 @@
 | 1 | SESSION-1 | Session domain core — manual create/join/leave, group or standalone | `DONE` |
 | 2 | SESSION-2 | Scheduled auto-generation job for group-recurring sessions | `DONE` |
 | 3 | SESSION-3 | Full status lifecycle (ONGOING, CANCELLED) + cancel reason/who/when | `DONE` |
-| 4 | SESSION-4 | Standalone session discovery — browse/join sessions you didn't create | `TODO` |
+| 4 | SESSION-4 | Standalone session discovery — browse/join sessions you didn't create | `DONE` |
 | 5 | SESSION-5 | Session capacity + fee/pricing | `TODO` |
 | 6 | SESSION-6 | Join-approval workflow + invite-friends-at-creation | `TODO` |
-| 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `TODO` |
+| 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `DONE` (bundled into SESSION-4) |
 
 ---
 
@@ -97,6 +97,16 @@ building the query as fully public-to-any-`ROLE_USER`.
 
 **Client follow-up (not filed yet):** a browse/discovery UI, and repointing `UpcomingMatches`'s
 `onJoinMatch` (currently just `navigate('/matches')`, per CLIENT-SESSION-2) at it.
+
+**Delta (2026-08-02, at pickup):** status filter is **`SCHEDULED` only**, not
+`IN (SCHEDULED, ONGOING)` as sketched above — once a session starts it's no longer something to
+discover-and-join, only something the caller sees in their own joined list. Exclusion rule decided
+as: excludes both created and currently-`JOINED` sessions (a `LEFT` session is eligible to
+reappear). Visibility decided as: gated to sports the caller holds an **active** `UserSportProfile`
+for (not fully public). Also added `GET /api/sessions/joined` (required `status` param) for a
+not-yet-built 3-section matches page's other two sections (joined+ongoing, joined+completed) — a
+related need surfaced during scoping, not part of the original sketch. Full writeup:
+`modules/session/docs/SESSION-4_STANDALONE_DISCOVERY.md`.
 
 ## SESSION-5 — Session capacity + fee/pricing
 
@@ -179,3 +189,9 @@ uses `sport_id` as a filter yet.
 **Verification:** no new Spock tests (no new logic). Once SESSION-4 exists, `EXPLAIN ANALYZE` its
 real query against a populated `sessions` table and confirm the planner uses this index (extending
 it first if SESSION-4's query needs more than a bare `sport_id` equality/`IN` check).
+
+**Delta (2026-08-02):** bundled into SESSION-4 rather than picked up separately, once SESSION-4's
+real query shape was known. Shipped as the composite `(sport_id, status, scheduled_start)`, not the
+bare `sport_id` sketched above — SESSION-4's query filters on `sportId IN (...)`, `status =
+SCHEDULED`, and sorts by `scheduledStart`, so the composite serves it directly. See
+`modules/session/docs/SESSION-4_STANDALONE_DISCOVERY.md`.

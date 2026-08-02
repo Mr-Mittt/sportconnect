@@ -16,7 +16,9 @@ import com.sportconnect.session.entity.Session
 import com.sportconnect.session.entity.SessionParticipant
 import com.sportconnect.session.repository.SessionParticipantRepository
 import com.sportconnect.session.repository.SessionRepository
+import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.SportService
+import com.sportconnect.sport.api.service.UserSportProfileService
 import com.sportconnect.user.api.service.UserService
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
@@ -33,10 +35,12 @@ class SessionServiceImplSpec extends Specification {
     LocationService locationService = Mock()
     UserService userService = Mock()
     SportService sportService = Mock()
+    UserSportProfileService userSportProfileService = Mock()
 
     @Subject
     SessionServiceImpl sessionService = new SessionServiceImpl(
-            sessionRepository, sessionParticipantRepository, groupService, locationService, userService, sportService)
+            sessionRepository, sessionParticipantRepository, groupService, locationService, userService,
+            sportService, userSportProfileService)
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
     def tennisLocation = LocationResponse.builder().id(2L).sportId(2L).name("Tennis Court").build()
@@ -362,5 +366,77 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionParticipantRepository.findBySessionIdAndStatus(1L, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions with no sportId filter queries across all the caller's active sports"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        sessionService.discoverSessions(callerId, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [
+                UserSportProfileResponse.builder().sportId(1L).build(),
+                UserSportProfileResponse.builder().sportId(2L).build()
+        ]
+        1 * sessionRepository.findDiscoverSessions(SessionStatus.SCHEDULED, [1L, 2L], callerId, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions with a sportId the caller has an active profile for narrows to that sport"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        sessionService.discoverSessions(callerId, 2L, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [
+                UserSportProfileResponse.builder().sportId(1L).build(),
+                UserSportProfileResponse.builder().sportId(2L).build()
+        ]
+        1 * sessionRepository.findDiscoverSessions(SessionStatus.SCHEDULED, [2L], callerId, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions returns an empty page without querying when the sportId isn't one of the caller's active sports"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        def result = sessionService.discoverSessions(callerId, 99L, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        0 * sessionRepository.findDiscoverSessions(*_)
+        result.totalElements == 0
+    }
+
+    def "discoverSessions returns an empty page without querying when the caller has zero active sport profiles"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        def result = sessionService.discoverSessions(callerId, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> []
+        0 * sessionRepository.findDiscoverSessions(*_)
+        result.totalElements == 0
+    }
+
+    def "getJoinedSessions delegates to the repository for the given status"() {
+        given:
+        def userId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        sessionService.getJoinedSessions(userId, SessionStatus.ONGOING, pageable)
+
+        then:
+        1 * sessionRepository.findJoinedSessionsByStatus(SessionStatus.ONGOING, userId, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
     }
 }
