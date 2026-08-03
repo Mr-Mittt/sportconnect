@@ -95,6 +95,10 @@ function makeSession(overrides: Partial<Session> & Pick<Session, 'id' | 'status'
     cancelledByFullName: null,
     cancelledAt: null,
     participantCount: 1,
+    capacity: 10,
+    feeType: 'FREE',
+    feeAmountVnd: null,
+    initialSlot: 0,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     ...overrides,
@@ -271,6 +275,8 @@ describe('useMatchesPageData', () => {
         sportId: 6,
         locationId: 1,
         scheduledStart: '2026-08-01T19:00:00',
+        capacity: 10,
+        feeType: 'FREE',
       }),
     );
 
@@ -279,6 +285,8 @@ describe('useMatchesPageData', () => {
         sportId: 6,
         locationId: 1,
         scheduledStart: '2026-08-01T19:00:00',
+        capacity: 10,
+        feeType: 'FREE',
       }),
     );
     await waitFor(() => expect(result.current.isCreateModalOpen).toBe(false));

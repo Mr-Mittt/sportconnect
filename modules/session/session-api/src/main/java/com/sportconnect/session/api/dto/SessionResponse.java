@@ -51,9 +51,14 @@ public class SessionResponse {
 
     private LocalDateTime cancelledAt;
 
+    /** Real JOINED SessionParticipant rows + initialSlot — not a raw participant-table count. */
     private Long participantCount;
 
     private Integer capacity;
+
+    /** The initialSlot value folded into participantCount above — exposed separately so a future
+     * edit screen can show/update it on its own, same as capacity/feeType. */
+    private Integer initialSlot;
 
     private FeeType feeType;
 

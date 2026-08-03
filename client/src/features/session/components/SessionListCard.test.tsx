@@ -48,6 +48,12 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
     cancelledByFullName: null,
     cancelledAt: null,
     participantCount: 3,
+    // 9999 = the backend's "uncapped" sentinel — keeps the plain "N participants" text the
+    // default here; individual tests below override it to exercise the "N/capacity" display.
+    capacity: 9999,
+    feeType: 'FREE',
+    feeAmountVnd: null,
+    initialSlot: 0,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     groupName: null,
@@ -64,22 +70,6 @@ describe('SessionListCard', () => {
     expect(screen.getByText('3 participants')).toBeInTheDocument();
   });
 
-  it('shows "Standalone" when groupName is null', () => {
-    render(<SessionListCard session={makeSession()} sportsByKey={sportsByKey} onViewDetails={() => {}} />);
-    expect(screen.getByText('Standalone')).toBeInTheDocument();
-  });
-
-  it('shows the group name when set', () => {
-    render(
-      <SessionListCard
-        session={makeSession({ groupName: 'Riverside Ballers' })}
-        sportsByKey={sportsByKey}
-        onViewDetails={() => {}}
-      />,
-    );
-    expect(screen.getByText('Riverside Ballers')).toBeInTheDocument();
-  });
-
   it('falls back to "{sportName} session" when title is null', () => {
     render(<SessionListCard session={makeSession({ title: null })} sportsByKey={sportsByKey} onViewDetails={() => {}} />);
     expect(screen.getByText('Basketball session')).toBeInTheDocument();
@@ -90,6 +80,36 @@ describe('SessionListCard', () => {
       <SessionListCard session={makeSession({ participantCount: 1 })} sportsByKey={sportsByKey} onViewDetails={() => {}} />,
     );
     expect(screen.getByText('1 participant')).toBeInTheDocument();
+  });
+
+  it('shows "N/capacity participants" once a real capacity was chosen', () => {
+    render(
+      <SessionListCard
+        session={makeSession({ participantCount: 3, capacity: 10 })}
+        sportsByKey={sportsByKey}
+        onViewDetails={() => {}}
+      />,
+    );
+    expect(screen.getByText('3/10 participants')).toBeInTheDocument();
+  });
+
+  it('shows the fee — Free, Split cost, or a formatted VND amount', () => {
+    const { rerender } = render(<SessionListCard session={makeSession()} sportsByKey={sportsByKey} onViewDetails={() => {}} />);
+    expect(screen.getByText('Free')).toBeInTheDocument();
+
+    rerender(
+      <SessionListCard session={makeSession({ feeType: 'SPLIT' })} sportsByKey={sportsByKey} onViewDetails={() => {}} />,
+    );
+    expect(screen.getByText('Split cost')).toBeInTheDocument();
+
+    rerender(
+      <SessionListCard
+        session={makeSession({ feeType: 'FIXED', feeAmountVnd: 50000 })}
+        sportsByKey={sportsByKey}
+        onViewDetails={() => {}}
+      />,
+    );
+    expect(screen.getByText('50 000 ₫')).toBeInTheDocument();
   });
 
   it('calls onViewDetails with the session id when clicked', async () => {

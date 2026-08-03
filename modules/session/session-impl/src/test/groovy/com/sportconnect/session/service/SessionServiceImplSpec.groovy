@@ -733,6 +733,89 @@ class SessionServiceImplSpec extends Specification {
         interaction { stubBatchEnrichment() }
     }
 
+    def "createSession sets initialSlot from the request"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .capacity(7).feeType(FeeType.FREE).initialSlot(2)
+                .build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
+                .status(SessionStatus.SCHEDULED).capacity(7).feeType(FeeType.FREE).initialSlot(2).build()
+
+        when:
+        def result = sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.initialSlot == 2 }) >> saved
+        interaction { stubBatchEnrichment() }
+        result.initialSlot == 2
+    }
+
+    def "createSession defaults initialSlot to 0 when omitted from the request"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .capacity(7).feeType(FeeType.FREE).build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
+                .status(SessionStatus.SCHEDULED).capacity(7).feeType(FeeType.FREE).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.initialSlot == 0 }) >> saved
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession folds initialSlot on top of the real JOINED participant count"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .capacity(7).feeType(FeeType.FREE).initialSlot(2)
+                .build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
+                .status(SessionStatus.SCHEDULED).capacity(7).feeType(FeeType.FREE).initialSlot(2).build()
+        def countRow = [getSessionId: { 1L }, getCount: { 1L }] as SessionParticipantRepository.SessionParticipantCount
+
+        when:
+        def result = sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save(_) >> saved
+        userService.getUsersByIds(_) >> [:]
+        sportService.getSportsByIds(_) >> [:]
+        locationService.getLocationsByIds(_) >> [1L: basketballLocation]
+        // 1 real JOINED row (the creator, auto-joined) + initialSlot(2) = 3.
+        1 * sessionParticipantRepository.countBySessionIdsAndStatus(_, _) >> [countRow]
+        result.participantCount == 3L
+    }
+
+    def "updateSession applies a partial initialSlot update"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .capacity(10).feeType(FeeType.FREE).initialSlot(0).build()
+        def request = UpdateSessionRequest.builder().initialSlot(5).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s -> s.initialSlot == 5 }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
     def "updateSession applies a partial capacity update"() {
         given:
         def userId = UUID.randomUUID()

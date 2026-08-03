@@ -51,6 +51,11 @@ public class CreateSessionRequest {
     /** Required when feeType is FIXED, ignored otherwise — enforced in SessionServiceImpl. */
     private Long feeAmountVnd;
 
+    /** Participants already accounted for outside the app — added on top of the real joined
+     * count when participantCount is reported. Omitted -> 0 (not mandatory like capacity/feeType). */
+    @Min(value = 0, message = "initialSlot must be >= 0")
+    private Integer initialSlot;
+
     /** Omitted → false (not mandatory like capacity/feeType). false = non-invited joiners land
      * in PENDING, awaiting creator/owner-admin approval. */
     private Boolean autoApprove;

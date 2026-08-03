@@ -3,7 +3,7 @@
 // feature's own imports read naturally. Write-only payloads (typed 1:1 against
 // modules/session/session-api/.../dto/{CreateSessionRequest,UpdateSessionRequest,
 // CancelSessionRequest}) stay local — no other feature needs them.
-import type { Session } from '@/shared/types/session';
+import type { FeeType, Session } from '@/shared/types/session';
 
 export type {
   Session,
@@ -11,6 +11,7 @@ export type {
   SessionType,
   SessionStatus,
   ParticipantStatus,
+  FeeType,
 } from '@/shared/types/session';
 
 export interface CreateSessionPayload {
@@ -24,6 +25,14 @@ export interface CreateSessionPayload {
   locationNote?: string;
   scheduledStart: string; // LocalDateTime, e.g. "2026-08-01T19:00:00"
   durationMinutes?: number;
+  /** Mandatory on the real backend (SESSION-5) — no default fallback for a missing field. */
+  capacity: number;
+  feeType: FeeType;
+  /** Required only when feeType is FIXED; omitted otherwise. */
+  feeAmountVnd?: number;
+  /** Participants already accounted for outside the app — folded into the backend's reported
+   * `participantCount` on top of the real joined count. Omitted -> backend defaults to 0. */
+  initialSlot?: number;
 }
 
 export interface UpdateSessionPayload {
@@ -33,6 +42,10 @@ export interface UpdateSessionPayload {
   locationNote?: string;
   scheduledStart?: string;
   durationMinutes?: number;
+  capacity?: number;
+  feeType?: FeeType;
+  feeAmountVnd?: number;
+  initialSlot?: number;
 }
 
 export interface CancelSessionPayload {

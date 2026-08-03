@@ -1,6 +1,8 @@
-import { IconMapPin, IconUsers } from '@tabler/icons-react';
+import { IconCoin, IconMapPin, IconUsers } from '@tabler/icons-react';
 import { useState } from 'react';
+import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { directionsUrl } from '@/shared/lib/mapsLinks';
+import { UNCAPPED_CAPACITY } from '@/shared/lib/sessionCapacity';
 import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
 import { formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
@@ -146,6 +148,11 @@ export function SessionDetailModal({
                 <p className="text-2sm text-text-secondary">{session.description}</p>
               )}
 
+              <div className="flex items-center gap-1.5 text-2sm text-text-secondary">
+                <IconCoin className="size-4 shrink-0" aria-hidden="true" />
+                {formatFeeDisplay(session.feeType, session.feeAmountVnd)}
+              </div>
+
               <div className="text-2xs text-text-muted">Created by {session.createdByFullName}</div>
 
               {session.status === 'CANCELLED' && (
@@ -163,7 +170,11 @@ export function SessionDetailModal({
               <section aria-label="Participants" className="flex flex-col gap-2">
                 <div className="flex items-center gap-1.5 text-2sm font-medium text-text-primary">
                   <IconUsers className="size-4" aria-hidden="true" />
-                  Participants ({session.participantCount})
+                  Participants (
+                  {session.capacity === UNCAPPED_CAPACITY
+                    ? session.participantCount
+                    : `${session.participantCount}/${session.capacity}`}
+                  )
                 </div>
                 {isParticipantsLoading && <p className="text-2xs text-text-muted">Loading…</p>}
                 {isParticipantsError && (

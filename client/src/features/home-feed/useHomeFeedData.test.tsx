@@ -181,6 +181,9 @@ const fixtureSession = {
   cancelledByFullName: null,
   cancelledAt: null,
   participantCount: 1,
+  capacity: 10,
+  feeType: 'FREE',
+  feeAmountVnd: null,
   createdAt: '2026-07-01T10:00:00',
   updatedAt: '2026-07-01T10:00:00',
 };

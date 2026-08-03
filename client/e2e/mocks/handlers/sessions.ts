@@ -69,11 +69,16 @@ export const sessionHandlers: HttpHandler[] = [
       locationNote?: string;
       scheduledStart: string;
       durationMinutes?: number;
+      capacity: number;
+      feeType: Session['feeType'];
+      feeAmountVnd?: number;
+      initialSlot?: number;
     };
-    if (!body.locationId || !body.scheduledStart) {
+    if (!body.locationId || !body.scheduledStart || body.capacity === undefined || !body.feeType) {
       return HttpResponse.json(apiError('Validation failed'), { status: 400 });
     }
     const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const initialSlot = body.initialSlot ?? 0;
     const created: Session = {
       id: session.nextSessionId++,
       groupId: body.groupId ?? null,
@@ -93,7 +98,14 @@ export const sessionHandlers: HttpHandler[] = [
       cancelledBy: null,
       cancelledByFullName: null,
       cancelledAt: null,
-      participantCount: 0,
+      // Real backend: participantCount = real JOINED rows + initialSlot. This mock doesn't
+      // simulate the creator auto-joining on create (a pre-existing gap, out of scope here), so
+      // the real-JOINED-rows half stays 0 — initialSlot is the only real addition this ticket makes.
+      participantCount: initialSlot,
+      capacity: body.capacity,
+      feeType: body.feeType,
+      feeAmountVnd: body.feeType === 'FIXED' ? (body.feeAmountVnd ?? null) : null,
+      initialSlot,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -207,7 +219,11 @@ export const sessionHandlers: HttpHandler[] = [
       session.participantsState[sessionId] = participants;
       session.sessionsState = session.sessionsState.map((candidate) =>
         candidate.id === sessionId
-          ? { ...candidate, participantCount: participants.filter((p) => p.status === 'JOINED').length }
+          ? {
+              ...candidate,
+              participantCount:
+                participants.filter((p) => p.status === 'JOINED').length + candidate.initialSlot,
+            }
           : candidate,
       );
     }
@@ -227,7 +243,11 @@ export const sessionHandlers: HttpHandler[] = [
     row.status = 'LEFT';
     session.sessionsState = session.sessionsState.map((candidate) =>
       candidate.id === sessionId
-        ? { ...candidate, participantCount: participants.filter((p) => p.status === 'JOINED').length }
+        ? {
+            ...candidate,
+            participantCount:
+              participants.filter((p) => p.status === 'JOINED').length + candidate.initialSlot,
+          }
         : candidate,
     );
     return HttpResponse.json(apiResponse(null, 'Left session successfully'));

@@ -124,7 +124,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 54 | CLIENT-SESSION-1 | Session create/list/join/leave/cancel UI, de-mocks HF-4 (`UpcomingMatches`) | `DONE` |
 | **Phase 11 — Session UX follow-ups (new, not in either epic, filed 2026-08-01)** | | | |
 | 55 | CLIENT-SESSION-2 | Standalone-only `CreateSessionModal` redesign (core fields) | `DONE` |
-| 56 | CLIENT-SESSION-3 | Capacity + fee/pricing fields in `CreateSessionModal` (SESSION-5) | `TODO` |
+| 56 | CLIENT-SESSION-3 | Capacity + fee/pricing fields in `CreateSessionModal` (SESSION-5) | `DONE` |
 | 57 | CLIENT-SESSION-4 | Invite-friends + auto-approve at creation, plus approval queue UI (SESSION-6) | `TODO` |
 | 58 | CLIENT-SESSION-5 | Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown (LOC-2) | `TODO` |
 | 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `TODO` |
@@ -237,6 +237,7 @@ GRP-8 (new, filed 2026-07-24, amended same day) — GRP-3, GRP-4, GRP-7 (all DON
 | SESSION-5: session capacity + fee/pricing | `modules/session/docs/BACKLOG_MVP.md` · SESSION-5 | a future client ticket (not yet filed) — capacity/fee fields in `CreateSessionModal` + display | `DONE` (2026-08-02) |
 | SESSION-6: join-approval workflow + invite-friends-at-creation | `modules/session/docs/BACKLOG_MVP.md` · SESSION-6 | a future client ticket (not yet filed) — invite/auto-approve UI + approval queue | `DONE` (2026-08-02) |
 | LOC-2: favorite locations | `modules/location/docs/BACKLOG_MVP.md` · LOC-2 | a future client ticket (not yet filed) — favorite heart toggle + `CreateSessionModal` favorites dropdown | `DONE` (2026-08-01) |
+| SESSION-9: expose the caller's own participant status via getSessionParticipants | `modules/session/docs/BACKLOG_MVP.md` · SESSION-9 | a future client ticket (not yet filed) — `SessionDetailModal`'s Join/Leave button needs to become 4-state (Join/Leave/"Accept this session"/"Waiting for approval") based on the caller's own status; scoped down from CLIENT-SESSION-4 to just this (user decision, 2026-08-03) — CLIENT-SESSION-4's invite-UI + approval-queue scope is unaffected, still `TODO` | `TODO` |
 | ~~Chat module (new `modules/social/chat-impl`, never existed beyond a docs folder, since deleted)~~ | ARCHIVED (2026-07-26) — see `documentation/md/archive/chat/` — fresh chat re-plan pending | ~~CHAT-2, CHAT-4~~ | `N/A` |
 
 ---
@@ -2639,10 +2640,11 @@ CLIENT-SESSION-6 ships a real discover destination). `FriendsPage` gains `ModalA
 anchor to there, so the exact anchor point is this ticket's own call to make at pickup.
 
 ### CLIENT-SESSION-3 · Capacity + fee/pricing fields in `CreateSessionModal`
-**Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (extends its "Session basic
-information" section) · **Filed:** 2026-08-03 · **Spec:** `CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`
-§ "Fields explicitly excluded" (original draft requirements), backend contract:
-`modules/session/docs/SESSION-5_CAPACITY_AND_FEE.md`
+**Status:** `DONE` (2026-08-03) · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (extends its
+"Session basic information" section) · **Filed:** 2026-08-03 · **Spec:**
+`CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` § "Fields explicitly excluded" (original draft
+requirements), backend contract: `modules/session/docs/SESSION-5_CAPACITY_AND_FEE.md` · **Summary:**
+`client/docs/CLIENT-SESSION-3_CAPACITY_AND_FEE.md`
 
 **What ships:** "Taken slot"/"Open slot" numeric inputs (1–24 in the UI; backend accepts any `>= 0`
 int, no upper cap — `capacity` is informational/display-only, never enforced by `joinSession`) and a
@@ -2651,6 +2653,19 @@ int, no upper cap — `capacity` is informational/display-only, never enforced b
 `feeType=FIXED`). Both `capacity` and `feeType` are **mandatory** on `CreateSessionRequest` — no
 default fallback, the form must require both before submit. Also displays capacity/fee on
 `SessionListCard`/`UpcomingMatches`/`SessionDetailModal` (read side, currently missing entirely).
+
+**Delta (2026-08-03, at close-out):** "Taken slot"/"Open slot" turned out to be literal — two
+separate inputs summed into the single backend `capacity` field at submit time, not one field with
+that phrasing as a description. "Taken slot" means the creator (and whoever's already with them) —
+it defaults to **1**, not 0, when left blank, since the creator always auto-joins; a live
+`"{taken}/{capacity} slots"` summary renders under the two inputs. Fee shipped as a checkbox each
+for Free/Split cost plus a label+number-input for Fixed amount (not a button/select group) —
+typing into the amount field selects `FIXED`. The Fixed-amount field additionally formats a
+thousand-space separator while typing, and every numeric field in the form rejects non-digit
+keystrokes/pastes at the DOM event level. `SessionListCard`'s session-type/group-name row was
+removed (user decision, unrelated to the backend contract) — `SessionDetailModal`'s own
+"Standalone"/"Group session" badge is untouched. See the summary doc's "Implementation notes" for
+the full before/after — the backend contract itself never changed.
 
 ### CLIENT-SESSION-4 · Invite-friends + auto-approve at creation, plus approval queue UI
 **Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (extends its "Session basic

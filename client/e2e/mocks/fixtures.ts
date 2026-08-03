@@ -536,6 +536,13 @@ export const mockSession: Session = {
   cancelledByFullName: null,
   cancelledAt: null,
   participantCount: 0,
+  // A real chosen capacity + fixed fee — exercises the "X/Y participants" and VND-amount display
+  // paths (SESSION-5/CLIENT-SESSION-3), unlike the two GROUP_RECURRING fixtures below, which stay
+  // on the backend's uncapped/free sentinel since a recurring session has no capacity/fee input.
+  capacity: 10,
+  feeType: 'FIXED',
+  feeAmountVnd: 50000,
+  initialSlot: 0,
   createdAt: '2026-06-20T10:00:00',
   updatedAt: '2026-06-20T10:00:00',
 };
@@ -564,6 +571,12 @@ export const mockGroupSession: Session = {
   cancelledByFullName: null,
   cancelledAt: null,
   participantCount: 3,
+  // GROUP_RECURRING sessions have no capacity/fee input (GroupRecurrenceConfigResponse carries
+  // neither) — sentinel/default, matching real backend backfill behavior (SESSION-5).
+  capacity: 9999,
+  feeType: 'FREE',
+  feeAmountVnd: null,
+  initialSlot: 0,
   createdAt: '2026-06-21T10:00:00',
   updatedAt: '2026-06-21T10:00:00',
 };
@@ -593,6 +606,11 @@ export const mockOwnedGroupSession: Session = {
   cancelledByFullName: null,
   cancelledAt: null,
   participantCount: 4,
+  // Same GROUP_RECURRING sentinel reasoning as mockGroupSession above.
+  capacity: 9999,
+  feeType: 'FREE',
+  feeAmountVnd: null,
+  initialSlot: 0,
   createdAt: '2026-06-22T10:00:00',
   updatedAt: '2026-06-22T10:00:00',
 };

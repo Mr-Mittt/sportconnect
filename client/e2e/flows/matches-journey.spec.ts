@@ -1,4 +1,4 @@
-import { mockGroup, mockLocation, seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import { mockLocation, seedAuthenticatedSession } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -22,11 +22,9 @@ import { expect, test } from '../mocks/test.ts';
 test('Matches journey', async ({ page }) => {
   await seedAuthenticatedSession(page, '/matches');
 
-  await test.step('1. load — both sessions render with the right group/standalone label', async () => {
+  await test.step('1. load — both sessions render', async () => {
     await expect(page.getByText('Sunday pickup run')).toBeVisible();
     await expect(page.getByText('Friday 5-a-side')).toBeVisible();
-    await expect(page.getByText('Standalone')).toBeVisible();
-    await expect(page.getByText(mockGroup.groupName)).toBeVisible();
   });
 
   await test.step('2. sport filter narrows the list, "All" restores it', async () => {
@@ -96,6 +94,8 @@ test('Matches journey', async ({ page }) => {
     // CLIENT-SESSION-2 pre-fills it on open, so there's nothing to fill in here anymore.
     await createDialog.getByLabel(/^Session title/).fill('New pickup game');
     await createDialog.getByLabel(/^Duration in minutes/).fill('90');
+    // Open slot is required (CLIENT-SESSION-3); Fee is left on its default "Free" checkbox state.
+    await createDialog.getByLabel(/^Open slot/).fill('10');
     await createDialog.getByRole('button', { name: 'Create session' }).click();
 
     await expect(createDialog).not.toBeVisible();

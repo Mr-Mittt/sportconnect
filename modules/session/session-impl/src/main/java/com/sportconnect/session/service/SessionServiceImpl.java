@@ -92,6 +92,7 @@ public class SessionServiceImpl implements SessionService {
 
         Long feeAmountVnd = resolveFeeAmountVnd(request.getFeeType(), request.getFeeAmountVnd());
         boolean autoApprove = Boolean.TRUE.equals(request.getAutoApprove());
+        int initialSlot = request.getInitialSlot() != null ? request.getInitialSlot() : 0;
 
         Session session = Session.builder()
                 .groupId(groupId)
@@ -109,6 +110,7 @@ public class SessionServiceImpl implements SessionService {
                 .feeType(request.getFeeType())
                 .feeAmountVnd(feeAmountVnd)
                 .autoApprove(autoApprove)
+                .initialSlot(initialSlot)
                 .build();
 
         Session saved = sessionRepository.save(session);
@@ -200,6 +202,9 @@ public class SessionServiceImpl implements SessionService {
         }
         if (request.getAutoApprove() != null) {
             session.setAutoApprove(request.getAutoApprove());
+        }
+        if (request.getInitialSlot() != null) {
+            session.setInitialSlot(request.getInitialSlot());
         }
         // Re-resolved unconditionally so the FIXED/feeAmountVnd invariant holds regardless of
         // which fee field (if either) this request touched — catches "switched to FIXED without
@@ -448,11 +453,15 @@ public class SessionServiceImpl implements SessionService {
                         .cancelledByFullName(Optional.ofNullable(session.getCancelledBy())
                                 .map(users::get).map(UserResponse::getFullName).orElse(null))
                         .cancelledAt(session.getCancelledAt())
-                        .participantCount(participantCounts.getOrDefault(session.getId(), 0L))
+                        // initialSlot (participants already accounted for outside the app) sits on
+                        // top of the real JOINED count — not a raw participant-table count.
+                        .participantCount(participantCounts.getOrDefault(session.getId(), 0L)
+                                + session.getInitialSlot())
                         .capacity(session.getCapacity())
                         .feeType(session.getFeeType())
                         .feeAmountVnd(session.getFeeAmountVnd())
                         .autoApprove(session.getAutoApprove())
+                        .initialSlot(session.getInitialSlot())
                         .createdAt(session.getCreatedAt())
                         .updatedAt(session.getUpdatedAt())
                         .build())
