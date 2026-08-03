@@ -156,7 +156,7 @@ describe('MatchesPage', () => {
     await screen.findByText('No sessions for this sport yet.');
 
     await user.click(screen.getByRole('button', { name: 'Create session' }));
-    expect(await screen.findByRole('heading', { name: 'Create a session' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Create your session' })).toBeInTheDocument();
   });
 
   it('clicking a session card opens the detail dialog', async () => {

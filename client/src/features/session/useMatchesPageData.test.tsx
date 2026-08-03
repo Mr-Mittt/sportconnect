@@ -159,27 +159,6 @@ describe('useMatchesPageData', () => {
     expect(result.current.sessions[0].id).toBe(1);
   });
 
-  it('manageableGroups only includes groups where the caller is owner/admin', async () => {
-    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-      if (url === '/groups/user/user-1') {
-        return apiResponse(
-          pageResponse([
-            makeGroup({ id: 1, groupName: 'Owned', sportId: 6, currentUserRole: 'group_owner' }),
-            makeGroup({ id: 2, groupName: 'Admin', sportId: 5, currentUserRole: 'group_admin' }),
-            makeGroup({ id: 3, groupName: 'Member only', sportId: 2, currentUserRole: 'group_member' }),
-          ]),
-        );
-      }
-      if (url.startsWith('/sessions/group/')) return apiResponse(pageResponse([]));
-      if (url === '/sessions/mine') return apiResponse(pageResponse([]));
-      throw new Error(`unexpected GET ${url}`);
-    });
-
-    const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.manageableGroups.map((g) => g.groupName)).toEqual(['Owned', 'Admin']);
-  });
-
   it('onViewDetails opens the detail dialog and loads the session + participants', async () => {
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
       if (url === '/groups/user/user-1') return apiResponse(pageResponse([]));

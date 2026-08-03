@@ -1,8 +1,20 @@
-# CLIENT-SESSION-2 · Upcoming rail create/join CTAs + standalone-only CreateSessionModal redesign
+# CLIENT-SESSION-2 · Standalone-only CreateSessionModal redesign (core fields)
 
-**Status:** `TODO` · **Type:** Feature · **Dependency:** none (frontend-only, no backend change) ·
-**Spec:** this file · **Filed:** 2026-08-01, scoped via discussion (see "Follow-ups" below for the
-backend-dependent pieces split out of it)
+**Status:** `DONE` (2026-08-03) · **Type:** Feature · **Dependency:** none (frontend-only, no
+backend change) · **Spec:** this file · **Filed:** 2026-08-01, scoped via discussion (see
+"Follow-ups" below for the backend-dependent pieces split out of it)
+
+**Delta (2026-08-03, at pickup):** the four backend-dependent follow-ups below (SESSION-4/5/6, LOC-2)
+all shipped 2026-08-01/02. They're now filed as concrete client tickets — CLIENT-SESSION-3
+(capacity/fee), CLIENT-SESSION-4 (invite/auto-approve + approval queue), CLIENT-SESSION-5 (favorite
+locations), CLIENT-SESSION-6 (discover browse UI) — see `client/docs/BACKLOG_MVP.md` for each one's
+scope.
+
+**Delta (2026-08-03, at close-out):** Point 1 below (rail CTAs + hook extraction) was **not**
+built this session (user decision: build Point 2, the modal redesign, first) — split out as its
+own ticket, **CLIENT-SESSION-7**, rather than leave it unstarted blocking this otherwise-`DONE`
+ticket. Point 2 shipped, but diverged from this file's original plan in three real ways —
+see "Implementation notes (2026-08-03)" right after Point 2 below for what changed and why.
 
 ## Point 1 — `UpcomingMatches` empty state
 
@@ -111,33 +123,71 @@ submit — actively misleading rather than just incomplete. Each moves into its 
 follow-up instead, landing together with the backend support it needs:
 
 - **"Taken slot" / "Open slot"** (capacity) and **"Fee"** (Free / Split cost / fixed VND amount) —
-  ship with **SESSION-5** below.
+  ships with **CLIENT-SESSION-3** (`client/docs/BACKLOG_MVP.md`), backend: **SESSION-5**.
 - **"Invite your friend"** (friend search + multi-select with dismissible badges) and the **"Auto
-  approve join request"** checkbox + confirm-warning — ship with **SESSION-6** below. (The friend
-  search itself needs no new endpoint — `GET /api/users/friends` already returns the caller's full
-  friend list unpaginated, so "search by fullname, 3+ characters" is a client-side filter over
-  `useFriends()`'s existing result, same as `SESSION-6`'s eventual client ticket will build it.)
+  approve join request"** checkbox + confirm-warning — ships with **CLIENT-SESSION-4**
+  (`client/docs/BACKLOG_MVP.md`), backend: **SESSION-6**. (The friend search itself needs no new
+  endpoint — `GET /api/users/friends` already returns the caller's full friend list unpaginated, so
+  "search by fullname, 3+ characters" is a client-side filter over `useFriends()`'s existing result.)
 
-## Verification plan (once implemented)
+## Implementation notes (2026-08-03) — where the build diverged from the plan above
 
-- Vitest/RTL coverage for `UpcomingMatches`'s new empty-state buttons and props, the extracted
-  create-session hook, and `CreateSessionModal`'s new field set/validation.
-- Storybook stories for the new accordion sections and the new wheel-picker component's states.
-- `matches-journey.spec.ts` (e2e) updated for the removed group-mode toggle; a new e2e step or spec
-  covering "create from the Home Feed rail" (previously only reachable from `/matches`).
-- Visual regression: `UpcomingMatches` renders on Home Feed/Groups/Friends — expect baseline diffs on
-  every empty-state capture across all three, same "regenerate baselines" follow-up precedent
-  HF-13..HF-19 established for shared-component changes.
+Point 2 shipped, but three pieces of the original plan changed during implementation, each for a
+concrete reason found live, not a stylistic preference:
 
-## Follow-ups filed alongside this ticket (backend-dependent, not built here)
+1. **No shadcn Accordion was added.** `shared/ui/collapsible.tsx` (Radix `Collapsible`) already
+   existed — already used by `GroupSettingsTab`/`FriendRail`/`FriendProfilePanel` — and fits two
+   independent open/closed sections better than a single-select Accordion group anyway. Zero new
+   dependency needed.
+2. **The favorites-dropdown shell (item 3) was built, then reverted.** A `DropdownMenu` wrapping
+   just the "Choose a location" entry (ready to receive real favorite rows later) never opened at
+   all once live-tested against the running dev server — confirmed the menu genuinely doesn't
+   fire, not a styling/z-index issue. Since it had zero favorite rows to show anyway
+   (pre-CLIENT-SESSION-5), reverted to the plain `Button` this field had before. CLIENT-SESSION-5
+   now owns building a working favorites dropdown from scratch, not just wiring data into this
+   shell.
+3. **The wheel-picker (item 4) became three independent native `<select>`s**, not one trigger
+   opening a shared Popover with three wheel columns inside. The Popover version, nested inside
+   this modal's own `Dialog`, first silently failed to open at all in tests; forcing it `modal` to
+   fix that instead caused two competing focus traps to recurse into a real stack overflow
+   (confirmed live too — an outside click while the wheel was open left the whole page
+   permanently unclickable). Given the same nesting problem broke the favorites dropdown
+   independently, native `<select>`s (no portal/dismissable-layer involved) replaced the Popover
+   entirely — Date/Hour/Minute are three plain selects; "Pick a date…" reveals a small hand-built
+   calendar inline (no calendar library exists in this codebase) instead of in a popover.
 
-| Ticket | Where | What |
-|---|---|---|
-| SESSION-4 | `modules/session/docs/BACKLOG_MVP.md` | Standalone session discovery (real "Join a match") |
-| SESSION-5 | `modules/session/docs/BACKLOG_MVP.md` | Session capacity + fee/pricing |
-| SESSION-6 | `modules/session/docs/BACKLOG_MVP.md` | Join-approval workflow + invite-friends-at-creation |
-| LOC-2 | `modules/location/docs/BACKLOG_MVP.md` | Favorite locations |
+Two more changes came from direct user feedback after the initial build, not backend/nesting
+issues: the modal widened to `max-w-2xl` with Sport/Title and Location/Starts-at paired into
+2:8 and 7:3 rows respectively (Duration paired with Starts-at, Location note with Location); the
+Date/Hour/Minute selects default to Today/one-hour-from-now/:00 instead of starting blank; and
+"Create session" is always clickable, validating on submit with per-field error messages, rather
+than staying disabled until the whole form is valid.
 
-Each backend ticket's own entry lists the client-side follow-up work it unblocks; none of those
-client tickets are filed yet, per this project's established cadence (file the client ticket once the
-backend it needs has actually shipped — see SPORT-1/CLIENT-LOC-1/CLIENT-SESSION-1 for precedent).
+## Verification (Point 2 — what actually shipped)
+
+- Vitest/RTL: `CreateSessionModal.test.tsx` (sport pre-select, required-field errors, submit
+  payload shape, no `groupId`), `SessionStartTimePicker.test.tsx` (all three selects, defaults,
+  inline calendar), `SessionStartTimeCalendar.test.tsx` (month nav, min-date disabling). Typecheck
+  clean; full `src/features/session` suite green.
+- Storybook: `CreateSessionModal.stories.tsx`, `SessionStartTimePicker.stories.tsx`,
+  `SessionStartTimeCalendar.stories.tsx` — every new visual state covered.
+- Not done this ticket (belongs to CLIENT-SESSION-7, since Point 1 wasn't built): the removed
+  group-mode toggle's `matches-journey.spec.ts` e2e update, any "create from the Home Feed rail"
+  e2e step, and `UpcomingMatches` visual-regression baseline updates. `MatchesPage`'s own existing
+  create-flow e2e/visual coverage was not re-verified against the new modal layout in this
+  session — worth a pass before the next release.
+
+## Follow-ups split out of this ticket (backend-dependent, not built here)
+
+| Backend ticket | Status | Client ticket | Client status |
+|---|---|---|---|
+| SESSION-4 (`modules/session/docs/BACKLOG_MVP.md`) — standalone session discovery | `DONE` | CLIENT-SESSION-6 | `TODO` |
+| SESSION-5 (`modules/session/docs/BACKLOG_MVP.md`) — capacity + fee/pricing | `DONE` | CLIENT-SESSION-3 | `TODO` |
+| SESSION-6 (`modules/session/docs/BACKLOG_MVP.md`) — join-approval + invite-at-creation | `DONE` | CLIENT-SESSION-4 | `TODO` |
+| LOC-2 (`modules/location/docs/BACKLOG_MVP.md`) — favorite locations | `DONE` | CLIENT-SESSION-5 | `TODO` |
+
+All four backends shipped 2026-08-01/02 (after this ticket was filed 2026-08-01). Per this project's
+established cadence (file the client ticket once the backend it needs has actually shipped — see
+SPORT-1/CLIENT-LOC-1/CLIENT-SESSION-1 for precedent), each is now a filed client ticket in
+`client/docs/BACKLOG_MVP.md`, depending on this ticket rather than folded into it (this repo's usual
+pattern for splitting a large scope, e.g. GRP-1..GRP-8).

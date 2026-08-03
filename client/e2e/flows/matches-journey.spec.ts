@@ -82,8 +82,8 @@ test('Matches journey', async ({ page }) => {
 
   await test.step('6. create a standalone session, searching an existing location', async () => {
     await page.getByRole('button', { name: 'Create session' }).click();
-    const createDialog = page.getByRole('dialog', { name: 'Create a session' });
-    await createDialog.getByLabel('Sport').selectOption('basketball');
+    const createDialog = page.getByRole('dialog', { name: 'Create your session' });
+    await createDialog.getByLabel(/^Sport/).selectOption('basketball');
 
     await createDialog.getByRole('button', { name: 'Choose location' }).click();
     const locationDialog = page.getByRole('dialog', { name: 'Choose a location' });
@@ -92,8 +92,10 @@ test('Matches journey', async ({ page }) => {
     await locationDialog.getByRole('button', { name: new RegExp(mockLocation.name) }).click();
 
     await expect(createDialog.getByText(mockLocation.name)).toBeVisible();
-    await createDialog.getByLabel('Starts at').fill('2027-01-15T19:00');
-    await createDialog.getByLabel('Title (optional)').fill('New pickup game');
+    // Starts at (Date/Hour/Minute) is left on its own default (Today/one-hour-from-now/:00) —
+    // CLIENT-SESSION-2 pre-fills it on open, so there's nothing to fill in here anymore.
+    await createDialog.getByLabel(/^Session title/).fill('New pickup game');
+    await createDialog.getByLabel(/^Duration in minutes/).fill('90');
     await createDialog.getByRole('button', { name: 'Create session' }).click();
 
     await expect(createDialog).not.toBeVisible();

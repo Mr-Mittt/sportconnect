@@ -16,7 +16,6 @@ import { useMySessions } from './hooks/useMySessions';
 import { useSession } from './hooks/useSession';
 import { useSessionParticipants } from './hooks/useSessionParticipants';
 import type { CreateSessionPayload, SessionListItem } from './types';
-import type { ManageableGroup } from './components/CreateSessionModal';
 
 const CAN_MANAGE_ROLES = new Set(['group_owner', 'group_admin']);
 
@@ -71,14 +70,6 @@ export function useMatchesPageData(initialSessionId: number | null) {
       )
       .sort((a, b) => a.scheduledStart.localeCompare(b.scheduledStart));
   }, [groupSessionQueries, mySessionsQuery.data, groups, activeSport]);
-
-  const manageableGroups = useMemo<ManageableGroup[]>(
-    () =>
-      groups
-        .filter((group) => group.currentUserRole !== null && CAN_MANAGE_ROLES.has(group.currentUserRole))
-        .map((group) => ({ id: group.id, groupName: group.groupName, sportId: group.sportId })),
-    [groups],
-  );
 
   const isLoading =
     groupsQuery.isLoading || mySessionsQuery.isLoading || groupSessionQueries.some((query) => query.isLoading);
@@ -147,7 +138,6 @@ export function useMatchesPageData(initialSessionId: number | null) {
     isCreateModalOpen,
     openCreateModal,
     closeCreateModal,
-    manageableGroups,
     selectedLocationForCreate,
     onOpenLocationPickerForCreate: (sportId: number) => {
       setCreateFormSportId(sportId);

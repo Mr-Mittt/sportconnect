@@ -2,18 +2,18 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import { CreateSessionModal, type ManageableGroup } from './CreateSessionModal';
+import { CreateSessionModal } from './CreateSessionModal';
+
+// Real usage builds this from a partial API result via Object.fromEntries + a cast (see
+// useMatchesPageData.ts/HomeFeedPage.tsx) — the single-sport-profile stories below mirror a
+// caller who genuinely only has one, not all three keys.
+const soleFootballSport = { football: { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' } } as Record<SportKey, SportProfile>;
 
 const sportsByKey: Record<SportKey, SportProfile> = {
   football: { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' },
   basketball: { key: 'basketball', label: 'Basketball', icon: 'ball-basketball', colorRamp: 'coral' },
   tennis: { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' },
 };
-
-const manageableGroups: ManageableGroup[] = [
-  { id: 5, groupName: 'Riverside Ballers', sportId: 6 },
-  { id: 8, groupName: 'Downtown Aces', sportId: 2 },
-];
 
 const location: Location = {
   id: 1,
@@ -69,7 +69,6 @@ const meta = {
   args: {
     isOpen: true,
     onClose: () => {},
-    manageableGroups: [],
     sportsByKey,
     selectedLocation: null,
     onOpenLocationPicker: () => {},
@@ -83,20 +82,30 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const StandaloneOnly: Story = {};
+/** No `activeSport` and more than one sport profile — the "Select a sport" blank default. */
+export const Default: Story = {};
 
-export const WithGroupOption: Story = {
-  args: { manageableGroups },
+/** `activeSport` set to a real sport pre-selects the Sport field. */
+export const SportPreselectedFromActivePill: Story = {
+  args: { activeSport: 'basketball' },
+};
+
+/** Only one sport profile at all pre-selects it regardless of `activeSport`. */
+export const SportPreselectedFromSoleProfile: Story = {
+  args: {
+    sportsByKey: soleFootballSport,
+    activeSport: 'all',
+  },
 };
 
 export const LocationChosen: Story = {
-  args: { manageableGroups, selectedLocation: location },
+  args: { activeSport: 'basketball', selectedLocation: location },
 };
 
 export const Submitting: Story = {
-  args: { manageableGroups, selectedLocation: location, isSubmitting: true },
+  args: { activeSport: 'basketball', selectedLocation: location, isSubmitting: true },
 };
 
 export const SubmitError: Story = {
-  args: { manageableGroups, selectedLocation: location, isError: true },
+  args: { activeSport: 'basketball', selectedLocation: location, isError: true },
 };

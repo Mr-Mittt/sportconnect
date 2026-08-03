@@ -2110,6 +2110,22 @@ explicit go-ahead at each step (full story in A3's summary doc):
   table (`SessionParticipant`) can ever target a given (session, user) pair here. No
   notifications, matching that same precedent's own unbuilt scope. Client follow-up (invite
   search, auto-approve checkbox, approval queue UI) not filed yet.
+- **`CLIENT-SESSION-2` (`DONE`, 2026-08-03,
+  `client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`)** — `CreateSessionModal`
+  redesign: standalone-only (mode toggle removed), widened `max-w-2xl`, sport pre-selected from
+  context, 4 rows (Sport/Title 2:8; Location/Location-note 7:3, selected name + button on one
+  line; Starts-at/Duration 7:3; Description alone), collapsible sections styled after the Friends
+  rail's own section headers. New `SessionStartTimePicker` — three independent native `<select>`s
+  (Date/Hour/Minute) defaulting to Today/one-hour-from-now/:00, **not** a Radix Popover wheel:
+  nesting Radix floating UI (Popover, DropdownMenu) inside this modal's own Dialog caused two
+  separate confirmed-live bugs (a stuck pointer-events lock on outside-click; a DropdownMenu that
+  silently never opened), so both the wheel and a favorites-dropdown location shell were reverted
+  to plain primitives with no portal/dismissable-layer involved. "Create session" is always
+  clickable; submitting while invalid shows per-field errors instead of disabling the button.
+  Split into 4 backend-dependent follow-ups (capacity/fee, invite/auto-approve, favorites,
+  discover — all backend-`DONE`, all client-`TODO`): CLIENT-SESSION-3/4/5/6. The rail CTAs
+  (`UpcomingMatches` empty-state buttons + create-session hook extraction across pages), originally
+  also in scope, split out as CLIENT-SESSION-7 (`TODO`) instead — not started this session.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
