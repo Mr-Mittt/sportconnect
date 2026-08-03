@@ -141,6 +141,21 @@ tracked as their own follow-up ticket. User decision this time: note it here rat
 `HF-*` backlog ticket. Regenerating the baselines needs the same manual `update-baselines` GitHub
 Actions dispatch those tickets used (see e.g. `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`).
 
+**Executed:** `update-baselines` dispatch run, `visual-baselines.zip` downloaded and extracted.
+SHA-256 comparison before overwriting showed 9 of the 18 committed screenshots as byte-different:
+all 6 `home-feed-default-*`/`home-feed-basketball-*` (the expected cause above — confirmed via
+direct diff-image inspection: each Upcoming rail card grew taller from the new fee/capacity lines,
+shifting every row below it down) and, unexpectedly, all 3 `post-modal-*-1280` files. Direct
+side-by-side inspection of the old vs. new `post-modal-*-1280.png` files found them visually
+indistinguishable — same content, same layout, no post-modal code touched by this ticket — and the
+3 `post-modal-*-375`/`post-modal-*-768` files came back **byte-identical**, which rules out a real
+structural regression (one would be expected to show at every breakpoint, not only 1280px). Treated
+as harmless sub-pixel/encoder drift between the two separate `update-baselines` CI runs (Chromium/
+font-hinting can shift a few anti-aliased pixels near text edges run-to-run, more likely to surface
+at a larger viewport with more text). All 9 changed files copied over the committed baselines;
+`home-feed-empty-*` (all 3) and `post-modal-*-375`/`post-modal-*-768` (6) came back byte-identical
+and were left untouched.
+
 ## Out of scope / follow-ups
 
 - CLIENT-SESSION-4 (invite/auto-approve + approval queue), CLIENT-SESSION-5 (favorite locations),
