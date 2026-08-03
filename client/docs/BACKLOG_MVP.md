@@ -123,8 +123,13 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 53 | CLIENT-LOC-1 | `LocationPicker` component — search, Google-Maps-link paste-and-resolve, OSM/Leaflet preview pin, Get Directions | `DONE` |
 | 54 | CLIENT-SESSION-1 | Session create/list/join/leave/cancel UI, de-mocks HF-4 (`UpcomingMatches`) | `DONE` |
 | **Phase 11 — Session UX follow-ups (new, not in either epic, filed 2026-08-01)** | | | |
-| 55 | CLIENT-SESSION-2 | Upcoming rail create/join CTAs + standalone-only `CreateSessionModal` redesign | `TODO` |
-| 56 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 55 | CLIENT-SESSION-2 | Standalone-only `CreateSessionModal` redesign (core fields) | `DONE` |
+| 56 | CLIENT-SESSION-3 | Capacity + fee/pricing fields in `CreateSessionModal` (SESSION-5) | `TODO` |
+| 57 | CLIENT-SESSION-4 | Invite-friends + auto-approve at creation, plus approval queue UI (SESSION-6) | `TODO` |
+| 58 | CLIENT-SESSION-5 | Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown (LOC-2) | `TODO` |
+| 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `TODO` |
+| 60 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 61 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `TODO` |
 
 **Dependencies:**
 ```
@@ -149,11 +154,22 @@ CLIENT-LOC-1 → CLIENT-SESSION-1 (session forms need the location picker before
   (`docs/BACKLOG_MVP.md` in each) and GROUP-RECUR-1 (`modules/social/group-impl/docs/BACKLOG_MVP.md`).
 CLIENT-SESSION-1 → CLIENT-SESSION-2 (redesigns the modal CLIENT-SESSION-1 built). CLIENT-SESSION-2
   itself has no backend dependency — see `client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`.
-  It splits out four backend-dependent follow-ups, none blocking it and none filed as client tickets
-  yet (file each once its backend lands, same SPORT-1/CLIENT-LOC-1 cadence): SESSION-4 (standalone
-  session discovery — real "Join a match"), SESSION-5 (capacity + fee/pricing), SESSION-6
-  (join-approval workflow + invite-friends-at-creation), LOC-2 (favorite locations) — all `TODO` in
-  their respective module backlogs.
+  **Delta (2026-08-03):** originally split out four backend-dependent fields as "not yet filed"
+  follow-ups (SESSION-4/5/6, LOC-2 all still `TODO` in their module backlogs when this ticket was
+  written 2026-08-01). All four shipped backend-side 2026-08-01/02 — at pickup, filed as four
+  concrete client tickets rather than left unfiled, and split from CLIENT-SESSION-2 rather than
+  folded into one giant ticket (this repo's established pattern for large scopes, e.g. GRP-1..GRP-8):
+  CLIENT-SESSION-3 (capacity/fee, SESSION-5), CLIENT-SESSION-4 (invite-friends + auto-approve at
+  creation + the approval queue UI, SESSION-6), CLIENT-SESSION-5 (favorite locations, LOC-2),
+  CLIENT-SESSION-6 (real discover/browse UI, SESSION-4). CLIENT-SESSION-2 → all four (each extends
+  the modal CLIENT-SESSION-2 builds); no dependency among 3/4/5/6 themselves.
+  **Delta (2026-08-03, at close-out):** this ticket's own original scope also included Point 1 —
+  `UpcomingMatches`'s empty-state rail CTAs and extracting the create-session hook out of
+  `useMatchesPageData` so Home Feed/Groups/Friends/Matches share one modal instance. That work
+  wasn't started this session (user decision: build the modal redesign — Point 2 — first) and is
+  split out as its own ticket, **CLIENT-SESSION-7**, rather than leaving it as an unstarted part of
+  an otherwise-`DONE` ticket. CLIENT-SESSION-2 → CLIENT-SESSION-7 (the hook it extracts wraps the
+  now-`DONE` modal).
 FEED-4, FEED-5 → GRP-1 (Groups page epic; independent of Phase 6's other tickets).
 GRP-1, B7 (modules/social/group-impl/docs/BACKLOG_MVP.md) → GRP-2.
 GRP-1 → GRP-3 → GRP-4. GRP-3's "Waiting for user accept" section was blocked on B8
@@ -217,10 +233,10 @@ GRP-8 (new, filed 2026-07-24, amended same day) — GRP-3, GRP-4, GRP-7 (all DON
 | BE-2: logout derives user from principal | `modules/auth/docs/BACKLOG_MVP.md` · A3 | AUTH-4 (production) | `DONE` (2026-07-08) |
 | BE-3: login/registration rate limiting | `modules/auth/docs/BACKLOG_MVP.md` · A5 | a future client ticket (not yet filed) for rate-limit error surfacing, split out of AUTH-6 on 2026-07-12 | `TODO` |
 | Matches/tournaments module — `modules/session` + `modules/location` | `modules/session/docs/BACKLOG_MVP.md` (SESSION-1/2/3), `modules/location/docs/BACKLOG_MVP.md` (LOC-1), `modules/social/group-impl/docs/BACKLOG_MVP.md` (GROUP-RECUR-1) | de-mocking HF-4 | `DONE` (2026-07-30) |
-| SESSION-4: standalone session discovery | `modules/session/docs/BACKLOG_MVP.md` · SESSION-4 | a future client ticket (not yet filed) — real "Join a match" | `TODO` |
-| SESSION-5: session capacity + fee/pricing | `modules/session/docs/BACKLOG_MVP.md` · SESSION-5 | a future client ticket (not yet filed) — capacity/fee fields in `CreateSessionModal` + display | `TODO` |
-| SESSION-6: join-approval workflow + invite-friends-at-creation | `modules/session/docs/BACKLOG_MVP.md` · SESSION-6 | a future client ticket (not yet filed) — invite/auto-approve UI + approval queue | `TODO` |
-| LOC-2: favorite locations | `modules/location/docs/BACKLOG_MVP.md` · LOC-2 | a future client ticket (not yet filed) — favorite heart toggle + `CreateSessionModal` favorites dropdown | `TODO` |
+| SESSION-4: standalone session discovery | `modules/session/docs/BACKLOG_MVP.md` · SESSION-4 | a future client ticket (not yet filed) — real "Join a match" | `DONE` (2026-08-02) |
+| SESSION-5: session capacity + fee/pricing | `modules/session/docs/BACKLOG_MVP.md` · SESSION-5 | a future client ticket (not yet filed) — capacity/fee fields in `CreateSessionModal` + display | `DONE` (2026-08-02) |
+| SESSION-6: join-approval workflow + invite-friends-at-creation | `modules/session/docs/BACKLOG_MVP.md` · SESSION-6 | a future client ticket (not yet filed) — invite/auto-approve UI + approval queue | `DONE` (2026-08-02) |
+| LOC-2: favorite locations | `modules/location/docs/BACKLOG_MVP.md` · LOC-2 | a future client ticket (not yet filed) — favorite heart toggle + `CreateSessionModal` favorites dropdown | `DONE` (2026-08-01) |
 | ~~Chat module (new `modules/social/chat-impl`, never existed beyond a docs folder, since deleted)~~ | ARCHIVED (2026-07-26) — see `documentation/md/archive/chat/` — fresh chat re-plan pending | ~~CHAT-2, CHAT-4~~ | `N/A` |
 
 ---
@@ -2556,29 +2572,129 @@ batch "sessions across my groups" endpoint and no way to discover a standalone s
 created (only `GET /sessions/mine` = caller's own, `GET /sessions/group/{id}` = one group) — a real
 backend gap, not solved here, worth its own follow-up ticket if session discovery needs to widen.
 
-### CLIENT-SESSION-2 · Upcoming rail create/join CTAs + standalone-only `CreateSessionModal` redesign
-**Status:** `TODO` · **Type:** Feature · **Dependency:** none (frontend-only) · **Filed:** 2026-08-01
-· **Spec:** `client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`
+### CLIENT-SESSION-2 · Standalone-only `CreateSessionModal` redesign (core fields)
+**Status:** `DONE` (2026-08-03) · **Type:** Feature · **Dependency:** none (frontend-only) ·
+**Filed:** 2026-08-01 · **Spec:** `client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`
+
+**What shipped:** `CreateSessionModal` drops its standalone/group mode toggle (standalone-only —
+group-linked session creation has no UI until the still-unbuilt group recurrence-config settings
+surface ships), widens to `max-w-2xl`, and restructures into two collapsible sections styled after
+the Friends page rail's own section headers (`FriendSection` — small muted trigger label, chevron
+centered next to it, underlined, not a bold heading): "Session basic information" (open by
+default) and "Session detail" (collapsed, "Coming soon" placeholder for a later
+profile-derived-prefill ticket). Four rows inside the first section (ratios per user decision):
+Sport(2)/Title(8); Location(7, selected name + button on one line)/Location note(3); "Starts
+at"(7)/Duration(3); Description alone, full width. Sport pre-selects from the hosting page's active
+pill, or the caller's sole sport profile, or blank. Required fields (Sport/Title/Location/Starts
+at/Duration) show a red `*`; "Create session" is always clickable rather than disabled until
+valid — clicking it while invalid sets a per-field error under whichever required fields are still
+empty, each clearing on its own the moment that field is filled in.
+
+New shared-within-feature component `SessionStartTimePicker` replaces the old native
+`datetime-local` input with three fully independent native `<select>`s (Date/Hour/Minute) —
+**not** a Radix Popover-based wheel as originally planned. Nesting Radix floating UI inside this
+modal's own Dialog caused two separate confirmed-live bugs during implementation: a `Popover`
+stopped opening at all once made to cooperate with the Dialog's focus trap (forcing it `modal`
+"fixed" the open bug but caused a stack-overflow from two competing focus traps — reverted), and a
+`DropdownMenu`-based location-favorites shell never opened live either, with nothing to show in it
+anyway pre-CLIENT-SESSION-5 (reverted to the plain button). Native `<select>`s have no
+portal/dismissable-layer involved, so that whole bug class doesn't apply — the Date select offers
+Today/Tomorrow/next 5 days/"Pick a date…" (the last revealing a small hand-built inline calendar,
+no calendar library exists in this codebase), and defaults to Today/one-hour-from-now/:00 on open
+rather than starting blank.
+
+**Why the original plan (favorites dropdown shell, Popover wheel) changed:** both were designed
+before implementation surfaced that Radix floating UI doesn't reliably nest inside this specific
+modal's Dialog in this app's current Radix versions — confirmed live twice, not a jsdom-only
+artifact. Favor simple, proven primitives (native `<select>`, plain `Button`) over a broken shell
+for either don't-yet-exist data (favorites) or a "nicer" picker.
+
+**Delta (2026-08-03, at pickup):** the backends for four originally-excluded fields
+(SESSION-4/5/6, LOC-2 — capacity/fee, invite/auto-approve, favorites, discover) shipped
+2026-08-01/02, after this ticket was originally filed. Rather than re-scope this already-reviewed
+ticket mid-flight or fold everything into one oversized PR, those four areas are filed as their
+own tickets (CLIENT-SESSION-3/4/5/6, below), each depending on this one.
+
+**Delta (2026-08-03, at close-out):** this ticket's original scope also included Point 1 —
+`UpcomingMatches`'s empty-state rail CTAs ("Create your match"/"Join a match") and extracting the
+create-session hook out of `useMatchesPageData` so Home Feed/Groups/Friends/Matches share one
+modal instance. That work wasn't started this session (user decision: build the modal redesign —
+Point 2 — first, then close out what was actually done rather than leave an unstarted part
+blocking the rest) — split into its own ticket, **CLIENT-SESSION-7**, below.
+
+### CLIENT-SESSION-7 · Upcoming rail create/join CTAs + create-session hook extraction across pages
+**Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (`DONE` — the hook this
+ticket extracts wraps that modal) · **Filed:** 2026-08-03, split from CLIENT-SESSION-2's original
+scope at close-out · **Spec:** `client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`
+§ "Point 1"
 
 **What ships:** `UpcomingMatches`'s empty state drops "for this sport" from its copy and gains two
 controlled CTAs — "Create your match" (opens `CreateSessionModal` inline, anchored per-page; the
-modal's data hook is extracted out of `useMatchesPageData` so `HomeFeedPage`/`GroupsPage`/
-`FriendsPage`/`MatchesPage` share one create-session implementation) and "Join a match" (navigates to
-`/matches`, same as "See all", until SESSION-4 ships a real discovery endpoint). `FriendsPage` gains
-`ModalAnchorProvider` (the only rail-hosting page that didn't already have it).
+modal's data hook is extracted out of `useMatchesPageData` into a standalone hook so
+`HomeFeedPage`/`GroupsPage`/`FriendsPage`/`MatchesPage` share one create-session implementation,
+with `MatchesPage`'s existing "Create session" button switching to the same hook/modal instance
+too) and "Join a match" (navigates to `/matches`, same as "See all" — superseded once
+CLIENT-SESSION-6 ships a real discover destination). `FriendsPage` gains `ModalAnchorProvider`
+(the only rail-hosting page that doesn't already have one) — no natural pill-row equivalent to
+anchor to there, so the exact anchor point is this ticket's own call to make at pickup.
 
-`CreateSessionModal` drops its standalone/group mode toggle (standalone-only from here on — group-
-linked session creation has no UI until the still-unbuilt group recurrence-config settings surface
-ships) and restructures into two collapsible sections: "Session basic information" (sport
-pre-selected from the active pill or the caller's sole sport profile, now-required title, a
-favorite-locations dropdown that ships as an empty shell pending LOC-2, a new wheel-picker
-start-time component, now-required duration) and "Session detail" (collapsed, "Coming soon"
-placeholder). Capacity/fee/invite-friends/auto-approve fields are explicitly **not** part of this
-ticket — see the four backend follow-ups below.
+### CLIENT-SESSION-3 · Capacity + fee/pricing fields in `CreateSessionModal`
+**Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (extends its "Session basic
+information" section) · **Filed:** 2026-08-03 · **Spec:** `CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`
+§ "Fields explicitly excluded" (original draft requirements), backend contract:
+`modules/session/docs/SESSION-5_CAPACITY_AND_FEE.md`
 
-**Why split this way:** every excluded field has zero backend support today (confirmed against
-`Session.java`/`CreateSessionRequest` while scoping) — shipping their inputs now would silently drop
-whatever the user entered on submit. Each moves into its paired backend ticket instead.
+**What ships:** "Taken slot"/"Open slot" numeric inputs (1–24 in the UI; backend accepts any `>= 0`
+int, no upper cap — `capacity` is informational/display-only, never enforced by `joinSession`) and a
+"Fee" input group — mutually exclusive "Free" / "Split cost" / a fixed VND amount, mapping to
+`feeType` (`FREE`/`SPLIT`/`FIXED`) and `feeAmountVnd` (required, and only meaningful, when
+`feeType=FIXED`). Both `capacity` and `feeType` are **mandatory** on `CreateSessionRequest` — no
+default fallback, the form must require both before submit. Also displays capacity/fee on
+`SessionListCard`/`UpcomingMatches`/`SessionDetailModal` (read side, currently missing entirely).
+
+### CLIENT-SESSION-4 · Invite-friends + auto-approve at creation, plus approval queue UI
+**Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (extends its "Session basic
+information" section), FRIEND-1 (`useFriends()`, already `DONE`) · **Filed:** 2026-08-03 · **Spec:**
+`CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` § "Fields explicitly excluded" (original draft
+requirements), backend contract: `modules/session/docs/SESSION-6_JOIN_APPROVAL_AND_INVITES.md`
+
+**What ships:** an "Invite your friend" search-and-multi-select (client-side fullname filter, 3+
+characters, over `useFriends()`'s existing full unpaginated list — no new search endpoint needed)
+with dismissible badges, feeding `CreateSessionRequest.inviteeIds`; an "Auto approve join request"
+checkbox (default **unchecked**, matching the backend's new-session default) with a confirm/warning
+dialog on check ("everyone can join without your review"), feeding `autoApprove`. Also builds the
+approval queue: creators/owner-admins can list `REQUESTED` participants (`GET
+.../participants?status=REQUESTED`) and approve/reject them (optional reject reason), most likely
+surfaced in `SessionDetailModal` mirroring the Groups page's Members-tab approval queue pattern —
+without this, auto-approve-off sessions have no way to actually approve anyone through the app.
+
+### CLIENT-SESSION-5 · Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown
+**Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (the location field it
+populates), CLIENT-LOC-1 (`LocationPicker`, already `DONE`) · **Filed:** 2026-08-03 · **Spec:**
+`CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` § "Fields explicitly excluded" (original draft
+requirements), backend contract: `modules/location/docs/BACKLOG_MVP.md` § LOC-2
+
+**What ships:** a favorite-toggle heart on `LocationPicker`'s search-result rows, wired to the real
+favorite-locations backend, plus turning `CreateSessionModal`'s plain "Choose a location" button
+into a real favorites-aware dropdown for the effective sport (a `DropdownMenu`-based shell was
+tried during CLIENT-SESSION-2 and reverted — confirmed live, it never opened at all nested inside
+that modal's Dialog — so this ticket needs to solve that nesting problem for real, not just wire
+data into an already-built shell), with a trailing "Choose a location" entry still opening the
+unchanged `LocationPicker` flow.
+
+### CLIENT-SESSION-6 · Standalone session discover — real "Join a match" browse UI
+**Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (the `onJoinMatch` prop it
+introduces) · **Filed:** 2026-08-03 · **Spec:** backend contract:
+`modules/session/docs/SESSION-4_STANDALONE_DISCOVERY.md`
+
+**What ships:** a browse/discover UI (modal or dedicated view — TBD at design time) listing joinable
+standalone sessions via `GET /api/sessions/discover` (optional `sportId` filter, `SCHEDULED`-only,
+gated server-side to the caller's active sport profiles, excludes sessions the caller created or has
+joined), with a join action per row. Repoints `UpcomingMatches`'s `onJoinMatch` (currently
+`navigate('/matches')` per CLIENT-SESSION-2) at this real surface instead. Also a candidate to surface
+`GET /api/sessions/joined` (the 3-section matches page: discover / joined+ongoing / joined+completed)
+if scoped in at design time — confirm against `MatchesPage`'s current single-list layout before
+committing to that expansion.
 
 ### SPORT-2 · Static per-sport attribute config + `SportAttributesFields` component
 **Status:** `TODO` · **Type:** Component · **Dependency:** none · **Filed:** 2026-08-01 · **Spec:**

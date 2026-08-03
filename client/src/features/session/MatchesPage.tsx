@@ -89,8 +89,8 @@ export function MatchesPage() {
         key={data.isCreateModalOpen ? 'open' : 'closed'}
         isOpen={data.isCreateModalOpen}
         onClose={data.closeCreateModal}
-        manageableGroups={data.manageableGroups}
         sportsByKey={data.sportsByKey}
+        activeSport={data.activeSport}
         selectedLocation={data.selectedLocationForCreate}
         onOpenLocationPicker={data.onOpenLocationPickerForCreate}
         locationPicker={data.locationPickerForCreate}
