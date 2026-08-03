@@ -39,16 +39,18 @@ test('Matches journey', async ({ page }) => {
   await test.step('3. join then leave the standalone session', async () => {
     await page.getByRole('button', { name: /Sunday pickup run/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
-    await expect(dialog.getByText('Participants (0)')).toBeVisible();
+    // mockSession has a real chosen capacity (10, CLIENT-SESSION-3) — not the 9999 "uncapped"
+    // sentinel — so Participants shows "N/10", not the plain "N" the sentinel would render.
+    await expect(dialog.getByText('Participants (0/10)')).toBeVisible();
 
     await dialog.getByRole('button', { name: 'Join' }).click();
     await expect(dialog.getByRole('button', { name: 'Leave' })).toBeVisible();
-    await expect(dialog.getByText('Participants (1)')).toBeVisible();
+    await expect(dialog.getByText('Participants (1/10)')).toBeVisible();
     await expect(dialog.getByText('Jordan Lee', { exact: true })).toBeVisible();
 
     await dialog.getByRole('button', { name: 'Leave' }).click();
     await expect(dialog.getByRole('button', { name: 'Join' })).toBeVisible();
-    await expect(dialog.getByText('Participants (0)')).toBeVisible();
+    await expect(dialog.getByText('Participants (0/10)')).toBeVisible();
 
     await dialog.getByRole('button', { name: 'Close' }).click();
   });
