@@ -117,13 +117,17 @@ version was built and tested (not a re-scoping — same backend contract through
 - `pnpm exec tsc -b` — clean, no errors.
 - `pnpm exec vitest run` — full suite, 737/737 passing (multiple times across the iteration rounds
   above).
-- `pnpm exec playwright test --project=e2e matches-journey` — **inconclusive, not a pass**: failed
-  at the pre-existing login step (`seedAuthenticatedSession`) with "Invalid email or password",
-  which means Playwright reused an already-running dev server on port 5173 that wasn't pointed at
-  the e2e mock backend (a real, separately-running dev session on this machine, not something this
-  ticket's code touches) — same class of environment conflict flagged as inconclusive in
-  CLIENT-SESSION-2's own verification. Not re-attempted further to avoid interfering with that
-  running process.
+- `pnpm exec playwright test --project=e2e matches-journey` — **passes** (resolved, no longer
+  inconclusive). Root cause of the earlier inconclusive run: a stale Vite dev server (~10 hours
+  old) was squatting on port 5173, which Playwright's `reuseExistingServer` config reused instead
+  of starting its own e2e-wired one — that stale server wasn't pointed at the mock backend, so
+  login failed with "Invalid email or password" before ever reaching the app. Killed (user-
+  approved) and reran: login succeeded, then step 3 surfaced one real, expected staleness —
+  `mockSession` now carries a real `capacity: 10` (not the `9999` sentinel), so the modal correctly
+  renders `"Participants (N/10)"` instead of the spec's old `"Participants (N)"` assertion. Fixed
+  the assertions; full spec passes. Also ran the other 11 e2e specs touching session fixtures
+  (all pass) and the full `e2e` project (48/49 pass — the one failure, `feed-groups-journey`'s
+  unrelated feed-pagination test, passes cleanly in isolation, a parallel-run flake).
 - Storybook/browser walkthrough not performed live this session (no connected Chrome tooling) —
   Vitest/RTL component tests plus the Storybook stories added/updated for every new visual state are
   the verification evidence for this ticket, consistent with `client/CLAUDE.md`'s testing layers.
