@@ -1,7 +1,9 @@
-import { IconClock, IconMapPin } from '@tabler/icons-react';
+import { IconClock, IconCoin, IconMapPin } from '@tabler/icons-react';
 import { createElement } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
+import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
+import { formatParticipantCount } from '@/shared/lib/sessionCapacity';
 import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
 import { getSportIcon } from '@/shared/lib/sportIcons';
 import { formatStartTime } from '@/shared/lib/startTime';
@@ -27,9 +29,9 @@ interface UpcomingMatchesProps {
  * activeSport as the Feed (HF-7 shares the state). Presentational: the single
  * "View details" CTA only reports the session via onSelectMatch — join/leave/
  * cancel live in the Matches page's detail dialog, not here (CLIENT-SESSION-1:
- * the real Session has no capacity/spots-left concept, and cheaply knowing
- * "have I joined" per card isn't available without fetching each session's
- * participants, so this card shows a status badge instead of a join button).
+ * cheaply knowing "have I joined" per card isn't available without fetching
+ * each session's participants, so this card shows a status badge instead of a
+ * join button).
  */
 export function UpcomingMatches({
   matches,
@@ -105,9 +107,16 @@ export function UpcomingMatches({
                   <IconClock className="size-3 shrink-0" aria-hidden="true" />
                   {formatStartTime(match.scheduledStart)}
                 </div>
-                <div className="mb-2 flex items-center gap-1 text-2xs text-text-secondary">
+                <div className="mb-0.5 flex items-center gap-1 text-2xs text-text-secondary">
                   <IconMapPin className="size-3 shrink-0" aria-hidden="true" />
                   {match.location.name}
+                </div>
+                <div className="mb-2 flex items-center gap-2 text-2xs text-text-secondary">
+                  <span className="flex items-center gap-1">
+                    <IconCoin className="size-3 shrink-0" aria-hidden="true" />
+                    {formatFeeDisplay(match.feeType, match.feeAmountVnd)}
+                  </span>
+                  <span>{formatParticipantCount(match.participantCount, match.capacity)}</span>
                 </div>
                 <button
                   type="button"

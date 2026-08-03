@@ -46,6 +46,10 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
     cancelledByFullName: null,
     cancelledAt: null,
     participantCount: 3,
+    capacity: 10,
+    feeType: 'FREE',
+    feeAmountVnd: null,
+    initialSlot: 0,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     groupName: null,
@@ -67,17 +71,6 @@ export const Standalone: Story = {
   args: { session: makeSession() },
 };
 
-export const GroupLinked: Story = {
-  args: {
-    session: makeSession({
-      id: 2,
-      groupId: 5,
-      sessionType: 'GROUP_RECURRING',
-      groupName: 'Riverside Ballers',
-    }),
-  },
-};
-
 export const Ongoing: Story = {
   args: { session: makeSession({ id: 3, status: 'ONGOING' }) },
 };
@@ -96,4 +89,16 @@ export const NoTitle: Story = {
 
 export const SingleParticipant: Story = {
   args: { session: makeSession({ id: 7, participantCount: 1 }) },
+};
+
+export const SplitCost: Story = {
+  args: { session: makeSession({ id: 8, feeType: 'SPLIT' }) },
+};
+
+export const FixedFee: Story = {
+  args: { session: makeSession({ id: 9, feeType: 'FIXED', feeAmountVnd: 50000 }) },
+};
+
+export const Uncapped: Story = {
+  args: { session: makeSession({ id: 10, capacity: 9999 }) },
 };

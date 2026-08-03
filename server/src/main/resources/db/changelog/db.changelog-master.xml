@@ -101,4 +101,7 @@
     <!-- SESSION-6: Join-approval workflow + invite-friends-at-creation -->
     <include file="db/changelog/changes/V041__add_session_join_approval.sql" relativeToChangelogFile="false"/>
 
+    <!-- CLIENT-SESSION-3 follow-up: initial slot (participants already accounted for outside the app) -->
+    <include file="db/changelog/changes/V042__add_initial_slot_to_sessions.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

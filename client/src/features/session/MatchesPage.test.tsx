@@ -106,6 +106,9 @@ function session(overrides: Record<string, unknown> = {}) {
     cancelledByFullName: null,
     cancelledAt: null,
     participantCount: 1,
+    capacity: 10,
+    feeType: 'FREE',
+    feeAmountVnd: null,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     ...overrides,
@@ -139,7 +142,7 @@ describe('MatchesPage', () => {
     render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
 
     expect(await screen.findByText('Sunday pickup run')).toBeInTheDocument();
-    expect(screen.getByText('Standalone')).toBeInTheDocument();
+    expect(screen.getByText('Riverside Courts')).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no sessions', async () => {

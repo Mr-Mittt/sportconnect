@@ -41,4 +41,7 @@ public class UpdateSessionRequest {
     private Long feeAmountVnd;
 
     private Boolean autoApprove;
+
+    @Min(value = 0, message = "initialSlot must be >= 0")
+    private Integer initialSlot;
 }

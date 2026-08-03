@@ -41,6 +41,12 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     cancelledByFullName: null,
     cancelledAt: null,
     participantCount: 1,
+    // 9999 = the backend's "uncapped" sentinel — keeps "Participants (1)" the default text below;
+    // individual tests override it to exercise the "Participants (N/capacity)" display.
+    capacity: 9999,
+    feeType: 'FREE',
+    feeAmountVnd: null,
+    initialSlot: 0,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     ...overrides,
@@ -123,6 +129,27 @@ describe('SessionDetailModal', () => {
     render(<SessionDetailModal {...baseProps} />);
     expect(screen.getByText('Participants (1)')).toBeInTheDocument();
     expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
+  });
+
+  it('shows "Participants (N/capacity)" once a real capacity was chosen', () => {
+    render(<SessionDetailModal {...baseProps} session={makeSession({ capacity: 10 })} />);
+    expect(screen.getByText('Participants (1/10)')).toBeInTheDocument();
+  });
+
+  it('shows the fee — Free, Split cost, or a formatted VND amount', () => {
+    const { rerender } = render(<SessionDetailModal {...baseProps} />);
+    expect(screen.getByText('Free')).toBeInTheDocument();
+
+    rerender(<SessionDetailModal {...baseProps} session={makeSession({ feeType: 'SPLIT' })} />);
+    expect(screen.getByText('Split cost')).toBeInTheDocument();
+
+    rerender(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ feeType: 'FIXED', feeAmountVnd: 50000 })}
+      />,
+    );
+    expect(screen.getByText('50 000 ₫')).toBeInTheDocument();
   });
 
   it('shows Join (not Leave) when the current user has not joined', async () => {

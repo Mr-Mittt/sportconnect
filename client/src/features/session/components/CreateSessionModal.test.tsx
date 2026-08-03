@@ -155,7 +155,42 @@ describe('CreateSessionModal', () => {
     expect(screen.getByText('Title is required.')).toBeInTheDocument();
     expect(screen.getByText('Location is required.')).toBeInTheDocument();
     expect(screen.getByText('Duration is required.')).toBeInTheDocument();
+    expect(screen.getByText('Open slot is required.')).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('Fee defaults to "Free" checked, and it never blocks submit on its own', () => {
+    render(<CreateSessionModal {...baseProps} />);
+    expect(screen.getByRole('checkbox', { name: 'Free' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Split cost' })).not.toBeChecked();
+    expect(screen.getByLabelText('Fixed amount')).toHaveValue('');
+  });
+
+  it('typing into "Fixed amount" selects it and requires the amount on submit', async () => {
+    const user = userEvent.setup();
+    render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
+
+    await user.type(screen.getByLabelText('Fixed amount'), '50000');
+    expect(screen.getByRole('checkbox', { name: 'Free' })).not.toBeChecked();
+
+    await user.clear(screen.getByLabelText('Fixed amount'));
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+    expect(screen.getByText('Amount is required.')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Fixed amount'), '50000');
+    expect(screen.queryByText('Amount is required.')).not.toBeInTheDocument();
+  });
+
+  it('checking "Free" or "Split cost" clears a previously-typed amount', async () => {
+    const user = userEvent.setup();
+    render(<CreateSessionModal {...baseProps} />);
+
+    await user.type(screen.getByLabelText('Fixed amount'), '50000');
+    await user.click(screen.getByRole('checkbox', { name: 'Split cost' }));
+
+    expect(screen.getByRole('checkbox', { name: 'Split cost' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Free' })).not.toBeChecked();
+    expect(screen.getByLabelText('Fixed amount')).toHaveValue('');
   });
 
   it('a field error clears on its own once that field is filled in, without needing to resubmit', async () => {
@@ -187,6 +222,7 @@ describe('CreateSessionModal', () => {
     await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
     await pickAnyStartTime(user);
     await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Open slot/), '10');
     await user.click(screen.getByRole('button', { name: 'Create session' }));
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
@@ -207,6 +243,7 @@ describe('CreateSessionModal', () => {
     await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
     await pickAnyStartTime(user);
     await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Open slot/), '10');
     await user.click(screen.getByRole('button', { name: 'Create session' }));
 
     // scheduledStart's date half is "today" per the real clock (the Date select's "Today"
@@ -219,8 +256,127 @@ describe('CreateSessionModal', () => {
       locationNote: undefined,
       scheduledStart: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T19:00:00$/),
       durationMinutes: 90,
+      // Taken slot left blank -> defaults to 1 (the creator, who auto-joins) -> capacity = 1 + 10,
+      // initialSlot = 1 - 1 = 0 (the creator's own auto-joined row already accounts for it).
+      capacity: 11,
+      feeType: 'FREE',
+      feeAmountVnd: undefined,
+      initialSlot: 0,
     });
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('groupId');
+  });
+
+  it('shows a live "taken/capacity" summary — Taken slot defaults to 1 (the creator) when blank', async () => {
+    const user = userEvent.setup();
+    render(<CreateSessionModal {...baseProps} />);
+
+    expect(screen.getByText('1/1 slots')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/^Open slot/), '5');
+    expect(screen.getByText('1/6 slots')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Taken slot'), '3');
+    await user.clear(screen.getByLabelText(/^Open slot/));
+    await user.type(screen.getByLabelText(/^Open slot/), '4');
+    expect(screen.getByText('3/7 slots')).toBeInTheDocument();
+  });
+
+  it('submits capacity as taken (explicit) + open, not defaulted, once Taken slot is filled in', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(
+      <CreateSessionModal
+        {...baseProps}
+        selectedLocation={location}
+        activeSport="basketball"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+    await pickAnyStartTime(user);
+    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText('Taken slot'), '3');
+    await user.type(screen.getByLabelText(/^Open slot/), '4');
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+    // initialSlot = Taken slot(3) - 1 (the creator's own auto-joined row already accounts for 1).
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ capacity: 7, initialSlot: 2 }));
+  });
+
+  it('submits feeAmountVnd when Fixed amount is chosen', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(
+      <CreateSessionModal
+        {...baseProps}
+        selectedLocation={location}
+        activeSport="basketball"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+    await pickAnyStartTime(user);
+    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Open slot/), '10');
+    await user.type(screen.getByLabelText('Fixed amount'), '50000');
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ feeType: 'FIXED', feeAmountVnd: 50000 }),
+    );
+  });
+
+  it('every numeric field rejects non-digit keystrokes (Duration/Taken slot/Open slot/Fixed amount)', async () => {
+    const user = userEvent.setup();
+    render(<CreateSessionModal {...baseProps} />);
+
+    const duration = screen.getByLabelText(/^Duration in minutes/);
+    await user.type(duration, 'a1b2c3');
+    expect(duration).toHaveValue(123);
+
+    const takenSlot = screen.getByLabelText('Taken slot');
+    await user.type(takenSlot, '-1.5');
+    expect(takenSlot).toHaveValue(15);
+
+    const openSlot = screen.getByLabelText(/^Open slot/);
+    await user.type(openSlot, '1e10');
+    expect(openSlot).toHaveValue(110);
+
+    const fixedAmount = screen.getByLabelText('Fixed amount');
+    await user.type(fixedAmount, '50,000');
+    expect(fixedAmount).toHaveValue('50 000');
+  });
+
+  it('"Fixed amount" displays a space every 3 digits, and normalizes a pasted comma-formatted value', async () => {
+    const user = userEvent.setup();
+    render(<CreateSessionModal {...baseProps} />);
+    const fixedAmount = screen.getByLabelText('Fixed amount');
+
+    await user.type(fixedAmount, '1500000');
+    expect(fixedAmount).toHaveValue('1 500 000');
+
+    await user.clear(fixedAmount);
+    await user.click(fixedAmount);
+    await user.paste('50,000');
+    expect(fixedAmount).toHaveValue('50 000');
+
+    await user.clear(fixedAmount);
+    await user.paste('90 mins');
+    expect(fixedAmount).toHaveValue('');
+  });
+
+  it('every numeric field rejects a pasted non-numeric value but accepts a pasted numeric one', async () => {
+    const user = userEvent.setup();
+    render(<CreateSessionModal {...baseProps} />);
+
+    const duration = screen.getByLabelText(/^Duration in minutes/);
+    await user.click(duration);
+    await user.paste('90 mins');
+    expect(duration).toHaveValue(null);
+    await user.paste('90');
+    expect(duration).toHaveValue(90);
   });
 
   it('shows "Creating…" while submitting, and the error state', () => {

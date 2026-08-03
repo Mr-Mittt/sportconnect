@@ -1,7 +1,9 @@
-import { IconClock, IconMapPin, IconUsers, IconUsersGroup } from '@tabler/icons-react';
+import { IconClock, IconCoin, IconMapPin, IconUsers } from '@tabler/icons-react';
 import { createElement } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
+import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
+import { formatParticipantCount } from '@/shared/lib/sessionCapacity';
 import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
 import { getSportIcon } from '@/shared/lib/sportIcons';
 import { formatStartTime } from '@/shared/lib/startTime';
@@ -17,11 +19,12 @@ interface SessionListCardProps {
 
 /**
  * The Matches page's full-list row — richer than the right-rail `UpcomingMatches` card (sport
- * badge, status badge, group name or "Standalone", date/time, location, participant count).
- * Presentational: a single "View details" CTA opens `SessionDetailModal`, where join/leave/
- * cancel actually live (CLIENT-SESSION-1 design decision — the real backend has no capacity
- * field and cheaply knowing "have I joined" per row isn't available without fetching each
- * session's participants).
+ * badge, status badge, date/time, location, participant count, fee). No session-type/group-name
+ * row (user decision, CLIENT-SESSION-3) — `groupName` is resolved onto `SessionListItem` for
+ * other consumers but not rendered here. Presentational: a single "View details" CTA opens
+ * `SessionDetailModal`, where join/leave/cancel actually live (CLIENT-SESSION-1 design decision —
+ * cheaply knowing "have I joined" per row isn't available without fetching each session's
+ * participants).
  */
 export function SessionListCard({ session, sportsByKey, onViewDetails }: SessionListCardProps) {
   const sportKey = sportKeyForId(session.sportId);
@@ -54,11 +57,6 @@ export function SessionListCard({ session, sportsByKey, onViewDetails }: Session
       </div>
 
       <div className="flex items-center gap-1 text-2xs text-text-secondary">
-        <IconUsersGroup className="size-3.5 shrink-0" aria-hidden="true" />
-        {session.groupName ?? 'Standalone'}
-      </div>
-
-      <div className="flex items-center gap-1 text-2xs text-text-secondary">
         <IconClock className="size-3.5 shrink-0" aria-hidden="true" />
         {formatStartTime(session.scheduledStart)}
       </div>
@@ -70,7 +68,12 @@ export function SessionListCard({ session, sportsByKey, onViewDetails }: Session
 
       <div className="flex items-center gap-1 text-2xs text-text-muted">
         <IconUsers className="size-3.5 shrink-0" aria-hidden="true" />
-        {session.participantCount} {session.participantCount === 1 ? 'participant' : 'participants'}
+        {formatParticipantCount(session.participantCount, session.capacity)}
+      </div>
+
+      <div className="flex items-center gap-1 text-2xs text-text-muted">
+        <IconCoin className="size-3.5 shrink-0" aria-hidden="true" />
+        {formatFeeDisplay(session.feeType, session.feeAmountVnd)}
       </div>
     </button>
   );

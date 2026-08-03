@@ -2126,6 +2126,23 @@ explicit go-ahead at each step (full story in A3's summary doc):
   discover — all backend-`DONE`, all client-`TODO`): CLIENT-SESSION-3/4/5/6. The rail CTAs
   (`UpcomingMatches` empty-state buttons + create-session hook extraction across pages), originally
   also in scope, split out as CLIENT-SESSION-7 (`TODO`) instead — not started this session.
+- **`CLIENT-SESSION-3` (`DONE`, 2026-08-03,
+  `client/docs/CLIENT-SESSION-3_CAPACITY_AND_FEE.md`)** — capacity + fee/pricing fields added to
+  `CreateSessionModal` (SESSION-5's `capacity`/`feeType`/`feeAmountVnd`) and to the 3 read-side
+  displays (`SessionListCard`, `UpcomingMatches`, `SessionDetailModal`). Capacity input is split
+  into "Taken slot" (the creator + whoever's already with them, defaults to 1 when blank since the
+  creator always auto-joins) + "Open slot" (required), summed into the single backend `capacity`
+  field at submit time, with a live `"{taken}/{capacity} slots"` summary shown under the two inputs.
+  Fee is a checkbox each for Free/Split cost plus a label+number-input for Fixed amount (not a
+  button/select group) — typing into the amount field is what selects `FIXED`. The Fixed-amount
+  field formats a thousand-space separator while typing (`"50 000"`), and every numeric field in
+  the form (Duration, Taken/Open slot, Fixed amount) rejects non-digit keystrokes and pastes at the
+  DOM event level, not just via `type="number"`. Read-side displays hide the capacity denominator
+  for the backend's `9999` "uncapped" sentinel. `SessionListCard`'s session-type/group-name row was
+  also removed (user decision) — `SessionDetailModal`'s own "Standalone"/"Group session" badge is
+  untouched. Known consequence, not separately ticketed (user decision): the new `UpcomingMatches`
+  text shifts Home Feed's visual-regression baselines, same class of drift HF-13..HF-19 each
+  tracked — regen needs the same manual GitHub Actions dispatch those tickets used.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

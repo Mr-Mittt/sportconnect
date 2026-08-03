@@ -39,6 +39,10 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     cancelledByFullName: null,
     cancelledAt: null,
     participantCount: 2,
+    capacity: 10,
+    feeType: 'FREE',
+    feeAmountVnd: null,
+    initialSlot: 0,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     ...overrides,
@@ -142,4 +146,16 @@ export const JoinError: Story = {
 
 export const NoTitleFallback: Story = {
   args: { session: makeSession({ title: null }) },
+};
+
+export const SplitCostFee: Story = {
+  args: { session: makeSession({ feeType: 'SPLIT' }) },
+};
+
+export const FixedFee: Story = {
+  args: { session: makeSession({ feeType: 'FIXED', feeAmountVnd: 50000 }) },
+};
+
+export const UncappedCapacity: Story = {
+  args: { session: makeSession({ capacity: 9999 }) },
 };

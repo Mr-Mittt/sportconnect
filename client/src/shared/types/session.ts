@@ -13,6 +13,10 @@ export type SessionStatus = 'SCHEDULED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
 
 export type ParticipantStatus = 'JOINED' | 'LEFT';
 
+// SESSION-5: capacity is display-only (never enforced by joinSession); feeAmountVnd is
+// meaningful only when feeType is FIXED (null otherwise).
+export type FeeType = 'FREE' | 'SPLIT' | 'FIXED';
+
 export interface Session {
   id: number;
   groupId: number | null;
@@ -32,7 +36,15 @@ export interface Session {
   cancelledBy: string | null;
   cancelledByFullName: string | null;
   cancelledAt: string | null;
+  /** Real JOINED SessionParticipant rows + initialSlot, computed backend-side — not a raw
+   * participant-table count. */
   participantCount: number;
+  capacity: number;
+  feeType: FeeType;
+  feeAmountVnd: number | null;
+  /** Participants the creator already accounts for outside the app, folded into
+   * `participantCount` above (backend-side, `SessionServiceImpl.mapToResponses`). */
+  initialSlot: number;
   createdAt: string;
   updatedAt: string;
 }

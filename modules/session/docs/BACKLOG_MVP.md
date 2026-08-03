@@ -27,6 +27,7 @@
 | 6 | SESSION-6 | Join-approval workflow + invite-friends-at-creation | `DONE` |
 | 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `DONE` (bundled into SESSION-4) |
 | 8 | SESSION-8 | Session discover ranking algorithm | `TODO` |
+| 9 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `TODO` |
 
 ---
 
@@ -257,3 +258,43 @@ Phase 1/2 discussion so far, worth reading before re-scoping:
 - Also unresolved: whether combining signals should be a tiered priority sort (simple, stays
   SQL-`ORDER BY`-compatible with `Page`/`LIMIT`-`OFFSET` pagination) or a weighted composite score
   (more flexible, real added complexity to keep DB-side-paginatable).
+
+## SESSION-9 — Expose the caller's own participant status (any status) via getSessionParticipants
+
+**Filed:** 2026-08-03. Found while wiring `SessionDetailModal` to show the right action
+(Join/Leave/"Accept this session"/"Waiting for approval") based on the *caller's own*
+`SessionParticipant.status` for that session. SESSION-6 added `INVITED`/`REQUESTED` to
+`ParticipantStatus`, but `getSessionParticipants`'s existing gate —
+`effectiveStatus != JOINED` requires `requireCanModify` (creator/owner-admin only) — means a
+regular invitee or a user with a pending join request has **no way to see their own row** unless
+they also happen to manage the session. `GET /participants` (defaulting to `status=JOINED`) simply
+omits them entirely if they're `INVITED` or `REQUESTED`, and querying `?status=INVITED` or
+`?status=REQUESTED` themselves 400s for a non-manager.
+
+**What ships (user decision on approach — "add self to the existing query", not a new endpoint):**
+`getSessionParticipants` always includes the caller's own `SessionParticipant` row in the result,
+regardless of the `status` filter and regardless of `canManage` — since it's always the caller's
+*own* row, not someone else's, this doesn't leak anything the manager-only gate is meant to
+protect (that gate stays exactly as-is for every other participant's non-JOINED row). Exact
+mechanism is this ticket's design decision at pickup: e.g. union the caller's own
+`findBySessionIdAndUserId` result into the paginated status-filtered query's content (careful not
+to duplicate it if it already matches the filter, and not to break the `Page`'s
+total-count/pagination math), vs. a separate small "my participation" field bolted onto the
+response shape callers already fetch.
+
+**Client follow-up (not built yet, this ticket unblocks it):** `SessionDetailModal` resolves the
+caller's own status from the (now-complete) participants list instead of only checking for a
+`JOINED` row, and swaps its Join/Leave button for one of four states:
+- No row (or `LEFT`) → "Join" button (unchanged from today).
+- `JOINED` → "Leave" button (unchanged from today).
+- `INVITED` → "Accept this session" button — still calls the existing `joinSession` endpoint,
+  which already resolves an `INVITED` row straight to `JOINED` regardless of `autoApprove`
+  (SESSION-6), just needs its own label instead of reusing "Join".
+- `REQUESTED` → "Waiting for approval" — disabled, no action; there's nothing for the requester
+  themselves to do until the creator/owner-admin approves or rejects it.
+
+**Explicitly out of scope (stays with CLIENT-SESSION-4, `client/docs/BACKLOG_MVP.md`, still
+`TODO`):** the "Invite your friend" search + multi-select and "Auto approve join request" checkbox
+at creation, and the owner/creator-side approval queue UI for reviewing *other* users'
+`REQUESTED` rows. This ticket is scoped to the caller's own status only (user decision, 2026-08-03)
+— CLIENT-SESSION-4 remains the ticket for those two pieces once picked up.

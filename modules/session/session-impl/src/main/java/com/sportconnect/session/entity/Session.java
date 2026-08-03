@@ -92,6 +92,13 @@ public class Session {
     @Column(name = "fee_amount_vnd")
     private Long feeAmountVnd;
 
+    /** Participants the creator already accounts for outside the app (e.g. a team they brought
+     * with them) — added on top of the real JOINED SessionParticipant count when SessionServiceImpl
+     * reports participantCount. Never negative; 0 for every row predating this column. */
+    @Column(name = "initial_slot", nullable = false)
+    @Builder.Default
+    private Integer initialSlot = 0;
+
     /** false = joinSession puts non-invited joiners into PENDING, awaiting creator/owner-admin
      * approval. Sessions predating this column backfilled to true (see V041 migration) so their
      * existing instant-join behavior didn't silently change. */
