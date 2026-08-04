@@ -96,6 +96,10 @@ export function MatchesPage() {
         locationPicker={data.locationPickerForCreate}
         friends={data.friends}
         isFriendsLoading={data.isFriendsLoading}
+        onEffectiveSportChange={data.onEffectiveSportChangeForCreate}
+        favoriteLocations={data.favoriteLocationsForCreate}
+        isFavoriteLocationsLoading={data.isFavoriteLocationsLoading}
+        onSelectLocation={data.onSelectLocationForCreate}
         onSubmit={data.submitCreate}
         isSubmitting={data.isCreating}
         isError={data.isCreateError}

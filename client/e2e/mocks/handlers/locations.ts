@@ -36,6 +36,12 @@ function mockPageResponse<T>(content: T[]) {
 interface LocationsSession {
   locationsState: Location[];
   nextLocationId: number;
+  // CLIENT-SESSION-5: starts empty — the e2e journey exercises the full favorite/unfavorite
+  // round trip itself rather than a pre-seeded favorite, same reasoning as mockOwnedGroupSession's
+  // pre-seeded REQUESTED rows being the exception (there, a second live identity wasn't available
+  // to actually request-join as; here, favoriting is a single-user action this mock can simulate
+  // directly).
+  favoriteLocationIds: number[];
 }
 
 // CLIENT-SESSION-1: stateful, same reasoning as groups.ts's userGroupsState —
@@ -44,7 +50,7 @@ interface LocationsSession {
 // to hold up in e2e, even though this ticket's own journey only exercises
 // searching the pre-seeded mockLocation.
 function defaultLocationsSession(): LocationsSession {
-  return { locationsState: [mockLocation], nextLocationId: 100 };
+  return { locationsState: [mockLocation], nextLocationId: 100, favoriteLocationIds: [] };
 }
 
 const locationsSessions = createSessionStore(defaultLocationsSession);
@@ -96,6 +102,26 @@ export const locationHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(mockPageResponse(results), 'Locations retrieved successfully'));
   }),
 
+  // Registered before GET /api/locations/:locationId below — MSW matches handlers in
+  // registration order, and ":locationId" matches any single path segment including the literal
+  // string "favorites", so this must come first or every /favorites request 404s as if
+  // "favorites" were a locationId (confirmed live: caused the favorites query to retry-loop
+  // against the wrong handler, which looked like a permanently stuck "Loading…" in the UI).
+  http.get('/api/locations/favorites', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const url = new URL(request.url);
+    const sportId = url.searchParams.get('sportId');
+    if (sportId === null) {
+      return HttpResponse.json(apiError('sportId is required'), { status: 400 });
+    }
+    const session = locationsSessions.get(sessionIdFromRequest(request));
+    const results = session.locationsState.filter(
+      (location) => session.favoriteLocationIds.includes(location.id) && location.sportId === Number(sportId),
+    );
+    return HttpResponse.json(apiResponse(mockPageResponse(results), 'Favorite locations retrieved successfully'));
+  }),
+
   http.get('/api/locations/:locationId', ({ request, params }) => {
     const locationId = Number(params.locationId);
     const location = locationsSessions
@@ -117,6 +143,30 @@ export const locationHandlers: HttpHandler[] = [
     return HttpResponse.json(
       apiResponse({ latitude: null, longitude: null, suggestedName: null }, 'URL resolved'),
     );
+  }),
+
+  http.post('/api/locations/:locationId/favorite', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const locationId = Number(params.locationId);
+    const session = locationsSessions.get(sessionIdFromRequest(request));
+    if (session.favoriteLocationIds.includes(locationId)) {
+      return HttpResponse.json(apiError('You have already favorited this location'), { status: 400 });
+    }
+    session.favoriteLocationIds = [...session.favoriteLocationIds, locationId];
+    return HttpResponse.json(apiResponse(null, 'Location favorited successfully'));
+  }),
+
+  http.delete('/api/locations/:locationId/favorite', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const locationId = Number(params.locationId);
+    const session = locationsSessions.get(sessionIdFromRequest(request));
+    if (!session.favoriteLocationIds.includes(locationId)) {
+      return HttpResponse.json(apiError('You have not favorited this location'), { status: 400 });
+    }
+    session.favoriteLocationIds = session.favoriteLocationIds.filter((id) => id !== locationId);
+    return HttpResponse.json(apiResponse(null, 'Location unfavorited successfully'));
   }),
 ];
 

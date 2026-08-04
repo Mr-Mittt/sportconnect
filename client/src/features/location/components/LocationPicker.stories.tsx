@@ -36,6 +36,9 @@ const meta = {
     isSearching: false,
     isSearchError: false,
     onSelectResult: () => {},
+    favoriteLocationIds: new Set<number>(),
+    onToggleFavorite: () => {},
+    isTogglingFavorite: false,
     onOpenGoogleMaps: () => {},
     mapsUrlInput: '',
     onMapsUrlChange: () => {},
@@ -72,6 +75,18 @@ export const SearchWithResults: Story = {
 
 export const SearchEmpty: Story = {
   args: { inputValue: 'nonexistent venue' },
+};
+
+/** CLIENT-SESSION-5: one row already favorited (filled heart), one not. */
+export const SearchWithAFavorite: Story = {
+  args: {
+    inputValue: 'riverside',
+    results: [
+      location({ id: 1, name: 'Riverside Sports Complex' }),
+      location({ id: 2, name: 'Riverside Tennis Courts', address: null }),
+    ],
+    favoriteLocationIds: new Set([1]),
+  },
 };
 
 export const SearchLoading: Story = {

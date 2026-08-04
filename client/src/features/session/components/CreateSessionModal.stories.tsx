@@ -39,6 +39,12 @@ const location: Location = {
   updatedAt: '2026-06-01T10:00:00',
 };
 
+// CLIENT-SESSION-5: populates the location field's favorites dropdown.
+const favoriteLocations: Location[] = [
+  location,
+  { ...location, id: 2, name: 'Lakeside Courts', address: '4 Lake Rd' },
+];
+
 const locationPicker: LocationPickerProps = {
   isOpen: false,
   onClose: () => {},
@@ -52,6 +58,9 @@ const locationPicker: LocationPickerProps = {
   isSearching: false,
   isSearchError: false,
   onSelectResult: () => {},
+  favoriteLocationIds: new Set<number>(),
+  onToggleFavorite: () => {},
+  isTogglingFavorite: false,
   onOpenGoogleMaps: () => {},
   mapsUrlInput: '',
   onMapsUrlChange: () => {},
@@ -82,6 +91,10 @@ const meta = {
     selectedLocation: null,
     onOpenLocationPicker: () => {},
     locationPicker,
+    onEffectiveSportChange: () => {},
+    favoriteLocations,
+    isFavoriteLocationsLoading: false,
+    onSelectLocation: () => {},
     friends,
     isFriendsLoading: false,
     onSubmit: () => {},
@@ -119,4 +132,9 @@ export const Submitting: Story = {
 
 export const SubmitError: Story = {
   args: { activeSport: 'basketball', selectedLocation: location, isError: true },
+};
+
+/** CLIENT-SESSION-5: the location field's favorites dropdown with no favorites for this sport yet. */
+export const NoFavoriteLocationsYet: Story = {
+  args: { activeSport: 'basketball', favoriteLocations: [] },
 };

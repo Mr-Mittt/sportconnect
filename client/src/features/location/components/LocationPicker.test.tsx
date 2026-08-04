@@ -35,6 +35,9 @@ const baseProps = {
   isSearching: false,
   isSearchError: false,
   onSelectResult: () => {},
+  favoriteLocationIds: new Set<number>(),
+  onToggleFavorite: () => {},
+  isTogglingFavorite: false,
   onOpenGoogleMaps: () => {},
   mapsUrlInput: '',
   onMapsUrlChange: () => {},
@@ -81,6 +84,39 @@ describe('LocationPicker — search mode', () => {
     render(<LocationPicker {...baseProps} results={[first]} onSelectResult={onSelectResult} />);
     await user.click(screen.getByText('Riverside Sports Complex'));
     expect(onSelectResult).toHaveBeenCalledWith(first);
+  });
+
+  it('shows a heart-toggle per row that calls onToggleFavorite without also selecting the row', async () => {
+    const user = userEvent.setup();
+    const onSelectResult = vi.fn();
+    const onToggleFavorite = vi.fn();
+    const first = location({ id: 1, name: 'Riverside Sports Complex' });
+    render(
+      <LocationPicker
+        {...baseProps}
+        results={[first]}
+        onSelectResult={onSelectResult}
+        onToggleFavorite={onToggleFavorite}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Favorite Riverside Sports Complex' }));
+    expect(onToggleFavorite).toHaveBeenCalledWith(first);
+    expect(onSelectResult).not.toHaveBeenCalled();
+  });
+
+  it('labels an already-favorited row for unfavoriting, and reflects the filled state', () => {
+    const favorited = location({ id: 1, name: 'Riverside Sports Complex' });
+    render(
+      <LocationPicker {...baseProps} results={[favorited]} favoriteLocationIds={new Set([1])} />,
+    );
+    const heart = screen.getByRole('button', { name: 'Unfavorite Riverside Sports Complex' });
+    expect(heart).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('disables every heart-toggle while a favorite mutation is in flight', () => {
+    const first = location({ id: 1, name: 'Riverside Sports Complex' });
+    render(<LocationPicker {...baseProps} results={[first]} isTogglingFavorite />);
+    expect(screen.getByRole('button', { name: 'Favorite Riverside Sports Complex' })).toBeDisabled();
   });
 
   it('shows loading/error/empty states', () => {

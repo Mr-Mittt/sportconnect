@@ -4,6 +4,9 @@ import { useMatchesPageStore } from '@/app/matchesPageStore';
 import { useFriends } from '@/features/friends/hooks/useFriends';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
+import { useFavoriteLocation } from '@/features/location/hooks/useFavoriteLocation';
+import { useFavoriteLocations } from '@/features/location/hooks/useFavoriteLocations';
+import { useUnfavoriteLocation } from '@/features/location/hooks/useUnfavoriteLocation';
 import { useLocationPickerData } from '@/features/location/useLocationPickerData';
 import type { Location } from '@/shared/types/location';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
@@ -93,6 +96,32 @@ export function useMatchesPageData(initialSessionId: number | null) {
     setCreateFormSportId(null);
   };
 
+  // CLIENT-SESSION-5: the favorites dropdown needs to be scoped to whatever sport is *currently
+  // selected in the still-open, uncommitted create form* — CreateSessionModal owns that Sport
+  // field as its own local state (per its documented "owns its own transient form state"
+  // precedent), so it reports the currently-effective sportId up via this callback purely for
+  // query-scoping, without the field itself being lifted/controlled here. Reuses
+  // `createFormSportId` (already populated by `onOpenLocationPickerForCreate` below) as the same
+  // single source of truth for both the dropdown and `useLocationPickerData`.
+  const onEffectiveSportChangeForCreate = (sportId: number | undefined) =>
+    setCreateFormSportId(sportId ?? null);
+  const favoriteLocationsQuery = useFavoriteLocations(createFormSportId ?? undefined, isCreateModalOpen);
+  const favoriteLocationIds = useMemo(
+    () => new Set((favoriteLocationsQuery.data?.content ?? []).map((location) => location.id)),
+    [favoriteLocationsQuery.data],
+  );
+  const favoriteLocationMutation = useFavoriteLocation();
+  const unfavoriteLocationMutation = useUnfavoriteLocation();
+  const toggleFavoriteLocation = (location: Location) => {
+    if (createFormSportId === null) return;
+    const payload = { locationId: location.id, sportId: createFormSportId };
+    if (favoriteLocationIds.has(location.id)) {
+      unfavoriteLocationMutation.mutate(payload);
+    } else {
+      favoriteLocationMutation.mutate(payload);
+    }
+  };
+
   const locationPickerData = useLocationPickerData(
     createFormSportId ?? SPORT_ID_BY_KEY.football,
     isCreateLocationPickerOpen,
@@ -106,6 +135,9 @@ export function useMatchesPageData(initialSessionId: number | null) {
     isOpen: isCreateLocationPickerOpen,
     onClose: () => setIsCreateLocationPickerOpen(false),
     ...locationPickerData,
+    favoriteLocationIds,
+    onToggleFavorite: toggleFavoriteLocation,
+    isTogglingFavorite: favoriteLocationMutation.isPending || unfavoriteLocationMutation.isPending,
   };
 
   const createSessionMutation = useCreateSession();
@@ -166,6 +198,13 @@ export function useMatchesPageData(initialSessionId: number | null) {
     isCreateError: createSessionMutation.isError,
     friends: friendsQuery.data ?? [],
     isFriendsLoading: friendsQuery.isLoading,
+    onEffectiveSportChangeForCreate,
+    favoriteLocationsForCreate: favoriteLocationsQuery.data?.content ?? [],
+    isFavoriteLocationsLoading: favoriteLocationsQuery.isLoading,
+    // CLIENT-SESSION-5: selecting a favorite straight from the dropdown bypasses the full
+    // LocationPicker flow entirely — same setter useLocationPickerData's own onSelect uses, just
+    // called directly since there's no picker dialog to also close here.
+    onSelectLocationForCreate: setSelectedLocationForCreate,
 
     selectedSessionId,
     onViewDetails: (sessionId: number) => setSelectedSessionId(sessionId),
