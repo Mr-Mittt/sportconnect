@@ -43,6 +43,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     feeType: 'FREE',
     feeAmountVnd: null,
     initialSlot: 0,
+    autoApprove: false,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     ...overrides,
@@ -57,6 +58,7 @@ const participants: SessionParticipant[] = [
     userFullName: 'Jordan Lee',
     userAvatarUrl: null,
     status: 'JOINED',
+    rejectReason: null,
     createdAt: '2026-07-01T10:00:00',
   },
   {
@@ -66,7 +68,21 @@ const participants: SessionParticipant[] = [
     userFullName: 'Priya Shah',
     userAvatarUrl: null,
     status: 'JOINED',
+    rejectReason: null,
     createdAt: '2026-07-02T10:00:00',
+  },
+];
+
+const requestedParticipants: SessionParticipant[] = [
+  {
+    id: 3,
+    sessionId: 1,
+    userId: 'user-4',
+    userFullName: 'Alex Chen',
+    userAvatarUrl: null,
+    status: 'REQUESTED',
+    rejectReason: null,
+    createdAt: '2026-07-03T10:00:00',
   },
 ];
 
@@ -93,6 +109,13 @@ const meta = {
     onConfirmCancel: () => {},
     isCancelling: false,
     isCancelError: false,
+    requestedParticipants: [],
+    isRequestedParticipantsLoading: false,
+    isRequestedParticipantsError: false,
+    onApproveParticipant: () => {},
+    isApprovingParticipant: false,
+    onRejectParticipant: () => {},
+    isRejectingParticipant: false,
   },
 } satisfies Meta<typeof SessionDetailModal>;
 
@@ -158,4 +181,9 @@ export const FixedFee: Story = {
 
 export const UncappedCapacity: Story = {
   args: { session: makeSession({ capacity: 9999 }) },
+};
+
+/** CLIENT-SESSION-4: only renders for a canManage caller with at least one REQUESTED row. */
+export const ApprovalQueue: Story = {
+  args: { canManage: true, requestedParticipants },
 };

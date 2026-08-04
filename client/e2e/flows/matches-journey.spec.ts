@@ -1,4 +1,4 @@
-import { mockLocation, seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import { mockFriend, mockLocation, seedAuthenticatedSession } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -17,6 +17,15 @@ import { expect, test } from '../mocks/test.ts';
  * paste-a-link/resolve coverage here (that's LocationPicker's own
  * component/Storybook tests; e2e/mocks/handlers/locations.ts's
  * resolve-maps-url handler exists but isn't exercised by this spec).
+ *
+ * CLIENT-SESSION-4: step 6 also exercises "Invite your friend" (`mockFriend`)
+ * and "Auto approve join request" in the create form. Step 7 is the
+ * approval-queue journey against `mockOwnedGroupSession` ("Ladder night",
+ * mockUser is group_owner there — `canManage` true) — `mockSessionJoinRequest`/
+ * `mockSecondSessionJoinRequest` are pre-seeded REQUESTED rows (same
+ * "pre-seed the other person's row" precedent as group-invitations.spec.ts's
+ * `mockGroupJoinRequest`, since this mock server has no second live
+ * authenticated identity to actually request-join as).
  */
 
 test('Matches journey', async ({ page }) => {
@@ -98,9 +107,46 @@ test('Matches journey', async ({ page }) => {
     await createDialog.getByLabel(/^Duration in minutes/).fill('90');
     // Open slot is required (CLIENT-SESSION-3); Fee is left on its default "Free" checkbox state.
     await createDialog.getByLabel(/^Open slot/).fill('10');
+
+    // CLIENT-SESSION-4: invite a friend (dismissible badge) and check auto-approve (reveals the
+    // inline warning, no separate confirm step).
+    await createDialog.getByLabel('Search friends to invite').fill(mockFriend.fullName);
+    await createDialog.getByRole('button', { name: new RegExp(mockFriend.fullName) }).click();
+    await expect(createDialog.getByText(mockFriend.fullName, { exact: true })).toBeVisible();
+    const autoApproveCheckbox = createDialog.getByRole('checkbox', { name: 'Auto approve join request' });
+    await autoApproveCheckbox.check();
+    await expect(createDialog.getByText('Everyone can join without your review.')).toBeVisible();
+
     await createDialog.getByRole('button', { name: 'Create session' }).click();
 
     await expect(createDialog).not.toBeVisible();
     await expect(page.getByText('New pickup game')).toBeVisible();
+  });
+
+  await test.step('7. approval queue: approve one requester, reject the other', async () => {
+    await page.getByRole('button', { name: /Ladder night/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Ladder night' });
+    const approvalSection = dialog.getByRole('region', { name: 'Waiting for approval' });
+
+    await expect(approvalSection.getByText('Waiting for approval (2)')).toBeVisible();
+    await expect(approvalSection.getByText('Alex Chen')).toBeVisible();
+    await expect(approvalSection.getByText('Morgan Diaz')).toBeVisible();
+
+    await approvalSection
+      .getByText('Alex Chen')
+      .locator('xpath=ancestor::div[contains(@class, "justify-between")][1]')
+      .getByRole('button', { name: 'Approve' })
+      .click();
+    await expect(approvalSection.getByText('Alex Chen')).not.toBeVisible();
+    await expect(dialog.getByText('Alex Chen', { exact: true })).toBeVisible(); // now a real participant
+
+    const morganRow = approvalSection
+      .getByText('Morgan Diaz')
+      .locator('xpath=ancestor::div[contains(@class, "justify-between")][1]');
+    await morganRow.getByRole('button', { name: 'Reject' }).click();
+    await dialog.getByLabel('Reject reason for Morgan Diaz').fill('Ladder is full for this cycle.');
+    await dialog.getByRole('button', { name: 'Confirm reject' }).click();
+
+    await expect(approvalSection).not.toBeVisible();
   });
 });

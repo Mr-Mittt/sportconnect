@@ -1,8 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CreateSessionModal } from './CreateSessionModal';
+
+// CLIENT-SESSION-4: the "Invite your friend" field's own client-side filter over this list —
+// enough rows here to demo the 3+ character search actually narrowing results in Storybook.
+const friends: FriendUser[] = [
+  { id: 'friend-1', fullName: 'Priya Shah', avatarUrl: null, coverUrl: null, bio: null },
+  { id: 'friend-2', fullName: 'Priyanka Rao', avatarUrl: null, coverUrl: null, bio: null },
+  { id: 'friend-3', fullName: 'Jordan Lee', avatarUrl: null, coverUrl: null, bio: null },
+];
 
 // Real usage builds this from a partial API result via Object.fromEntries + a cast (see
 // useMatchesPageData.ts/HomeFeedPage.tsx) — the single-sport-profile stories below mirror a
@@ -73,6 +82,8 @@ const meta = {
     selectedLocation: null,
     onOpenLocationPicker: () => {},
     locationPicker,
+    friends,
+    isFriendsLoading: false,
     onSubmit: () => {},
     isSubmitting: false,
     isError: false,

@@ -125,7 +125,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | **Phase 11 — Session UX follow-ups (new, not in either epic, filed 2026-08-01)** | | | |
 | 55 | CLIENT-SESSION-2 | Standalone-only `CreateSessionModal` redesign (core fields) | `DONE` |
 | 56 | CLIENT-SESSION-3 | Capacity + fee/pricing fields in `CreateSessionModal` (SESSION-5) | `DONE` |
-| 57 | CLIENT-SESSION-4 | Invite-friends + auto-approve at creation, plus approval queue UI (SESSION-6) | `TODO` |
+| 57 | CLIENT-SESSION-4 | Invite-friends + auto-approve at creation, plus approval queue UI (SESSION-6) | `DONE` |
 | 58 | CLIENT-SESSION-5 | Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown (LOC-2) | `TODO` |
 | 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `TODO` |
 | 60 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
@@ -235,7 +235,7 @@ GRP-8 (new, filed 2026-07-24, amended same day) — GRP-3, GRP-4, GRP-7 (all DON
 | Matches/tournaments module — `modules/session` + `modules/location` | `modules/session/docs/BACKLOG_MVP.md` (SESSION-1/2/3), `modules/location/docs/BACKLOG_MVP.md` (LOC-1), `modules/social/group-impl/docs/BACKLOG_MVP.md` (GROUP-RECUR-1) | de-mocking HF-4 | `DONE` (2026-07-30) |
 | SESSION-4: standalone session discovery | `modules/session/docs/BACKLOG_MVP.md` · SESSION-4 | a future client ticket (not yet filed) — real "Join a match" | `DONE` (2026-08-02) |
 | SESSION-5: session capacity + fee/pricing | `modules/session/docs/BACKLOG_MVP.md` · SESSION-5 | a future client ticket (not yet filed) — capacity/fee fields in `CreateSessionModal` + display | `DONE` (2026-08-02) |
-| SESSION-6: join-approval workflow + invite-friends-at-creation | `modules/session/docs/BACKLOG_MVP.md` · SESSION-6 | a future client ticket (not yet filed) — invite/auto-approve UI + approval queue | `DONE` (2026-08-02) |
+| SESSION-6: join-approval workflow + invite-friends-at-creation | `modules/session/docs/BACKLOG_MVP.md` · SESSION-6 | CLIENT-SESSION-4 — invite/auto-approve UI + approval queue | `DONE` (2026-08-02) |
 | LOC-2: favorite locations | `modules/location/docs/BACKLOG_MVP.md` · LOC-2 | a future client ticket (not yet filed) — favorite heart toggle + `CreateSessionModal` favorites dropdown | `DONE` (2026-08-01) |
 | SESSION-9: expose the caller's own participant status via getSessionParticipants | `modules/session/docs/BACKLOG_MVP.md` · SESSION-9 | a future client ticket (not yet filed) — `SessionDetailModal`'s Join/Leave button needs to become 4-state (Join/Leave/"Accept this session"/"Waiting for approval") based on the caller's own status; scoped down from CLIENT-SESSION-4 to just this (user decision, 2026-08-03) — CLIENT-SESSION-4's invite-UI + approval-queue scope is unaffected, still `TODO` | `TODO` |
 | ~~Chat module (new `modules/social/chat-impl`, never existed beyond a docs folder, since deleted)~~ | ARCHIVED (2026-07-26) — see `documentation/md/archive/chat/` — fresh chat re-plan pending | ~~CHAT-2, CHAT-4~~ | `N/A` |
@@ -2668,10 +2668,12 @@ removed (user decision, unrelated to the backend contract) — `SessionDetailMod
 the full before/after — the backend contract itself never changed.
 
 ### CLIENT-SESSION-4 · Invite-friends + auto-approve at creation, plus approval queue UI
-**Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (extends its "Session basic
-information" section), FRIEND-1 (`useFriends()`, already `DONE`) · **Filed:** 2026-08-03 · **Spec:**
-`CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` § "Fields explicitly excluded" (original draft
-requirements), backend contract: `modules/session/docs/SESSION-6_JOIN_APPROVAL_AND_INVITES.md`
+**Status:** `DONE` (2026-08-04) · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (extends its
+"Session basic information" section), FRIEND-1 (`useFriends()`, already `DONE`) · **Filed:**
+2026-08-03 · **Spec:** `CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` § "Fields explicitly
+excluded" (original draft requirements), backend contract:
+`modules/session/docs/SESSION-6_JOIN_APPROVAL_AND_INVITES.md` · **Summary:**
+`client/docs/CLIENT-SESSION-4_INVITE_APPROVAL.md`
 
 **What ships:** an "Invite your friend" search-and-multi-select (client-side fullname filter, 3+
 characters, over `useFriends()`'s existing full unpaginated list — no new search endpoint needed)
@@ -2682,6 +2684,16 @@ approval queue: creators/owner-admins can list `REQUESTED` participants (`GET
 .../participants?status=REQUESTED`) and approve/reject them (optional reject reason), most likely
 surfaced in `SessionDetailModal` mirroring the Groups page's Members-tab approval queue pattern —
 without this, auto-approve-off sessions have no way to actually approve anyone through the app.
+
+**Delta (2026-08-04, at close-out):** the "confirm/warning dialog on check" wording above was
+built as an inline warning line under the checkbox instead of an actual dialog — no separate
+confirm step, and no nested Dialog/Popover of any kind. `CreateSessionModal` had already broken
+twice from nesting a Radix `Popover`/`DropdownMenu` inside its own already-open modal `Dialog`
+(CLIENT-SESSION-2's favorites-dropdown and wheel-picker reverts — both are separate-portal,
+separate-focus-trap primitives that fight the outer Dialog's own trap). The approval queue's
+"Waiting for approval" section also gates on `canJoinOrLeave` (SCHEDULED/ONGOING), not just
+non-empty — the backend rejects approve/reject once a session is `CANCELLED`, so this avoids
+showing buttons that would only ever 400.
 
 ### CLIENT-SESSION-5 · Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown
 **Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (the location field it

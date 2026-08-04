@@ -11,7 +11,11 @@ export type SessionType = 'GROUP_RECURRING' | 'STANDALONE' | 'TOURNAMENT' | 'TRA
 
 export type SessionStatus = 'SCHEDULED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
 
-export type ParticipantStatus = 'JOINED' | 'LEFT';
+// SESSION-6: REQUESTED = self-initiated join awaiting creator/owner-admin approval (only reachable
+// when the session's autoApprove is false). INVITED = pre-created at session creation from
+// CreateSessionRequest.inviteeIds, resolved only by the invitee's own joinSession call (which
+// bypasses the approval gate regardless of autoApprove) — no separate accept endpoint exists.
+export type ParticipantStatus = 'JOINED' | 'LEFT' | 'REQUESTED' | 'INVITED';
 
 // SESSION-5: capacity is display-only (never enforced by joinSession); feeAmountVnd is
 // meaningful only when feeType is FIXED (null otherwise).
@@ -45,6 +49,9 @@ export interface Session {
   /** Participants the creator already accounts for outside the app, folded into
    * `participantCount` above (backend-side, `SessionServiceImpl.mapToResponses`). */
   initialSlot: number;
+  /** SESSION-6: false = non-invited joiners land in REQUESTED, awaiting creator/owner-admin
+   * approval. An INVITED row always bypasses this gate regardless of this value. */
+  autoApprove: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,5 +63,7 @@ export interface SessionParticipant {
   userFullName: string;
   userAvatarUrl: string | null;
   status: ParticipantStatus;
+  /** Set only by rejectParticipant — null otherwise, including for a LEFT row from a self-leave. */
+  rejectReason: string | null;
   createdAt: string;
 }

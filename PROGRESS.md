@@ -2143,6 +2143,18 @@ explicit go-ahead at each step (full story in A3's summary doc):
   untouched. Known consequence, not separately ticketed (user decision): the new `UpcomingMatches`
   text shifts Home Feed's visual-regression baselines, same class of drift HF-13..HF-19 each
   tracked — regen needs the same manual GitHub Actions dispatch those tickets used.
+- **`CLIENT-SESSION-4` (`DONE`, 2026-08-04,
+  `client/docs/CLIENT-SESSION-4_INVITE_APPROVAL.md`)** — `CreateSessionModal` gains "Invite your
+  friend" (client-side fullname filter over `useFriends()`, 3+ characters, dismissible badges,
+  feeding `inviteeIds`) and "Auto approve join request" (unchecked by default, inline warning on
+  check, feeding `autoApprove`) — both plain conditional `<div>`s, not a Popover/DropdownMenu
+  (same nested-Dialog focus-trap conflict CLIENT-SESSION-2 already hit twice). `SessionDetailModal`
+  gains a "Waiting for approval" section (creator/owner-admin only, hidden when empty or once the
+  session is no longer SCHEDULED/ONGOING) listing `REQUESTED` participants with
+  Approve/inline-reject-reason actions, wired to SESSION-6's `?status=REQUESTED` +
+  approve/reject endpoints. E2E fixture correction found during verification: the 3 pre-existing
+  session fixtures needed `autoApprove: true` (matching SESSION-6's real backfill of pre-existing
+  rows), not `false` — the join/leave e2e step broke until this was fixed.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

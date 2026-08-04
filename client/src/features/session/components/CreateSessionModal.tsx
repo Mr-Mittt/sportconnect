@@ -1,12 +1,15 @@
 import type { ComponentProps } from 'react';
 import { useState } from 'react';
 import { SPORT_ID_BY_KEY } from '@/features/feed/sportIdMap';
+import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import { LocationPicker } from '@/features/location/components/LocationPicker';
 import { FEE_TYPE_LABEL } from '@/shared/lib/feeType';
 import type { Location } from '@/shared/types/location';
 import type { FeeType } from '@/shared/types/session';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
+import { IconX } from '@tabler/icons-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
@@ -16,6 +19,18 @@ import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
 import type { CreateSessionPayload } from '../types';
 import { SessionStartTimePicker } from './SessionStartTimePicker';
+
+const INVITE_SEARCH_MIN_LENGTH = 3;
+
+function initialsFor(fullName: string): string {
+  return fullName
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
 
 /** Visual-only marker for a required field — screen readers get the real signal from each
  * field's own `aria-required`/error text, not this asterisk (hence `aria-hidden`). */
@@ -171,6 +186,119 @@ function FeeTypeFields({
   );
 }
 
+/** CLIENT-SESSION-4's "Invite your friend" — client-side fullname filter (3+ characters) over the
+ * full `useFriends()` list (no new search endpoint), dismissible selected badges above a plain
+ * input, and a plain non-portaled inline result list below it. Deliberately never a Popover/
+ * DropdownMenu: both silently failed to open when nested inside this modal's own Dialog
+ * (CLIENT-SESSION-2 confirmed live — two competing Radix focus traps, see this ticket's design
+ * notes), so this reuses the same "plain conditional div" idiom as the cancel-reason reveal in
+ * SessionDetailModal instead. */
+function InviteFriendField({
+  friends,
+  isFriendsLoading,
+  selected,
+  onSelect,
+  onRemove,
+}: {
+  friends: FriendUser[];
+  isFriendsLoading: boolean;
+  selected: FriendUser[];
+  onSelect: (friend: FriendUser) => void;
+  onRemove: (friendId: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const selectedIds = new Set(selected.map((friend) => friend.id));
+  const trimmedQuery = query.trim();
+  const results =
+    trimmedQuery.length >= INVITE_SEARCH_MIN_LENGTH
+      ? friends.filter(
+          (friend) =>
+            !selectedIds.has(friend.id) &&
+            friend.fullName.toLowerCase().includes(trimmedQuery.toLowerCase()),
+        )
+      : [];
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map((friend) => (
+            <span
+              key={friend.id}
+              className="flex items-center gap-1 rounded-full bg-surface-1 py-1 pr-1.5 pl-2.5 text-2xs font-medium text-text-primary"
+            >
+              {friend.fullName}
+              <button
+                type="button"
+                onClick={() => onRemove(friend.id)}
+                aria-label={`Remove ${friend.fullName}`}
+                className="flex size-4 cursor-pointer items-center justify-center rounded-full text-text-muted hover:bg-surface-2 hover:text-text-primary"
+              >
+                <IconX className="size-3" aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <Input
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search friends by name…"
+        aria-label="Search friends to invite"
+      />
+      {trimmedQuery.length > 0 && trimmedQuery.length < INVITE_SEARCH_MIN_LENGTH && (
+        <p className="text-2xs text-text-muted">Type at least 3 characters to search.</p>
+      )}
+      {trimmedQuery.length >= INVITE_SEARCH_MIN_LENGTH &&
+        (isFriendsLoading ? (
+          <p className="text-2xs text-text-muted">Loading…</p>
+        ) : results.length === 0 ? (
+          <p className="text-2xs text-text-muted">No friends found.</p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {results.map((friend) => (
+              <button
+                key={friend.id}
+                type="button"
+                onClick={() => {
+                  onSelect(friend);
+                  setQuery('');
+                }}
+                className="border-hairline flex cursor-pointer items-center gap-2 rounded-lg border-border p-2 text-left hover:bg-surface-1"
+              >
+                <Avatar className="size-6 shrink-0">
+                  {friend.avatarUrl !== null && <AvatarImage src={friend.avatarUrl} alt="" />}
+                  <AvatarFallback className="text-2xs">{initialsFor(friend.fullName)}</AvatarFallback>
+                </Avatar>
+                <span className="text-2sm text-text-primary">{friend.fullName}</span>
+              </button>
+            ))}
+          </div>
+        ))}
+    </div>
+  );
+}
+
+/** "Auto approve join request" — unchecked by default (matches the backend's new-session
+ * default). Checking it reveals an inline warning immediately, no separate confirm step (user
+ * decision) and no nested Dialog — same reasoning as `InviteFriendField` above. */
+function AutoApproveField({ checked, onChange }: { checked: boolean; onChange: (next: boolean) => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="flex cursor-pointer items-center gap-2 text-2sm text-text-primary select-none">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          className="size-4 cursor-pointer rounded border-border-strong"
+        />
+        Auto approve join request
+      </label>
+      {checked && <p className="text-2xs text-text-muted">Everyone can join without your review.</p>}
+    </div>
+  );
+}
+
 interface CreateSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -189,6 +317,11 @@ interface CreateSessionModalProps {
    * the page uses it to scope useLocationPickerData's search to the right sport. */
   onOpenLocationPicker: (sportId: number) => void;
   locationPicker: LocationPickerProps;
+
+  /** CLIENT-SESSION-4's "Invite your friend" field filters this full list client-side — the
+   * page's `useFriends()` query, gated to only fetch while this modal is open. */
+  friends: FriendUser[];
+  isFriendsLoading: boolean;
 
   onSubmit: (payload: CreateSessionPayload) => void;
   isSubmitting: boolean;
@@ -231,6 +364,17 @@ interface CreateSessionModalProps {
  * (not a 3-way button/select group) — typing into the amount input is what selects `FIXED`;
  * checking Free/Split cost clears it.
  *
+ * CLIENT-SESSION-4 adds two more full-width rows after Fee, still inside "Session basic
+ * information" (per the ticket's own dependency note — it extends that section, not "Session
+ * detail", which stays the unrelated "Coming soon" placeholder): `InviteFriendField` (a
+ * client-side fullname filter over the full `useFriends()` list, no new search endpoint, feeding
+ * `inviteeIds`) and `AutoApproveField` (unchecked by default, matching the backend's own
+ * new-session default; checking it reveals an inline warning with no separate confirm step).
+ * Neither uses a Popover/DropdownMenu — both silently failed to open the first time something
+ * portaled tried to nest inside this modal's own Dialog (see the location-dropdown and
+ * wheel-picker notes above) — so both are plain conditional `<div>`s instead, same idiom as
+ * `SessionDetailModal`'s cancel-reason reveal.
+ *
  * "Create session" is always clickable (user decision) rather than disabled until every required
  * field (marked with a red `*`) is filled — clicking it while invalid sets `hasAttemptedSubmit`
  * instead of submitting, which turns on a per-field error message for whichever required fields
@@ -255,6 +399,8 @@ export function CreateSessionModal({
   selectedLocation,
   onOpenLocationPicker,
   locationPicker,
+  friends,
+  isFriendsLoading,
   onSubmit,
   isSubmitting,
   isError,
@@ -277,6 +423,8 @@ export function CreateSessionModal({
   const [openSlots, setOpenSlots] = useState('');
   const [feeType, setFeeType] = useState<FeeType>('FREE');
   const [feeAmountVnd, setFeeAmountVnd] = useState('');
+  const [selectedInvitees, setSelectedInvitees] = useState<FriendUser[]>([]);
+  const [autoApprove, setAutoApprove] = useState(false);
   const [isBasicInfoOpen, setIsBasicInfoOpen] = useState(true);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   /** Set on the first submit attempt while the form is still invalid — from then on, each
@@ -326,6 +474,8 @@ export function CreateSessionModal({
       feeType,
       feeAmountVnd: isFeeAmountRequired ? Number(feeAmountVnd) : undefined,
       initialSlot,
+      autoApprove,
+      inviteeIds: selectedInvitees.length > 0 ? selectedInvitees.map((friend) => friend.id) : undefined,
     });
   };
 
@@ -518,6 +668,23 @@ export function CreateSessionModal({
                     )}
                   </div>
                 </div>
+
+                <div>
+                  <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
+                    Invite your friend (optional)
+                  </span>
+                  <InviteFriendField
+                    friends={friends}
+                    isFriendsLoading={isFriendsLoading}
+                    selected={selectedInvitees}
+                    onSelect={(friend) => setSelectedInvitees((prev) => [...prev, friend])}
+                    onRemove={(friendId) =>
+                      setSelectedInvitees((prev) => prev.filter((friend) => friend.id !== friendId))
+                    }
+                  />
+                </div>
+
+                <AutoApproveField checked={autoApprove} onChange={setAutoApprove} />
 
                 <div>
                   <Label htmlFor="create-session-description">Description (optional)</Label>

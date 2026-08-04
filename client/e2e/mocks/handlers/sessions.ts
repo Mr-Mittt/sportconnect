@@ -1,8 +1,23 @@
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
-import type { Session, SessionParticipant } from '../../../src/shared/types/session.ts';
-import { mockGroupSession, mockLocation, mockOwnedGroupSession, mockSession, mockUser } from '../fixtures.ts';
+import type { ParticipantStatus, Session, SessionParticipant } from '../../../src/shared/types/session.ts';
+import {
+  mockFriend,
+  mockGroupSession,
+  mockLocation,
+  mockOwnedGroupSession,
+  mockSecondSessionJoinRequest,
+  mockSession,
+  mockSessionJoinRequest,
+  mockUser,
+} from '../fixtures.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
+
+// CLIENT-SESSION-4: the only invitee identity this mock backend knows by id — same reasoning as
+// groups.ts's own `[mockFriend.id]: mockFriend.fullName` map for invited-member display names.
+const KNOWN_USER_NAMES: Record<string, string> = {
+  [mockFriend.id]: mockFriend.fullName,
+};
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
@@ -48,7 +63,12 @@ interface SessionsSession {
 function defaultSessionsSession(): SessionsSession {
   return {
     sessionsState: [{ ...mockSession }, { ...mockGroupSession }, { ...mockOwnedGroupSession }],
-    participantsState: {},
+    // CLIENT-SESSION-4: mockOwnedGroupSession (mockUser is group_owner) starts with one
+    // pre-seeded REQUESTED row, so the approval queue has something to show without needing a
+    // second live authenticated session.
+    participantsState: {
+      [mockOwnedGroupSession.id]: [{ ...mockSessionJoinRequest }, { ...mockSecondSessionJoinRequest }],
+    },
     nextSessionId: 100,
     nextParticipantId: 100,
   };
@@ -73,6 +93,8 @@ export const sessionHandlers: HttpHandler[] = [
       feeType: Session['feeType'];
       feeAmountVnd?: number;
       initialSlot?: number;
+      autoApprove?: boolean;
+      inviteeIds?: string[];
     };
     if (!body.locationId || !body.scheduledStart || body.capacity === undefined || !body.feeType) {
       return HttpResponse.json(apiError('Validation failed'), { status: 400 });
@@ -106,10 +128,26 @@ export const sessionHandlers: HttpHandler[] = [
       feeType: body.feeType,
       feeAmountVnd: body.feeType === 'FIXED' ? (body.feeAmountVnd ?? null) : null,
       initialSlot,
+      autoApprove: body.autoApprove ?? false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     session.sessionsState = [created, ...session.sessionsState];
+    // SESSION-6: pre-create an INVITED row per deduped invitee id (excluding the creator's own),
+    // resolved only by that user's own later joinSession call, which bypasses autoApprove entirely.
+    const dedupedInviteeIds = [...new Set(body.inviteeIds ?? [])].filter((id) => id !== mockUser.id);
+    if (dedupedInviteeIds.length > 0) {
+      session.participantsState[created.id] = dedupedInviteeIds.map((inviteeId) => ({
+        id: session.nextParticipantId++,
+        sessionId: created.id,
+        userId: inviteeId,
+        userFullName: KNOWN_USER_NAMES[inviteeId] ?? 'Invited user',
+        userAvatarUrl: null,
+        status: 'INVITED',
+        rejectReason: null,
+        createdAt: new Date().toISOString(),
+      }));
+    }
     return HttpResponse.json(apiResponse(created, 'Session created successfully'), { status: 201 });
   }),
 
@@ -203,8 +241,12 @@ export const sessionHandlers: HttpHandler[] = [
     const alreadyJoined = participants.some((p) => p.userId === mockUser.id && p.status === 'JOINED');
     if (!alreadyJoined) {
       const existingRow = participants.find((p) => p.userId === mockUser.id);
+      // SESSION-6: an INVITED row always bypasses autoApprove; otherwise autoApprove decides
+      // between an instant JOINED and a REQUESTED row awaiting the creator/owner-admin.
+      const resolvedStatus: ParticipantStatus =
+        existingRow?.status === 'INVITED' || existing.autoApprove ? 'JOINED' : 'REQUESTED';
       if (existingRow) {
-        existingRow.status = 'JOINED';
+        existingRow.status = resolvedStatus;
       } else {
         participants.push({
           id: session.nextParticipantId++,
@@ -212,7 +254,8 @@ export const sessionHandlers: HttpHandler[] = [
           userId: mockUser.id,
           userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
           userAvatarUrl: null,
-          status: 'JOINED',
+          status: resolvedStatus,
+          rejectReason: null,
           createdAt: new Date().toISOString(),
         });
       }
@@ -255,10 +298,55 @@ export const sessionHandlers: HttpHandler[] = [
 
   http.get('/api/sessions/:sessionId/participants', ({ request, params }) => {
     const sessionId = Number(params.sessionId);
+    // SESSION-6: status omitted defaults to JOINED (the public default); any other status (in
+    // practice REQUESTED, the approval queue) is real-backend-gated to canManage, but this mock
+    // — same as every other handler here — doesn't simulate that 400, only the filter behavior.
+    const status = (new URL(request.url).searchParams.get('status') as ParticipantStatus | null) ?? 'JOINED';
     const participants = (
       sessionsSessions.get(sessionIdFromRequest(request)).participantsState[sessionId] ?? []
-    ).filter((p) => p.status === 'JOINED');
+    ).filter((p) => p.status === status);
     return HttpResponse.json(apiResponse(mockPageResponse(participants), 'Participants retrieved successfully'));
+  }),
+
+  http.post('/api/sessions/:sessionId/participants/:userId/approve', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sessionId = Number(params.sessionId);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const participants = session.participantsState[sessionId] ?? [];
+    const row = participants.find((p) => p.userId === params.userId && p.status === 'REQUESTED');
+    if (!row) {
+      return HttpResponse.json(apiError('No pending join request for this user'), { status: 400 });
+    }
+    row.status = 'JOINED';
+    session.sessionsState = session.sessionsState.map((candidate) =>
+      candidate.id === sessionId
+        ? {
+            ...candidate,
+            participantCount:
+              participants.filter((p) => p.status === 'JOINED').length + candidate.initialSlot,
+          }
+        : candidate,
+    );
+    return HttpResponse.json(apiResponse(null, 'Participant approved successfully'));
+  }),
+
+  http.post('/api/sessions/:sessionId/participants/:userId/reject', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sessionId = Number(params.sessionId);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const participants = session.participantsState[sessionId] ?? [];
+    const row = participants.find((p) => p.userId === params.userId && p.status === 'REQUESTED');
+    if (!row) {
+      return HttpResponse.json(apiError('No pending join request for this user'), { status: 400 });
+    }
+    const body = (request.headers.get('content-length') === '0' ? {} : await request.json().catch(() => ({}))) as {
+      reason?: string;
+    };
+    row.status = 'LEFT';
+    row.rejectReason = body.reason ?? null;
+    return HttpResponse.json(apiResponse(null, 'Participant rejected successfully'));
   }),
 ];
 

@@ -33,6 +33,12 @@ export interface CreateSessionPayload {
   /** Participants already accounted for outside the app — folded into the backend's reported
    * `participantCount` on top of the real joined count. Omitted -> backend defaults to 0. */
   initialSlot?: number;
+  /** Omitted -> backend defaults to false (non-invited joiners land in REQUESTED). */
+  autoApprove?: boolean;
+  /** Pre-creates an INVITED participant row per id, bypassing the approval gate once that user
+   * joins. The caller's own id and duplicates are silently deduped backend-side. Omitted/empty
+   * -> no invitees. */
+  inviteeIds?: string[];
 }
 
 export interface UpdateSessionPayload {

@@ -94,6 +94,8 @@ export function MatchesPage() {
         selectedLocation={data.selectedLocationForCreate}
         onOpenLocationPicker={data.onOpenLocationPickerForCreate}
         locationPicker={data.locationPickerForCreate}
+        friends={data.friends}
+        isFriendsLoading={data.isFriendsLoading}
         onSubmit={data.submitCreate}
         isSubmitting={data.isCreating}
         isError={data.isCreateError}
@@ -119,6 +121,13 @@ export function MatchesPage() {
         onConfirmCancel={data.onConfirmCancel}
         isCancelling={data.isCancelling}
         isCancelError={data.isCancelError}
+        requestedParticipants={data.requestedParticipants}
+        isRequestedParticipantsLoading={data.isRequestedParticipantsLoading}
+        isRequestedParticipantsError={data.isRequestedParticipantsError}
+        onApproveParticipant={data.onApproveParticipant}
+        isApprovingParticipant={data.isApprovingParticipant}
+        onRejectParticipant={data.onRejectParticipant}
+        isRejectingParticipant={data.isRejectingParticipant}
       />
 
       <AddSportModal
