@@ -46,6 +46,9 @@ const locationPicker: LocationPickerProps = {
   isSearching: false,
   isSearchError: false,
   onSelectResult: () => {},
+  favoriteLocationIds: new Set<number>(),
+  onToggleFavorite: () => {},
+  isTogglingFavorite: false,
   onOpenGoogleMaps: () => {},
   mapsUrlInput: '',
   onMapsUrlChange: () => {},
@@ -73,6 +76,10 @@ const baseProps = {
   selectedLocation: null as Location | null,
   onOpenLocationPicker: () => {},
   locationPicker,
+  onEffectiveSportChange: () => {},
+  favoriteLocations: [] as Location[],
+  isFavoriteLocationsLoading: false,
+  onSelectLocation: () => {},
   friends,
   isFriendsLoading: false,
   onSubmit: () => {},
@@ -130,15 +137,22 @@ describe('CreateSessionModal', () => {
     expect(screen.getByText('Coming soon.')).toBeInTheDocument();
   });
 
-  it('calls onOpenLocationPicker with the selected sport id once a sport is chosen', async () => {
+  it('the "Choose location" trigger stays disabled until a sport is chosen', async () => {
     const user = userEvent.setup();
-    const onOpenLocationPicker = vi.fn();
-    render(<CreateSessionModal {...baseProps} onOpenLocationPicker={onOpenLocationPicker} />);
+    render(<CreateSessionModal {...baseProps} />);
 
     expect(screen.getByRole('button', { name: 'Choose location' })).toBeDisabled();
     await user.selectOptions(screen.getByLabelText(/^Sport/), 'basketball');
     expect(screen.getByRole('button', { name: 'Choose location' })).toBeEnabled();
+  });
+
+  it('"Choose a location…" in the favorites dropdown calls onOpenLocationPicker with the effective sportId', async () => {
+    const user = userEvent.setup();
+    const onOpenLocationPicker = vi.fn();
+    render(<CreateSessionModal {...baseProps} activeSport="basketball" onOpenLocationPicker={onOpenLocationPicker} />);
+
     await user.click(screen.getByRole('button', { name: 'Choose location' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Choose a location…' }));
     expect(onOpenLocationPicker).toHaveBeenCalledWith(6);
   });
 
@@ -146,6 +160,44 @@ describe('CreateSessionModal', () => {
     render(<CreateSessionModal {...baseProps} selectedLocation={location} />);
     expect(screen.getByText('Riverside Courts')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Change location' })).toBeInTheDocument();
+  });
+
+  it('favorites dropdown lists favoriteLocations, selecting one calls onSelectLocation, and shows an empty state', async () => {
+    const user = userEvent.setup();
+    const onSelectLocation = vi.fn();
+    const favorite = { ...location, id: 2, name: 'Lakeside Courts' };
+    const { rerender } = render(
+      <CreateSessionModal
+        {...baseProps}
+        activeSport="basketball"
+        favoriteLocations={[favorite]}
+        onSelectLocation={onSelectLocation}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Choose location' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Lakeside Courts' }));
+    expect(onSelectLocation).toHaveBeenCalledWith(favorite);
+
+    rerender(<CreateSessionModal {...baseProps} activeSport="basketball" favoriteLocations={[]} />);
+    await user.click(screen.getByRole('button', { name: 'Choose location' }));
+    expect(screen.getByText('No favorites yet.')).toBeInTheDocument();
+  });
+
+  it('reports the effective sportId up via onEffectiveSportChange on mount and on every change', async () => {
+    const user = userEvent.setup();
+    const onEffectiveSportChange = vi.fn();
+    render(
+      <CreateSessionModal
+        {...baseProps}
+        activeSport="basketball"
+        onEffectiveSportChange={onEffectiveSportChange}
+      />,
+    );
+    expect(onEffectiveSportChange).toHaveBeenLastCalledWith(6);
+
+    await user.selectOptions(screen.getByLabelText(/^Sport/), 'tennis');
+    expect(onEffectiveSportChange).toHaveBeenLastCalledWith(2);
   });
 
   it('"Create session" is clickable even with required fields missing', () => {

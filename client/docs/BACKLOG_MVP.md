@@ -126,7 +126,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 55 | CLIENT-SESSION-2 | Standalone-only `CreateSessionModal` redesign (core fields) | `DONE` |
 | 56 | CLIENT-SESSION-3 | Capacity + fee/pricing fields in `CreateSessionModal` (SESSION-5) | `DONE` |
 | 57 | CLIENT-SESSION-4 | Invite-friends + auto-approve at creation, plus approval queue UI (SESSION-6) | `DONE` |
-| 58 | CLIENT-SESSION-5 | Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown (LOC-2) | `TODO` |
+| 58 | CLIENT-SESSION-5 | Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown (LOC-2) | `DONE` |
 | 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `TODO` |
 | 60 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 | 61 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `TODO` |
@@ -2696,10 +2696,12 @@ non-empty — the backend rejects approve/reject once a session is `CANCELLED`, 
 showing buttons that would only ever 400.
 
 ### CLIENT-SESSION-5 · Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown
-**Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (the location field it
-populates), CLIENT-LOC-1 (`LocationPicker`, already `DONE`) · **Filed:** 2026-08-03 · **Spec:**
-`CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` § "Fields explicitly excluded" (original draft
-requirements), backend contract: `modules/location/docs/BACKLOG_MVP.md` § LOC-2
+**Status:** `DONE` (2026-08-04) · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (the location
+field it populates), CLIENT-LOC-1 (`LocationPicker`, already `DONE`) · **Filed:** 2026-08-03 ·
+**Spec:** `CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` § "Fields explicitly excluded"
+(original draft requirements), backend contract:
+`modules/location/location-impl/docs/LOC-2_FAVORITE_LOCATIONS.md` · **Summary:**
+`client/docs/CLIENT-SESSION-5_FAVORITE_LOCATIONS.md`
 
 **What ships:** a favorite-toggle heart on `LocationPicker`'s search-result rows, wired to the real
 favorite-locations backend, plus turning `CreateSessionModal`'s plain "Choose a location" button
@@ -2708,6 +2710,20 @@ tried during CLIENT-SESSION-2 and reverted — confirmed live, it never opened a
 that modal's Dialog — so this ticket needs to solve that nesting problem for real, not just wire
 data into an already-built shell), with a trailing "Choose a location" entry still opening the
 unchanged `LocationPicker` flow.
+
+**Delta (2026-08-04, at close-out):** the nesting problem *was* solved for real, and the actual
+cause was different from what CLIENT-SESSION-2's note implied. It's not a focus-trap conflict —
+Dialog and DropdownMenu share the same internal Radix package versions in this repo and already
+coordinate correctly. The real cause: `DropdownMenu`'s default `modal={true}` calls the same
+`hideOthers()`/`aria-hidden` mechanism the outer `Dialog` itself uses, and since the menu's portal
+is a DOM sibling of the Dialog's (not a descendant), opening it aria-hid the *entire parent
+Dialog* — confirmed directly via live DOM inspection (`data-aria-hidden="true"` appeared on the
+dialog the instant the menu opened). Fix: `modal={false}` on the nested menu only. Also found and
+fixed, not originally scoped: `shared/ui/button.tsx`'s `Button` was missing `React.forwardRef`
+(broke `asChild` ref composition for any Radix trigger wrapping it, app-wide — every other
+`DropdownMenuTrigger` in the codebase happened to wrap a plain `<button>` instead), and an MSW
+mock-only route-ordering bug where `GET /api/locations/:locationId` intercepted
+`GET /api/locations/favorites` before it, causing a stuck "Loading…" in e2e.
 
 ### CLIENT-SESSION-6 · Standalone session discover — real "Join a match" browse UI
 **Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (the `onJoinMatch` prop it

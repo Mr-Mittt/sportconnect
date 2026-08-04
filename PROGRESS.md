@@ -2155,6 +2155,20 @@ explicit go-ahead at each step (full story in A3's summary doc):
   approve/reject endpoints. E2E fixture correction found during verification: the 3 pre-existing
   session fixtures needed `autoApprove: true` (matching SESSION-6's real backfill of pre-existing
   rows), not `false` — the join/leave e2e step broke until this was fixed.
+- **`CLIENT-SESSION-5` (`DONE`, 2026-08-04,
+  `client/docs/CLIENT-SESSION-5_FAVORITE_LOCATIONS.md`)** — favorite-toggle heart on
+  `LocationPicker`'s search results + a real `DropdownMenu` favorites list replacing
+  `CreateSessionModal`'s plain "Choose location" button (LOC-2). CLIENT-SESSION-2 had reverted an
+  earlier DropdownMenu attempt after it appeared to "never open" live; this ticket found the real
+  cause via a live investigation harness — `DropdownMenu`'s default `modal={true}` calls the same
+  `hideOthers()`/`aria-hidden` mechanism the outer `Dialog` uses, and since the menu's portal is a
+  DOM sibling of the Dialog's (not a descendant), opening it aria-hid the *entire parent Dialog*.
+  Fixed with `modal={false}` on the nested menu, confirmed via a real browser interaction test
+  (open/select/reopen/Escape/outside-click all verified). Also found and fixed two real bugs along
+  the way: `shared/ui/button.tsx`'s `Button` was missing `React.forwardRef` (broke `asChild`
+  ref composition app-wide, not just here), and an MSW route-ordering collision where
+  `GET /api/locations/:locationId` was intercepting `GET /api/locations/favorites` before it
+  (caused a permanently-stuck "Loading…" in e2e, masked by TanStack Query's retry backoff).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

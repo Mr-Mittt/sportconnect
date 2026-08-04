@@ -1,7 +1,8 @@
-import { IconArrowLeft, IconExternalLink, IconMapPin, IconSearch } from '@tabler/icons-react';
+import { IconArrowLeft, IconExternalLink, IconHeart, IconMapPin, IconSearch } from '@tabler/icons-react';
 import type { Location } from '../types';
 import type { LocationPickerMode } from '../useLocationPickerData';
 import { directionsUrl } from '@/shared/lib/mapsLinks';
+import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
@@ -23,6 +24,12 @@ export interface LocationPickerProps {
   isSearching: boolean;
   isSearchError: boolean;
   onSelectResult: (location: Location) => void;
+  /** CLIENT-SESSION-5: which of `results` the caller has already favorited — `LocationResponse`
+   * carries no `isFavorite` flag itself, so the parent derives this set from a separate
+   * favorites-list query. */
+  favoriteLocationIds: Set<number>;
+  onToggleFavorite: (location: Location) => void;
+  isTogglingFavorite: boolean;
 
   onOpenGoogleMaps: () => void;
   mapsUrlInput: string;
@@ -77,6 +84,9 @@ export function LocationPicker({
   isSearching,
   isSearchError,
   onSelectResult,
+  favoriteLocationIds,
+  onToggleFavorite,
+  isTogglingFavorite,
   onOpenGoogleMaps,
   mapsUrlInput,
   onMapsUrlChange,
@@ -127,19 +137,39 @@ export function LocationPicker({
                 <p className="text-2sm text-text-muted">No locations found.</p>
               )}
               <div className="flex flex-col gap-2.5">
-                {results.map((location) => (
-                  <button
-                    key={location.id}
-                    type="button"
-                    onClick={() => onSelectResult(location)}
-                    className="border-hairline flex flex-col items-start gap-0.5 rounded-lg border-border p-2.5 text-left transition-colors hover:bg-surface-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-                  >
-                    <span className="text-sm font-medium text-text-primary">{location.name}</span>
-                    {location.address !== null && (
-                      <span className="text-2xs text-text-muted">{location.address}</span>
-                    )}
-                  </button>
-                ))}
+                {results.map((location) => {
+                  const isFavorited = favoriteLocationIds.has(location.id);
+                  return (
+                    <div key={location.id} className="border-hairline flex items-center gap-1 rounded-lg border-border">
+                      <button
+                        type="button"
+                        onClick={() => onSelectResult(location)}
+                        className="flex min-w-0 flex-1 flex-col items-start gap-0.5 p-2.5 text-left transition-colors hover:bg-surface-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                      >
+                        <span className="text-sm font-medium text-text-primary">{location.name}</span>
+                        {location.address !== null && (
+                          <span className="text-2xs text-text-muted">{location.address}</span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isTogglingFavorite}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onToggleFavorite(location);
+                        }}
+                        aria-label={isFavorited ? `Unfavorite ${location.name}` : `Favorite ${location.name}`}
+                        aria-pressed={isFavorited}
+                        className="mr-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-muted hover:bg-surface-1 hover:text-text-danger disabled:cursor-default disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                      >
+                        <IconHeart
+                          className={cn('size-4', isFavorited && 'fill-text-danger text-text-danger')}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div className="border-hairline-t flex justify-center border-border px-4 py-3">

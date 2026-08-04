@@ -94,11 +94,14 @@ test('Matches journey', async ({ page }) => {
     const createDialog = page.getByRole('dialog', { name: 'Create your session' });
     await createDialog.getByLabel(/^Sport/).selectOption('basketball');
 
+    // CLIENT-SESSION-5: "Choose location" is now a favorites dropdown trigger, not a direct
+    // LocationPicker opener — "Choose a location…" is its trailing item.
     await createDialog.getByRole('button', { name: 'Choose location' }).click();
+    await page.getByRole('menuitem', { name: 'Choose a location…' }).click();
     const locationDialog = page.getByRole('dialog', { name: 'Choose a location' });
     await locationDialog.getByLabel('Search locations').fill('Riverside');
     await locationDialog.getByRole('button', { name: 'Search' }).click();
-    await locationDialog.getByRole('button', { name: new RegExp(mockLocation.name) }).click();
+    await locationDialog.getByText(mockLocation.name, { exact: true }).click();
 
     await expect(createDialog.getByText(mockLocation.name)).toBeVisible();
     // Starts at (Date/Hour/Minute) is left on its own default (Today/one-hour-from-now/:00) —
@@ -148,5 +151,39 @@ test('Matches journey', async ({ page }) => {
     await dialog.getByRole('button', { name: 'Confirm reject' }).click();
 
     await expect(approvalSection).not.toBeVisible();
+    await dialog.getByRole('button', { name: 'Close' }).click();
+  });
+
+  await test.step('8. favorite a location in LocationPicker, then pick it from the favorites dropdown', async () => {
+    await page.getByRole('button', { name: 'Create session' }).click();
+    const createDialog = page.getByRole('dialog', { name: 'Create your session' });
+    await createDialog.getByLabel(/^Sport/).selectOption('basketball');
+
+    await createDialog.getByRole('button', { name: 'Choose location' }).click();
+    await expect(page.getByText('No favorites yet.')).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Choose a location…' }).click();
+
+    const locationDialog = page.getByRole('dialog', { name: 'Choose a location' });
+    await locationDialog.getByLabel('Search locations').fill('Riverside');
+    await locationDialog.getByRole('button', { name: 'Search' }).click();
+
+    const favoriteHeart = locationDialog.getByRole('button', {
+      name: `Favorite ${mockLocation.name}`,
+    });
+    await favoriteHeart.click();
+    await expect(
+      locationDialog.getByRole('button', { name: `Unfavorite ${mockLocation.name}` }),
+    ).toBeVisible();
+
+    await locationDialog.getByText(mockLocation.name, { exact: true }).click();
+    await expect(createDialog.getByText(mockLocation.name)).toBeVisible();
+
+    // Reopen the dropdown — the just-favorited location now appears instead of "No favorites yet."
+    await createDialog.getByRole('button', { name: 'Change location' }).click();
+    await expect(page.getByText('No favorites yet.')).not.toBeVisible();
+    await page.getByRole('menuitem', { name: mockLocation.name }).click();
+    await expect(createDialog.getByText(mockLocation.name)).toBeVisible();
+
+    await createDialog.getByRole('button', { name: 'Close' }).click();
   });
 });

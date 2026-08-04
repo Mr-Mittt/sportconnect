@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SPORT_ID_BY_KEY } from '@/features/feed/sportIdMap';
 import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
@@ -14,6 +14,13 @@ import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/ui/dropdown-menu';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
@@ -299,6 +306,57 @@ function AutoApproveField({ checked, onChange }: { checked: boolean; onChange: (
   );
 }
 
+/** CLIENT-SESSION-5's favorites-aware location selector — a real Radix `DropdownMenu`, not the
+ * plain "Choose location" button CLIENT-SESSION-1/2 shipped. `modal={false}` is required: a
+ * default-modal DropdownMenu nested inside this modal's own Dialog calls the same `hideOthers()`
+ * mechanism the Dialog itself uses, aria-hiding the *entire parent Dialog* (confirmed live via a
+ * real browser test — the Dialog's `aria-hidden` flipped to `"true"` the instant the menu opened,
+ * and `getByRole('dialog')` dropped from 1 match to 0) since the menu's portal is a DOM sibling
+ * of the Dialog's, not a descendant. `modal={false}` skips that entirely while every other
+ * behavior (Escape/outside-click dismiss, keyboard nav) still works, also verified live. Rows are
+ * select-only (user decision) — unfavoriting stays a `LocationPicker`-search-results-only action
+ * via the heart icon there. */
+function LocationFavoritesDropdown({
+  selectedLocation,
+  favorites,
+  isFavoritesLoading,
+  disabled,
+  onSelectFavorite,
+  onOpenLocationPicker,
+}: {
+  selectedLocation: Location | null;
+  favorites: Location[];
+  isFavoritesLoading: boolean;
+  disabled: boolean;
+  onSelectFavorite: (location: Location) => void;
+  onOpenLocationPicker: () => void;
+}) {
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={disabled}>
+          {selectedLocation === null ? 'Choose location' : 'Change location'}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        {isFavoritesLoading ? (
+          <p className="px-2 py-2 text-2xs text-text-muted">Loading…</p>
+        ) : favorites.length === 0 ? (
+          <p className="px-2 py-2 text-2xs text-text-muted">No favorites yet.</p>
+        ) : (
+          favorites.map((location) => (
+            <DropdownMenuItem key={location.id} onSelect={() => onSelectFavorite(location)}>
+              {location.name}
+            </DropdownMenuItem>
+          ))
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onOpenLocationPicker}>Choose a location…</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 interface CreateSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -317,6 +375,15 @@ interface CreateSessionModalProps {
    * the page uses it to scope useLocationPickerData's search to the right sport. */
   onOpenLocationPicker: (sportId: number) => void;
   locationPicker: LocationPickerProps;
+
+  /** CLIENT-SESSION-5: fires whenever the form's effective sportId changes (including on mount,
+   * for a pre-selected sport) — the page uses this to scope the favorites dropdown's query
+   * without lifting the Sport field itself out of this component's own local state. */
+  onEffectiveSportChange: (sportId: number | undefined) => void;
+  favoriteLocations: Location[];
+  isFavoriteLocationsLoading: boolean;
+  /** Selecting a favorite straight from the dropdown bypasses the full LocationPicker flow. */
+  onSelectLocation: (location: Location) => void;
 
   /** CLIENT-SESSION-4's "Invite your friend" field filters this full list client-side — the
    * page's `useFriends()` query, gated to only fetch while this modal is open. */
@@ -340,12 +407,15 @@ interface CreateSessionModalProps {
  * `datetime-local` input. Four rows on a widened `max-w-2xl` modal (user decision on every split):
  * Sport(2)/Title(8); Location(7, selected-name + button on one line)/Location note(3);
  * "Starts at"(7)/Duration(3); "Taken slot"+"Open slot" as one flex pair(5)/Fee(5, CLIENT-SESSION-3);
- * Description alone, full width. The location field is still the
- * plain "Choose a location" button from CLIENT-SESSION-1 — a `DropdownMenu`-shell version was
- * tried here and reverted (confirmed live: the menu never opened at all, nested inside this modal
- * Dialog) with nothing to show in it yet anyway (zero favorites exist pre-CLIENT-SESSION-5) —
- * CLIENT-SESSION-5 builds the real dropdown when it has actual data and can be verified
- * end-to-end, rather than shipping a broken shell for a feature that doesn't exist yet.
+ * Description alone, full width. CLIENT-SESSION-5 turns the location field's button into
+ * `LocationFavoritesDropdown`, a real Radix `DropdownMenu` — a first attempt at this during
+ * CLIENT-SESSION-2 was reverted after appearing to "never open at all" live; the real cause
+ * (found and fixed here) was that a default-`modal` DropdownMenu nested inside this modal's own
+ * Dialog aria-hides the entire parent Dialog when it opens (both portal to `document.body` as
+ * siblings, and DropdownMenu's own `hideOthers()` treats everything outside itself, including the
+ * Dialog, as "other") — `modal={false}` on the nested menu fixes this with no loss of Escape/
+ * outside-click dismissal, confirmed via a real browser interaction test. See
+ * `LocationFavoritesDropdown`'s own doc comment for the full mechanism.
  *
  * CLIENT-SESSION-3's capacity input is split into "Taken slot" (optional) and "Open slot"
  * (required) — the backend's single `capacity` field is their sum, computed at submit time;
@@ -399,6 +469,10 @@ export function CreateSessionModal({
   selectedLocation,
   onOpenLocationPicker,
   locationPicker,
+  onEffectiveSportChange,
+  favoriteLocations,
+  isFavoriteLocationsLoading,
+  onSelectLocation,
   friends,
   isFriendsLoading,
   onSubmit,
@@ -434,6 +508,17 @@ export function CreateSessionModal({
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   const effectiveSportId = selectedSport !== '' ? SPORT_ID_BY_KEY[selectedSport] : undefined;
+
+  // CLIENT-SESSION-5: report the effective sportId up on every change (including the initial
+  // pre-selected value) so the parent can scope the favorites dropdown's query — this field
+  // itself stays local state, only its current value is mirrored upward.
+  useEffect(() => {
+    onEffectiveSportChange(effectiveSportId);
+    // onEffectiveSportChange deliberately excluded below: it's a stable page-level callback
+    // (setState), not something that should retrigger this effect if the parent happens to pass
+    // a new function identity across renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveSportId]);
 
   const isFeeAmountRequired = feeType === 'FIXED';
 
@@ -549,16 +634,16 @@ export function CreateSessionModal({
                           {selectedLocation.name}
                         </span>
                       )}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0"
+                      <LocationFavoritesDropdown
+                        selectedLocation={selectedLocation}
+                        favorites={favoriteLocations}
+                        isFavoritesLoading={isFavoriteLocationsLoading}
                         disabled={effectiveSportId === undefined}
-                        onClick={() => effectiveSportId !== undefined && onOpenLocationPicker(effectiveSportId)}
-                      >
-                        {selectedLocation === null ? 'Choose location' : 'Change location'}
-                      </Button>
+                        onSelectFavorite={onSelectLocation}
+                        onOpenLocationPicker={() =>
+                          effectiveSportId !== undefined && onOpenLocationPicker(effectiveSportId)
+                        }
+                      />
                     </div>
                     {effectiveSportId === undefined ? (
                       <p className="mt-1 text-2xs text-text-muted">Pick a sport first.</p>

@@ -39,16 +39,30 @@ interface ButtonProps
   asChild?: boolean;
 }
 
-function Button({ className, variant, size, asChild = false, type, ...props }: ButtonProps) {
-  const Comp = asChild ? Slot : 'button';
-  return (
-    <Comp
-      type={asChild ? type : (type ?? 'button')}
-      className={cn(buttonVariants({ variant, size }), className)}
-      {...props}
-    />
-  );
-}
+/**
+ * `forwardRef` (not a plain function component) — required for `asChild` compositions where a
+ * Radix trigger (`DropdownMenuTrigger`, `PopoverTrigger`, etc.) needs a real DOM ref on the
+ * rendered element to measure its position for floating content. Every existing `asChild`
+ * trigger in this codebase happened to wrap a plain native `<button>` instead of this component,
+ * which is why this gap went unnoticed until CLIENT-SESSION-5 tried `DropdownMenuTrigger asChild`
+ * around `Button` for the first time — Radix's Popper silently measured the wrong (or no) anchor
+ * without a forwarded ref, rendering its content off-screen ("outside of the viewport" in a real
+ * click-and-observe test), which looks identical to "never opens" to anyone testing by eye.
+ */
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, type, ...props }, ref) => {
+    const Comp = asChild ? Slot : 'button';
+    return (
+      <Comp
+        ref={ref}
+        type={asChild ? type : (type ?? 'button')}
+        className={cn(buttonVariants({ variant, size }), className)}
+        {...props}
+      />
+    );
+  },
+);
+Button.displayName = 'Button';
 
 /**
  * `Button`'s disabled treatment is opacity-fade by default (client/CLAUDE.md),
