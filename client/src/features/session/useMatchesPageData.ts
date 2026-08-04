@@ -1,18 +1,22 @@
 import { useMemo, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useMatchesPageStore } from '@/app/matchesPageStore';
+import { useFriends } from '@/features/friends/hooks/useFriends';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useLocationPickerData } from '@/features/location/useLocationPickerData';
 import type { Location } from '@/shared/types/location';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
+import { useApproveParticipant } from './hooks/useApproveParticipant';
 import { useCancelSession } from './hooks/useCancelSession';
 import { useCreateSession } from './hooks/useCreateSession';
 import { useGroupSessionsForGroups } from './hooks/useGroupSessions';
 import { useJoinSession } from './hooks/useJoinSession';
 import { useLeaveSession } from './hooks/useLeaveSession';
 import { useMySessions } from './hooks/useMySessions';
+import { useRejectParticipant } from './hooks/useRejectParticipant';
+import { useRequestedParticipants } from './hooks/useRequestedParticipants';
 import { useSession } from './hooks/useSession';
 import { useSessionParticipants } from './hooks/useSessionParticipants';
 import type { CreateSessionPayload, SessionListItem } from './types';
@@ -109,6 +113,10 @@ export function useMatchesPageData(initialSessionId: number | null) {
     createSessionMutation.mutate(payload, { onSuccess: closeCreateModal });
   };
 
+  // CLIENT-SESSION-4: only needed while the create form is open — the "Invite your friend"
+  // field's client-side search is a filter over this full unpaginated list, no new endpoint.
+  const friendsQuery = useFriends(isCreateModalOpen);
+
   // --- Session detail ---
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(initialSessionId);
   const isDetailOpen = selectedSessionId !== null;
@@ -126,6 +134,15 @@ export function useMatchesPageData(initialSessionId: number | null) {
   const joinMutation = useJoinSession();
   const leaveMutation = useLeaveSession();
   const cancelMutation = useCancelSession();
+
+  // CLIENT-SESSION-4: the approval queue only ever fires for a canManage caller — gating the
+  // query on it too (not just hiding the section) avoids a request that would 400 for anyone else.
+  const requestedParticipantsQuery = useRequestedParticipants(
+    selectedSessionId ?? undefined,
+    isDetailOpen && canManageSelected,
+  );
+  const approveParticipantMutation = useApproveParticipant();
+  const rejectParticipantMutation = useRejectParticipant();
 
   return {
     activeSport,
@@ -147,6 +164,8 @@ export function useMatchesPageData(initialSessionId: number | null) {
     submitCreate,
     isCreating: createSessionMutation.isPending,
     isCreateError: createSessionMutation.isError,
+    friends: friendsQuery.data ?? [],
+    isFriendsLoading: friendsQuery.isLoading,
 
     selectedSessionId,
     onViewDetails: (sessionId: number) => setSelectedSessionId(sessionId),
@@ -170,5 +189,17 @@ export function useMatchesPageData(initialSessionId: number | null) {
       cancelMutation.mutate({ sessionId: selectedSessionId, payload: { reason: reason || undefined } }),
     isCancelling: cancelMutation.isPending,
     isCancelError: cancelMutation.isError,
+
+    requestedParticipants: requestedParticipantsQuery.data?.content ?? [],
+    isRequestedParticipantsLoading: requestedParticipantsQuery.isLoading,
+    isRequestedParticipantsError: requestedParticipantsQuery.isError,
+    onApproveParticipant: (userId: string) =>
+      selectedSessionId !== null &&
+      approveParticipantMutation.mutate({ sessionId: selectedSessionId, userId }),
+    isApprovingParticipant: approveParticipantMutation.isPending,
+    onRejectParticipant: (userId: string, reason: string) =>
+      selectedSessionId !== null &&
+      rejectParticipantMutation.mutate({ sessionId: selectedSessionId, userId, reason }),
+    isRejectingParticipant: rejectParticipantMutation.isPending,
   };
 }

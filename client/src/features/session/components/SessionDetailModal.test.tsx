@@ -47,6 +47,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     feeType: 'FREE',
     feeAmountVnd: null,
     initialSlot: 0,
+    autoApprove: false,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     ...overrides,
@@ -61,7 +62,21 @@ const participants: SessionParticipant[] = [
     userFullName: 'Jordan Lee',
     userAvatarUrl: null,
     status: 'JOINED',
+    rejectReason: null,
     createdAt: '2026-07-01T10:00:00',
+  },
+];
+
+const requestedParticipants: SessionParticipant[] = [
+  {
+    id: 2,
+    sessionId: 1,
+    userId: 'user-3',
+    userFullName: 'Alex Chen',
+    userAvatarUrl: null,
+    status: 'REQUESTED',
+    rejectReason: null,
+    createdAt: '2026-07-02T10:00:00',
   },
 ];
 
@@ -85,6 +100,13 @@ const baseProps = {
   onConfirmCancel: () => {},
   isCancelling: false,
   isCancelError: false,
+  requestedParticipants: [] as SessionParticipant[],
+  isRequestedParticipantsLoading: false,
+  isRequestedParticipantsError: false,
+  onApproveParticipant: () => {},
+  isApprovingParticipant: false,
+  onRejectParticipant: () => {},
+  isRejectingParticipant: false,
 };
 
 describe('SessionDetailModal', () => {
@@ -227,5 +249,61 @@ describe('SessionDetailModal', () => {
   it('falls back to "{sportName} session" for a null title', () => {
     render(<SessionDetailModal {...baseProps} session={makeSession({ title: null })} />);
     expect(screen.getByText('Basketball session')).toBeInTheDocument();
+  });
+
+  it('hides "Waiting for approval" when there are no requested participants', () => {
+    render(<SessionDetailModal {...baseProps} canManage requestedParticipants={[]} />);
+    expect(screen.queryByText(/Waiting for approval/)).not.toBeInTheDocument();
+  });
+
+  it('shows "Waiting for approval" with Approve/Reject once there is a requested participant', () => {
+    render(
+      <SessionDetailModal {...baseProps} canManage requestedParticipants={requestedParticipants} />,
+    );
+    expect(screen.getByText('Waiting for approval (1)')).toBeInTheDocument();
+    expect(screen.getByText('Alex Chen')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+  });
+
+  it('Approve calls onApproveParticipant with the userId', async () => {
+    const user = userEvent.setup();
+    const onApproveParticipant = vi.fn();
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        canManage
+        requestedParticipants={requestedParticipants}
+        onApproveParticipant={onApproveParticipant}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(onApproveParticipant).toHaveBeenCalledWith('user-3');
+  });
+
+  it('Reject reveals an inline optional-reason box; Confirm reject calls onRejectParticipant, Never mind dismisses it', async () => {
+    const user = userEvent.setup();
+    const onRejectParticipant = vi.fn();
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        canManage
+        requestedParticipants={requestedParticipants}
+        onRejectParticipant={onRejectParticipant}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Reject' }));
+    const reasonInput = screen.getByLabelText('Reject reason for Alex Chen');
+    await user.type(reasonInput, '  Not a group member  ');
+    await user.click(screen.getByRole('button', { name: 'Confirm reject' }));
+    expect(onRejectParticipant).toHaveBeenCalledWith('user-3', 'Not a group member');
+
+    // reopen and dismiss without confirming
+    await user.click(screen.getByRole('button', { name: 'Reject' }));
+    await user.click(screen.getByRole('button', { name: 'Never mind' }));
+    expect(screen.queryByLabelText('Reject reason for Alex Chen')).not.toBeInTheDocument();
+    expect(onRejectParticipant).toHaveBeenCalledTimes(1);
   });
 });

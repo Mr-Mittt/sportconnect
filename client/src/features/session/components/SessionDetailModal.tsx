@@ -40,6 +40,16 @@ interface SessionDetailModalProps {
   onConfirmCancel: (reason: string) => void;
   isCancelling: boolean;
   isCancelError: boolean;
+
+  /** CLIENT-SESSION-4: REQUESTED participants awaiting approval — parent gates the underlying
+   * query on `canManage` too, so this stays empty (and the section stays hidden) for anyone else. */
+  requestedParticipants: SessionParticipant[];
+  isRequestedParticipantsLoading: boolean;
+  isRequestedParticipantsError: boolean;
+  onApproveParticipant: (userId: string) => void;
+  isApprovingParticipant: boolean;
+  onRejectParticipant: (userId: string, reason: string) => void;
+  isRejectingParticipant: boolean;
 }
 
 function initialsFor(fullName: string): string {
@@ -60,6 +70,17 @@ function initialsFor(fullName: string): string {
  * field + Confirm/Never mind, not `window.confirm` — matches this codebase's existing
  * no-native-confirm-dialogs convention. Presentational and controlled: the parent
  * (`useMatchesPageData`) owns every query/mutation and passes state + callbacks down.
+ *
+ * CLIENT-SESSION-4 adds a "Waiting for approval" section between Participants and the Join/Leave
+ * button, mirroring `GroupMembersTab`'s empty-hides pattern: it only renders when
+ * `requestedParticipants` is non-empty AND `canJoinOrLeave` (SCHEDULED/ONGOING) — the backend
+ * rejects approve/reject once a session is CANCELLED, same reason `cancelSession` itself is
+ * blocked on COMPLETED/CANCELLED, so this doesn't show buttons that would only ever 400. The
+ * parent also gates the underlying query on `canManage`, so a non-manager caller never even
+ * fetches it — same reasoning as the group module's own approval-queue gating. Reject reveals an
+ * inline optional-reason box per row (same idiom as the cancel-reason reveal above, not a second
+ * nested Dialog/Popover — see `CreateSessionModal`'s notes on why that pattern breaks here),
+ * Approve is immediate.
  */
 export function SessionDetailModal({
   isOpen,
@@ -81,9 +102,20 @@ export function SessionDetailModal({
   onConfirmCancel,
   isCancelling,
   isCancelError,
+  requestedParticipants,
+  isRequestedParticipantsLoading,
+  isRequestedParticipantsError,
+  onApproveParticipant,
+  isApprovingParticipant,
+  onRejectParticipant,
+  isRejectingParticipant,
 }: SessionDetailModalProps) {
   const [isCancelFormOpen, setIsCancelFormOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  /** Which requested-participant row currently has its reject-reason box open — only one at a
+   * time, same "no native confirm dialog, inline reveal" idiom as `isCancelFormOpen` above. */
+  const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   const isJoined = participants.some(
     (participant) => participant.userId === currentUserId && participant.status === 'JOINED',
@@ -97,6 +129,8 @@ export function SessionDetailModal({
         if (!open) {
           setIsCancelFormOpen(false);
           setCancelReason('');
+          setRejectingUserId(null);
+          setRejectReason('');
           onClose();
         }
       }}
@@ -200,6 +234,105 @@ export function SessionDetailModal({
                   </div>
                 )}
               </section>
+
+              {/* canJoinOrLeave also gates approve/reject, not just non-empty — the backend
+                  rejects both once the session is CANCELLED (same reason cancelSession itself
+                  is blocked on COMPLETED/CANCELLED), so this stays hidden rather than showing
+                  buttons that would only ever 400. */}
+              {canJoinOrLeave && requestedParticipants.length > 0 && (
+                <section aria-label="Waiting for approval" className="flex flex-col gap-2">
+                  <div className="text-2sm font-medium text-text-primary">
+                    Waiting for approval ({requestedParticipants.length})
+                  </div>
+                  {isRequestedParticipantsLoading && (
+                    <p className="text-2xs text-text-muted">Loading…</p>
+                  )}
+                  {isRequestedParticipantsError && (
+                    <p role="alert" className="text-2xs text-text-danger">
+                      Couldn't load requests.
+                    </p>
+                  )}
+                  {!isRequestedParticipantsLoading && !isRequestedParticipantsError && (
+                    <div className="flex flex-col gap-1.5">
+                      {requestedParticipants.map((participant) => (
+                        <div key={participant.id} className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <Avatar className="size-6 shrink-0">
+                                {participant.userAvatarUrl !== null && (
+                                  <AvatarImage src={participant.userAvatarUrl} alt="" />
+                                )}
+                                <AvatarFallback className="text-2xs">
+                                  {initialsFor(participant.userFullName)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="truncate text-2sm text-text-primary">
+                                {participant.userFullName}
+                              </span>
+                            </div>
+                            <div className="flex shrink-0 gap-1.5">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={isRejectingParticipant}
+                                onClick={() => {
+                                  setRejectingUserId(participant.userId);
+                                  setRejectReason('');
+                                }}
+                              >
+                                Reject
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                disabled={isApprovingParticipant}
+                                onClick={() => onApproveParticipant(participant.userId)}
+                              >
+                                Approve
+                              </Button>
+                            </div>
+                          </div>
+                          {rejectingUserId === participant.userId && (
+                            <div className="border-hairline flex flex-col gap-2 rounded-lg border-border p-2.5">
+                              <Input
+                                value={rejectReason}
+                                onChange={(event) => setRejectReason(event.target.value)}
+                                placeholder="Reason (optional)"
+                                aria-label={`Reject reason for ${participant.userFullName}`}
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  variant="primary"
+                                  size="sm"
+                                  disabled={isRejectingParticipant}
+                                  onClick={() => {
+                                    onRejectParticipant(participant.userId, rejectReason.trim());
+                                    setRejectingUserId(null);
+                                  }}
+                                >
+                                  {isRejectingParticipant ? 'Rejecting…' : 'Confirm reject'}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={isRejectingParticipant}
+                                  onClick={() => setRejectingUserId(null)}
+                                >
+                                  Never mind
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
 
               {isJoinError && (
                 <p role="alert" className="text-2sm text-text-danger">

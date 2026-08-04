@@ -18,7 +18,9 @@ is the living reference, that one is the point-in-time implementation record), `
 MSW-backed e2e coverage for the two chat surfaces CHAT-8/CHAT-9 wired up, including the WebSocket-vs-MSW
 resolution `friends-journey.spec.ts` had flagged as still open), `CLIENT-SESSION-1_SESSION_UI.md` (new
 `matches-journey.spec.ts`, `mocks/handlers/{locations,sessions}.ts` — the real `/matches` page's
-create/list/join/leave/cancel journey).
+create/list/join/leave/cancel journey), `CLIENT-SESSION-4_INVITE_APPROVAL.md` (extends
+`matches-journey.spec.ts` with invite/auto-approve create-form fields and a new approval-queue
+step 7).
 
 ---
 
@@ -166,7 +168,7 @@ e2e/
     post-deep-link.spec.ts
     group-chat.spec.ts        # CHAT-10
     direct-chat.spec.ts       # CHAT-10
-    matches-journey.spec.ts   # CLIENT-SESSION-1
+    matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
@@ -519,23 +521,32 @@ path other specs already exercise incidentally.
 | `loading a shared post link directly renders the post + comments, even outside the feed's first page` | `seedPaginatedFeedOnNextLoad(mockSessionId)` (21-post fixture) → direct `seedAuthenticatedSession(page, '/posts/1020')` (post **1020**, index 20 — only reachable via "Load more" on page 0) → dialog renders the right post/comments on a cold load; closing returns to `/` with the normal Home Feed visible | Drives the real "shared link, not logged in yet" flow end-to-end (redirect to `/login`, bounce back) — the same generic mechanism AUTH-8's step 7 already covers, not something FEED-12 built itself. Proves the dialog doesn't depend on the feed having paginated the post into view first. |
 | `opening comments from the feed updates the URL, and closing returns to it` | Click a post's "View comments" from `/` → URL becomes `/posts/{id}` → Close → URL back to `/` | Confirms the in-feed path is also URL-addressable now (`navigate` push on open, `replace` on close), not just the direct-load path above |
 
-### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1, one `test()` with 6 steps)
+### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/CLIENT-SESSION-4, one `test()` with 7 steps)
 
-`/matches` (real page, replacing `ComingSoonPage`) — list/create/join/leave/cancel. Fixtures:
-`mockSession` (standalone, created by the test user, `participantCount: 0`) and `mockGroupSession`
-(linked to `mockGroup`, created by someone else — the test user is only a `group_member`, proving
-Cancel stays hidden). The create step searches the pre-seeded `mockLocation` rather than exercising
-`LocationPicker`'s paste-a-link/resolve flow — that's covered by `LocationPicker`'s own
-component/Storybook tests, not e2e.
+`/matches` (real page, replacing `ComingSoonPage`) — list/create/join/leave/cancel, plus
+CLIENT-SESSION-4's invite/auto-approve fields and approval queue. Fixtures: `mockSession`
+(standalone, created by the test user, `participantCount: 0`), `mockGroupSession` (linked to
+`mockGroup`, created by someone else — the test user is only a `group_member`, proving Cancel
+stays hidden), `mockOwnedGroupSession` ("Ladder night", the test user is `group_owner` —
+`canManage` true), `mockFriend` (the invite-friend field's search target), and
+`mockSessionJoinRequest`/`mockSecondSessionJoinRequest` (two pre-seeded `REQUESTED` rows on
+`mockOwnedGroupSession` — same "pre-seed the other person's row" precedent as
+`group-invitations.spec.ts`'s `mockGroupJoinRequest`, since this mock server has no second live
+authenticated identity to actually request-join as). All three session fixtures carry
+`autoApprove: true` (real SESSION-6 backfilled every pre-existing session this way; only a
+genuinely new session created mid-test defaults to `false`). The create step searches the
+pre-seeded `mockLocation` rather than exercising `LocationPicker`'s paste-a-link/resolve flow —
+that's covered by `LocationPicker`'s own component/Storybook tests, not e2e.
 
 | Step | What it checks | Notes |
 |---|---|---|
-| 1. load | Both sessions render with the correct "Standalone" / group-name label | |
+| 1. load | Both sessions render | |
 | 2. sport filter | Filtering to Basketball narrows to `mockSession`; "All" restores both | |
 | 3. join/leave | Open `mockSession`'s detail → Join → "Leave" appears, participant count 0→1 → Leave → back to "Join", count 1→0 | |
 | 4. cancel | Cancel session → reason field → Confirm cancel → "Cancelled" + reason shown; list card reflects it without a reload | Creator of a standalone session can manage it |
 | 5. group session, member-only | Open `mockGroupSession`'s detail → no "Cancel session" button, Join still available | The test user is a `group_member`, not owner/admin, and didn't create it |
-| 6. create | "Create session" → pick Basketball → "Choose location" → search "Riverside" → select `mockLocation` → fill start time/title → submit → dialog closes, new session appears in the list | Two dialogs open simultaneously (`CreateSessionModal` + nested `LocationPicker`) — scoped via `getByRole('dialog', { name: ... })` on each |
+| 6. create | "Create session" → pick Basketball → "Choose location" → search "Riverside" → select `mockLocation` → fill start time/title → invite `mockFriend` (badge appears) → check "Auto approve join request" (warning appears) → submit → dialog closes, new session appears in the list | Two dialogs open simultaneously (`CreateSessionModal` + nested `LocationPicker`) — scoped via `getByRole('dialog', { name: ... })` on each |
+| 7. approval queue | Open `mockOwnedGroupSession`'s ("Ladder night") detail → "Waiting for approval (2)" shows both requesters → Approve one (moves into Participants) → Reject the other with a reason → section disappears | Only renders for `canManage`; reject reveals an inline optional-reason box, not a second dialog |
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 

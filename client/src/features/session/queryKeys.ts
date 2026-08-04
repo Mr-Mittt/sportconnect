@@ -5,4 +5,8 @@ export const sessionKeys = {
   mine: () => [...sessionKeys.all, 'mine'] as const,
   detail: (sessionId: number) => [...sessionKeys.all, 'detail', sessionId] as const,
   participants: (sessionId: number) => [...sessionKeys.all, 'participants', sessionId] as const,
+  /** Separate cache entry from `participants` above — that one is always JOINED-only (the public
+   * default), this is the REQUESTED-only approval queue (canManage-gated backend-side). */
+  requestedParticipants: (sessionId: number) =>
+    [...sessionKeys.all, 'requestedParticipants', sessionId] as const,
 };

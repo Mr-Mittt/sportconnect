@@ -16,7 +16,7 @@ import type {
 import type { FriendRequest, FriendUser, UserSearchResult } from '../../src/features/friends/types.ts';
 import { hoursAgo, hoursFromNow } from '../../src/shared/lib/mockClock.ts';
 import type { Location } from '../../src/shared/types/location.ts';
-import type { Session } from '../../src/shared/types/session.ts';
+import type { Session, SessionParticipant } from '../../src/shared/types/session.ts';
 import type { UserSportProfileResponse } from '../../src/shared/types/sport.ts';
 import { MOCK_SERVER_URL } from './mockServerConfig.ts';
 
@@ -543,6 +543,13 @@ export const mockSession: Session = {
   feeType: 'FIXED',
   feeAmountVnd: 50000,
   initialSlot: 0,
+  // These are pre-existing fixture sessions (never created through the create endpoint mid-test)
+  // — real SESSION-6 backfilled every pre-existing session to autoApprove=true (preserving their
+  // instant-join behavior); only a genuinely new session (the create-handler's own `created`
+  // object) defaults to false. mockSession in particular needs this true, or "join" from its
+  // empty participantsState (the join/leave/cancel journey's own premise) would land in
+  // REQUESTED instead of JOINED.
+  autoApprove: true,
   createdAt: '2026-06-20T10:00:00',
   updatedAt: '2026-06-20T10:00:00',
 };
@@ -577,6 +584,7 @@ export const mockGroupSession: Session = {
   feeType: 'FREE',
   feeAmountVnd: null,
   initialSlot: 0,
+  autoApprove: true, // pre-existing fixture — same backfill reasoning as mockSession above.
   createdAt: '2026-06-21T10:00:00',
   updatedAt: '2026-06-21T10:00:00',
 };
@@ -611,8 +619,37 @@ export const mockOwnedGroupSession: Session = {
   feeType: 'FREE',
   feeAmountVnd: null,
   initialSlot: 0,
+  autoApprove: true, // pre-existing fixture — same backfill reasoning as mockSession above.
   createdAt: '2026-06-22T10:00:00',
   updatedAt: '2026-06-22T10:00:00',
+};
+
+// CLIENT-SESSION-4: a pre-seeded REQUESTED row on mockOwnedGroupSession (mockUser is group_owner
+// there, so canManage is true) — same "pre-seed the other person's row, don't try to simulate a
+// second live browser identity" precedent as mockGroupJoinRequest above. Exercises the approval
+// queue without needing a second authenticated session.
+export const mockSessionJoinRequest: SessionParticipant = {
+  id: 1,
+  sessionId: mockOwnedGroupSession.id,
+  userId: '33333333-3333-4333-8333-333333333333',
+  userFullName: 'Alex Chen',
+  userAvatarUrl: null,
+  status: 'REQUESTED',
+  rejectReason: null,
+  createdAt: '2026-07-17T00:00:00',
+};
+
+/** A second pre-seeded REQUESTED row on the same session, so the e2e journey can exercise both
+ * Approve (on `mockSessionJoinRequest`) and Reject without needing a third fixture. */
+export const mockSecondSessionJoinRequest: SessionParticipant = {
+  id: 2,
+  sessionId: mockOwnedGroupSession.id,
+  userId: '44444444-4444-4444-8444-444444444444',
+  userFullName: 'Morgan Diaz',
+  userAvatarUrl: null,
+  status: 'REQUESTED',
+  rejectReason: null,
+  createdAt: '2026-07-17T00:05:00',
 };
 
 /** Builds a Spring Data `Page<T>`-shaped response from a full content array. */

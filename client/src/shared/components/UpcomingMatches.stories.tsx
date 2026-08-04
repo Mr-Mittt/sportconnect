@@ -59,6 +59,7 @@ function makeSession(overrides: Partial<Session> & Pick<Session, 'id' | 'sportId
     feeType: 'FREE',
     feeAmountVnd: null,
     initialSlot: 0,
+    autoApprove: false,
     createdAt: '2026-06-01T10:00:00',
     updatedAt: '2026-06-01T10:00:00',
     ...overrides,

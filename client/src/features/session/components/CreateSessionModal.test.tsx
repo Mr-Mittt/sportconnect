@@ -1,10 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CreateSessionModal } from './CreateSessionModal';
+
+const friends: FriendUser[] = [
+  { id: 'friend-1', fullName: 'Priya Shah', avatarUrl: null, coverUrl: null, bio: null },
+  { id: 'friend-2', fullName: 'Priyanka Rao', avatarUrl: null, coverUrl: null, bio: null },
+];
 
 const sportsByKey: Record<SportKey, SportProfile> = {
   football: { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' },
@@ -67,6 +73,8 @@ const baseProps = {
   selectedLocation: null as Location | null,
   onOpenLocationPicker: () => {},
   locationPicker,
+  friends,
+  isFriendsLoading: false,
   onSubmit: () => {},
   isSubmitting: false,
   isError: false,
@@ -262,6 +270,8 @@ describe('CreateSessionModal', () => {
       feeType: 'FREE',
       feeAmountVnd: undefined,
       initialSlot: 0,
+      autoApprove: false,
+      inviteeIds: undefined,
     });
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('groupId');
   });
@@ -385,5 +395,89 @@ describe('CreateSessionModal', () => {
 
     rerender(<CreateSessionModal {...baseProps} selectedLocation={location} isError />);
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't create the session");
+  });
+
+  it('"Invite your friend" shows nothing below 3 characters, then filters the friends list', async () => {
+    const user = userEvent.setup();
+    render(<CreateSessionModal {...baseProps} />);
+
+    const search = screen.getByLabelText('Search friends to invite');
+    await user.type(search, 'Pr');
+    expect(screen.queryByRole('button', { name: /Priya Shah/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Type at least 3 characters to search.')).toBeInTheDocument();
+
+    await user.type(search, 'iya S');
+    expect(screen.getByRole('button', { name: /Priya Shah/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Priyanka Rao/ })).not.toBeInTheDocument();
+  });
+
+  it('selecting a friend badges them, removes them from results, and × removes the badge', async () => {
+    const user = userEvent.setup();
+    render(<CreateSessionModal {...baseProps} />);
+
+    const search = screen.getByLabelText('Search friends to invite');
+    await user.type(search, 'Priya Shah');
+    await user.click(screen.getByRole('button', { name: /Priya Shah/ }));
+
+    expect(search).toHaveValue('');
+    expect(screen.getByText('Priya Shah')).toBeInTheDocument();
+    // Exact name (not the /Priya Shah/ regex used above) so this doesn't also match the
+    // "Remove Priya Shah" badge button, which is the one still on screen at this point.
+    expect(screen.queryByRole('button', { name: 'Priya Shah' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Remove Priya Shah' }));
+    expect(screen.queryByText('Priya Shah')).not.toBeInTheDocument();
+  });
+
+  it('submits selected invitee ids, omitted entirely when none are selected', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(
+      <CreateSessionModal
+        {...baseProps}
+        selectedLocation={location}
+        activeSport="basketball"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+    await pickAnyStartTime(user);
+    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Open slot/), '10');
+    await user.type(screen.getByLabelText('Search friends to invite'), 'Priya Shah');
+    await user.click(screen.getByRole('button', { name: /Priya Shah/ }));
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ inviteeIds: ['friend-1'] }));
+  });
+
+  it('"Auto approve join request" defaults unchecked, and reveals a warning once checked', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(
+      <CreateSessionModal
+        {...baseProps}
+        selectedLocation={location}
+        activeSport="basketball"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const checkbox = screen.getByRole('checkbox', { name: 'Auto approve join request' });
+    expect(checkbox).not.toBeChecked();
+    expect(screen.queryByText('Everyone can join without your review.')).not.toBeInTheDocument();
+
+    await user.click(checkbox);
+    expect(checkbox).toBeChecked();
+    expect(screen.getByText('Everyone can join without your review.')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+    await pickAnyStartTime(user);
+    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Open slot/), '10');
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ autoApprove: true }));
   });
 });
