@@ -22,7 +22,10 @@ create/list/join/leave/cancel journey), `CLIENT-SESSION-4_INVITE_APPROVAL.md` (e
 `matches-journey.spec.ts` with invite/auto-approve create-form fields and a new approval-queue
 step 7), `CLIENT-SESSION-5_FAVORITE_LOCATIONS.md` (extends `matches-journey.spec.ts` with a new
 favorites round-trip step 8, `mocks/handlers/locations.ts`'s favorite/unfavorite/favorites-list
-handlers).
+handlers), `CLIENT-SESSION-6_STANDALONE_DISCOVERY.md` (splits `/matches` into a Discover grid +
+collapsible "My sessions" panel; extends `matches-journey.spec.ts` with steps 9-10, new
+`mocks/handlers/sessions.ts` `GET /sessions/discover`/`GET /sessions/joined` handlers, and a new
+`mockDiscoverableSession` fixture).
 
 ---
 
@@ -170,7 +173,7 @@ e2e/
     post-deep-link.spec.ts
     group-chat.spec.ts        # CHAT-10
     direct-chat.spec.ts       # CHAT-10
-    matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5
+    matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
@@ -523,36 +526,46 @@ path other specs already exercise incidentally.
 | `loading a shared post link directly renders the post + comments, even outside the feed's first page` | `seedPaginatedFeedOnNextLoad(mockSessionId)` (21-post fixture) → direct `seedAuthenticatedSession(page, '/posts/1020')` (post **1020**, index 20 — only reachable via "Load more" on page 0) → dialog renders the right post/comments on a cold load; closing returns to `/` with the normal Home Feed visible | Drives the real "shared link, not logged in yet" flow end-to-end (redirect to `/login`, bounce back) — the same generic mechanism AUTH-8's step 7 already covers, not something FEED-12 built itself. Proves the dialog doesn't depend on the feed having paginated the post into view first. |
 | `opening comments from the feed updates the URL, and closing returns to it` | Click a post's "View comments" from `/` → URL becomes `/posts/{id}` → Close → URL back to `/` | Confirms the in-feed path is also URL-addressable now (`navigate` push on open, `replace` on close), not just the direct-load path above |
 
-### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5, one `test()` with 8 steps)
+### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6, one `test()` with 10 steps)
 
 `/matches` (real page, replacing `ComingSoonPage`) — list/create/join/leave/cancel, plus
 CLIENT-SESSION-4's invite/auto-approve fields and approval queue, plus CLIENT-SESSION-5's
-favorite-locations round trip. Fixtures: `mockSession` (standalone, created by the test user,
-`participantCount: 0`), `mockGroupSession` (linked to `mockGroup`, created by someone else — the
-test user is only a `group_member`, proving Cancel stays hidden), `mockOwnedGroupSession`
-("Ladder night", the test user is `group_owner` — `canManage` true), `mockFriend` (the
-invite-friend field's search target), and `mockSessionJoinRequest`/`mockSecondSessionJoinRequest`
-(two pre-seeded `REQUESTED` rows on `mockOwnedGroupSession` — same "pre-seed the other person's
-row" precedent as `group-invitations.spec.ts`'s `mockGroupJoinRequest`, since this mock server has
-no second live authenticated identity to actually request-join as). All three session fixtures
-carry `autoApprove: true` (real SESSION-6 backfilled every pre-existing session this way; only a
+favorite-locations round trip, plus CLIENT-SESSION-6's Discover grid / "My sessions" panel split.
+Fixtures: `mockSession` (standalone, created by the test user, `participantCount: 0`),
+`mockGroupSession` (linked to `mockGroup`, created by someone else — the test user is only a
+`group_member`, proving Cancel stays hidden), `mockOwnedGroupSession` ("Ladder night", the test
+user is `group_owner` — `canManage` true), `mockDiscoverableSession` ("Weekend 5-a-side",
+standalone, created by someone else, Soccer — a sport the test user holds an active profile for —
+the only fixture eligible for `GET /sessions/discover`; every other session fixture is either
+self-created or `GROUP_RECURRING`), `mockFriend` (the invite-friend field's search target), and
+`mockSessionJoinRequest`/`mockSecondSessionJoinRequest` (two pre-seeded `REQUESTED` rows on
+`mockOwnedGroupSession` — same "pre-seed the other person's row" precedent as
+`group-invitations.spec.ts`'s `mockGroupJoinRequest`, since this mock server has no second live
+authenticated identity to actually request-join as). All session fixtures carry
+`autoApprove: true` (real SESSION-6 backfilled every pre-existing session this way; only a
 genuinely new session created mid-test defaults to `false`). The create step searches the
 pre-seeded `mockLocation` rather than exercising `LocationPicker`'s paste-a-link/resolve flow —
 that's covered by `LocationPicker`'s own component/Storybook tests, not e2e. Favorites start empty
 each run (`mocks/handlers/locations.ts`'s `favoriteLocationIds`) — step 8 exercises the full
 favorite/unfavorite round trip itself rather than relying on a pre-seeded favorite, since a
-single-user mock can simulate that action directly (unlike step 7's REQUESTED rows).
+single-user mock can simulate that action directly (unlike step 7's REQUESTED rows). Steps 1-8
+all target sessions that render inside the "My sessions" panel (`region` "My sessions") — the
+Discover/"My sessions" split (CLIENT-SESSION-6) doesn't change where those assertions look, since
+`page.getByText`/`getByRole('button', ...)` finds them regardless of which region they're in;
+steps 9-10 are what's actually new.
 
 | Step | What it checks | Notes |
 |---|---|---|
-| 1. load | Both sessions render | |
-| 2. sport filter | Filtering to Basketball narrows to `mockSession`; "All" restores both | |
+| 1. load | `mockSession`/`mockGroupSession` render (My sessions), `mockDiscoverableSession` renders in the Discover region | |
+| 2. sport filter | Filtering to Basketball narrows to `mockSession`; "All" restores both | Filters both panels — `mockDiscoverableSession` (Soccer) isn't asserted here, covered by step 9 instead |
 | 3. join/leave | Open `mockSession`'s detail → Join → "Leave" appears, participant count 0→1 → Leave → back to "Join", count 1→0 | |
 | 4. cancel | Cancel session → reason field → Confirm cancel → "Cancelled" + reason shown; list card reflects it without a reload | Creator of a standalone session can manage it |
 | 5. group session, member-only | Open `mockGroupSession`'s detail → no "Cancel session" button, Join still available | The test user is a `group_member`, not owner/admin, and didn't create it |
 | 6. create | "Create session" → pick Basketball → "Choose location" (opens the favorites dropdown) → "Choose a location…" → search "Riverside" → select `mockLocation` → fill start time/title → invite `mockFriend` (badge appears) → check "Auto approve join request" (warning appears) → submit → dialog closes, new session appears in the list | Two dialogs/a dropdown all open in sequence (`CreateSessionModal`, its `LocationFavoritesDropdown`, and the nested `LocationPicker`) — the dropdown's own menu items are queried via `page.getByRole('menuitem', ...)`, not scoped to `createDialog`, since `DropdownMenuContent` portals as a DOM sibling of the Dialog, not a descendant |
 | 7. approval queue | Open `mockOwnedGroupSession`'s ("Ladder night") detail → "Waiting for approval (2)" shows both requesters → Approve one (moves into Participants) → Reject the other with a reason → section disappears | Only renders for `canManage`; reject reveals an inline optional-reason box, not a second dialog |
 | 8. favorite a location, then pick it from the favorites dropdown | Open a new create form → dropdown shows "No favorites yet." → open `LocationPicker`, search "Riverside" → click the heart on `mockLocation`'s row (aria-label flips to "Unfavorite …") → select it → reopen the dropdown → the just-favorited location now lists instead of the empty state → selecting it sets the location again | Confirms `LocationFavoritesDropdown`'s real Radix `DropdownMenu` (`modal={false}`) actually works nested inside the Dialog — CLIENT-SESSION-2 had reverted an earlier attempt after it appeared broken live; CLIENT-SESSION-5 found and fixed the real cause (see its summary doc) |
+| 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverSessions`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED` row for, same exclusion rule as the real backend |
+| 10. search filters Discover; the panel toggle hides/shows My sessions | Typing a non-matching string into the search box shows "No sessions match your search." in Discover; the "Hide my sessions"/"Show my sessions" button toggles the whole `region` "My sessions" | Search is client-side only (`useMatchesPageData`'s `discoverSessions` memo), not a new backend query |
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 

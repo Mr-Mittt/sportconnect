@@ -374,8 +374,9 @@ public class SessionServiceImpl implements SessionService {
     @Override
     @Transactional(readOnly = true)
     public Page<SessionResponse> getJoinedSessions(UUID userId, SessionStatus status, Pageable pageable) {
-        Page<Session> sessions = sessionRepository.findJoinedSessionsByStatus(
-                status, userId, ParticipantStatus.JOINED, pageable);
+        Page<Session> sessions = status != null
+                ? sessionRepository.findJoinedSessionsByStatus(status, userId, ParticipantStatus.JOINED, pageable)
+                : sessionRepository.findJoinedSessions(userId, ParticipantStatus.JOINED, pageable);
         return toResponsePage(sessions);
     }
 

@@ -107,6 +107,13 @@ fired), empty page when the caller has zero active profiles (no query fired), an
 - **Client:** discover browse UI (a modal, per scoping discussion) repointing
   `UpcomingMatches.onJoinMatch`; the 3-section matches page (discover / joined+ongoing /
   joined+completed) itself. Not filed as tickets yet.
-- **Not built:** an "all statuses" mode for `/joined` — add if a real caller needs it.
+- ~~**Not built:** an "all statuses" mode for `/joined` — add if a real caller needs it.~~
+  **Built 2026-08-05 (CLIENT-SESSION-6 pickup):** `status` on `GET /api/sessions/joined` is now
+  optional — omitted returns every status the caller has a `JOINED` row for in one page. Added
+  because CLIENT-SESSION-6's single "My sessions" panel needs the caller's whole joined
+  history/upcoming at once; a 4-call fan-out (one per `SessionStatus`) was the alternative. New
+  repository method `findJoinedSessions` (no status predicate) alongside the existing
+  `findJoinedSessionsByStatus`; `SessionServiceImpl.getJoinedSessions` branches on `status != null`.
+  Fully backward compatible — existing callers passing a status are unaffected.
 - SESSION-5 (capacity/fee), SESSION-6 (join-approval/invite) remain `TODO`, unaffected by this
   ticket.

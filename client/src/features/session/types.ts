@@ -64,3 +64,8 @@ export interface CancelSessionPayload {
 export interface SessionListItem extends Session {
   groupName: string | null;
 }
+
+/** CLIENT-SESSION-6's Discover panel search-scope dropdown. Only 'sessions' is wired to real
+ * client-side filtering — 'location'/'gear' render as disabled placeholders (no gear/equipment
+ * domain exists in this app yet, per client/CLAUDE.md's phase roadmap). */
+export type SessionSearchMode = 'sessions' | 'location' | 'gear';

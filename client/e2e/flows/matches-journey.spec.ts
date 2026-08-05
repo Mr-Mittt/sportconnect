@@ -1,4 +1,4 @@
-import { mockFriend, mockLocation, seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import { mockDiscoverableSession, mockFriend, mockLocation, seedAuthenticatedSession } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -26,14 +26,29 @@ import { expect, test } from '../mocks/test.ts';
  * "pre-seed the other person's row" precedent as group-invitations.spec.ts's
  * `mockGroupJoinRequest`, since this mock server has no second live
  * authenticated identity to actually request-join as).
+ *
+ * CLIENT-SESSION-6: the page split into a Discover grid (`region` "Discover
+ * sessions") and a collapsible "My sessions" panel (`region` "My sessions").
+ * Steps 1-8 above all target sessions that render inside "My sessions"
+ * (mockUser created or belongs to the group) and are unaffected by the
+ * split — `page.getByText`/`getByRole('button', {name: ...})` finds them
+ * regardless of which panel they're in. Step 9 covers what's actually new:
+ * `mockDiscoverableSession` ("Weekend 5-a-side", created by someone else,
+ * Soccer — a sport mockUser holds an active profile for) starts out visible
+ * only in Discover; joining it moves it into "My sessions" without a
+ * reload (both queries share the `sessionKeys.all` invalidation root).
+ * Step 10 covers the search filter and the panel collapse toggle.
  */
 
 test('Matches journey', async ({ page }) => {
   await seedAuthenticatedSession(page, '/matches');
 
-  await test.step('1. load — both sessions render', async () => {
+  await test.step('1. load — both my sessions and a discoverable session render', async () => {
     await expect(page.getByText('Sunday pickup run')).toBeVisible();
     await expect(page.getByText('Friday 5-a-side')).toBeVisible();
+    await expect(
+      page.getByRole('region', { name: 'Discover sessions' }).getByText('Weekend 5-a-side'),
+    ).toBeVisible();
   });
 
   await test.step('2. sport filter narrows the list, "All" restores it', async () => {
@@ -185,5 +200,40 @@ test('Matches journey', async ({ page }) => {
     await expect(createDialog.getByText(mockLocation.name)).toBeVisible();
 
     await createDialog.getByRole('button', { name: 'Close' }).click();
+  });
+
+  await test.step('9. discover a session created by someone else, join it, and see it move into My sessions', async () => {
+    const discoverSection = page.getByRole('region', { name: 'Discover sessions' });
+    const mySessionsSection = page.getByRole('region', { name: 'My sessions' });
+
+    await expect(discoverSection.getByText(mockDiscoverableSession.title!)).toBeVisible();
+    await expect(mySessionsSection.getByText(mockDiscoverableSession.title!)).not.toBeVisible();
+
+    await discoverSection.getByRole('button', { name: new RegExp(mockDiscoverableSession.title!) }).click();
+    const dialog = page.getByRole('dialog', { name: mockDiscoverableSession.title! });
+    await dialog.getByRole('button', { name: 'Join' }).click();
+    await expect(dialog.getByRole('button', { name: 'Leave' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close' }).click();
+
+    // autoApprove is true on this fixture, so the join is instant — the session no longer
+    // qualifies for discover (already joined) and now shows up in My sessions instead.
+    await expect(discoverSection.getByText(mockDiscoverableSession.title!)).not.toBeVisible();
+    await expect(mySessionsSection.getByText(mockDiscoverableSession.title!)).toBeVisible();
+  });
+
+  await test.step('10. search filters Discover, and the panel toggle hides/shows My sessions', async () => {
+    await page.getByRole('button', { name: 'All', exact: true }).click();
+    const discoverSection = page.getByRole('region', { name: 'Discover sessions' });
+
+    await page.getByRole('textbox', { name: 'Search sessions' }).fill('nonexistent-session-title');
+    await expect(discoverSection.getByText('No sessions match your search.')).toBeVisible();
+    await page.getByRole('textbox', { name: 'Search sessions' }).fill('');
+
+    await expect(page.getByRole('region', { name: 'My sessions' })).toBeVisible();
+    await page.getByRole('button', { name: 'Hide my sessions' }).click();
+    await expect(page.getByRole('region', { name: 'My sessions' })).not.toBeVisible();
+
+    await page.getByRole('button', { name: 'Show my sessions' }).click();
+    await expect(page.getByRole('region', { name: 'My sessions' })).toBeVisible();
   });
 });

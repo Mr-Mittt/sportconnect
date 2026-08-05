@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.29.0/dist/tabler-icons.min.css">
+</helmet>
+<div style="--surface-0:#f7f7f4;--surface-1:#f1efe8;--surface-2:#ffffff;--text-primary:#1a1a18;--text-secondary:#5f5e5a;--text-muted:#6e6d66;--text-accent:#185fa5;--text-danger:#a32d2d;--text-success:#15803d;--border:rgba(44,44,42,0.12);--border-strong:rgba(44,44,42,0.24);--border-accent:#378add;--bg-accent:#E6F1FB;--teal-50:#E1F5EE;--teal-800:#085041;background:var(--surface-0);font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--text-primary);display:flex;justify-content:center;padding:32px 16px;min-height:100vh;">
+<div style="width:960px;max-width:100%;">
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+  <div style="font-size:18px;font-weight:500;color:var(--text-primary);">SportHub</div>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <i class="ti ti-search" style="font-size:19px;color:var(--text-secondary);"></i>
+    <i class="ti ti-bell" style="font-size:19px;color:var(--text-secondary);"></i>
+    <div style="width:28px;height:28px;border-radius:50%;background:var(--bg-accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--text-accent);">BN</div>
+  </div>
+</div>
+
+<div style="display:flex;gap:6px;border-bottom:0.5px solid var(--border);padding-bottom:8px;margin-bottom:14px;">
+  <button style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-secondary);padding:6px 8px;border-radius:8px;cursor:pointer;"><i class="ti ti-home" style="font-size:16px;"></i>Home</button>
+  <button style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-secondary);padding:6px 8px;border-radius:8px;cursor:pointer;"><i class="ti ti-users" style="font-size:16px;"></i>Friends</button>
+  <button style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-secondary);padding:6px 8px;border-radius:8px;cursor:pointer;"><i class="ti ti-users-group" style="font-size:16px;"></i>Groups</button>
+  <button style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-primary);font-weight:500;padding:6px 8px;border-radius:8px;cursor:pointer;"><i class="ti ti-calendar-event" style="font-size:16px;"></i>Matches</button>
+  <button style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-secondary);padding:6px 8px;border-radius:8px;cursor:pointer;"><i class="ti ti-user" style="font-size:16px;"></i>Profile</button>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px;">
+  <div style="display:flex;flex-wrap:wrap;gap:8px;">
+    <button style="border:2px solid var(--border-accent);background:var(--surface-1);display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text-primary);padding:7px 12px;border-radius:20px;cursor:pointer;"><i class="ti ti-layout-grid" style="font-size:15px;"></i>All</button>
+    <button style="border:0.5px solid var(--border);background:var(--surface-1);display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;color:var(--text-primary);padding:7px 12px;border-radius:20px;cursor:pointer;"><i class="ti ti-ball-football" style="font-size:15px;"></i>Football</button>
+    <button style="border:0.5px solid var(--border);background:var(--surface-1);display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;color:var(--text-primary);padding:7px 12px;border-radius:20px;cursor:pointer;"><i class="ti ti-ball-tennis" style="font-size:15px;"></i>Tennis</button>
+    <button style="border:0.5px dashed var(--border-strong);background:none;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);padding:7px 12px;border-radius:20px;cursor:pointer;"><i class="ti ti-plus" style="font-size:15px;"></i>Add sport</button>
+  </div>
+  <button style="border:0.5px dashed var(--border-strong);background:var(--surface-2);display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);padding:7px 12px;border-radius:20px;cursor:pointer;flex-shrink:0;"><i class="ti ti-plus" style="font-size:16px;"></i>Create session</button>
+</div>
+
+<!-- Split content -->
+<div style="display:flex;align-items:stretch;">
+
+  <div style="flex:1;min-width:0;">
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <select value="{{ filterMode }}" onChange="{{ setFilterMode }}" style="border:0.5px solid var(--border);background:var(--surface-2);color:var(--text-primary);font-size:13px;padding:8px 10px;border-radius:8px;cursor:pointer;">
+          <option value="sessions">Sessions</option>
+          <option value="location">Location</option>
+          <option value="gear">Gear</option>
+        </select>
+        <input type="text" placeholder="Search" value="{{ searchText }}" onChange="{{ setSearchText }}" style="flex:1;min-width:0;border:0.5px solid var(--border);background:var(--surface-2);color:var(--text-primary);font-size:13px;padding:8px 10px;border-radius:8px;"/>
+        <button style="border:0.5px solid var(--border);background:var(--surface-2);color:var(--text-secondary);width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;"><i class="ti ti-search" style="font-size:16px;"></i></button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <sc-for list="{{ filterOptions }}" as="opt" hint-placeholder-count="3">
+          <button style="border:0.5px solid var(--border);background:var(--surface-1);color:var(--text-primary);font-size:12px;padding:6px 12px;border-radius:20px;cursor:pointer;">{{ opt }}</button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:{{ gridCols }};gap:12px;">
+      <sc-for list="{{ sessions }}" as="s" hint-placeholder-count="6">
+        <button style="border:0.5px solid var(--border);border-radius:12px;background:var(--surface-2);padding:14px;display:flex;flex-direction:column;gap:6px;text-align:left;cursor:pointer;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;background:var(--teal-50);color:var(--teal-800);"><i class="ti ti-ball-football"></i></span>
+            <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:500;color:var(--text-primary);">{{ s.title }}</div>
+            <span style="flex-shrink:0;font-size:11px;font-weight:500;color:{{ s.statusColor }};">{{ s.status }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);"><i class="ti ti-clock"></i>{{ s.time }}</div>
+          <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);"><i class="ti ti-map-pin"></i>{{ s.location }}</div>
+          <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);"><i class="ti ti-users"></i>{{ s.participants }}</div>
+          <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);"><i class="ti ti-coin"></i>{{ s.fee }}</div>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="width:1px;background:var(--border);margin:0 16px;position:relative;flex-shrink:0;align-self:stretch;">
+    <button title="Toggle side panel" onClick="{{ toggleCollapsed }}" style="position:absolute;top:57px;left:50%;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;border:0.5px solid var(--border-strong);background:var(--surface-2);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+      <i class="{{ chevronIcon }}" style="font-size:15px;color:var(--text-secondary);"></i>
+    </button>
+  </div>
+
+  <sc-if value="{{ !collapsed }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:0 0 calc(33.333% - 33px);min-width:0;display:flex;flex-direction:column;gap:12px;">
+      <sc-for list="{{ historyGroups }}" as="g" hint-placeholder-count="3">
+        <button onClick="{{ g.toggleOpen }}" style="display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;padding:0;cursor:pointer;">
+          <i class="{{ g.chevronIcon }}" style="font-size:14px;color:var(--text-muted);flex-shrink:0;"></i>
+          <span style="font-size:11px;font-weight:500;color:var(--text-muted);white-space:nowrap;">{{ g.date }}</span>
+          <div style="flex:1;height:1px;background:var(--border);"></div>
+        </button>
+        <sc-if value="{{ g.open }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px;">
+          <sc-for list="{{ g.sessions }}" as="s" hint-placeholder-count="2">
+            <button style="border:0.5px solid var(--border);border-radius:12px;background:var(--surface-2);padding:14px;display:flex;flex-direction:column;gap:6px;text-align:left;cursor:pointer;width:100%;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;background:var(--teal-50);color:var(--teal-800);"><i class="ti ti-ball-football"></i></span>
+                <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:500;color:var(--text-primary);">{{ s.title }}</div>
+              </div>
+              <span style="font-size:11px;font-weight:500;color:{{ s.statusColor }};">{{ s.status }}</span>
+              <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);"><i class="ti ti-clock"></i>{{ s.time }}</div>
+              <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);"><i class="ti ti-map-pin"></i>{{ s.location }}</div>
+              <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);"><i class="ti ti-users"></i>{{ s.participants }}</div>
+              <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);"><i class="ti ti-coin"></i>{{ s.fee }}</div>
+            </button>
+          </sc-for>
+        </div>
+        </sc-if>
+      </sc-for>
+    </div>
+  </sc-if>
+
+</div>
+
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1024,&quot;height&quot;:900},&quot;defaultCollapsed&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { collapsed: this.props.defaultCollapsed ?? false, filterMode: 'sessions', searchText: '', collapsedDates: {} };
+
+  sessions = [
+    { title: 'wqeqweq', statusKey: 'completed', status: 'Completed', dateSort: '2024-07-31', date: 'Jul 31, 2024', time: '1:10 PM', location: 'Tin sport Badminton (Sân cầu lông)', participants: '1 participant', fee: 'Free' },
+    { title: 'ai đá bóng không', statusKey: 'completed', status: 'Completed', dateSort: '2024-08-03', date: 'Aug 3, 2024', time: '5:00 PM', location: 'Tin sport Badminton (Sân cầu lông)', participants: '1/8 participants', fee: '45,000 ₫' },
+    { title: 'ai đá bóng không ne', statusKey: 'completed', status: 'Completed', dateSort: '2024-08-03', date: 'Aug 3, 2024', time: '5:00 PM', location: 'Tin sport Badminton (Sân cầu lông)', participants: '1/7 participants', fee: 'Free' },
+    { title: 'ai đá bóng không', statusKey: 'completed', status: 'Completed', dateSort: '2024-08-03', date: 'Aug 3, 2024', time: '5:00 PM', location: 'PINPON SPORT Badminton 24/7', participants: '1/7 participants', fee: 'Free' },
+    { title: 'ai đá bóng không', statusKey: 'completed', status: 'Completed', dateSort: '2024-08-03', date: 'Aug 3, 2024', time: '6:00 PM', location: 'Tin sport Badminton (Sân cầu lông)', participants: '1/7 participants', fee: 'Free' },
+    { title: 'ai đá bóng không', statusKey: 'completed', status: 'Completed', dateSort: '2024-08-03', date: 'Aug 3, 2024', time: '10:00 PM', location: 'Tin sport Badminton (Sân cầu lông)', participants: '2/7 participants', fee: 'Free' },
+    { title: 'ai đá bóng không', statusKey: 'completed', status: 'Completed', dateSort: '2024-08-03', date: 'Aug 3, 2024', time: '11:00 PM', location: 'Tin sport Badminton (Sân cầu lông)', participants: '3/7 participants', fee: 'Free' },
+    { title: 'ai đá bóng không', statusKey: 'cancelled', status: 'Cancelled', dateSort: '2026-08-05', date: 'Today', time: '8:00 AM', location: 'PINPON SPORT Badminton 24/7', participants: '3/7 participants', fee: 'Free' },
+    { title: 'ai đá bóng không', statusKey: 'completed', status: 'Completed', dateSort: '2026-08-05', date: 'Today', time: '8:00 AM', location: 'PINPON SPORT Badminton 24/7', participants: '3/7 participants', fee: 'Free' },
+    { title: 'ai đá bóng không', statusKey: 'completed', status: 'Completed', dateSort: '2026-08-05', date: 'Today', time: '11:00 AM', location: 'Tin sport Badminton (Sân cầu lông)', participants: '3/7 participants', fee: 'Free' }
+  ];
+
+  liveSessions = [
+    { title: 'Weekend 5-a-side', statusKey: 'scheduled', status: 'Scheduled', dateSort: '2026-08-06', date: 'Aug 6, 2026', time: '6:00 PM', location: 'Tin sport Badminton (Sân cầu lông)', participants: '4/10 participants', fee: '20,000 ₫' },
+    { title: 'Tennis doubles match', statusKey: 'ongoing', status: 'Ongoing', dateSort: '2026-08-05', date: 'Today', time: 'Started 3:00 PM', location: 'PINPON SPORT Badminton 24/7', participants: '3/4 participants', fee: 'Free' },
+    { title: 'ai đá bóng không nữa', statusKey: 'scheduled', status: 'Scheduled', dateSort: '2026-08-08', date: 'Aug 8, 2026', time: '7:00 PM', location: 'Tin sport Badminton (Sân cầu lông)', participants: '1/7 participants', fee: 'Free' }
+  ];
+
+  groupByDateDesc(list) {
+    const sorted = [...list].sort((a, b) => b.dateSort.localeCompare(a.dateSort));
+    const groups = [];
+    for (const s of sorted) {
+      const last = groups[groups.length - 1];
+      if (last && last.dateSort === s.dateSort) last.sessions.push(s);
+      else groups.push({ dateSort: s.dateSort, date: s.date, sessions: [s] });
+    }
+    return groups;
+  }
+
+  statusColor(key) {
+    return key === 'ongoing' ? 'var(--text-success)' : key === 'scheduled' ? 'var(--text-accent)' : key === 'cancelled' ? 'var(--text-danger)' : 'var(--text-muted)';
+  }
+
+  filterOptions() {
+    return this.state.filterMode === 'gear' ? ['Category', 'Brand', 'Model', 'Price'] : ['Date', 'Time', 'Location'];
+  }
+
+  renderVals() {
+    const collapsed = this.state.collapsed;
+    const history = this.sessions.filter(s => s.statusKey === 'completed' || s.statusKey === 'cancelled')
+      .map(s => ({ ...s, statusColor: this.statusColor(s.statusKey) }));
+    const live = this.liveSessions.map(s => ({ ...s, statusColor: this.statusColor(s.statusKey) }));
+    return {
+      collapsed,
+      sessions: live,
+      historyGroups: this.groupByDateDesc(history).map(g => ({
+        ...g,
+        open: !this.state.collapsedDates[g.dateSort],
+        chevronIcon: this.state.collapsedDates[g.dateSort] ? 'ti ti-chevron-right' : 'ti ti-chevron-down',
+        toggleOpen: () => this.setState(s => ({ collapsedDates: { ...s.collapsedDates, [g.dateSort]: !s.collapsedDates[g.dateSort] } }))
+      })),
+      gridCols: collapsed ? 'repeat(3,1fr)' : 'repeat(2,1fr)',
+      chevronIcon: collapsed ? 'ti ti-chevrons-left' : 'ti ti-chevrons-right',
+      toggleCollapsed: () => this.setState(s => ({ collapsed: !s.collapsed })),
+      filterMode: this.state.filterMode,
+      filterOptions: this.filterOptions(),
+      searchText: this.state.searchText,
+      setFilterMode: (e) => this.setState({ filterMode: e.target.value }),
+      setSearchText: (e) => this.setState({ searchText: e.target.value })
+    };
+  }
+}
+</script>
+</body>
+</html>

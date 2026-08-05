@@ -3,6 +3,12 @@ export const sessionKeys = {
   all: ['session'] as const,
   group: (groupId: number) => [...sessionKeys.all, 'group', groupId] as const,
   mine: () => [...sessionKeys.all, 'mine'] as const,
+  /** sportId undefined = every sport the caller holds an active profile for (backend default). */
+  discover: (sportId: number | undefined) => [...sessionKeys.all, 'discover', sportId ?? 'all'] as const,
+  /** CLIENT-SESSION-6: one cache entry for every status now that GET /sessions/joined's
+   * `status` param is optional (SESSION-4 delta, 2026-08-05) — the "My sessions" panel needs
+   * the caller's whole joined history/upcoming at once, not one query per SessionStatus. */
+  joined: () => [...sessionKeys.all, 'joined'] as const,
   detail: (sessionId: number) => [...sessionKeys.all, 'detail', sessionId] as const,
   participants: (sessionId: number) => [...sessionKeys.all, 'participants', sessionId] as const,
   /** Separate cache entry from `participants` above — that one is always JOINED-only (the public

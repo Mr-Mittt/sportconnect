@@ -2169,6 +2169,15 @@ explicit go-ahead at each step (full story in A3's summary doc):
   ref composition app-wide, not just here), and an MSW route-ordering collision where
   `GET /api/locations/:locationId` was intercepting `GET /api/locations/favorites` before it
   (caused a permanently-stuck "Loading…" in e2e, masked by TanStack Query's retry backoff).
+- **`CLIENT-SESSION-6` (`DONE`, 2026-08-05,
+  `client/docs/CLIENT-SESSION-6_STANDALONE_DISCOVERY.md`)** — `/matches` rebuilt into two panels: a
+  **Discover** grid (`GET /sessions/discover`, sport-filtered, client-side search) and a collapsible,
+  calendar-day-grouped **"My sessions"** panel (created/managed/joined, any status). Layout built
+  from a user-provided design export, not the backlog's original "modal or dedicated view, TBD".
+  Backend delta: `GET /api/sessions/joined`'s `status` param is now optional (omitted returns every
+  status in one page) — added so "My sessions" needs one query instead of a 4-call fan-out per
+  `SessionStatus`; fully backward compatible. CLIENT-SESSION-7 (still `TODO`) still owns repointing
+  the Home Feed/Groups/Friends rail's "Join a match" CTA at this new surface.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

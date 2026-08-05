@@ -673,6 +673,19 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findJoinedSessionsByStatus(SessionStatus.ONGOING, userId, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
     }
 
+    def "getJoinedSessions with a null status queries every status in one call"() {
+        given:
+        def userId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        sessionService.getJoinedSessions(userId, null, pageable)
+
+        then:
+        1 * sessionRepository.findJoinedSessions(userId, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
+        0 * sessionRepository.findJoinedSessionsByStatus(*_)
+    }
+
     def "createSession sets capacity/feeType/feeAmountVnd from the request"() {
         given:
         def userId = UUID.randomUUID()

@@ -117,7 +117,7 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
-    @Operation(summary = "List the caller's joined sessions by status", description = "Standalone or group-linked sessions the caller currently has a JOINED participant row for, restricted to one status (e.g. ONGOING, COMPLETED).")
+    @Operation(summary = "List the caller's joined sessions", description = "Standalone or group-linked sessions the caller currently has a JOINED participant row for. Optional status narrows to one (e.g. ONGOING, COMPLETED); omitted returns every status in one page.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
@@ -126,7 +126,7 @@ public class SessionController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> getJoinedSessions(
             @AuthenticationPrincipal String userIdStr,
-            @RequestParam SessionStatus status,
+            @RequestParam(required = false) SessionStatus status,
             Pageable pageable) {
         UUID userId = UUID.fromString(userIdStr);
         Page<SessionResponse> response = sessionService.getJoinedSessions(userId, status, pageable);

@@ -14,7 +14,9 @@ import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { useApproveParticipant } from './hooks/useApproveParticipant';
 import { useCancelSession } from './hooks/useCancelSession';
 import { useCreateSession } from './hooks/useCreateSession';
+import { useDiscoverSessions } from './hooks/useDiscoverSessions';
 import { useGroupSessionsForGroups } from './hooks/useGroupSessions';
+import { useJoinedSessions } from './hooks/useJoinedSessions';
 import { useJoinSession } from './hooks/useJoinSession';
 import { useLeaveSession } from './hooks/useLeaveSession';
 import { useMySessions } from './hooks/useMySessions';
@@ -22,26 +24,37 @@ import { useRejectParticipant } from './hooks/useRejectParticipant';
 import { useRequestedParticipants } from './hooks/useRequestedParticipants';
 import { useSession } from './hooks/useSession';
 import { useSessionParticipants } from './hooks/useSessionParticipants';
-import type { CreateSessionPayload, SessionListItem } from './types';
+import { dedupeSessionsById, groupSessionsByDate } from './groupSessionsByDate';
+import type { CreateSessionPayload, SessionListItem, SessionSearchMode } from './types';
 
 const CAN_MANAGE_ROLES = new Set(['group_owner', 'group_admin']);
 
 /**
  * The Matches page's data boundary — composes every session query/mutation this ticket needs
- * (list aggregation, create, detail, join/leave/cancel) plus `LocationPicker`'s data hook for
- * the create form's required location field, so `MatchesPage`/`SessionListCard`/
- * `CreateSessionModal`/`SessionDetailModal` all stay presentational and controlled per
- * `client/CLAUDE.md` — same "mega page-data hook" shape as `useGroupsPageData`/`useHomeFeedData`.
+ * (discover + "My sessions" list aggregation, create, detail, join/leave/cancel) plus
+ * `LocationPicker`'s data hook for the create form's required location field, so
+ * `MatchesPage`/`SessionListCard`/`CreateSessionModal`/`SessionDetailModal` all stay
+ * presentational and controlled per `client/CLAUDE.md` — same "mega page-data hook" shape as
+ * `useGroupsPageData`/`useHomeFeedData`.
  *
  * `initialSessionId` seeds the detail dialog open on mount for the rail card's
  * `?session={id}` deep link (same `useParams`-seeds-page-state precedent FEED-12 established
  * for `/posts/:postId`, via a query param instead of a path segment since the primary
  * interaction shape here is a dialog, not a route — see CLIENT-SESSION-1's design decision).
  *
- * There is no batch "sessions across my groups" endpoint (a real backend gap, flagged in
- * CLIENT-SESSION-1's implementation summary), so the list fans out one query per group via
- * `useGroupSessionsForGroups` and merges with the caller's own standalone sessions
- * (`useMySessions` — creator-only, not "sessions I joined"; another flagged gap).
+ * CLIENT-SESSION-6 split the old single merged list into two panels:
+ *  - **Discover** (`useDiscoverSessions`) — joinable SCHEDULED sessions from other users,
+ *    scoped by the active sport switcher pill.
+ *  - **My sessions** — everything the caller created, manages via a group, or has joined, any
+ *    status, grouped by calendar day. There's still no batch "sessions across my groups"
+ *    endpoint (a real backend gap, flagged in CLIENT-SESSION-1's implementation summary), so
+ *    this fans out one query per group via `useGroupSessionsForGroups`, merged with `mine`
+ *    (creator-only standalone sessions — kept even though a standalone creator auto-JOINs,
+ *    because a creator who later *leaves* their own session would otherwise disappear from
+ *    "My sessions" entirely) and `useJoinedSessions` (every status the caller has a JOINED row
+ *    for — the piece that makes a session joined via Discover show up here afterward). These
+ *    three sources legitimately overlap (a self-created standalone session is in both `mine`
+ *    and `joined`), so the merge runs through `dedupeSessionsById` before grouping.
  */
 export function useMatchesPageData(initialSessionId: number | null) {
   const currentUserId = useAuthStore((state) => state.user?.id);
@@ -58,30 +71,76 @@ export function useMatchesPageData(initialSessionId: number | null) {
     [sportProfilesQuery.data],
   );
 
+  const activeSportId = activeSport === 'all' ? undefined : SPORT_ID_BY_KEY[activeSport];
+
+  // --- Discover panel ---
+  const [searchText, setSearchText] = useState('');
+  const [searchMode, setSearchMode] = useState<SessionSearchMode>('sessions');
+  const discoverQuery = useDiscoverSessions(activeSportId, currentUserId !== undefined);
+  const discoverSessions = useMemo<SessionListItem[]>(() => {
+    const content = discoverQuery.data?.content ?? [];
+    const withGroupName = content.map((session) => ({ ...session, groupName: null }));
+    // "Location"/"Gear" search modes have no wired behavior yet (no gear/equipment domain
+    // exists in this app — client/CLAUDE.md) — only "Sessions" actually filters.
+    const query = searchMode === 'sessions' ? searchText.trim().toLowerCase() : '';
+    if (query === '') return withGroupName;
+    return withGroupName.filter((session) => {
+      const title = session.title ?? `${session.sportName} session`;
+      return (
+        title.toLowerCase().includes(query) || session.location.name.toLowerCase().includes(query)
+      );
+    });
+  }, [discoverQuery.data, searchMode, searchText]);
+
+  // --- "My sessions" panel ---
   const groupsQuery = useUserGroups(currentUserId);
   const groups = useMemo(() => groupsQuery.data?.content ?? [], [groupsQuery.data]);
   const groupIds = useMemo(() => groups.map((group) => group.id), [groups]);
   const groupSessionQueries = useGroupSessionsForGroups(groupIds);
   const mySessionsQuery = useMySessions(currentUserId !== undefined);
+  const joinedSessionsQuery = useJoinedSessions(currentUserId !== undefined);
 
-  const sessions = useMemo<SessionListItem[]>(() => {
+  const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(false);
+  const toggleHistoryPanelCollapsed = () => setIsHistoryPanelCollapsed((collapsed) => !collapsed);
+  const [collapsedDateKeys, setCollapsedDateKeys] = useState<Set<string>>(() => new Set());
+  const toggleDateGroupCollapsed = (dateKey: string) =>
+    setCollapsedDateKeys((keys) => {
+      const next = new Set(keys);
+      if (next.has(dateKey)) {
+        next.delete(dateKey);
+      } else {
+        next.add(dateKey);
+      }
+      return next;
+    });
+
+  const mySessionDateGroups = useMemo(() => {
     const fromGroups = groupSessionQueries.flatMap((query) => query.data?.content ?? []);
     const mine = mySessionsQuery.data?.content ?? [];
-    const withGroupName = [...fromGroups, ...mine].map((session) => ({
+    const joined = joinedSessionsQuery.data?.content ?? [];
+    const withGroupName = [...fromGroups, ...mine, ...joined].map((session) => ({
       ...session,
       groupName: groups.find((group) => group.id === session.groupId)?.groupName ?? null,
     }));
-    return withGroupName
-      .filter(
-        (session) => activeSport === 'all' || sportKeyForId(session.sportId) === activeSport,
-      )
-      .sort((a, b) => a.scheduledStart.localeCompare(b.scheduledStart));
-  }, [groupSessionQueries, mySessionsQuery.data, groups, activeSport]);
+    const deduped = dedupeSessionsById(withGroupName);
+    const filtered = deduped.filter(
+      (session) => activeSport === 'all' || sportKeyForId(session.sportId) === activeSport,
+    );
+    return groupSessionsByDate(filtered);
+  }, [groupSessionQueries, mySessionsQuery.data, joinedSessionsQuery.data, groups, activeSport]);
 
-  const isLoading =
-    groupsQuery.isLoading || mySessionsQuery.isLoading || groupSessionQueries.some((query) => query.isLoading);
-  const isError =
-    groupsQuery.isError || mySessionsQuery.isError || groupSessionQueries.some((query) => query.isError);
+  const isDiscoverLoading = discoverQuery.isLoading;
+  const isDiscoverError = discoverQuery.isError;
+  const isMySessionsLoading =
+    groupsQuery.isLoading ||
+    mySessionsQuery.isLoading ||
+    joinedSessionsQuery.isLoading ||
+    groupSessionQueries.some((query) => query.isLoading);
+  const isMySessionsError =
+    groupsQuery.isError ||
+    mySessionsQuery.isError ||
+    joinedSessionsQuery.isError ||
+    groupSessionQueries.some((query) => query.isError);
 
   // --- Create session ---
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -180,9 +239,22 @@ export function useMatchesPageData(initialSessionId: number | null) {
     activeSport,
     setActiveSport,
     sportsByKey,
-    sessions,
-    isLoading,
-    isError,
+
+    discoverSessions,
+    isDiscoverLoading,
+    isDiscoverError,
+    searchText,
+    setSearchText,
+    searchMode,
+    setSearchMode,
+
+    mySessionDateGroups,
+    isMySessionsLoading,
+    isMySessionsError,
+    isHistoryPanelCollapsed,
+    toggleHistoryPanelCollapsed,
+    collapsedDateKeys,
+    toggleDateGroupCollapsed,
 
     isCreateModalOpen,
     openCreateModal,

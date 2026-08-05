@@ -127,7 +127,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 56 | CLIENT-SESSION-3 | Capacity + fee/pricing fields in `CreateSessionModal` (SESSION-5) | `DONE` |
 | 57 | CLIENT-SESSION-4 | Invite-friends + auto-approve at creation, plus approval queue UI (SESSION-6) | `DONE` |
 | 58 | CLIENT-SESSION-5 | Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown (LOC-2) | `DONE` |
-| 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `TODO` |
+| 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `DONE` |
 | 60 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 | 61 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `TODO` |
 
@@ -233,7 +233,7 @@ GRP-8 (new, filed 2026-07-24, amended same day) — GRP-3, GRP-4, GRP-7 (all DON
 | BE-2: logout derives user from principal | `modules/auth/docs/BACKLOG_MVP.md` · A3 | AUTH-4 (production) | `DONE` (2026-07-08) |
 | BE-3: login/registration rate limiting | `modules/auth/docs/BACKLOG_MVP.md` · A5 | a future client ticket (not yet filed) for rate-limit error surfacing, split out of AUTH-6 on 2026-07-12 | `TODO` |
 | Matches/tournaments module — `modules/session` + `modules/location` | `modules/session/docs/BACKLOG_MVP.md` (SESSION-1/2/3), `modules/location/docs/BACKLOG_MVP.md` (LOC-1), `modules/social/group-impl/docs/BACKLOG_MVP.md` (GROUP-RECUR-1) | de-mocking HF-4 | `DONE` (2026-07-30) |
-| SESSION-4: standalone session discovery | `modules/session/docs/BACKLOG_MVP.md` · SESSION-4 | a future client ticket (not yet filed) — real "Join a match" | `DONE` (2026-08-02) |
+| SESSION-4: standalone session discovery | `modules/session/docs/BACKLOG_MVP.md` · SESSION-4 | CLIENT-SESSION-6 — real "Join a match" Discover surface | `DONE` (2026-08-02) |
 | SESSION-5: session capacity + fee/pricing | `modules/session/docs/BACKLOG_MVP.md` · SESSION-5 | a future client ticket (not yet filed) — capacity/fee fields in `CreateSessionModal` + display | `DONE` (2026-08-02) |
 | SESSION-6: join-approval workflow + invite-friends-at-creation | `modules/session/docs/BACKLOG_MVP.md` · SESSION-6 | CLIENT-SESSION-4 — invite/auto-approve UI + approval queue | `DONE` (2026-08-02) |
 | LOC-2: favorite locations | `modules/location/docs/BACKLOG_MVP.md` · LOC-2 | a future client ticket (not yet filed) — favorite heart toggle + `CreateSessionModal` favorites dropdown | `DONE` (2026-08-01) |
@@ -2726,18 +2726,30 @@ mock-only route-ordering bug where `GET /api/locations/:locationId` intercepted
 `GET /api/locations/favorites` before it, causing a stuck "Loading…" in e2e.
 
 ### CLIENT-SESSION-6 · Standalone session discover — real "Join a match" browse UI
-**Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (the `onJoinMatch` prop it
-introduces) · **Filed:** 2026-08-03 · **Spec:** backend contract:
-`modules/session/docs/SESSION-4_STANDALONE_DISCOVERY.md`
+**Status:** `DONE` (2026-08-05) · **Type:** Feature · **Dependency:** CLIENT-SESSION-1 (`DONE` — the
+`/matches` page this ticket rebuilds) · **Filed:** 2026-08-03 · **Spec:** backend contract:
+`modules/session/docs/SESSION-4_STANDALONE_DISCOVERY.md` · **Summary:**
+`client/docs/CLIENT-SESSION-6_STANDALONE_DISCOVERY.md`
 
-**What ships:** a browse/discover UI (modal or dedicated view — TBD at design time) listing joinable
-standalone sessions via `GET /api/sessions/discover` (optional `sportId` filter, `SCHEDULED`-only,
-gated server-side to the caller's active sport profiles, excludes sessions the caller created or has
-joined), with a join action per row. Repoints `UpcomingMatches`'s `onJoinMatch` (currently
-`navigate('/matches')` per CLIENT-SESSION-2) at this real surface instead. Also a candidate to surface
-`GET /api/sessions/joined` (the 3-section matches page: discover / joined+ongoing / joined+completed)
-if scoped in at design time — confirm against `MatchesPage`'s current single-list layout before
-committing to that expansion.
+**What ships:** `/matches` rebuilt into two panels: a **Discover** grid (`GET /api/sessions/discover`,
+optional `sportId` filter tied to the sport switcher, client-side search-by-title/location) and a
+collapsible, calendar-day-grouped **"My sessions"** panel (everything the caller created, manages via
+a group, or has joined — any status, one merged list, not split into separate upcoming/history
+sections).
+
+**Delta (2026-08-05, at pickup):** this ticket's original dependency note ("CLIENT-SESSION-2 — the
+`onJoinMatch` prop it introduces") was stale — that prop doesn't exist; it's CLIENT-SESSION-7 scope
+(still `TODO`), corrected here to depend on CLIENT-SESSION-1 instead. Repointing
+`UpcomingMatches`'s rail CTA at this new Discover surface remains CLIENT-SESSION-7's job, not this
+ticket's — there was no rail entry point to repoint yet at pickup. The "modal or dedicated view, TBD
+at design time" open question was resolved by a user-provided design export (a two-panel layout, not
+either original option) rather than a fresh design pass — see the summary doc.
+
+**Delta (2026-08-05, at close-out):** `GET /api/sessions/joined`'s `status` param — required at
+SESSION-4 ship time, with an explicit "add an all-statuses mode if a real caller needs it" note — is
+now optional. The "My sessions" panel needed the caller's whole joined set in one date-grouped list;
+omitting `status` returns every `SessionStatus` in one page instead of a 4-call fan-out. Backward
+compatible, see `modules/session/docs/SESSION-4_STANDALONE_DISCOVERY.md`'s own delta note.
 
 ### SPORT-2 · Static per-sport attribute config + `SportAttributesFields` component
 **Status:** `TODO` · **Type:** Component · **Dependency:** none · **Filed:** 2026-08-01 · **Spec:**
