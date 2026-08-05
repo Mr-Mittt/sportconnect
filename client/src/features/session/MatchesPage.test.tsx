@@ -115,11 +115,21 @@ function session(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function mockGet(sessions: unknown[]) {
+/** `mySessions` seeds `/sessions/mine` (the "My sessions" panel); `discoverSessions` seeds
+ * `/sessions/discover` (the Discover grid) — most tests only care about one or the other. */
+function mockGet({
+  mySessions = [],
+  discoverSessions = [],
+}: {
+  mySessions?: unknown[];
+  discoverSessions?: unknown[];
+}) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
     if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
     if (url === '/groups/user/user-1') return apiResponse(pageResponse([]));
-    if (url === '/sessions/mine') return apiResponse(pageResponse(sessions));
+    if (url === '/sessions/mine') return apiResponse(pageResponse(mySessions));
+    if (url === '/sessions/discover') return apiResponse(pageResponse(discoverSessions));
+    if (url === '/sessions/joined') return apiResponse(pageResponse([]));
     if (url === '/sessions/1') return apiResponse(session());
     if (url === '/sessions/1/participants') return apiResponse(pageResponse([]));
     throw new Error(`unexpected GET ${url}`);
@@ -137,34 +147,53 @@ describe('MatchesPage', () => {
     useAuthStore.setState({ user: null, accessToken: null, isBootstrapping: false });
   });
 
-  it('renders the session list', async () => {
-    mockGet([session()]);
+  it('renders the My sessions panel from /sessions/mine', async () => {
+    mockGet({ mySessions: [session()] });
     render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
 
     expect(await screen.findByText('Sunday pickup run')).toBeInTheDocument();
     expect(screen.getByText('Riverside Courts')).toBeInTheDocument();
   });
 
-  it('shows an empty state when there are no sessions', async () => {
-    mockGet([]);
+  it('renders the Discover grid from /sessions/discover', async () => {
+    mockGet({ discoverSessions: [session({ id: 2, title: 'Evening scrimmage' })] });
     render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
 
-    expect(await screen.findByText('No sessions for this sport yet.')).toBeInTheDocument();
+    expect(await screen.findByText('Evening scrimmage')).toBeInTheDocument();
+  });
+
+  it('shows empty states when there are no sessions in either panel', async () => {
+    mockGet({});
+    render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
+
+    expect(await screen.findByText('No sessions to discover for this sport yet.')).toBeInTheDocument();
+    expect(screen.getByText("You haven't created or joined any sessions yet.")).toBeInTheDocument();
   });
 
   it('opens the create session dialog from the "Create session" pill', async () => {
     const user = userEvent.setup();
-    mockGet([]);
+    mockGet({});
     render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
-    await screen.findByText('No sessions for this sport yet.');
+    await screen.findByText('No sessions to discover for this sport yet.');
 
     await user.click(screen.getByRole('button', { name: 'Create session' }));
     expect(await screen.findByRole('heading', { name: 'Create your session' })).toBeInTheDocument();
   });
 
-  it('clicking a session card opens the detail dialog', async () => {
+  it('clicking a My sessions card opens the detail dialog', async () => {
     const user = userEvent.setup();
-    mockGet([session()]);
+    mockGet({ mySessions: [session()] });
+    render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
+    await screen.findByText('Sunday pickup run');
+
+    await user.click(screen.getByRole('button', { name: /Sunday pickup run/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('Riverside Courts')).toBeInTheDocument();
+  });
+
+  it('clicking a Discover card opens the detail dialog', async () => {
+    const user = userEvent.setup();
+    mockGet({ discoverSessions: [session()] });
     render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
     await screen.findByText('Sunday pickup run');
 
@@ -174,10 +203,39 @@ describe('MatchesPage', () => {
   });
 
   it('pre-opens the detail dialog from the ?session= deep link', async () => {
-    mockGet([session()]);
+    mockGet({ mySessions: [session()] });
     render(<MatchesPage />, { wrapper: wrapperFor('/matches?session=1') });
 
     const dialog = await screen.findByRole('dialog');
     expect(await within(dialog).findByText('Riverside Courts')).toBeInTheDocument();
+  });
+
+  it('the "Hide my sessions" toggle collapses the My sessions panel', async () => {
+    const user = userEvent.setup();
+    mockGet({ mySessions: [session()] });
+    render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
+    await screen.findByText('Sunday pickup run');
+
+    expect(screen.getByRole('region', { name: 'My sessions' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Hide my sessions' }));
+    expect(screen.queryByRole('region', { name: 'My sessions' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Show my sessions' }));
+    expect(screen.getByRole('region', { name: 'My sessions' })).toBeInTheDocument();
+  });
+
+  it('the search input filters the Discover grid by title', async () => {
+    const user = userEvent.setup();
+    mockGet({
+      discoverSessions: [session({ id: 1, title: 'Sunday pickup run' }), session({ id: 2, title: 'Evening scrimmage' })],
+    });
+    render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
+    await screen.findByText('Sunday pickup run');
+    expect(screen.getByText('Evening scrimmage')).toBeInTheDocument();
+
+    await user.type(screen.getByRole('textbox', { name: 'Search sessions' }), 'pickup');
+
+    expect(screen.getByText('Sunday pickup run')).toBeInTheDocument();
+    expect(screen.queryByText('Evening scrimmage')).not.toBeInTheDocument();
   });
 });

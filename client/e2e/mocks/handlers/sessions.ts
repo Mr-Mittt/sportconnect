@@ -2,6 +2,7 @@ import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import type { ParticipantStatus, Session, SessionParticipant } from '../../../src/shared/types/session.ts';
 import {
+  mockDiscoverableSession,
   mockFriend,
   mockGroupSession,
   mockLocation,
@@ -62,7 +63,12 @@ interface SessionsSession {
 // invalidateQueries would otherwise clobber a static fixture on refetch).
 function defaultSessionsSession(): SessionsSession {
   return {
-    sessionsState: [{ ...mockSession }, { ...mockGroupSession }, { ...mockOwnedGroupSession }],
+    sessionsState: [
+      { ...mockSession },
+      { ...mockGroupSession },
+      { ...mockOwnedGroupSession },
+      { ...mockDiscoverableSession },
+    ],
     // CLIENT-SESSION-4: mockOwnedGroupSession (mockUser is group_owner) starts with one
     // pre-seeded REQUESTED row, so the approval queue has something to show without needing a
     // second live authenticated session.
@@ -167,6 +173,42 @@ export const sessionHandlers: HttpHandler[] = [
     const results = sessionsSessions
       .get(sessionIdFromRequest(request))
       .sessionsState.filter((candidate) => candidate.groupId === null && candidate.createdBy === mockUser.id);
+    return HttpResponse.json(apiResponse(mockPageResponse(results), 'Sessions retrieved successfully'));
+  }),
+
+  // CLIENT-SESSION-6: registered before the `:sessionId` catch-all below, same route-ordering
+  // lesson CLIENT-SESSION-5 found for /locations/favorites — MSW matches in array order, and
+  // `:sessionId` would otherwise swallow the literal strings "discover"/"joined" as a bogus id
+  // (Number("discover") is NaN, so it'd fall through to a false "Session not found").
+  http.get('/api/sessions/discover', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sportIdParam = new URL(request.url).searchParams.get('sportId');
+    const sportId = sportIdParam !== null ? Number(sportIdParam) : null;
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const results = session.sessionsState.filter((candidate) => {
+      if (candidate.groupId !== null || candidate.status !== 'SCHEDULED') return false;
+      if (candidate.createdBy === mockUser.id) return false;
+      if (sportId !== null && candidate.sportId !== sportId) return false;
+      const alreadyJoined = (session.participantsState[candidate.id] ?? []).some(
+        (p) => p.userId === mockUser.id && p.status === 'JOINED',
+      );
+      return !alreadyJoined;
+    });
+    return HttpResponse.json(apiResponse(mockPageResponse(results), 'Sessions retrieved successfully'));
+  }),
+
+  http.get('/api/sessions/joined', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const statusParam = new URL(request.url).searchParams.get('status');
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const results = session.sessionsState.filter((candidate) => {
+      if (statusParam !== null && candidate.status !== statusParam) return false;
+      return (session.participantsState[candidate.id] ?? []).some(
+        (p) => p.userId === mockUser.id && p.status === 'JOINED',
+      );
+    });
     return HttpResponse.json(apiResponse(mockPageResponse(results), 'Sessions retrieved successfully'));
   }),
 

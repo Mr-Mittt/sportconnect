@@ -78,4 +78,17 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("userId") UUID userId,
             @Param("joinedStatus") ParticipantStatus joinedStatus,
             Pageable pageable);
+
+    /**
+     * Same as {@link #findJoinedSessionsByStatus} but across every status — CLIENT-SESSION-6's
+     * single "My sessions" panel needs the caller's whole joined history/upcoming in one page
+     * rather than fanning out one call per {@code SessionStatus}.
+     */
+    @Query("SELECT s FROM Session s "
+            + "WHERE s.id IN (SELECT sp.sessionId FROM SessionParticipant sp "
+            + "    WHERE sp.userId = :userId AND sp.status = :joinedStatus)")
+    Page<Session> findJoinedSessions(
+            @Param("userId") UUID userId,
+            @Param("joinedStatus") ParticipantStatus joinedStatus,
+            Pageable pageable);
 }

@@ -652,6 +652,41 @@ export const mockSecondSessionJoinRequest: SessionParticipant = {
   createdAt: '2026-07-17T00:05:00',
 };
 
+// CLIENT-SESSION-6: a standalone session created by someone other than mockUser, for a sport
+// mockUser holds an active profile for (Soccer, sportId 5) and hasn't joined — the only fixture
+// eligible for GET /api/sessions/discover (mockSession is self-created; mockGroupSession/
+// mockOwnedGroupSession are GROUP_RECURRING, and discover is standalone-only). Without this,
+// discover would be permanently empty in every e2e run, since nothing else in this file matches
+// its exclusion rules.
+export const mockDiscoverableSession: Session = {
+  id: 4,
+  groupId: null,
+  sessionType: 'STANDALONE',
+  createdBy: 'other-user-id',
+  createdByFullName: 'Priya Shah',
+  sportId: 5,
+  sportName: 'Soccer',
+  title: 'Weekend 5-a-side',
+  description: 'Open pickup game, all welcome.',
+  location: { ...mockLocation, id: 4, sportId: 5, sportName: 'Soccer', name: 'Central Turf Park' },
+  locationNote: null,
+  scheduledStart: '2026-08-06T18:00:00', // fixed — see mockSession's note on hoursFromNow()
+  scheduledEndAt: null,
+  status: 'SCHEDULED',
+  cancelReason: null,
+  cancelledBy: null,
+  cancelledByFullName: null,
+  cancelledAt: null,
+  participantCount: 4,
+  capacity: 10,
+  feeType: 'FREE',
+  feeAmountVnd: null,
+  initialSlot: 0,
+  autoApprove: true,
+  createdAt: '2026-06-23T10:00:00',
+  updatedAt: '2026-06-23T10:00:00',
+};
+
 /** Builds a Spring Data `Page<T>`-shaped response from a full content array. */
 export function mockPageResponse<T>(content: T[]): PageResponse<T> {
   return {

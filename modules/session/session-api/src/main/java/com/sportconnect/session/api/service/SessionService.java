@@ -88,8 +88,10 @@ public interface SessionService {
 
     /**
      * Sessions (standalone or group-linked) the caller currently has a JOINED participant row
-     * for, restricted to a single status — backs per-status sections on the matches page (e.g.
-     * "joined + ongoing", "joined + completed").
+     * for. {@code status} null returns every status in one page (CLIENT-SESSION-6's single
+     * "My sessions" panel, avoiding a 4-call fan-out across SCHEDULED/ONGOING/COMPLETED/
+     * CANCELLED); a given status restricts to just that one, same as before this parameter
+     * became optional.
      */
     Page<SessionResponse> getJoinedSessions(UUID userId, SessionStatus status, Pageable pageable);
 }
