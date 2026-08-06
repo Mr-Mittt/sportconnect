@@ -76,4 +76,12 @@ describe('AddSportModal', () => {
     render(<AddSportModal {...baseProps} isError />);
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't add that sport");
   });
+
+  it('renders no callout by default, and the prompt message when given one', () => {
+    const { rerender } = render(<AddSportModal {...baseProps} />);
+    expect(screen.queryByText(/add a sport first/i)).not.toBeInTheDocument();
+
+    rerender(<AddSportModal {...baseProps} promptMessage="Hey champ, add a sport first!" />);
+    expect(screen.getByText('Hey champ, add a sport first!')).toBeInTheDocument();
+  });
 });

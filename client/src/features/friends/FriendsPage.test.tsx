@@ -68,6 +68,7 @@ function staticGetResponse(url: string): { data: unknown } | undefined {
   if (url === '/posts/broadcast') return emptyPage();
   if (url.startsWith('/groups/user/')) return emptyPage();
   if (url === '/sessions/mine') return emptyPage();
+  if (url === '/sessions/discover') return emptyPage();
   if (url === '/sports/profiles/user/me') return apiResponse([]);
   return undefined;
 }
@@ -201,5 +202,27 @@ describe('FriendsPage', () => {
     await user.click(sendButton);
 
     expect(postSpy).toHaveBeenCalledWith('/users/friends/requests', { receiverId: 'u1' });
+  });
+
+  // CLIENT-SESSION-7: this page's upcoming matches are already empty by default (staticGetResponse
+  // above), and it has no sport switcher to anchor a modal below — the ModalAnchorProvider added
+  // for this ticket anchors to the page's own sr-only h1 instead.
+  it('empty upcoming matches: "Create a match"/"Join a match" open their own modals', async () => {
+    mockFriendsGet();
+    const user = userEvent.setup();
+    render(<FriendsPage />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Priya Shah')).toBeInTheDocument());
+    expect(screen.getByText('No upcoming matches.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Create a match' }));
+    expect(await screen.findByRole('dialog', { name: 'Create your session' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Create your session' })).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Join a match' }));
+    expect(await screen.findByRole('dialog', { name: 'Discover sessions' })).toBeInTheDocument();
   });
 });

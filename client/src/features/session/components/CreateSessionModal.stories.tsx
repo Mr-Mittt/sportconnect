@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
+import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import type { Location } from '@/shared/types/location';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CreateSessionModal } from './CreateSessionModal';
@@ -100,13 +101,18 @@ const meta = {
     onSubmit: () => {},
     isSubmitting: false,
     isError: false,
+    availableSports: [],
+    onAddSport: () => {},
+    isAddingSport: false,
+    isAddSportError: false,
   },
 } satisfies Meta<typeof CreateSessionModal>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** No `activeSport` and more than one sport profile — the "Select a sport" blank default. */
+/** No `activeSport` and more than one sport profile — prefills the first one (`sportsByKey`'s
+ * own order, "football" here). */
 export const Default: Story = {};
 
 /** `activeSport` set to a real sport pre-selects the Sport field. */
@@ -137,4 +143,13 @@ export const SubmitError: Story = {
 /** CLIENT-SESSION-5: the location field's favorites dropdown with no favorites for this sport yet. */
 export const NoFavoriteLocationsYet: Story = {
   args: { activeSport: 'basketball', favoriteLocations: [] },
+};
+
+/** CLIENT-SESSION-7 follow-up: zero sport profiles — the whole form is replaced by the inline
+ * "add a sport first" prompt, staying on this same Dialog instead of opening a second one. */
+export const NoSportProfilesYet: Story = {
+  args: {
+    sportsByKey: {} as Record<SportKey, SportProfile>,
+    availableSports: ALL_SPORT_KEYS,
+  },
 };

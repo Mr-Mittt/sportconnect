@@ -24,8 +24,11 @@ import {
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
+import { AddSportFields, type AddSportProfileSubmission } from '@/shared/components/AddSportFields';
 import type { CreateSessionPayload } from '../types';
 import { SessionStartTimePicker } from './SessionStartTimePicker';
+
+const NO_SPORTS_PROMPT = "Hey champ, add a sport first — can't host a match out of thin air! 🏆";
 
 const INVITE_SEARCH_MIN_LENGTH = 3;
 
@@ -393,6 +396,17 @@ interface CreateSessionModalProps {
   onSubmit: (payload: CreateSessionPayload) => void;
   isSubmitting: boolean;
   isError: boolean;
+
+  /** CLIENT-SESSION-7 follow-up: when the caller has zero sport profiles (`sportsByKey` empty),
+   * this form is replaced by an inline "add a sport first" prompt (`AddSportFields`) instead of
+   * closing this Dialog and opening a second one — see that component's own doc comment for why.
+   * `availableSports` is the same list the hosting page already computes for its own
+   * `AddSportModal` (SportSwitcher's "+" pill) — always `ALL_SPORT_KEYS` in this gated case,
+   * since a caller with zero profiles has no sport to exclude. */
+  availableSports: SportKey[];
+  onAddSport: (payload: AddSportProfileSubmission) => void;
+  isAddingSport: boolean;
+  isAddSportError: boolean;
 }
 
 /**
@@ -478,16 +492,33 @@ export function CreateSessionModal({
   onSubmit,
   isSubmitting,
   isError,
+  availableSports,
+  onAddSport,
+  isAddingSport,
+  isAddSportError,
 }: CreateSessionModalProps) {
   const sportKeys = Object.keys(sportsByKey) as SportKey[];
+  // Prefers the hosting page's active SportSwitcher pill; otherwise falls back to the caller's
+  // first sport profile (in sportsByKey's own order) — covers both "exactly one profile" and
+  // "2+ profiles with 'All' selected" the same way, rather than leaving the field blank in the
+  // latter case. Only stays blank when the caller has no sport profiles at all.
   const initialSport: SportKey | '' =
     activeSport !== undefined && activeSport !== 'all'
       ? activeSport
-      : sportKeys.length === 1
+      : sportKeys.length > 0
         ? sportKeys[0]
         : '';
 
   const [selectedSport, setSelectedSport] = useState<SportKey | ''>(initialSport);
+  // Derived at render time rather than synced via an effect+setState (which would cascade an
+  // extra render every time). This Dialog stays mounted while the caller adds their first sport
+  // (see AddSportFields' own doc comment) — `sportKeys` transitions from empty to non-empty
+  // *without* this component remounting, so `selectedSport`'s useState initializer above never
+  // re-runs on its own; falling back to `initialSport` (recomputed fresh from current props every
+  // render) here is what actually picks a sport once one becomes available, without ever
+  // clobbering a sport the caller already picked themselves (that only happens while
+  // `selectedSport` is still '').
+  const displaySport: SportKey | '' = selectedSport !== '' ? selectedSport : initialSport;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [locationNote, setLocationNote] = useState('');
@@ -507,7 +538,7 @@ export function CreateSessionModal({
    * every render, not tracked as separate per-field "touched" flags). */
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
-  const effectiveSportId = selectedSport !== '' ? SPORT_ID_BY_KEY[selectedSport] : undefined;
+  const effectiveSportId = displaySport !== '' ? SPORT_ID_BY_KEY[displaySport] : undefined;
 
   // CLIENT-SESSION-5: report the effective sportId up on every change (including the initial
   // pre-selected value) so the parent can scope the favorites dropdown's query — this field
@@ -567,8 +598,25 @@ export function CreateSessionModal({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent fixedHeight className="max-w-2xl">
+        {/* The gated "add a sport first" view (see sportKeys.length === 0 below) is a compact
+            3-field form — sized like the standalone AddSportModal (max-w-md, shrink-to-fit)
+            instead of this form's own wide/fixed-height treatment, so its "Add sport" button
+            sits right at the bottom of the modal instead of floating above dead space. */}
+        <DialogContent
+          fixedHeight={sportKeys.length > 0}
+          className={sportKeys.length > 0 ? 'max-w-2xl' : 'max-w-md'}
+        >
           <DialogHeader title="Create your session" className="border-hairline-b border-border px-4 py-3" />
+          {sportKeys.length === 0 ? (
+            <AddSportFields
+              availableSports={availableSports}
+              onSubmit={onAddSport}
+              isSubmitting={isAddingSport}
+              isError={isAddSportError}
+              promptMessage={NO_SPORTS_PROMPT}
+            />
+          ) : (
+            <>
           <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-4 py-3.5">
             <Collapsible open={isBasicInfoOpen} onOpenChange={setIsBasicInfoOpen}>
               <CollapsibleTrigger className="border-hairline-b justify-center gap-1.5 border-border px-1.75 py-1.5">
@@ -584,7 +632,7 @@ export function CreateSessionModal({
                     <Select
                       id="create-session-sport"
                       aria-required="true"
-                      value={selectedSport}
+                      value={displaySport}
                       onChange={(event) => setSelectedSport(event.target.value as SportKey)}
                     >
                       <option value="" disabled>
@@ -810,6 +858,8 @@ export function CreateSessionModal({
               {isSubmitting ? 'Creating…' : 'Create session'}
             </Button>
           </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
       <LocationPicker {...locationPicker} />

@@ -116,16 +116,20 @@ function session(overrides: Record<string, unknown> = {}) {
 }
 
 /** `mySessions` seeds `/sessions/mine` (the "My sessions" panel); `discoverSessions` seeds
- * `/sessions/discover` (the Discover grid) — most tests only care about one or the other. */
+ * `/sessions/discover` (the Discover grid) — most tests only care about one or the other.
+ * `sportProfiles` defaults to the module-level fixture (one active Basketball profile) —
+ * overridden to `[]` by the zero-sport-profile gate test below. */
 function mockGet({
   mySessions = [],
   discoverSessions = [],
+  sportProfiles: sportProfilesOverride = sportProfiles,
 }: {
   mySessions?: unknown[];
   discoverSessions?: unknown[];
+  sportProfiles?: unknown[];
 }) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-    if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+    if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfilesOverride);
     if (url === '/groups/user/user-1') return apiResponse(pageResponse([]));
     if (url === '/sessions/mine') return apiResponse(pageResponse(mySessions));
     if (url === '/sessions/discover') return apiResponse(pageResponse(discoverSessions));
@@ -237,5 +241,21 @@ describe('MatchesPage', () => {
 
     expect(screen.getByText('Sunday pickup run')).toBeInTheDocument();
     expect(screen.queryByText('Evening scrimmage')).not.toBeInTheDocument();
+  });
+
+  it('auto-opens the Add sport modal on page load when the caller has zero sport profiles', async () => {
+    mockGet({ sportProfiles: [] });
+    render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
+
+    const dialog = await screen.findByRole('dialog', { name: 'Add a sport' });
+    expect(within(dialog).getByText(/add a sport first/i)).toBeInTheDocument();
+  });
+
+  it('does not open the Add sport modal when the caller already has a sport profile', async () => {
+    mockGet({ mySessions: [session()] });
+    render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
+
+    await screen.findByText('Sunday pickup run');
+    expect(screen.queryByRole('dialog', { name: 'Add a sport' })).not.toBeInTheDocument();
   });
 });

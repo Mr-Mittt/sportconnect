@@ -2176,8 +2176,17 @@ explicit go-ahead at each step (full story in A3's summary doc):
   from a user-provided design export, not the backlog's original "modal or dedicated view, TBD".
   Backend delta: `GET /api/sessions/joined`'s `status` param is now optional (omitted returns every
   status in one page) — added so "My sessions" needs one query instead of a 4-call fan-out per
-  `SessionStatus`; fully backward compatible. CLIENT-SESSION-7 (still `TODO`) still owns repointing
-  the Home Feed/Groups/Friends rail's "Join a match" CTA at this new surface.
+  `SessionStatus`; fully backward compatible.
+- **`CLIENT-SESSION-7` (`DONE`, 2026-08-06,
+  `client/docs/CLIENT-SESSION-7_RAIL_CTAS_AND_HOOK_EXTRACTION.md`)** — `UpcomingMatches`'s empty
+  state gains "Create a match"/"Join a match" CTAs on Home Feed/Groups/Friends. Scope grew at
+  pickup (user decision): "Join a match" opens a new `SessionDiscoverModal` (reusing a
+  `SessionDiscoverPanel` extracted out of `MatchesPage`) rather than just navigating to `/matches`
+  as originally specced. `useCreateSessionModalData` (extracted out of `useMatchesPageData`) and
+  the new `useDiscoverModalData` are each a self-contained hook shared by all four pages, so there's
+  exactly one create-session and one Discover implementation, not four diverging copies.
+  `FriendsPage` gained `ModalAnchorProvider` (anchored to its own hidden `<h1>`, no pill row to use
+  instead) — the only rail-hosting page that didn't have one yet.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

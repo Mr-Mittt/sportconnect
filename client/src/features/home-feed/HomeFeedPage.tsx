@@ -4,9 +4,14 @@ import { useAuthStore } from '@/app/authStore';
 import { useGroupsPageStore } from '@/app/groupsPageStore';
 import { useHomeFeedStore } from '@/app/homeFeedStore';
 import { usePost } from '@/features/feed/hooks/usePost';
-import { sportKeyForId } from '@/features/feed/sportIdMap';
+import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
+import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
+import { SessionDetailModal } from '@/features/session/components/SessionDetailModal';
+import { SessionDiscoverModal } from '@/features/session/components/SessionDiscoverModal';
+import { useCreateSessionModalData } from '@/features/session/useCreateSessionModalData';
+import { useDiscoverModalData } from '@/features/session/useDiscoverModalData';
 import { AddSportModal } from '@/shared/components/AddSportModal';
 import { CommentSection } from '@/shared/components/CommentSection';
 import { CreatePostForm } from '@/shared/components/CreatePostForm';
@@ -170,6 +175,13 @@ export function HomeFeedPage() {
   const sportSwitcherRef = useRef<HTMLDivElement>(null);
   const modalAnchorBottom = useAnchorBottom(sportSwitcherRef);
 
+  // CLIENT-SESSION-7: UpcomingMatches' empty-state CTAs. One hook/modal instance shared with
+  // Groups/Friends/Matches (create) and its own self-contained Discover modal instance (each
+  // rail-hosting page gets one, scoped to that page's own active sport pill).
+  const createSessionModalData = useCreateSessionModalData();
+  const activeSportId = activeSport === 'all' ? undefined : SPORT_ID_BY_KEY[activeSport];
+  const discoverModalData = useDiscoverModalData(activeSportId);
+
   return (
     <ModalAnchorProvider value={modalAnchorBottom}>
       <main className="py-4">
@@ -231,6 +243,8 @@ export function HomeFeedPage() {
               sportsByKey={sportsByKey}
               onSeeAll={() => navigate('/matches')}
               onSelectMatch={(sessionId) => navigate(`/matches?session=${sessionId}`)}
+              onCreateMatch={createSessionModalData.openCreateModal}
+              onJoinMatch={discoverModalData.openDiscoverModal}
             />
             <TrendingHashtags
               hashtags={data.hashtags}
@@ -328,6 +342,74 @@ export function HomeFeedPage() {
           isError={hashtagResultsData.isError}
           onRetry={hashtagResultsData.retryPosts}
           isLoadMoreError={hashtagResultsData.isLoadMorePostsError}
+        />
+        <CreateSessionModal
+          key={createSessionModalData.isCreateModalOpen ? 'open' : 'closed'}
+          isOpen={createSessionModalData.isCreateModalOpen}
+          onClose={createSessionModalData.closeCreateModal}
+          sportsByKey={sportsByKey}
+          activeSport={activeSport}
+          selectedLocation={createSessionModalData.selectedLocationForCreate}
+          onOpenLocationPicker={createSessionModalData.onOpenLocationPickerForCreate}
+          locationPicker={createSessionModalData.locationPickerForCreate}
+          friends={createSessionModalData.friends}
+          isFriendsLoading={createSessionModalData.isFriendsLoading}
+          onEffectiveSportChange={createSessionModalData.onEffectiveSportChangeForCreate}
+          favoriteLocations={createSessionModalData.favoriteLocationsForCreate}
+          isFavoriteLocationsLoading={createSessionModalData.isFavoriteLocationsLoading}
+          onSelectLocation={createSessionModalData.onSelectLocationForCreate}
+          onSubmit={createSessionModalData.submitCreate}
+          isSubmitting={createSessionModalData.isCreating}
+          isError={createSessionModalData.isCreateError}
+          availableSports={availableSports}
+          onAddSport={addSportMutation.mutate}
+          isAddingSport={addSportMutation.isPending}
+          isAddSportError={addSportMutation.isError}
+        />
+        <SessionDiscoverModal
+          isOpen={discoverModalData.isDiscoverModalOpen}
+          onClose={discoverModalData.closeDiscoverModal}
+          searchMode={discoverModalData.searchMode}
+          onSearchModeChange={discoverModalData.setSearchMode}
+          searchText={discoverModalData.searchText}
+          onSearchTextChange={discoverModalData.setSearchText}
+          sessions={discoverModalData.discoverSessions}
+          isLoading={discoverModalData.isDiscoverLoading}
+          isError={discoverModalData.isDiscoverError}
+          sportsByKey={sportsByKey}
+          onViewDetails={discoverModalData.onViewDetails}
+          availableSports={availableSports}
+          onAddSport={addSportMutation.mutate}
+          isAddingSport={addSportMutation.isPending}
+          isAddSportError={addSportMutation.isError}
+        />
+        <SessionDetailModal
+          isOpen={discoverModalData.selectedSessionId !== null}
+          onClose={discoverModalData.closeDetail}
+          session={discoverModalData.selectedSession}
+          isLoading={discoverModalData.isSessionLoading}
+          isError={discoverModalData.isSessionError}
+          participants={discoverModalData.participants}
+          isParticipantsLoading={discoverModalData.isParticipantsLoading}
+          isParticipantsError={discoverModalData.isParticipantsError}
+          currentUserId={discoverModalData.currentUserId}
+          canManage={discoverModalData.canManage}
+          onJoin={discoverModalData.onJoin}
+          isJoining={discoverModalData.isJoining}
+          isJoinError={discoverModalData.isJoinError}
+          onLeave={discoverModalData.onLeave}
+          isLeaving={discoverModalData.isLeaving}
+          isLeaveError={discoverModalData.isLeaveError}
+          onConfirmCancel={discoverModalData.onConfirmCancel}
+          isCancelling={discoverModalData.isCancelling}
+          isCancelError={discoverModalData.isCancelError}
+          requestedParticipants={discoverModalData.requestedParticipants}
+          isRequestedParticipantsLoading={discoverModalData.isRequestedParticipantsLoading}
+          isRequestedParticipantsError={discoverModalData.isRequestedParticipantsError}
+          onApproveParticipant={discoverModalData.onApproveParticipant}
+          isApprovingParticipant={discoverModalData.isApprovingParticipant}
+          onRejectParticipant={discoverModalData.onRejectParticipant}
+          isRejectingParticipant={discoverModalData.isRejectingParticipant}
         />
       </main>
     </ModalAnchorProvider>

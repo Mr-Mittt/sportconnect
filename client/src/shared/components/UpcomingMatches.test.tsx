@@ -86,6 +86,8 @@ const renderMatches = (
       sportsByKey={sportsByKey}
       onSeeAll={() => {}}
       onSelectMatch={() => {}}
+      onCreateMatch={() => {}}
+      onJoinMatch={() => {}}
       {...overrides}
     />,
   );
@@ -108,11 +110,34 @@ describe('UpcomingMatches', () => {
 
   it('renders the empty state for a sport with no matches', () => {
     renderMatches({ matches: matches.filter((m) => m.sportId !== SPORT_ID.tennis), activeSport: 'tennis' });
-    expect(screen.getByText('No upcoming matches for this sport.')).toBeInTheDocument();
+    expect(screen.getByText('No upcoming matches.')).toBeInTheDocument();
     expect(screen.queryAllByRole('button', { name: /View details/ })).toHaveLength(0);
     // Header and "See all" survive the empty state (mockup parity)
     expect(screen.getByText('Upcoming')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'See all' })).toBeInTheDocument();
+  });
+
+  it('renders "Create a match"/"Join a match" only in the empty state, wired to their own callbacks', async () => {
+    const user = userEvent.setup();
+    const onCreateMatch = vi.fn();
+    const onJoinMatch = vi.fn();
+
+    // Populated list — neither CTA renders.
+    renderMatches({ onCreateMatch, onJoinMatch });
+    expect(screen.queryByRole('button', { name: 'Create a match' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Join a match' })).not.toBeInTheDocument();
+
+    // Empty state — both render and call their own prop.
+    renderMatches({
+      matches: matches.filter((m) => m.sportId !== SPORT_ID.tennis),
+      activeSport: 'tennis',
+      onCreateMatch,
+      onJoinMatch,
+    });
+    await user.click(screen.getByRole('button', { name: 'Create a match' }));
+    expect(onCreateMatch).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Join a match' }));
+    expect(onJoinMatch).toHaveBeenCalledTimes(1);
   });
 
   it('shows a distinct status label per session status', () => {
