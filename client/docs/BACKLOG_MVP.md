@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-08-01
+**Last updated:** 2026-08-07
 
 ---
 
@@ -131,6 +131,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 60 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
 | 61 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 | 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `TODO` |
+| 63 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) | `TODO` |
 
 **Dependencies:**
 ```
@@ -174,6 +175,13 @@ CLIENT-SESSION-1 → CLIENT-SESSION-2 (redesigns the modal CLIENT-SESSION-1 buil
 SESSION-10 (`modules/session/docs/BACKLOG_MVP.md`, backend, `TODO`) → CLIENT-SESSION-8 (the comment
   section needs the backend endpoints before it can go real; filed together from the same
   `/vision` session, see `documentation/md/vision/SESSION_COMMENTS_VISION.md`).
+SPORT-3 (new, filed 2026-08-07) — soft dependency on **A6** (`modules/sport/sport-impl/docs/BACKLOG_MVP.md`,
+  `TODO`): SPORT-3 works against whatever `GET /api/sports` returns at pickup time either way (it's
+  already active-filtered server-side), but the two tickets were scoped together — A6 is what shrinks
+  the real active catalog down to Badminton + Pickleball, which is the concrete case SPORT-3's design
+  needs to render correctly (neither sport exists in today's hardcoded `SportKey` set). No code
+  dependency; picking up A6 first just means SPORT-3 is tested against the real target catalog
+  instead of a hypothetical one.
 FEED-4, FEED-5 → GRP-1 (Groups page epic; independent of Phase 6's other tickets).
 GRP-1, B7 (modules/social/group-impl/docs/BACKLOG_MVP.md) → GRP-2.
 GRP-1 → GRP-3 → GRP-4. GRP-3's "Waiting for user accept" section was blocked on B8
@@ -2798,3 +2806,58 @@ standalone and group-linked sessions — no conditional on `groupId`.
 **Explicitly out of scope:** live updates, new-comment notifications, moderation UI for
 creator/owner, locking the thread on cancellation — see SESSION-10's own out-of-scope list, same
 source of truth.
+
+### SPORT-3 · Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config
+**Status:** `TODO` · **Type:** Data layer (real integration) · **Dependency:** soft — **A6**
+(`modules/sport/sport-impl/docs/BACKLOG_MVP.md`, `TODO`) · **Filed:** 2026-08-07
+
+**Problem, verified against the actual code (not assumed):** despite SPORT-1's ticket text listing
+`GET /api/sports` as an endpoint it would use "for icon/name lookup," nothing in the client actually
+calls it — confirmed via a repo-wide grep for the endpoint path. The entire "which sports exist" /
+label / icon / color-ramp catalog is `shared/lib/sportProfileConfig.ts`'s hardcoded
+`SPORT_PROFILE_CONFIG`/`ALL_SPORT_KEYS` (`['football', 'basketball', 'tennis']`) plus
+`features/feed/sportIdMap.ts`'s hand-maintained `SPORT_ID_BY_KEY` (`{ football: 5, basketball: 6,
+tennis: 2 }`). Every "add a sport" flow (`AddSportModal`/`AddSportFields`, `CreateSessionModal`,
+`SessionDiscoverModal`, the Home Feed / Groups / Matches / Friends page rails) reads from these two
+static files, not the server. **This means the client cannot show Badminton or Pickleball at all
+today** — neither is in `SportKey`, `SPORT_PROFILE_CONFIG`, or `SPORT_ID_BY_KEY` — which becomes a
+hard blocker once **A6** deactivates every other sport server-side, since the client's entire
+hardcoded catalog will then reference only inactive sports.
+
+**What ships:**
+- A real data hook (`useSportCatalog()` or similar, TanStack Query) wrapping `GET /api/sports` — the
+  endpoint is already active-only server-side (`SportServiceImpl.getAllActiveSports()`), so no
+  client-side `isActive` filtering is needed; whatever the endpoint returns is the full "sports a
+  user can pick" list.
+- The catalog becomes the single source of truth for which sports the "Add sport" flow, session
+  creation/discovery, and every page-level `availableSports` computation can offer — not a
+  hand-maintained array that silently drifts from what the backend actually serves (exactly the
+  drift this ticket exists to fix).
+- Label/icon/color-ramp stay a **static client-side config** (same precedent as A3/SPORT-2 for
+  attributes) keyed by something stable from the server response (`sport.id` or `sport.name`) — this
+  part is presentational and doesn't need to come from the backend. What changes is *which sports
+  exist and are offered*, not how each one is styled once known.
+
+**Open question for implementer (flag before designing, don't decide silently):** `SportKey` is
+currently a hand-written string-literal union threaded through most of `src/features/` and
+`src/shared/` (ramp lookups, ids, component prop types, ~40+ call sites per the grep that surfaced
+this ticket). Two directions, both viable:
+1. **Keep `SportKey` as a literal union**, but generate/validate it against the live catalog at
+   startup (extend the union by hand each time a sport is added/removed, same as today, just backed
+   by a real fetch instead of a guess) — smaller diff, keeps strong typing on every existing call
+   site, but doesn't fully remove the "hardcoded set that can drift from the server" problem, just
+   narrows it to a manual sync step.
+2. **Derive sport identity from `sportId: number` end-to-end**, dropping the `SportKey` string-literal
+   layer and `sportIdMap.ts` entirely, with label/icon/ramp keyed by `sportId` instead — removes the
+   drift risk completely, but touches every component currently typed against `SportKey` (a much
+   larger diff, and the "Sport color ramps" table in `client/CLAUDE.md` would need rewriting since it
+   currently names ramps by sport rather than by id).
+
+Given A6 leaves exactly 2 active sports (Badminton, Pickleball — both currently entirely absent from
+the client), either direction requires touching `SPORT_PROFILE_CONFIG` regardless; the open question
+is only about how much of the existing `SportKey`-typed surface gets touched along with it. Resolve
+in Phase 1/3 of `/workon`, not assumed here.
+
+**Out of scope:** re-theming existing sports' ramps (football/basketball/tennis keep their current
+teal/coral/purple assignment wherever they remain referenced); any change to `SportServiceImpl` or
+other backend behavior (A6 owns the backend side).
