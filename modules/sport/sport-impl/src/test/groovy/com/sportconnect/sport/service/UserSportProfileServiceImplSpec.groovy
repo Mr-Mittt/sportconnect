@@ -114,6 +114,30 @@ class UserSportProfileServiceImplSpec extends Specification {
         thrown(ResourceNotFoundException)
     }
 
+    def "createProfile should throw exception when sport is inactive"() {
+        given:
+        def userId = UUID.randomUUID()
+        def sportId = 1L
+        def request = CreateUserSportProfileRequest.builder()
+                .sportId(sportId)
+                .build()
+
+        def sport = Sport.builder()
+                .id(sportId)
+                .name("Soccer")
+                .isActive(false)
+                .build()
+
+        when:
+        profileService.createProfile(userId, request)
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        0 * profileRepository.findByUserIdAndIsActiveTrue(_)
+        0 * profileRepository.save(_)
+        thrown(BadRequestException)
+    }
+
     def "createProfile should throw exception when profile already exists"() {
         given:
         def userId = UUID.randomUUID()
