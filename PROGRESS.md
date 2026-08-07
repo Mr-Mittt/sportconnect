@@ -181,7 +181,19 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - **A2 (2026-07-03):** Sport profile ownership check — `PUT /api/sports/profiles/{profileId}` and `DELETE /api/sports/profiles/{profileId}` previously had no ownership check (any authenticated user could edit/delete anyone's profile); `UserSportProfileService.updateProfile()`/`deleteProfile()` gained a `callerId` param, throw `ForbiddenException` on mismatch after fetching (fetch-then-check, so not-found still 404s correctly); 2 new Spock tests (non-owner update/delete → `ForbiddenException`)
 - **A3 (2026-07-03):** Flexible per-sport attributes — `attributes JSONB` column added to `user_sport_profiles` (V025) for sport-specific data (e.g. dominant hand, stroke style) that doesn't fit a fixed schema; first JSONB column in the codebase, uses Hibernate 6's native `@JdbcTypeCode(SqlTypes.JSON)` mapping (no extra library needed, verified against the project's actual Hibernate version before implementing); `updateProfile()` merges new attribute keys rather than replacing wholesale; serialized size capped at ~4KB (`BadRequestException` if exceeded); 4 new/changed Spock tests. **Verification gap:** the JSONB column/Hibernate JSON mapping could not be validated against a live Postgres in this sandbox — recommend a real DB run before merging.
 - **A4 (2026-07-03):** Batch sport lookup in `getUserProfiles` — replaced a per-profile `sportRepository.findById()` with one `findAllById()` call; ticketed and fixed for cleanliness/consistency only, not performance (confirmed this list can never exceed 3 items, per the max-3-profiles rule — never a real N+1 scaling risk); 1 new Spock test (empty-input guard)
-- **MVP backlog:** 4 tickets (A1–A4) in `modules/sport/sport-impl/docs/BACKLOG_MVP.md`, **all `DONE`**
+- **A5 (2026-08-07,
+  `modules/sport/sport-impl/docs/A5_CACHE_SPORT_LOOKUPS.md`):** cached sport lookups —
+  `spring-boot-starter-cache` + `ConcurrentMapCacheManager`, one cached master map
+  (`SportLookupCache.getAllSportsById()`, own bean to avoid an AOP self-invocation trap) backing
+  `getSportById`/`getSportsByIds`/`getAllActiveSports`/`getAllSports` instead of independently
+  `@Cacheable`-annotating each (would have made `getSportsByIds`'s `List<Long>` argument part of its
+  cache key); evict-on-write on `createSport`/`updateSport`/`deleteSport`, no TTL. Live-verified
+  against real Postgres: cache miss queries once, cache hit queries zero times. Also fixed, found
+  while trying to verify this ticket's own tests: `sport-impl/build.gradle` was missing
+  `test { useJUnitPlatform() }` (every other module has it) — this module's Spock suite had never
+  actually executed under Gradle; once fixed, surfaced ~76 pre-existing `UUID`-instead-of-`Long` id
+  bugs across all 4 of this module's test files, all fixed.
+- **MVP backlog:** 5 tickets (A1–A5) in `modules/sport/sport-impl/docs/BACKLOG_MVP.md`, **all `DONE`**
 
 #### `modules:social:post-api` + `modules:social:post-impl`
 - `Post` entity: content (5000 chars), geolocation, sport, visibility, post type, soft delete

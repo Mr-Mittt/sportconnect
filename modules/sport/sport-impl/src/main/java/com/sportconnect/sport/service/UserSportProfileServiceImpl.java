@@ -6,7 +6,9 @@ import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest;
+import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
+import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.sport.api.service.UserSportProfileService;
 import com.sportconnect.sport.entity.Sport;
 import com.sportconnect.sport.entity.UserSportProfile;
@@ -32,6 +34,7 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
 
     private final UserSportProfileRepository profileRepository;
     private final SportRepository sportRepository;
+    private final SportService sportService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -87,10 +90,12 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
     /**
      * {@inheritDoc}
      *
-     * <p>Resolves all sport names in one batched {@code sportRepository.findAllById} call instead
-     * of one per profile (A4 cleanliness fix — this list is bounded to ≤3 profiles by the
+     * <p>Resolves sport names via {@link SportService#getSportsByIds}, one batched call instead of
+     * one per profile (A4 cleanliness fix — this list is bounded to ≤3 profiles by the
      * max-3-profiles rule in {@code createProfile}, so this was never a real N+1 scaling risk, see
-     * {@code BACKLOG_MVP.md}).
+     * {@code BACKLOG_MVP.md}). Routed through {@code SportService} rather than
+     * {@code sportRepository} directly (A5) so this read path benefits from {@code SportLookupCache}
+     * too, instead of hitting the database on every call.
      */
     @Override
     @Transactional(readOnly = true)
@@ -101,14 +106,15 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
                 .map(UserSportProfile::getSportId)
                 .distinct()
                 .collect(Collectors.toList());
-        Map<Long, String> sportNamesById = sportIds.isEmpty()
+        Map<Long, SportResponse> sportsById = sportIds.isEmpty()
                 ? Map.of()
-                : sportRepository.findAllById(sportIds).stream()
-                        .collect(Collectors.toMap(Sport::getId, Sport::getName));
+                : sportService.getSportsByIds(sportIds);
 
         return profiles.stream()
                 .map(profile -> toUserSportProfileResponse(profile,
-                        sportNamesById.getOrDefault(profile.getSportId(), "Unknown")))
+                        sportsById.containsKey(profile.getSportId())
+                                ? sportsById.get(profile.getSportId()).getName()
+                                : "Unknown"))
                 .collect(Collectors.toList());
     }
 

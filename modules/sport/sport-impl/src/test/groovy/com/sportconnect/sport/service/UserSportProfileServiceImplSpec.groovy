@@ -5,6 +5,8 @@ import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest
+import com.sportconnect.sport.api.dto.SportResponse
+import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.entity.Sport
 import com.sportconnect.sport.entity.UserSportProfile
 import com.sportconnect.sport.repository.SportRepository
@@ -16,15 +18,17 @@ class UserSportProfileServiceImplSpec extends Specification {
 
     UserSportProfileRepository profileRepository = Mock()
     SportRepository sportRepository = Mock()
+    SportService sportService = Mock()
     ObjectMapper objectMapper = new ObjectMapper()
 
     @Subject
-    UserSportProfileServiceImpl profileService = new UserSportProfileServiceImpl(profileRepository, sportRepository, objectMapper)
+    UserSportProfileServiceImpl profileService =
+            new UserSportProfileServiceImpl(profileRepository, sportRepository, sportService, objectMapper)
 
     def "createProfile should create new profile successfully"() {
         given:
         def userId = UUID.randomUUID()
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
         def request = CreateUserSportProfileRequest.builder()
                 .sportId(sportId)
                 .skillLevel("Intermediate")
@@ -40,7 +44,7 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .build()
 
         def profile = UserSportProfile.builder()
-                .id(UUID.randomUUID())
+                .id(1L)
                 .userId(userId)
                 .sportId(sportId)
                 .skillLevel("Intermediate")
@@ -56,6 +60,7 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         then:
         1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> []
         1 * profileRepository.existsByUserIdAndSportId(userId, sportId) >> false
         1 * profileRepository.save(_) >> { UserSportProfile savedProfile ->
             assert savedProfile.attributes == ["dominantHand": "left"]
@@ -70,7 +75,7 @@ class UserSportProfileServiceImplSpec extends Specification {
     def "createProfile should reject oversized attributes payload"() {
         given:
         def userId = UUID.randomUUID()
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
         def request = CreateUserSportProfileRequest.builder()
                 .sportId(sportId)
                 .skillLevel("Intermediate")
@@ -87,6 +92,7 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         then:
         1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> []
         1 * profileRepository.existsByUserIdAndSportId(userId, sportId) >> false
         0 * profileRepository.save(_)
         thrown(BadRequestException)
@@ -95,7 +101,7 @@ class UserSportProfileServiceImplSpec extends Specification {
     def "createProfile should throw exception when sport not found"() {
         given:
         def userId = UUID.randomUUID()
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
         def request = CreateUserSportProfileRequest.builder()
                 .sportId(sportId)
                 .build()
@@ -111,7 +117,7 @@ class UserSportProfileServiceImplSpec extends Specification {
     def "createProfile should throw exception when profile already exists"() {
         given:
         def userId = UUID.randomUUID()
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
         def request = CreateUserSportProfileRequest.builder()
                 .sportId(sportId)
                 .build()
@@ -126,15 +132,16 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         then:
         1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> []
         1 * profileRepository.existsByUserIdAndSportId(userId, sportId) >> true
         thrown(BadRequestException)
     }
 
     def "getProfileById should return profile when found"() {
         given:
-        def profileId = UUID.randomUUID()
+        def profileId = 1L
         def userId = UUID.randomUUID()
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
 
         def profile = UserSportProfile.builder()
                 .id(profileId)
@@ -161,7 +168,7 @@ class UserSportProfileServiceImplSpec extends Specification {
 
     def "getProfileById should throw exception when profile not found"() {
         given:
-        def profileId = UUID.randomUUID()
+        def profileId = 1L
 
         when:
         profileService.getProfileById(profileId)
@@ -174,23 +181,25 @@ class UserSportProfileServiceImplSpec extends Specification {
     def "getUserProfiles should return all active profiles for user"() {
         given:
         def userId = UUID.randomUUID()
-        def sportId1 = UUID.randomUUID()
-        def sportId2 = UUID.randomUUID()
+        def sportId1 = 1L
+        def sportId2 = 2L
 
         def profiles = [
-            UserSportProfile.builder().id(UUID.randomUUID()).userId(userId).sportId(sportId1).isActive(true).build(),
-            UserSportProfile.builder().id(UUID.randomUUID()).userId(userId).sportId(sportId2).isActive(true).build()
+            UserSportProfile.builder().id(1L).userId(userId).sportId(sportId1).isActive(true).build(),
+            UserSportProfile.builder().id(2L).userId(userId).sportId(sportId2).isActive(true).build()
         ]
 
-        def sport1 = Sport.builder().id(sportId1).name("Football").build()
-        def sport2 = Sport.builder().id(sportId2).name("Cricket").build()
+        def sportsById = [
+            (sportId1): SportResponse.builder().id(sportId1).name("Football").build(),
+            (sportId2): SportResponse.builder().id(sportId2).name("Cricket").build()
+        ]
 
         when:
         def result = profileService.getUserProfiles(userId)
 
         then:
         1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> profiles
-        1 * sportRepository.findAllById([sportId1, sportId2]) >> [sport1, sport2]
+        1 * sportService.getSportsByIds([sportId1, sportId2]) >> sportsById
         result.size() == 2
         result*.sportName as Set == ["Football", "Cricket"] as Set
     }
@@ -204,17 +213,36 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         then:
         1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> []
-        0 * sportRepository.findAllById(_)
+        0 * sportService.getSportsByIds(_)
         result.isEmpty()
+    }
+
+    def "getUserProfiles should fall back to Unknown for a sport id sportService doesn't resolve"() {
+        given:
+        def userId = UUID.randomUUID()
+        def sportId = 1L
+
+        def profiles = [
+            UserSportProfile.builder().id(1L).userId(userId).sportId(sportId).isActive(true).build()
+        ]
+
+        when:
+        def result = profileService.getUserProfiles(userId)
+
+        then:
+        1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> profiles
+        1 * sportService.getSportsByIds([sportId]) >> [:]
+        result.size() == 1
+        result[0].sportName == "Unknown"
     }
 
     def "getUserProfileForSport should return specific profile"() {
         given:
         def userId = UUID.randomUUID()
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
 
         def profile = UserSportProfile.builder()
-                .id(UUID.randomUUID())
+                .id(1L)
                 .userId(userId)
                 .sportId(sportId)
                 .skillLevel("Expert")
@@ -239,7 +267,7 @@ class UserSportProfileServiceImplSpec extends Specification {
     def "getUserProfileForSport should throw exception when profile not found"() {
         given:
         def userId = UUID.randomUUID()
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
 
         when:
         profileService.getUserProfileForSport(userId, sportId)
@@ -251,8 +279,8 @@ class UserSportProfileServiceImplSpec extends Specification {
 
     def "updateProfile should update all provided fields"() {
         given:
-        def profileId = UUID.randomUUID()
-        def sportId = UUID.randomUUID()
+        def profileId = 1L
+        def sportId = 1L
         def ownerId = UUID.randomUUID()
 
         def profile = UserSportProfile.builder()
@@ -294,8 +322,8 @@ class UserSportProfileServiceImplSpec extends Specification {
 
     def "updateProfile should merge new attribute keys without dropping existing ones"() {
         given:
-        def profileId = UUID.randomUUID()
-        def sportId = UUID.randomUUID()
+        def profileId = 1L
+        def sportId = 1L
         def ownerId = UUID.randomUUID()
 
         def profile = UserSportProfile.builder()
@@ -330,8 +358,8 @@ class UserSportProfileServiceImplSpec extends Specification {
 
     def "updateProfile should reject oversized attributes payload"() {
         given:
-        def profileId = UUID.randomUUID()
-        def sportId = UUID.randomUUID()
+        def profileId = 1L
+        def sportId = 1L
         def ownerId = UUID.randomUUID()
 
         def profile = UserSportProfile.builder()
@@ -355,7 +383,7 @@ class UserSportProfileServiceImplSpec extends Specification {
 
     def "updateProfile should throw exception when profile not found"() {
         given:
-        def profileId = UUID.randomUUID()
+        def profileId = 1L
         def request = new CreateUserSportProfileRequest()
 
         when:
@@ -368,13 +396,13 @@ class UserSportProfileServiceImplSpec extends Specification {
 
     def "updateProfile should throw ForbiddenException when caller is not the owner"() {
         given:
-        def profileId = UUID.randomUUID()
+        def profileId = 1L
         def ownerId = UUID.randomUUID()
         def otherUserId = UUID.randomUUID()
         def profile = UserSportProfile.builder()
                 .id(profileId)
                 .userId(ownerId)
-                .sportId(UUID.randomUUID())
+                .sportId(1L)
                 .build()
         def request = new CreateUserSportProfileRequest()
 
@@ -389,12 +417,12 @@ class UserSportProfileServiceImplSpec extends Specification {
 
     def "deleteProfile should soft delete profile"() {
         given:
-        def profileId = UUID.randomUUID()
+        def profileId = 1L
         def ownerId = UUID.randomUUID()
         def profile = UserSportProfile.builder()
                 .id(profileId)
                 .userId(ownerId)
-                .sportId(UUID.randomUUID())
+                .sportId(1L)
                 .isActive(true)
                 .build()
 
@@ -411,7 +439,7 @@ class UserSportProfileServiceImplSpec extends Specification {
 
     def "deleteProfile should throw exception when profile not found"() {
         given:
-        def profileId = UUID.randomUUID()
+        def profileId = 1L
 
         when:
         profileService.deleteProfile(profileId, UUID.randomUUID())
@@ -423,13 +451,13 @@ class UserSportProfileServiceImplSpec extends Specification {
 
     def "deleteProfile should throw ForbiddenException when caller is not the owner"() {
         given:
-        def profileId = UUID.randomUUID()
+        def profileId = 1L
         def ownerId = UUID.randomUUID()
         def otherUserId = UUID.randomUUID()
         def profile = UserSportProfile.builder()
                 .id(profileId)
                 .userId(ownerId)
-                .sportId(UUID.randomUUID())
+                .sportId(1L)
                 .isActive(true)
                 .build()
 

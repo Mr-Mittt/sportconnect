@@ -6,7 +6,7 @@ class UserSportProfileSpec extends Specification {
 
     def "equals should return true for same id"() {
         given:
-        def id = UUID.randomUUID()
+        def id = 1L
         def profile1 = UserSportProfile.builder().id(id).userId(UUID.randomUUID()).build()
         def profile2 = UserSportProfile.builder().id(id).userId(UUID.randomUUID()).build()
 
@@ -16,8 +16,8 @@ class UserSportProfileSpec extends Specification {
 
     def "equals should return false for different id"() {
         given:
-        def profile1 = UserSportProfile.builder().id(UUID.randomUUID()).build()
-        def profile2 = UserSportProfile.builder().id(UUID.randomUUID()).build()
+        def profile1 = UserSportProfile.builder().id(1L).build()
+        def profile2 = UserSportProfile.builder().id(2L).build()
 
         expect:
         !profile1.equals(profile2)
@@ -34,9 +34,9 @@ class UserSportProfileSpec extends Specification {
 
     def "builder should create profile with all fields"() {
         given:
-        def id = UUID.randomUUID()
+        def id = 1L
         def userId = UUID.randomUUID()
-        def sportId = UUID.randomUUID()
+        def sportId = 2L
 
         when:
         def profile = UserSportProfile.builder()
@@ -65,7 +65,7 @@ class UserSportProfileSpec extends Specification {
         when:
         def profile = UserSportProfile.builder()
                 .userId(UUID.randomUUID())
-                .sportId(UUID.randomUUID())
+                .sportId(1L)
                 .build()
 
         then:

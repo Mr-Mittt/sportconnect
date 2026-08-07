@@ -12,9 +12,10 @@ import spock.lang.Subject
 class SportServiceImplSpec extends Specification {
 
     SportRepository sportRepository = Mock()
+    SportLookupCache sportLookupCache = Mock()
 
     @Subject
-    SportServiceImpl sportService = new SportServiceImpl(sportRepository)
+    SportServiceImpl sportService = new SportServiceImpl(sportRepository, sportLookupCache)
 
     def "createSport should create new sport successfully"() {
         given:
@@ -27,7 +28,7 @@ class SportServiceImplSpec extends Specification {
                 .build()
 
         def sport = Sport.builder()
-                .id(UUID.randomUUID())
+                .id(1L)
                 .name("Basketball")
                 .description("Team sport")
                 .category("Team Sports")
@@ -42,6 +43,7 @@ class SportServiceImplSpec extends Specification {
         then:
         1 * sportRepository.existsByName("Basketball") >> false
         1 * sportRepository.save(_) >> sport
+        1 * sportLookupCache.evictAll()
         result.name == "Basketball"
         result.category == "Team Sports"
     }
@@ -57,12 +59,13 @@ class SportServiceImplSpec extends Specification {
 
         then:
         1 * sportRepository.existsByName("Basketball") >> true
+        0 * sportLookupCache.evictAll()
         thrown(BadRequestException)
     }
 
     def "getSportById should return sport when found"() {
         given:
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
         def sport = Sport.builder()
                 .id(sportId)
                 .name("Tennis")
@@ -74,35 +77,35 @@ class SportServiceImplSpec extends Specification {
         def result = sportService.getSportById(sportId)
 
         then:
-        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * sportLookupCache.getAllSportsById() >> [(sportId): sport]
         result.id == sportId
         result.name == "Tennis"
     }
 
     def "getSportById should throw exception when sport not found"() {
         given:
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
 
         when:
         sportService.getSportById(sportId)
 
         then:
-        1 * sportRepository.findById(sportId) >> Optional.empty()
+        1 * sportLookupCache.getAllSportsById() >> [:]
         thrown(ResourceNotFoundException)
     }
 
     def "getSportsByIds should return a map keyed by id for found sports"() {
         given:
-        def sports = [
-            Sport.builder().id(1L).name("Football").category("Team Sports").isActive(true).build(),
-            Sport.builder().id(2L).name("Tennis").category("Racket Sports").isActive(true).build()
+        def allSports = [
+            (1L): Sport.builder().id(1L).name("Football").category("Team Sports").isActive(true).build(),
+            (2L): Sport.builder().id(2L).name("Tennis").category("Racket Sports").isActive(true).build()
         ]
 
         when:
         def result = sportService.getSportsByIds([1L, 2L])
 
         then:
-        1 * sportRepository.findAllById([1L, 2L]) >> sports
+        1 * sportLookupCache.getAllSportsById() >> allSports
         result.size() == 2
         result[1L].name == "Football"
         result[2L].name == "Tennis"
@@ -110,13 +113,13 @@ class SportServiceImplSpec extends Specification {
 
     def "getSportsByIds should silently omit ids that don't resolve to a sport"() {
         given:
-        def sports = [Sport.builder().id(1L).name("Football").isActive(true).build()]
+        def allSports = [(1L): Sport.builder().id(1L).name("Football").isActive(true).build()]
 
         when:
         def result = sportService.getSportsByIds([1L, 999L])
 
         then:
-        1 * sportRepository.findAllById([1L, 999L]) >> sports
+        1 * sportLookupCache.getAllSportsById() >> allSports
         result.size() == 1
         result[1L].name == "Football"
         !result.containsKey(999L)
@@ -124,33 +127,33 @@ class SportServiceImplSpec extends Specification {
 
     def "getAllActiveSports should return only active sports"() {
         given:
-        def sports = [
-            Sport.builder().id(UUID.randomUUID()).name("Football").isActive(true).build(),
-            Sport.builder().id(UUID.randomUUID()).name("Cricket").isActive(true).build()
+        def allSports = [
+            (1L): Sport.builder().id(1L).name("Football").isActive(true).build(),
+            (2L): Sport.builder().id(2L).name("Cricket").isActive(true).build(),
+            (3L): Sport.builder().id(3L).name("Retired Sport").isActive(false).build()
         ]
 
         when:
         def result = sportService.getAllActiveSports()
 
         then:
-        1 * sportRepository.findByIsActiveTrue() >> sports
+        1 * sportLookupCache.getAllSportsById() >> allSports
         result.size() == 2
-        result[0].name == "Football"
-        result[1].name == "Cricket"
+        result*.name as Set == ["Football", "Cricket"] as Set
     }
 
     def "getAllSports should return all sports including inactive"() {
         given:
-        def sports = [
-            Sport.builder().id(UUID.randomUUID()).name("Football").isActive(true).build(),
-            Sport.builder().id(UUID.randomUUID()).name("Cricket").isActive(false).build()
+        def allSports = [
+            (1L): Sport.builder().id(1L).name("Football").isActive(true).build(),
+            (2L): Sport.builder().id(2L).name("Cricket").isActive(false).build()
         ]
 
         when:
         def result = sportService.getAllSports()
 
         then:
-        1 * sportRepository.findAll() >> sports
+        1 * sportLookupCache.getAllSportsById() >> allSports
         result.size() == 2
     }
 
@@ -158,7 +161,7 @@ class SportServiceImplSpec extends Specification {
         given:
         def category = "Team Sports"
         def sports = [
-            Sport.builder().id(UUID.randomUUID()).name("Football").category(category).isActive(true).build()
+            Sport.builder().id(1L).name("Football").category(category).isActive(true).build()
         ]
 
         when:
@@ -172,7 +175,7 @@ class SportServiceImplSpec extends Specification {
 
     def "updateSport should update all provided fields"() {
         given:
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
         def sport = Sport.builder()
                 .id(sportId)
                 .name("Football")
@@ -200,12 +203,13 @@ class SportServiceImplSpec extends Specification {
             assert savedSport.maxPlayers == 10
             return savedSport
         }
+        1 * sportLookupCache.evictAll()
         result.description == "Updated description"
     }
 
     def "updateSport should throw exception when sport not found"() {
         given:
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
         def request = new UpdateSportRequest()
 
         when:
@@ -213,12 +217,13 @@ class SportServiceImplSpec extends Specification {
 
         then:
         1 * sportRepository.findById(sportId) >> Optional.empty()
+        0 * sportLookupCache.evictAll()
         thrown(ResourceNotFoundException)
     }
 
     def "deleteSport should soft delete sport"() {
         given:
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
         def sport = Sport.builder()
                 .id(sportId)
                 .name("Football")
@@ -234,17 +239,19 @@ class SportServiceImplSpec extends Specification {
             assert savedSport.isActive == false
             return savedSport
         }
+        1 * sportLookupCache.evictAll()
     }
 
     def "deleteSport should throw exception when sport not found"() {
         given:
-        def sportId = UUID.randomUUID()
+        def sportId = 1L
 
         when:
         sportService.deleteSport(sportId)
 
         then:
         1 * sportRepository.findById(sportId) >> Optional.empty()
+        0 * sportLookupCache.evictAll()
         thrown(ResourceNotFoundException)
     }
 

@@ -23,7 +23,7 @@
 | 2 | A2 | Sport profile ownership check (update + delete) | `DONE` |
 | 3 | A3 | Flexible per-sport attributes (JSONB) | `DONE` |
 | 4 | A4 | Batch sport lookup in getUserProfiles (cleanliness, not a scaling fix) | `DONE` |
-| 5 | A5 | Cache sport lookups — sport data is effectively static at runtime | `TODO` |
+| 5 | A5 | Cache sport lookups — sport data is effectively static at runtime | `DONE` |
 
 **Dependencies:**
 ```
@@ -183,7 +183,7 @@ fallback for a missing sport.
 ---
 
 ### A5 · Cache sport lookups — sport data is effectively static at runtime
-**Status:** `TODO`
+**Status:** `DONE` (2026-08-07) · **Summary:** `modules/sport/sport-impl/docs/A5_CACHE_SPORT_LOOKUPS.md`
 **Type:** Enhancement (Performance)
 **Scope:** `SportServiceImpl.java` (and possibly `UserSportProfileServiceImpl`'s own per-profile
 sport lookup, see A4)
@@ -214,5 +214,16 @@ belong bundled into a bug-fix ticket.
 
 **Out of scope:** no change to what data is returned — purely a caching layer in front of existing,
 unchanged read methods.
+
+**Delta (2026-08-07, at implementation):** the 3-independent-`@Cacheable`-methods approach above was
+revised — `getSportsByIds(List<Long>)` would have had `sportIds` become part of its own cache key
+(one entry per distinct id combination, never sharing `getSportById`'s cache region). Shipped as one
+cached master map (`SportLookupCache.getAllSportsById()`) backing all 4 read paths instead. No TTL
+(evict-on-write only), per the "reliable eviction" branch above. Also found and fixed, blocking this
+ticket's own test verification: `sport-impl/build.gradle` was missing `test { useJUnitPlatform() }`
+(every other module has it) — this module's entire Spock test suite had never actually executed
+under Gradle. Once fixed, surfaced ~76 pre-existing `UUID`-instead-of-`Long` id bugs across all 4 of
+this module's test files (never caught, since nothing had run) — all fixed. Full write-up in the
+summary doc above.
 
 ---
