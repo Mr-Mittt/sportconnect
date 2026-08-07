@@ -241,7 +241,32 @@ describe('App routing', () => {
         };
       }
       if (url === '/sports/profiles/user/1') {
-        return { data: { success: true, message: '', data: [], timestamp: '' } };
+        // Non-empty — this test isn't about the zero-sport-profile page-access gate
+        // (CLIENT-SESSION-7 follow-up); an empty fixture here would auto-open AddSportModal,
+        // which aria-hides the rest of the page and breaks the getByRole queries below.
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: [
+              {
+                id: 1,
+                userId: '1',
+                sportId: 5,
+                sportName: 'Soccer',
+                skillLevel: null,
+                yearsOfExperience: null,
+                preferredPosition: null,
+                bio: null,
+                attributes: null,
+                isActive: true,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+            ],
+            timestamp: '',
+          },
+        };
       }
       return {
         data: {
@@ -318,7 +343,32 @@ describe('App routing', () => {
         };
       }
       if (url === '/sports/profiles/user/1') {
-        return { data: { success: true, message: '', data: [], timestamp: '' } };
+        // Non-empty — this test isn't about the zero-sport-profile page-access gate
+        // (CLIENT-SESSION-7 follow-up); an empty fixture here would auto-open AddSportModal
+        // and block the group-selection interaction this test actually exercises.
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: [
+              {
+                id: 1,
+                userId: '1',
+                sportId: 5,
+                sportName: 'Soccer',
+                skillLevel: null,
+                yearsOfExperience: null,
+                preferredPosition: null,
+                bio: null,
+                attributes: null,
+                isActive: true,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+            ],
+            timestamp: '',
+          },
+        };
       }
       return {
         data: {

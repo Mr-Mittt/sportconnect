@@ -38,3 +38,11 @@ export const Submitting: Story = {
 export const ErrorState: Story = {
   args: { isError: true },
 };
+
+/** CLIENT-SESSION-7 follow-up: auto-opened by the zero-sport-profile page-access gate on
+ * Groups/Matches, rather than the SportSwitcher "+" pill — carries the funny prompt. */
+export const AutoPromptedOnPageAccess: Story = {
+  args: {
+    promptMessage: "Hey champ, add a sport first — this page won't make much sense without one! 🏅",
+  },
+};

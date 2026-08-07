@@ -108,7 +108,13 @@ const manyFootballMatches: Session[] = Array.from({ length: 6 }, (_, i) =>
 const meta = {
   title: 'Shared/UpcomingMatches',
   component: UpcomingMatches,
-  args: { sportsByKey, onSeeAll: () => {}, onSelectMatch: () => {} },
+  args: {
+    sportsByKey,
+    onSeeAll: () => {},
+    onSelectMatch: () => {},
+    onCreateMatch: () => {},
+    onJoinMatch: () => {},
+  },
   // Constrain to the right rail's width so stories match the page context
   decorators: [(Story) => <div style={{ maxWidth: 360 }}>{Story()}</div>],
 } satisfies Meta<typeof UpcomingMatches>;

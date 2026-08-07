@@ -85,6 +85,10 @@ const baseProps = {
   onSubmit: () => {},
   isSubmitting: false,
   isError: false,
+  availableSports: [] as SportKey[],
+  onAddSport: () => {},
+  isAddingSport: false,
+  isAddSportError: false,
 };
 
 /** Picks Today + 19:00 across the three independent Date/Hour/Minute selects — enough to make
@@ -103,9 +107,58 @@ describe('CreateSessionModal', () => {
     expect(screen.getByLabelText(/^Sport/)).toBeInTheDocument();
   });
 
-  it('leaves Sport blank with no activeSport and more than one sport profile', () => {
+  it('pre-selects the first sport profile with no activeSport and more than one sport profile', () => {
     render(<CreateSessionModal {...baseProps} />);
-    expect(screen.getByLabelText(/^Sport/)).toHaveValue('');
+    expect(screen.getByLabelText(/^Sport/)).toHaveValue('football');
+  });
+
+  it('pre-selects the first sport profile when "All" is selected and more than one sport profile exists', () => {
+    render(<CreateSessionModal {...baseProps} activeSport="all" />);
+    expect(screen.getByLabelText(/^Sport/)).toHaveValue('football');
+  });
+
+  it('shows the "add a sport first" gate instead of the create form when the caller has no sport profiles at all', () => {
+    render(
+      <CreateSessionModal
+        {...baseProps}
+        sportsByKey={{} as Record<SportKey, SportProfile>}
+        availableSports={['football', 'basketball']}
+      />,
+    );
+    expect(screen.getByText(/add a sport first/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Session title')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create session' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add sport' })).toBeInTheDocument();
+  });
+
+  it('submitting the "add a sport first" gate calls onAddSport, and reveals the create form once a sport profile exists', async () => {
+    const user = userEvent.setup();
+    const onAddSport = vi.fn();
+    const { rerender } = render(
+      <CreateSessionModal
+        {...baseProps}
+        sportsByKey={{} as Record<SportKey, SportProfile>}
+        availableSports={['football', 'basketball']}
+        onAddSport={onAddSport}
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText('Sport'), 'basketball');
+    await user.selectOptions(screen.getByLabelText('Skill level'), 'beginner');
+    await user.click(screen.getByRole('button', { name: 'Add sport' }));
+    expect(onAddSport).toHaveBeenCalledWith({
+      sportId: 6,
+      skillLevel: 'beginner',
+      yearsOfExperience: undefined,
+    });
+
+    // Real usage: the mutation's onSuccess writes the new profile into the query cache, which
+    // flows back down as a non-empty sportsByKey prop — this Dialog was never unmounted, so it's
+    // the same mounted instance that swaps from the gate to the real form.
+    rerender(<CreateSessionModal {...baseProps} onAddSport={onAddSport} />);
+    expect(screen.queryByText(/add a sport first/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create session' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Sport/)).toHaveValue('football');
   });
 
   it('pre-selects Sport from a real activeSport pill', () => {
@@ -137,12 +190,9 @@ describe('CreateSessionModal', () => {
     expect(screen.getByText('Coming soon.')).toBeInTheDocument();
   });
 
-  it('the "Choose location" trigger stays disabled until a sport is chosen', async () => {
-    const user = userEvent.setup();
+  it('the "Choose location" trigger is enabled from the start (Sport always prefills when the caller has any profile)', () => {
     render(<CreateSessionModal {...baseProps} />);
-
-    expect(screen.getByRole('button', { name: 'Choose location' })).toBeDisabled();
-    await user.selectOptions(screen.getByLabelText(/^Sport/), 'basketball');
+    expect(screen.getByLabelText(/^Sport/)).toHaveValue('football');
     expect(screen.getByRole('button', { name: 'Choose location' })).toBeEnabled();
   });
 

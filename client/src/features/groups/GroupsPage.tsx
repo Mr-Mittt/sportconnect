@@ -9,9 +9,14 @@ import { useJoinRequests } from '@/features/feed/hooks/useJoinRequests';
 import { useLeaveGroup } from '@/features/feed/hooks/useLeaveGroup';
 import { usePost } from '@/features/feed/hooks/usePost';
 import { useUpdateGroup } from '@/features/feed/hooks/useUpdateGroup';
-import { sportKeyForId } from '@/features/feed/sportIdMap';
+import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
+import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
+import { SessionDetailModal } from '@/features/session/components/SessionDetailModal';
+import { SessionDiscoverModal } from '@/features/session/components/SessionDiscoverModal';
+import { useCreateSessionModalData } from '@/features/session/useCreateSessionModalData';
+import { useDiscoverModalData } from '@/features/session/useDiscoverModalData';
 import { AddSportIntroDialog } from '@/shared/components/AddSportIntroDialog';
 import { AddSportModal } from '@/shared/components/AddSportModal';
 import { CommentSection } from '@/shared/components/CommentSection';
@@ -24,7 +29,9 @@ import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
 import { UpdateBroadcastConfirmDialog } from '@/shared/components/UpdateBroadcastConfirmDialog';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
+import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
+import { PAGE_ACCESS_NO_SPORTS_PROMPT } from '@/shared/lib/noSportsPrompt';
 import { ALL_SPORT_KEYS, SPORT_PROFILE_CONFIG } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CreateGroupModal } from './components/CreateGroupModal';
@@ -213,6 +220,28 @@ export function GroupsPage() {
   const hashtagResultsData = useHashtagResultsData(activeHashtag, activeHashtag !== null);
   const createGroupMutation = useCreateGroup(currentUserId);
   const addSportMutation = useAddSportProfile(currentUserId);
+
+  // Zero-sport-profile gate on page access (not just on create/join a match — see
+  // CreateSessionModal/SessionDiscoverModal's own inline gate for that): a caller who lands here
+  // with no sport profile at all gets the same AddSportModal the SportSwitcher's own "+" pill
+  // opens, prompted automatically once (not on every render/refetch, and not re-shown just
+  // because they close it — `hasAutoPromptedAddSportRef` latches after the first prompt) — with
+  // the same funny copy the create/join gates use, via `addSportPromptMessage` (cleared when the
+  // "+" pill opens the modal manually instead, so that open stays plain).
+  // `useSportProfiles()` here is a second subscription to the same query `data.sportProfiles`
+  // already comes from (deduped by TanStack Query, not a second request) — needed for its own
+  // `isLoading`, which `useGroupsPageData` doesn't expose separately.
+  const sportProfilesQuery = useSportProfiles();
+  const hasAutoPromptedAddSportRef = useRef(false);
+  // Latched synchronously (not effect-derived) the moment `handleAcceptInvitation` below engages
+  // GRP-8 part 5's own sport gate — guards the auto-prompt effect against a real race: accepting
+  // that invitation transiently drives `invitations.length` to 0 before the sport-profiles query
+  // refetches to reflect the newly added sport, and an effect keyed on that data alone would
+  // re-fire the generic prompt on top of the flow that just handled it. A ref set at the actual
+  // decision point sidesteps that instead of trying to infer it from query timing.
+  const hasEngagedInvitationSportGateRef = useRef(false);
+  const [addSportPromptMessage, setAddSportPromptMessage] = useState<string | undefined>(undefined);
+
   const lockedSport = activeSport !== 'all' ? activeSport : null;
   const joinGroupModalData = useJoinGroupModalData(
     currentUserId,
@@ -286,6 +315,40 @@ export function GroupsPage() {
     (groupId, sportId) => selectGroupAndShowPosts(groupId, sportId),
   );
 
+  // Zero-sport-profile gate on page access (not just on create/join a match — see
+  // CreateSessionModal/SessionDiscoverModal's own inline gate for that): a caller who lands here
+  // with no sport profile at all gets the same AddSportModal the SportSwitcher's own "+" pill
+  // opens, prompted automatically once (not on every render/refetch, and not re-shown just
+  // because they close it — `hasAutoPromptedAddSportRef` latches after the first prompt) — with
+  // the same funny copy the create/join gates use, via `addSportPromptMessage` (cleared when the
+  // "+" pill opens the modal manually instead, so that open stays plain). Skipped entirely while
+  // there's a pending received invitation to show instead, or once the invitee has ever engaged
+  // GRP-8 part 5's own sport gate (`hasEngagedInvitationSportGateRef`, latched in
+  // `handleAcceptInvitation` below) — that gate already owns the moment for whichever sport the
+  // invitation is for, and this generic prompt racing it would either steal focus from the
+  // Invitations section or open a redundant, wrongly-defaulted AddSportModal on top of it.
+  useEffect(() => {
+    if (
+      hasAutoPromptedAddSportRef.current ||
+      hasEngagedInvitationSportGateRef.current ||
+      sportProfilesQuery.isLoading ||
+      sportProfilesQuery.data.length > 0 ||
+      groupInvitationsData.isLoading ||
+      groupInvitationsData.invitations.length > 0
+    ) {
+      return;
+    }
+    hasAutoPromptedAddSportRef.current = true;
+    setAddSportPromptMessage(PAGE_ACCESS_NO_SPORTS_PROMPT);
+    setAddSportOpenCount((count) => count + 1);
+    setIsAddSportOpen(true);
+  }, [
+    sportProfilesQuery.isLoading,
+    sportProfilesQuery.data.length,
+    groupInvitationsData.isLoading,
+    groupInvitationsData.invitations.length,
+  ]);
+
   // GRP-8 part 3: the current user's own pending join requests — same query
   // JoinGroupModal's "already requested" badge already reads, just rendered
   // here too.
@@ -306,6 +369,7 @@ export function GroupsPage() {
     const hasSportProfile =
       sportKey === undefined || data.sportProfiles.some((sport) => sport.key === sportKey);
     if (!hasSportProfile && sportKey !== undefined) {
+      hasEngagedInvitationSportGateRef.current = true;
       setSportGate({ invitationId, sportKey, step: 'intro' });
       return;
     }
@@ -375,6 +439,11 @@ export function GroupsPage() {
 
   const modalAnchorRef = useRef<HTMLDivElement>(null);
   const modalAnchorBottom = useAnchorBottom(modalAnchorRef);
+
+  // CLIENT-SESSION-7: UpcomingMatches' empty-state CTAs — same pattern as HomeFeedPage.
+  const createSessionModalData = useCreateSessionModalData();
+  const activeSessionSportId = activeSport === 'all' ? undefined : SPORT_ID_BY_KEY[activeSport];
+  const discoverModalData = useDiscoverModalData(activeSessionSportId);
   // Chat only (user decision, after Members/Settings/Posts all being forced
   // to the same viewport-derived height left short tabs with a large empty
   // gap below them — found live): the group box's height reaches the
@@ -414,6 +483,7 @@ export function GroupsPage() {
             active={activeSport}
             onChange={guardedSetActiveSport}
             onAddSport={() => {
+              setAddSportPromptMessage(undefined);
               setAddSportOpenCount((count) => count + 1);
               setIsAddSportOpen(true);
             }}
@@ -589,6 +659,8 @@ export function GroupsPage() {
               sportsByKey={sportsByKey}
               onSeeAll={() => navigate('/matches')}
               onSelectMatch={(sessionId) => navigate(`/matches?session=${sessionId}`)}
+              onCreateMatch={createSessionModalData.openCreateModal}
+              onJoinMatch={discoverModalData.openDiscoverModal}
             />
             <TrendingHashtags
               hashtags={data.hashtags}
@@ -701,6 +773,7 @@ export function GroupsPage() {
           onSubmit={(payload) =>
             addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
           }
+          promptMessage={addSportPromptMessage}
         />
         <RejectInvitationConfirmDialog
           key={rejectingInvitationId ?? 'none'}
@@ -800,6 +873,74 @@ export function GroupsPage() {
           onSave={settingsGuard.save}
           isSaving={settingsGuard.isSaving}
           isSaveError={settingsGuard.isSaveError}
+        />
+        <CreateSessionModal
+          key={createSessionModalData.isCreateModalOpen ? 'open' : 'closed'}
+          isOpen={createSessionModalData.isCreateModalOpen}
+          onClose={createSessionModalData.closeCreateModal}
+          sportsByKey={sportsByKey}
+          activeSport={activeSport}
+          selectedLocation={createSessionModalData.selectedLocationForCreate}
+          onOpenLocationPicker={createSessionModalData.onOpenLocationPickerForCreate}
+          locationPicker={createSessionModalData.locationPickerForCreate}
+          friends={createSessionModalData.friends}
+          isFriendsLoading={createSessionModalData.isFriendsLoading}
+          onEffectiveSportChange={createSessionModalData.onEffectiveSportChangeForCreate}
+          favoriteLocations={createSessionModalData.favoriteLocationsForCreate}
+          isFavoriteLocationsLoading={createSessionModalData.isFavoriteLocationsLoading}
+          onSelectLocation={createSessionModalData.onSelectLocationForCreate}
+          onSubmit={createSessionModalData.submitCreate}
+          isSubmitting={createSessionModalData.isCreating}
+          isError={createSessionModalData.isCreateError}
+          availableSports={availableSports}
+          onAddSport={addSportMutation.mutate}
+          isAddingSport={addSportMutation.isPending}
+          isAddSportError={addSportMutation.isError}
+        />
+        <SessionDiscoverModal
+          isOpen={discoverModalData.isDiscoverModalOpen}
+          onClose={discoverModalData.closeDiscoverModal}
+          searchMode={discoverModalData.searchMode}
+          onSearchModeChange={discoverModalData.setSearchMode}
+          searchText={discoverModalData.searchText}
+          onSearchTextChange={discoverModalData.setSearchText}
+          sessions={discoverModalData.discoverSessions}
+          isLoading={discoverModalData.isDiscoverLoading}
+          isError={discoverModalData.isDiscoverError}
+          sportsByKey={sportsByKey}
+          onViewDetails={discoverModalData.onViewDetails}
+          availableSports={availableSports}
+          onAddSport={addSportMutation.mutate}
+          isAddingSport={addSportMutation.isPending}
+          isAddSportError={addSportMutation.isError}
+        />
+        <SessionDetailModal
+          isOpen={discoverModalData.selectedSessionId !== null}
+          onClose={discoverModalData.closeDetail}
+          session={discoverModalData.selectedSession}
+          isLoading={discoverModalData.isSessionLoading}
+          isError={discoverModalData.isSessionError}
+          participants={discoverModalData.participants}
+          isParticipantsLoading={discoverModalData.isParticipantsLoading}
+          isParticipantsError={discoverModalData.isParticipantsError}
+          currentUserId={discoverModalData.currentUserId}
+          canManage={discoverModalData.canManage}
+          onJoin={discoverModalData.onJoin}
+          isJoining={discoverModalData.isJoining}
+          isJoinError={discoverModalData.isJoinError}
+          onLeave={discoverModalData.onLeave}
+          isLeaving={discoverModalData.isLeaving}
+          isLeaveError={discoverModalData.isLeaveError}
+          onConfirmCancel={discoverModalData.onConfirmCancel}
+          isCancelling={discoverModalData.isCancelling}
+          isCancelError={discoverModalData.isCancelError}
+          requestedParticipants={discoverModalData.requestedParticipants}
+          isRequestedParticipantsLoading={discoverModalData.isRequestedParticipantsLoading}
+          isRequestedParticipantsError={discoverModalData.isRequestedParticipantsError}
+          onApproveParticipant={discoverModalData.onApproveParticipant}
+          isApprovingParticipant={discoverModalData.isApprovingParticipant}
+          onRejectParticipant={discoverModalData.onRejectParticipant}
+          isRejectingParticipant={discoverModalData.isRejectingParticipant}
         />
       </main>
     </ModalAnchorProvider>

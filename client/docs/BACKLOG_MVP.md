@@ -128,8 +128,8 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 57 | CLIENT-SESSION-4 | Invite-friends + auto-approve at creation, plus approval queue UI (SESSION-6) | `DONE` |
 | 58 | CLIENT-SESSION-5 | Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown (LOC-2) | `DONE` |
 | 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `DONE` |
-| 60 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
-| 61 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `TODO` |
+| 60 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
+| 61 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 
 **Dependencies:**
 ```
@@ -2624,20 +2624,27 @@ Point 2 — first, then close out what was actually done rather than leave an un
 blocking the rest) — split into its own ticket, **CLIENT-SESSION-7**, below.
 
 ### CLIENT-SESSION-7 · Upcoming rail create/join CTAs + create-session hook extraction across pages
-**Status:** `TODO` · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (`DONE` — the hook this
-ticket extracts wraps that modal) · **Filed:** 2026-08-03, split from CLIENT-SESSION-2's original
-scope at close-out · **Spec:** `client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`
-§ "Point 1"
+**Status:** `DONE` (2026-08-06) · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (`DONE` —
+the hook this ticket extracts wraps that modal), CLIENT-SESSION-6 (`DONE` — Discover is real) ·
+**Filed:** 2026-08-03, split from CLIENT-SESSION-2's original scope at close-out · **Spec:**
+`client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` § "Point 1" · **Summary:**
+`client/docs/CLIENT-SESSION-7_RAIL_CTAS_AND_HOOK_EXTRACTION.md`
 
-**What ships:** `UpcomingMatches`'s empty state drops "for this sport" from its copy and gains two
-controlled CTAs — "Create your match" (opens `CreateSessionModal` inline, anchored per-page; the
-modal's data hook is extracted out of `useMatchesPageData` into a standalone hook so
-`HomeFeedPage`/`GroupsPage`/`FriendsPage`/`MatchesPage` share one create-session implementation,
-with `MatchesPage`'s existing "Create session" button switching to the same hook/modal instance
-too) and "Join a match" (navigates to `/matches`, same as "See all" — superseded once
-CLIENT-SESSION-6 ships a real discover destination). `FriendsPage` gains `ModalAnchorProvider`
-(the only rail-hosting page that doesn't already have one) — no natural pill-row equivalent to
-anchor to there, so the exact anchor point is this ticket's own call to make at pickup.
+**What shipped:** `UpcomingMatches`'s empty state drops "for this sport" from its copy and gains
+two controlled CTAs — "Create a match" (opens `CreateSessionModal`, its data hook extracted out
+of `useMatchesPageData` into standalone `useCreateSessionModalData` so
+`HomeFeedPage`/`GroupsPage`/`FriendsPage`/`MatchesPage` share one create-session implementation)
+and "Join a match". `FriendsPage` gained `ModalAnchorProvider`, anchored to its own `sr-only`
+`<h1>` (no pill row to anchor to instead).
+
+**Delta (2026-08-06, at pickup):** "Join a match" was originally specced as `navigate('/matches')`
+("superseded once CLIENT-SESSION-6 ships a real discover destination" — it since has). Asked
+directly at pickup whether it should navigate there or open a dedicated modal instead — chose the
+modal. Real scope growth as a result: a new `SessionDiscoverModal` + `SessionDiscoverPanel` (the
+latter extracted out of `MatchesPage`'s inline Discover JSX so the modal and the full page share
+one implementation) + `useDiscoverModalData`, none of which were in the original ticket. See the
+summary doc for the full design and the resulting no-e2e-coverage divergence (existing e2e
+fixtures never reach `UpcomingMatches`'s empty-state branch — covered via Vitest instead).
 
 ### CLIENT-SESSION-3 · Capacity + fee/pricing fields in `CreateSessionModal`
 **Status:** `DONE` (2026-08-03) · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (extends its

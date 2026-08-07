@@ -1,29 +1,17 @@
-import { IconChevronsLeft, IconChevronsRight, IconPlus, IconSearch } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { IconChevronsLeft, IconChevronsRight, IconPlus } from '@tabler/icons-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
+import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
+import { PAGE_ACCESS_NO_SPORTS_PROMPT } from '@/shared/lib/noSportsPrompt';
 import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import { AddSportModal } from '@/shared/components/AddSportModal';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { CreateSessionModal } from './components/CreateSessionModal';
 import { SessionDateGroup } from './components/SessionDateGroup';
 import { SessionDetailModal } from './components/SessionDetailModal';
-import { SessionListCard } from './components/SessionListCard';
+import { SessionDiscoverPanel } from './components/SessionDiscoverPanel';
 import { useMatchesPageData } from './useMatchesPageData';
-import type { SessionSearchMode } from './types';
-
-/** Discover panel search-scope options — only 'sessions' filters for real (see
- * useMatchesPageData's discoverSessions memo); the other two render disabled since this app
- * has no location/gear search or gear/equipment domain yet. */
-const SEARCH_MODE_OPTIONS: { value: SessionSearchMode; label: string; disabled?: boolean }[] = [
-  { value: 'sessions', label: 'Sessions' },
-  { value: 'location', label: 'Location', disabled: true },
-  { value: 'gear', label: 'Gear', disabled: true },
-];
-
-/** Rendered inert (aria-disabled, no handler) — CLIENT-SESSION-6 ships the visual affordance
- * only, real filtering behavior is a follow-up once there's a design for what each one opens. */
-const FILTER_PILL_LABELS = ['Date', 'Time', 'Location'];
 
 /**
  * CLIENT-SESSION-6's Matches page (`/matches`) — redesigned from CLIENT-SESSION-1's single
@@ -51,6 +39,32 @@ export function MatchesPage() {
     [data.sportsByKey],
   );
 
+  // Zero-sport-profile gate on page access (not just on create/join a match — see
+  // CreateSessionModal/SessionDiscoverPanel's own inline gate for that): a caller who lands
+  // here with no sport profile at all gets the same AddSportModal the SportSwitcher's own "+"
+  // pill opens, prompted automatically once (not on every render/refetch, and not re-shown just
+  // because they close it — `hasAutoPromptedAddSportRef` latches after the first prompt) — with
+  // the same funny copy the create/join gates use, via `addSportPromptMessage` (cleared when the
+  // "+" pill opens the modal manually instead, so that open stays plain).
+  // `useSportProfiles()` here is a second subscription to the same query `data.sportsByKey`
+  // already comes from (deduped by TanStack Query, not a second request) — needed for its own
+  // `isLoading`, which `useMatchesPageData` doesn't expose separately.
+  const sportProfilesQuery = useSportProfiles();
+  const hasAutoPromptedAddSportRef = useRef(false);
+  const [addSportPromptMessage, setAddSportPromptMessage] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (
+      hasAutoPromptedAddSportRef.current ||
+      sportProfilesQuery.isLoading ||
+      sportProfilesQuery.data.length > 0
+    ) {
+      return;
+    }
+    hasAutoPromptedAddSportRef.current = true;
+    setAddSportPromptMessage(PAGE_ACCESS_NO_SPORTS_PROMPT);
+    setIsAddSportOpen(true);
+  }, [sportProfilesQuery.isLoading, sportProfilesQuery.data.length]);
+
   const closeDetail = () => {
     data.closeDetail();
     setSearchParams((params) => {
@@ -71,7 +85,10 @@ export function MatchesPage() {
           sports={Object.values(data.sportsByKey)}
           active={data.activeSport}
           onChange={data.setActiveSport}
-          onAddSport={() => setIsAddSportOpen(true)}
+          onAddSport={() => {
+            setAddSportPromptMessage(undefined);
+            setIsAddSportOpen(true);
+          }}
         />
         <button
           type="button"
@@ -84,78 +101,18 @@ export function MatchesPage() {
       </div>
 
       <div className="flex flex-col gap-4 md:flex-row md:items-stretch">
-        <section aria-label="Discover sessions" className="min-w-0 flex-1">
-          <h2 className="sr-only">Discover</h2>
-          <div className="mb-3.5 flex flex-col gap-2.5">
-            <div className="flex items-center gap-2">
-              <select
-                value={data.searchMode}
-                onChange={(event) => data.setSearchMode(event.target.value as SessionSearchMode)}
-                aria-label="Search scope"
-                className="border-hairline cursor-pointer rounded-lg border-border bg-surface-2 px-2.5 py-2 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-              >
-                {SEARCH_MODE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value} disabled={option.disabled}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <div className="relative min-w-0 flex-1">
-                <IconSearch
-                  className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-text-muted"
-                  aria-hidden="true"
-                />
-                <input
-                  type="text"
-                  value={data.searchText}
-                  onChange={(event) => data.setSearchText(event.target.value)}
-                  placeholder="Search"
-                  aria-label="Search sessions"
-                  className="border-hairline w-full rounded-lg border-border bg-surface-2 py-2 pr-2.5 pl-8 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {FILTER_PILL_LABELS.map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  aria-disabled="true"
-                  title="Filtering by this isn't available yet"
-                  className="border-hairline cursor-not-allowed rounded-full border-border bg-surface-1 px-3 py-1.5 text-xs text-text-secondary"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {data.isDiscoverLoading && <p className="text-2sm text-text-muted">Loading…</p>}
-          {data.isDiscoverError && (
-            <p role="alert" className="text-2sm text-text-danger">
-              Couldn't load sessions to discover.
-            </p>
-          )}
-          {!data.isDiscoverLoading && !data.isDiscoverError && data.discoverSessions.length === 0 && (
-            <p className="text-2sm text-text-muted">
-              {data.searchText.trim() === ''
-                ? 'No sessions to discover for this sport yet.'
-                : 'No sessions match your search.'}
-            </p>
-          )}
-          {!data.isDiscoverLoading && !data.isDiscoverError && data.discoverSessions.length > 0 && (
-            <div className={discoverGridClassName}>
-              {data.discoverSessions.map((session) => (
-                <SessionListCard
-                  key={session.id}
-                  session={session}
-                  sportsByKey={data.sportsByKey}
-                  onViewDetails={data.onViewDetails}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+        <SessionDiscoverPanel
+          searchMode={data.searchMode}
+          onSearchModeChange={data.setSearchMode}
+          searchText={data.searchText}
+          onSearchTextChange={data.setSearchText}
+          sessions={data.discoverSessions}
+          isLoading={data.isDiscoverLoading}
+          isError={data.isDiscoverError}
+          sportsByKey={data.sportsByKey}
+          onViewDetails={data.onViewDetails}
+          gridClassName={discoverGridClassName}
+        />
 
         <div className="relative hidden shrink-0 md:block md:w-px md:self-stretch md:bg-border">
           <button
@@ -225,6 +182,10 @@ export function MatchesPage() {
         onSubmit={data.submitCreate}
         isSubmitting={data.isCreating}
         isError={data.isCreateError}
+        availableSports={availableSports}
+        onAddSport={addSportMutation.mutate}
+        isAddingSport={addSportMutation.isPending}
+        isAddSportError={addSportMutation.isError}
       />
 
       <SessionDetailModal
@@ -265,6 +226,7 @@ export function MatchesPage() {
         onSubmit={(payload) =>
           addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
         }
+        promptMessage={addSportPromptMessage}
       />
     </main>
   );

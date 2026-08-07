@@ -586,4 +586,45 @@ describe('HomeFeedPage', () => {
     // Not a bare backdrop — the normal Home Feed content is there.
     expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument();
   });
+
+  // CLIENT-SESSION-7: UpcomingMatches' empty-state CTAs — only reachable with zero upcoming
+  // matches, unlike this file's other tests (sessionFixtures always renders 3).
+  it('empty upcoming matches: "Create a match"/"Join a match" open their own modals', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === `/sessions/group/${fixtureGroup.id}`) {
+        return { data: { success: true, message: '', data: feedPage([]), timestamp: '' } };
+      }
+      if (url === '/sessions/mine') {
+        return { data: { success: true, message: '', data: feedPage([]), timestamp: '' } };
+      }
+      if (url === '/users/friends') {
+        return { data: { success: true, message: '', data: [], timestamp: '' } };
+      }
+      if (url === '/sessions/discover') {
+        return { data: { success: true, message: '', data: feedPage([]), timestamp: '' } };
+      }
+      const staticResponse = staticGetResponse(url);
+      if (staticResponse) return staticResponse;
+      if (url === '/posts/feed') {
+        return { data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' } };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+    const user = userEvent.setup();
+
+    render(<HomeFeedPage />, { wrapper });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
+    expect(screen.queryAllByRole('button', { name: /view details/i })).toHaveLength(0);
+    expect(screen.getByText('No upcoming matches.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Create a match' }));
+    expect(await screen.findByRole('dialog', { name: 'Create your session' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Create your session' })).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Join a match' }));
+    expect(await screen.findByRole('dialog', { name: 'Discover sessions' })).toBeInTheDocument();
+  });
 });

@@ -1,19 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useMatchesPageStore } from '@/app/matchesPageStore';
-import { useFriends } from '@/features/friends/hooks/useFriends';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
-import { useFavoriteLocation } from '@/features/location/hooks/useFavoriteLocation';
-import { useFavoriteLocations } from '@/features/location/hooks/useFavoriteLocations';
-import { useUnfavoriteLocation } from '@/features/location/hooks/useUnfavoriteLocation';
-import { useLocationPickerData } from '@/features/location/useLocationPickerData';
-import type { Location } from '@/shared/types/location';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { useApproveParticipant } from './hooks/useApproveParticipant';
 import { useCancelSession } from './hooks/useCancelSession';
-import { useCreateSession } from './hooks/useCreateSession';
 import { useDiscoverSessions } from './hooks/useDiscoverSessions';
 import { useGroupSessionsForGroups } from './hooks/useGroupSessions';
 import { useJoinedSessions } from './hooks/useJoinedSessions';
@@ -25,7 +18,9 @@ import { useRequestedParticipants } from './hooks/useRequestedParticipants';
 import { useSession } from './hooks/useSession';
 import { useSessionParticipants } from './hooks/useSessionParticipants';
 import { dedupeSessionsById, groupSessionsByDate } from './groupSessionsByDate';
-import type { CreateSessionPayload, SessionListItem, SessionSearchMode } from './types';
+import { filterDiscoverSessions } from './discoverSearch';
+import { useCreateSessionModalData } from './useCreateSessionModalData';
+import type { SessionListItem, SessionSearchMode } from './types';
 
 const CAN_MANAGE_ROLES = new Set(['group_owner', 'group_admin']);
 
@@ -77,20 +72,10 @@ export function useMatchesPageData(initialSessionId: number | null) {
   const [searchText, setSearchText] = useState('');
   const [searchMode, setSearchMode] = useState<SessionSearchMode>('sessions');
   const discoverQuery = useDiscoverSessions(activeSportId, currentUserId !== undefined);
-  const discoverSessions = useMemo<SessionListItem[]>(() => {
-    const content = discoverQuery.data?.content ?? [];
-    const withGroupName = content.map((session) => ({ ...session, groupName: null }));
-    // "Location"/"Gear" search modes have no wired behavior yet (no gear/equipment domain
-    // exists in this app — client/CLAUDE.md) — only "Sessions" actually filters.
-    const query = searchMode === 'sessions' ? searchText.trim().toLowerCase() : '';
-    if (query === '') return withGroupName;
-    return withGroupName.filter((session) => {
-      const title = session.title ?? `${session.sportName} session`;
-      return (
-        title.toLowerCase().includes(query) || session.location.name.toLowerCase().includes(query)
-      );
-    });
-  }, [discoverQuery.data, searchMode, searchText]);
+  const discoverSessions = useMemo<SessionListItem[]>(
+    () => filterDiscoverSessions(discoverQuery.data?.content ?? [], searchMode, searchText),
+    [discoverQuery.data, searchMode, searchText],
+  );
 
   // --- "My sessions" panel ---
   const groupsQuery = useUserGroups(currentUserId);
@@ -143,70 +128,9 @@ export function useMatchesPageData(initialSessionId: number | null) {
     groupSessionQueries.some((query) => query.isError);
 
   // --- Create session ---
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isCreateLocationPickerOpen, setIsCreateLocationPickerOpen] = useState(false);
-  const [createFormSportId, setCreateFormSportId] = useState<number | null>(null);
-  const [selectedLocationForCreate, setSelectedLocationForCreate] = useState<Location | null>(null);
-
-  const openCreateModal = () => setIsCreateModalOpen(true);
-  const closeCreateModal = () => {
-    setIsCreateModalOpen(false);
-    setSelectedLocationForCreate(null);
-    setCreateFormSportId(null);
-  };
-
-  // CLIENT-SESSION-5: the favorites dropdown needs to be scoped to whatever sport is *currently
-  // selected in the still-open, uncommitted create form* — CreateSessionModal owns that Sport
-  // field as its own local state (per its documented "owns its own transient form state"
-  // precedent), so it reports the currently-effective sportId up via this callback purely for
-  // query-scoping, without the field itself being lifted/controlled here. Reuses
-  // `createFormSportId` (already populated by `onOpenLocationPickerForCreate` below) as the same
-  // single source of truth for both the dropdown and `useLocationPickerData`.
-  const onEffectiveSportChangeForCreate = (sportId: number | undefined) =>
-    setCreateFormSportId(sportId ?? null);
-  const favoriteLocationsQuery = useFavoriteLocations(createFormSportId ?? undefined, isCreateModalOpen);
-  const favoriteLocationIds = useMemo(
-    () => new Set((favoriteLocationsQuery.data?.content ?? []).map((location) => location.id)),
-    [favoriteLocationsQuery.data],
-  );
-  const favoriteLocationMutation = useFavoriteLocation();
-  const unfavoriteLocationMutation = useUnfavoriteLocation();
-  const toggleFavoriteLocation = (location: Location) => {
-    if (createFormSportId === null) return;
-    const payload = { locationId: location.id, sportId: createFormSportId };
-    if (favoriteLocationIds.has(location.id)) {
-      unfavoriteLocationMutation.mutate(payload);
-    } else {
-      favoriteLocationMutation.mutate(payload);
-    }
-  };
-
-  const locationPickerData = useLocationPickerData(
-    createFormSportId ?? SPORT_ID_BY_KEY.football,
-    isCreateLocationPickerOpen,
-    (location) => setSelectedLocationForCreate(location),
-    () => setIsCreateLocationPickerOpen(false),
-  );
-  // useLocationPickerData returns only its *derived* state/handlers — isOpen/onClose are the
-  // inputs it was given, not part of its return value, so LocationPicker's full prop set is
-  // assembled here rather than in the page component.
-  const locationPickerForCreate = {
-    isOpen: isCreateLocationPickerOpen,
-    onClose: () => setIsCreateLocationPickerOpen(false),
-    ...locationPickerData,
-    favoriteLocationIds,
-    onToggleFavorite: toggleFavoriteLocation,
-    isTogglingFavorite: favoriteLocationMutation.isPending || unfavoriteLocationMutation.isPending,
-  };
-
-  const createSessionMutation = useCreateSession();
-  const submitCreate = (payload: CreateSessionPayload) => {
-    createSessionMutation.mutate(payload, { onSuccess: closeCreateModal });
-  };
-
-  // CLIENT-SESSION-4: only needed while the create form is open — the "Invite your friend"
-  // field's client-side search is a filter over this full unpaginated list, no new endpoint.
-  const friendsQuery = useFriends(isCreateModalOpen);
+  // CLIENT-SESSION-7: extracted into its own hook so Home Feed/Groups/Friends' rail-triggered
+  // modal instance and this page's "Create session" button share exactly one implementation.
+  const createSessionModalData = useCreateSessionModalData();
 
   // --- Session detail ---
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(initialSessionId);
@@ -256,27 +180,7 @@ export function useMatchesPageData(initialSessionId: number | null) {
     collapsedDateKeys,
     toggleDateGroupCollapsed,
 
-    isCreateModalOpen,
-    openCreateModal,
-    closeCreateModal,
-    selectedLocationForCreate,
-    onOpenLocationPickerForCreate: (sportId: number) => {
-      setCreateFormSportId(sportId);
-      setIsCreateLocationPickerOpen(true);
-    },
-    locationPickerForCreate,
-    submitCreate,
-    isCreating: createSessionMutation.isPending,
-    isCreateError: createSessionMutation.isError,
-    friends: friendsQuery.data ?? [],
-    isFriendsLoading: friendsQuery.isLoading,
-    onEffectiveSportChangeForCreate,
-    favoriteLocationsForCreate: favoriteLocationsQuery.data?.content ?? [],
-    isFavoriteLocationsLoading: favoriteLocationsQuery.isLoading,
-    // CLIENT-SESSION-5: selecting a favorite straight from the dropdown bypasses the full
-    // LocationPicker flow entirely — same setter useLocationPickerData's own onSelect uses, just
-    // called directly since there's no picker dialog to also close here.
-    onSelectLocationForCreate: setSelectedLocationForCreate,
+    ...createSessionModalData,
 
     selectedSessionId,
     onViewDetails: (sessionId: number) => setSelectedSessionId(sessionId),

@@ -8,6 +8,7 @@ import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessi
 import { getSportIcon } from '@/shared/lib/sportIcons';
 import { formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
+import { Button } from '@/shared/ui/button';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Session } from '@/shared/types/session';
 
@@ -17,6 +18,11 @@ interface UpcomingMatchesProps {
   sportsByKey: Record<SportKey, SportProfile>;
   onSeeAll: () => void;
   onSelectMatch: (sessionId: number) => void;
+  /** CLIENT-SESSION-7: empty-state-only CTAs (see the empty-state branch below) — opens the
+   * hosting page's create-session modal / Discover modal. Kept as separate props (not literally
+   * `onSeeAll` reused) so each can point somewhere more specific than the populated list does. */
+  onCreateMatch: () => void;
+  onJoinMatch: () => void;
   /**
    * Max matches rendered after the sport filter; the rest live behind
    * "See all" (cap of 4 decided on the HF-4 backlog entry — the epic left it open).
@@ -32,6 +38,10 @@ interface UpcomingMatchesProps {
  * cheaply knowing "have I joined" per card isn't available without fetching
  * each session's participants, so this card shows a status badge instead of a
  * join button).
+ *
+ * CLIENT-SESSION-7: the empty state (only, not the populated list) also
+ * renders "Create a match"/"Join a match" CTAs — the hosting page decides
+ * what they open (a create-session modal, a discover modal).
  */
 export function UpcomingMatches({
   matches,
@@ -39,6 +49,8 @@ export function UpcomingMatches({
   sportsByKey,
   onSeeAll,
   onSelectMatch,
+  onCreateMatch,
+  onJoinMatch,
   maxVisible = 4,
 }: UpcomingMatchesProps) {
   const filtered =
@@ -64,7 +76,17 @@ export function UpcomingMatches({
       </div>
 
       {visible.length === 0 ? (
-        <div className="py-2 text-xs text-text-muted">No upcoming matches for this sport.</div>
+        <div className="flex flex-col items-center gap-2 py-2">
+          <p className="text-xs text-text-muted">No upcoming matches.</p>
+          <div className="flex w-full gap-2">
+            <Button variant="primary" size="sm" className="flex-1" onClick={onJoinMatch}>
+              Join a match
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1" onClick={onCreateMatch}>
+              Create a match
+            </Button>
+          </div>
+        </div>
       ) : (
         <div className="flex flex-col gap-2.5">
           {visible.map((match) => {
