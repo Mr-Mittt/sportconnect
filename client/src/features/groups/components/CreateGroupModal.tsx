@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { SPORT_ID_BY_KEY } from '@/features/feed/sportIdMap';
+import { sportIdForKey } from '@/features/feed/sportIdMap';
 import {
   MAX_GROUP_DESCRIPTION_LENGTH,
   MAX_GROUP_NAME_LENGTH,
@@ -69,7 +69,10 @@ export function CreateGroupModal({
   const submit = () => {
     if (!isValid) return;
     onSubmit({
-      sportId: SPORT_ID_BY_KEY[effectiveSport as SportKey],
+      // effectiveSport only ever holds a key from the live catalog (lockedSport or a selected
+      // option), so this always resolves — the ?? 0 fallback is defensive, not reachable in
+      // practice.
+      sportId: sportIdForKey(effectiveSport as SportKey) ?? 0,
       groupName: groupName.trim(),
       description: description.trim() || undefined,
       isPrivate,

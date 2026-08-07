@@ -4,7 +4,7 @@ import { useAuthStore } from '@/app/authStore';
 import { useGroupsPageStore } from '@/app/groupsPageStore';
 import { useHomeFeedStore } from '@/app/homeFeedStore';
 import { usePost } from '@/features/feed/hooks/usePost';
-import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
+import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
@@ -22,8 +22,8 @@ import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
+import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
-import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { useHomeFeedData } from './useHomeFeedData';
 
@@ -141,9 +141,13 @@ export function HomeFeedPage() {
   );
   const hashtagResultsData = useHashtagResultsData(activeHashtag, activeHashtag !== null);
   const addSportMutation = useAddSportProfile(currentUserId);
+  const sportCatalog = useSportCatalog();
   const availableSports = useMemo(
-    () => ALL_SPORT_KEYS.filter((key) => !data.sportProfiles.some((sport) => sport.key === key)),
-    [data.sportProfiles],
+    () =>
+      sportCatalog.data
+        .map((sport) => sport.key)
+        .filter((key) => !data.sportProfiles.some((sport) => sport.key === key)),
+    [sportCatalog.data, data.sportProfiles],
   );
 
   const sportsByKey = useMemo(
@@ -179,7 +183,7 @@ export function HomeFeedPage() {
   // Groups/Friends/Matches (create) and its own self-contained Discover modal instance (each
   // rail-hosting page gets one, scoped to that page's own active sport pill).
   const createSessionModalData = useCreateSessionModalData();
-  const activeSportId = activeSport === 'all' ? undefined : SPORT_ID_BY_KEY[activeSport];
+  const activeSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
   const discoverModalData = useDiscoverModalData(activeSportId);
 
   return (
@@ -192,6 +196,7 @@ export function HomeFeedPage() {
             sports={data.sportProfiles}
             active={activeSport}
             onChange={setActiveSport}
+            maxSports={sportCatalog.data.length || undefined}
             onAddSport={() => {
               setAddSportOpenCount((count) => count + 1);
               setIsAddSportOpen(true);

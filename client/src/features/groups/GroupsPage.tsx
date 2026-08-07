@@ -9,7 +9,7 @@ import { useJoinRequests } from '@/features/feed/hooks/useJoinRequests';
 import { useLeaveGroup } from '@/features/feed/hooks/useLeaveGroup';
 import { usePost } from '@/features/feed/hooks/usePost';
 import { useUpdateGroup } from '@/features/feed/hooks/useUpdateGroup';
-import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
+import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
@@ -29,10 +29,11 @@ import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
 import { UpdateBroadcastConfirmDialog } from '@/shared/components/UpdateBroadcastConfirmDialog';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
+import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
 import { PAGE_ACCESS_NO_SPORTS_PROMPT } from '@/shared/lib/noSportsPrompt';
-import { ALL_SPORT_KEYS, SPORT_PROFILE_CONFIG } from '@/shared/lib/sportProfileConfig';
+import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CreateGroupModal } from './components/CreateGroupModal';
 import { DeleteGroupConfirmDialog } from './components/DeleteGroupConfirmDialog';
@@ -264,9 +265,13 @@ export function GroupsPage() {
       >,
     [data.sportProfiles],
   );
+  const sportCatalog = useSportCatalog();
   const availableSports = useMemo(
-    () => ALL_SPORT_KEYS.filter((key) => !data.sportProfiles.some((sport) => sport.key === key)),
-    [data.sportProfiles],
+    () =>
+      sportCatalog.data
+        .map((sport) => sport.key)
+        .filter((key) => !data.sportProfiles.some((sport) => sport.key === key)),
+    [sportCatalog.data, data.sportProfiles],
   );
 
   // GRP-1: the full selected Group (cover banner, Settings tab) — found in
@@ -442,7 +447,7 @@ export function GroupsPage() {
 
   // CLIENT-SESSION-7: UpcomingMatches' empty-state CTAs — same pattern as HomeFeedPage.
   const createSessionModalData = useCreateSessionModalData();
-  const activeSessionSportId = activeSport === 'all' ? undefined : SPORT_ID_BY_KEY[activeSport];
+  const activeSessionSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
   const discoverModalData = useDiscoverModalData(activeSessionSportId);
   // Chat only (user decision, after Members/Settings/Posts all being forced
   // to the same viewport-derived height left short tabs with a large empty
@@ -482,6 +487,7 @@ export function GroupsPage() {
             sports={data.sportProfiles}
             active={activeSport}
             onChange={guardedSetActiveSport}
+            maxSports={sportCatalog.data.length || undefined}
             onAddSport={() => {
               setAddSportPromptMessage(undefined);
               setAddSportOpenCount((count) => count + 1);
@@ -801,7 +807,7 @@ export function GroupsPage() {
           onConfirm={() =>
             setSportGate((current) => (current !== null ? { ...current, step: 'form' } : null))
           }
-          sportName={sportGate !== null ? SPORT_PROFILE_CONFIG[sportGate.sportKey].label : ''}
+          sportName={sportGate !== null ? getSportProfileConfig(sportGate.sportKey).label : ''}
         />
         <AddSportModal
           key={`sport-gate-${sportGate?.invitationId ?? 'none'}`}

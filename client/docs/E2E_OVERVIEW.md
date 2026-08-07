@@ -221,26 +221,26 @@ The single logged-in test user, unless a spec explicitly overrides via an admin-
 |---|---|---|
 | `mockUser` | Jordan Lee, `jordan@example.com` | `id: '11111111-...'` |
 | `mockPassword` | `password123` | |
-| `mockSportProfiles` | Soccer(5)/Basketball(6)/Tennis(2) | **At the 3-sport cap** — any spec asserting `SportSwitcher`'s "Add sport" is `aria-disabled` relies on this |
+| `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. Any spec asserting `SportSwitcher`'s "Add sport" is `aria-disabled` relies on this (now "every available sport already held", not a numeric cap) |
 
-Posts (all owned by `mockUser` unless noted) — `sportId` 5 = Soccer ("Football" pill in the UI, see
-`sportIdMap.ts`'s naming note), 6 = Basketball:
+Posts (all owned by `mockUser` unless noted) — `sportId` 1 = Badminton, 3 = Pickleball
+(SPORT-3 — was 5 = Soccer/6 = Basketball before the real catalog shrank to 2 sports, A6):
 
 | Fixture | id | Type | Notes |
 |---|---|---|---|
-| `mockPost` | 1 | `USER_FEED` | "Great match today! #fridayrun" — `likeCount: 3`, `commentCount: 1` |
-| `mockGroupPost` | 2 | `GROUP_POST` | belongs to `mockGroup` |
+| `mockPost` | 1 | `USER_FEED` | "Great match today! #fridayrun" — `likeCount: 3`, `commentCount: 1` — Badminton |
+| `mockGroupPost` | 2 | `GROUP_POST` | belongs to `mockGroup` — Badminton |
 | `mockBroadcastPost` | 3 | `GROUP_BROADCAST` | belongs to `mockGroup`, `broadcastEndTime: hoursFromNow(24)` (always active) |
-| `mockBasketballPost` | 4 | `USER_FEED` | owned by **Priya Shah** (a friend, not `mockUser`) — the "no delete menu on someone else's post" case |
+| `mockBasketballPost` | 4 | `USER_FEED` | owned by **Priya Shah** (a friend, not `mockUser`) — the "no delete menu on someone else's post" case — Pickleball (name unchanged since SPORT-3, only its sportId/sportName fields did) |
 | `mockExpiredBroadcastPost` | 5 | `GROUP_BROADCAST` | belongs to `mockGroup`, `broadcastEndTime: hoursAgo(24)` — proves the expiry filter is real |
 
 Groups:
 
 | Fixture | id | sportId | `currentUserRole` | Notes |
 |---|---|---|---|---|
-| `mockGroup` | 1 | 5 (Soccer) | `group_member` | "Friday Night Football" |
-| `mockOwnedGroup` | 3 | 2 (Tennis) | `group_owner` | "Weekend Tennis Ladder" — the owner/admin broadcast-toggle fixture, also GRP-2's Settings-tab fixture |
-| `mockPublicGroup` | 2 | 6 (Basketball) | n/a (not joined) | "Riverside Hoopers" — the "request to join" fixture |
+| `mockGroup` | 1 | 1 (Badminton) | `group_member` | "Friday Night Football" (display name unrelated to real sportId, unchanged by SPORT-3) |
+| `mockOwnedGroup` | 3 | 3 (Pickleball) | `group_owner` | "Weekend Tennis Ladder" — the owner/admin broadcast-toggle fixture, also GRP-2's Settings-tab fixture |
+| `mockPublicGroup` | 2 | 3 (Pickleball) | n/a (not joined) | "Riverside Hoopers" — the "request to join" fixture. **SPORT-3:** now the same sport as `mockOwnedGroup` (only 2 real sports exist) — harmless, no test examines both groups' sports together |
 
 `mockHashtag`: `fridayrun`, `usageCount: 12`. `mockComment`: one root comment on `mockPost` (matches its
 `commentCount: 1`). `mockGroupSettings`: settings for `mockOwnedGroup` (`groupTypeName: 'DEFAULT'`,
@@ -264,7 +264,7 @@ skips `pending_owner` entirely, so the only invitation that can realistically si
 owner-approval queue is one a peer member sent. Backs `groupInvitationsState`/`GET
 .../invitations` (the owner/admin's merged-queue source, distinct from `sentInvitationsState`/`GET
 .../invitations/sent`). `mockReceivedInvitation` — a `pending_user` invitation addressed to the
-test user for `mockPublicGroup` ("Riverside Hoopers", Basketball, not yet joined), from **Priya
+test user for `mockPublicGroup` ("Riverside Hoopers", Pickleball, not yet joined), from **Priya
 Shah**. Backs `userPendingInvitationsState`/`GET /invitations/user` — `GroupDiscoveryPanel`'s
 "Invitations" section. Accepting it (`PUT .../accept`) synthesizes a full `Group` from the matching
 `publicGroupsState` entry and prepends it to `userGroupsState`, same "mutate state so a refetch
@@ -308,12 +308,12 @@ helpers called.
 | Step | What it checks | Notes |
 |---|---|---|
 | 1. load | Shell/switcher/feed/all 3 rail blocks render; 3 articles, 3 match CTAs, 1 trending row, 1 broadcast row | |
-| 2. Basketball pill | Feed + Upcoming Matches filter to 1; Trending/Broadcasts **unchanged** | Trending/broadcasts are deliberately global, not sport-scoped (HF-5/HF-6 resolved open question) |
+| 2. Pickleball pill | Feed filters to 1 (Priya Shah's post); Upcoming Matches filters to **2** (`mockSession` + `mockOwnedGroupSession`, both Pickleball); Trending/Broadcasts **unchanged** | **SPORT-3:** renamed from "Basketball pill" — with only 2 real sports, `mockSession`/`mockOwnedGroupSession` now share Pickleball, so the matches count is 2, not 1 (the old "one session per sport" 1:1:1 split isn't representable). Trending/broadcasts are deliberately global, not sport-scoped (HF-5/HF-6 resolved open question) |
 | 3. "All" | Filters clear back to 3 | |
 | 4. like toggle | `likeCount` 3→4→3, `aria-pressed` flips | Optimistic — no network wait asserted |
 | 5. hashtag click | Opens `HashtagPostsModal` with 2 matching posts (`mockPost`+`mockGroupPost`, both tagged `fridayrun`); reachable from both an inline post tag and the Trending row; Escape closes it; **no URL change** | Modal, not a route — user decision, see FEED-6's delta |
-| 6. match CTA | "View details" navigates to `/matches?session={id}` with the detail dialog pre-opened, then returns to `/` for the remaining steps | CLIENT-SESSION-1: real destination now (was a deliberate no-op before the session backend existed); matches come from `mocks/handlers/sessions.ts`'s default 3-session fixture set (one per sport) |
-| 7. "Add sport" | `aria-disabled="true"` | Relies on the fixture user being **at** the 3-sport cap |
+| 6. match CTA | "View details" navigates to `/matches?session={id}` with the detail dialog pre-opened, then returns to `/` for the remaining steps | CLIENT-SESSION-1: real destination now (was a deliberate no-op before the session backend existed); matches come from `mocks/handlers/sessions.ts`'s default 3-session fixture set |
+| 7. "Add sport" | `aria-disabled="true"` | **SPORT-3:** relies on the fixture user holding a profile for every sport the live catalog serves (2), not a numeric "3-sport cap" anymore |
 | 8. delete | "..." menu only on the caller's own post (not Priya Shah's); delete removes it, count 3→2 | |
 
 ### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + GRP-3 + FRIEND-1, several independent `test()`s)
@@ -322,7 +322,7 @@ helpers called.
 |---|---|---|
 | `home feed @ {375,768,1280}px — no horizontal overflow` (×3) | `scrollWidth - clientWidth <= 0` | String-form `page.evaluate` — e2e tsconfig has no DOM lib |
 | `home feed @ {375,768,1280}px — axe reports no critical/serious violations` (×3) | `axe-core` scan, filtered to `impact === 'critical' \| 'serious'` | Moderate/minor violations don't fail the gate |
-| `sport-filtered state — axe reports no critical/serious violations` | Same axe gate after clicking Basketball (1 article) | |
+| `sport-filtered state — axe reports no critical/serious violations` | Same axe gate after clicking Pickleball (1 article) | SPORT-3: renamed from Basketball |
 | `groups page — Members tab (owner) — axe reports no critical/serious violations` | Same axe gate on the Groups page, `mockOwnedGroup` selected, Members tab active | GRP-3: the first Groups-page a11y coverage in this file — GRP-1/GRP-2 both claimed to extend this file but never actually added a Groups-page block. One check (owner role, 1280px, Members tab — the richest per-group tab) establishes a baseline rather than backfilling every tab/breakpoint retroactively |
 | `friends page — friend selected — axe reports no critical/serious violations` | Same axe gate on the Friends page with `mockFriend` selected (profile + chat split, the richest state) | FRIEND-1: one check at 1280px, same "one representative state" scoping the Groups-page check above uses |
 | `/login`/`/register` @ {375,768,1280}px — no horizontal overflow (×6) | Same overflow check, logged-out pages | No `seedAuthenticatedSession` — these routes aren't behind `ProtectedRoute` |
@@ -357,28 +357,29 @@ helpers called.
 ### `e2e/flows/feed-groups-journey.spec.ts` (FEED-10, one `test()` with 9 steps + 1 separate `test()`)
 
 Uses `seedPaginatedFeedOnNextLoad(mockSessionId)` — replaces the feed with **21 posts** before the
-first fetch (index 19 = a `GROUP_POST` for `mockGroup`, index 20 = Basketball, everything else Soccer).
+first fetch (index 19 = a `GROUP_POST` for `mockGroup`, index 20 = Pickleball, everything else
+Badminton — SPORT-3: was Basketball/Soccer before A6 shrank the real catalog to 2 sports).
 This spec destructures `mockSessionId` directly (needed by the seed/override admin calls).
 
 **Main test — `Feed/groups journey`:**
 
 | Step | What it checks | Notes |
 |---|---|---|
-| 1. load + pagination | 20 articles (page 0) → "Load more" → 21 articles, Basketball post now visible, "Load more" button gone | Real second-page fetch, not a fixed 3-post fixture. Only clicks the button if it's still visible — `useInfiniteScrollSentinel`'s `IntersectionObserver` (200px `rootMargin`) can auto-fire the same fetch first under slow/contended rendering, a real race reproduced under parallel headless runs, not test flakiness to shrug off |
+| 1. load + pagination | 20 articles (page 0) → "Load more" → 21 articles, Pickleball post now visible, "Load more" button gone | Real second-page fetch, not a fixed 3-post fixture. Only clicks the button if it's still visible — `useInfiniteScrollSentinel`'s `IntersectionObserver` (200px `rootMargin`) can auto-fire the same fetch first under slow/contended rendering, a real race reproduced under parallel headless runs, not test flakiness to shrug off |
 | 2. like toggle | `3→4→3` | Base `likeCount` inherited from `mockPost` by every seeded post |
 | 3. add comment | Comment count `1→2`, appears in dialog | |
 | 4. create post (simulated failure) | `simulateCreatePostFailOnce(mockSessionId)` first → first submit fails with error text, composer clears anyway → retry succeeds, count → 22 | FEED-10's required "at least one MSW-simulated error response" acceptance criterion |
 | 5. switch to group feed | Click "Friday Night Football" (`mockGroup`) in `GroupSpaceSwitcher` → 1 article (the seeded GROUP_POST) | Scoped query — "Friday Night Football" also appears as a broadcast-rail row, an ambiguous unscoped match |
-| 6. create a group | Back to "All" (group switcher) → `GroupDiscoveryPanel`'s "Create Group" button → "Sunday Runners" (no manual sport pick) → appears selected in switcher, "No posts yet for this sport." | GRP-1: `GroupSpaceSwitcher`'s own "Group options" dropdown was removed (redundant with the panel's Join/Create entry points) — the panel only renders in the "All" state, hence the extra click back. **GRP-8 delta:** step 5's group selection now also drives this page's own sport pill to Football (`groupsPageStore.selectGroup`'s derivation) — deselecting the *group* via the group switcher's "All" leaves the *sport* pill on Football, so `CreateGroupModal` opens already `lockedSport`-locked to it (no `#create-group-sport` select to interact with — asserts `toHaveCount(0)` instead of `selectOption`) |
+| 6. create a group | Back to "All" (group switcher) → `GroupDiscoveryPanel`'s "Create Group" button → "Sunday Runners" (no manual sport pick) → appears selected in switcher, "No posts yet for this sport." | GRP-1: `GroupSpaceSwitcher`'s own "Group options" dropdown was removed (redundant with the panel's Join/Create entry points) — the panel only renders in the "All" state, hence the extra click back. **GRP-8 delta:** step 5's group selection now also drives this page's own sport pill to Badminton (`groupsPageStore.selectGroup`'s derivation; SPORT-3: was Football before the real catalog shrank to Badminton/Pickleball) — deselecting the *group* via the group switcher's "All" leaves the *sport* pill on Badminton, so `CreateGroupModal` opens already `lockedSport`-locked to it (no `#create-group-sport` select to interact with — asserts `toHaveCount(0)` instead of `selectOption`) |
 | 7. Trending + Broadcasts | 1 trending row, 1 broadcast row (expired one excluded) | Unaffected by the postsState replacement — separate handler state |
-| 8. Broadcast toggle permission | Absent for `mockGroup` (member) → reset sport pill to "All" → present for `mockOwnedGroup` (owner, Tennis) | **GRP-8 delta:** the group switcher list is sport-filtered by this page's own pill (unchanged design), which now reliably stays on Football from steps 5–6 — `mockOwnedGroup` ("Weekend Tennis Ladder", Tennis) isn't reachable in that filtered list until the sport pill is explicitly reset to "All" first |
-| 9. SPORT-1 sport filter | Basketball pill → 1 article (the seeded index-20 post); back to All → 22 | Waits for Home Feed's own `<h1>` before clicking — `GroupsPage`/`HomeFeedPage` share `SportSwitcher`'s exact accessible name ("Sport filter" group), and under a slow route transition the previous page's pill can still be attached, so an unscoped click can silently land on the wrong page's button (reproduced under parallel headless runs) |
+| 8. Broadcast toggle permission | Absent for `mockGroup` (member) → reset sport pill to "All" → present for `mockOwnedGroup` (owner, Pickleball) | **GRP-8 delta:** the group switcher list is sport-filtered by this page's own pill (unchanged design), which now reliably stays on Badminton from steps 5–6 — `mockOwnedGroup` ("Weekend Tennis Ladder", Pickleball) isn't reachable in that filtered list until the sport pill is explicitly reset to "All" first |
+| 9. SPORT-1 sport filter | Pickleball pill → 1 article (the seeded index-20 post); back to All → 22 | SPORT-3: renamed from Basketball. Waits for Home Feed's own `<h1>` before clicking — `GroupsPage`/`HomeFeedPage` share `SportSwitcher`'s exact accessible name ("Sport filter" group), and under a slow route transition the previous page's pill can still be attached, so an unscoped click can silently land on the wrong page's button (reproduced under parallel headless runs) |
 
 **Separate test — `zero sport profiles renders without error`:**
 
 | Test | What it checks | Notes |
 |---|---|---|
-| zero sport profiles | `seedZeroSportProfilesOnNextLoad(mockSessionId)` → only "All" + "Add sport" render, 2 buttons total, no crash | SPORT-1's zero-profile edge case — can't coexist with the main journey's 3-sport-cap step 9, hence a separate test |
+| zero sport profiles | `seedZeroSportProfilesOnNextLoad(mockSessionId)` → only "All" + "Add sport" render, 2 buttons total, no crash | SPORT-1's zero-profile edge case — can't coexist with the main journey's step 9 (fixture user holds a profile for every real sport), hence a separate test |
 
 ### `e2e/flows/group-settings.spec.ts` (GRP-2, one `test()` with 4 steps)
 
@@ -427,17 +428,17 @@ endpoint 400s for one).
 
 GRP-7's invitation approve/accept lifecycle, extended by GRP-8's sport-pill/merged-inviter/reject-reason/
 join-request-withdraw/sport-add-on-accept polish. Uses `mockOwnedGroup` ("Weekend Tennis Ladder") for the
-owner/admin approval-queue journey, and `mockPublicGroup` ("Riverside Hoopers", Basketball) via
+owner/admin approval-queue journey, and `mockPublicGroup` ("Riverside Hoopers", Pickleball) via
 `mockReceivedInvitation` for the invitee-facing acceptance journey.
 
 | Test | What it checks | Notes |
 |---|---|---|
 | Merged approval queue shows both row types, approving an invitation only clears the queue row | A join request and a `pending_owner` invitation render together in "Waiting for group approve"; approving the invitation removes only that row (no member added — real semantics: approve just moves `pending_owner` → `pending_user`); the join request still accepts normally afterward | GRP-7 |
-| Invitations section accepts an invitation and navigates into the new group, sport pill included | Accept → lands on the new group's Posts tab; **GRP-8 part 1**: `SportSwitcher`'s Basketball pill is now active (`aria-pressed="true"`) — no more forcing "All" first, since B15 added `sportId` to the invitation | Also asserts the merged-inviter copy: "Group invitation from Priya Shah" |
-| A group selection on the Groups page survives switching sport on Home Feed, but not an explicit "All" click on the Groups page itself | Open a group (Tennis pill active) → switch to Home, click "All" there → back to Groups, group still open, pill still Tennis → click "All" directly on Groups → group deselected | Regression guard for the `homeFeedStore`/`groupsPageStore` split. Waits for Home Feed's own `<h1>` before touching its Sport filter — same shared-accessible-name race as `feed-groups-journey.spec.ts` step 9, reproduced under parallel headless runs |
+| Invitations section accepts an invitation and navigates into the new group, sport pill included | Accept → lands on the new group's Posts tab; **GRP-8 part 1**: `SportSwitcher`'s Pickleball pill is now active (`aria-pressed="true"`) — no more forcing "All" first, since B15 added `sportId` to the invitation | SPORT-3: renamed from Basketball. Also asserts the merged-inviter copy: "Group invitation from Priya Shah" |
+| A group selection on the Groups page survives switching sport on Home Feed, but not an explicit "All" click on the Groups page itself | Open a group (Pickleball pill active) → switch to Home, click "All" there → back to Groups, group still open, pill still Pickleball → click "All" directly on Groups → group deselected | SPORT-3: renamed from Tennis. Regression guard for the `homeFeedStore`/`groupsPageStore` split. Waits for Home Feed's own `<h1>` before touching its Sport filter — same shared-accessible-name race as `feed-groups-journey.spec.ts` step 9, reproduced under parallel headless runs |
 | Invitations section is absent once there are none to show | Reject → **GRP-8 part 2**: opens `RejectInvitationConfirmDialog` first (optional reason, left empty here) → confirming inside the dialog removes the row | Exercises "reason is optional" (user decision) |
 | Join requests section withdraws the current user's own pending request | `mockJoinRequest` seeded via a new admin route (`seed-join-requests` — no existing e2e coverage of `JoinGroupModal`'s search UI to drive instead) → "Riverside Hoopers" row visible with a "Withdraw" button → clicking it empties the section | **GRP-8 part 3** |
-| Accepting an invitation for a sport the invitee lacks offers to add it first | Test user's sport profiles zeroed via `seedZeroSportProfilesOnNextLoad` → Accept → `AddSportIntroDialog` ("This Basketball group…", OK button) → `AddSportModal` pre-selected to Basketball → submitting adds the profile then accepts the invitation, landing on the new group's Posts tab | **GRP-8 part 5** |
+| Accepting an invitation for a sport the invitee lacks offers to add it first | Test user's sport profiles zeroed via `seedZeroSportProfilesOnNextLoad` → Accept → `AddSportIntroDialog` ("This Pickleball group…", OK button) → `AddSportModal` pre-selected to Pickleball → submitting adds the profile then accepts the invitation, landing on the new group's Posts tab | **GRP-8 part 5**. SPORT-3: renamed from Basketball |
 
 ### `e2e/flows/friends-journey.spec.ts` (FRIEND-1, one `test()` with 6 steps)
 
@@ -535,7 +536,7 @@ Fixtures: `mockSession` (standalone, created by the test user, `participantCount
 `mockGroupSession` (linked to `mockGroup`, created by someone else — the test user is only a
 `group_member`, proving Cancel stays hidden), `mockOwnedGroupSession` ("Ladder night", the test
 user is `group_owner` — `canManage` true), `mockDiscoverableSession` ("Weekend 5-a-side",
-standalone, created by someone else, Soccer — a sport the test user holds an active profile for —
+standalone, created by someone else, Badminton (SPORT-3: was Soccer) — a sport the test user holds an active profile for —
 the only fixture eligible for `GET /sessions/discover`; every other session fixture is either
 self-created or `GROUP_RECURRING`), `mockFriend` (the invite-friend field's search target), and
 `mockSessionJoinRequest`/`mockSecondSessionJoinRequest` (two pre-seeded `REQUESTED` rows on
@@ -557,11 +558,11 @@ steps 9-10 are what's actually new.
 | Step | What it checks | Notes |
 |---|---|---|
 | 1. load | `mockSession`/`mockGroupSession` render (My sessions), `mockDiscoverableSession` renders in the Discover region | |
-| 2. sport filter | Filtering to Basketball narrows to `mockSession`; "All" restores both | Filters both panels — `mockDiscoverableSession` (Soccer) isn't asserted here, covered by step 9 instead |
+| 2. sport filter | Filtering to Pickleball narrows to `mockSession`; "All" restores both | SPORT-3: renamed from Basketball. Filters both panels — `mockDiscoverableSession` (Badminton) isn't asserted here, covered by step 9 instead |
 | 3. join/leave | Open `mockSession`'s detail → Join → "Leave" appears, participant count 0→1 → Leave → back to "Join", count 1→0 | |
 | 4. cancel | Cancel session → reason field → Confirm cancel → "Cancelled" + reason shown; list card reflects it without a reload | Creator of a standalone session can manage it |
 | 5. group session, member-only | Open `mockGroupSession`'s detail → no "Cancel session" button, Join still available | The test user is a `group_member`, not owner/admin, and didn't create it |
-| 6. create | "Create session" → pick Basketball → "Choose location" (opens the favorites dropdown) → "Choose a location…" → search "Riverside" → select `mockLocation` → fill start time/title → invite `mockFriend` (badge appears) → check "Auto approve join request" (warning appears) → submit → dialog closes, new session appears in the list | Two dialogs/a dropdown all open in sequence (`CreateSessionModal`, its `LocationFavoritesDropdown`, and the nested `LocationPicker`) — the dropdown's own menu items are queried via `page.getByRole('menuitem', ...)`, not scoped to `createDialog`, since `DropdownMenuContent` portals as a DOM sibling of the Dialog, not a descendant |
+| 6. create | "Create session" → pick Pickleball → "Choose location" (opens the favorites dropdown) → "Choose a location…" → search "Riverside" → select `mockLocation` → fill start time/title → invite `mockFriend` (badge appears) → check "Auto approve join request" (warning appears) → submit → dialog closes, new session appears in the list | SPORT-3: renamed from Basketball. Two dialogs/a dropdown all open in sequence (`CreateSessionModal`, its `LocationFavoritesDropdown`, and the nested `LocationPicker`) — the dropdown's own menu items are queried via `page.getByRole('menuitem', ...)`, not scoped to `createDialog`, since `DropdownMenuContent` portals as a DOM sibling of the Dialog, not a descendant |
 | 7. approval queue | Open `mockOwnedGroupSession`'s ("Ladder night") detail → "Waiting for approval (2)" shows both requesters → Approve one (moves into Participants) → Reject the other with a reason → section disappears | Only renders for `canManage`; reject reveals an inline optional-reason box, not a second dialog |
 | 8. favorite a location, then pick it from the favorites dropdown | Open a new create form → dropdown shows "No favorites yet." → open `LocationPicker`, search "Riverside" → click the heart on `mockLocation`'s row (aria-label flips to "Unfavorite …") → select it → reopen the dropdown → the just-favorited location now lists instead of the empty state → selecting it sets the location again | Confirms `LocationFavoritesDropdown`'s real Radix `DropdownMenu` (`modal={false}`) actually works nested inside the Dialog — CLIENT-SESSION-2 had reverted an earlier attempt after it appeared broken live; CLIENT-SESSION-5 found and fixed the real cause (see its summary doc) |
 | 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverSessions`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED` row for, same exclusion rule as the real backend |
@@ -574,7 +575,7 @@ Parameterized: 3 breakpoints × 3 states = **9 test instances**, `home feed — 
 | State | Setup | Expects |
 |---|---|---|
 | `default` | `seedAuthenticatedSession(page, '/')` | First article visible |
-| `basketball` | same + click Basketball pill | Exactly 1 article |
+| `pickleball` | same + click Pickleball pill | Exactly 1 article. SPORT-3: renamed from `basketball` (baseline regenerated, not just relabeled — filename changed too) |
 | `empty` | `seedEmptyFeedOnNextLoad(mockSessionId)` before seeding auth | "No posts yet for this sport." |
 
 Every instance: freezes the clock (`page.clock.setFixedTime`, **before** any navigation, so relative

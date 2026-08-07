@@ -12,7 +12,7 @@ import { expect, test } from '../mocks/test.ts';
  * across the join/leave/cancel steps. `mockGroupSession` — group-linked to
  * `mockGroup` (mockUser is a group_member, not owner/admin, and didn't
  * create it), proving the Cancel button stays hidden for a session the
- * caller can only join/leave. `mockLocation` (Basketball, sportId 6) backs
+ * caller can only join/leave. `mockLocation` (Pickleball, sportId 3) backs
  * the create-session step's "search an existing location" flow — no
  * paste-a-link/resolve coverage here (that's LocationPicker's own
  * component/Storybook tests; e2e/mocks/handlers/locations.ts's
@@ -34,7 +34,7 @@ import { expect, test } from '../mocks/test.ts';
  * split — `page.getByText`/`getByRole('button', {name: ...})` finds them
  * regardless of which panel they're in. Step 9 covers what's actually new:
  * `mockDiscoverableSession` ("Weekend 5-a-side", created by someone else,
- * Soccer — a sport mockUser holds an active profile for) starts out visible
+ * Badminton — a sport mockUser holds an active profile for) starts out visible
  * only in Discover; joining it moves it into "My sessions" without a
  * reload (both queries share the `sessionKeys.all` invalidation root).
  * Step 10 covers the search filter and the panel collapse toggle.
@@ -52,7 +52,7 @@ test('Matches journey', async ({ page }) => {
   });
 
   await test.step('2. sport filter narrows the list, "All" restores it', async () => {
-    await page.getByRole('button', { name: 'Basketball' }).click();
+    await page.getByRole('button', { name: 'Pickleball' }).click();
     await expect(page.getByText('Sunday pickup run')).toBeVisible();
     await expect(page.getByText('Friday 5-a-side')).not.toBeVisible();
 
@@ -107,7 +107,7 @@ test('Matches journey', async ({ page }) => {
   await test.step('6. create a standalone session, searching an existing location', async () => {
     await page.getByRole('button', { name: 'Create session' }).click();
     const createDialog = page.getByRole('dialog', { name: 'Create your session' });
-    await createDialog.getByLabel(/^Sport/).selectOption('basketball');
+    await createDialog.getByLabel(/^Sport/).selectOption('pickleball');
 
     // CLIENT-SESSION-5: "Choose location" is now a favorites dropdown trigger, not a direct
     // LocationPicker opener — "Choose a location…" is its trailing item.
@@ -172,7 +172,7 @@ test('Matches journey', async ({ page }) => {
   await test.step('8. favorite a location in LocationPicker, then pick it from the favorites dropdown', async () => {
     await page.getByRole('button', { name: 'Create session' }).click();
     const createDialog = page.getByRole('dialog', { name: 'Create your session' });
-    await createDialog.getByLabel(/^Sport/).selectOption('basketball');
+    await createDialog.getByLabel(/^Sport/).selectOption('pickleball');
 
     await createDialog.getByRole('button', { name: 'Choose location' }).click();
     await expect(page.getByText('No favorites yet.')).toBeVisible();

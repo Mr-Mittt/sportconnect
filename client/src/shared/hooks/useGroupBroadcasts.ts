@@ -3,7 +3,7 @@ import { useAuthStore } from '@/app/authStore';
 import { useActiveBroadcasts } from '@/features/feed/hooks/useActiveBroadcasts';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
-import { SPORT_PROFILE_CONFIG } from '@/shared/lib/sportProfileConfig';
+import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
 import type { GroupBroadcast } from '@/shared/types/rail';
 
 function initialsFor(groupName: string): string {
@@ -55,7 +55,7 @@ export function useGroupBroadcasts(): {
       if (group === undefined) return broadcasts;
 
       const sportKey = sportKeyForId(group.sportId);
-      const colorRamp = sportKey !== undefined ? SPORT_PROFILE_CONFIG[sportKey].colorRamp : '';
+      const colorRamp = sportKey !== undefined ? getSportProfileConfig(sportKey).colorRamp : '';
 
       broadcasts.push({
         id: post.id,

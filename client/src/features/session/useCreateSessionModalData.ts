@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useFriends } from '@/features/friends/hooks/useFriends';
-import { SPORT_ID_BY_KEY } from '@/features/feed/sportIdMap';
 import { useFavoriteLocation } from '@/features/location/hooks/useFavoriteLocation';
 import { useFavoriteLocations } from '@/features/location/hooks/useFavoriteLocations';
 import { useUnfavoriteLocation } from '@/features/location/hooks/useUnfavoriteLocation';
 import { useLocationPickerData } from '@/features/location/useLocationPickerData';
+import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import type { Location } from '@/shared/types/location';
 import { useCreateSession } from './hooks/useCreateSession';
 import type { CreateSessionPayload } from './types';
@@ -56,8 +56,12 @@ export function useCreateSessionModalData() {
     }
   };
 
+  // SPORT-3: before the user has picked a sport in the still-open create form, fall back to the
+  // live catalog's first sport (was hardcoded to football's id) — reactive, so a picker opened
+  // before the catalog's first fetch resolves still gets a valid id once it does.
+  const firstCatalogSportId = useSportCatalogStore((state) => state.sports[0]?.id);
   const locationPickerData = useLocationPickerData(
-    createFormSportId ?? SPORT_ID_BY_KEY.football,
+    createFormSportId ?? firstCatalogSportId ?? 0,
     isCreateLocationPickerOpen,
     (location) => setSelectedLocationForCreate(location),
     () => setIsCreateLocationPickerOpen(false),

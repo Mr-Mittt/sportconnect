@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useMatchesPageStore } from '@/app/matchesPageStore';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
-import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
+import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { useApproveParticipant } from './hooks/useApproveParticipant';
@@ -66,7 +66,7 @@ export function useMatchesPageData(initialSessionId: number | null) {
     [sportProfilesQuery.data],
   );
 
-  const activeSportId = activeSport === 'all' ? undefined : SPORT_ID_BY_KEY[activeSport];
+  const activeSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
 
   // --- Discover panel ---
   const [searchText, setSearchText] = useState('');

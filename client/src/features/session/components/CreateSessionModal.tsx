@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 import { useEffect, useState } from 'react';
-import { SPORT_ID_BY_KEY } from '@/features/feed/sportIdMap';
+import { sportIdForKey } from '@/features/feed/sportIdMap';
 import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import { LocationPicker } from '@/features/location/components/LocationPicker';
@@ -401,7 +401,7 @@ interface CreateSessionModalProps {
    * this form is replaced by an inline "add a sport first" prompt (`AddSportFields`) instead of
    * closing this Dialog and opening a second one — see that component's own doc comment for why.
    * `availableSports` is the same list the hosting page already computes for its own
-   * `AddSportModal` (SportSwitcher's "+" pill) — always `ALL_SPORT_KEYS` in this gated case,
+   * `AddSportModal` (SportSwitcher's "+" pill) — always the full live catalog in this gated case,
    * since a caller with zero profiles has no sport to exclude. */
   availableSports: SportKey[];
   onAddSport: (payload: AddSportProfileSubmission) => void;
@@ -538,7 +538,7 @@ export function CreateSessionModal({
    * every render, not tracked as separate per-field "touched" flags). */
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
-  const effectiveSportId = displaySport !== '' ? SPORT_ID_BY_KEY[displaySport] : undefined;
+  const effectiveSportId = displaySport !== '' ? sportIdForKey(displaySport) : undefined;
 
   // CLIENT-SESSION-5: report the effective sportId up on every change (including the initial
   // pre-selected value) so the parent can scope the favorites dropdown's query — this field

@@ -120,13 +120,15 @@ describe('useGroupBroadcasts', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.isError).toBe(false);
+    // SPORT-3: basketball has no bespoke SPORT_PROFILE_CONFIG entry anymore (real MVP catalog is
+    // Badminton/Pickleball only, A6) — getSportProfileConfig's generic fallback ramp applies.
     expect(result.current.data).toEqual([
       {
         id: 1,
         groupId: 5,
         groupName: 'Riverside Ballers',
         groupInitials: 'RB',
-        colorRamp: 'coral',
+        colorRamp: 'gray',
         text: 'Court booking confirmed.',
         createdAt: '2026-07-13T09:00:00',
       },

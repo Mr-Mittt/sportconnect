@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useJoinGroup } from '@/features/feed/hooks/useJoinGroup';
 import { useJoinRequests } from '@/features/feed/hooks/useJoinRequests';
 import { usePublicGroups } from '@/features/feed/hooks/usePublicGroups';
-import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
+import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import type { GroupSearchResult } from '@/features/feed/types';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 
@@ -63,7 +63,10 @@ export function useJoinGroupModalData(
   }, [isOpen, lockedSport, sportProfiles]);
 
   const sportIds = useMemo(
-    () => Array.from(selectedSports).map((key) => SPORT_ID_BY_KEY[key]),
+    () =>
+      Array.from(selectedSports)
+        .map((key) => sportIdForKey(key))
+        .filter((id): id is number => id !== undefined),
     [selectedSports],
   );
 

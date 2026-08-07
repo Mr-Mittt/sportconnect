@@ -10,7 +10,7 @@ import { usePersonalFeed } from '@/features/feed/hooks/usePersonalFeed';
 import { useUnlikePost } from '@/features/feed/hooks/useUnlikePost';
 import { useUpdatePost } from '@/features/feed/hooks/useUpdatePost';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
-import { SPORT_ID_BY_KEY } from '@/features/feed/sportIdMap';
+import { sportIdForKey } from '@/features/feed/sportIdMap';
 import type { Group, GroupRef, Post } from '@/features/feed/types';
 import { useGroupBroadcasts } from '@/shared/hooks/useGroupBroadcasts';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
@@ -131,7 +131,7 @@ export function useGroupsPageData(): {
     const allGroups = groupsQuery.data?.content ?? [];
     return activeSport === 'all'
       ? allGroups
-      : allGroups.filter((group) => group.sportId === SPORT_ID_BY_KEY[activeSport]);
+      : allGroups.filter((group) => group.sportId === sportIdForKey(activeSport));
   }, [groupsQuery.data, activeSport]);
 
   const canBroadcast = useMemo(() => {
@@ -181,7 +181,7 @@ export function useGroupsPageData(): {
     if (selectedGroupId !== null) return allPosts;
     return allPosts.filter((post) => {
       if (post.postType !== 'GROUP_POST') return false;
-      return activeSport === 'all' || post.sportId === SPORT_ID_BY_KEY[activeSport];
+      return activeSport === 'all' || post.sportId === sportIdForKey(activeSport);
     });
   }, [activeFeedQuery.data, selectedGroupId, activeSport]);
 

@@ -52,6 +52,27 @@ describe('App routing', () => {
     // No MSW in Vitest (Playwright-only, see MSW-0) — default to "no valid
     // session" so auth-page tests don't need an authenticated fixture.
     vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('no session'));
+    // SPORT-3: AppShell unconditionally fetches GET /sports and gates rendering on it — every
+    // test that reaches an authenticated page needs this to resolve, not just the ones that
+    // happen to care about sport data. Default here (any test with its own more specific
+    // apiClient.get mock overrides this via its own vi.spyOn call, same composition as before).
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/sports') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: [
+              { id: 5, name: 'Soccer', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+              { id: 6, name: 'Basketball', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+              { id: 2, name: 'Tennis', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+            ],
+            timestamp: '',
+          },
+        };
+      }
+      throw new Error(`unmocked GET ${url} — this test needs its own apiClient.get mock for it`);
+    });
   });
 
   afterEach(() => {
@@ -98,6 +119,23 @@ describe('App routing', () => {
     // real too (GET /sports/profiles/user/{userId}) — an empty array is fine
     // here, this test only asserts the shell/feed render, not the switcher's cap.
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      // SPORT-3: AppShell now always fetches GET /sports (useSportCatalog) — every apiClient.get
+      // mock in this file needs a branch for it, or the catch-all fallback below (shaped for a
+      // different endpoint) breaks useSportCatalog's `.map()` over what it expects to be an array.
+      if (url === '/sports') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: [
+              { id: 5, name: 'Soccer', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+              { id: 6, name: 'Basketball', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+              { id: 2, name: 'Tennis', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+            ],
+            timestamp: '',
+          },
+        };
+      }
       if (url === '/sports/profiles/user/1') {
         return { data: { success: true, message: '', data: [], timestamp: '' } };
       }
@@ -202,6 +240,23 @@ describe('App routing', () => {
   it('renders the assembled Groups page on /groups for an authenticated user (FEED-4)', async () => {
     vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      // SPORT-3: AppShell now always fetches GET /sports (useSportCatalog) — every apiClient.get
+      // mock in this file needs a branch for it, or the catch-all fallback below (shaped for a
+      // different endpoint) breaks useSportCatalog's `.map()` over what it expects to be an array.
+      if (url === '/sports') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: [
+              { id: 5, name: 'Soccer', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+              { id: 6, name: 'Basketball', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+              { id: 2, name: 'Tennis', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+            ],
+            timestamp: '',
+          },
+        };
+      }
       if (url === '/groups/user/1') {
         return {
           data: {
@@ -304,6 +359,23 @@ describe('App routing', () => {
   it('selecting a group on /groups reveals the post composer', async () => {
     vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      // SPORT-3: AppShell now always fetches GET /sports (useSportCatalog) — every apiClient.get
+      // mock in this file needs a branch for it, or the catch-all fallback below (shaped for a
+      // different endpoint) breaks useSportCatalog's `.map()` over what it expects to be an array.
+      if (url === '/sports') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: [
+              { id: 5, name: 'Soccer', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+              { id: 6, name: 'Basketball', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+              { id: 2, name: 'Tennis', description: null, category: null, iconUrl: null, minPlayers: null, maxPlayers: null, isActive: true, createdAt: '', updatedAt: '' },
+            ],
+            timestamp: '',
+          },
+        };
+      }
       if (url === '/groups/user/1') {
         return {
           data: {

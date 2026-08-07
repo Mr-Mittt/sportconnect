@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { SPORT_ID_BY_KEY } from '@/features/feed/sportIdMap';
-import { SPORT_PROFILE_CONFIG } from '@/shared/lib/sportProfileConfig';
+import { sportIdForKey } from '@/features/feed/sportIdMap';
+import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey } from '@/shared/types/sport';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
@@ -65,7 +65,9 @@ export function AddSportFields({
   const submit = () => {
     if (!isValid) return;
     onSubmit({
-      sportId: SPORT_ID_BY_KEY[selectedSport as SportKey],
+      // selectedSport only ever holds a key from availableSports, which is always catalog-derived
+      // — the ?? 0 fallback is defensive, not reachable in practice.
+      sportId: sportIdForKey(selectedSport as SportKey) ?? 0,
       skillLevel,
       yearsOfExperience: yearsOfExperience === '' ? undefined : Number(yearsOfExperience),
     });
@@ -94,7 +96,7 @@ export function AddSportFields({
               >
                 {availableSports.map((key) => (
                   <option key={key} value={key}>
-                    {SPORT_PROFILE_CONFIG[key].label}
+                    {getSportProfileConfig(key).label}
                   </option>
                 ))}
               </Select>

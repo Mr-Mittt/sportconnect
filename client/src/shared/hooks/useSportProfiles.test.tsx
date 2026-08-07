@@ -73,10 +73,14 @@ describe('useSportProfiles', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(apiClient.get).toHaveBeenCalledWith(`/sports/profiles/user/${mockUser.id}`);
     expect(result.current.isError).toBe(false);
+    // SPORT-3: football/basketball/tennis have no bespoke SPORT_PROFILE_CONFIG entry anymore
+    // (the real MVP catalog only has Badminton/Pickleball, A6) — getSportProfileConfig's generic
+    // fallback applies to all three (title-cased label, neutral icon/ramp). This test's fixture
+    // ids stay 5/6/2 regardless — it's exercising id->key resolution, not real production colors.
     expect(result.current.data).toEqual([
-      { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' },
-      { key: 'basketball', label: 'Basketball', icon: 'ball-basketball', colorRamp: 'coral' },
-      { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' },
+      { key: 'football', label: 'Football', icon: 'question-mark', colorRamp: 'gray' },
+      { key: 'basketball', label: 'Basketball', icon: 'question-mark', colorRamp: 'gray' },
+      { key: 'tennis', label: 'Tennis', icon: 'question-mark', colorRamp: 'gray' },
     ]);
   });
 

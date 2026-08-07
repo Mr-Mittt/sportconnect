@@ -10,6 +10,9 @@ interface SportSwitcherProps {
   onChange: (key: SportKey | 'all') => void;
   /** Only fired while the user is below the sport cap — at the cap the pill is aria-disabled. */
   onAddSport: () => void;
+  /** SPORT-3: callers should pass the live catalog's size here (falling back to this default only
+   * before the catalog's first fetch resolves) — hardcoding 3 stopped reflecting reality once the
+   * real active catalog shrank to 2 sports (A6). */
   maxSports?: number;
 }
 

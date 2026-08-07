@@ -16,9 +16,15 @@ import { expect, test } from '../mocks/test.ts';
  * pending_user, membership needs the invitee's own accept). (2) invitee
  * acceptance — GroupDiscoveryPanel's new "Invitations" section shows
  * mockReceivedInvitation (Priya Shah invited the test user to
- * mockPublicGroup/"Riverside Hoopers", a Basketball group the test user
+ * mockPublicGroup/"Riverside Hoopers", a Pickleball group the test user
  * hasn't joined), accepting navigates straight into it regardless of the
  * currently active sport tab.
+ *
+ * SPORT-3 note: mockOwnedGroup ("Weekend Tennis Ladder") is also Pickleball
+ * now (only 2 real sports exist post-A6) — no test in this file examines
+ * both mockPublicGroup and mockOwnedGroup's sports in the same assertion, so
+ * this collision doesn't affect anything below; each test still only cares
+ * about one group's sport pill at a time.
  */
 
 test('Group Members tab — merged approval queue shows both row types, approving an invitation only clears the queue row', async ({
@@ -66,17 +72,17 @@ test('GroupDiscoveryPanel — Invitations section accepts an invitation and navi
   await invitationsSection.getByRole('button', { name: 'Accept' }).click();
 
   // Post-accept auto-navigates into the group regardless of the sport it
-  // belongs to (Basketball) vs. whatever sport tab was active — the tabbed
+  // belongs to (Pickleball) vs. whatever sport tab was active — the tabbed
   // per-group view (GroupTabs' Posts/Members/etc.) replacing
   // GroupDiscoveryPanel's "All groups" state is the real assertion here.
   await expect(page.getByRole('tab', { name: 'Posts' })).toBeVisible();
   await expect(invitationsSection).not.toBeVisible();
 
   // GRP-8 part 1: the sport pill now follows the accepted invitation's own
-  // sport (Basketball, via B15's sportId) rather than staying on whatever
+  // sport (Pickleball, via B15's sportId) rather than staying on whatever
   // was active before — no more forcing "All" first.
   await expect(
-    page.getByRole('group', { name: 'Sport filter' }).getByRole('button', { name: /Basketball/ }),
+    page.getByRole('group', { name: 'Sport filter' }).getByRole('button', { name: /Pickleball/ }),
   ).toHaveAttribute('aria-pressed', 'true');
 });
 
@@ -93,13 +99,13 @@ test('a group selection on the Groups page survives switching sport on Home Feed
   await seedAuthenticatedSession(page, '/groups');
   const sportFilter = page.getByRole('group', { name: 'Sport filter' });
 
-  await test.step('open Weekend Tennis Ladder — its own sport pill (Tennis) is active', async () => {
+  await test.step('open Weekend Tennis Ladder — its own sport pill (Pickleball) is active', async () => {
     await page.getByRole('group', { name: 'Group filter' }).getByRole('button', { name: /Weekend Tennis Ladder/ }).click();
     await expect(page.getByRole('tab', { name: 'Posts' })).toBeVisible();
-    await expect(sportFilter.getByRole('button', { name: /Tennis/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(sportFilter.getByRole('button', { name: /Pickleball/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  await test.step('switch to "All" on Home Feed, then return to Groups — the group is still open, pill still Tennis', async () => {
+  await test.step('switch to "All" on Home Feed, then return to Groups — the group is still open, pill still Pickleball', async () => {
     await page.getByRole('button', { name: 'Home' }).click();
     // GroupsPage and HomeFeedPage both render the shared SportSwitcher with
     // the identical accessible name (role="group", aria-label="Sport
@@ -115,7 +121,7 @@ test('a group selection on the Groups page survives switching sport on Home Feed
 
     await page.getByRole('button', { name: 'Groups' }).click();
     await expect(page.getByRole('tab', { name: 'Posts' })).toBeVisible();
-    await expect(sportFilter.getByRole('button', { name: /Tennis/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(sportFilter.getByRole('button', { name: /Pickleball/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   await test.step('clicking "All" directly on the Groups page deselects the group', async () => {
@@ -155,7 +161,7 @@ test('GroupDiscoveryPanel — Join requests section withdraws the current user\'
 });
 
 // GRP-8 part 5 — the test user has zero sport profiles here (override), so
-// accepting a Basketball invitation must gate on adding that sport first.
+// accepting a Pickleball invitation must gate on adding that sport first.
 test('GroupDiscoveryPanel — accepting an invitation for a sport the invitee lacks offers to add it first', async ({
   page,
   mockSessionId,
@@ -168,13 +174,13 @@ test('GroupDiscoveryPanel — accepting an invitation for a sport the invitee la
 
   await test.step('the intro dialog explains the sport will be added, OK opens AddSportModal', async () => {
     const introDialog = page.getByRole('dialog', { name: 'Add this sport to your profile?' });
-    await expect(introDialog.getByText(/This Basketball group/)).toBeVisible();
+    await expect(introDialog.getByText(/This Pickleball group/)).toBeVisible();
     await introDialog.getByRole('button', { name: 'OK' }).click();
   });
 
-  await test.step('AddSportModal is pre-selected to Basketball; completing it accepts the invitation', async () => {
+  await test.step('AddSportModal is pre-selected to Pickleball; completing it accepts the invitation', async () => {
     const addSportDialog = page.getByRole('dialog', { name: 'Add a sport' });
-    await expect(addSportDialog.getByLabel('Sport')).toHaveValue('basketball');
+    await expect(addSportDialog.getByLabel('Sport')).toHaveValue('pickleball');
     await addSportDialog.getByLabel('Skill level').selectOption('beginner');
     await addSportDialog.getByRole('button', { name: 'Add sport' }).click();
 
