@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
-import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import type { Location } from '@/shared/types/location';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CreateSessionModal } from './CreateSessionModal';
@@ -150,6 +149,6 @@ export const NoFavoriteLocationsYet: Story = {
 export const NoSportProfilesYet: Story = {
   args: {
     sportsByKey: {} as Record<SportKey, SportProfile>,
-    availableSports: ALL_SPORT_KEYS,
+    availableSports: Object.keys(sportsByKey),
   },
 };

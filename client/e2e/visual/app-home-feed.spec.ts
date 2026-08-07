@@ -35,7 +35,10 @@ const breakpoints = [375, 768, 1280] as const;
 
 const states = [
   { name: 'default', query: '', filterTo: null },
-  { name: 'basketball', query: '', filterTo: 'Basketball' },
+  // SPORT-3: renamed from 'basketball' — the real catalog only serves
+  // Badminton/Pickleball post-A6, so this baseline's filename changed too
+  // (regenerated, not just relabeled).
+  { name: 'pickleball', query: '', filterTo: 'Pickleball' },
   { name: 'empty', query: '?visual-state=empty', filterTo: null },
 ] as const;
 

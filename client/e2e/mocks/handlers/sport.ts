@@ -20,16 +20,15 @@ function requireAuth(request: Request): Response | null {
   return null;
 }
 
-// Minimal shape of the real `SportResponse` — no client type consumes this
-// catalog endpoint yet (SPORT-1 maps sport profiles via the static
-// SPORT_PROFILE_CONFIG, not this response), but the handler exists per the
-// ticket's deliverables for when the add-sport flow is scoped. Ids/names
-// match `V003__create_sports_tables.sql`'s INSERT order.
+// SPORT-3: real shape of `SportResponse` — this catalog is now the client's
+// actual source of truth for "which sports exist" (`useSportCatalog()`),
+// not just a placeholder for a future add-sport flow. Matches the real
+// backend's post-A6 state exactly: every seeded sport except Badminton and
+// Pickleball is deactivated, so `GET /api/sports` (active-only) returns just
+// these 2. Ids match `V003__create_sports_tables.sql`'s INSERT order.
 const mockSportCatalog = [
   { id: 1, name: 'Badminton', category: null, iconUrl: '/images/sports/badminton.png', isActive: true },
-  { id: 2, name: 'Tennis', category: null, iconUrl: '/images/sports/tennis.png', isActive: true },
-  { id: 5, name: 'Soccer', category: null, iconUrl: '/images/sports/soccer.png', isActive: true },
-  { id: 6, name: 'Basketball', category: null, iconUrl: '/images/sports/basketball.png', isActive: true },
+  { id: 3, name: 'Pickleball', category: null, iconUrl: '/images/sports/pickleball.png', isActive: true },
 ];
 
 interface SportSession {
@@ -114,14 +113,15 @@ export function resetSportHandlersState(sessionId: string): void {
 
 /**
  * GRP-8 bug fix — the `sportProfilesEmpty` override used to only fake the
- * GET response, leaving the real `userSportProfilesState` at its 3-profile
- * default underneath. That was fine for tests that only ever read the list
- * (e.g. "zero sport profiles renders without error"), but broke the first
- * test to also POST a new profile afterward: the create handler checked the
- * real (still full) state and 400'd with "Already has a profile for this
- * sport" for Basketball, since the default fixture already includes it.
- * Called alongside `setOverride(sessionId, 'sportProfilesEmpty')` so the
- * real state actually is empty, not just the faked response.
+ * GET response, leaving the real `userSportProfilesState` at its default
+ * (every sport the mock catalog serves — 2, post-SPORT-3) underneath. That
+ * was fine for tests that only ever read the list (e.g. "zero sport profiles
+ * renders without error"), but broke the first test to also POST a new
+ * profile afterward: the create handler checked the real (still full) state
+ * and 400'd with "Already has a profile for this sport" for Pickleball,
+ * since the default fixture already includes it. Called alongside
+ * `setOverride(sessionId, 'sportProfilesEmpty')` so the real state actually
+ * is empty, not just the faked response.
  */
 export function seedZeroSportProfilesState(sessionId: string): void {
   sportSessions.get(sessionId).userSportProfilesState = [];

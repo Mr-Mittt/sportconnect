@@ -41,16 +41,19 @@ export const mockAccessToken = 'mock-access-token';
 // Real tests never read this directly — the browser handles the cookie.
 export const mockRefreshToken = 'mock-refresh-token';
 
-// SPORT-1 fixtures: mockUser at the 3-sport cap (sportIds match mockPost's
-// Soccer=5, mockBasketballPost's Basketball=6, plus Tennis=2 — see
-// sportIdMap.ts's INSERT-order note) — keeps HF-11's step 7 "Add sport is
-// aria-disabled at cap" assertion true now that SportSwitcher's data is real.
+// SPORT-3: mockUser holds a profile for every sport the real MVP catalog now
+// serves (A6 — Badminton=1, Pickleball=3; see sportIdMap.ts's note) — the
+// "3-sport cap" this fixture used to model (Soccer/Basketball/Tennis) is no
+// longer representable at all: a user can never hold 3 active profiles when
+// only 2 sports exist. HF-11's step 7 now asserts the "every available sport
+// already held" behavior instead of the numeric-cap behavior — see that
+// spec's own updated note.
 export const mockSportProfiles: UserSportProfileResponse[] = [
   {
     id: 1,
     userId: mockUser.id,
-    sportId: 5,
-    sportName: 'Soccer',
+    sportId: 1,
+    sportName: 'Badminton',
     skillLevel: 'intermediate',
     yearsOfExperience: 4,
     preferredPosition: null,
@@ -63,24 +66,10 @@ export const mockSportProfiles: UserSportProfileResponse[] = [
   {
     id: 2,
     userId: mockUser.id,
-    sportId: 6,
-    sportName: 'Basketball',
+    sportId: 3,
+    sportName: 'Pickleball',
     skillLevel: 'beginner',
     yearsOfExperience: 1,
-    preferredPosition: null,
-    bio: null,
-    attributes: null,
-    isActive: true,
-    createdAt: '2026-06-01T10:00:00',
-    updatedAt: '2026-06-01T10:00:00',
-  },
-  {
-    id: 3,
-    userId: mockUser.id,
-    sportId: 2,
-    sportName: 'Tennis',
-    skillLevel: 'advanced',
-    yearsOfExperience: 8,
     preferredPosition: null,
     bio: null,
     attributes: null,
@@ -95,13 +84,13 @@ export const mockSportProfiles: UserSportProfileResponse[] = [
 // fixtures above.
 export const mockGroup: Group = {
   id: 1,
-  // 5, not 1 — matches mockPost/mockGroupPost's sportId (the real `sports`
-  // table's Soccer row; see mockPost's own note on the football<->soccer
-  // naming gap). Was 1 (Badminton) before FEED-4, which is the first ticket
-  // to filter groups by sportId — that value never lined up with this
-  // group's own "Friday Night Football" theming or its posts' sportId, so a
-  // sport-filtered group switcher would never have shown it under Football.
-  sportId: 5,
+  // SPORT-3: Badminton (1) — matches mockPost/mockGroupPost's sportId. The
+  // group's own "Friday Night Football" display name is unrelated to its
+  // real sportId (that mismatch already existed before SPORT-3 too, see the
+  // old FEED-4 note this replaced) — display copy is deliberately left as-is
+  // across this fixture rewrite; only the numeric sportId/sportName fields
+  // that drive real filtering/badge behavior changed.
+  sportId: 1,
   groupName: 'Friday Night Football',
   description: 'Weekly 5-a-side, all skill levels welcome.',
   avatarUrl: null,
@@ -120,12 +109,12 @@ export const mockGroup: Group = {
 // FEED-10: a second pre-seeded group where the test user is the owner (not
 // just a member, like mockGroup) — the dedicated fixture for asserting
 // CreatePostForm's "Broadcast" toggle appears for an owner/admin and doesn't
-// for a plain member. sportId 2 (Tennis, one of mockSportProfiles' 3 sports)
-// deliberately differs from mockGroup's Soccer (5), so both are reachable
-// under distinct sport pills rather than colliding under the same filter.
+// for a plain member. sportId 3 (Pickleball) deliberately differs from
+// mockGroup's Badminton (1), so both are reachable under distinct sport
+// pills rather than colliding under the same filter.
 export const mockOwnedGroup: Group = {
   id: 3,
-  sportId: 2,
+  sportId: 3,
   groupName: 'Weekend Tennis Ladder',
   description: 'Casual ladder, singles and doubles.',
   avatarUrl: null,
@@ -280,12 +269,9 @@ export const mockPost: Post = {
   latitude: null,
   longitude: null,
   locationName: null,
-  // 5, not 1 — the real `sports` table has no "Football" row, only "Soccer"
-  // (id 5, confirmed via V003__create_sports_tables.sql's INSERT order).
-  // FEED-1's temporary sportId<->SportKey map treats them as the same sport;
-  // this fixture needs the real id to filter correctly under that map.
-  sportId: 5,
-  sportName: 'Soccer',
+  // SPORT-3: Badminton (1) — one of the 2 real MVP-active sports (A6).
+  sportId: 1,
+  sportName: 'Badminton',
   visibility: 'public',
   media: [],
   // No leading '#' — matches the real backend's extraction/storage format
@@ -314,7 +300,10 @@ export const mockGroupPost: Post = {
 
 // A friend's post, not the logged-in test user's — covers the "no delete
 // menu on someone else's post" case and gives the feed a second sport
-// (basketball, sportId 6) so sport-filtering has something real to filter.
+// (Pickleball, sportId 3) so sport-filtering has something real to filter.
+// Variable name/content text kept as-is across the SPORT-3 fixture rewrite
+// (display copy is unrelated to the real sportId) — only sportId/sportName
+// changed.
 export const mockBasketballPost: Post = {
   ...mockPost,
   id: 4,
@@ -322,8 +311,8 @@ export const mockBasketballPost: Post = {
   userFullName: 'Priya Shah',
   content: 'Looking for 2 more players for Sunday pickup at Riverside courts. #pickup',
   hashtags: ['pickup'],
-  sportId: 6,
-  sportName: 'Basketball',
+  sportId: 3,
+  sportName: 'Pickleball',
   likeCount: 9,
   commentCount: 6,
   createdAt: '2026-07-13T06:00:00',
@@ -375,7 +364,7 @@ export const mockHashtag: Hashtag = {
 // real to filter), for exercising the "Request to join" flow.
 export const mockPublicGroup: GroupSearchResult = {
   id: 2,
-  sportId: 6, // Basketball, same id as mockBasketballPost
+  sportId: 3, // Pickleball, same id as mockBasketballPost
   groupName: 'Riverside Hoopers',
   description: 'Pickup games every weekend.',
   avatarUrl: null,
@@ -489,13 +478,13 @@ export const mockSearchResultUser: UserSearchResult = {
   friendshipStatus: 'NONE',
 };
 
-// CLIENT-SESSION-1: a shared, sport-scoped venue — sportId 6 (Basketball),
+// CLIENT-SESSION-1: a shared, sport-scoped venue — sportId 3 (Pickleball),
 // matching mockSession below. Reused by the Matches page's "search existing
 // location" step in the create-session flow.
 export const mockLocation: Location = {
   id: 1,
-  sportId: 6,
-  sportName: 'Basketball',
+  sportId: 3,
+  sportName: 'Pickleball',
   name: 'Riverside Courts',
   address: '12 River Rd',
   latitude: 21.0285,
@@ -507,7 +496,7 @@ export const mockLocation: Location = {
   updatedAt: '2026-06-01T10:00:00',
 };
 
-// A standalone session mockUser created themselves (Basketball, sportId 6) —
+// A standalone session mockUser created themselves (Pickleball, sportId 3) —
 // not yet joined by mockUser (participantCount 0), so the journey can
 // exercise Join -> Leave -> Cancel on one fixture.
 export const mockSession: Session = {
@@ -516,8 +505,8 @@ export const mockSession: Session = {
   sessionType: 'STANDALONE',
   createdBy: mockUser.id,
   createdByFullName: `${mockUser.firstName} ${mockUser.lastName}`,
-  sportId: 6,
-  sportName: 'Basketball',
+  sportId: 3,
+  sportName: 'Pickleball',
   title: 'Sunday pickup run',
   description: 'Casual 5v5, all levels welcome.',
   location: mockLocation,
@@ -554,7 +543,7 @@ export const mockSession: Session = {
   updatedAt: '2026-06-20T10:00:00',
 };
 
-// A group-linked session for mockGroup (id 1, Soccer, currentUserRole
+// A group-linked session for mockGroup (id 1, Badminton, currentUserRole
 // group_member — mockUser is a member, not owner/admin) — created by someone
 // else, so canManage is false for mockUser: proves the Cancel button is
 // correctly hidden for a session the caller can only join/leave, not manage.
@@ -565,10 +554,10 @@ export const mockGroupSession: Session = {
   createdBy: 'other-user-id',
   createdByFullName: 'Priya Shah',
   sportId: mockGroup.sportId,
-  sportName: 'Soccer',
+  sportName: 'Badminton',
   title: 'Friday 5-a-side',
   description: null,
-  location: { ...mockLocation, id: 2, sportId: mockGroup.sportId, sportName: 'Soccer' },
+  location: { ...mockLocation, id: 2, sportId: mockGroup.sportId, sportName: 'Badminton' },
   locationNote: null,
   scheduledStart: '2026-08-02T19:00:00', // fixed — see mockSession's note on hoursFromNow()
   scheduledEndAt: null,
@@ -589,11 +578,14 @@ export const mockGroupSession: Session = {
   updatedAt: '2026-06-21T10:00:00',
 };
 
-// A group-linked session for mockOwnedGroup (id 3, Tennis, currentUserRole
+// A group-linked session for mockOwnedGroup (id 3, Pickleball, currentUserRole
 // group_owner) — gives the Home Feed rail's default 3-session fixture set
-// (Basketball/mockSession, Soccer/mockGroupSession, Tennis/this one) so
-// home-feed-journey.spec.ts's pre-existing "3 rail matches, 1 basketball"
-// assertions keep holding without that spec seeding its own session state.
+// (Badminton/mockGroupSession, Pickleball/mockSession, Pickleball/this one)
+// so home-feed-journey.spec.ts's rail assertions keep holding without that
+// spec seeding its own session state. SPORT-3: with only 2 real sports,
+// mockSession and this fixture now share Pickleball (the old 3-distinct-
+// sports premise, one per fixture, isn't representable anymore) — see that
+// spec's own updated counts.
 export const mockOwnedGroupSession: Session = {
   id: 3,
   groupId: mockOwnedGroup.id,
@@ -601,10 +593,10 @@ export const mockOwnedGroupSession: Session = {
   createdBy: mockUser.id,
   createdByFullName: `${mockUser.firstName} ${mockUser.lastName}`,
   sportId: mockOwnedGroup.sportId,
-  sportName: 'Tennis',
+  sportName: 'Pickleball',
   title: 'Ladder night',
   description: null,
-  location: { ...mockLocation, id: 3, sportId: mockOwnedGroup.sportId, sportName: 'Tennis' },
+  location: { ...mockLocation, id: 3, sportId: mockOwnedGroup.sportId, sportName: 'Pickleball' },
   locationNote: null,
   scheduledStart: '2026-08-03T19:00:00', // fixed — see mockSession's note on hoursFromNow()
   scheduledEndAt: null,
@@ -653,7 +645,7 @@ export const mockSecondSessionJoinRequest: SessionParticipant = {
 };
 
 // CLIENT-SESSION-6: a standalone session created by someone other than mockUser, for a sport
-// mockUser holds an active profile for (Soccer, sportId 5) and hasn't joined — the only fixture
+// mockUser holds an active profile for (Badminton, sportId 1) and hasn't joined — the only fixture
 // eligible for GET /api/sessions/discover (mockSession is self-created; mockGroupSession/
 // mockOwnedGroupSession are GROUP_RECURRING, and discover is standalone-only). Without this,
 // discover would be permanently empty in every e2e run, since nothing else in this file matches
@@ -664,11 +656,11 @@ export const mockDiscoverableSession: Session = {
   sessionType: 'STANDALONE',
   createdBy: 'other-user-id',
   createdByFullName: 'Priya Shah',
-  sportId: 5,
-  sportName: 'Soccer',
+  sportId: 1,
+  sportName: 'Badminton',
   title: 'Weekend 5-a-side',
   description: 'Open pickup game, all welcome.',
-  location: { ...mockLocation, id: 4, sportId: 5, sportName: 'Soccer', name: 'Central Turf Park' },
+  location: { ...mockLocation, id: 4, sportId: 1, sportName: 'Badminton', name: 'Central Turf Park' },
   locationNote: null,
   scheduledStart: '2026-08-06T18:00:00', // fixed — see mockSession's note on hoursFromNow()
   scheduledEndAt: null,

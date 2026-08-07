@@ -2231,14 +2231,31 @@ explicit go-ahead at each step (full story in A3's summary doc):
   new-comment notifications, success metric.
 - **MVP sport restriction (filed 2026-08-07)** — user decision to launch with only Badminton +
   Pickleball active; all other seeded sports deactivated. Filed as **A6**
-  (`modules/sport/sport-impl/docs/BACKLOG_MVP.md`, `TODO`) — data migration + a real gap found in
+  (`modules/sport/sport-impl/docs/BACKLOG_MVP.md`, `DONE`) — data migration + a real gap found in
   `createProfile()` (checked sport exists but not that it's active) — and **SPORT-3**
-  (`client/docs/BACKLOG_MVP.md`, `TODO`, soft dependency on A6) — the client's sport catalog
-  (`SPORT_PROFILE_CONFIG`/`ALL_SPORT_KEYS`/`SPORT_ID_BY_KEY`) turned out to be a hardcoded
-  football/basketball/tennis config that never actually calls `GET /api/sports`; neither Badminton
-  nor Pickleball exist in the client today. SPORT-3 leaves open, for its implementer to resolve, how
-  much of the `SportKey` string-literal-union surface should be touched to properly derive from the
-  live catalog vs. kept as a hand-extended union.
+  (`client/docs/BACKLOG_MVP.md`, `DONE` 2026-08-07,
+  `client/docs/SPORT-3_SPORT_CATALOG_REAL_FETCH.md`).
+- **SPORT-3 (2026-08-07):** the client's sport catalog (`SPORT_PROFILE_CONFIG`/`ALL_SPORT_KEYS`/
+  `SPORT_ID_BY_KEY`) was a hardcoded football/basketball/tennis config that never actually called
+  `GET /api/sports`. Resolved the open design question left at filing (`SportKey` union vs. derived
+  `string`) in favor of **`SportKey = string`, no compile-time closed set** — the id↔key map is now
+  derived from the live catalog at runtime instead of hand-copied off a migration file. New
+  `useSportCatalog()` hook + `sportCatalogStore` (a plain, non-hook-readable Zustand store —
+  needed because `groupsPageStore.ts`'s `selectGroup` action resolves a sport synchronously and
+  can't call a hook); every production call site of the old static config migrated (full scope,
+  user decision, not split into a follow-up). **Found and fixed mid-implementation:** a real race —
+  `sportKeyForId`/`sportIdForKey` read the catalog store via a plain non-reactive snapshot, so any
+  page mounting before `AppShell`'s catalog fetch resolved would silently map every sport profile to
+  nothing, with no re-render ever correcting it. Fixed by gating `AppShell`'s `<Outlet />` behind
+  the catalog's `isLoading` and syncing the store synchronously in the render body (not a
+  `useEffect`). **Also reshaped the entire MSW/e2e fixture graph** (`e2e/mocks/fixtures.ts`,
+  `paginatedFeedFixture.ts`, 10 spec files, `client/docs/E2E_OVERVIEW.md`) from the old
+  football/basketball/tennis universe to the real 2-sport one — user decision, made after the true
+  cost (not just "10 files, minor tweaks") was surfaced explicitly; the old "user at the 3-sport
+  cap" fixture is no longer representable at all with only 2 real sports. `pnpm test`
+  (793/793), `pnpm e2e` (49/49), typecheck, and lint all green; visual baselines regenerated
+  locally — Linux-rendered CI baselines still need the usual post-merge `update-baselines` dispatch
+  (same HF-13..HF-19 precedent).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

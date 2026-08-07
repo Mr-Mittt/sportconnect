@@ -1,5 +1,5 @@
 import type { GroupRef, Post } from '@/features/feed/types';
-import { SPORT_ID_BY_KEY, sportKeyForId } from '@/features/feed/sportIdMap';
+import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useInfiniteScrollSentinel } from '@/shared/lib/useInfiniteScrollSentinel';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -140,7 +140,7 @@ export function Feed({
   const visiblePosts =
     activeSport === 'all'
       ? posts
-      : posts.filter((post) => post.sportId === SPORT_ID_BY_KEY[activeSport]);
+      : posts.filter((post) => post.sportId === sportIdForKey(activeSport));
 
   if (visiblePosts.length === 0) {
     return <div className="py-6 text-center text-2sm text-text-muted">{emptyMessage}</div>;

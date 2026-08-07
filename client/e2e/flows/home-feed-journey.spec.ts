@@ -5,10 +5,9 @@ import { expect, test } from '../mocks/test.ts';
  * HF-11: the 7(+1)-step Home Feed journey (HF epic § HF-11). Feed/PostCard
  * are real now (FEED-1, usePersonalFeed via e2e/mocks/handlers/feed.ts's
  * stateful fixture — 3 posts: mockPost/mockGroupPost owned by the logged-in
- * test user "Jordan Lee" (football/Soccer, sportId 5), mockBasketballPost
- * owned by a friend "Priya Shah" (basketball, sportId 6)). SportSwitcher is
- * real now too (SPORT-1, via e2e/mocks/handlers/sport.ts's mockSportProfiles
- * fixture — Jordan Lee at the 3-sport cap: football/basketball/tennis).
+ * test user "Jordan Lee" (Badminton, sportId 1), mockBasketballPost owned by
+ * a friend "Priya Shah" (Pickleball, sportId 3)). SportSwitcher is real now
+ * too (SPORT-1, via e2e/mocks/handlers/sport.ts's mockSportProfiles fixture).
  * Trending hashtags are real now too (FEED-6, via feed.ts's
  * `GET /api/hashtags/trending` handler — a single `mockHashtag`, `fridayrun`).
  * Group broadcasts are real now too (FEED-7, via groups.ts's single
@@ -17,15 +16,25 @@ import { expect, test } from '../mocks/test.ts';
  * sleeps.
  *
  * Premise corrections vs the epic's literal steps (user-approved; see the
- * backlog entry's deltas): the fixture user is AT the 3-sport cap, so step 7
- * asserts HF-2's at-cap behavior (aria-disabled).
+ * backlog entry's deltas): the fixture user holds a profile for every sport
+ * the catalog serves, so step 7 asserts HF-2's at-cap behavior
+ * (aria-disabled).
  *
  * CLIENT-SESSION-1 update: matches are real now (modules/session via
- * e2e/mocks/handlers/sessions.ts's stateful fixtures — mockSession/Basketball,
- * mockGroupSession/Soccer, mockOwnedGroupSession/Tennis, one per sport so
- * step 1/2/3's "3 matches, 1 basketball" counts still hold). The old
+ * e2e/mocks/handlers/sessions.ts's stateful fixtures — mockSession/Pickleball,
+ * mockGroupSession/Badminton, mockOwnedGroupSession/Pickleball). The old
  * spots-left/full CTA is gone — every card shows a status badge + a single
  * "View details" CTA, which now has a real destination (step 6, rewritten).
+ *
+ * SPORT-3 update: the real sport catalog shrank to exactly 2 active sports
+ * (Badminton, Pickleball — sport-impl's A6). mockUser now holds a profile
+ * for both (every available sport), not a "3-sport cap" that's no longer
+ * representable at all with only 2 real sports. Step 2 now clicks the
+ * "Pickleball" pill (was "Basketball") — the feed narrows to 1 post
+ * (unchanged split: 2 posts Badminton, 1 Pickleball), but matches now narrow
+ * to 2, not 1 (mockSession AND mockOwnedGroupSession are both Pickleball —
+ * with only 2 real sports, the old "one session per sport" 1:1:1 split isn't
+ * representable either; Badminton keeps exactly 1 (mockGroupSession)).
  *
  * AUTH-4 update: Home Feed now sits behind ProtectedRoute — step 1 seeds an
  * authenticated session (MSW-backed) instead of a bare page.goto('/').
@@ -70,11 +79,11 @@ test('Home Feed journey', async ({ page }) => {
     await expect(broadcasts.getByRole('button')).toHaveCount(1);
   });
 
-  await test.step('2. basketball pill — feed and matches filter; trending/broadcasts unchanged', async () => {
-    await page.getByRole('button', { name: 'Basketball', exact: true }).click();
+  await test.step('2. pickleball pill — feed and matches filter; trending/broadcasts unchanged', async () => {
+    await page.getByRole('button', { name: 'Pickleball', exact: true }).click();
     await expect(page.getByRole('article')).toHaveCount(1);
     await expect(page.getByRole('article')).toContainText('Priya Shah');
-    await expect(matchCtas).toHaveCount(1);
+    await expect(matchCtas).toHaveCount(2);
     await expect(upcoming).toContainText('Sunday pickup run');
     await expect(trending.getByRole('button')).toHaveCount(1);
     await expect(broadcasts.getByRole('button')).toHaveCount(1);
@@ -134,7 +143,7 @@ test('Home Feed journey', async ({ page }) => {
     await page.goto('/'); // back to Home Feed for the remaining steps
   });
 
-  await test.step('7. "Add sport" — at the 3-sport cap (real SPORT-1 profiles) it renders aria-disabled (HF-2 behavior)', async () => {
+  await test.step('7. "Add sport" — every catalog sport already held (real SPORT-1/SPORT-3 data) renders aria-disabled (HF-2 behavior)', async () => {
     const addSport = page.getByRole('button', { name: 'Add sport' });
     await expect(addSport).toBeVisible();
     await expect(addSport).toHaveAttribute('aria-disabled', 'true');

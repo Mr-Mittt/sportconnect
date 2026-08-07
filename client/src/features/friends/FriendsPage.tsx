@@ -11,11 +11,11 @@ import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
 import { useGroupBroadcasts } from '@/shared/hooks/useGroupBroadcasts';
+import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useTrendingHashtags } from '@/shared/hooks/useTrendingHashtags';
 import { useUpcomingMatches } from '@/shared/hooks/useUpcomingMatches';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
-import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { FriendChatPanel } from './components/FriendChatPanel';
 import { FriendProfilePanel } from './components/FriendProfilePanel';
@@ -76,9 +76,11 @@ export function FriendsPage() {
   // inside CreateSessionModal/SessionDiscoverModal, same computation every other page already
   // does for its own SportSwitcher "+" pill.
   const addSportMutation = useAddSportProfile(user.id);
+  const sportCatalog = useSportCatalog();
   const availableSports = useMemo(
-    () => ALL_SPORT_KEYS.filter((key) => !Object.keys(sportsByKey).includes(key)),
-    [sportsByKey],
+    () =>
+      sportCatalog.data.map((sport) => sport.key).filter((key) => !Object.keys(sportsByKey).includes(key)),
+    [sportCatalog.data, sportsByKey],
   );
 
   const h1Ref = useRef<HTMLHeadingElement>(null);

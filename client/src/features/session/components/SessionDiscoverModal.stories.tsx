@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
 import type { SessionListItem } from '../types';
@@ -107,6 +106,6 @@ export const NoSportProfilesYet: Story = {
   args: {
     sportsByKey: {} as Record<SportKey, SportProfile>,
     sessions: [],
-    availableSports: ALL_SPORT_KEYS,
+    availableSports: Object.keys(sportsByKey),
   },
 };

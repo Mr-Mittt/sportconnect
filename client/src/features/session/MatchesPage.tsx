@@ -2,9 +2,9 @@ import { IconChevronsLeft, IconChevronsRight, IconPlus } from '@tabler/icons-rea
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
+import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { PAGE_ACCESS_NO_SPORTS_PROMPT } from '@/shared/lib/noSportsPrompt';
-import { ALL_SPORT_KEYS } from '@/shared/lib/sportProfileConfig';
 import { AddSportModal } from '@/shared/components/AddSportModal';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { CreateSessionModal } from './components/CreateSessionModal';
@@ -34,9 +34,13 @@ export function MatchesPage() {
 
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
   const addSportMutation = useAddSportProfile(data.currentUserId);
+  const sportCatalog = useSportCatalog();
   const availableSports = useMemo(
-    () => ALL_SPORT_KEYS.filter((key) => !Object.keys(data.sportsByKey).includes(key)),
-    [data.sportsByKey],
+    () =>
+      sportCatalog.data
+        .map((sport) => sport.key)
+        .filter((key) => !Object.keys(data.sportsByKey).includes(key)),
+    [sportCatalog.data, data.sportsByKey],
   );
 
   // Zero-sport-profile gate on page access (not just on create/join a match — see
@@ -85,6 +89,7 @@ export function MatchesPage() {
           sports={Object.values(data.sportsByKey)}
           active={data.activeSport}
           onChange={data.setActiveSport}
+          maxSports={sportCatalog.data.length || undefined}
           onAddSport={() => {
             setAddSportPromptMessage(undefined);
             setIsAddSportOpen(true);

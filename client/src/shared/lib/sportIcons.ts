@@ -3,6 +3,7 @@ import {
   IconBallFootball,
   IconBallTennis,
   IconQuestionMark,
+  IconTournament,
   type Icon,
 } from '@tabler/icons-react';
 
@@ -10,6 +11,10 @@ const iconsByName: Record<string, Icon> = {
   'ball-football': IconBallFootball,
   'ball-basketball': IconBallBasketball,
   'ball-tennis': IconBallTennis,
+  // SPORT-3: Tabler has no dedicated badminton/pickleball icon — 'ball-tennis'
+  // (Badminton) and 'tournament' (Pickleball) are the closest racquet/court
+  // stand-ins available, picked for visual distinctness from each other.
+  tournament: IconTournament,
 };
 
 /**

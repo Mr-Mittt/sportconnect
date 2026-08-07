@@ -129,7 +129,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 58 | CLIENT-SESSION-5 | Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown (LOC-2) | `DONE` |
 | 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `DONE` |
 | 60 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
-| 61 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `TODO` |
+| 61 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `DONE` |
 | 62 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 | 63 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `TODO` |
 
@@ -2813,8 +2813,9 @@ creator/owner, locking the thread on cancellation — see SESSION-10's own out-o
 source of truth.
 
 ### SPORT-3 · Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config
-**Status:** `TODO` · **Type:** Data layer (real integration) · **Dependency:** soft — **A6**
-(`modules/sport/sport-impl/docs/BACKLOG_MVP.md`, `TODO`) · **Filed:** 2026-08-07
+**Status:** `DONE` (2026-08-07) · **Type:** Data layer (real integration) · **Dependency:** soft — **A6**
+(`modules/sport/sport-impl/docs/BACKLOG_MVP.md`, `DONE`) · **Filed:** 2026-08-07 · **Summary:**
+`client/docs/SPORT-3_SPORT_CATALOG_REAL_FETCH.md`
 
 **Problem, verified against the actual code (not assumed):** despite SPORT-1's ticket text listing
 `GET /api/sports` as an endpoint it would use "for icon/name lookup," nothing in the client actually
@@ -2866,3 +2867,17 @@ in Phase 1/3 of `/workon`, not assumed here.
 **Out of scope:** re-theming existing sports' ramps (football/basketball/tennis keep their current
 teal/coral/purple assignment wherever they remain referenced); any change to `SportServiceImpl` or
 other backend behavior (A6 owns the backend side).
+
+**Delta (2026-08-07, at implementation):** the open `SportKey` question resolved to **option
+2 — `SportKey = string`**, derived from the live catalog at runtime (`key = sport.name.toLowerCase()`),
+not a hand-extended literal union. The "re-theming out of scope" line above held for football/
+basketball/tennis's *specific* colors, but those three sports were dropped from
+`SPORT_PROFILE_CONFIG` entirely (not kept as dormant entries) since the live catalog can no longer
+reach them — a new `getSportProfileConfig()` fallback covers any sport with no bespoke entry instead
+of leaving a hole. Scope grew significantly beyond the original description at pickup (user
+decision, full cost surfaced explicitly before proceeding): every production call site was migrated
+in this same ticket (not split into a follow-up), and the entire MSW/e2e fixture graph
+(`e2e/mocks/fixtures.ts`, `paginatedFeedFixture.ts`, 10 spec files, `E2E_OVERVIEW.md`) was reshaped
+from the old football/basketball/tennis universe to the real 2-sport one. A genuine race condition
+(not anticipated in the original design) was found and fixed along the way — see the summary doc's
+"Non-obvious constraints" section.

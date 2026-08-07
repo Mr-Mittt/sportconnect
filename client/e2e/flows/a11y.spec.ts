@@ -55,8 +55,8 @@ for (const width of breakpoints) {
 
 test('sport-filtered state — axe reports no critical/serious violations', async ({ page }) => {
   await loadHomeFeed(page, 1280);
-  await page.getByRole('button', { name: 'Basketball', exact: true }).click();
-  // Filtered feed rendered (single basketball post — FEED-1's real feed,
+  await page.getByRole('button', { name: 'Pickleball', exact: true }).click();
+  // Filtered feed rendered (single pickleball post — FEED-1's real feed,
   // e2e/mocks/handlers/feed.ts's mockBasketballPost fixture)
   await expect(page.getByRole('article')).toHaveCount(1);
   expect(await gatingViolations(page)).toEqual([]);

@@ -19,7 +19,7 @@ import { expect, test } from '../mocks/test.ts';
  *   usePersonalFeed's page size, so "Load more" fetches a real second page.
  *   Two posts are special-cased: index 19 (last on page 0) is a GROUP_POST
  *   for `mockGroup`, reused by step 5; index 20 (only reachable via "Load
- *   more") is Basketball rather than Soccer, reused by step 9's sport-filter
+ *   more") is Pickleball rather than Badminton, reused by step 9's sport-filter
  *   check. Since this replaces postsState wholesale, none of HF-11's usual
  *   fixtures (mockPost/mockGroupPost/mockBasketballPost) are present in this
  *   spec — every assertion below targets the paginated set.
@@ -132,10 +132,11 @@ test('Feed/groups journey', async ({ page, mockSessionId }) => {
     // switcher, which now also drives this page's own sport pill to match
     // (`groupsPageStore.selectGroup`'s derivation) — deselecting the group
     // just now (the "All" click above) intentionally leaves that sport pill
-    // on Football, since it's a *group* deselection, not a *sport* reset.
-    // CreateGroupModal therefore opens with `lockedSport = 'football'` and
-    // has no manual Sport select to interact with (`lockedSport === null`
-    // gates it) — the group is created as Football directly.
+    // on Badminton (mockGroup's real sportId, SPORT-3), since it's a *group*
+    // deselection, not a *sport* reset. CreateGroupModal therefore opens with
+    // `lockedSport = 'badminton'` and has no manual Sport select to interact
+    // with (`lockedSport === null` gates it) — the group is created as
+    // Badminton directly.
     const dialog = page.getByRole('dialog');
     await dialog.locator('#create-group-name').fill('Sunday Runners');
     await expect(dialog.locator('#create-group-sport')).toHaveCount(0);
@@ -168,8 +169,8 @@ test('Feed/groups journey', async ({ page, mockSessionId }) => {
 
     // GRP-8 part 1: the group switcher list is sport-filtered by this page's
     // own pill, which now reliably follows whatever group was last touched
-    // (still Football, from the click above and step 6's Football group
-    // create) — "Weekend Tennis Ladder" (Tennis) isn't reachable in that
+    // (still Badminton, from the click above and step 6's Badminton group
+    // create) — "Weekend Tennis Ladder" (Pickleball) isn't reachable in that
     // filtered list until the sport pill is reset to "All".
     await page.getByRole('group', { name: 'Sport filter' }).getByRole('button', { name: 'All', exact: true }).click();
     await groupSwitcher.getByRole('button', { name: /Weekend Tennis Ladder/ }).click();
@@ -190,7 +191,7 @@ test('Feed/groups journey', async ({ page, mockSessionId }) => {
     // the click below targets Home Feed's own Sport filter.
     await expect(page.getByRole('heading', { name: 'Home Feed' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Basketball', exact: true }).click();
+    await page.getByRole('button', { name: 'Pickleball', exact: true }).click();
     await expect(page.getByRole('article')).toHaveCount(1);
     await expect(page.getByRole('article')).toContainText('Pickup game this weekend');
 
@@ -201,8 +202,8 @@ test('Feed/groups journey', async ({ page, mockSessionId }) => {
 
 /*
  * SPORT-1 delta, isolated: a user with zero sport profiles (impossible in
- * the main journey above, which needs the primary fixture user's 3-sport
- * cap for step 9) must still render Home Feed without crashing — same
+ * the main journey above, which needs the primary fixture user's real sport
+ * profiles for step 9) must still render Home Feed without crashing — same
  * "separate small test()" precedent as a11y.spec.ts's multiple independent
  * tests in one file.
  */
