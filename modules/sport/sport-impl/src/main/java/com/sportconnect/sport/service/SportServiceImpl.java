@@ -24,7 +24,16 @@ import java.util.stream.Collectors;
 public class SportServiceImpl implements SportService {
 
     private final SportRepository sportRepository;
+    private final SportLookupCache sportLookupCache;
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Evicts {@link SportLookupCache}'s cached master map (A5) after the write so the next read
+     * repopulates it — otherwise a newly created sport would stay invisible to
+     * {@code getSportById}/{@code getSportsByIds}/{@code getAllActiveSports}/{@code getAllSports}
+     * until the cache separately expired (it has no TTL, so it never would).
+     */
     @Override
     @Transactional
     public SportResponse createSport(CreateSportRequest request) {
@@ -43,37 +52,71 @@ public class SportServiceImpl implements SportService {
                 .build();
 
         Sport savedSport = sportRepository.save(sport);
+        sportLookupCache.evictAll();
         log.info("Created new sport: {}", savedSport.getName());
         return toSportResponse(savedSport);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Reads from {@link SportLookupCache}'s cached master map (A5) rather than
+     * {@code sportRepository} directly — includes inactive sports, matching the previous
+     * unfiltered {@code findById} behavior.
+     */
     @Override
     @Transactional(readOnly = true)
     public SportResponse getSportById(Long sportId) {
-        Sport sport = sportRepository.findById(sportId)
-                .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
+        Sport sport = sportLookupCache.getAllSportsById().get(sportId);
+        if (sport == null) {
+            throw new ResourceNotFoundException("Sport", "id", sportId);
+        }
         return toSportResponse(sport);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Reads from {@link SportLookupCache}'s cached master map (A5) instead of
+     * {@code sportRepository.findAllById(sportIds)} — avoids {@code sportIds} becoming part of a
+     * per-method cache key, which would otherwise create one cache entry per distinct id
+     * combination instead of sharing {@code getSportById}'s single cached map.
+     */
     @Override
     @Transactional(readOnly = true)
     public Map<Long, SportResponse> getSportsByIds(List<Long> sportIds) {
-        return sportRepository.findAllById(sportIds).stream()
-                .collect(Collectors.toMap(Sport::getId, this::toSportResponse));
+        Map<Long, Sport> allSportsById = sportLookupCache.getAllSportsById();
+        return sportIds.stream()
+                .distinct()
+                .filter(allSportsById::containsKey)
+                .collect(Collectors.toMap(id -> id, id -> toSportResponse(allSportsById.get(id))));
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Reads from {@link SportLookupCache}'s cached master map (A5), filtered to active sports,
+     * instead of {@code sportRepository.findByIsActiveTrue()}.
+     */
     @Override
     @Transactional(readOnly = true)
     public List<SportResponse> getAllActiveSports() {
-        return sportRepository.findByIsActiveTrue().stream()
+        return sportLookupCache.getAllSportsById().values().stream()
+                .filter(Sport::getIsActive)
                 .map(this::toSportResponse)
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Reads from {@link SportLookupCache}'s cached master map (A5) instead of
+     * {@code sportRepository.findAll()}.
+     */
     @Override
     @Transactional(readOnly = true)
     public List<SportResponse> getAllSports() {
-        return sportRepository.findAll().stream()
+        return sportLookupCache.getAllSportsById().values().stream()
                 .map(this::toSportResponse)
                 .collect(Collectors.toList());
     }
@@ -86,6 +129,12 @@ public class SportServiceImpl implements SportService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Evicts {@link SportLookupCache}'s cached master map (A5) after the write, same reasoning
+     * as {@link #createSport}.
+     */
     @Override
     @Transactional
     public SportResponse updateSport(Long sportId, UpdateSportRequest request) {
@@ -115,10 +164,17 @@ public class SportServiceImpl implements SportService {
         }
 
         Sport updatedSport = sportRepository.save(sport);
+        sportLookupCache.evictAll();
         log.info("Updated sport: {}", updatedSport.getName());
         return toSportResponse(updatedSport);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Evicts {@link SportLookupCache}'s cached master map (A5) after the write, same reasoning
+     * as {@link #createSport}.
+     */
     @Override
     @Transactional
     public void deleteSport(Long sportId) {
@@ -126,6 +182,7 @@ public class SportServiceImpl implements SportService {
                 .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
         sport.setIsActive(false);
         sportRepository.save(sport);
+        sportLookupCache.evictAll();
         log.info("Soft deleted sport: {}", sport.getName());
     }
 

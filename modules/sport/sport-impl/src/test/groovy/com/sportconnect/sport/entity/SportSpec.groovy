@@ -6,7 +6,7 @@ class SportSpec extends Specification {
 
     def "equals should return true for same id"() {
         given:
-        def id = UUID.randomUUID()
+        def id = 1L
         def sport1 = Sport.builder().id(id).name("Football").build()
         def sport2 = Sport.builder().id(id).name("Basketball").build()
 
@@ -16,8 +16,8 @@ class SportSpec extends Specification {
 
     def "equals should return false for different id"() {
         given:
-        def sport1 = Sport.builder().id(UUID.randomUUID()).name("Football").build()
-        def sport2 = Sport.builder().id(UUID.randomUUID()).name("Football").build()
+        def sport1 = Sport.builder().id(1L).name("Football").build()
+        def sport2 = Sport.builder().id(2L).name("Football").build()
 
         expect:
         !sport1.equals(sport2)
@@ -34,7 +34,7 @@ class SportSpec extends Specification {
 
     def "builder should create sport with all fields"() {
         given:
-        def id = UUID.randomUUID()
+        def id = 1L
 
         when:
         def sport = Sport.builder()
