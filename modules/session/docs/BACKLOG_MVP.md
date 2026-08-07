@@ -28,6 +28,7 @@
 | 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `DONE` (bundled into SESSION-4) |
 | 8 | SESSION-8 | Session discover ranking algorithm | `TODO` |
 | 9 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `TODO` |
+| 10 | SESSION-10 | Session comments — participant discussion thread on `SessionDetailModal` | `TODO` |
 
 ---
 
@@ -298,3 +299,47 @@ caller's own status from the (now-complete) participants list instead of only ch
 at creation, and the owner/creator-side approval queue UI for reviewing *other* users'
 `REQUESTED` rows. This ticket is scoped to the caller's own status only (user decision, 2026-08-03)
 — CLIENT-SESSION-4 remains the ticket for those two pieces once picked up.
+
+## SESSION-10 — Session comments: participant discussion thread
+
+**Filed:** 2026-08-07, from a `/vision` session — see
+`documentation/md/vision/SESSION_COMMENTS_VISION.md` for the full discussion, rejected
+alternatives, and open questions.
+
+New `SessionComment` entity, domain-scoped to `modules/session` (this repo's domain-scoped-tables
+rule means it does **not** reuse `post-impl`'s `Comment` entity/table, even though the shape
+matches — no cross-domain JPA relationship, no shared table). Shape mirrors `post-impl`'s comments:
+one level of nesting via a `parentCommentId` (replies cannot themselves be replied to, same
+enforcement as `post-impl`'s `CommentServiceImpl`), per-comment likes via a `SessionCommentLike`
+join, and the same Redis preview-cache pattern `post-impl` uses.
+
+**Gating:** readable/postable only by callers with a `SessionParticipant` row in `JOINED`,
+`REQUESTED`, or `INVITED` status for that session — `LEFT` loses access. No public read for
+non-participants (e.g. someone browsing a standalone session from Discover before joining).
+Applies uniformly to standalone and group-linked sessions — not conditional on `groupId` (a
+group-linked session's comment thread is scoped to that specific session, independent of the
+group's own chat channel).
+
+**Delete:** own comment only — no creator/owner moderation capability in v1.
+
+**Lifecycle:** no `SessionStatus` gating — the thread stays open for new comments regardless of
+status, including `CANCELLED` or a session whose scheduled time has already passed.
+
+**Endpoints (mirror `post-impl`'s comment shape):**
+```
+POST   /api/sessions/{sessionId}/comments
+GET    /api/sessions/{sessionId}/comments
+DELETE /api/sessions/comments/{commentId}
+POST   /api/sessions/comments/{commentId}/like
+DELETE /api/sessions/comments/{commentId}/like
+```
+
+**Client follow-up (not built yet, this ticket unblocks it):** `CLIENT-SESSION-8`
+(`client/docs/BACKLOG_MVP.md`) — the comment section rendered in `SessionDetailModal`.
+
+**Explicitly out of scope (v1):** live/real-time updates (client refetches on modal open — see
+CLIENT-SESSION-8), notifications on new comment, creator/owner moderation (deleting others'
+comments), locking the thread on cancellation.
+
+**Open questions (not resolved in the vision session):** whether new comments should notify other
+participants; what success looks like for this feature.

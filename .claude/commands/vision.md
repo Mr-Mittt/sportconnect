@@ -58,14 +58,24 @@ When the user is ready to wrap up, persist the session:
    ## Open questions
    <unresolved items to revisit>
 
-   ## Next steps
-   <concrete follow-ups, e.g. features to plan with /feature>
+   ## Proposed tickets
+   <the grouped ticket list from Step 3.2 below, embedded here verbatim>
    ```
 
    When updating an existing doc, merge — integrate the new discussion into the existing content and refresh the date; never blindly overwrite prior decisions without flagging the change to the user.
 
-2. **Summarize into `PROGRESS.md`** — update the relevant vision/roadmap section with a short summary and a link to the MD file.
+2. **Turn every concrete decision into tickets, grouped by module/service/client, and file them into each domain's own backlog:**
+
+   - From the decisions reached this session, derive one or more concrete, buildable tickets. Every ticket must belong to exactly one of: `client`, a specific `modules/<domain>` (or `modules/<domain>/<subdomain>-impl` for split domains like `social/post`, `social/group`), or `services/chat`. If a decision doesn't clearly resolve to one owner yet (e.g. it needs further scoping first), leave it in **Open questions** instead of forcing it into a ticket.
+   - Locate the backlog file for each owning domain — glob `**/docs/BACKLOG_MVP.md`, not a hardcoded path list, since new modules/services can appear over time. If a touched domain has no `BACKLOG_MVP.md` yet, flag that to the user instead of guessing where to create one.
+   - **Read the target file's existing entries first** — its ticket-ID prefix convention (e.g. `SPORT-`, `SESSION-`, `GRP-`/`A`/`B`, `CLIENT-`, `LOC-`, `CHAT-`, `AUTH-`), its numbering scheme, and its table/section structure — then append new entries that match that exact shape. Don't invent a new format for a file that already has one.
+   - Every appended ticket is filed as `TODO`, with a one-sentence description and a dependency note if it depends on another ticket proposed this same session (including one in a different domain's file — e.g. a client ticket depending on a backend ticket proposed in the same session).
+   - Build the same list a second time as the vision doc's **Proposed tickets** section, grouped under a heading per domain (`### Client`, `### modules/sport`, `### services/chat`, etc.), each line naming the ticket ID + one-line summary + which backlog file it was filed in — this is what gets embedded in the doc per the structure above, and is the literal thing to read back to the user in Step 4.
+
+3. **Check every Open question for a notification shape.** If an unresolved item is a "should this event notify someone?" question (the most common shape: "should X get notified when Y happens"), also log it in `documentation/md/NOTIFICATION_USE_CASES.md` per `CLAUDE.md`'s Documentation Convention — a new `NOTIF-<n>` entry, source pointing back to this vision doc — even though it stays unresolved here too. Don't let it live only in this session's Open questions where it won't be found once the notification feature is actually scoped.
+
+4. **Summarize into `PROGRESS.md`** — update the relevant vision/roadmap section with a short summary and a link to the MD file.
 
 ## Step 4 — Confirm
 
-Tell the user: `Vision saved: documentation/md/vision/<FILE>.md (summarized in PROGRESS.md)` and list the decisions and open questions in one short recap. If any decision changed a previously recorded one, call that out explicitly.
+Tell the user: `Vision saved: documentation/md/vision/<FILE>.md (summarized in PROGRESS.md)`. Then show, grouped by domain, every ticket filed this session and which backlog file it landed in; any `NOTIF-<n>` entries logged to `NOTIFICATION_USE_CASES.md`; and the remaining open questions, in one short recap. If any decision changed a previously recorded one, call that out explicitly.

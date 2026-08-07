@@ -130,6 +130,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `DONE` |
 | 60 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
 | 61 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `TODO` |
 
 **Dependencies:**
 ```
@@ -170,6 +171,9 @@ CLIENT-SESSION-1 → CLIENT-SESSION-2 (redesigns the modal CLIENT-SESSION-1 buil
   split out as its own ticket, **CLIENT-SESSION-7**, rather than leaving it as an unstarted part of
   an otherwise-`DONE` ticket. CLIENT-SESSION-2 → CLIENT-SESSION-7 (the hook it extracts wraps the
   now-`DONE` modal).
+SESSION-10 (`modules/session/docs/BACKLOG_MVP.md`, backend, `TODO`) → CLIENT-SESSION-8 (the comment
+  section needs the backend endpoints before it can go real; filed together from the same
+  `/vision` session, see `documentation/md/vision/SESSION_COMMENTS_VISION.md`).
 FEED-4, FEED-5 → GRP-1 (Groups page epic; independent of Phase 6's other tickets).
 GRP-1, B7 (modules/social/group-impl/docs/BACKLOG_MVP.md) → GRP-2.
 GRP-1 → GRP-3 → GRP-4. GRP-3's "Waiting for user accept" section was blocked on B8
@@ -2776,3 +2780,21 @@ ships everything this needs.
 `bio`/`preferredPosition` to "a future profile-editing screen" that was never filed; `attributes`
 joins that same deferred list. This ticket only removes the "component doesn't exist yet" blocker,
 same "component ships ahead of the page" precedent `LocationPicker` set for `CreateSessionModal`.
+
+### CLIENT-SESSION-8 · Session comments — discussion section in Session Detail modal
+**Status:** `TODO` · **Type:** Feature · **Dependency:** SESSION-10
+(`modules/session/docs/BACKLOG_MVP.md`, backend, `TODO`) · **Filed:** 2026-08-07 · **Spec:**
+`documentation/md/vision/SESSION_COMMENTS_VISION.md` (vision session — full ticket spec via
+`/feature` at pickup)
+
+**What ships:** a comment section rendered below the existing session details in
+`SessionDetailModal`, for participant discussion. Visible only when the caller has a
+`JOINED`/`REQUESTED`/`INVITED` row on that session (SESSION-10's gate) — absent entirely for a
+non-participant viewing a session from Discover. List + post + delete-own-comment, one-level reply
+nesting and per-comment likes, same UI idiom as Post's `CommentSection` (not a new pattern). Data
+hook refetches on modal open (TanStack Query), no live/websocket updates. Renders identically for
+standalone and group-linked sessions — no conditional on `groupId`.
+
+**Explicitly out of scope:** live updates, new-comment notifications, moderation UI for
+creator/owner, locking the thread on cancellation — see SESSION-10's own out-of-scope list, same
+source of truth.

@@ -25,6 +25,13 @@ Every new architecture discussion, design decision, implementation summary, or p
 | `documentation/md/` | Cross-cutting concerns: architecture decisions, product vision, phase roadmaps, DB strategy, payment/booking plans, competitive analysis, testing guides |
 | `modules/<domain>/docs/` | Module-specific: implementation details, design decisions, test summaries, fix write-ups scoped to one module (e.g. `modules/auth/docs/`, `modules/social/docs/`) |
 
+**Notification use cases:** there is no notification feature (push or in-app) built yet. Any "should
+this event notify someone?" question that comes up anywhere — a ticket, a `/vision` session, a
+`/feature` scoping pass, a bug write-up — and isn't resolved on the spot must also be logged in
+`documentation/md/NOTIFICATION_USE_CASES.md`, not just left as an unresolved bullet in that one
+doc. This keeps every candidate trigger in one place so the notification feature, once it's
+eventually scoped, starts from a real list instead of a blank page.
+
 ## Commands
 
 ### Dev environment (Postgres+PostGIS, Redis)
