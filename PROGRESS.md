@@ -2187,6 +2187,15 @@ explicit go-ahead at each step (full story in A3's summary doc):
   exactly one create-session and one Discover implementation, not four diverging copies.
   `FriendsPage` gained `ModalAnchorProvider` (anchored to its own hidden `<h1>`, no pill row to use
   instead) — the only rail-hosting page that didn't have one yet.
+- **Session comments (`/vision` session held 2026-08-07,
+  `documentation/md/vision/SESSION_COMMENTS_VISION.md`)** — a participant discussion thread below
+  the session details in `SessionDetailModal`, reusing Post's comment shape (one-level nesting,
+  likes) as a new domain-scoped `SessionComment` entity (not a reuse of `post-impl`'s `Comment`
+  table). Gated to `JOINED`/`REQUESTED`/`INVITED` participants, participants-only read, refetch-based
+  (no live updates), applies to both standalone and group-linked sessions. Filed as **SESSION-10**
+  (`modules/session/docs/BACKLOG_MVP.md`, `TODO`) and **CLIENT-SESSION-8**
+  (`client/docs/BACKLOG_MVP.md`, `TODO`, depends on SESSION-10). Open questions (not resolved):
+  new-comment notifications, success metric.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
