@@ -129,3 +129,34 @@ that risks breaking other specs' match-count assertions. Covered instead via Vit
   `features/home-feed/HomeFeedPage.tsx` (+ `.test.tsx`),
   `features/groups/GroupsPage.tsx`,
   `features/friends/FriendsPage.tsx` (+ `.test.tsx`)
+
+## Post-ship fixes (found via a pre-existing e2e test, same PR)
+
+Running the full e2e suite after the above landed surfaced a real regression in `GroupsPage.tsx`'s
+new zero-sport-profile page-access gate: `group-invitations.spec.ts`'s pre-existing GRP-8 part 5
+test (`seedZeroSportProfilesOnNextLoad` + accepting a Basketball invitation) timed out, because the
+new page-access gate auto-opened `AddSportModal` (generic copy, Football preselected) on page load
+before the test could click "Accept" — racing GRP-8 part 5's own, invitation-specific sport gate.
+
+- **Fix 1** (`c295514`): page-access gate now skips while there's a pending received invitation —
+  the invitation's own gate owns that moment.
+- **Fix 2** (`7a2af22`): fix 1 alone still had a narrower race — accepting an invitation transiently
+  drives `invitations.length` to 0 *before* the sport-profiles query refetches to reflect the newly
+  added sport, which re-triggered the generic prompt right on top of the flow that had just handled
+  it. Also, the first fix's "decide once, permanently" effect restructuring (splitting the guard
+  across two conditionals) tripped `react-hooks/set-state-in-effect`. Final shape: a
+  `hasEngagedInvitationSportGateRef`, latched synchronously inside `handleAcceptInvitation` (not
+  effect-derived) the moment the invitation-specific gate engages, added as one more condition in
+  the original single-guard `useEffect` shape — lint-clean and race-free.
+- **Fix 3** (`08b642f`): regenerated `home-feed-empty-{375,768,1280}.png` — the committed visual
+  regression baselines still reflected `UpcomingMatches`'s pre-CTA empty state.
+
+All three landed on this branch before merge (PR #102), so `master` already has them — this section
+exists because the original write-up above predates them. Re-verified after: `pnpm lint` 0 errors,
+`pnpm exec tsc -b` clean, 190/190 `features/groups` unit tests, 6/6 `group-invitations.spec.ts`.
+
+**Not re-verified this session:** the `visual-regression` project failed locally across all 9
+`app-home-feed.spec.ts` checks (including the two sport tabs whose baselines didn't change) with
+uniform whole-page text-ghosting diffs — consistent with the font-rendering/OS variance
+`playwright.config.ts` itself already calls out for these baselines, not a layout regression. Worth
+confirming once CI/Linux baselines land (tracked separately, see `linux-visual-baselines` branch).
