@@ -233,6 +233,13 @@ export function GroupsPage() {
   // `isLoading`, which `useGroupsPageData` doesn't expose separately.
   const sportProfilesQuery = useSportProfiles();
   const hasAutoPromptedAddSportRef = useRef(false);
+  // Latched synchronously (not effect-derived) the moment `handleAcceptInvitation` below engages
+  // GRP-8 part 5's own sport gate — guards the auto-prompt effect against a real race: accepting
+  // that invitation transiently drives `invitations.length` to 0 before the sport-profiles query
+  // refetches to reflect the newly added sport, and an effect keyed on that data alone would
+  // re-fire the generic prompt on top of the flow that just handled it. A ref set at the actual
+  // decision point sidesteps that instead of trying to infer it from query timing.
+  const hasEngagedInvitationSportGateRef = useRef(false);
   const [addSportPromptMessage, setAddSportPromptMessage] = useState<string | undefined>(undefined);
 
   const lockedSport = activeSport !== 'all' ? activeSport : null;
@@ -315,27 +322,23 @@ export function GroupsPage() {
   // because they close it — `hasAutoPromptedAddSportRef` latches after the first prompt) — with
   // the same funny copy the create/join gates use, via `addSportPromptMessage` (cleared when the
   // "+" pill opens the modal manually instead, so that open stays plain). Skipped entirely while
-  // there's a pending received invitation to show instead: GRP-8 part 5's own sport gate
-  // (`sportGate` state, triggered from `handleAcceptInvitation` below) already owns that moment
-  // for whichever sport the invitation is for — this generic prompt racing it would either steal
-  // focus from the Invitations section or open a redundant, wrongly-defaulted AddSportModal on
-  // top of it. The decision is made exactly once, the first time both queries have settled — not
-  // re-derived on every data change — because accepting an invitation transiently passes through
-  // `invitations.length === 0 && sportProfiles.length === 0` itself (the invitation list empties
-  // on accept before the sport-profile refetch lands), which would otherwise re-trigger this
-  // effect right on top of the flow that just handled it.
+  // there's a pending received invitation to show instead, or once the invitee has ever engaged
+  // GRP-8 part 5's own sport gate (`hasEngagedInvitationSportGateRef`, latched in
+  // `handleAcceptInvitation` below) — that gate already owns the moment for whichever sport the
+  // invitation is for, and this generic prompt racing it would either steal focus from the
+  // Invitations section or open a redundant, wrongly-defaulted AddSportModal on top of it.
   useEffect(() => {
     if (
       hasAutoPromptedAddSportRef.current ||
+      hasEngagedInvitationSportGateRef.current ||
       sportProfilesQuery.isLoading ||
-      groupInvitationsData.isLoading
+      sportProfilesQuery.data.length > 0 ||
+      groupInvitationsData.isLoading ||
+      groupInvitationsData.invitations.length > 0
     ) {
       return;
     }
     hasAutoPromptedAddSportRef.current = true;
-    if (sportProfilesQuery.data.length > 0 || groupInvitationsData.invitations.length > 0) {
-      return;
-    }
     setAddSportPromptMessage(PAGE_ACCESS_NO_SPORTS_PROMPT);
     setAddSportOpenCount((count) => count + 1);
     setIsAddSportOpen(true);
@@ -366,6 +369,7 @@ export function GroupsPage() {
     const hasSportProfile =
       sportKey === undefined || data.sportProfiles.some((sport) => sport.key === sportKey);
     if (!hasSportProfile && sportKey !== undefined) {
+      hasEngagedInvitationSportGateRef.current = true;
       setSportGate({ invitationId, sportKey, step: 'intro' });
       return;
     }
