@@ -24,7 +24,7 @@
 | 3 | A3 | Flexible per-sport attributes (JSONB) | `DONE` |
 | 4 | A4 | Batch sport lookup in getUserProfiles (cleanliness, not a scaling fix) | `DONE` |
 | 5 | A5 | Cache sport lookups — sport data is effectively static at runtime | `DONE` |
-| 6 | A6 | MVP sport restriction — deactivate all sports except Badminton & Pickleball; enforce `isActive` on every read/write path | `TODO` |
+| 6 | A6 | MVP sport restriction — deactivate all sports except Badminton & Pickleball; enforce `isActive` on every read/write path | `DONE` |
 
 **Dependencies:**
 ```
@@ -230,7 +230,7 @@ summary doc above.
 ---
 
 ### A6 · MVP sport restriction — deactivate all sports except Badminton & Pickleball; enforce `isActive` on every read/write path
-**Status:** `TODO`
+**Status:** `DONE` (2026-08-07) · **Summary:** `modules/sport/sport-impl/docs/A6_MVP_SPORT_RESTRICTION.md`
 **Type:** Data migration + Bug Fix (business rule enforcement)
 **Scope:** New Liquibase migration + `UserSportProfileServiceImpl.java` (+ possibly `SportController.java`
 docs/tests). No `SportServiceImpl.java` change needed — see audit below.

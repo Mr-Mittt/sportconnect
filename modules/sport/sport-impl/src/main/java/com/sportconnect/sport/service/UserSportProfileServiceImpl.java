@@ -37,12 +37,26 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
     private final SportService sportService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates a new sport profile for the caller.
+     *
+     * <p>Verifies the sport exists and is currently active (A6 — a deactivated sport, e.g. one
+     * turned off for this MVP's launch scope, can no longer be selected for a <em>new</em> profile;
+     * an existing profile referencing a sport that's deactivated later is left untouched, see
+     * {@link SportServiceImpl#getSportById} and {@link SportServiceImpl#getSportsByIds}), enforces
+     * the max-3-active-profiles-per-user rule, and rejects a duplicate (userId, sportId) pair.
+     */
     @Override
     @Transactional
     public UserSportProfileResponse createProfile(UUID userId, CreateUserSportProfileRequest request) {
         // Verify sport exists
         Sport sport = sportRepository.findById(request.getSportId())
                 .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", request.getSportId()));
+
+        // Verify sport is active — a deactivated sport can't be picked for a new profile
+        if (!sport.getIsActive()) {
+            throw new BadRequestException("Sport '" + sport.getName() + "' is not currently active");
+        }
 
         // Enforce max-3 active sport profiles per user
         if (profileRepository.findByUserIdAndIsActiveTrue(userId).size() >= 3) {

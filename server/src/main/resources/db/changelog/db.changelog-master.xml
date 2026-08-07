@@ -104,4 +104,7 @@
     <!-- CLIENT-SESSION-3 follow-up: initial slot (participants already accounted for outside the app) -->
     <include file="db/changelog/changes/V042__add_initial_slot_to_sessions.sql" relativeToChangelogFile="false"/>
 
+    <!-- A6: MVP sport restriction — deactivate every sport except Badminton and Pickleball -->
+    <include file="db/changelog/changes/V043__deactivate_non_mvp_sports.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
