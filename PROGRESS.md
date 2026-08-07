@@ -193,7 +193,21 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `test { useJUnitPlatform() }` (every other module has it) — this module's Spock suite had never
   actually executed under Gradle; once fixed, surfaced ~76 pre-existing `UUID`-instead-of-`Long` id
   bugs across all 4 of this module's test files, all fixed.
-- **MVP backlog:** 5 tickets (A1–A5) in `modules/sport/sport-impl/docs/BACKLOG_MVP.md`, **all `DONE`**
+- **A6 filed (2026-08-07, `TODO`):** MVP sport restriction — user decision to launch with only
+  Badminton + Pickleball active, all other seeded sports deactivated (`is_active = false`, data-only
+  migration). Audited every `Sport`/`SportResponse` read path against the module's own documented
+  "no global `isActive` filter" gotcha: the public catalog (`getAllActiveSports`,
+  `getSportsByCategory`) and admin catalog (`getAllSports`) are already correct; `getSportById`/
+  `getSportsByIds` are deliberately unfiltered (existing profiles for a now-deactivated sport must
+  keep resolving a name, not degrade to "Unknown"). Found one real gap: `createProfile()` only
+  checked the sport *exists*, never that it's *active* — a user could open a profile for a
+  deliberately-deactivated sport. Ticketed as the fix. Filed alongside **SPORT-3**
+  (`client/docs/BACKLOG_MVP.md`) — client-side audit found the entire client sport catalog
+  (`SPORT_PROFILE_CONFIG`/`ALL_SPORT_KEYS`/`SPORT_ID_BY_KEY`) is a hardcoded 3-sport
+  (football/basketball/tennis) config that never actually calls `GET /api/sports`, despite SPORT-1's
+  ticket text saying it would — neither Badminton nor Pickleball exist in the client at all today.
+- **MVP backlog:** 6 tickets (A1–A6) in `modules/sport/sport-impl/docs/BACKLOG_MVP.md`, A1–A5 `DONE`,
+  A6 `TODO`
 
 #### `modules:social:post-api` + `modules:social:post-impl`
 - `Post` entity: content (5000 chars), geolocation, sport, visibility, post type, soft delete
@@ -2208,6 +2222,16 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (`modules/session/docs/BACKLOG_MVP.md`, `TODO`) and **CLIENT-SESSION-8**
   (`client/docs/BACKLOG_MVP.md`, `TODO`, depends on SESSION-10). Open questions (not resolved):
   new-comment notifications, success metric.
+- **MVP sport restriction (filed 2026-08-07)** — user decision to launch with only Badminton +
+  Pickleball active; all other seeded sports deactivated. Filed as **A6**
+  (`modules/sport/sport-impl/docs/BACKLOG_MVP.md`, `TODO`) — data migration + a real gap found in
+  `createProfile()` (checked sport exists but not that it's active) — and **SPORT-3**
+  (`client/docs/BACKLOG_MVP.md`, `TODO`, soft dependency on A6) — the client's sport catalog
+  (`SPORT_PROFILE_CONFIG`/`ALL_SPORT_KEYS`/`SPORT_ID_BY_KEY`) turned out to be a hardcoded
+  football/basketball/tennis config that never actually calls `GET /api/sports`; neither Badminton
+  nor Pickleball exist in the client today. SPORT-3 leaves open, for its implementer to resolve, how
+  much of the `SportKey` string-literal-union surface should be touched to properly derive from the
+  live catalog vs. kept as a hand-extended union.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
