@@ -129,9 +129,9 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 58 | CLIENT-SESSION-5 | Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown (LOC-2) | `DONE` |
 | 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `DONE` |
 | 60 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
-| 61 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
-| 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `TODO` |
-| 63 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) | `TODO` |
+| 61 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `TODO` |
+| 62 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 63 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `TODO` |
 
 **Dependencies:**
 ```
@@ -176,12 +176,17 @@ SESSION-10 (`modules/session/docs/BACKLOG_MVP.md`, backend, `TODO`) → CLIENT-S
   section needs the backend endpoints before it can go real; filed together from the same
   `/vision` session, see `documentation/md/vision/SESSION_COMMENTS_VISION.md`).
 SPORT-3 (new, filed 2026-08-07) — soft dependency on **A6** (`modules/sport/sport-impl/docs/BACKLOG_MVP.md`,
-  `TODO`): SPORT-3 works against whatever `GET /api/sports` returns at pickup time either way (it's
-  already active-filtered server-side), but the two tickets were scoped together — A6 is what shrinks
-  the real active catalog down to Badminton + Pickleball, which is the concrete case SPORT-3's design
-  needs to render correctly (neither sport exists in today's hardcoded `SportKey` set). No code
-  dependency; picking up A6 first just means SPORT-3 is tested against the real target catalog
-  instead of a hypothetical one.
+  `DONE` 2026-08-07): SPORT-3 works against whatever `GET /api/sports` returns at pickup time either
+  way (it's already active-filtered server-side), but the two tickets were scoped together — A6 is
+  what shrinks the real active catalog down to Badminton + Pickleball, which is the concrete case
+  SPORT-3's design needs to render correctly (neither sport exists in today's hardcoded `SportKey`
+  set). No code dependency; A6 shipping first just means SPORT-3 is tested against the real target
+  catalog instead of a hypothetical one.
+**Reordered ahead of SPORT-2/CLIENT-SESSION-8 (user decision, 2026-08-07):** now A6 is `DONE`, the
+  live catalog only has 2 sports and neither is selectable in the client yet — user wants this closed
+  before picking up anything else client-side, rather than leaving the mismatch open while SPORT-2/
+  CLIENT-SESSION-8 (both independent of SPORT-3) get picked up first. No dependency change, just
+  queue-order priority.
 FEED-4, FEED-5 → GRP-1 (Groups page epic; independent of Phase 6's other tickets).
 GRP-1, B7 (modules/social/group-impl/docs/BACKLOG_MVP.md) → GRP-2.
 GRP-1 → GRP-3 → GRP-4. GRP-3's "Waiting for user accept" section was blocked on B8
