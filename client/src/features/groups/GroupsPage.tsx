@@ -234,19 +234,6 @@ export function GroupsPage() {
   const sportProfilesQuery = useSportProfiles();
   const hasAutoPromptedAddSportRef = useRef(false);
   const [addSportPromptMessage, setAddSportPromptMessage] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    if (
-      hasAutoPromptedAddSportRef.current ||
-      sportProfilesQuery.isLoading ||
-      sportProfilesQuery.data.length > 0
-    ) {
-      return;
-    }
-    hasAutoPromptedAddSportRef.current = true;
-    setAddSportPromptMessage(PAGE_ACCESS_NO_SPORTS_PROMPT);
-    setAddSportOpenCount((count) => count + 1);
-    setIsAddSportOpen(true);
-  }, [sportProfilesQuery.isLoading, sportProfilesQuery.data.length]);
 
   const lockedSport = activeSport !== 'all' ? activeSport : null;
   const joinGroupModalData = useJoinGroupModalData(
@@ -320,6 +307,44 @@ export function GroupsPage() {
     selectedGroup === null,
     (groupId, sportId) => selectGroupAndShowPosts(groupId, sportId),
   );
+
+  // Zero-sport-profile gate on page access (not just on create/join a match — see
+  // CreateSessionModal/SessionDiscoverModal's own inline gate for that): a caller who lands here
+  // with no sport profile at all gets the same AddSportModal the SportSwitcher's own "+" pill
+  // opens, prompted automatically once (not on every render/refetch, and not re-shown just
+  // because they close it — `hasAutoPromptedAddSportRef` latches after the first prompt) — with
+  // the same funny copy the create/join gates use, via `addSportPromptMessage` (cleared when the
+  // "+" pill opens the modal manually instead, so that open stays plain). Skipped entirely while
+  // there's a pending received invitation to show instead: GRP-8 part 5's own sport gate
+  // (`sportGate` state, triggered from `handleAcceptInvitation` below) already owns that moment
+  // for whichever sport the invitation is for — this generic prompt racing it would either steal
+  // focus from the Invitations section or open a redundant, wrongly-defaulted AddSportModal on
+  // top of it. The decision is made exactly once, the first time both queries have settled — not
+  // re-derived on every data change — because accepting an invitation transiently passes through
+  // `invitations.length === 0 && sportProfiles.length === 0` itself (the invitation list empties
+  // on accept before the sport-profile refetch lands), which would otherwise re-trigger this
+  // effect right on top of the flow that just handled it.
+  useEffect(() => {
+    if (
+      hasAutoPromptedAddSportRef.current ||
+      sportProfilesQuery.isLoading ||
+      groupInvitationsData.isLoading
+    ) {
+      return;
+    }
+    hasAutoPromptedAddSportRef.current = true;
+    if (sportProfilesQuery.data.length > 0 || groupInvitationsData.invitations.length > 0) {
+      return;
+    }
+    setAddSportPromptMessage(PAGE_ACCESS_NO_SPORTS_PROMPT);
+    setAddSportOpenCount((count) => count + 1);
+    setIsAddSportOpen(true);
+  }, [
+    sportProfilesQuery.isLoading,
+    sportProfilesQuery.data.length,
+    groupInvitationsData.isLoading,
+    groupInvitationsData.invitations.length,
+  ]);
 
   // GRP-8 part 3: the current user's own pending join requests — same query
   // JoinGroupModal's "already requested" badge already reads, just rendered
