@@ -26,7 +26,7 @@
 | 5 | SESSION-5 | Session capacity + fee/pricing | `DONE` |
 | 6 | SESSION-6 | Join-approval workflow + invite-friends-at-creation | `DONE` |
 | 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `DONE` (bundled into SESSION-4) |
-| 8 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `TODO` |
+| 8 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `DONE` |
 | 9 | SESSION-10 | Session comments — participant discussion thread on `SessionDetailModal` | `TODO` |
 | 10 | SESSION-8 | Session discover ranking algorithm | `TODO` |
 
@@ -299,6 +299,20 @@ caller's own status from the (now-complete) participants list instead of only ch
 at creation, and the owner/creator-side approval queue UI for reviewing *other* users'
 `REQUESTED` rows. This ticket is scoped to the caller's own status only (user decision, 2026-08-03)
 — CLIENT-SESSION-4 remains the ticket for those two pieces once picked up.
+
+**Delta (2026-08-08, at implementation — re-clarified scope + design pivot):** the user expanded
+scope beyond this text before pickup: the caller's status needed to drive Accept/**Decline**
+(INVITED) and **Cancel** (REQUESTED) as real actions, not just a disabled "Waiting for approval",
+and needed to cover the session card (list surfaces) in addition to `SessionDetailModal`. Given
+that, the mechanism also changed from what this ticket originally proposed: instead of exposing the
+caller's row via `getSessionParticipants` (which has real shipped client consumers expecting a raw
+`Page` — wrapping it would have broken them), `callerParticipation: SessionParticipantResponse` was
+added to `SessionResponse` instead, batch-resolved for every session-returning endpoint.
+`getSessionParticipants` itself ships unchanged. Decline/Cancel needed no new endpoint —
+`leaveSession`'s status filter was widened to accept `INVITED`/`REQUESTED` in addition to `JOINED`,
+all transitioning to `LEFT` via the existing `DELETE /sessions/{id}/leave`. Full writeup:
+`modules/session/docs/SESSION-9_CALLER_PARTICIPATION_STATUS.md`. Client follow-up filed as
+**CLIENT-SESSION-9** (`client/docs/BACKLOG_MVP.md`).
 
 ## SESSION-10 — Session comments: participant discussion thread
 

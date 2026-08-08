@@ -30,13 +30,13 @@ fields. See `modules/location/location-impl/CLAUDE.md` for that side of the boun
 
 ```
 POST   /api/sessions                          ROLE_USER
-GET    /api/sessions/{sessionId}
+GET    /api/sessions/{sessionId}               ROLE_USER (SESSION-9: caller id now threaded through for callerParticipation)
 GET    /api/sessions/group/{groupId}          paginated, private-group visibility enforced via GroupService.getGroup
 GET    /api/sessions/mine                     paginated — caller's STANDALONE sessions only (not group ones they created)
 PUT    /api/sessions/{sessionId}               creator (standalone) or owner/admin (group)
 POST   /api/sessions/{sessionId}/cancel        same gating; soft — sets status=CANCELLED, never deletes; rejected if already COMPLETED/CANCELLED
 POST   /api/sessions/{sessionId}/join          rejected if the session is CANCELLED
-DELETE /api/sessions/{sessionId}/leave
+DELETE /api/sessions/{sessionId}/leave         JOINED->LEFT, or INVITED->LEFT ("decline")/REQUESTED->LEFT ("cancel my request") — SESSION-9
 GET    /api/sessions/{sessionId}/participants  paginated, JOINED-only
 ```
 
@@ -62,6 +62,13 @@ GET    /api/sessions/{sessionId}/participants  paginated, JOINED-only
    delete anywhere in this service.
 5. `getGroupSessions` calls `groupService.getGroup(groupId, currentUserId)` first — this reuses
    the *existing* private-group membership gate rather than reimplementing it.
+6. **SESSION-9:** every `SessionResponse`-returning method resolves `callerParticipation` — the
+   caller's own `SessionParticipant` row for that session (null if none), batch-resolved in
+   `mapToResponses` via `findBySessionIdInAndUserId`. Drives the client's action button
+   (Join/Accept/Decline/Cancel/Leave) on both the session card and `SessionDetailModal`. `null`
+   userFullName/userAvatarUrl inside it are intentional — it's always the caller's own identity,
+   which the client already has. `leaveSession` doubles as decline/cancel for this reason — see
+   its Javadoc.
 
 ## Gotchas
 

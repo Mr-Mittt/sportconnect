@@ -23,7 +23,9 @@ public interface SessionService {
      */
     SessionResponse createSession(UUID userId, CreateSessionRequest request);
 
-    SessionResponse getSession(Long sessionId);
+    /** callerId (SESSION-9) resolves SessionResponse.callerParticipation — the caller's own
+     * SessionParticipant row for this session, or null if they have none. */
+    SessionResponse getSession(Long sessionId, UUID callerId);
 
     /**
      * Delegates private-group visibility to GroupService.getGroup(groupId, currentUserId) before
@@ -50,7 +52,14 @@ public interface SessionService {
      */
     void joinSession(Long sessionId, UUID userId);
 
-    /** Requires an existing JOINED row; flips it to LEFT. BadRequestException otherwise. */
+    /**
+     * Requires an existing JOINED, INVITED, or REQUESTED row; flips it to LEFT.
+     * BadRequestException if no such row exists. Doubles as "decline" for an INVITED row and
+     * "cancel my request" for a REQUESTED one (SESSION-9) — same endpoint as a plain leave, the
+     * client just labels the button differently based on the caller's current status. Unlike
+     * rejectParticipant, never sets rejectReason (that field is reserved for manager-initiated
+     * rejection).
+     */
     void leaveSession(Long sessionId, UUID userId);
 
     /**

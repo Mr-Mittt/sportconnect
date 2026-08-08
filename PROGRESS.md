@@ -2274,6 +2274,21 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (793/793), `pnpm e2e` (49/49), typecheck, and lint all green; visual baselines regenerated
   locally — Linux-rendered CI baselines still need the usual post-merge `update-baselines` dispatch
   (same HF-13..HF-19 precedent).
+- **SESSION-9 (`DONE`, 2026-08-08,
+  `modules/session/docs/SESSION-9_CALLER_PARTICIPATION_STATUS.md`)** — scope re-clarified at pickup:
+  beyond the original "expose caller's status via `getSessionParticipants`" text, the user confirmed
+  the caller's status needs to drive real Accept/**Decline**/**Cancel** actions (not just a disabled
+  "waiting" state), on both the session card and `SessionDetailModal`. Design pivoted accordingly:
+  `SessionResponse.callerParticipation` (batch-resolved, every session endpoint) instead of wrapping
+  `getSessionParticipants` — which has real shipped client consumers that would have broken.
+  `leaveSession` widened to accept `INVITED`/`REQUESTED` (not just `JOINED`), doubling as
+  decline/cancel via the existing `DELETE /sessions/{id}/leave` — no new endpoint.
+  `getSessionParticipants` itself ships unchanged. Live-verified against a running backend +
+  Postgres (not just Spock): null/JOINED/INVITED→decline/REQUESTED→cancel all confirmed via curl.
+  Client follow-up filed as **CLIENT-SESSION-9** (`client/docs/BACKLOG_MVP.md`, `TODO`).
+- **MVP backlog (session module):** 8 of 10 tickets `DONE` (SESSION-1 through SESSION-9); SESSION-10
+  and SESSION-8 remain `TODO` (queue order: SESSION-10, then SESSION-8 last — user-reordered
+  2026-08-08 to unblock `CLIENT-SESSION-8` sooner).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

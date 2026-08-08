@@ -16,6 +16,10 @@ public interface SessionParticipantRepository extends JpaRepository<SessionParti
 
     Optional<SessionParticipant> findBySessionIdAndUserId(Long sessionId, UUID userId);
 
+    /** Batch lookup for a page of sessions — one query for the caller's own row across all of
+     * them, instead of a per-session findBySessionIdAndUserId call. */
+    List<SessionParticipant> findBySessionIdInAndUserId(List<Long> sessionIds, UUID userId);
+
     Page<SessionParticipant> findBySessionIdAndStatus(Long sessionId, ParticipantStatus status, Pageable pageable);
 
     long countBySessionIdAndStatus(Long sessionId, ParticipantStatus status);

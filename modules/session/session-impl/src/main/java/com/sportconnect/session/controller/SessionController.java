@@ -60,14 +60,19 @@ public class SessionController {
                 .body(ApiResponse.success("Session created successfully", response));
     }
 
-    @Operation(summary = "Get a session by id")
+    @Operation(summary = "Get a session by id", description = "Includes the caller's own participation status (SESSION-9), if any.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
     })
     @GetMapping("/{sessionId}")
-    public ResponseEntity<ApiResponse<SessionResponse>> getSession(@PathVariable Long sessionId) {
-        SessionResponse response = sessionService.getSession(sessionId);
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<SessionResponse>> getSession(
+            @PathVariable Long sessionId,
+            @AuthenticationPrincipal String callerIdStr) {
+        UUID callerId = UUID.fromString(callerIdStr);
+        SessionResponse response = sessionService.getSession(sessionId, callerId);
         return ResponseEntity.ok(ApiResponse.success("Session retrieved successfully", response));
     }
 
@@ -186,10 +191,10 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Joined session successfully", null));
     }
 
-    @Operation(summary = "Leave a session")
+    @Operation(summary = "Leave a session", description = "Also doubles as declining an INVITED row or cancelling the caller's own REQUESTED row (SESSION-9) — same endpoint, just a different button label client-side depending on the caller's current status.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Left"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not currently joined"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Left / declined / cancelled"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not currently a participant (no row, or already LEFT)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @DeleteMapping("/{sessionId}/leave")

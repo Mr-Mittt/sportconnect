@@ -140,13 +140,13 @@ public class SessionServiceImpl implements SessionService {
         }
 
         log.info("Created session {} (type={}, group={})", saved.getId(), saved.getSessionType(), saved.getGroupId());
-        return toResponse(saved);
+        return toResponse(saved, userId);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public SessionResponse getSession(Long sessionId) {
-        return toResponse(findSessionOrThrow(sessionId));
+    public SessionResponse getSession(Long sessionId, UUID callerId) {
+        return toResponse(findSessionOrThrow(sessionId), callerId);
     }
 
     @Override
@@ -154,13 +154,13 @@ public class SessionServiceImpl implements SessionService {
     public Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, Pageable pageable) {
         // Enforces the existing private-group membership gate rather than reimplementing it.
         groupService.getGroup(groupId, currentUserId);
-        return toResponsePage(sessionRepository.findByGroupId(groupId, pageable));
+        return toResponsePage(sessionRepository.findByGroupId(groupId, pageable), currentUserId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<SessionResponse> getSessionsCreatedByUser(UUID userId, Pageable pageable) {
-        return toResponsePage(sessionRepository.findByCreatedByAndGroupIdIsNull(userId, pageable));
+        return toResponsePage(sessionRepository.findByCreatedByAndGroupIdIsNull(userId, pageable), userId);
     }
 
     @Override
@@ -211,7 +211,7 @@ public class SessionServiceImpl implements SessionService {
         // an amount" and clears a stale amount when switching away from FIXED.
         session.setFeeAmountVnd(resolveFeeAmountVnd(session.getFeeType(), session.getFeeAmountVnd()));
 
-        return toResponse(sessionRepository.save(session));
+        return toResponse(sessionRepository.save(session), userId);
     }
 
     /** Enforces "feeAmountVnd is meaningful only when feeType is FIXED": returns candidateAmount
@@ -240,7 +240,7 @@ public class SessionServiceImpl implements SessionService {
         session.setCancelledBy(userId);
         session.setCancelledAt(LocalDateTime.now());
 
-        return toResponse(sessionRepository.save(session));
+        return toResponse(sessionRepository.save(session), userId);
     }
 
     @Override
@@ -277,10 +277,15 @@ public class SessionServiceImpl implements SessionService {
     @Override
     @Transactional
     public void leaveSession(Long sessionId, UUID userId) {
+        // Also doubles as "decline" (INVITED) and "cancel my request" (REQUESTED) — SESSION-9.
+        // Same LEFT target for all three; the client picks the button label from the caller's
+        // current status, same as "Accept" already reusing this endpoint's sibling, joinSession.
         SessionParticipant participant = sessionParticipantRepository
                 .findBySessionIdAndUserId(sessionId, userId)
-                .filter(p -> p.getStatus() == ParticipantStatus.JOINED)
-                .orElseThrow(() -> new BadRequestException("Not currently joined to this session"));
+                .filter(p -> p.getStatus() == ParticipantStatus.JOINED
+                        || p.getStatus() == ParticipantStatus.INVITED
+                        || p.getStatus() == ParticipantStatus.REQUESTED)
+                .orElseThrow(() -> new BadRequestException("Not currently a participant in this session"));
         participant.setStatus(ParticipantStatus.LEFT);
         sessionParticipantRepository.save(participant);
     }
@@ -368,7 +373,7 @@ public class SessionServiceImpl implements SessionService {
 
         Page<Session> sessions = sessionRepository.findDiscoverSessions(
                 SessionStatus.SCHEDULED, effectiveSportIds, callerId, ParticipantStatus.JOINED, pageable);
-        return toResponsePage(sessions);
+        return toResponsePage(sessions, callerId);
     }
 
     @Override
@@ -377,7 +382,7 @@ public class SessionServiceImpl implements SessionService {
         Page<Session> sessions = status != null
                 ? sessionRepository.findJoinedSessionsByStatus(status, userId, ParticipantStatus.JOINED, pageable)
                 : sessionRepository.findJoinedSessions(userId, ParticipantStatus.JOINED, pageable);
-        return toResponsePage(sessions);
+        return toResponsePage(sessions, userId);
     }
 
     private Session findSessionOrThrow(Long sessionId) {
@@ -395,20 +400,21 @@ public class SessionServiceImpl implements SessionService {
         }
     }
 
-    private SessionResponse toResponse(Session session) {
-        return mapToResponses(List.of(session)).get(0);
+    private SessionResponse toResponse(Session session, UUID callerId) {
+        return mapToResponses(List.of(session), callerId).get(0);
     }
 
-    private Page<SessionResponse> toResponsePage(Page<Session> sessions) {
-        List<SessionResponse> mapped = mapToResponses(sessions.getContent());
+    private Page<SessionResponse> toResponsePage(Page<Session> sessions, UUID callerId) {
+        List<SessionResponse> mapped = mapToResponses(sessions.getContent(), callerId);
         return new PageImpl<>(mapped, sessions.getPageable(), sessions.getTotalElements());
     }
 
     /**
-     * Batch-resolves creator/sport/location/participant-count for a list of sessions in one
-     * round trip each — never per-row calls in a loop, per the no-N+1 rule.
+     * Batch-resolves creator/sport/location/participant-count/caller's-own-participation for a
+     * list of sessions in one round trip each — never per-row calls in a loop, per the no-N+1
+     * rule. callerId (SESSION-9) resolves each SessionResponse.callerParticipation.
      */
-    private List<SessionResponse> mapToResponses(List<Session> sessions) {
+    private List<SessionResponse> mapToResponses(List<Session> sessions, UUID callerId) {
         if (sessions.isEmpty()) {
             return Collections.emptyList();
         }
@@ -430,6 +436,18 @@ public class SessionServiceImpl implements SessionService {
                 .collect(Collectors.toMap(
                         SessionParticipantRepository.SessionParticipantCount::getSessionId,
                         SessionParticipantRepository.SessionParticipantCount::getCount));
+        // Caller's own row per session, if any — not enriched with userFullName/userAvatarUrl
+        // (it's always the caller's own identity, which they already know client-side).
+        Map<Long, SessionParticipantResponse> callerParticipations = sessionParticipantRepository
+                .findBySessionIdInAndUserId(sessionIds, callerId).stream()
+                .collect(Collectors.toMap(SessionParticipant::getSessionId, p -> SessionParticipantResponse.builder()
+                        .id(p.getId())
+                        .sessionId(p.getSessionId())
+                        .userId(p.getUserId())
+                        .status(p.getStatus())
+                        .rejectReason(p.getRejectReason())
+                        .createdAt(p.getCreatedAt())
+                        .build()));
 
         return sessions.stream()
                 .map(session -> SessionResponse.builder()
@@ -463,6 +481,7 @@ public class SessionServiceImpl implements SessionService {
                         .feeAmountVnd(session.getFeeAmountVnd())
                         .autoApprove(session.getAutoApprove())
                         .initialSlot(session.getInitialSlot())
+                        .callerParticipation(callerParticipations.get(session.getId()))
                         .createdAt(session.getCreatedAt())
                         .updatedAt(session.getUpdatedAt())
                         .build())
