@@ -130,8 +130,8 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `DONE` |
 | 60 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
 | 61 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `DONE` |
-| 62 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
-| 63 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `TODO` |
+| 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `TODO` |
+| 63 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 
 **Dependencies:**
 ```

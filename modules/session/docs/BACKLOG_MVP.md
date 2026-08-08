@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/session/session-impl`
-**Last updated:** 2026-08-01
+**Last updated:** 2026-08-08
 
 ---
 
@@ -26,9 +26,9 @@
 | 5 | SESSION-5 | Session capacity + fee/pricing | `DONE` |
 | 6 | SESSION-6 | Join-approval workflow + invite-friends-at-creation | `DONE` |
 | 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `DONE` (bundled into SESSION-4) |
-| 8 | SESSION-8 | Session discover ranking algorithm | `TODO` |
-| 9 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `TODO` |
-| 10 | SESSION-10 | Session comments — participant discussion thread on `SessionDetailModal` | `TODO` |
+| 8 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `TODO` |
+| 9 | SESSION-10 | Session comments — participant discussion thread on `SessionDetailModal` | `TODO` |
+| 10 | SESSION-8 | Session discover ranking algorithm | `TODO` |
 
 ---
 
