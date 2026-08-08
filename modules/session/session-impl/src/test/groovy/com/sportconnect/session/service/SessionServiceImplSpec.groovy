@@ -52,6 +52,7 @@ class SessionServiceImplSpec extends Specification {
         sportService.getSportsByIds(_) >> [:]
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
         sessionParticipantRepository.countBySessionIdsAndStatus(_, _) >> []
+        sessionParticipantRepository.findBySessionIdInAndUserId(_, _) >> []
     }
 
     def "createSession creates a standalone session open to any user"() {
@@ -339,11 +340,46 @@ class SessionServiceImplSpec extends Specification {
 
     def "getSession throws ResourceNotFoundException when missing"() {
         when:
-        sessionService.getSession(99L)
+        sessionService.getSession(99L, UUID.randomUUID())
 
         then:
         1 * sessionRepository.findById(99L) >> Optional.empty()
         thrown(ResourceNotFoundException)
+    }
+
+    def "getSession populates callerParticipation from the caller's own SessionParticipant row"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def session = Session.builder().id(1L).sportId(1L).locationId(1L).build()
+        def ownRow = SessionParticipant.builder().id(9L).sessionId(1L).userId(callerId)
+                .status(ParticipantStatus.REQUESTED).build()
+        stubBatchEnrichment()
+
+        when:
+        def response = sessionService.getSession(1L, callerId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdInAndUserId([1L], callerId) >> [ownRow]
+        response.callerParticipation.status == ParticipantStatus.REQUESTED
+        response.callerParticipation.id == 9L
+        // Caller's own identity is already known client-side — not re-enriched here.
+        response.callerParticipation.userFullName == null
+    }
+
+    def "getSession leaves callerParticipation null when the caller has no row for that session"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def session = Session.builder().id(1L).sportId(1L).locationId(1L).build()
+        stubBatchEnrichment()
+
+        when:
+        def response = sessionService.getSession(1L, callerId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdInAndUserId([1L], callerId) >> []
+        response.callerParticipation == null
     }
 
     def "joinSession rejects joining a cancelled session"() {
@@ -435,7 +471,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.id == 9L && p.status == ParticipantStatus.JOINED }) >> existing
     }
 
-    def "leaveSession rejects when not currently joined"() {
+    def "leaveSession rejects when the caller has no participant row at all"() {
         given:
         def userId = UUID.randomUUID()
 
@@ -447,10 +483,50 @@ class SessionServiceImplSpec extends Specification {
         thrown(BadRequestException)
     }
 
+    def "leaveSession rejects a row that's already LEFT"() {
+        given:
+        def userId = UUID.randomUUID()
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.LEFT).build()
+
+        when:
+        sessionService.leaveSession(1L, userId)
+
+        then:
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        thrown(BadRequestException)
+        0 * sessionParticipantRepository.save(_)
+    }
+
     def "leaveSession flips a JOINED row to LEFT"() {
         given:
         def userId = UUID.randomUUID()
         def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
+
+        when:
+        sessionService.leaveSession(1L, userId)
+
+        then:
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
+    }
+
+    def "leaveSession doubles as decline, flipping an INVITED row to LEFT"() {
+        given:
+        def userId = UUID.randomUUID()
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.INVITED).build()
+
+        when:
+        sessionService.leaveSession(1L, userId)
+
+        then:
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
+    }
+
+    def "leaveSession doubles as cancelling my own request, flipping a REQUESTED row to LEFT"() {
+        given:
+        def userId = UUID.randomUUID()
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.REQUESTED).build()
 
         when:
         sessionService.leaveSession(1L, userId)
@@ -807,6 +883,7 @@ class SessionServiceImplSpec extends Specification {
         userService.getUsersByIds(_) >> [:]
         sportService.getSportsByIds(_) >> [:]
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
+        sessionParticipantRepository.findBySessionIdInAndUserId(_, _) >> []
         // 1 real JOINED row (the creator, auto-joined) + initialSlot(2) = 3.
         1 * sessionParticipantRepository.countBySessionIdsAndStatus(_, _) >> [countRow]
         result.participantCount == 3L

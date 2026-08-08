@@ -66,6 +66,13 @@ public class SessionResponse {
 
     private Boolean autoApprove;
 
+    /** The calling user's own SessionParticipant row for this session (SESSION-9) — null if they
+     * have none. userFullName/userAvatarUrl are left unset here (the caller already knows their
+     * own identity); only status/rejectReason/createdAt/id are meaningful. Drives the client's
+     * Join/Accept/Decline/Cancel/Leave button on both the session card and SessionDetailModal:
+     * null or LEFT -> Join, INVITED -> Accept/Decline, REQUESTED -> Cancel, JOINED -> Leave. */
+    private SessionParticipantResponse callerParticipation;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

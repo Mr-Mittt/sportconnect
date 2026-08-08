@@ -132,6 +132,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 61 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `DONE` |
 | 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `TODO` |
 | 63 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 64 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) | `TODO` |
 
 **Dependencies:**
 ```
@@ -2811,6 +2812,29 @@ standalone and group-linked sessions — no conditional on `groupId`.
 **Explicitly out of scope:** live updates, new-comment notifications, moderation UI for
 creator/owner, locking the thread on cancellation — see SESSION-10's own out-of-scope list, same
 source of truth.
+
+### CLIENT-SESSION-9 · Wire Join/Accept/Decline/Cancel/Leave button on session card + Session Detail modal
+**Status:** `TODO` · **Type:** Feature · **Dependency:** SESSION-9
+(`modules/session/docs/BACKLOG_MVP.md`, backend, `DONE`) · **Filed:** 2026-08-08 · **Backend
+summary:** `modules/session/docs/SESSION-9_CALLER_PARTICIPATION_STATUS.md`
+
+**What ships:** the session card (Discover, Upcoming rail, `/sessions/mine` results) and
+`SessionDetailModal` both resolve their action button from `SessionResponse.callerParticipation`
+(now returned by every session endpoint) instead of only checking for a `JOINED` row:
+- no row, or `LEFT` → **Join** button (`POST /sessions/{id}/join`)
+- `INVITED` → **Accept** (`POST /sessions/{id}/join` — an invitee's own join call always resolves
+  straight to `JOINED`) and **Decline** (`DELETE /sessions/{id}/leave`)
+- `REQUESTED` → **Cancel** (`DELETE /sessions/{id}/leave`) — no "waiting for approval, disabled"
+  state; cancelling is a real action
+- `JOINED` → **Leave** (`DELETE /sessions/{id}/leave`)
+
+Decline and Cancel both call the same `DELETE /sessions/{id}/leave` endpoint Leave already uses —
+no new endpoint on the backend side, just a different button label/icon depending on
+`callerParticipation.status`.
+
+**Explicitly out of scope:** the invite-friend search + multi-select and approval-queue UI for
+reviewing *other* users' `REQUESTED` rows (`CLIENT-SESSION-4`, already `DONE`); anything on
+`getSessionParticipants` (unchanged by SESSION-9, not part of this ticket).
 
 ### SPORT-3 · Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config
 **Status:** `DONE` (2026-08-07) · **Type:** Data layer (real integration) · **Dependency:** soft — **A6**
