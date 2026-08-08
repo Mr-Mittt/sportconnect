@@ -213,8 +213,15 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   found the entire client sport catalog (`SPORT_PROFILE_CONFIG`/`ALL_SPORT_KEYS`/`SPORT_ID_BY_KEY`)
   is a hardcoded football/basketball/tennis config that never actually calls `GET /api/sports`;
   neither Badminton nor Pickleball exist in the client yet.
-- **MVP backlog:** 6 tickets (A1–A6) in `modules/sport/sport-impl/docs/BACKLOG_MVP.md`, **all
-  `DONE`**
+- **A7 (2026-08-08, filed):** generalizes A6's read/write split beyond `sport-impl` itself — a
+  read-only survey of `group`/`location`/`session` domains' create paths (`createGroup`,
+  `createLocation`, `createSession`) found none of them check `isActive` on the sport they tag,
+  unlike `UserSportProfileServiceImpl.createProfile` (A6). `hasProfileForSport` (used by
+  `createGroup`) is existence-only and doesn't substitute — a profile created while a sport was
+  active still passes it after that sport is later deactivated. Ticketed for later; no code
+  changed yet.
+- **MVP backlog:** 7 tickets (A1–A7) in `modules/sport/sport-impl/docs/BACKLOG_MVP.md` — A1–A6
+  `DONE`, A7 `TODO`
 
 #### `modules:social:post-api` + `modules:social:post-impl`
 - `Post` entity: content (5000 chars), geolocation, sport, visibility, post type, soft delete
