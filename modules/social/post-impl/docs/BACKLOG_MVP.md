@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/social/post-impl`  
-**Last updated:** 2026-07-25
+**Last updated:** 2026-08-07
 
 ---
 
@@ -37,6 +37,7 @@
 | 16 | A10 | Fix `GET /api/posts/hashtag/{tag}` — always 500s (conflicting `ORDER BY`) | `DONE` |
 | 17 | A11 | Fix broadcast-expiry timezone mismatch (JVM-local `LocalDateTime` vs DB-UTC `CURRENT_TIMESTAMP`) | `TODO` |
 | 18 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `TODO` |
+| 19 | A13 | Drop the DB-level FK on `posts.sport_id` — historical artifact, inconsistent with this repo's cross-domain-refs-are-IDs-only rule | `TODO` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
 
@@ -739,5 +740,60 @@ at the time A9 was scoped).
 
 **Out of scope:** any change to `GroupInvitationResponse`/group-impl (B15 already shipped, sportId-only,
 no sportName) — this ticket is scoped entirely to `post-impl`'s existing A9 field.
+
+---
+
+### A13 · Drop the DB-level FK on `posts.sport_id`
+**Status:** `TODO` · **Type:** Enhancement (Architecture) · **Filed:** 2026-08-07, raised during a
+client SPORT-3 session (`client/docs/SPORT-3_SPORT_CATALOG_REAL_FETCH.md`) while explaining the
+sport-relationship tables to the user.
+
+**Found:** `posts.sport_id` (`V004__create_posts_tables.sql`) is declared
+`BIGINT REFERENCES sports(id) ON DELETE SET NULL` — a real Postgres foreign-key constraint across
+domains. Every *other* cross-domain `sport_id` column added since —
+`groups.sport_id` (`V015__add_sport_id_to_groups.sql`), `locations.sport_id`
+(`V030__create_locations_table.sql`), `sessions.sport_id` (`V031__create_sessions_table.sql` /
+`V039__enforce_session_sport_id_and_add_standalone_index.sql`) — is a plain unenforced `BIGINT`,
+matching root `CLAUDE.md`'s "cross-domain references use IDs only" rule (no JPA `@ManyToOne`, and by
+implicit extension, no DB-level FK locking the two domains' tables together).
+
+**Why this exists (confirmed via `git log`, not guessed):** `posts` (`V004`) was part of this repo's
+very first commit (`16a7cd4`, 2026-03-03). The "cross-domain references use IDs only" rule was added
+to root `CLAUDE.md` on 2026-07-07 (`7c2d7f7`) — the same commit that added `groups.sport_id`,
+correctly FK-free from day one. `posts.sport_id`'s FK predates the rule by ~4 months; since
+Liquibase migrations are append-only (a merged one can't be edited, only reversed by a new one), it
+was never retrofitted once the rule existed. Same "predates `CLAUDE.md`, never retrofitted" story as
+A5 in this same file (a cross-domain-import violation in `CommentServiceImpl`) and group-impl's own
+A6 — this ticket is the schema-level counterpart of that pattern.
+
+**Why it matters:** a DB-level FK is a hard coupling at the schema level — `posts` and `sports` must
+stay in the same database/schema as long as the constraint exists, which works directly against this
+repo's stated "monolith-first, microservice-ready" goal. Extracting `sport` into its own service
+later would require dropping this constraint first as a blocking pre-step, rather than it already
+being a non-issue like every other cross-domain `sport_id` column. Low urgency today (`Post.sportId`
+in the JPA entity is already a plain `Long` field, no `@ManyToOne` — the *application* layer already
+follows the rule regardless of what the DB constraint enforces underneath; `ON DELETE SET NULL` is
+benign, not actively causing bugs) — filed so it's tracked and fixable in one small migration
+whenever it's convenient, not because anything is currently broken.
+
+**Fix approach:**
+```sql
+ALTER TABLE posts DROP CONSTRAINT posts_sport_id_fkey;
+```
+(confirm the actual constraint name via `\d posts` or
+`information_schema.table_constraints` before writing the migration — Postgres auto-generates it,
+`posts_sport_id_fkey` is the conventional name but not guaranteed). New Liquibase changeset, next
+sequential `Vxxx` file, registered in `db.changelog-master.xml` — same as every other migration in
+this repo. No entity/service/DTO change needed (the JPA layer never referenced the constraint).
+
+**Verify before/after:** confirm no existing code path relies on the FK's `ON DELETE SET NULL`
+cascade behavior specifically (vs. the service layer's own soft-delete-via-`is_active` pattern for
+`sports` — `SportServiceImpl.deleteSport()` never hard-deletes a row, so this cascade has likely
+never fired in practice; grep for any test or migration that hard-deletes a `sports` row before
+assuming it's dead code).
+
+**Out of scope:** `groups`/`locations`/`sessions`' `sport_id` columns (already correct, no FK to
+remove); any change to `Post`'s JPA entity, `PostServiceImpl`, or `PostRepository` (this is a schema-
+only change — the application layer's behavior is unaffected either way).
 
 ---

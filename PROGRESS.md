@@ -213,8 +213,15 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   found the entire client sport catalog (`SPORT_PROFILE_CONFIG`/`ALL_SPORT_KEYS`/`SPORT_ID_BY_KEY`)
   is a hardcoded football/basketball/tennis config that never actually calls `GET /api/sports`;
   neither Badminton nor Pickleball exist in the client yet.
-- **MVP backlog:** 6 tickets (A1–A6) in `modules/sport/sport-impl/docs/BACKLOG_MVP.md`, **all
-  `DONE`**
+- **A7 (2026-08-08, filed):** generalizes A6's read/write split beyond `sport-impl` itself — a
+  read-only survey of `group`/`location`/`session` domains' create paths (`createGroup`,
+  `createLocation`, `createSession`) found none of them check `isActive` on the sport they tag,
+  unlike `UserSportProfileServiceImpl.createProfile` (A6). `hasProfileForSport` (used by
+  `createGroup`) is existence-only and doesn't substitute — a profile created while a sport was
+  active still passes it after that sport is later deactivated. Ticketed for later; no code
+  changed yet.
+- **MVP backlog:** 7 tickets (A1–A7) in `modules/sport/sport-impl/docs/BACKLOG_MVP.md` — A1–A6
+  `DONE`, A7 `TODO`
 
 #### `modules:social:post-api` + `modules:social:post-impl`
 - `Post` entity: content (5000 chars), geolocation, sport, visibility, post type, soft delete
@@ -222,7 +229,18 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - `Hashtag`, `PostHashtag`, `UserFollow` entities (tables exist; UserFollow → replaced by Friendship in B1)
 - `PostServiceImpl`, `CommentServiceImpl`
 - `PostController` — 16 endpoints: create/read/update/delete posts, like/unlike, comment CRUD, feed, group posts, active broadcasts, broadcast end-time extension
-- **MVP backlog:** 12 tickets (A1–A8, B1–B6) in `modules/social/post-impl/docs/BACKLOG_MVP.md`; all `DONE`
+- **A13 filed (2026-08-07, `TODO`):** `posts.sport_id` is the one cross-domain `sport_id` column with
+  a real DB-level FK (`REFERENCES sports(id)`) — every other one (`groups`, `locations`, `sessions`)
+  is a plain unenforced `BIGINT`, per root `CLAUDE.md`'s "cross-domain refs are IDs only" rule.
+  Confirmed via `git log`: `posts` (V004) predates the rule by ~4 months (initial commit,
+  2026-03-03; the rule was added 2026-07-07, same commit as `groups.sport_id`, correctly FK-free) —
+  never retrofitted since Liquibase migrations are append-only. Same "predates CLAUDE.md, never
+  retrofitted" pattern as this module's own A5. Low urgency (the JPA entity is already a plain
+  `Long`, no `@ManyToOne` — app layer already compliant) but blocks a clean `sport` service
+  extraction later; fixable in one small `ALTER TABLE ... DROP CONSTRAINT` migration whenever
+  picked up. Raised while explaining the sport-relationship tables to the user during SPORT-3.
+- **MVP backlog:** 19 tickets (A1–A13, B1–B6) in `modules/social/post-impl/docs/BACKLOG_MVP.md`;
+  A1–A10, B1–B6 `DONE`, A11/A12/A13 `TODO`
 - **A1 (2026-06-30):** JWT-based identity — all `@RequestParam userId` removed from `PostController`; write endpoints use `@AuthenticationPrincipal`, read endpoints use `Authentication` + `SecurityUtils.extractUserId()`; `GET /api/posts/user/{userId}` renamed to `GET /api/posts/mine`
 - **A2 (2026-06-30):** Fix post delete permission — `PostServiceImpl.deletePost()` now allows group owner/admin to delete GROUP_POST and GROUP_BROADCAST posts in their group (reuses existing `GroupService.isGroupOwner/isGroupAdmin`)
 - **A3 (2026-07-01):** Group posts membership gate — `getGroupPosts()` now throws `ForbiddenException` for unauthenticated or non-member callers; `ForbiddenException` added to `modules/common`
