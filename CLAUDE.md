@@ -144,6 +144,32 @@ Base API path is `/api`. Public endpoints: `/api/auth/**`, `/api/sports/**`, `GE
 
 Stateless JWT (JJWT 0.12.x). Access token + refresh token pair. The new client keeps the access token in memory only and expects the refresh token in an httpOnly cookie — the cookie contract is backend ticket A2 in `modules/auth/docs/BACKLOG_MVP.md` (until it ships, the API still returns `refreshToken` in the response body). The old client's localStorage token storage was an XSS exposure and must not be reintroduced.
 
+### Account lifecycle
+
+**A deactivated user (`isActive = false`) must not be able to perform any further interaction with
+the app.** This is a non-negotiable, cross-cutting constraint on the same footing as the
+cross-domain rules above — every new feature that adds an authenticated endpoint, background job,
+or cross-domain call triggered by a user must explicitly consider whether a deactivated caller can
+still reach it. Do not assume this is enforced somewhere else in the request pipeline; today it
+mostly isn't (see gaps below), so a new feature that relies on that assumption inherits the gap
+instead of closing it.
+
+**Known gaps as of 2026-08-10** (tracked in
+`modules/user/user-impl/docs/BACKLOG_MVP.md`'s **U12**, `TODO`, not yet fixed):
+- `UserServiceImpl.deleteUser()` (the only deactivation path — admin-only today) does not revoke
+  the user's refresh tokens or access token.
+- `JwtAuthenticationFilter` validates signature + expiry only — no per-request `isActive` recheck.
+  An already-issued access token keeps authenticating a deactivated user until it naturally expires
+  (`app.jwt.expiration`, currently 1 hour).
+- Only `/api/auth/refresh` currently rejects a deactivated user (`AuthServiceImpl.refreshToken()`,
+  `"Account is deactivated"`), and only reactively — checked when the token is next used, not
+  proactively at deactivation time.
+
+Until U12 closes these gaps, treat the access-token window as a known, accepted risk — but don't
+compound it. Any new security-sensitive feature should check the caller's `isActive` status
+explicitly (via `UserService`) in its own service method rather than assuming the JWT filter or
+`SecurityConfig` already guarantees it.
+
 ### Database
 
 PostgreSQL with Liquibase migrations. Migration scripts live in `server/src/main/resources/db/changelog/changes/` and are registered in `db.changelog-master.xml`. Dev database name: `sportconnect_dev` (configured in `application-dev.yml`).

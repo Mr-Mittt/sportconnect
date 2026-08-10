@@ -58,6 +58,15 @@ For infra tickets, adapt the questions: "who" is the dev team/CI, "entry point" 
 
 For backend module tickets: if a field in scope overlaps a concept another domain already treats as first-class (e.g. `sportId`, `groupId`, `userId`), don't answer scoping/validation questions from this domain's own fields alone — do Phase 2's cross-domain concept precedent check (below) *before* locking in the answer, not after. (Concrete miss this rule exists to prevent: a "favorite locations, filter by sport" ticket was scoped with a bare `sportId` filter, with no connection to the fact that "sport" already means "a sport the user holds an active `UserSportProfile` for" everywhere else it's used as a gate — e.g. `GroupServiceImpl.createGroup`'s `hasProfileForSport` check. The precedent existed in the codebase the whole time; it just wasn't checked before proposing scope.)
 
+For backend module tickets, also apply the **account lifecycle check** (CLAUDE.md's Account
+lifecycle rule): if this ticket adds any new authenticated endpoint, background job, or
+user-triggered cross-domain call, the edge-cases answer must explicitly cover what happens when
+the caller is a deactivated (`isActive = false`) user. Don't assume the JWT filter or
+`SecurityConfig` already blocks them — today it doesn't (see CLAUDE.md and
+`modules/user/user-impl/docs/BACKLOG_MVP.md`'s U12 for the current known gaps). If the ticket is
+security-sensitive, plan an explicit `isActive` check via `UserService` rather than inheriting the
+existing gap.
+
 Do not proceed to Phase 2 until the user confirms the scope.
 
 ---
@@ -71,6 +80,7 @@ Do not proceed to Phase 2 until the user confirms the scope.
 - Existing patterns for similar features
 - Any cross-domain concerns — flag immediately if the ticket would require importing from another domain's `-impl` or creating a JPA relationship across domain boundaries
 - **Cross-domain concept precedent** — if this ticket's fields overlap a concept another domain already treats as first-class (`sportId`, `groupId`, `userId`, etc.), grep for that concept's existing `-api` interface usages across every module (e.g. `sport-api`'s `hasProfileForSport`, `getSportsByIds`) to find established validation/business-rule precedent, not just structural import violations — a new consumer of an existing concept should match how existing consumers already gate/validate it unless there's a real reason to diverge
+- **Account lifecycle** — check whether the endpoint(s)/service method(s) this ticket adds need an explicit `isActive` check (via `UserService`), rather than assuming the existing JWT filter or `SecurityConfig` already excludes deactivated users — confirm against `JwtAuthenticationFilter` (auth-impl) directly, don't assume it re-checks active status just because it validates the token
 
 **Client:** explore to find:
 
@@ -105,6 +115,7 @@ Surface findings as a short summary before designing. Confirm no surprises.
 - **No shared mutable state between domains**
 - **Domain-scoped DB tables** — no cross-domain foreign keys
 - **Service interfaces as contracts** — future network transport is a drop-in swap
+- **Deactivated users get no further interaction** — any new authenticated endpoint or service method must explicitly reject a caller whose `isActive` is `false`, unless it's read-only data already public without auth (see CLAUDE.md's Account lifecycle rule)
 
 Produce a concrete plan:
 1. **Backend** — migrations, entities, DTOs, repository methods, service interface methods, service impl, controller endpoints, security config changes
