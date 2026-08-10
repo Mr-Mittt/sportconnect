@@ -2327,14 +2327,16 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `getSessionParticipants` itself ships unchanged. Live-verified against a running backend +
   Postgres (not just Spock): null/JOINED/INVITED→decline/REQUESTED→cancel all confirmed via curl.
   Client follow-up filed as **CLIENT-SESSION-9** (`client/docs/BACKLOG_MVP.md`, `TODO`).
-- **SESSION-11 filed (2026-08-10, `TODO`):** repo-wide sweep for cross-domain DB-level FKs (following
-  post-impl's A13 precedent) found 4 in this module — `sessions.created_by`/`cancelled_by`/
-  `location_id`, `session_participants.user_id`. Unlike A13/A6/A8/A15/B17, this one isn't a
-  "predates the rule" story: `sessions`/`session_participants` (`V031`/`V032`) were both first
+- **SESSION-11 (`DONE`, 2026-08-10,
+  `modules/session/docs/SESSION-11_DROP_CROSS_DOMAIN_FKS.md`):** dropped the 4 cross-domain
+  DB-level FKs found in the 2026-08-10 sweep — `sessions_created_by_fkey`,
+  `sessions_cancelled_by_fkey`, `sessions_location_id_fkey`, `session_participants_user_id_fkey`
+  — via `V046__drop_session_tables_cross_domain_fks.sql`. Unlike A13/A6/A8/A15/B17, this one isn't
+  a "predates the rule" story: `sessions`/`session_participants` (`V031`/`V032`) were both first
   committed 2026-07-30, nearly a month *after* the 2026-07-07 cross-domain-refs rule, and the same
   migration's `sessions.sport_id` already gets it right (plain `Long`, no FK) — `created_by`/
-  `cancelled_by`/`location_id` were missed despite that. All four already plain `UUID`/`Long` fields
-  at the JPA layer regardless.
+  `cancelled_by`/`location_id` were missed despite that. Schema-only; all four were already
+  `NO ACTION` (no cascade to lose) and already plain `UUID`/`Long` fields at the JPA layer.
 - **LOC-3 (`DONE`, 2026-08-10,
   `modules/location/location-impl/docs/LOC-3_DROP_LOCATION_CROSS_DOMAIN_FKS.md`):** dropped the 2
   cross-domain DB-level FKs found in the 2026-08-10 sweep — `locations_created_by_fkey`,
@@ -2351,10 +2353,9 @@ explicit go-ahead at each step (full story in A3's summary doc):
   no module actually implements them, so there's no owning backlog to file a fix-the-schema ticket
   against; flagged here in case someone wants to scope either "build the feature" or "drop the dead
   table" later, same "leftover placeholder, leave it alone" status as `sport-impl`'s `FacilityType`.
-- **MVP backlog (session module):** 8 of 11 tickets `DONE` (SESSION-1 through SESSION-9); SESSION-10
-  and SESSION-8 remain `TODO`, plus new SESSION-11 (queue order: SESSION-10, then SESSION-8 last —
-  user-reordered 2026-08-08 to unblock `CLIENT-SESSION-8` sooner; SESSION-11 has no ordering
-  dependency on either).
+- **MVP backlog (session module):** 9 of 11 tickets `DONE` (SESSION-1 through SESSION-9,
+  SESSION-11); SESSION-10 and SESSION-8 remain `TODO` (queue order: SESSION-10, then SESSION-8 —
+  user-reordered 2026-08-10 to put SESSION-11's architecture cleanup first, ahead of both).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
