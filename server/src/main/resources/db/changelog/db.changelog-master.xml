@@ -107,4 +107,7 @@
     <!-- A6: MVP sport restriction — deactivate every sport except Badminton and Pickleball -->
     <include file="db/changelog/changes/V043__deactivate_non_mvp_sports.sql" relativeToChangelogFile="false"/>
 
+    <!-- auth A6: drop cross-domain DB-level FKs on auth tables' user_id columns -->
+    <include file="db/changelog/changes/V044__drop_auth_tables_user_id_fks.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

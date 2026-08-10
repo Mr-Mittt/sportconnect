@@ -102,11 +102,13 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - `SecurityConfig` — stateless, CORS for localhost:3000/5173, public endpoints configured
 - `AuthController` endpoints: `POST /api/auth/register`, `/login`, `/refresh`, `/logout`, `/verify-email`, `/forgot-password` (placeholder), `/reset-password`
 - `EmailVerificationService`, `PasswordResetService`, `EmailService`
-- **A6 filed (2026-08-10, `TODO`):** repo-wide sweep for cross-domain DB-level FKs (following
-  post-impl's A13 precedent) found 3 in this module — `email_verifications.user_id`,
-  `password_reset_tokens.user_id`, `refresh_tokens.user_id` — all pre-date the 2026-07-07
-  cross-domain-refs rule, all already plain `UUID` fields at the JPA layer.
-- **MVP backlog:** 5 tickets (A2–A6) in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4 `DONE`, A5/A6
+- **A6 (2026-08-10, `DONE`, `modules/auth/docs/A6_DROP_AUTH_TABLES_USER_ID_FKS.md`):** dropped the
+  3 cross-domain DB-level FKs found in the 2026-08-10 sweep (following post-impl's A13
+  precedent) — `email_verifications_user_id_fkey`, `password_reset_tokens_user_id_fkey`,
+  `refresh_tokens_user_id_fkey` — via `V044__drop_auth_tables_user_id_fks.sql`. Schema-only;
+  confirmed no code path relies on `ON DELETE CASCADE` (`UserServiceImpl.deleteUser` is a soft
+  delete).
+- **MVP backlog:** 5 tickets (A2–A6) in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4/A6 `DONE`, A5
   `TODO`
 
 #### `modules:user:user-api` + `modules:user:user-impl`
