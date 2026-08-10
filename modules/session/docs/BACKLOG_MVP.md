@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/session/session-impl`
-**Last updated:** 2026-08-08
+**Last updated:** 2026-08-10
 
 ---
 
@@ -27,9 +27,9 @@
 | 6 | SESSION-6 | Join-approval workflow + invite-friends-at-creation | `DONE` |
 | 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `DONE` (bundled into SESSION-4) |
 | 8 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `DONE` |
-| 9 | SESSION-10 | Session comments — participant discussion thread on `SessionDetailModal` | `IN PROGRESS` |
-| 10 | SESSION-8 | Session discover ranking algorithm | `TODO` |
-| 11 | SESSION-11 | Drop DB-level FKs on session tables' cross-domain columns | `TODO` |
+| 9 | SESSION-11 | Drop DB-level FKs on session tables' cross-domain columns | `TODO` |
+| 10 | SESSION-10 | Session comments — participant discussion thread on `SessionDetailModal` | `TODO` |
+| 11 | SESSION-8 | Session discover ranking algorithm | `TODO` |
 
 ---
 
