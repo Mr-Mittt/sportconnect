@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/social/post-impl`  
-**Last updated:** 2026-08-08
+**Last updated:** 2026-08-10
 
 ---
 
@@ -35,11 +35,10 @@
 | 14 | A8 | `server:test` needs Redis — `PostControllerIntegrationTest.shouldCreatePost` fails without it | `DONE` |
 | 15 | A9 | Fix `PostResponse` never populating `userFullName`/`sportName`/`shareCount` | `DONE` |
 | 16 | A10 | Fix `GET /api/posts/hashtag/{tag}` — always 500s (conflicting `ORDER BY`) | `DONE` |
-| 17 | A11 | Fix broadcast-expiry timezone mismatch (JVM-local `LocalDateTime` vs DB-UTC `CURRENT_TIMESTAMP`) | `TODO` |
-| 18 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `TODO` |
-| 19 | A13 | Drop the DB-level FK on `posts.sport_id` — historical artifact, inconsistent with this repo's cross-domain-refs-are-IDs-only rule | `TODO` |
+| 17 | A15 | Drop DB-level FKs on post-impl tables' cross-domain columns (user_id chain, posts.group_id, and posts.sport_id — absorbs A13) | `TODO` |
+| 18 | A11 | Fix broadcast-expiry timezone mismatch (JVM-local `LocalDateTime` vs DB-UTC `CURRENT_TIMESTAMP`) | `TODO` |
+| 19 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `TODO` |
 | 20 | A14 | Enforce post visibility/group-membership on single-item paths (getPostById, comments, likes) — not just list endpoints | `TODO` |
-| 21 | A15 | Drop DB-level FKs on post-impl tables' cross-domain columns (user_id chain + posts.group_id) | `TODO` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
 
@@ -745,61 +744,6 @@ no sportName) — this ticket is scoped entirely to `post-impl`'s existing A9 fi
 
 ---
 
-### A13 · Drop the DB-level FK on `posts.sport_id`
-**Status:** `TODO` · **Type:** Enhancement (Architecture) · **Filed:** 2026-08-07, raised during a
-client SPORT-3 session (`client/docs/SPORT-3_SPORT_CATALOG_REAL_FETCH.md`) while explaining the
-sport-relationship tables to the user.
-
-**Found:** `posts.sport_id` (`V004__create_posts_tables.sql`) is declared
-`BIGINT REFERENCES sports(id) ON DELETE SET NULL` — a real Postgres foreign-key constraint across
-domains. Every *other* cross-domain `sport_id` column added since —
-`groups.sport_id` (`V015__add_sport_id_to_groups.sql`), `locations.sport_id`
-(`V030__create_locations_table.sql`), `sessions.sport_id` (`V031__create_sessions_table.sql` /
-`V039__enforce_session_sport_id_and_add_standalone_index.sql`) — is a plain unenforced `BIGINT`,
-matching root `CLAUDE.md`'s "cross-domain references use IDs only" rule (no JPA `@ManyToOne`, and by
-implicit extension, no DB-level FK locking the two domains' tables together).
-
-**Why this exists (confirmed via `git log`, not guessed):** `posts` (`V004`) was part of this repo's
-very first commit (`16a7cd4`, 2026-03-03). The "cross-domain references use IDs only" rule was added
-to root `CLAUDE.md` on 2026-07-07 (`7c2d7f7`) — the same commit that added `groups.sport_id`,
-correctly FK-free from day one. `posts.sport_id`'s FK predates the rule by ~4 months; since
-Liquibase migrations are append-only (a merged one can't be edited, only reversed by a new one), it
-was never retrofitted once the rule existed. Same "predates `CLAUDE.md`, never retrofitted" story as
-A5 in this same file (a cross-domain-import violation in `CommentServiceImpl`) and group-impl's own
-A6 — this ticket is the schema-level counterpart of that pattern.
-
-**Why it matters:** a DB-level FK is a hard coupling at the schema level — `posts` and `sports` must
-stay in the same database/schema as long as the constraint exists, which works directly against this
-repo's stated "monolith-first, microservice-ready" goal. Extracting `sport` into its own service
-later would require dropping this constraint first as a blocking pre-step, rather than it already
-being a non-issue like every other cross-domain `sport_id` column. Low urgency today (`Post.sportId`
-in the JPA entity is already a plain `Long` field, no `@ManyToOne` — the *application* layer already
-follows the rule regardless of what the DB constraint enforces underneath; `ON DELETE SET NULL` is
-benign, not actively causing bugs) — filed so it's tracked and fixable in one small migration
-whenever it's convenient, not because anything is currently broken.
-
-**Fix approach:**
-```sql
-ALTER TABLE posts DROP CONSTRAINT posts_sport_id_fkey;
-```
-(confirm the actual constraint name via `\d posts` or
-`information_schema.table_constraints` before writing the migration — Postgres auto-generates it,
-`posts_sport_id_fkey` is the conventional name but not guaranteed). New Liquibase changeset, next
-sequential `Vxxx` file, registered in `db.changelog-master.xml` — same as every other migration in
-this repo. No entity/service/DTO change needed (the JPA layer never referenced the constraint).
-
-**Verify before/after:** confirm no existing code path relies on the FK's `ON DELETE SET NULL`
-cascade behavior specifically (vs. the service layer's own soft-delete-via-`is_active` pattern for
-`sports` — `SportServiceImpl.deleteSport()` never hard-deletes a row, so this cascade has likely
-never fired in practice; grep for any test or migration that hard-deletes a `sports` row before
-assuming it's dead code).
-
-**Out of scope:** `groups`/`locations`/`sessions`' `sport_id` columns (already correct, no FK to
-remove); any change to `Post`'s JPA entity, `PostServiceImpl`, or `PostRepository` (this is a schema-
-only change — the application layer's behavior is unaffected either way).
-
----
-
 ### A14 · Enforce post visibility/group-membership on single-item paths, not just list endpoints
 **Status:** `TODO` · **Type:** Bug Fix (Security) · **Filed:** 2026-08-08, found while designing
 `SESSION-10`'s comment access-gating (`modules/session/docs/BACKLOG_MVP.md`) — comparing how a
@@ -842,27 +786,35 @@ guard); a `public`/non-group post is unaffected for any caller.
 
 ### A15 · Drop DB-level FKs on post-impl tables' cross-domain columns
 **Status:** `TODO` · **Type:** Enhancement (Architecture) · **Filed:** 2026-08-10, as part of a
-repo-wide sweep for cross-domain DB-level FKs, following on from this same module's A13
-(`posts.sport_id`, `TODO`) — A13 was scoped narrowly to the one `sport_id` anomaly found while
-explaining sport-relationship tables; this sweep found `posts.sport_id` wasn't the only cross-domain
-FK left in this module, just the only `sport_id` one.
+repo-wide sweep for cross-domain DB-level FKs, following on from this same module's original A13
+(`posts.sport_id`) — A13 was scoped narrowly to the one `sport_id` anomaly found while explaining
+sport-relationship tables to the user; this sweep found `posts.sport_id` wasn't the only
+cross-domain FK left in this module, just the only `sport_id` one. **A13 has since been merged
+into this ticket** (2026-08-10, user decision — the two migrations would touch the same tables in
+the same way, no reason to ship them separately) and no longer exists as a standalone entry in
+this backlog; everything A13 covered is folded into the list and fix approach below.
 
-**Found:** six more `post-impl`-owned columns carry a real Postgres FK across into a different
-domain's table, all `ON DELETE CASCADE`, confirmed via `information_schema.table_constraints`
-against the live `sportconnect_dev` database:
-- `posts.user_id` → `posts_user_id_fkey` (into `user-impl`'s `users`)
-- `posts.group_id` → `posts_group_id_fkey` (into `group-impl`'s `groups`)
-- `comments.user_id` → `comments_user_id_fkey`
-- `comment_likes.user_id` → `comment_likes_user_id_fkey`
-- `post_likes.user_id` → `post_likes_user_id_fkey`
-- `post_shares.user_id` → `post_shares_user_id_fkey`
+**Found:** seven `post-impl`-owned columns carry a real Postgres FK across into a different
+domain's table, confirmed via `information_schema.table_constraints` against the live
+`sportconnect_dev` database:
+- `posts.sport_id` → `posts_sport_id_fkey` (into `sport-impl`'s `sports`, `ON DELETE SET NULL` —
+  absorbed from A13)
+- `posts.user_id` → `posts_user_id_fkey` (into `user-impl`'s `users`, `ON DELETE CASCADE`)
+- `posts.group_id` → `posts_group_id_fkey` (into `group-impl`'s `groups`, `ON DELETE CASCADE`)
+- `comments.user_id` → `comments_user_id_fkey` (`ON DELETE CASCADE`)
+- `comment_likes.user_id` → `comment_likes_user_id_fkey` (`ON DELETE CASCADE`)
+- `post_likes.user_id` → `post_likes_user_id_fkey` (`ON DELETE CASCADE`)
+- `post_shares.user_id` → `post_shares_user_id_fkey` (`ON DELETE CASCADE`)
 
 All predate root `CLAUDE.md`'s "cross-domain references use IDs only" rule (added 2026-07-07) —
 `posts`/`comments`/`comment_likes`/`post_likes`/`post_shares` (`V004`) are part of this repo's
-initial commit (2026-03-03). Every one of these columns is already a plain `UUID`/`Long` field in
-its JPA entity, no `@ManyToOne` — the application layer already complies; only the schema
-constraint doesn't. Same "predates `CLAUDE.md`, never retrofitted" story as A13 and this module's
-own A5.
+initial commit (2026-03-03), confirmed via `git log` (`16a7cd4`). Every *other* cross-domain
+`sport_id` column added since — `groups.sport_id`, `locations.sport_id`, `sessions.sport_id` — is
+correctly FK-free from day one; `posts.sport_id`'s FK is the one exception, ~4 months older than
+the rule and never retrofitted (Liquibase migrations are append-only). Every one of these seven
+columns is already a plain `UUID`/`Long` field in its JPA entity, no `@ManyToOne` — the
+application layer already complies; only the schema constraint doesn't. Same "predates
+`CLAUDE.md`, never retrofitted" story as this module's own A5.
 
 **`post_reports` deliberately excluded:** its two `user_id`-referencing columns
 (`reporter_id`/`reviewed_by`) have the exact same cross-domain FK shape, but confirmed via a
@@ -871,17 +823,19 @@ anywhere** — `V005__create_social_tables.sql` created the table but it was nev
 "schema exists, no code owns it" pattern as `notifications`/`social_accounts`/`user_blocks`/
 `user_sessions` (found in the same sweep, flagged separately, not part of any per-domain ticket
 since no domain module actually implements them). Dropping a dead table's FK isn't a "post-impl
-architecture" fix in the same sense as the six above — leave it for whoever decides what to do
+architecture" fix in the same sense as the seven above — leave it for whoever decides what to do
 with the four other orphaned tables, rather than silently folding it into this module's ticket.
 
-**Why it matters:** same as A13 — each of these is a hard schema coupling between `post-impl` and
-either `user-impl` or `group-impl`, working against "monolith-first, microservice-ready." Low
-urgency (nothing is currently broken; `ON DELETE CASCADE` on `user_id`/`group_id` largely mirrors
-what the service layer would do anyway on a hard delete) but blocks a clean extraction of any of
-these three domains later unless dropped first.
+**Why it matters:** a DB-level FK is a hard coupling at the schema level, working against this
+repo's "monolith-first, microservice-ready" goal — each of these locks `post-impl`'s tables to
+`sport-impl`, `user-impl`, or `group-impl` staying in the same database/schema. Low urgency
+(nothing is currently broken; the cascades largely mirror what the service layer would do anyway
+on a hard delete, and `posts.sport_id`'s `ON DELETE SET NULL` is benign) but blocks a clean
+extraction of any of these domains later unless dropped first.
 
 **Fix approach:**
 ```sql
+ALTER TABLE posts DROP CONSTRAINT posts_sport_id_fkey;
 ALTER TABLE posts DROP CONSTRAINT posts_user_id_fkey;
 ALTER TABLE posts DROP CONSTRAINT posts_group_id_fkey;
 ALTER TABLE comments DROP CONSTRAINT comments_user_id_fkey;
@@ -889,23 +843,25 @@ ALTER TABLE comment_likes DROP CONSTRAINT comment_likes_user_id_fkey;
 ALTER TABLE post_likes DROP CONSTRAINT post_likes_user_id_fkey;
 ALTER TABLE post_shares DROP CONSTRAINT post_shares_user_id_fkey;
 ```
-Confirm every constraint name via `\d <table>` before writing the migration. Can ship as one
-Liquibase changeset (next sequential `Vxxx` file, registered in `db.changelog-master.xml`) covering
-all six, or land alongside A13's own migration if picked up together — implementer's call at
-pickup. No entity/service/DTO change — purely schema-level, same as A13.
+Confirm every constraint name via `\d <table>` before writing the migration — Postgres
+auto-generates these names conventionally, not guaranteed. One Liquibase changeset (next
+sequential `Vxxx` file, registered in `db.changelog-master.xml`) covering all seven. No
+entity/service/DTO change — purely schema-level.
 
-**Verify before/after:** confirm no code path relies on any of these `ON DELETE CASCADE`s
-specifically (vs. the service layer's own explicit delete/cleanup logic) — `posts.user_id`/
-`comments.user_id`/etc. cascading away on a hard user-delete is plausible but unconfirmed; grep
-`UserServiceImpl` for a hard-delete-user path before assuming the cascade is redundant. `posts.
-group_id` cascading on group hard-delete is more clearly redundant — `GroupServiceImpl.deleteGroup`
-already exists and its own behavior toward member posts should be checked directly rather than
-assumed to match the DB cascade.
+**Verify before/after:** confirm no code path relies on any of these `ON DELETE CASCADE`/
+`SET NULL` behaviors specifically (vs. the service layer's own explicit delete/cleanup logic) —
+`posts.user_id`/`comments.user_id`/etc. cascading away on a hard user-delete is plausible but
+unconfirmed; grep `UserServiceImpl` for a hard-delete-user path before assuming the cascade is
+redundant. `posts.group_id` cascading on group hard-delete is more clearly redundant —
+`GroupServiceImpl.deleteGroup` already exists and its own behavior toward member posts should be
+checked directly rather than assumed to match the DB cascade. `posts.sport_id`'s `SET NULL`:
+`SportServiceImpl.deleteSport()` never hard-deletes a row (soft-delete via `is_active`), so this
+cascade has likely never fired in practice — grep for any test or migration that hard-deletes a
+`sports` row before assuming it's dead code.
 
-**Out of scope:** `posts.sport_id` (already tracked separately as A13 — don't duplicate); any
-same-domain (intra `post-impl`) FK, e.g. `comments.post_id`, `comment_likes.comment_id`,
-`post_hashtags.post_id`/`hashtag_id`, `post_media.post_id`, `post_reports.post_id`,
-`post_shares.post_id` — all correctly scoped, nothing to remove; any change to any JPA entity,
-service, or repository in this module.
+**Out of scope:** any same-domain (intra `post-impl`) FK, e.g. `comments.post_id`,
+`comment_likes.comment_id`, `post_hashtags.post_id`/`hashtag_id`, `post_media.post_id`,
+`post_reports.post_id`, `post_shares.post_id` — all correctly scoped, nothing to remove; any
+change to any JPA entity, service, or repository in this module.
 
 ---

@@ -249,16 +249,6 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - `Hashtag`, `PostHashtag`, `UserFollow` entities (tables exist; UserFollow → replaced by Friendship in B1)
 - `PostServiceImpl`, `CommentServiceImpl`
 - `PostController` — 16 endpoints: create/read/update/delete posts, like/unlike, comment CRUD, feed, group posts, active broadcasts, broadcast end-time extension
-- **A13 filed (2026-08-07, `TODO`):** `posts.sport_id` is the one cross-domain `sport_id` column with
-  a real DB-level FK (`REFERENCES sports(id)`) — every other one (`groups`, `locations`, `sessions`)
-  is a plain unenforced `BIGINT`, per root `CLAUDE.md`'s "cross-domain refs are IDs only" rule.
-  Confirmed via `git log`: `posts` (V004) predates the rule by ~4 months (initial commit,
-  2026-03-03; the rule was added 2026-07-07, same commit as `groups.sport_id`, correctly FK-free) —
-  never retrofitted since Liquibase migrations are append-only. Same "predates CLAUDE.md, never
-  retrofitted" pattern as this module's own A5. Low urgency (the JPA entity is already a plain
-  `Long`, no `@ManyToOne` — app layer already compliant) but blocks a clean `sport` service
-  extraction later; fixable in one small `ALTER TABLE ... DROP CONSTRAINT` migration whenever
-  picked up. Raised while explaining the sport-relationship tables to the user during SPORT-3.
 - **A14 filed (2026-08-08, `TODO`):** found while designing SESSION-10's participant-status comment
   gating — checked how the equivalent post/group-membership gate works today for comparison.
   `getGroupPosts` (list) correctly checks `isGroupMember`, but every single-item path
@@ -267,16 +257,23 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   group with a `postId` (leaked link, guessed id, cached from before leaving) can currently read,
   comment on, and like that group's posts. Confirms why SESSION-10 doesn't reuse `post-impl`'s
   comment service — this gating barely exists for posts' own simpler case.
-- **A15 filed (2026-08-10, `TODO`):** repo-wide sweep for cross-domain DB-level FKs (following A13's
-  precedent) found 6 more in this module — `posts.user_id`/`group_id`, `comments.user_id`,
-  `comment_likes.user_id`, `post_likes.user_id`, `post_shares.user_id` — all pre-date the 2026-07-07
-  cross-domain-refs rule, all already plain fields at the JPA layer. `post_reports`' matching
-  `reporter_id`/`reviewed_by` FKs deliberately excluded — that table has zero owning code (no
-  entity/service/controller anywhere), same "dead schema" status as `notifications`/
-  `social_accounts`/`user_blocks`/`user_sessions` found in the same sweep (flagged separately, not
-  ticketed against any domain).
-- **MVP backlog:** 21 tickets (A1–A15, B1–B6) in `modules/social/post-impl/docs/BACKLOG_MVP.md`;
-  A1–A10, B1–B6 `DONE`, A11/A12/A13/A14/A15 `TODO`
+- **A15 filed (2026-08-10, `TODO`), absorbed A13 (2026-08-10, user decision):** originally filed
+  2026-08-07 as A13 — `posts.sport_id` is the one cross-domain `sport_id` column with a real
+  DB-level FK (`REFERENCES sports(id)`), unlike `groups`/`locations`/`sessions`' plain unenforced
+  `BIGINT`s (confirmed via `git log`: `posts`, V004, predates the 2026-07-07 cross-domain-refs
+  rule by ~4 months, never retrofitted, same story as this module's own A5). The 2026-08-10
+  repo-wide FK sweep then found 6 more in this module — `posts.user_id`/`group_id`,
+  `comments.user_id`, `comment_likes.user_id`, `post_likes.user_id`, `post_shares.user_id` — all
+  the same "predates the rule" story. Rather than ship two near-identical migrations touching
+  overlapping tables, A13 was merged into A15: dropping all 7 constraints in one changeset.
+  `post_reports`' matching `reporter_id`/`reviewed_by` FKs deliberately excluded — that table has
+  zero owning code (no entity/service/controller anywhere), same "dead schema" status as
+  `notifications`/`social_accounts`/`user_blocks`/`user_sessions` found in the same sweep (flagged
+  separately, not ticketed against any domain). Moved to the top of the module's TODO queue
+  (user-reordered 2026-08-10, ahead of A11/A12/A14).
+- **MVP backlog:** 20 tickets (A1–A12, A14–A15, B1–B6) in
+  `modules/social/post-impl/docs/BACKLOG_MVP.md` — A13 no longer a standalone entry (merged into
+  A15); A1–A10, B1–B6 `DONE`, A15/A11/A12/A14 `TODO` (queue order)
 - **A1 (2026-06-30):** JWT-based identity — all `@RequestParam userId` removed from `PostController`; write endpoints use `@AuthenticationPrincipal`, read endpoints use `Authentication` + `SecurityUtils.extractUserId()`; `GET /api/posts/user/{userId}` renamed to `GET /api/posts/mine`
 - **A2 (2026-06-30):** Fix post delete permission — `PostServiceImpl.deletePost()` now allows group owner/admin to delete GROUP_POST and GROUP_BROADCAST posts in their group (reuses existing `GroupService.isGroupOwner/isGroupAdmin`)
 - **A3 (2026-07-01):** Group posts membership gate — `getGroupPosts()` now throws `ForbiddenException` for unauthenticated or non-member callers; `ForbiddenException` added to `modules/common`
