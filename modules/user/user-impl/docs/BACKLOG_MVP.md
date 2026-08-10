@@ -574,6 +574,28 @@ tradeoff). Two options to weigh, don't assume which:
 Given the added latency/complexity on *every* authenticated request, confirm with the user whether
 this is in scope for MVP or an accepted ~1hr-window risk deferred to V1 before implementing Fix 2.
 
+**Fix 1 vs. Fix 2 — not alternatives, they close different gaps (discussed 2026-08-10, in the
+context of location-impl's favorite-locations endpoints, which have no `isActive` check today):**
+a per-endpoint `isActive` check (e.g. calling `UserService.getUserById()`, which already throws
+`ResourceNotFoundException` for a deactivated user via `findByIdAndIsActiveTrue()`, from inside
+`favoriteLocation`/`unfavoriteLocation`/etc.) was floated as a quick stopgap for that one module
+and explicitly **rejected** in favor of doing Fix 2 properly instead:
+- **Fix 1 (revoke on deactivate) stops new access tokens** — cheap (one call at deactivation
+  time, zero added latency on normal requests) — but does nothing about an access token the caller
+  already holds; that keeps authenticating everywhere until it naturally expires regardless of
+  what happens to the refresh token, since the JWT filter never queries the DB.
+- **A per-endpoint `isActive` check stops an already-issued access token from working**, but only
+  on whichever endpoints someone remembered to patch. Scattering it feature-by-feature (as
+  favorite-locations' patch would have done) recreates the exact discipline problem the new
+  CLAUDE.md "Account lifecycle" rule (and its wiring into `/feature`/`/workon`/`/implement`) is
+  trying to paper over, rather than closing it once. It's strictly weaker than doing Fix 2 as
+  originally scoped below.
+- **Conclusion:** implement Fix 1 regardless (it's cheap and unconditionally worth doing), and
+  implement Fix 2's **option 2 (Redis deny-list in `JwtAuthenticationFilter`)** rather than
+  option 1 or a per-endpoint patch — one check, every request, every endpoint, impossible to
+  forget on the next feature. No location-impl-specific fix needed; U12 shipping this way closes
+  the favorite-locations gap (and every other endpoint's) in one place.
+
 **Open question for implementer — partial index on `users.is_active`?** Confirmed in the same
 2026-08-10 conversation: `users` has no index at all (partial or otherwise) on `is_active` today,
 unlike `posts`/`comments`/`groups`, which each have a `WHERE is_active = true` partial index. It's
