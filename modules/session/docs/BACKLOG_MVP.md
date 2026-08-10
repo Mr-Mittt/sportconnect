@@ -27,7 +27,7 @@
 | 6 | SESSION-6 | Join-approval workflow + invite-friends-at-creation | `DONE` |
 | 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `DONE` (bundled into SESSION-4) |
 | 8 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `DONE` |
-| 9 | SESSION-11 | Drop DB-level FKs on session tables' cross-domain columns | `TODO` |
+| 9 | SESSION-11 | Drop DB-level FKs on session tables' cross-domain columns | `DONE` |
 | 10 | SESSION-10 | Session comments — participant discussion thread on `SessionDetailModal` | `TODO` |
 | 11 | SESSION-8 | Session discover ranking algorithm | `TODO` |
 
@@ -361,7 +361,9 @@ participants; what success looks like for this feature.
 
 ## SESSION-11 — Drop DB-level FKs on session tables' cross-domain columns
 
-**Status:** `TODO` · **Type:** Enhancement (Architecture) · **Filed:** 2026-08-10, as part of a
+**Status:** `DONE` (2026-08-10) · **Summary:**
+`modules/session/docs/SESSION-11_DROP_CROSS_DOMAIN_FKS.md`
+**Type:** Enhancement (Architecture) · **Filed:** 2026-08-10, as part of a
 repo-wide sweep for cross-domain DB-level FKs, following the precedent set by `post-impl`'s A13
 (`posts.sport_id`, `TODO`) — same rationale, applied domain-by-domain.
 

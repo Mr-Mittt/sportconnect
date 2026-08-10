@@ -113,4 +113,7 @@
     <!-- LOC-3: drop cross-domain DB-level FKs on location tables' cross-domain columns -->
     <include file="db/changelog/changes/V045__drop_location_tables_cross_domain_fks.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-11: drop cross-domain DB-level FKs on session tables' cross-domain columns -->
+    <include file="db/changelog/changes/V046__drop_session_tables_cross_domain_fks.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
