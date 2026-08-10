@@ -274,9 +274,27 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   zero owning code (no entity/service/controller anywhere), same "dead schema" status as
   `notifications`/`social_accounts`/`user_blocks`/`user_sessions` found in the same sweep (flagged
   separately, not ticketed against any domain).
+- **A11 (`DONE`, 2026-08-10,
+  `modules/social/post-impl/docs/A11_BROADCAST_TIMEZONE_INVESTIGATION.md`) — re-investigated,
+  closed not reproducible, no code change:** the original 2026-07-17 report claimed
+  `broadcastEndTime`'s JVM-local write vs. Postgres `CURRENT_TIMESTAMP`-UTC read caused a
+  near-future broadcast to read as instantly expired. Before implementing the proposed fix,
+  `application.yml`'s `hibernate.jdbc.time_zone: UTC` (present since the initial commit, per
+  `git blame`) was found to already correctly normalize every naive `LocalDateTime` write to true
+  UTC. Empirically re-verified against real dev Postgres (not mocked): created a
+  `GROUP_BROADCAST` with an explicit 30s-future `broadcastEndTime`, confirmed it read as active
+  throughout the window and correctly expired only after the real 30s elapsed — no premature
+  expiry at any point. Likely root cause of the original report: an 8-second test window plus
+  ~55s of real elapsed time during manual `curl`/`psql` verification, misdiagnosed as a timezone
+  bug. Also corrected a factual claim in the original report — `PATCH
+  /api/posts/{postId}/broadcast-end-time` already exists and is reachable today, not a
+  hypothetical future risk as originally framed. No regression test added:
+  `:server:test` runs against H2 in-memory (Liquibase disabled), which shares the JVM's own clock
+  and structurally cannot reproduce this class of bug (app-clock vs. a *separate* DB-server
+  clock) — flagged as a testing-infrastructure limitation rather than worked around.
 - **MVP backlog:** 20 tickets (A1–A12, A14–A15, B1–B6) in
   `modules/social/post-impl/docs/BACKLOG_MVP.md` — A13 no longer a standalone entry (merged into
-  A15); A1–A10, A15, B1–B6 `DONE`; A11/A12/A14 `TODO`
+  A15); A1–A11, A15, B1–B6 `DONE`; A12/A14 `TODO`
 - **A1 (2026-06-30):** JWT-based identity — all `@RequestParam userId` removed from `PostController`; write endpoints use `@AuthenticationPrincipal`, read endpoints use `Authentication` + `SecurityUtils.extractUserId()`; `GET /api/posts/user/{userId}` renamed to `GET /api/posts/mine`
 - **A2 (2026-06-30):** Fix post delete permission — `PostServiceImpl.deletePost()` now allows group owner/admin to delete GROUP_POST and GROUP_BROADCAST posts in their group (reuses existing `GroupService.isGroupOwner/isGroupAdmin`)
 - **A3 (2026-07-01):** Group posts membership gate — `getGroupPosts()` now throws `ForbiddenException` for unauthenticated or non-member callers; `ForbiddenException` added to `modules/common`
