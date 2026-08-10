@@ -102,6 +102,12 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - `SecurityConfig` — stateless, CORS for localhost:3000/5173, public endpoints configured
 - `AuthController` endpoints: `POST /api/auth/register`, `/login`, `/refresh`, `/logout`, `/verify-email`, `/forgot-password` (placeholder), `/reset-password`
 - `EmailVerificationService`, `PasswordResetService`, `EmailService`
+- **A6 filed (2026-08-10, `TODO`):** repo-wide sweep for cross-domain DB-level FKs (following
+  post-impl's A13 precedent) found 3 in this module — `email_verifications.user_id`,
+  `password_reset_tokens.user_id`, `refresh_tokens.user_id` — all pre-date the 2026-07-07
+  cross-domain-refs rule, all already plain `UUID` fields at the JPA layer.
+- **MVP backlog:** 5 tickets (A2–A6) in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4 `DONE`, A5/A6
+  `TODO`
 
 #### `modules:user:user-api` + `modules:user:user-impl`
 - `User` entity: UUID PK, email/username unique, profile fields, PostGIS `geography(Point, 4326)` for location, soft delete (`isActive`), roles (ManyToMany eager)
@@ -220,8 +226,11 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `createGroup`) is existence-only and doesn't substitute — a profile created while a sport was
   active still passes it after that sport is later deactivated. Ticketed for later; no code
   changed yet.
-- **MVP backlog:** 7 tickets (A1–A7) in `modules/sport/sport-impl/docs/BACKLOG_MVP.md` — A1–A6
-  `DONE`, A7 `TODO`
+- **A8 filed (2026-08-10, `TODO`):** repo-wide sweep for cross-domain DB-level FKs (following
+  post-impl's A13 precedent) found 1 in this module — `user_sport_profiles.user_id`, pre-dating the
+  2026-07-07 cross-domain-refs rule, already a plain `UUID` field at the JPA layer.
+- **MVP backlog:** 8 tickets (A1–A8) in `modules/sport/sport-impl/docs/BACKLOG_MVP.md` — A1–A6
+  `DONE`, A7/A8 `TODO`
 
 #### `modules:social:post-api` + `modules:social:post-impl`
 - `Post` entity: content (5000 chars), geolocation, sport, visibility, post type, soft delete
@@ -239,8 +248,24 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `Long`, no `@ManyToOne` — app layer already compliant) but blocks a clean `sport` service
   extraction later; fixable in one small `ALTER TABLE ... DROP CONSTRAINT` migration whenever
   picked up. Raised while explaining the sport-relationship tables to the user during SPORT-3.
-- **MVP backlog:** 19 tickets (A1–A13, B1–B6) in `modules/social/post-impl/docs/BACKLOG_MVP.md`;
-  A1–A10, B1–B6 `DONE`, A11/A12/A13 `TODO`
+- **A14 filed (2026-08-08, `TODO`):** found while designing SESSION-10's participant-status comment
+  gating — checked how the equivalent post/group-membership gate works today for comparison.
+  `getGroupPosts` (list) correctly checks `isGroupMember`, but every single-item path
+  (`getPostById`, `getPostComments`, `createComment`, `likeComment`, `unlikeComment`) only checks
+  the post exists/is active — never `visibility`, never group membership. A non-member of a private
+  group with a `postId` (leaked link, guessed id, cached from before leaving) can currently read,
+  comment on, and like that group's posts. Confirms why SESSION-10 doesn't reuse `post-impl`'s
+  comment service — this gating barely exists for posts' own simpler case.
+- **A15 filed (2026-08-10, `TODO`):** repo-wide sweep for cross-domain DB-level FKs (following A13's
+  precedent) found 6 more in this module — `posts.user_id`/`group_id`, `comments.user_id`,
+  `comment_likes.user_id`, `post_likes.user_id`, `post_shares.user_id` — all pre-date the 2026-07-07
+  cross-domain-refs rule, all already plain fields at the JPA layer. `post_reports`' matching
+  `reporter_id`/`reviewed_by` FKs deliberately excluded — that table has zero owning code (no
+  entity/service/controller anywhere), same "dead schema" status as `notifications`/
+  `social_accounts`/`user_blocks`/`user_sessions` found in the same sweep (flagged separately, not
+  ticketed against any domain).
+- **MVP backlog:** 21 tickets (A1–A15, B1–B6) in `modules/social/post-impl/docs/BACKLOG_MVP.md`;
+  A1–A10, B1–B6 `DONE`, A11/A12/A13/A14/A15 `TODO`
 - **A1 (2026-06-30):** JWT-based identity — all `@RequestParam userId` removed from `PostController`; write endpoints use `@AuthenticationPrincipal`, read endpoints use `Authentication` + `SecurityUtils.extractUserId()`; `GET /api/posts/user/{userId}` renamed to `GET /api/posts/mine`
 - **A2 (2026-06-30):** Fix post delete permission — `PostServiceImpl.deletePost()` now allows group owner/admin to delete GROUP_POST and GROUP_BROADCAST posts in their group (reuses existing `GroupService.isGroupOwner/isGroupAdmin`)
 - **A3 (2026-07-01):** Group posts membership gate — `getGroupPosts()` now throws `ForbiddenException` for unauthenticated or non-member callers; `ForbiddenException` added to `modules/common`
@@ -279,6 +304,11 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - **B9 (2026-07-21, `modules/social/group-impl/docs/B9_GROUP_WELCOME_SYSTEM_POST.md`):** new `GROUP_SYSTEM` post type (migration `V027`), auto-created welcome message ("{name} joined the group 👋" / "...— invited by {inviter} 👋") on `acceptJoinRequest`/`acceptInvitation`, authored by the group's *current* owner (resolved dynamically, no dedicated system-user account — that idea from the original ticket draft was dropped during scoping). `createPost` rejects caller-supplied `GROUP_SYSTEM` (closes the impersonation hole); new internal-only `PostService.createSystemPost`; `updatePost`/`deletePost` reject `GROUP_SYSTEM` unconditionally, even for the nominal author. Bigger-than-planned change: `addMember` no longer inserts a member directly — it now creates a self-approved (`pending_user`) `GroupInvitation` that still requires the friends-only gate and the target's acceptance, collapsing its trigger into the same `acceptInvitation` path (roleName param dropped; promote via `updateMemberRole` after accept). `:modules:social:post-impl:test`, `:modules:social:group-impl:test`, `:server:test` all green (30/30 on `:server:test`, Docker started mid-session).
 - **A10 (2026-07-21, `modules/social/group-impl/docs/A10_MULTI_SPORT_FILTER_PUBLIC_GROUPS.md`):** filed mid-scoping of the client's GRP-6 (Join Group modal multi-select sport filter) once a client-side per-sport fan-out was reversed in favor of a real backend filter. `GET /api/groups/public` gained an optional `sportIds` (`List<Long>`) param alongside the existing single `sportId` (kept for back-compat) — `sportIds`, when non-empty, takes priority over `sportId` rather than the two being combined. Resolved to one canonical list in `GroupServiceImpl` before the repository is touched; both `searchPublicGroupsWithCounts`/`searchPublicGroupsAnon` JPQL changed from `= :sportId` to `IN :sportIds` (a pattern already used elsewhere in this repository for nullable list params, so not a new risk). `:modules:social:group-impl:test` and `:server:test` both green; live-verified against a running `bootRun` instance with 3 real sport-scoped groups (multi-value filter, legacy single filter, no-filter, and priority-when-both-present all confirmed correct against real HTTP responses, not just mocked tests). Unblocks GRP-6 (`client/docs/BACKLOG_MVP.md`).
 - **B11 (2026-07-23, corrected 2026-07-24, `modules/social/group-impl/docs/B11_JOIN_INVITATION_RACE_CONDITIONS.md`):** reconciled the three race conditions between `group_join_requests` and `group_invitations` filed while scoping the client's GRP-7 (full rule diagrams: `documentation/md/adr/JOIN_GROUP_ADR.md` §5). Three rules in `GroupServiceImpl`: (1) `createInvitation` — an owner/admin's own invitation skips `pending_owner`, created directly at `pending_user` (or `accepted`, if rule 2 fires in the same call); (2) every place an invitation is about to enter `pending_user` checks for an existing `pending` join request from the same person first — if found, the invitation goes straight to `accepted` and the join request is marked `accepted` too, not left dangling; (3) `createJoinRequest` — if the requester already has a `pending_user` invitation, a `GroupJoinRequest` row is still created (no synthetic response, no contract change) but directly as `accepted`, crediting the invitation's approver as `reviewedBy`. New shared `finalizeMembership()` helper replaces the capacity+insert+welcome-post block that was about to be duplicated a 4th time. Deliberate consequence, confirmed with the user: rules 2/3 can leave two `accepted` rows (one invitation, one join request) for the same real join event — no merge/suppression added; noted on GRP-7's backlog entry for the client's future display decision. **Follow-up fix (2026-07-24):** the initial pass wired rule 2 into only the two call sites the ADR named, missing a third — `addMember` (B9's owner/admin direct-add) also creates a self-approved `pending_user` invitation and needed the same check; caught by the user re-reviewing the rules against the code, not by the original tests. Fixed by reusing the same `acceptJoinRequestAsSideEffect` helper. `:modules:social:group-impl:test` (117 tests) and `:server:test` both green; all races — including the `addMember` one — live-verified against a running `bootRun` instance with real registered users, friend requests, and group invitations/join requests. Unblocks GRP-7 (`client/docs/BACKLOG_MVP.md`).
+- **B17 filed (2026-08-10, `TODO`):** repo-wide sweep for cross-domain DB-level FKs (following
+  post-impl's A13 precedent) found 5 in this module — `groups.created_by`,
+  `groups.recurrence_location_id`, `group_members.user_id`, `group_join_requests.user_id`/
+  `reviewed_by` — all pre-date the 2026-07-07 cross-domain-refs rule, all already plain `UUID`/
+  `Long` fields at the JPA layer.
 
 #### `server`
 - `SportConnectApplication.java` — main entry point with full component scan
@@ -2286,9 +2316,29 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `getSessionParticipants` itself ships unchanged. Live-verified against a running backend +
   Postgres (not just Spock): null/JOINED/INVITED→decline/REQUESTED→cancel all confirmed via curl.
   Client follow-up filed as **CLIENT-SESSION-9** (`client/docs/BACKLOG_MVP.md`, `TODO`).
-- **MVP backlog (session module):** 8 of 10 tickets `DONE` (SESSION-1 through SESSION-9); SESSION-10
-  and SESSION-8 remain `TODO` (queue order: SESSION-10, then SESSION-8 last — user-reordered
-  2026-08-08 to unblock `CLIENT-SESSION-8` sooner).
+- **SESSION-11 filed (2026-08-10, `TODO`):** repo-wide sweep for cross-domain DB-level FKs (following
+  post-impl's A13 precedent) found 4 in this module — `sessions.created_by`/`cancelled_by`/
+  `location_id`, `session_participants.user_id`. Unlike A13/A6/A8/A15/B17, this one isn't a
+  "predates the rule" story: `sessions`/`session_participants` (`V031`/`V032`) were both first
+  committed 2026-07-30, nearly a month *after* the 2026-07-07 cross-domain-refs rule, and the same
+  migration's `sessions.sport_id` already gets it right (plain `Long`, no FK) — `created_by`/
+  `cancelled_by`/`location_id` were missed despite that. All four already plain `UUID`/`Long` fields
+  at the JPA layer regardless.
+- **LOC-3 filed (2026-08-10, `TODO`, `modules/location`):** same sweep, same "not predates the rule"
+  finding as SESSION-11 — `locations.created_by` (`V030`, 2026-07-30) and
+  `user_favorite_locations.user_id` (`V038`, LOC-2, 2026-08-02) both post-date the rule, both missed
+  despite `locations.sport_id` (same file as `created_by`) getting it right.
+- **Sweep also found 4 orphaned tables with zero owning code** (no entity/repository/service/
+  controller anywhere in the repo, confirmed by grep): `notifications`, `social_accounts`,
+  `user_blocks`, `user_sessions` (all from the initial `V001`/`V002`/`V005` migrations), plus
+  `post_reports` (`V005`, noted on `post-impl`'s A15 instead). Not ticketed against any domain —
+  no module actually implements them, so there's no owning backlog to file a fix-the-schema ticket
+  against; flagged here in case someone wants to scope either "build the feature" or "drop the dead
+  table" later, same "leftover placeholder, leave it alone" status as `sport-impl`'s `FacilityType`.
+- **MVP backlog (session module):** 8 of 11 tickets `DONE` (SESSION-1 through SESSION-9); SESSION-10
+  and SESSION-8 remain `TODO`, plus new SESSION-11 (queue order: SESSION-10, then SESSION-8 last —
+  user-reordered 2026-08-08 to unblock `CLIENT-SESSION-8` sooner; SESSION-11 has no ordering
+  dependency on either).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

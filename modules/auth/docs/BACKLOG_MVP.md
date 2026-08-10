@@ -23,6 +23,7 @@
 | 2 | A3 | Fix `/api/auth/logout` authorization (client epic's BE-2) | `DONE` |
 | 3 | A4 | JWT `jti` claim for guaranteed token uniqueness | `DONE` |
 | 4 | A5 | Login/registration rate limiting | `TODO` |
+| 5 | A6 | Drop DB-level FKs on auth tables' `user_id` columns (cross-domain, violates domain-scoped-tables rule) | `TODO` |
 
 **Dependencies:**
 ```
@@ -170,6 +171,54 @@ early (only the TTL does) unless the design doc's intent is otherwise — confir
 **Client impact:** once this ships, file the client ticket AUTH-6 flagged but didn't build — a
 `useLogin`/`useRegister` error-message branch that recognizes the 429 shape and shows a
 distinguishable message instead of falling through to the generic error string.
+
+---
+
+### A6 · Drop DB-level FKs on auth tables' `user_id` columns
+**Status:** `TODO`
+**Type:** Enhancement (Architecture)
+**Filed:** 2026-08-10, as part of a repo-wide sweep for cross-domain DB-level FKs, following the
+precedent set by `post-impl`'s A13 (`posts.sport_id`, `TODO`) — same rationale, applied
+domain-by-domain.
+
+**Found:** three `auth-impl` tables carry a real Postgres FK across into `users` (owned by
+`user-impl`, a different domain):
+- `email_verifications.user_id` → `email_verifications_user_id_fkey`
+- `password_reset_tokens.user_id` → `password_reset_tokens_user_id_fkey`
+- `refresh_tokens.user_id` → `refresh_tokens_user_id_fkey`
+
+All three predate root `CLAUDE.md`'s "cross-domain references use IDs only" rule (added
+2026-07-07) — `V002__create_auth_tables.sql` is part of this repo's initial commit
+(2026-03-03), same "predates the rule, never retrofitted" story as A13. Confirmed via
+`information_schema.table_constraints` against the live `sportconnect_dev` database, not assumed
+from the migration file alone (all `ON DELETE CASCADE`, ~55 cross-domain FKs found repo-wide in
+the same sweep, tracked as one ticket per owning domain).
+
+**Why it matters:** same as A13 — a DB-level FK is a hard schema coupling that works against
+"monolith-first, microservice-ready." Each of these three JPA entities (`EmailVerification`,
+`PasswordResetToken`, `RefreshToken`) already stores `userId` as a plain `UUID` field, no
+`@ManyToOne` — the application layer already complies; only the schema constraint doesn't.
+
+**Fix approach:**
+```sql
+ALTER TABLE email_verifications DROP CONSTRAINT email_verifications_user_id_fkey;
+ALTER TABLE password_reset_tokens DROP CONSTRAINT password_reset_tokens_user_id_fkey;
+ALTER TABLE refresh_tokens DROP CONSTRAINT refresh_tokens_user_id_fkey;
+```
+Confirm the actual constraint names via `\d <table>` before writing the migration (Postgres's
+auto-generated name is conventional, not guaranteed). One new Liquibase changeset, next
+sequential `Vxxx` file, registered in `db.changelog-master.xml`. No entity/service/DTO change —
+purely schema-level, same as A13.
+
+**Verify before/after:** confirm no code path relies on the `ON DELETE CASCADE` behavior
+specifically (vs. an explicit cleanup path) — these three tables are all short-lived/token tables
+with their own expiry logic; a user hard-delete cascading them away is plausible but unconfirmed,
+grep `UserServiceImpl`/`AuthServiceImpl` for any hard-delete-user path before assuming the cascade
+is redundant.
+
+**Out of scope:** `users`/`roles`/`user_roles` (all owned by `user-impl` itself — self-referential,
+not cross-domain, no FK to remove); any change to `EmailVerification`/`PasswordResetToken`/
+`RefreshToken`'s JPA entities or the services that use them.
 
 ---
 

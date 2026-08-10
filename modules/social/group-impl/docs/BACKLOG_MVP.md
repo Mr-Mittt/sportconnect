@@ -43,6 +43,7 @@
 | 22 | B15 | Add sportId to GroupInvitationResponse — unblocks client GRP-8 | `DONE` |
 | 23 | GROUP-RECUR-1 | Recurring-session schedule config, alongside `modules/session` and `modules/location` | `DONE` |
 | 24 | B16 | Partial index on `groups.sport_id` for public-group search | `TODO` |
+| 25 | B17 | Drop DB-level FKs on group-impl tables' cross-domain columns | `TODO` |
 
 ---
 
@@ -99,6 +100,62 @@ this is a pure index addition, nothing to change in `GroupRepository`/`GroupServ
 Postgres instance, `EXPLAIN ANALYZE` the actual `searchPublicGroupsWithCounts`/`searchPublicGroupsAnon`
 SQL with a populated `groups` table and confirm the planner picks the new index (bitmap or plain
 index scan) rather than a sequential scan.
+
+### B17 · Drop DB-level FKs on group-impl tables' cross-domain columns
+**Status:** `TODO`
+**Type:** Enhancement (Architecture)
+
+**Filed:** 2026-08-10, as part of a repo-wide sweep for cross-domain DB-level FKs, following the
+precedent set by `post-impl`'s A13 (`posts.sport_id`, `TODO`) — same rationale, applied
+domain-by-domain.
+
+**Found:** five `group-impl`-owned columns carry a real Postgres FK across into a different
+domain's table, confirmed via `information_schema.table_constraints` against the live
+`sportconnect_dev` database:
+- `groups.created_by` → `groups_created_by_fkey` (into `user-impl`'s `users`, `ON DELETE CASCADE`)
+- `groups.recurrence_location_id` → `groups_recurrence_location_id_fkey` (into `location-impl`'s
+  `locations`, `NO ACTION`)
+- `group_members.user_id` → `group_members_user_id_fkey` (into `users`, `ON DELETE CASCADE`)
+- `group_join_requests.user_id` → `group_join_requests_user_id_fkey` (into `users`, `ON DELETE CASCADE`)
+- `group_join_requests.reviewed_by` → `group_join_requests_reviewed_by_fkey` (into `users`, `NO ACTION`)
+
+All predate root `CLAUDE.md`'s "cross-domain references use IDs only" rule (added 2026-07-07) —
+`groups`/`group_members`/`group_join_requests` were all created 2026-03-04 (confirmed via `git log`,
+not assumed), well before the rule; `groups.sport_id` (`V015`, added the *same commit* as the rule)
+is correctly FK-free, the same contrast A13 already draws for `post-impl`. Every one of
+these columns is already a plain `UUID`/`Long` field in its JPA entity (`Group.createdBy`,
+`Group.recurrenceLocationId`, `GroupMember.userId`, `GroupJoinRequest.userId`/`reviewedBy`), no
+`@ManyToOne` — the application layer already complies; only the schema constraint doesn't.
+
+**Why it matters:** same as A13 — each of these is a hard schema coupling between `group-impl` and
+either `user-impl` or `location-impl`, working against "monolith-first, microservice-ready."
+
+**Fix approach:**
+```sql
+ALTER TABLE groups DROP CONSTRAINT groups_created_by_fkey;
+ALTER TABLE groups DROP CONSTRAINT groups_recurrence_location_id_fkey;
+ALTER TABLE group_members DROP CONSTRAINT group_members_user_id_fkey;
+ALTER TABLE group_join_requests DROP CONSTRAINT group_join_requests_user_id_fkey;
+ALTER TABLE group_join_requests DROP CONSTRAINT group_join_requests_reviewed_by_fkey;
+```
+Confirm every constraint name via `\d <table>` before writing the migration. One new Liquibase
+changeset, next sequential `Vxxx` file, registered in `db.changelog-master.xml`. No entity/service/
+DTO change — purely schema-level.
+
+**Verify before/after:** `groups.created_by`'s `ON DELETE CASCADE` is the one worth checking closely
+— a hard user-delete today would cascade-delete every group they created (and, transitively via
+`group_members`'s own cascade, remove every member's row too); confirm whether `UserServiceImpl` has
+any hard-delete-user path at all before assuming this cascade is dead weight (per this module's own
+`transferOwnership` requirement, an owner *should* have transferred first, but nothing in the DB
+schema currently enforces that at delete time — the cascade is the only thing stopping an orphaned
+`groups` row today, so dropping it without confirming there's no hard-delete path is the one real
+risk in this ticket, unlike the others).
+
+**Out of scope:** `groups.sport_id` (already correctly FK-free, nothing to do); any same-domain
+(intra `group-impl`) FK, e.g. `group_members.group_id`, `group_join_requests.group_id`,
+`group_settings.group_id`/`group_type_id`, `group_invitation_inviters.invitation_id` — all
+correctly scoped, nothing to remove; any change to any JPA entity, service, or repository in this
+module.
 
 ## Tickets
 
