@@ -27,8 +27,9 @@
 | 6 | SESSION-6 | Join-approval workflow + invite-friends-at-creation | `DONE` |
 | 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `DONE` (bundled into SESSION-4) |
 | 8 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `DONE` |
-| 9 | SESSION-10 | Session comments — participant discussion thread on `SessionDetailModal` | `TODO` |
+| 9 | SESSION-10 | Session comments — participant discussion thread on `SessionDetailModal` | `IN PROGRESS` |
 | 10 | SESSION-8 | Session discover ranking algorithm | `TODO` |
+| 11 | SESSION-11 | Drop DB-level FKs on session tables' cross-domain columns | `TODO` |
 
 ---
 
@@ -357,3 +358,56 @@ comments), locking the thread on cancellation.
 
 **Open questions (not resolved in the vision session):** whether new comments should notify other
 participants; what success looks like for this feature.
+
+## SESSION-11 — Drop DB-level FKs on session tables' cross-domain columns
+
+**Status:** `TODO` · **Type:** Enhancement (Architecture) · **Filed:** 2026-08-10, as part of a
+repo-wide sweep for cross-domain DB-level FKs, following the precedent set by `post-impl`'s A13
+(`posts.sport_id`, `TODO`) — same rationale, applied domain-by-domain.
+
+**Found:** four `session-impl`-owned columns carry a real Postgres FK across into a different
+domain's table, confirmed via `information_schema.table_constraints` against the live
+`sportconnect_dev` database:
+- `sessions.created_by` → `sessions_created_by_fkey` (into `user-impl`'s `users`, `NO ACTION`)
+- `sessions.cancelled_by` → `sessions_cancelled_by_fkey` (into `users`, `NO ACTION`)
+- `sessions.location_id` → `sessions_location_id_fkey` (into `location-impl`'s `locations`,
+  `NO ACTION`)
+- `session_participants.user_id` → `session_participants_user_id_fkey` (into `users`, `NO ACTION`)
+
+**This one is not a "predates the rule" story like A13/A8/A15/B17.** `V031__create_sessions_table.sql`
+and `V032__create_session_participants_table.sql` were both first committed **2026-07-30** — nearly
+a month *after* root `CLAUDE.md`'s "cross-domain references use IDs only" rule was added
+(2026-07-07), and this module's own `sessions.sport_id` column (same migration) already gets this
+right — it's a plain unenforced `BIGINT`, no FK. `created_by`/`cancelled_by`/`location_id` were
+missed despite the same file getting `sport_id` correct, and despite `groups.sport_id`
+(`group-impl`) and `locations.sport_id` (`location-impl`) both already having established the
+FK-free pattern by the time this module was built. All four columns are already plain `UUID`/`Long`
+fields in their JPA entities (`Session.createdBy`/`cancelledBy`/`locationId`,
+`SessionParticipant.userId`), no `@ManyToOne` — confirmed by reading the entities directly, not
+assumed — so the application layer already complies; only the schema constraint doesn't, same end
+state as the pre-rule cases even though the cause here is a miss, not an artifact of timing.
+
+**Why it matters:** same as A13 — each of these is a hard schema coupling between `session-impl` and
+either `user-impl` or `location-impl`, working against "monolith-first, microservice-ready."
+
+**Fix approach:**
+```sql
+ALTER TABLE sessions DROP CONSTRAINT sessions_created_by_fkey;
+ALTER TABLE sessions DROP CONSTRAINT sessions_cancelled_by_fkey;
+ALTER TABLE sessions DROP CONSTRAINT sessions_location_id_fkey;
+ALTER TABLE session_participants DROP CONSTRAINT session_participants_user_id_fkey;
+```
+Confirm every constraint name via `\d <table>` before writing the migration. One new Liquibase
+changeset, next sequential `Vxxx` file, registered in `db.changelog-master.xml`. No entity/service/
+DTO change — purely schema-level.
+
+**Verify before/after:** all four are `NO ACTION` (not `CASCADE`), so there's no delete-cascade
+behavior to lose — dropping these is lower-risk than A13/A8/A15/B17's `CASCADE` cases. Confirm no
+code path relies on the FK rejecting an insert with a dangling `created_by`/`cancelled_by`/
+`location_id`/`user_id` (e.g. a test deliberately asserting a DB-level constraint violation rather
+than the service layer's own `ResourceNotFoundException`/`BadRequestException` checks) before
+dropping.
+
+**Out of scope:** `sessions.sport_id` (already correctly FK-free, nothing to do); the intra-domain
+`session_participants.session_id → sessions.id` FK — same domain, correctly scoped, nothing to
+remove; any change to any JPA entity, service, or repository in this module.

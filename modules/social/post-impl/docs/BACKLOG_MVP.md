@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/social/post-impl`  
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-08
 
 ---
 
@@ -38,6 +38,8 @@
 | 17 | A11 | Fix broadcast-expiry timezone mismatch (JVM-local `LocalDateTime` vs DB-UTC `CURRENT_TIMESTAMP`) | `TODO` |
 | 18 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `TODO` |
 | 19 | A13 | Drop the DB-level FK on `posts.sport_id` — historical artifact, inconsistent with this repo's cross-domain-refs-are-IDs-only rule | `TODO` |
+| 20 | A14 | Enforce post visibility/group-membership on single-item paths (getPostById, comments, likes) — not just list endpoints | `TODO` |
+| 21 | A15 | Drop DB-level FKs on post-impl tables' cross-domain columns (user_id chain + posts.group_id) | `TODO` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
 
@@ -795,5 +797,115 @@ assuming it's dead code).
 **Out of scope:** `groups`/`locations`/`sessions`' `sport_id` columns (already correct, no FK to
 remove); any change to `Post`'s JPA entity, `PostServiceImpl`, or `PostRepository` (this is a schema-
 only change — the application layer's behavior is unaffected either way).
+
+---
+
+### A14 · Enforce post visibility/group-membership on single-item paths, not just list endpoints
+**Status:** `TODO` · **Type:** Bug Fix (Security) · **Filed:** 2026-08-08, found while designing
+`SESSION-10`'s comment access-gating (`modules/session/docs/BACKLOG_MVP.md`) — comparing how a
+session's `SessionParticipant`-status gate would need to work led to checking how the equivalent
+post/group-membership gate actually works today, surfacing this gap.
+
+**Found:** `getGroupPosts(groupId, currentUserId, pageable)` (the *list* endpoint) correctly calls
+`groupService.isGroupMember(groupId, currentUserId)` before returning anything. But every
+**single-item** path only checks that the post exists (and is active) — never `visibility`, never
+group membership:
+- `getPostById(postId, currentUserId)` (`GET /api/posts/{postId}`) — `postRepository.findByIdAndIsActiveTrue(postId)` only.
+- `getPostComments(postId, currentUserId, pageable)` (`GET /api/posts/{postId}/comments`) — same.
+- `createComment`, `likeComment`, `unlikeComment` — `postRepository.existsById(postId)` only.
+
+**Concretely:** a non-member of a private group who obtains a `postId` for one of that group's posts
+(leaked link, guessed sequential id, cached from before they left the group) can currently read the
+post itself, read every comment on it, post a new comment, and like/unlike it — despite having no
+membership. The same applies to a `private`-visibility post outside any group: `visibility` is
+stored but never checked on any of these single-item paths (separately from the already-documented
+`friends`-visibility gap in `post-impl/CLAUDE.md`'s gotchas, which is a different, known limitation —
+this one isn't currently documented anywhere).
+
+**Fix approach:** add the same `groupService.isGroupMember` check `getGroupPosts` already uses to
+each single-item path, gated on the fetched post's own `groupId` (skip the check when `groupId` is
+null — a non-group post). For `visibility='private'`, restrict reads to the post's own `userId`
+(`friends` stays unenforced, matching the existing documented limitation — not this ticket's problem
+to solve). Likely lands as one shared private helper (e.g. `requirePostVisible(Post, UUID
+currentUserId)`) called from all five methods above, rather than five separate inline checks.
+
+**Out of scope:** implementing the `friends`-visibility graph itself (pre-existing, separately
+documented limitation); any change to `getGroupPosts`/`getFeed` (already correct); anything in
+`modules/session` (SESSION-10 does not reuse this service — see its own design notes on why).
+
+**Tests:** non-member of a private group gets `BadRequestException`/403-equivalent (match this
+module's existing 400-not-403 convention) from `getPostById`/`getPostComments`/`createComment`/
+`likeComment`/`unlikeComment` on that group's post; a member still succeeds on all five (regression
+guard); a `public`/non-group post is unaffected for any caller.
+
+---
+
+### A15 · Drop DB-level FKs on post-impl tables' cross-domain columns
+**Status:** `TODO` · **Type:** Enhancement (Architecture) · **Filed:** 2026-08-10, as part of a
+repo-wide sweep for cross-domain DB-level FKs, following on from this same module's A13
+(`posts.sport_id`, `TODO`) — A13 was scoped narrowly to the one `sport_id` anomaly found while
+explaining sport-relationship tables; this sweep found `posts.sport_id` wasn't the only cross-domain
+FK left in this module, just the only `sport_id` one.
+
+**Found:** six more `post-impl`-owned columns carry a real Postgres FK across into a different
+domain's table, all `ON DELETE CASCADE`, confirmed via `information_schema.table_constraints`
+against the live `sportconnect_dev` database:
+- `posts.user_id` → `posts_user_id_fkey` (into `user-impl`'s `users`)
+- `posts.group_id` → `posts_group_id_fkey` (into `group-impl`'s `groups`)
+- `comments.user_id` → `comments_user_id_fkey`
+- `comment_likes.user_id` → `comment_likes_user_id_fkey`
+- `post_likes.user_id` → `post_likes_user_id_fkey`
+- `post_shares.user_id` → `post_shares_user_id_fkey`
+
+All predate root `CLAUDE.md`'s "cross-domain references use IDs only" rule (added 2026-07-07) —
+`posts`/`comments`/`comment_likes`/`post_likes`/`post_shares` (`V004`) are part of this repo's
+initial commit (2026-03-03). Every one of these columns is already a plain `UUID`/`Long` field in
+its JPA entity, no `@ManyToOne` — the application layer already complies; only the schema
+constraint doesn't. Same "predates `CLAUDE.md`, never retrofitted" story as A13 and this module's
+own A5.
+
+**`post_reports` deliberately excluded:** its two `user_id`-referencing columns
+(`reporter_id`/`reviewed_by`) have the exact same cross-domain FK shape, but confirmed via a
+repo-wide grep that **no `PostReport` JPA entity, repository, service, or controller exists
+anywhere** — `V005__create_social_tables.sql` created the table but it was never wired up, same
+"schema exists, no code owns it" pattern as `notifications`/`social_accounts`/`user_blocks`/
+`user_sessions` (found in the same sweep, flagged separately, not part of any per-domain ticket
+since no domain module actually implements them). Dropping a dead table's FK isn't a "post-impl
+architecture" fix in the same sense as the six above — leave it for whoever decides what to do
+with the four other orphaned tables, rather than silently folding it into this module's ticket.
+
+**Why it matters:** same as A13 — each of these is a hard schema coupling between `post-impl` and
+either `user-impl` or `group-impl`, working against "monolith-first, microservice-ready." Low
+urgency (nothing is currently broken; `ON DELETE CASCADE` on `user_id`/`group_id` largely mirrors
+what the service layer would do anyway on a hard delete) but blocks a clean extraction of any of
+these three domains later unless dropped first.
+
+**Fix approach:**
+```sql
+ALTER TABLE posts DROP CONSTRAINT posts_user_id_fkey;
+ALTER TABLE posts DROP CONSTRAINT posts_group_id_fkey;
+ALTER TABLE comments DROP CONSTRAINT comments_user_id_fkey;
+ALTER TABLE comment_likes DROP CONSTRAINT comment_likes_user_id_fkey;
+ALTER TABLE post_likes DROP CONSTRAINT post_likes_user_id_fkey;
+ALTER TABLE post_shares DROP CONSTRAINT post_shares_user_id_fkey;
+```
+Confirm every constraint name via `\d <table>` before writing the migration. Can ship as one
+Liquibase changeset (next sequential `Vxxx` file, registered in `db.changelog-master.xml`) covering
+all six, or land alongside A13's own migration if picked up together — implementer's call at
+pickup. No entity/service/DTO change — purely schema-level, same as A13.
+
+**Verify before/after:** confirm no code path relies on any of these `ON DELETE CASCADE`s
+specifically (vs. the service layer's own explicit delete/cleanup logic) — `posts.user_id`/
+`comments.user_id`/etc. cascading away on a hard user-delete is plausible but unconfirmed; grep
+`UserServiceImpl` for a hard-delete-user path before assuming the cascade is redundant. `posts.
+group_id` cascading on group hard-delete is more clearly redundant — `GroupServiceImpl.deleteGroup`
+already exists and its own behavior toward member posts should be checked directly rather than
+assumed to match the DB cascade.
+
+**Out of scope:** `posts.sport_id` (already tracked separately as A13 — don't duplicate); any
+same-domain (intra `post-impl`) FK, e.g. `comments.post_id`, `comment_likes.comment_id`,
+`post_hashtags.post_id`/`hashtag_id`, `post_media.post_id`, `post_reports.post_id`,
+`post_shares.post_id` — all correctly scoped, nothing to remove; any change to any JPA entity,
+service, or repository in this module.
 
 ---

@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | LOC-1 | Location domain backend — shared, sport-scoped venue directory | `DONE` |
 | 2 | LOC-2 | Favorite locations | `DONE` |
+| 3 | LOC-3 | Drop DB-level FKs on location tables' cross-domain columns | `TODO` |
 
 ---
 
@@ -79,3 +80,47 @@ missed on first pass).
 populating `CreateSessionModal`'s favorites dropdown (CLIENT-SESSION-2 ships that dropdown as an
 empty shell — just the trailing "Choose a location" entry — specifically so this follow-up only has
 to wire data into an already-built UI, not build the field twice).
+
+## LOC-3 — Drop DB-level FKs on location tables' cross-domain columns
+
+**Status:** `TODO` · **Type:** Enhancement (Architecture) · **Filed:** 2026-08-10, as part of a
+repo-wide sweep for cross-domain DB-level FKs, following the precedent set by `post-impl`'s A13
+(`posts.sport_id`, `TODO`) — same rationale, applied domain-by-domain.
+
+**Found:** two `location-impl`-owned columns carry a real Postgres FK across into `user-impl`'s
+`users` table, confirmed via `information_schema.table_constraints` against the live
+`sportconnect_dev` database:
+- `locations.created_by` → `locations_created_by_fkey` (`NO ACTION`)
+- `user_favorite_locations.user_id` → `user_favorite_locations_user_id_fkey` (`ON DELETE CASCADE`)
+
+**Not a "predates the rule" story** (same finding as `session-impl`'s sibling ticket SESSION-11,
+filed in the same sweep): `V030__create_locations_table.sql` was first committed 2026-07-30, nearly
+a month after root `CLAUDE.md`'s "cross-domain references use IDs only" rule (2026-07-07) — and this
+module's own `locations.sport_id` column, added in the very same migration, already gets it right
+(plain unenforced `BIGINT`, no FK, same pattern `groups.sport_id` established). `created_by` was
+missed despite `sport_id` in the same file getting it right. `user_favorite_locations` (`V038`, LOC-2,
+2026-08-02) repeats the same miss on `user_id`. Both columns are already plain `UUID` fields in their
+JPA entities (`Location.createdBy`, `UserFavoriteLocation.userId`), no `@ManyToOne` — confirmed by
+reading the entities directly — so the application layer already complies; only the schema
+constraint doesn't.
+
+**Why it matters:** same as A13 — each of these is a hard schema coupling between `location-impl`
+and `user-impl`, working against "monolith-first, microservice-ready."
+
+**Fix approach:**
+```sql
+ALTER TABLE locations DROP CONSTRAINT locations_created_by_fkey;
+ALTER TABLE user_favorite_locations DROP CONSTRAINT user_favorite_locations_user_id_fkey;
+```
+Confirm both constraint names via `\d <table>` before writing the migration. One new Liquibase
+changeset, next sequential `Vxxx` file, registered in `db.changelog-master.xml`. No entity/service/
+DTO change — purely schema-level.
+
+**Verify before/after:** `locations.created_by` is `NO ACTION` — no cascade behavior to lose.
+`user_favorite_locations.user_id` is `ON DELETE CASCADE` — confirm no code path relies on a hard
+user-delete auto-clearing their favorites (plausible but unconfirmed; grep `UserServiceImpl` for a
+hard-delete-user path) before assuming the cascade is redundant.
+
+**Out of scope:** `locations.sport_id` (already correctly FK-free, nothing to do); the intra-domain
+`user_favorite_locations.location_id → locations.id` FK — same domain, correctly scoped, nothing to
+remove; any change to any JPA entity, service, or repository in this module.
