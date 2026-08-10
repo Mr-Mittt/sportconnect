@@ -36,7 +36,7 @@
 | 15 | A9 | Fix `PostResponse` never populating `userFullName`/`sportName`/`shareCount` | `DONE` |
 | 16 | A10 | Fix `GET /api/posts/hashtag/{tag}` — always 500s (conflicting `ORDER BY`) | `DONE` |
 | 17 | A15 | Drop DB-level FKs on post-impl tables' cross-domain columns (user_id chain, posts.group_id, and posts.sport_id — absorbs A13) | `DONE` |
-| 18 | A11 | Fix broadcast-expiry timezone mismatch (JVM-local `LocalDateTime` vs DB-UTC `CURRENT_TIMESTAMP`) | `TODO` |
+| 18 | A11 | Broadcast-expiry timezone mismatch — investigated 2026-08-10, not reproducible, no code change | `DONE` |
 | 19 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `TODO` |
 | 20 | A14 | Enforce post visibility/group-membership on single-item paths (getPostById, comments, likes) — not just list endpoints | `TODO` |
 
@@ -657,58 +657,60 @@ fails a test instead of only surfacing via manual/live verification again.
 
 ---
 
-### A11 · Fix broadcast-expiry timezone mismatch
-**Status:** `TODO` · **Type:** Bug Fix
-**Scope:** `PostServiceImpl.createPost`/`updateBroadcastEndTime`, `PostRepository.existsActiveGroupBroadcast`/`findActiveBroadcasts`
-**Found during:** client ticket FEED-9 (QA/acceptance checklist), live-verified against a real running
-backend + dev Postgres (2026-07-17).
+### A11 · Broadcast-expiry timezone mismatch — investigated, not reproducible
+**Status:** `DONE` (2026-08-10, closed as not reproducible — no code change) · **Summary:**
+`modules/social/post-impl/docs/A11_BROADCAST_TIMEZONE_INVESTIGATION.md`
+**Type:** Bug Fix (originally filed) → Investigation
+**Originally found during:** client ticket FEED-9 (QA/acceptance checklist), live-verified against a
+real running backend + dev Postgres (2026-07-17).
 
-`broadcastEndTime` is validated and defaulted using the **application server's JVM-local clock**
-(`LocalDateTime.now()`, observed running at UTC+7 in dev), but the dev Postgres container's clock —
-and therefore JPQL's `CURRENT_TIMESTAMP`, used by both `existsActiveGroupBroadcast` and
-`findActiveBroadcasts` to decide whether a broadcast is still active — runs in **UTC**. Confirmed live:
+**Original claim:** `broadcastEndTime` is validated/defaulted using the application server's
+JVM-local clock, but Postgres's `CURRENT_TIMESTAMP` (used by `existsActiveGroupBroadcast`/
+`findActiveBroadcasts`) runs in UTC — supposedly causing a broadcast set a few seconds in the future
+to read as already-expired immediately after creation, off by the ~7h dev clock skew.
 
-- Sent `broadcastEndTime: "2026-07-17T11:18:45"` (a few seconds ahead of the app server's own
-  `now()`, ~`11:18:37`) in a `POST /api/posts` (`GROUP_BROADCAST`) call — passed the
-  "`broadcastEndTime` must be in the future" check (compared against the app server's local clock).
-- Row landed in Postgres as `broadcast_end_time = 2026-07-17 04:18:45` — 7 hours **earlier** than the
-  literal value sent, while Postgres's own `NOW()` at the same moment was `2026-07-17 04:19:32`.
-  `broadcast_end_time > CURRENT_TIMESTAMP` therefore evaluated `false` **immediately**, even though
-  the caller had just been told this timestamp was in the future — `GET /api/posts/broadcast`
-  silently omitted the row from the moment it was created.
+**Re-investigated 2026-08-10, does not reproduce.** `application.yml` has
+`hibernate.jdbc.time_zone: UTC`, present since the repo's **initial commit** (`16a7cd4`,
+2026-03-03 — confirmed via `git blame`, not a later undocumented fix). This makes Hibernate
+correctly treat a naive `LocalDateTime` as a JVM-local wall-clock reading and convert it to true
+UTC before persisting, so the stored `broadcast_end_time` and Postgres's `CURRENT_TIMESTAMP` are
+both genuinely, correctly expressed in UTC — the "~7h shift" the original report observed is that
+*correct* conversion, not corruption.
 
-**Why this isn't a shipped-feature regression today:** the only real client path that creates a
-broadcast (`CreatePostForm`'s broadcast toggle, FEED-7) never sends `broadcastEndTime` at all — it
-lets the server default to `now()+24h` using the *same* JVM-local clock for both the write and the
-later `CURRENT_TIMESTAMP` read-side comparison, so the ~7h skew is dwarfed by the 24h margin and the
-broadcast still reads as active well past its intended window. Live-verified this default path
-separately: correctly appeared in `GET /api/posts/broadcast` immediately after creation. The
-update-broadcast flow (`useUpdatePost` via `UpdateBroadcastConfirmDialog`) also never touches
-`broadcastEndTime` — it only re-sends `content`/`locationName`/`sportId`/`visibility`. So today's UI
-never exercises the broken window; this is a latent correctness bug, not a visible regression.
+**Empirical reproduction against real dev Postgres** (not mocked): created a `GROUP_BROADCAST` with
+an explicit `broadcastEndTime` 30s in the future. `created_at`/`broadcast_end_time` both landed
+correctly converted to true UTC; `is_still_active` (and `GET /api/posts/broadcast`) correctly read
+`true` while inside the window and `false` only after the real 30s had genuinely elapsed — no
+premature or incorrect expiry at any point. Full trail in the summary doc linked above.
 
-**Where it would bite:** any future ticket that lets a caller set a broadcast's expiry to something
-closer to "now" than the JVM/DB clock skew (e.g. a "custom duration" broadcast option, or exposing
-the existing-but-unused `updateBroadcastEndTime` service method to a real endpoint/client call) would
-see broadcasts silently read as already-expired. Also affects `existsActiveGroupBroadcast`'s one-
-active-broadcast-per-group cap the same way, in the same narrow window.
+**Likely root cause of the original report:** the original test used an 8-second validity window
+and captured Postgres's `NOW()` reading 47 seconds *after* the intended expiry — i.e. ~55 real
+seconds elapsed between the `POST` and the follow-up check. An 8-second window is razor-thin for
+manual `curl`/`psql` testing; the broadcast most likely just genuinely expired during ordinary
+test-timing lag, misdiagnosed as a timezone bug rather than confirmed against a tight, controlled
+timing window.
 
-**Fix approach:** store and compare `broadcastEndTime` in a timezone-consistent way — either persist
-as `OffsetDateTime`/`Instant` (timestamptz) instead of a naive `LocalDateTime`, or explicitly convert
-using a fixed zone (e.g. UTC) on both the write path (`createPost`'s default-computation and the
-future-check) and read path (replace JPQL `CURRENT_TIMESTAMP`, which resolves against the DB
-server's own clock/timezone setting, with a value computed application-side in the same zone used to
-store the column). Verify dev/prod Postgres and the JVM's default timezone assumption don't silently
-drift apart again — this class of bug (naive local timestamp vs. DB-server-clock comparison) is easy
-to reintroduce anywhere else in the codebase using JPQL `CURRENT_TIMESTAMP` against a
-`LocalDateTime`-typed column.
+**Also corrects a factual claim in the original report:** it framed the risk as needing a *future*
+ticket to "expose the existing-but-unused `updateBroadcastEndTime` service method to a real
+endpoint" — that endpoint already exists today (`PATCH /api/posts/{postId}/broadcast-end-time`,
+`PostController.java:160-169`), it just has no client caller yet. Doesn't change the conclusion
+(no bug either way), but the "not yet reachable" framing was wrong.
 
-**Tests:** No existing Spock coverage exercises the actual DB-level timestamp comparison (mocked
-repositories in unit specs wouldn't catch this class of bug at all) — add a `server:test`-level
-integration test that creates a broadcast with a short explicit `broadcastEndTime` a few seconds in
-the future and asserts it's still returned by `getActiveBroadcasts` immediately after creation, so a
-regression here fails a real test instead of only surfacing via manual/live verification again (same
-lesson as A10).
+**No test added.** `:server:test` runs against H2 in-memory (`application-test.yml`:
+`jdbc:h2:mem:testdb`, Liquibase disabled), not real Postgres. H2 has no independent server
+process/timezone — its `CURRENT_TIMESTAMP` reads the same JVM clock the application code already
+uses, so this specific bug class (app-JVM clock vs. a *separate* DB-server clock disagreeing)
+cannot be reproduced or meaningfully regression-tested against H2 — a test written there would
+pass today and keep passing even if `hibernate.jdbc.time_zone: UTC` were later removed, since both
+sides of the comparison would still share the same in-process JVM clock. Writing one would create
+false confidence, not real protection; flagged as a testing-infrastructure limitation rather than
+worked around here.
+
+**Out of scope:** no production code changed (nothing was broken). The general "JPQL
+`CURRENT_TIMESTAMP` against a `LocalDateTime`-typed column is a fragile pattern" observation from
+the original report is still true in principle and worth remembering for future code review, but
+isn't itself a bug to fix — `hibernate.jdbc.time_zone: UTC` already covers every existing usage of
+this pattern correctly today.
 
 ---
 
