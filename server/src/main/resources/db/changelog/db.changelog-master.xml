@@ -119,4 +119,7 @@
     <!-- B16: partial index on groups.sport_id for public-group search -->
     <include file="db/changelog/changes/V047__add_groups_sport_id_public_active_partial_index.sql" relativeToChangelogFile="false"/>
 
+    <!-- A15 (absorbs A13): drop cross-domain DB-level FKs on post-impl tables -->
+    <include file="db/changelog/changes/V048__drop_post_tables_cross_domain_fks.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
