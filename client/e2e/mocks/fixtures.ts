@@ -271,7 +271,6 @@ export const mockPost: Post = {
   locationName: null,
   // SPORT-3: Badminton (1) — one of the 2 real MVP-active sports (A6).
   sportId: 1,
-  sportName: 'Badminton',
   visibility: 'public',
   media: [],
   // No leading '#' — matches the real backend's extraction/storage format
@@ -302,8 +301,7 @@ export const mockGroupPost: Post = {
 // menu on someone else's post" case and gives the feed a second sport
 // (Pickleball, sportId 3) so sport-filtering has something real to filter.
 // Variable name/content text kept as-is across the SPORT-3 fixture rewrite
-// (display copy is unrelated to the real sportId) — only sportId/sportName
-// changed.
+// (display copy is unrelated to the real sportId) — only sportId changed.
 export const mockBasketballPost: Post = {
   ...mockPost,
   id: 4,
@@ -312,7 +310,6 @@ export const mockBasketballPost: Post = {
   content: 'Looking for 2 more players for Sunday pickup at Riverside courts. #pickup',
   hashtags: ['pickup'],
   sportId: 3,
-  sportName: 'Pickleball',
   likeCount: 9,
   commentCount: 6,
   createdAt: '2026-07-13T06:00:00',

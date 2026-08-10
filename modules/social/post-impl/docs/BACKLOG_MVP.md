@@ -37,7 +37,7 @@
 | 16 | A10 | Fix `GET /api/posts/hashtag/{tag}` — always 500s (conflicting `ORDER BY`) | `DONE` |
 | 17 | A15 | Drop DB-level FKs on post-impl tables' cross-domain columns (user_id chain, posts.group_id, and posts.sport_id — absorbs A13) | `DONE` |
 | 18 | A11 | Broadcast-expiry timezone mismatch — investigated 2026-08-10, not reproducible, no code change | `DONE` |
-| 19 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `TODO` |
+| 19 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `DONE` |
 | 20 | A14 | Enforce post visibility/group-membership on single-item paths (getPostById, comments, likes) — not just list endpoints | `TODO` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
@@ -715,7 +715,9 @@ this pattern correctly today.
 ---
 
 ### A12 · Revisit A9's `sportName` join
-**Status:** `TODO` · **Type:** Enhancement (Efficiency) · **Filed:** 2026-07-25, raised while scoping
+**Status:** `DONE` (2026-08-10) · **Summary:**
+`modules/social/post-impl/docs/A12_REMOVE_POSTRESPONSE_SPORTNAME.md`
+**Type:** Enhancement (Efficiency) · **Filed:** 2026-07-25, raised while scoping
 group-impl's B15 (`modules/social/group-impl/docs/BACKLOG_MVP.md`).
 
 **Origin:** B15 needed to add `sportId` to `GroupInvitationResponse` and initially considered mirroring
@@ -743,6 +745,19 @@ at the time A9 was scoped).
 
 **Out of scope:** any change to `GroupInvitationResponse`/group-impl (B15 already shipped, sportId-only,
 no sportName) — this ticket is scoped entirely to `post-impl`'s existing A9 field.
+
+**Resolution (2026-08-10):** confirmed the blocking question before any code change — the client's
+`useSportCatalog()` (SPORT-3, `GET /api/sports` fetched once, cached in `sportCatalogStore`) and
+`sportIdMap.ts`'s `sportKeyForId()` already resolve every post's sport badge from `sportId` alone;
+`Feed.tsx` never reads `post.sportName`, and the field's only trace in the client type was a stale
+pre-A9 comment. User decision: remove now, both sides, in one session (no coordination gap — the
+client provably never depended on it). Removed `PostResponse.sportName`,
+`SportService`/`SportResponse`/`getSportsForPosts()` from `PostServiceImpl` (all 8 call sites), the
+now-unused `sport-api` Gradle dependency from `post-impl`, `Post.sportName` from the client type, and
+every other client `Post`-shaped `sportName` reference (23 files total). Full detail and verification
+in the summary doc linked above. **Delta for any future ticket reading A9's text:** A9's
+`sportName`/`getSportsForPosts` no longer exist — don't copy that pattern for a new field without
+first checking, as this ticket did, whether the client already resolves the concept locally.
 
 ---
 

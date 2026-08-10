@@ -52,11 +52,10 @@ export interface Post {
   id: number;
   userId: string;
   // Nullable, verified against a live backend (2026-07-13): PostServiceImpl
-  // .mapToResponse() never populates userFullName, sportName, or shareCount —
-  // no builder call for any of the three, confirmed by reading the mapper
-  // directly. Unlike CommentResponse (which DOES resolve userFullName
-  // correctly via a working lookup), this is Post-specific. Filed as a
-  // backend bug blocking FEED-1's author-name rendering:
+  // .mapToResponse() never populated userFullName or shareCount — no builder
+  // call for either, confirmed by reading the mapper directly. Unlike
+  // CommentResponse (which DOES resolve userFullName correctly via a working
+  // lookup), this was Post-specific. Fixed by backend ticket A9:
   // modules/social/post-impl/docs/BACKLOG_MVP.md.
   userFullName: string | null;
   userAvatarUrl: string | null;
@@ -66,8 +65,12 @@ export interface Post {
   latitude: number | null;
   longitude: number | null;
   locationName: string | null;
+  // A12: sportId is intentionally the only sport reference on the wire —
+  // sports are static reference data, resolved client-side via
+  // sportKeyForId()/useSportCatalog() instead of a backend-joined name (same
+  // precedent as GroupInvitation.sportId below). PostResponse.sportName was
+  // removed server-side because nothing here ever read it.
   sportId: number | null;
-  sportName: string | null; // see userFullName's note — never populated today, same bug
   visibility: PostVisibility;
   media: PostMedia[];
   // Does NOT include a leading '#' — verified against a live backend

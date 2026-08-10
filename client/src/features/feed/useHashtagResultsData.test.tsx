@@ -30,7 +30,6 @@ function post(overrides: Partial<Post> & Pick<Post, 'id'>): Post {
     longitude: null,
     locationName: null,
     sportId: 5,
-    sportName: null,
     visibility: 'public',
     media: [],
     hashtags: ['fridayrun'],

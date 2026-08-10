@@ -292,9 +292,24 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `:server:test` runs against H2 in-memory (Liquibase disabled), which shares the JVM's own clock
   and structurally cannot reproduce this class of bug (app-clock vs. a *separate* DB-server
   clock) — flagged as a testing-infrastructure limitation rather than worked around.
+- **A12 (`DONE`, 2026-08-10,
+  `modules/social/post-impl/docs/A12_REMOVE_POSTRESPONSE_SPORTNAME.md`) — removed
+  `PostResponse.sportName`, both backend and client:** confirmed before any code change that the
+  client's sport badges resolve entirely from `sportId` via `useSportCatalog()`/`sportKeyForId()`
+  (SPORT-3) — `Post.sportName` was dead on the wire since SPORT-3 shipped, its only remaining trace
+  a stale pre-A9 comment. Removed `SportResponse`/`SportService`/`getSportsForPosts()` from
+  `PostServiceImpl` entirely (all 8 `mapToResponse` call sites), dropped the now-unused `sport-api`
+  Gradle dependency from `post-impl`, removed `Post.sportName` from the client type and swept every
+  other client reference (21 `src/` files + `e2e/mocks/fixtures.ts`/`paginatedFeedFixture.ts`) —
+  verified each ambiguous `sportName:` occurrence individually rather than bulk-deleting, since
+  `Session`/`Location`/`SportProfile` have their own real, actively-used `sportName` fields.
+  `:modules:social:post-impl:test`, `:server:test`, client `tsc -b`, and client Vitest (793/793)
+  all pass. 12 of 26 e2e specs failed on a `seedAuthenticatedSession` login timeout — confirmed
+  pre-existing/environmental by re-running the same specs against a stashed pre-A12 baseline
+  (identical failure count and point), not a regression from this change.
 - **MVP backlog:** 20 tickets (A1–A12, A14–A15, B1–B6) in
   `modules/social/post-impl/docs/BACKLOG_MVP.md` — A13 no longer a standalone entry (merged into
-  A15); A1–A11, A15, B1–B6 `DONE`; A12/A14 `TODO`
+  A15); A1–A12, A15, B1–B6 `DONE`; A14 `TODO`
 - **A1 (2026-06-30):** JWT-based identity — all `@RequestParam userId` removed from `PostController`; write endpoints use `@AuthenticationPrincipal`, read endpoints use `Authentication` + `SecurityUtils.extractUserId()`; `GET /api/posts/user/{userId}` renamed to `GET /api/posts/mine`
 - **A2 (2026-06-30):** Fix post delete permission — `PostServiceImpl.deletePost()` now allows group owner/admin to delete GROUP_POST and GROUP_BROADCAST posts in their group (reuses existing `GroupService.isGroupOwner/isGroupAdmin`)
 - **A3 (2026-07-01):** Group posts membership gate — `getGroupPosts()` now throws `ForbiddenException` for unauthenticated or non-member callers; `ForbiddenException` added to `modules/common`

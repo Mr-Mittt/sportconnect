@@ -8,7 +8,6 @@ dependencies {
     implementation project(':modules:social:group-api')
     implementation project(':modules:common')
     implementation project(':modules:user:user-api')
-    implementation project(':modules:sport:sport-api')
 
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'

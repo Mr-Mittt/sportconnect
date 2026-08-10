@@ -23,7 +23,6 @@ const fixturePost: Post = {
   longitude: null,
   locationName: null,
   sportId: 1,
-  sportName: 'Football',
   visibility: 'public',
   media: [],
   hashtags: [],

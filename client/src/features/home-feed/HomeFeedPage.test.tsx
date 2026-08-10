@@ -39,7 +39,6 @@ function post(overrides: Partial<Post> & Pick<Post, 'id' | 'userFullName' | 'spo
     latitude: null,
     longitude: null,
     locationName: null,
-    sportName: null,
     visibility: 'public',
     media: [],
     hashtags: [],
