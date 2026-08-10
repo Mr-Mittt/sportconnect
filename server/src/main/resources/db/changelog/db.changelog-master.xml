@@ -116,4 +116,7 @@
     <!-- SESSION-11: drop cross-domain DB-level FKs on session tables' cross-domain columns -->
     <include file="db/changelog/changes/V046__drop_session_tables_cross_domain_fks.sql" relativeToChangelogFile="false"/>
 
+    <!-- B16: partial index on groups.sport_id for public-group search -->
+    <include file="db/changelog/changes/V047__add_groups_sport_id_public_active_partial_index.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

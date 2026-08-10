@@ -23,8 +23,6 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
 
     Page<Group> findByIsActiveTrueAndIsPrivateFalse(Pageable pageable);
 
-    Page<Group> findByIsActiveTrueAndIsPrivateFalseAndSportId(Long sportId, Pageable pageable);
-
     @Query("SELECT g FROM Group g WHERE g.createdBy = :userId AND g.isActive = true")
     Page<Group> findByCreatedByAndIsActiveTrue(@Param("userId") UUID userId, Pageable pageable);
 
