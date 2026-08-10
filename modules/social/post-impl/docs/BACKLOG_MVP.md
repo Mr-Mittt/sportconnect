@@ -35,7 +35,7 @@
 | 14 | A8 | `server:test` needs Redis — `PostControllerIntegrationTest.shouldCreatePost` fails without it | `DONE` |
 | 15 | A9 | Fix `PostResponse` never populating `userFullName`/`sportName`/`shareCount` | `DONE` |
 | 16 | A10 | Fix `GET /api/posts/hashtag/{tag}` — always 500s (conflicting `ORDER BY`) | `DONE` |
-| 17 | A15 | Drop DB-level FKs on post-impl tables' cross-domain columns (user_id chain, posts.group_id, and posts.sport_id — absorbs A13) | `TODO` |
+| 17 | A15 | Drop DB-level FKs on post-impl tables' cross-domain columns (user_id chain, posts.group_id, and posts.sport_id — absorbs A13) | `DONE` |
 | 18 | A11 | Fix broadcast-expiry timezone mismatch (JVM-local `LocalDateTime` vs DB-UTC `CURRENT_TIMESTAMP`) | `TODO` |
 | 19 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `TODO` |
 | 20 | A14 | Enforce post visibility/group-membership on single-item paths (getPostById, comments, likes) — not just list endpoints | `TODO` |
@@ -785,7 +785,9 @@ guard); a `public`/non-group post is unaffected for any caller.
 ---
 
 ### A15 · Drop DB-level FKs on post-impl tables' cross-domain columns
-**Status:** `TODO` · **Type:** Enhancement (Architecture) · **Filed:** 2026-08-10, as part of a
+**Status:** `DONE` (2026-08-10) · **Summary:**
+`modules/social/post-impl/docs/A15_DROP_POST_CROSS_DOMAIN_FKS.md`
+**Type:** Enhancement (Architecture) · **Filed:** 2026-08-10, as part of a
 repo-wide sweep for cross-domain DB-level FKs, following on from this same module's original A13
 (`posts.sport_id`) — A13 was scoped narrowly to the one `sport_id` anomaly found while explaining
 sport-relationship tables to the user; this sweep found `posts.sport_id` wasn't the only
