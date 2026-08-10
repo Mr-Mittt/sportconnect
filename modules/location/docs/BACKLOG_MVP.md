@@ -21,7 +21,7 @@
 |---|---|---|---|
 | 1 | LOC-1 | Location domain backend — shared, sport-scoped venue directory | `DONE` |
 | 2 | LOC-2 | Favorite locations | `DONE` |
-| 3 | LOC-3 | Drop DB-level FKs on location tables' cross-domain columns | `TODO` |
+| 3 | LOC-3 | Drop DB-level FKs on location tables' cross-domain columns | `DONE` |
 
 ---
 
@@ -83,7 +83,9 @@ to wire data into an already-built UI, not build the field twice).
 
 ## LOC-3 — Drop DB-level FKs on location tables' cross-domain columns
 
-**Status:** `TODO` · **Type:** Enhancement (Architecture) · **Filed:** 2026-08-10, as part of a
+**Status:** `DONE` (2026-08-10) · **Summary:**
+`modules/location/location-impl/docs/LOC-3_DROP_LOCATION_CROSS_DOMAIN_FKS.md`
+**Type:** Enhancement (Architecture) · **Filed:** 2026-08-10, as part of a
 repo-wide sweep for cross-domain DB-level FKs, following the precedent set by `post-impl`'s A13
 (`posts.sport_id`, `TODO`) — same rationale, applied domain-by-domain.
 

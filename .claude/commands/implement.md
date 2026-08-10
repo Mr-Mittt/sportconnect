@@ -48,6 +48,10 @@ Enforce these constraints at every step — do not let them slip:
 - Cross-domain references are IDs only — no JPA `@ManyToOne` across domain boundaries
 - DB tables are domain-scoped — no cross-domain foreign keys at the DB level
 - Always depend on the `-api` interface, not the `-impl` class
+- Deactivated users get no further interaction — any new authenticated endpoint or service method
+  must explicitly reject a caller whose `isActive` is `false`, unless it's read-only data already
+  public without auth; don't assume the JWT filter already excludes them — it doesn't (CLAUDE.md's
+  Account lifecycle rule)
 
 ---
 
