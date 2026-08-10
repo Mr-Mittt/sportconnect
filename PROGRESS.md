@@ -2335,10 +2335,15 @@ explicit go-ahead at each step (full story in A3's summary doc):
   migration's `sessions.sport_id` already gets it right (plain `Long`, no FK) — `created_by`/
   `cancelled_by`/`location_id` were missed despite that. All four already plain `UUID`/`Long` fields
   at the JPA layer regardless.
-- **LOC-3 filed (2026-08-10, `TODO`, `modules/location`):** same sweep, same "not predates the rule"
-  finding as SESSION-11 — `locations.created_by` (`V030`, 2026-07-30) and
-  `user_favorite_locations.user_id` (`V038`, LOC-2, 2026-08-02) both post-date the rule, both missed
-  despite `locations.sport_id` (same file as `created_by`) getting it right.
+- **LOC-3 (`DONE`, 2026-08-10,
+  `modules/location/location-impl/docs/LOC-3_DROP_LOCATION_CROSS_DOMAIN_FKS.md`):** dropped the 2
+  cross-domain DB-level FKs found in the 2026-08-10 sweep — `locations_created_by_fkey`,
+  `user_favorite_locations_user_id_fkey` — via `V045__drop_location_tables_cross_domain_fks.sql`.
+  Same "not predates the rule" finding as SESSION-11 — `locations.created_by` (`V030`,
+  2026-07-30) and `user_favorite_locations.user_id` (`V038`, LOC-2, 2026-08-02) both post-date the
+  rule, both missed despite `locations.sport_id` (same file as `created_by`) getting it right.
+  Schema-only; confirmed no code path relies on `ON DELETE CASCADE` (same
+  `UserServiceImpl.deleteUser` soft-delete finding as auth's A6).
 - **Sweep also found 4 orphaned tables with zero owning code** (no entity/repository/service/
   controller anywhere in the repo, confirmed by grep): `notifications`, `social_accounts`,
   `user_blocks`, `user_sessions` (all from the initial `V001`/`V002`/`V005` migrations), plus
