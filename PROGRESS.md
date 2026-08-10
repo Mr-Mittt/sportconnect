@@ -177,8 +177,17 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   narrow: every internal caller (`AuthServiceImpl`, `CommentServiceImpl`, `PostServiceImpl`) calls
   `UserService` directly in-process, never through this HTTP layer. No client screen depends on the
   wider shape either. Scoping only, no code yet.
-- **MVP backlog:** 11 tickets (U1–U11) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, 10 `DONE`,
-  U11 `TODO`
+- **U12 filed (2026-08-10, `TODO`):** Revoke sessions on deactivation — found while discussing what
+  "delete account" does today. `UserServiceImpl.deleteUser()` only flips `is_active = false`; it
+  never revokes the user's refresh tokens (`user-impl` doesn't even depend on `auth-api` yet) or
+  their already-issued access token (`JwtAuthenticationFilter` only checks signature/expiry, no
+  active-status recheck — up to a 1hr window where a deactivated user's JWT still authenticates).
+  Fix 1 (required): wire `deleteUser()` to call the existing `AuthService.logout(userId)`. Fix 2
+  (access-token gap): DB lookup vs. Redis deny-list per request — tradeoff to confirm at pickup,
+  may split into its own ticket; worth coordinating with whoever picks up auth's A5 (also about to
+  add a per-request Redis check, for rate limiting).
+- **MVP backlog:** 12 tickets (U1–U12) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, 10 `DONE`,
+  U11/U12 `TODO`
 
 #### `modules:sport:sport-api` + `modules:sport:sport-impl`
 - `Sport` entity: name, description, category, icon_url, min/max players, soft delete
