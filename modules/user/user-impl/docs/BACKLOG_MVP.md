@@ -574,6 +574,20 @@ tradeoff). Two options to weigh, don't assume which:
 Given the added latency/complexity on *every* authenticated request, confirm with the user whether
 this is in scope for MVP or an accepted ~1hr-window risk deferred to V1 before implementing Fix 2.
 
+**Open question for implementer — partial index on `users.is_active`?** Confirmed in the same
+2026-08-10 conversation: `users` has no index at all (partial or otherwise) on `is_active` today,
+unlike `posts`/`comments`/`groups`, which each have a `WHERE is_active = true` partial index. It's
+been a non-issue so far because every existing `is_active`-filtered query already rides a more
+selective index (PK, or the unique `idx_users_email`/`idx_users_username`). This ticket is the
+first thing that could change that calculus:
+- If Fix 2 goes with the **DB-lookup-per-request** option, that's a new `is_active` check (via PK,
+  so still fine — no index gap introduced) on *every* authenticated request. Not a reason for a
+  partial index by itself, but worth naming since it's the first per-request `is_active` read.
+- Not needed for Fix 1 (`deleteUser()` reads by PK, not by `is_active`) or the Redis-deny-list
+  option for Fix 2 (no DB query at all).
+Net: no proven need yet — decide at implementation time whether Fix 2's chosen approach actually
+introduces an unindexed `is_active`-only query pattern before adding one speculatively.
+
 **Tests:** `deleteUser()` calls `authService.logout(userId)` exactly once; a refresh attempt with a
 token issued before deactivation now fails immediately (not just on the pre-existing
 `isActive`-recheck path, since the token itself is revoked first); if Fix 2 is in scope, a request
