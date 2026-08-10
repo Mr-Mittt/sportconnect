@@ -102,11 +102,13 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - `SecurityConfig` — stateless, CORS for localhost:3000/5173, public endpoints configured
 - `AuthController` endpoints: `POST /api/auth/register`, `/login`, `/refresh`, `/logout`, `/verify-email`, `/forgot-password` (placeholder), `/reset-password`
 - `EmailVerificationService`, `PasswordResetService`, `EmailService`
-- **A6 filed (2026-08-10, `TODO`):** repo-wide sweep for cross-domain DB-level FKs (following
-  post-impl's A13 precedent) found 3 in this module — `email_verifications.user_id`,
-  `password_reset_tokens.user_id`, `refresh_tokens.user_id` — all pre-date the 2026-07-07
-  cross-domain-refs rule, all already plain `UUID` fields at the JPA layer.
-- **MVP backlog:** 5 tickets (A2–A6) in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4 `DONE`, A5/A6
+- **A6 (2026-08-10, `DONE`, `modules/auth/docs/A6_DROP_AUTH_TABLES_USER_ID_FKS.md`):** dropped the
+  3 cross-domain DB-level FKs found in the 2026-08-10 sweep (following post-impl's A13
+  precedent) — `email_verifications_user_id_fkey`, `password_reset_tokens_user_id_fkey`,
+  `refresh_tokens_user_id_fkey` — via `V044__drop_auth_tables_user_id_fks.sql`. Schema-only;
+  confirmed no code path relies on `ON DELETE CASCADE` (`UserServiceImpl.deleteUser` is a soft
+  delete).
+- **MVP backlog:** 5 tickets (A2–A6) in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4/A6 `DONE`, A5
   `TODO`
 
 #### `modules:user:user-api` + `modules:user:user-impl`
@@ -175,8 +177,17 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   narrow: every internal caller (`AuthServiceImpl`, `CommentServiceImpl`, `PostServiceImpl`) calls
   `UserService` directly in-process, never through this HTTP layer. No client screen depends on the
   wider shape either. Scoping only, no code yet.
-- **MVP backlog:** 11 tickets (U1–U11) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, 10 `DONE`,
-  U11 `TODO`
+- **U12 filed (2026-08-10, `TODO`):** Revoke sessions on deactivation — found while discussing what
+  "delete account" does today. `UserServiceImpl.deleteUser()` only flips `is_active = false`; it
+  never revokes the user's refresh tokens (`user-impl` doesn't even depend on `auth-api` yet) or
+  their already-issued access token (`JwtAuthenticationFilter` only checks signature/expiry, no
+  active-status recheck — up to a 1hr window where a deactivated user's JWT still authenticates).
+  Fix 1 (required): wire `deleteUser()` to call the existing `AuthService.logout(userId)`. Fix 2
+  (access-token gap): DB lookup vs. Redis deny-list per request — tradeoff to confirm at pickup,
+  may split into its own ticket; worth coordinating with whoever picks up auth's A5 (also about to
+  add a per-request Redis check, for rate limiting).
+- **MVP backlog:** 12 tickets (U1–U12) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, 10 `DONE`,
+  U11/U12 `TODO`
 
 #### `modules:sport:sport-api` + `modules:sport:sport-impl`
 - `Sport` entity: name, description, category, icon_url, min/max players, soft delete

@@ -23,7 +23,7 @@
 | 2 | A3 | Fix `/api/auth/logout` authorization (client epic's BE-2) | `DONE` |
 | 3 | A4 | JWT `jti` claim for guaranteed token uniqueness | `DONE` |
 | 4 | A5 | Login/registration rate limiting | `TODO` |
-| 5 | A6 | Drop DB-level FKs on auth tables' `user_id` columns (cross-domain, violates domain-scoped-tables rule) | `TODO` |
+| 5 | A6 | Drop DB-level FKs on auth tables' `user_id` columns (cross-domain, violates domain-scoped-tables rule) | `DONE` |
 
 **Dependencies:**
 ```
@@ -175,7 +175,7 @@ distinguishable message instead of falling through to the generic error string.
 ---
 
 ### A6 · Drop DB-level FKs on auth tables' `user_id` columns
-**Status:** `TODO`
+**Status:** `DONE` (2026-08-10) · **Summary:** `modules/auth/docs/A6_DROP_AUTH_TABLES_USER_ID_FKS.md`
 **Type:** Enhancement (Architecture)
 **Filed:** 2026-08-10, as part of a repo-wide sweep for cross-domain DB-level FKs, following the
 precedent set by `post-impl`'s A13 (`posts.sport_id`, `TODO`) — same rationale, applied
