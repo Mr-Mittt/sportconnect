@@ -33,7 +33,6 @@ export function buildPaginatedFeed(): Post[] {
       postType: isGroupPost ? 'GROUP_POST' : 'USER_FEED',
       groupId: isGroupPost ? mockGroup.id : null,
       sportId: isPickleball ? 3 : 1,
-      sportName: isPickleball ? 'Pickleball' : 'Badminton',
       createdAt: new Date(Date.now() - index * 60 * 60 * 1000).toISOString(),
       updatedAt: new Date(Date.now() - index * 60 * 60 * 1000).toISOString(),
     };

@@ -26,7 +26,6 @@ public class PostResponse {
     private Double longitude;
     private String locationName;
     private Long sportId;
-    private String sportName;
     private String visibility;
     private List<PostMediaResponse> media;
     private List<String> hashtags;

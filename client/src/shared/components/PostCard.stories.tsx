@@ -22,7 +22,6 @@ const basePost: Post = {
   longitude: null,
   locationName: null,
   sportId: 5,
-  sportName: 'Soccer',
   visibility: 'public',
   media: [],
   hashtags: ['5aside', 'fridayrun'],
@@ -68,7 +67,7 @@ export const WithAvatarImage: Story = {
 };
 
 export const NoSportBadge: Story = {
-  args: { post: { ...basePost, sportId: null, sportName: null }, sport: null },
+  args: { post: { ...basePost, sportId: null }, sport: null },
 };
 
 export const OwnPostShowsDeleteMenu: Story = {

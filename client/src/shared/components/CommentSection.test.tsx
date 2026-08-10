@@ -36,7 +36,6 @@ const post: Post = {
   longitude: null,
   locationName: null,
   sportId: 5,
-  sportName: 'Soccer',
   visibility: 'public',
   media: [],
   hashtags: [],

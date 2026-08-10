@@ -203,7 +203,6 @@ describe('App routing', () => {
                 longitude: null,
                 locationName: null,
                 sportId: null,
-                sportName: null,
                 visibility: 'public',
                 media: [],
                 hashtags: [],

@@ -70,7 +70,6 @@ function makeBroadcastPost(overrides: Partial<Post> & Pick<Post, 'id' | 'groupId
     longitude: null,
     locationName: null,
     sportId: null,
-    sportName: null,
     visibility: 'public',
     media: [],
     hashtags: [],

@@ -53,7 +53,6 @@ function post(overrides: Partial<Post>): Post {
     longitude: null,
     locationName: null,
     sportId: null,
-    sportName: null,
     visibility: 'public',
     media: [],
     hashtags: [],

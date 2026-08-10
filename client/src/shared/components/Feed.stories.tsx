@@ -27,7 +27,6 @@ function post(overrides: Partial<Post> & Pick<Post, 'id' | 'userFullName'>): Pos
     longitude: null,
     locationName: null,
     sportId: null,
-    sportName: null,
     visibility: 'public',
     media: [],
     hashtags: [],

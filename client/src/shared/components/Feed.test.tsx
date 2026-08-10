@@ -34,7 +34,6 @@ const makePost = (id: number, sportId: number | null, userFullName: string): Pos
   longitude: null,
   locationName: null,
   sportId,
-  sportName: null,
   visibility: 'public',
   media: [],
   hashtags: [],

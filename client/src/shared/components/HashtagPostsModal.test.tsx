@@ -34,7 +34,6 @@ const makePost = (id: number, userFullName: string): Post => ({
   longitude: null,
   locationName: null,
   sportId: 5,
-  sportName: null,
   visibility: 'public',
   media: [],
   hashtags: ['fridayrun'],
