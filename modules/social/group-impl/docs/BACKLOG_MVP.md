@@ -42,7 +42,7 @@
 | 21 | B14 | Track every co-inviter on a single group invitation — unblocks client GRP-8 | `DONE` |
 | 22 | B15 | Add sportId to GroupInvitationResponse — unblocks client GRP-8 | `DONE` |
 | 23 | GROUP-RECUR-1 | Recurring-session schedule config, alongside `modules/session` and `modules/location` | `DONE` |
-| 24 | B16 | Partial index on `groups.sport_id` for public-group search | `TODO` |
+| 24 | B16 | Partial index on `groups.sport_id` for public-group search | `DONE` |
 | 25 | B17 | Drop DB-level FKs on group-impl tables' cross-domain columns | `TODO` |
 
 ---
@@ -70,7 +70,8 @@ new `GroupMemberRepository.findByGroupIdInAndRoleId` batch method.
 ---
 
 ### B16 · Partial index on `groups.sport_id` for public-group search
-**Status:** `TODO`
+**Status:** `DONE` (2026-08-10) · **Summary:**
+`modules/social/group-impl/docs/B16_GROUPS_SPORT_ID_PARTIAL_INDEX.md`
 **Type:** Performance (DB only — no service/entity/controller changes)
 
 **Filed:** 2026-08-01, found auditing `sport_id`-as-filter indexing across the app (client-side
