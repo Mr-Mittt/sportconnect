@@ -170,6 +170,31 @@ compound it. Any new security-sensitive feature should check the caller's `isAct
 explicitly (via `UserService`) in its own service method rather than assuming the JWT filter or
 `SecurityConfig` already guarantees it.
 
+### Resource access: availability vs. visibility
+
+Any domain with per-item read/write rules on a resource (a `Post`, a `Session`, a `SessionComment`)
+must answer two **separate** questions before a caller touches it, in this order:
+
+1. **Is it available?** — existence/lifecycle: not soft-deleted, and its parent chain (if any) is
+   also still available (e.g. a group-scoped `Post` also requires its `Group` to still be active).
+   Unavailable → `NotFoundException`.
+2. **Is it visible to *this* caller?** — authorization, evaluated only once (1) is true (e.g. group
+   membership for a `GROUP_POST`, participant status for a session comment thread). Not visible →
+   `ForbiddenException`.
+
+These are genuinely independent — conflating them is exactly what let a real bug hide (see
+`documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md` §5.1: `GroupServiceImpl.isGroupMember()`
+implicitly assumed "...and the group still exists," which silently broke once groups became
+soft-deletable). Every new resource with this shape implements
+`com.sportconnect.common.access.ResourceGate<T>` (two boolean methods + a `require()` default that
+throws the right exception) — service-impl layer, gating single-item paths *after* fetching the
+entity, list endpoints gating the known scope *before* querying (unchanged from existing precedent
+like `getGroupPosts`'s membership check). This is a shared **shape** in `common`, never shared
+**logic** — each domain's `isAvailable`/`isVisibleTo` implementation is its own, using its own
+`-api` cross-domain calls, same as every other cross-domain interaction in this codebase. See the
+ADR for the full design discussion, rejected alternatives (including why a session's discussion
+thread is a domain-scoped `SessionComment`, never a reused `Post`), and open items.
+
 ### Database
 
 PostgreSQL with Liquibase migrations. Migration scripts live in `server/src/main/resources/db/changelog/changes/` and are registered in `db.changelog-master.xml`. Dev database name: `sportconnect_dev` (configured in `application-dev.yml`).

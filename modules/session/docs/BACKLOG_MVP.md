@@ -319,7 +319,12 @@ all transitioning to `LEFT` via the existing `DELETE /sessions/{id}/leave`. Full
 
 **Filed:** 2026-08-07, from a `/vision` session — see
 `documentation/md/vision/SESSION_COMMENTS_VISION.md` for the full discussion, rejected
-alternatives, and open questions.
+alternatives, and open questions. **Gating redesigned 2026-08-11** against
+`documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md` (§6) — read the ADR before implementing; this
+entry is a summary, not the full design record. The vision doc's "reuse Post's actual `Comment`
+entity" alternative was reconsidered and re-rejected during that ADR discussion (in a stronger
+form — a whole session as a `Post`) for the same domain-scoped-tables reason; nothing about the
+entity/table decision below has changed.
 
 New `SessionComment` entity, domain-scoped to `modules/session` (this repo's domain-scoped-tables
 rule means it does **not** reuse `post-impl`'s `Comment` entity/table, even though the shape
@@ -328,12 +333,34 @@ one level of nesting via a `parentCommentId` (replies cannot themselves be repli
 enforcement as `post-impl`'s `CommentServiceImpl`), per-comment likes via a `SessionCommentLike`
 join, and the same Redis preview-cache pattern `post-impl` uses.
 
-**Gating:** readable/postable only by callers with a `SessionParticipant` row in `JOINED`,
-`REQUESTED`, or `INVITED` status for that session — `LEFT` loses access. No public read for
-non-participants (e.g. someone browsing a standalone session from Discover before joining).
-Applies uniformly to standalone and group-linked sessions — not conditional on `groupId` (a
-group-linked session's comment thread is scoped to that specific session, independent of the
-group's own chat channel).
+**Gating — implement `ResourceGate<Session>` (`common`'s C2), same shape `post-impl`'s A14 uses for
+`PostGate`, no shared logic:**
+```java
+class SessionGate implements ResourceGate<Session> {
+    private final GroupService groupService; // group-api — new session-impl dependency
+
+    public boolean isAvailable(Session session) {
+        return session.getGroupId() == null || groupService.isGroupActive(session.getGroupId()); // B18
+    }
+
+    public boolean isVisibleTo(Session session, UUID viewerId) {
+        boolean isParticipant = participantStatusIn(session, viewerId, JOINED, REQUESTED, INVITED);
+        boolean isGroupMember = session.getGroupId() != null && groupService.isGroupMember(session.getGroupId(), viewerId);
+        return isParticipant || isGroupMember; // widened — see delta below
+    }
+}
+```
+Readable/postable by callers with a `SessionParticipant` row in `JOINED`, `REQUESTED`, or `INVITED`
+status — `LEFT` loses access. No public read for non-participants of a **standalone** session (e.g.
+someone browsing it from Discover before joining) — `isVisibleTo` returns `false` for them since
+`session.getGroupId()` is null.
+
+**Delta from the original vision-doc decision:** for a **group-linked** session, group members are
+now also visible/postable, not just `SessionParticipant`s — the original decision
+(`SESSION_COMMENTS_VISION.md`) scoped this participants-only even for group-linked sessions
+("independent of the group's own ongoing chat channel"); the ADR discussion revisited this
+specifically and widened it, since a group-linked session's thread is also effectively a group post.
+Standalone sessions are unaffected by this delta — still strictly participant-only.
 
 **Delete:** own comment only — no creator/owner moderation capability in v1.
 
