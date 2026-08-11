@@ -76,6 +76,11 @@ class GroupServiceImplSpec extends Specification {
     UserResponse testUser
 
     def setup() {
+        // Default every test's group to active — isGroupOwner/isGroupAdmin/isGroupMember (B18) all
+        // gate on this first. Tests exercising the soft-deleted-group path override this per-test
+        // with a more specific stub, which Spock resolves in declaration order (last wins).
+        groupRepository.existsByIdAndIsActiveTrue(_) >> true
+
         testUser = UserResponse.builder()
                 .id(userId)
                 .email("test@example.com")
@@ -826,6 +831,107 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(regularMember)
 
         and: "result is false"
+        result == false
+    }
+
+    def "isGroupOwner should return false when the group is soft-deleted, even if the user is owner"() {
+        when: "checking if user is owner of a soft-deleted group"
+        def result = groupService.isGroupOwner(testGroup.id, userId)
+
+        then: "the active check short-circuits before any role lookup"
+        1 * groupRepository.existsByIdAndIsActiveTrue(testGroup.id) >> false
+        0 * groupRoleRepository.findByRoleName(_)
+        0 * groupMemberRepository.findByGroupIdAndUserId(_, _)
+
+        and: "result is false"
+        result == false
+    }
+
+    def "isGroupAdmin should return true when user is admin"() {
+        given: "user is admin"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(adminRole.id)
+                .build()
+
+        when: "checking if user is admin"
+        def result = groupService.isGroupAdmin(testGroup.id, userId)
+
+        then: "user is admin"
+        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+
+        and: "result is true"
+        result == true
+    }
+
+    def "isGroupAdmin should return false when the group is soft-deleted, even if the user is admin"() {
+        when: "checking if user is admin of a soft-deleted group"
+        def result = groupService.isGroupAdmin(testGroup.id, userId)
+
+        then: "the active check short-circuits before any role lookup"
+        1 * groupRepository.existsByIdAndIsActiveTrue(testGroup.id) >> false
+        0 * groupRoleRepository.findByRoleName(_)
+        0 * groupMemberRepository.findByGroupIdAndUserId(_, _)
+
+        and: "result is false"
+        result == false
+    }
+
+    def "isGroupMember should return true when user is a member"() {
+        when: "checking if user is a member"
+        def result = groupService.isGroupMember(testGroup.id, userId)
+
+        then: "membership is confirmed"
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
+
+        and: "result is true"
+        result == true
+    }
+
+    def "isGroupMember should return false when the group is soft-deleted, even if the user is a member"() {
+        when: "checking membership of a soft-deleted group"
+        def result = groupService.isGroupMember(testGroup.id, userId)
+
+        then: "the active check short-circuits before the membership lookup"
+        1 * groupRepository.existsByIdAndIsActiveTrue(testGroup.id) >> false
+        0 * groupMemberRepository.existsByGroupIdAndUserId(_, _)
+
+        and: "result is false"
+        result == false
+    }
+
+    def "isGroupActive should return true for an active group"() {
+        when: "checking group activity"
+        def result = groupService.isGroupActive(testGroup.id)
+
+        then:
+        1 * groupRepository.existsByIdAndIsActiveTrue(testGroup.id) >> true
+
+        and:
+        result == true
+    }
+
+    def "isGroupActive should return false for a soft-deleted group"() {
+        when: "checking group activity"
+        def result = groupService.isGroupActive(testGroup.id)
+
+        then:
+        1 * groupRepository.existsByIdAndIsActiveTrue(testGroup.id) >> false
+
+        and:
+        result == false
+    }
+
+    def "isGroupActive should return false for a non-existent group"() {
+        when: "checking group activity"
+        def result = groupService.isGroupActive(999L)
+
+        then:
+        1 * groupRepository.existsByIdAndIsActiveTrue(999L) >> false
+
+        and:
         result == false
     }
 

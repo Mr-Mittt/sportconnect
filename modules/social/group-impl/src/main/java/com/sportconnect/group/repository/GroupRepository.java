@@ -21,6 +21,16 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
 
     Optional<Group> findByIdAndIsActiveTrue(Long id);
 
+    /**
+     * Existence-only lifecycle check, deliberately distinct from {@link #findByIdAndIsActiveTrue}
+     * — used by {@code isGroupActive}/{@code isGroupOwner}/{@code isGroupAdmin}/
+     * {@code isGroupMember} (B18), which are often called from a method that already holds the
+     * fetched {@link Group} via {@code findByIdAndIsActiveTrue}. Reusing that method here would
+     * double the query count in those call paths for no benefit, since the group's already been
+     * confirmed active by then.
+     */
+    boolean existsByIdAndIsActiveTrue(Long id);
+
     Page<Group> findByIsActiveTrueAndIsPrivateFalse(Pageable pageable);
 
     @Query("SELECT g FROM Group g WHERE g.createdBy = :userId AND g.isActive = true")

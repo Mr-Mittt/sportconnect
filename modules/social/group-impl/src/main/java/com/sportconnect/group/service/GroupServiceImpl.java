@@ -1001,7 +1001,15 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     @Transactional(readOnly = true)
+    public boolean isGroupActive(Long groupId) {
+        return groupRepository.existsByIdAndIsActiveTrue(groupId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean isGroupOwner(Long groupId, UUID userId) {
+        if (!isGroupActive(groupId)) return false;
+
         GroupRole ownerRole = groupRoleRepository.findByRoleName("group_owner")
                 .orElse(null);
         if (ownerRole == null) return false;
@@ -1014,6 +1022,8 @@ public class GroupServiceImpl implements GroupService {
     @Override
     @Transactional(readOnly = true)
     public boolean isGroupAdmin(Long groupId, UUID userId) {
+        if (!isGroupActive(groupId)) return false;
+
         GroupRole adminRole = groupRoleRepository.findByRoleName("group_admin")
                 .orElse(null);
         if (adminRole == null) return false;
@@ -1026,6 +1036,8 @@ public class GroupServiceImpl implements GroupService {
     @Override
     @Transactional(readOnly = true)
     public boolean isGroupMember(Long groupId, UUID userId) {
+        if (!isGroupActive(groupId)) return false;
+
         return groupMemberRepository.existsByGroupIdAndUserId(groupId, userId);
     }
 

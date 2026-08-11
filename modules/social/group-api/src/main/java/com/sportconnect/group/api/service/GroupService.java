@@ -126,12 +126,26 @@ public interface GroupService {
     List<GroupRecurrenceConfigResponse> getGroupsWithAutoGenerateSessionsEnabled();
 
     // Permission Checks
+    /**
+     * Existence/lifecycle only, no caller-identity component — true iff the group exists and is
+     * not soft-deleted. Not exposed via a controller endpoint; its only intended callers are
+     * same-JVM cross-domain {@code -api} consumers (e.g. a future {@code PostGate}/
+     * {@code SessionGate}'s own {@code isAvailable()}) asking "is this resource's parent group
+     * still active," independent of who's asking. {@link #isGroupOwner}/{@link #isGroupAdmin}/
+     * {@link #isGroupMember} already call this internally, so callers checking role membership
+     * don't need to call it separately first.
+     */
+    boolean isGroupActive(Long groupId);
+
+    /** False for a non-existent groupId or a userId not owning it; also false if the group itself is soft-deleted (B18) — see {@link #isGroupActive}. */
     boolean isGroupOwner(Long groupId, UUID userId);
-    
+
+    /** False for a non-existent groupId or a userId not admining it; also false if the group itself is soft-deleted (B18) — see {@link #isGroupActive}. */
     boolean isGroupAdmin(Long groupId, UUID userId);
-    
+
+    /** False for a non-existent groupId or a userId not a member; also false if the group itself is soft-deleted (B18) — see {@link #isGroupActive}. */
     boolean isGroupMember(Long groupId, UUID userId);
-    
+
     boolean canManageMembers(Long groupId, UUID userId);
     
     boolean canManagePosts(Long groupId, UUID userId);
