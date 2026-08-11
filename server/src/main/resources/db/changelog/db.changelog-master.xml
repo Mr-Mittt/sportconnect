@@ -122,4 +122,7 @@
     <!-- A15 (absorbs A13): drop cross-domain DB-level FKs on post-impl tables -->
     <include file="db/changelog/changes/V048__drop_post_tables_cross_domain_fks.sql" relativeToChangelogFile="false"/>
 
+    <!-- B17: drop cross-domain DB-level FKs on group-impl tables -->
+    <include file="db/changelog/changes/V049__drop_group_tables_cross_domain_fks.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
