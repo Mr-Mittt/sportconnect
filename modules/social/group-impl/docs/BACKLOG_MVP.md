@@ -43,7 +43,7 @@
 | 22 | B15 | Add sportId to GroupInvitationResponse — unblocks client GRP-8 | `DONE` |
 | 23 | GROUP-RECUR-1 | Recurring-session schedule config, alongside `modules/session` and `modules/location` | `DONE` |
 | 24 | B16 | Partial index on `groups.sport_id` for public-group search | `DONE` |
-| 25 | B17 | Drop DB-level FKs on group-impl tables' cross-domain columns | `TODO` |
+| 25 | B17 | Drop DB-level FKs on group-impl tables' cross-domain columns | `DONE` |
 | 26 | B18 | Require `group.isActive` in `isGroupMember`/`isGroupOwner`/`isGroupAdmin`; add `isGroupActive()` | `TODO` |
 
 ---
@@ -104,7 +104,8 @@ SQL with a populated `groups` table and confirm the planner picks the new index 
 index scan) rather than a sequential scan.
 
 ### B17 · Drop DB-level FKs on group-impl tables' cross-domain columns
-**Status:** `TODO`
+**Status:** `DONE` (2026-08-11) · **Summary:**
+`modules/social/group-impl/docs/B17_DROP_GROUP_TABLES_CROSS_DOMAIN_FKS.md`
 **Type:** Enhancement (Architecture)
 
 **Filed:** 2026-08-10, as part of a repo-wide sweep for cross-domain DB-level FKs, following the

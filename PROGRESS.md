@@ -393,11 +393,19 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   queries, zero callers). On the live dev data (25 rows) the planner correctly picks a seq scan
   over the index — expected at this row count; forcing `enable_seqscan=off` confirmed the index
   itself is valid and picked (`Index Cond: (sport_id = 1)`).
-- **B17 filed (2026-08-10, `TODO`):** repo-wide sweep for cross-domain DB-level FKs (following
-  post-impl's A13 precedent) found 5 in this module — `groups.created_by`,
+- **B17 (2026-08-11, `DONE`, `modules/social/group-impl/docs/B17_DROP_GROUP_TABLES_CROSS_DOMAIN_FKS.md`):**
+  filed 2026-08-10 from a repo-wide sweep for cross-domain DB-level FKs (following `post-impl`'s
+  A15/A13 precedent), found 5 in this module — `groups.created_by`,
   `groups.recurrence_location_id`, `group_members.user_id`, `group_join_requests.user_id`/
   `reviewed_by` — all pre-date the 2026-07-07 cross-domain-refs rule, all already plain `UUID`/
-  `Long` fields at the JPA layer.
+  `Long` fields at the JPA layer, no `@ManyToOne` anywhere. Dropped via
+  `V049__drop_group_tables_cross_domain_fks.sql`, schema-only, no entity/service/DTO change.
+  Confirmed `UserServiceImpl.deleteUser()` is soft-delete-only before dropping
+  `groups.created_by`'s `ON DELETE CASCADE` — that cascade has never fired in practice. Verified
+  live: constraints confirmed via `\d <table>` before/after against the running `sportconnect_dev`
+  container, migration applied cleanly via `:server:bootRun` (23ms), server booted and served a
+  clean `401` on `/api/groups/public`. `:modules:social:group-impl:test` and `:server:test` both
+  green.
 
 #### `server`
 - `SportConnectApplication.java` — main entry point with full component scan
