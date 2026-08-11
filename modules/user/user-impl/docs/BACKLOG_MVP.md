@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/user/user-impl`  
-**Last updated:** 2026-07-02
+**Last updated:** 2026-08-11
 
 ---
 
@@ -595,6 +595,15 @@ and explicitly **rejected** in favor of doing Fix 2 properly instead:
   option 1 or a per-endpoint patch — one check, every request, every endpoint, impossible to
   forget on the next feature. No location-impl-specific fix needed; U12 shipping this way closes
   the favorite-locations gap (and every other endpoint's) in one place.
+
+**Another confirmed instance (2026-08-11, found while closing out `group-impl`'s B18):**
+`GroupServiceImpl.createGroup` has no caller-`isActive` check either — a deactivated user, as long
+as their already-issued access token hasn't expired, can still create a group and become its
+owner. Same shape as the `location-impl` favorite-locations example above; not filed as its own
+ticket for the same reason that one wasn't — a `createGroup`-specific patch would be exactly the
+scattered per-endpoint fix this ticket's own conclusion already rejected. Recorded here as one
+more concrete call site that stays open until Fix 2 ships, not as a reason to reconsider the
+Fix 2 decision.
 
 **Open question for implementer — partial index on `users.is_active`?** Confirmed in the same
 2026-08-10 conversation: `users` has no index at all (partial or otherwise) on `is_active` today,

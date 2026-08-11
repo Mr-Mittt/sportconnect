@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/sport/sport-impl`  
-**Last updated:** 2026-08-08
+**Last updated:** 2026-08-11
 
 ---
 
@@ -297,7 +297,7 @@ rejected-inactive-sport path (fails before reaching the profile-creation logic).
 **Type:** Bug Fix (business rule enforcement)
 **Scope:** `modules/social/group-impl` (`GroupServiceImpl.createGroup`), `modules/location/location-impl`
 (`LocationServiceImpl.createLocation`), `modules/session/session-impl` (`SessionServiceImpl.createSession`)
-— no `sport-impl` code changes; this module's own `SportService` contract already exposes what's needed.
+— originally no `sport-impl` code changes; **see the 2026-08-11 delta below, which adds one.**
 
 **Found while** discussing A6's read/write split with the user, generalized beyond `sport-impl` itself:
 A6 fixed the one gap inside this module (`UserSportProfileServiceImpl.createProfile` didn't check
@@ -346,6 +346,40 @@ check and doesn't need a dedicated method for 3 call sites.
 **Tests:** one Spock case per domain — create (group/location/session) against a deactivated sport
 throws `BadRequestException`; create against an active sport still succeeds (regression guard); no
 downstream write (`*Repository.save(_)`) on the rejected path.
+
+**Delta (2026-08-11, found while closing out `group-impl`'s B18, folded in rather than filed as a
+separate ticket since it lands in the same call sites this ticket already touches):** a second,
+distinct gap in the same neighborhood — `hasProfileForSport` cannot substitute for an active
+check, but it also can't substitute for a check that the caller's **own `UserSportProfile` row**
+is still active. `UserSportProfileServiceImpl.hasProfileForSport` is
+`profileRepository.existsByUserIdAndSportId(userId, sportId)` — no `isActive` filter at all.
+`UserSportProfile` has its own real, user-triggered soft-delete (`deleteProfile`, `DELETE
+/api/sports/profiles/{profileId}`, `ROLE_USER`, sets `isActive=false`). Reproducible today: create
+a profile for a sport → create a group for that sport (`hasProfileForSport` passes) → soft-delete
+that profile → create a *second* group for the same sport — still succeeds, because
+`existsByUserIdAndSportId` still finds the soft-deleted row. This is a different root cause from
+A7's own finding (a *sport* being deactivated) but the identical shape — B2's original intent ("a
+group's creator must hold a profile for that sport") is silently defeated once profiles became
+individually deletable, same story as B18's `isGroupMember` and the group's own soft-delete.
+
+Also confirmed **not** `group-impl`-only: `location-impl`'s `LocationServiceImpl.createLocation`
+already calls the exact same `hasProfileForSport` gate (with a comment there noting it's
+deliberately "the same gate `createGroup` uses") — so this is a `sport-impl`-source-level fix
+benefiting both callers in one change, not a per-caller patch, same "fix at the source" principle
+B18 used for `isGroupActive`.
+
+**Fix (adds a `sport-impl` code change to this ticket's scope):**
+- New `UserSportProfileRepository.existsByUserIdAndSportIdAndIsActiveTrue(UUID userId, Long
+  sportId)` (plain Spring Data derived query).
+- `UserSportProfileServiceImpl.hasProfileForSport` switches to calling it instead of
+  `existsByUserIdAndSportId` — one-line change, no interface signature change (still `(userId,
+  sportId) -> boolean`), so both `group-impl` and `location-impl` get the fix automatically with no
+  change needed on their side.
+
+**Tests (add to this ticket's existing Spock coverage):** `hasProfileForSport` returns `false` for
+a soft-deleted profile even when the sport itself is active (regression guard distinguishing this
+from A7's own sport-deactivation case); `createGroup`/`createLocation` reject a caller whose only
+matching profile has been soft-deleted.
 
 ---
 
