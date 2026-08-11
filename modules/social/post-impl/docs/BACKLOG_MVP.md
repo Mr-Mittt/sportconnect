@@ -765,7 +765,9 @@ first checking, as this ticket did, whether the client already resolves the conc
 **Status:** `TODO` · **Type:** Bug Fix (Security) · **Filed:** 2026-08-08, found while designing
 `SESSION-10`'s comment access-gating (`modules/session/docs/BACKLOG_MVP.md`) — comparing how a
 session's `SessionParticipant`-status gate would need to work led to checking how the equivalent
-post/group-membership gate actually works today, surfacing this gap.
+post/group-membership gate actually works today, surfacing this gap. **Redesigned 2026-08-11**
+against `documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md` — read the ADR before implementing; this
+entry is a summary, not the full design record.
 
 **Found:** `getGroupPosts(groupId, currentUserId, pageable)` (the *list* endpoint) correctly calls
 `groupService.isGroupMember(groupId, currentUserId)` before returning anything. But every
@@ -783,21 +785,50 @@ stored but never checked on any of these single-item paths (separately from the 
 `friends`-visibility gap in `post-impl/CLAUDE.md`'s gotchas, which is a different, known limitation —
 this one isn't currently documented anywhere).
 
-**Fix approach:** add the same `groupService.isGroupMember` check `getGroupPosts` already uses to
-each single-item path, gated on the fetched post's own `groupId` (skip the check when `groupId` is
-null — a non-group post). For `visibility='private'`, restrict reads to the post's own `userId`
-(`friends` stays unenforced, matching the existing documented limitation — not this ticket's problem
-to solve). Likely lands as one shared private helper (e.g. `requirePostVisible(Post, UUID
-currentUserId)`) called from all five methods above, rather than five separate inline checks.
+**Fix approach — implement `ResourceGate<Post>` (`common`'s C2), don't hand-roll another inline
+check:**
+```java
+class PostGate implements ResourceGate<Post> {
+    private final GroupService groupService; // group-api — post-impl already depends on it
+
+    public boolean isAvailable(Post post) {
+        if (!post.getIsActive()) return false;
+        return post.getGroupId() == null || groupService.isGroupActive(post.getGroupId()); // B18
+    }
+
+    public boolean isVisibleTo(Post post, UUID viewerId) {
+        return switch (post.getPostType()) {
+            case USER_FEED -> isOwnerOrPublicOrFriend(post, viewerId); // 'friends' stays unenforced, see below
+            case GROUP_POST, GROUP_BROADCAST, GROUP_SYSTEM -> groupService.isGroupMember(post.getGroupId(), viewerId);
+        };
+    }
+}
+```
+Called from all five methods above via `postGate.require(post, currentUserId, "Post not found",
+"You don't have access to this post")` — one call site per method, not five separate inline checks.
+`isAvailable` also closes a related, previously undocumented gap: a post in a since-deactivated
+group currently stays reachable via these same paths (see `group-impl`'s **B18**, filed alongside
+this redesign — `PostGate.isAvailable` depends on B18's new `GroupService.isGroupActive()` method,
+so land B18 first).
+
+**`ForbiddenException`, not `BadRequestException`:** `ResourceGate.require()` standardizes on
+`ForbiddenException` for "available but not visible" — this ticket's own denial cases move off the
+`BadRequestException` this module used inconsistently elsewhere (see ADR §5.2); existing call sites
+outside this ticket's five methods are not required to migrate in the same pass.
 
 **Out of scope:** implementing the `friends`-visibility graph itself (pre-existing, separately
-documented limitation); any change to `getGroupPosts`/`getFeed` (already correct); anything in
-`modules/session` (SESSION-10 does not reuse this service — see its own design notes on why).
+documented limitation — `isOwnerOrPublicOrFriend` above still treats `friends` as private, matching
+current behavior, not a new gap); any change to `getGroupPosts`/`getFeed` (already correct, keeps
+gating the known scope before querying rather than routing through `PostGate`); anything in
+`modules/session` (`SESSION-10` implements its own `SessionGate` against the same `ResourceGate<T>`
+shape, no shared logic — see the ADR §7 for why a session's discussion thread is not a reused
+`Post`).
 
-**Tests:** non-member of a private group gets `BadRequestException`/403-equivalent (match this
-module's existing 400-not-403 convention) from `getPostById`/`getPostComments`/`createComment`/
-`likeComment`/`unlikeComment` on that group's post; a member still succeeds on all five (regression
-guard); a `public`/non-group post is unaffected for any caller.
+**Tests:** non-member of a private group gets `ForbiddenException` (403-equivalent — see above, this
+is a change from the ticket's original 400-convention note) from `getPostById`/`getPostComments`/
+`createComment`/`likeComment`/`unlikeComment` on that group's post; a member still succeeds on all
+five (regression guard); a `public`/non-group post is unaffected for any caller; a post whose group
+has been soft-deleted (B18) now 404s via `isAvailable` instead of remaining reachable.
 
 ---
 

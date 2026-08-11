@@ -82,6 +82,35 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - **Decision:** Embedded PNG resources in `sport-impl` for MVP; migrate to S3 + CloudFront for production.
 - V013 migration updates sports with `icon_url` paths.
 
+### 2.11 Resource Access — Availability vs. Visibility Gates
+- **Decision (2026-08-10, design only, not yet implemented):** any domain with per-item read/write
+  rules on a resource answers two separate questions, in order — is it **available** (existence/
+  lifecycle, unavailable → `NotFoundException`), then is it **visible** to this caller (authorization,
+  not-visible → `ForbiddenException`). Every such resource implements a new shared-shape-only
+  interface, `common`'s `ResourceGate<T>` (two boolean methods + a `require()` default) — service-impl
+  layer, no shared logic across domains, each domain's own cross-domain `-api` calls compose the
+  check (e.g. a `Post`'s availability checking its parent `Group`'s active status via `group-api`).
+  Full design, code sketches, and rationale: `documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md`.
+  Summarized as a durable rule in root `CLAUDE.md`'s "Resource access" section.
+- **Rejected:** a session's discussion thread modeled as a `Post` (`PostType.SESSION_POST`) to reuse
+  comment/like/cache infra for free — a stronger form of something `SESSION_COMMENTS_VISION.md`
+  already rejected; would weld `session-impl` to `post-impl` at the schema level and require a
+  bidirectional `-api` dependency. Also rejected: a fully generic annotation/AOP visibility framework
+  (no reusable logic across domains to justify the ceremony) and controller-layer/query-only checks.
+- **Concrete bugs found while designing this:** `GroupServiceImpl.isGroupMember/isGroupOwner/
+  isGroupAdmin` never check `group.isActive` — a former member of a soft-deleted group can still pass
+  every one of these checks (8 call sites in `post-impl`, 1 in `session-impl`); fix belongs in
+  `group-impl` at the source, not per-caller. Also: `post-impl` inconsistently throws
+  `BadRequestException` (A2) vs. `ForbiddenException` (A3) for the same category of access denial —
+  to be standardized on `ForbiddenException` going forward via this gate's convention.
+- **Delta on `SESSION_COMMENTS_VISION.md`:** a group-linked session's comment thread (SESSION-10,
+  not yet implemented) should also be visible to group members, not just `SessionParticipant`s — the
+  vision doc's original decision was participant-only even for group-linked sessions.
+- **Tickets filed (2026-08-11):** `group-impl` **B18** (active-group fix), `common` **C2**
+  (`ResourceGate<T>`), `post-impl` **A14** redesigned against this ADR, `session-impl` **SESSION-10**
+  gating redesigned to build against it from the start (including the group-member widening delta).
+  All `TODO`. See the ADR's §9 for detail.
+
 ---
 
 ## 3. What Is Fully Implemented

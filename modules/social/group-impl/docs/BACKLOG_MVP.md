@@ -44,6 +44,7 @@
 | 23 | GROUP-RECUR-1 | Recurring-session schedule config, alongside `modules/session` and `modules/location` | `DONE` |
 | 24 | B16 | Partial index on `groups.sport_id` for public-group search | `DONE` |
 | 25 | B17 | Drop DB-level FKs on group-impl tables' cross-domain columns | `TODO` |
+| 26 | B18 | Require `group.isActive` in `isGroupMember`/`isGroupOwner`/`isGroupAdmin`; add `isGroupActive()` | `TODO` |
 
 ---
 
@@ -157,6 +158,62 @@ risk in this ticket, unlike the others).
 `group_settings.group_id`/`group_type_id`, `group_invitation_inviters.invitation_id` — all
 correctly scoped, nothing to remove; any change to any JPA entity, service, or repository in this
 module.
+
+---
+
+### B18 · Require `group.isActive` in `isGroupMember`/`isGroupOwner`/`isGroupAdmin`; add `isGroupActive()`
+**Status:** `TODO`
+**Type:** Bug Fix (Security/Correctness)
+
+**Filed:** 2026-08-11, surfaced while designing `post-impl`'s A14 and
+`documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md` (§5.1) — auditing every cross-domain caller of
+these three methods to design a `ResourceGate<T>`-based access check for `Post` surfaced that none
+of them account for the group itself being soft-deleted.
+
+**Found:** `deleteGroup` is a soft-delete (`group.setIsActive(false)`) — it never touches
+`group_members` rows. But:
+```java
+public boolean isGroupMember(Long groupId, UUID userId) {
+    return groupMemberRepository.existsByGroupIdAndUserId(groupId, userId);
+}
+```
+...and `isGroupOwner`/`isGroupAdmin` (role lookups against the same table) never join against
+`group.is_active` either. Confirmed via a repo-wide grep of every cross-domain caller (8 call sites
+in `post-impl`, 1 in `session-impl`) that every single one uses the result as a live gate — "can
+this caller act *right now*" — never a historical/audit lookup. Concretely, a former member of a
+since-soft-deleted group can still: create `GROUP_POST`s in it (`PostServiceImpl.createPost`), have
+owner/admin status honored to moderate posts in it (`deletePost`/`updatePost`/
+`updateBroadcastEndTime`), list its posts (`getGroupPosts`), and pass `session-impl`'s
+group-linked-session gate.
+
+**Why fix at the source, not per-caller:** since every existing consumer already treats these
+methods as "true right now," requiring `group.isActive` inside all three closes the gap for every
+current and future caller in one change — no domain has to remember to bolt on its own extra
+active-check on top. This is unlike the Account Lifecycle gap (root `CLAUDE.md`) — that gap is
+deliberately *not* fixed at the JWT-filter choke point because of the already-issued-token
+staleness window; no equivalent staleness/caching concern applies here, this is a pure
+repository-query correctness fix.
+
+**Fix approach:**
+- `isGroupMember(groupId, userId)`, `isGroupOwner(groupId, userId)`, `isGroupAdmin(groupId, userId)`:
+  fetch the `Group` first (or join `is_active` into the existing membership/role query) and return
+  `false` outright if `!group.getIsActive()`, before evaluating membership/role at all.
+- **New method on `GroupService` (group-api):** `boolean isGroupActive(Long groupId)` — a standalone
+  existence/lifecycle check with no caller-identity component, for a cross-domain resource's own
+  `isAvailable()` implementation to call (e.g. `post-impl`'s future `PostGate.isAvailable(Post)`
+  needs to ask "is this post's parent group still active" independent of who's asking — none of the
+  three existing methods answer that on their own since they're all keyed to a specific `userId`).
+  Returns `false` for a non-existent `groupId` too (no separate not-found signal needed at this
+  layer — the caller's own gate decides what "unavailable" means for its resource).
+
+**Tests:** for each of the three existing methods — a member/owner/admin of a soft-deleted group now
+gets `false` (was `true`); an active group's checks are unchanged (regression guard). New coverage
+for `isGroupActive`: `true` for an active group, `false` for a soft-deleted group, `false` for a
+non-existent `groupId`.
+
+**Out of scope:** `post-impl`'s A14 itself (consumes `isGroupActive` once this ships, but is its own
+ticket); any change to `deleteGroup`'s own soft-delete behavior (already correct); hard-delete of a
+`Group` row (doesn't exist today, not introduced here).
 
 ## Tickets
 
