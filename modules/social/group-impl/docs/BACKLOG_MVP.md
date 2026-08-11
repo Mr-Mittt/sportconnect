@@ -44,7 +44,7 @@
 | 23 | GROUP-RECUR-1 | Recurring-session schedule config, alongside `modules/session` and `modules/location` | `DONE` |
 | 24 | B16 | Partial index on `groups.sport_id` for public-group search | `DONE` |
 | 25 | B17 | Drop DB-level FKs on group-impl tables' cross-domain columns | `DONE` |
-| 26 | B18 | Require `group.isActive` in `isGroupMember`/`isGroupOwner`/`isGroupAdmin`; add `isGroupActive()` | `TODO` |
+| 26 | B18 | Require `group.isActive` in `isGroupMember`/`isGroupOwner`/`isGroupAdmin`; add `isGroupActive()` | `DONE` |
 
 ---
 
@@ -163,7 +163,9 @@ module.
 ---
 
 ### B18 · Require `group.isActive` in `isGroupMember`/`isGroupOwner`/`isGroupAdmin`; add `isGroupActive()`
-**Status:** `TODO`
+**Status:** `DONE` (2026-08-11) · **Summary:**
+`modules/social/group-impl/docs/B18_GROUP_ACTIVE_PERMISSION_GATE.md` — implementation diverges
+from this ticket's own two suggested approaches; see the summary doc's "Design" section for why.
 **Type:** Bug Fix (Security/Correctness)
 
 **Filed:** 2026-08-11, surfaced while designing `post-impl`'s A14 and

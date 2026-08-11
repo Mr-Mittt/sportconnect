@@ -406,6 +406,27 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   container, migration applied cleanly via `:server:bootRun` (23ms), server booted and served a
   clean `401` on `/api/groups/public`. `:modules:social:group-impl:test` and `:server:test` both
   green.
+- **B18 (2026-08-11, `DONE`, `modules/social/group-impl/docs/B18_GROUP_ACTIVE_PERMISSION_GATE.md`):**
+  `isGroupMember`/`isGroupOwner`/`isGroupAdmin` never checked `group.isActive` — a former member of
+  a since-soft-deleted group could still pass every one of these live gates (create posts in it,
+  moderate it, list its posts, pass `session-impl`'s group-linked-session gate). Fixed via a new
+  `isGroupActive(groupId)` (new `GroupRepository.existsByIdAndIsActiveTrue`, deliberately distinct
+  from the existing `findByIdAndIsActiveTrue` to avoid doubling that method's call count in the ~5
+  call sites that already fetch the group and then check permissions in the same method) that the
+  three permission checks now call first. **Diverged from the ticket's own two suggested
+  approaches** — both would have broken a large swath of the 143-test `GroupServiceImplSpec` for
+  reasons the ticket didn't anticipate (colliding with ~30 existing `1 *` cardinality assertions on
+  `findByIdAndIsActiveTrue`, or with 130 lines already stubbing the `GroupMemberRepository` lookup
+  methods for unrelated permission-gating). The distinct-method design needed only one new line in
+  `setup()` to keep all 143 existing tests green unchanged. Implemented and verified incrementally
+  per explicit user request (add methods → confirm zero impact → wire in → confirm predicted
+  74/143 failures → add the `setup()` stub → confirm 143/143 green again → add 8 new dedicated
+  tests → 151/151 green). `isGroupActive` is interface-only, no controller endpoint (same
+  precedent as `getGroupsWithAutoGenerateSessionsEnabled`) — confirmed with the user before
+  building. Live-verified end-to-end against a running `bootRun` instance and the real dev
+  Postgres: created a group, confirmed `is-owner`/`is-member` both `true`, soft-deleted the group
+  via the existing owner-only `DELETE` endpoint, re-checked all three permission endpoints — all
+  now correctly `false`. `:modules:social:group-impl:test` (151) and `:server:test` both green.
 
 #### `server`
 - `SportConnectApplication.java` — main entry point with full component scan
