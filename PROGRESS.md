@@ -109,7 +109,12 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - **Tickets filed (2026-08-11):** `group-impl` **B18** (active-group fix), `common` **C2**
   (`ResourceGate<T>`), `post-impl` **A14** redesigned against this ADR, `session-impl` **SESSION-10**
   gating redesigned to build against it from the start (including the group-member widening delta).
-  All `TODO`. See the ADR's §9 for detail.
+  See the ADR's §9 for detail.
+- **C2 (2026-08-11):** `ResourceGate<T>` implemented in `modules/common` exactly per the ADR §4 shape
+  — `isAvailable`/`isVisibleTo` plus a `require()` default throwing `NotFoundException`/
+  `ForbiddenException` in that fixed order; zero domain dependency, no logic, shape only. `DONE`.
+  `PostGate`/`SessionGate` (A14, SESSION-10) still `TODO`. Details:
+  `modules/common/docs/C2_RESOURCE_GATE.md`.
 
 ---
 
@@ -121,7 +126,8 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - `ApiResponse<T>` — standard wrapper for all REST responses
 - Shared exceptions: `ResourceNotFoundException`, `BadRequestException`, `UnauthorizedException`
 - **C1 (2026-07-03):** Global exception handler — new `GlobalExceptionHandler` (`@RestControllerAdvice`) maps all 5 shared exception types to their correct HTTP status (400/403/401/404) plus `MethodArgumentNotValidException` → 400 with field-level errors and a catch-all `Exception` → 500 (no leaked details), all wrapped in `ApiResponse`; before this fix, every one of these fell through to Spring's default 500 across the **entire application** since none had a handler or `@ResponseStatus`; auto-registered via component scan, zero changes needed at any of the ~100+ existing throw sites; first test infrastructure of any kind added to `modules/common` (MockMvc standalone setup, 7 new Spock tests)
-- **MVP backlog:** 1 ticket (C1) in `modules/common/docs/BACKLOG_MVP.md`, **`DONE`**
+- **C2 (2026-08-11):** `ResourceGate<T>` — shared availability/visibility check shape (`com.sportconnect.common.access`), two boolean methods (`isAvailable`, `isVisibleTo`) plus a `require()` default enforcing availability-before-visibility and the `NotFoundException`/`ForbiddenException` convention; zero domain dependency, no shared logic, `modules/common` has never imported a domain type here. See `documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md`.
+- **MVP backlog:** 2 tickets (C1, C2) in `modules/common/docs/BACKLOG_MVP.md`, both **`DONE`**
 
 #### `modules:auth:auth-api` + `modules:auth:auth-impl`
 - JWT access + refresh token generation/validation (JJWT 0.12.x)

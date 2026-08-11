@@ -20,7 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | C1 | Global exception handler for common exception types | `DONE` |
-| 2 | C2 | `ResourceGate<T>` — shared availability/visibility check shape | `TODO` |
+| 2 | C2 | `ResourceGate<T>` — shared availability/visibility check shape | `DONE` |
 
 ---
 
@@ -78,7 +78,7 @@ perspective (including the frontend, once it starts handling these).
 ---
 
 ### C2 · `ResourceGate<T>` — shared availability/visibility check shape
-**Status:** `TODO`
+**Status:** `DONE`
 **Type:** New Feature (Architecture)
 **Scope:** One new interface in `modules/common` only — no changes to any domain module in this
 ticket; `post-impl`'s A14 and `session-impl`'s SESSION-10 each implement it against this shape in
