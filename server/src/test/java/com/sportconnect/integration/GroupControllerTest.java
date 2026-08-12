@@ -3,12 +3,15 @@ package com.sportconnect.integration;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.group.api.dto.CreateGroupRequest;
 import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
+import com.sportconnect.group.api.dto.GroupGeneralDataResponse;
+import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.dto.GroupSettingsResponse;
 import com.sportconnect.group.api.dto.JoinRequestResponse;
 import com.sportconnect.group.api.dto.RejectInvitationRequest;
+import com.sportconnect.group.api.dto.UpdateGroupGeneralDataRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import com.sportconnect.group.api.service.GroupService;
@@ -168,6 +171,91 @@ class GroupControllerTest extends BaseIT {
     }
 
     @Test
+    void getGroupInfo_Success() throws Exception {
+        // Legacy path (not reused for general data going forward, per the user — it's earmarked
+        // for a different purpose later) — its own GroupService method + DTO (GroupInfoResponse),
+        // deliberately not shared with GET .../generalData below (GroupGeneralDataResponse), since
+        // the two are expected to diverge.
+        GroupInfoResponse infoResponse = GroupInfoResponse.builder()
+                .groupId(1L)
+                .groupName("Test Group")
+                .isPrivate(false)
+                .rules("Be respectful")
+                .schedule("Weekends only")
+                .build();
+
+        when(groupService.getGroupInfo(1L, userId)).thenReturn(infoResponse);
+
+        mockMvc.perform(get("/api/groups/1/info"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.groupId").value(1))
+                .andExpect(jsonPath("$.data.isPrivate").value(false))
+                .andExpect(jsonPath("$.data.rules").value("Be respectful"));
+
+        verify(groupService).getGroupInfo(1L, userId);
+    }
+
+    @Test
+    void getGroupGeneralData_Success() throws Exception {
+        // B19/GRP-9's canonical path (matches PUT .../generalData) — the client's
+        // useGroupGeneralData hook calls this, not the legacy /info path above. Own
+        // GroupGeneralDataResponse type, not GroupInfoResponse.
+        GroupGeneralDataResponse generalDataResponse = GroupGeneralDataResponse.builder()
+                .groupId(1L)
+                .groupName("Test Group")
+                .isPrivate(false)
+                .rules("Be respectful")
+                .schedule("Weekends only")
+                .build();
+
+        when(groupService.getGroupGeneralData(1L, userId)).thenReturn(generalDataResponse);
+
+        mockMvc.perform(get("/api/groups/1/generalData"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.groupId").value(1))
+                .andExpect(jsonPath("$.data.isPrivate").value(false))
+                .andExpect(jsonPath("$.data.rules").value("Be respectful"));
+
+        verify(groupService).getGroupGeneralData(1L, userId);
+    }
+
+    @Test
+    void getGroupGeneralData_WithoutAuthentication_ReturnsUnauthorized() throws Exception {
+        // GET /{groupId}/generalData now has @PreAuthorize("hasRole('USER')") like every other
+        // endpoint in this controller — an anonymous caller is rejected by SecurityConfig's own
+        // "must be authenticated" filter before @PreAuthorize is even evaluated, so this still
+        // asserts a 401 (not 403), same as before the annotation was added.
+        mockMvc.perform(get("/api/groups/1/generalData").with(anonymous()))
+                .andExpect(status().isUnauthorized());
+
+        verify(groupService, never()).getGroupGeneralData(any(), any());
+    }
+
+    @Test
+    void getGroupGeneralData_PrivateGroupNonMember_ReturnsStub() throws Exception {
+        // The privacy-gate decision itself is exercised in GroupServiceImplSpec (GroupService is
+        // mocked here) — this confirms the controller passes the authenticated caller through and
+        // returns whatever stub/full response the service decides on, unlike getGroup's A9 gate
+        // which throws instead.
+        GroupGeneralDataResponse stub = GroupGeneralDataResponse.builder()
+                .groupId(1L)
+                .groupName("Test Group")
+                .isPrivate(true)
+                .build();
+
+        when(groupService.getGroupGeneralData(1L, userId)).thenReturn(stub);
+
+        mockMvc.perform(get("/api/groups/1/generalData"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.groupName").value("Test Group"))
+                .andExpect(jsonPath("$.data.isPrivate").value(true));
+
+        verify(groupService).getGroupGeneralData(1L, userId);
+    }
+
+    @Test
     void getUserGroups_Success() throws Exception {
         // Arrange
         Page<GroupResponse> page = new PageImpl<>(List.of(groupResponse), 
@@ -234,6 +322,39 @@ class GroupControllerTest extends BaseIT {
                 .andExpect(jsonPath("$.message").value("Group updated successfully"));
 
         verify(groupService).updateGroup(eq(1L), eq(userId), any(UpdateGroupRequest.class));
+    }
+
+    @Test
+    void updateGroupGeneralData_Success() throws Exception {
+        // Arrange
+        UpdateGroupGeneralDataRequest updateRequest = UpdateGroupGeneralDataRequest.builder()
+                .rules("Be respectful")
+                .schedule("Weekends only")
+                .build();
+
+        GroupGeneralDataResponse generalDataResponse = GroupGeneralDataResponse.builder()
+                .groupId(1L)
+                .groupName("Test Group")
+                .rules("Be respectful")
+                .schedule("Weekends only")
+                .build();
+
+        when(groupService.updateGroupGeneralData(eq(1L), eq(userId), any(UpdateGroupGeneralDataRequest.class)))
+                .thenReturn(generalDataResponse);
+
+        // Act & Assert
+        mockMvc.perform(put("/api/groups/1/generalData")
+                        .with(csrf())
+                        .param("userId", userId.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(updateRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Group general data updated successfully"))
+                .andExpect(jsonPath("$.data.rules").value("Be respectful"))
+                .andExpect(jsonPath("$.data.schedule").value("Weekends only"));
+
+        verify(groupService).updateGroupGeneralData(eq(1L), eq(userId), any(UpdateGroupGeneralDataRequest.class));
     }
 
     @Test

@@ -45,6 +45,7 @@
 | 24 | B16 | Partial index on `groups.sport_id` for public-group search | `DONE` |
 | 25 | B17 | Drop DB-level FKs on group-impl tables' cross-domain columns | `DONE` |
 | 26 | B18 | Require `group.isActive` in `isGroupMember`/`isGroupOwner`/`isGroupAdmin`; add `isGroupActive()` | `DONE` |
+| 27 | B19 | Dedicated `PUT /{groupId}/generalData` endpoint — unblocks client GRP-9 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
 
 ---
 
@@ -217,6 +218,40 @@ non-existent `groupId`.
 **Out of scope:** `post-impl`'s A14 itself (consumes `isGroupActive` once this ships, but is its own
 ticket); any change to `deleteGroup`'s own soft-delete behavior (already correct); hard-delete of a
 `Group` row (doesn't exist today, not introduced here).
+
+---
+
+### B19 · Dedicated `PUT /{groupId}/generalData` endpoint
+**Status:** `DONE` (2026-08-11) · **Summary:**
+`modules/social/group-impl/docs/B19_GROUP_GENERAL_DATA_ENDPOINT.md`
+**Type:** Enhancement (API design)
+
+**Filed:** 2026-08-11, raised directly by the user while discussing why the client's Settings tab
+General section (`rules`/`schedule`) writes through the generic `PUT /{groupId}`
+(`updateGroup`/`UpdateGroupRequest`) rather than a scoped endpoint mirroring `GET`/`PUT
+/{groupId}/settings` — `GET /{groupId}/info` already existed read-side with no matching write side,
+forcing the client to reuse the wider DTO and manually patch its query cache since
+`GroupResponse` never carries `rules`/`schedule`.
+
+**Decision (confirmed with user via `AskUserQuestion` before implementing):** add `PUT
+/{groupId}/generalData` **alongside** (not replacing) the existing `GET /{groupId}/info`; field
+scope is the full `groupName`/`description`/`avatarUrl`/`coverUrl`/`rules`/`schedule` set (not just
+the two fields the client edits today) — deliberate front-loading so future UI doesn't need another
+backend ticket, same reasoning A10 used keeping `sportId` alongside `sportIds`. `isPrivate` stays
+on `UpdateGroupPayload`/`PUT /{groupId}` (its own immediate-apply toggle, different UX shape).
+`UpdateGroupRequest`/`PUT /{groupId}` keeps accepting `rules`/`schedule` too, for back-compat — not
+removed, same precedent as A10 keeping its legacy `sportId` param.
+
+**What shipped:** new `UpdateGroupGeneralDataRequest` DTO; `GroupInfoResponse` expanded with
+`description`/`avatarUrl`/`coverUrl`; new `GroupService.updateGroupGeneralData` (owner/admin,
+mirrors `updateGroup`'s permission + partial-update + name-conflict-backstop shape exactly);
+`PUT /api/groups/{groupId}/generalData`. Full design/implementation writeup, including the
+`AskUserQuestion` decisions verbatim: `modules/social/group-impl/docs/B19_GROUP_GENERAL_DATA_ENDPOINT.md`.
+
+**Out of scope:** removing `rules`/`schedule` from `UpdateGroupRequest` (kept for back-compat); any
+UI for the newly-added `groupName`/`description`/`avatarUrl`/`coverUrl` write fields (client's
+GRP-9 only wires `rules`/`schedule` through the new endpoint, matching what the Settings tab
+General section actually edits today).
 
 ## Tickets
 

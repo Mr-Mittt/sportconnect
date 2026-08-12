@@ -56,6 +56,12 @@ PUT    /api/groups/join-requests/{requestId}/decline
 GET    /api/groups/{groupId}/join-requests
 GET    /api/groups/join-requests/user/{userId}
 
+// Group Info (B19/GRP-9) — privacy-gated: a non-member of a private group gets a
+// groupId/groupName/isPrivate-only stub, everyone else gets every field
+GET    /api/groups/{groupId}/info                          legacy path, kept unchanged — reserved for a different future purpose, not general data going forward. GroupInfoResponse.
+GET    /api/groups/{groupId}/generalData                   canonical GET path, separate GroupService method + DTO (GroupGeneralDataResponse) from /info above — same fields today, deliberately not shared, since the two are expected to diverge. Client's useGroupGeneralData hook uses this one.
+PUT    /api/groups/{groupId}/generalData                   owner or admin — groupName/description/avatarUrl/coverUrl/rules/schedule (isPrivate stays on the generic PUT /{groupId} above)
+
 // Settings
 GET    /api/groups/{groupId}/settings
 PUT    /api/groups/{groupId}/settings
@@ -153,3 +159,12 @@ GET    /api/groups/{groupId}/permissions/user-role
 - Role names are plain strings — always use the exact values `"group_owner"`, `"group_admin"`, `"group_member"` when querying or comparing.
 - `canManagePosts()` is defined in `GroupServiceImpl` but not called anywhere — placeholder for the future post-approval flow.
 - `GroupMember.joinedAt` is set by `@PrePersist` — do not set it manually.
+- `GET /{groupId}/info` is kept **unchanged** — `GroupController.getGroupInfo` /
+  `GroupService.getGroupInfo` / `GroupInfoResponse` — even though the fields it returns currently
+  line up 1:1 with the newer `GET /{groupId}/generalData` (B19/GRP-9,
+  `GroupController.getGroupGeneralData` / `GroupService.getGroupGeneralData` /
+  `GroupGeneralDataResponse` — a fully separate method/DTO, not shared with `/info`, since the two
+  are expected to diverge). The client's `useGroupGeneralData` hook uses the `/generalData` path
+  only. The user has flagged `/info` for a **different future purpose** — don't repurpose or remove
+  it without checking with them first, and don't assume "general data" owns this path just because it
+  currently returns the same response shape.

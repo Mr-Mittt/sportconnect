@@ -24,6 +24,10 @@ function info(overrides: Partial<GroupInfo> = {}): GroupInfo {
   return {
     groupId: 1,
     groupName: 'Riverside Ballers',
+    isPrivate: false,
+    description: null,
+    avatarUrl: null,
+    coverUrl: null,
     rules: null,
     schedule: null,
     updatedAt: '2026-07-15T00:00:00',
@@ -37,7 +41,7 @@ function mockGetEndpoints(settingsData: GroupSettings, infoData: GroupInfo) {
     if (url === '/groups/1/settings') {
       return { data: { success: true, message: '', data: settingsData, timestamp: '' } };
     }
-    if (url === '/groups/1/info') {
+    if (url === '/groups/1/generalData') {
       return { data: { success: true, message: '', data: infoData, timestamp: '' } };
     }
     throw new Error(`unexpected GET ${url}`);
@@ -54,13 +58,13 @@ type Guard = ReturnType<typeof useSettingsUnsavedGuard>;
  * navigate to) and exposes the hook's latest return value via a mutable box
  * updated on every render.
  */
-function renderGuard(groupId: number | undefined, isActive: boolean, currentUserId: string | undefined = 'user-1') {
+function renderGuard(groupId: number | undefined, isActive: boolean) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const box: { current: Guard | null } = { current: null };
   function Harness() {
-    box.current = useSettingsUnsavedGuard(groupId, isActive, currentUserId);
+    box.current = useSettingsUnsavedGuard(groupId, isActive);
     return null;
   }
   const router = createMemoryRouter(
@@ -192,37 +196,14 @@ describe('useSettingsUnsavedGuard', () => {
     act(() => box.current?.updateInfoField('rules', 'Be kind'));
 
     const putSpy = vi.spyOn(apiClient, 'put').mockResolvedValueOnce({
-      data: {
-        success: true,
-        message: '',
-        data: {
-          id: 1,
-          sportId: 5,
-          groupName: 'Riverside Ballers',
-          description: null,
-          avatarUrl: null,
-          coverUrl: null,
-          isPrivate: false,
-          isActive: true,
-          createdBy: 'user-1',
-          createdByFullName: 'Jordan Lee',
-          memberCount: 1,
-          currentUserRole: 'group_owner',
-          createdAt: '',
-          updatedAt: '',
-          pinnedPosts: null,
-        },
-        timestamp: '',
-      },
+      data: { success: true, message: '', data: info({ rules: 'Be kind' }), timestamp: '' },
     });
 
     await act(async () => box.current?.save());
 
     await waitFor(() => expect(box.current?.hasUnsavedChanges).toBe(false));
-    expect(putSpy).toHaveBeenCalledWith('/groups/1', { rules: 'Be kind' });
+    expect(putSpy).toHaveBeenCalledWith('/groups/1/generalData', { rules: 'Be kind' });
     expect(putSpy).not.toHaveBeenCalledWith('/groups/1/settings', expect.anything());
-    // GroupResponse never returns rules/schedule — the saved value is patched
-    // into the groupInfo cache directly from what was submitted.
     expect(box.current?.info?.rules).toBe('Be kind');
   });
 
@@ -240,28 +221,7 @@ describe('useSettingsUnsavedGuard', () => {
         };
       }
       return {
-        data: {
-          success: true,
-          message: '',
-          data: {
-            id: 1,
-            sportId: 5,
-            groupName: 'Riverside Ballers',
-            description: null,
-            avatarUrl: null,
-            coverUrl: null,
-            isPrivate: false,
-            isActive: true,
-            createdBy: 'user-1',
-            createdByFullName: 'Jordan Lee',
-            memberCount: 1,
-            currentUserRole: 'group_owner',
-            createdAt: '',
-            updatedAt: '',
-            pinnedPosts: null,
-          },
-          timestamp: '',
-        },
+        data: { success: true, message: '', data: info({ schedule: 'Sundays' }), timestamp: '' },
       };
     });
 
@@ -269,7 +229,7 @@ describe('useSettingsUnsavedGuard', () => {
 
     await waitFor(() => expect(box.current?.hasUnsavedChanges).toBe(false));
     expect(putSpy).toHaveBeenCalledWith('/groups/1/settings', { allowMemberInvites: true });
-    expect(putSpy).toHaveBeenCalledWith('/groups/1', { schedule: 'Sundays' });
+    expect(putSpy).toHaveBeenCalledWith('/groups/1/generalData', { schedule: 'Sundays' });
   });
 
   it('blocks in-app navigation away while dirty, and discard proceeds it', async () => {

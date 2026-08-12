@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { useGroupInfo } from '@/features/feed/hooks/useGroupInfo';
+import { useGroupGeneralData } from '@/features/feed/hooks/useGroupGeneralData';
 import { useGroupSettings } from '@/features/feed/hooks/useGroupSettings';
-import { useUpdateGroup } from '@/features/feed/hooks/useUpdateGroup';
+import { useUpdateGroupGeneralData } from '@/features/feed/hooks/useUpdateGroupGeneralData';
 import { useUpdateGroupSettings } from '@/features/feed/hooks/useUpdateGroupSettings';
-import { feedKeys } from '@/features/feed/queryKeys';
 import type { UpdateGroupSettingsPayload } from '@/features/feed/types';
 
 interface GroupInfoDraft {
@@ -17,11 +15,13 @@ interface GroupInfoDraft {
  * Owns the Settings tab's draft/Save/unsaved-changes-guard state (GRP-2),
  * across both collapsible sections: Permission (the three owner-only
  * `GroupSettings` toggles, via `updateGroupSettings`) and General's
- * rules/schedule text fields (via the existing `updateGroup` endpoint —
- * same one Privacy uses, but Privacy itself stays immediate-apply,
- * untouched, since a toggle click isn't the same UX problem a free-text
- * field commit-per-keystroke would be). One shared draft/Save/dialog for
- * both sections — editing either marks the whole tab dirty.
+ * rules/schedule text fields (via `updateGroupGeneralData`, PUT
+ * .../generalData, B19/GRP-9 — a dedicated endpoint scoped to these fields,
+ * separate from Privacy's own `updateGroup`/PUT /{groupId} call elsewhere on
+ * the page, which stays immediate-apply, untouched, since a toggle click
+ * isn't the same UX problem a free-text field commit-per-keystroke would
+ * be). One shared draft/Save/dialog for both sections — editing either
+ * marks the whole tab dirty.
  *
  * "Leaving" while dirty is caught three ways:
  * - In-page tab/group switches — callers wrap their switch handlers in
@@ -41,7 +41,6 @@ interface GroupInfoDraft {
 export function useSettingsUnsavedGuard(
   groupId: number | undefined,
   isSettingsTabActive: boolean,
-  currentUserId: string | undefined,
 ) {
   const [settingsDraft, setSettingsDraft] = useState<UpdateGroupSettingsPayload>({});
   const [infoDraft, setInfoDraft] = useState<GroupInfoDraft>({});
@@ -58,14 +57,13 @@ export function useSettingsUnsavedGuard(
     setInfoDraft({});
   }
 
-  const queryClient = useQueryClient();
   const settingsQuery = useGroupSettings(groupId, isSettingsTabActive);
-  const infoQuery = useGroupInfo(groupId, isSettingsTabActive);
+  const infoQuery = useGroupGeneralData(groupId, isSettingsTabActive);
   const updateSettingsMutation = useUpdateGroupSettings();
   // Separate instance from any Privacy-toggle `useUpdateGroup` elsewhere on
   // the page — keeps this hook's `isSaving`/`isSaveError` scoped to its own
   // Save button, not conflated with Privacy's independent pending/error state.
-  const updateGroupMutation = useUpdateGroup(currentUserId);
+  const updateGeneralDataMutation = useUpdateGroupGeneralData();
 
   const savedSettings = settingsQuery.data;
   const savedInfo = infoQuery.data;
@@ -147,27 +145,9 @@ export function useSettingsUnsavedGuard(
     if (hasInfoChanges) {
       pending.push(
         new Promise((resolve, reject) =>
-          updateGroupMutation.mutate(
+          updateGeneralDataMutation.mutate(
             { groupId, payload: infoDraft },
-            {
-              onSuccess: () => {
-                // GroupResponse (updateGroup's own return shape) never
-                // includes rules/schedule — patch the groupInfo cache
-                // directly with what we know was just sent, rather than an
-                // extra round-trip refetch.
-                queryClient.setQueryData(feedKeys.groupInfo(groupId), (prev: typeof savedInfo) =>
-                  prev
-                    ? {
-                        ...prev,
-                        rules: infoDraft.rules ?? prev.rules,
-                        schedule: infoDraft.schedule ?? prev.schedule,
-                      }
-                    : prev,
-                );
-                resolve(undefined);
-              },
-              onError: reject,
-            },
+            { onSuccess: resolve, onError: reject },
           ),
         ),
       );
@@ -195,8 +175,8 @@ export function useSettingsUnsavedGuard(
     updateInfoField,
     hasUnsavedChanges,
     save,
-    isSaving: updateSettingsMutation.isPending || updateGroupMutation.isPending,
-    isSaveError: updateSettingsMutation.isError || updateGroupMutation.isError,
+    isSaving: updateSettingsMutation.isPending || updateGeneralDataMutation.isPending,
+    isSaveError: updateSettingsMutation.isError || updateGeneralDataMutation.isError,
     guard,
     isLeaveDialogOpen: pendingAction !== null || blocker.state === 'blocked',
     discard,

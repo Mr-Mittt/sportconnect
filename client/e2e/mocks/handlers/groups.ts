@@ -11,6 +11,7 @@ import type {
   GroupSettings,
   JoinRequest,
   JoinRequestPayload,
+  UpdateGroupGeneralDataPayload,
   UpdateGroupPayload,
   UpdateGroupSettingsPayload,
 } from '../../../src/features/feed/types.ts';
@@ -251,9 +252,10 @@ export const groupHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(null, 'Join request cancelled'));
   }),
 
-  // GRP-1/GRP-2: Privacy toggle and rules/schedule both go through this same
-  // endpoint. No handler existed for it before GRP-2 — Privacy's own e2e
-  // coverage never exercised a real PUT call until this ticket added one.
+  // GRP-1: Privacy toggle goes through this endpoint (immediate-apply).
+  // rules/schedule are also still accepted here for backend back-compat
+  // (B19) — mirrored below — but the client itself moved to the dedicated
+  // .../generalData endpoint (GRP-9) and no longer sends them here.
   http.put('/api/groups/:groupId', async ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
@@ -276,22 +278,29 @@ export const groupHandlers: HttpHandler[] = [
     session.userGroupsState = session.userGroupsState.map((candidate) =>
       candidate.id === groupId ? updatedGroup : candidate,
     );
-    // rules/schedule aren't part of GroupResponse but are persisted
-    // server-side — update groupInfoState too so a later GET .../info
-    // reflects them, matching the real backend's behavior.
+    // rules/schedule/isPrivate aren't part of GroupResponse's own
+    // consumers here but groupInfoState is a separate cached snapshot, not
+    // derived from userGroupsState on each read — keep it in sync so a
+    // later GET .../info reflects them, matching the real backend (where
+    // getGroupInfo reads isPrivate off the same live Group row).
     const existingInfo = session.groupInfoState[groupId];
-    if (existingInfo && (body.rules !== undefined || body.schedule !== undefined)) {
+    if (
+      existingInfo &&
+      (body.rules !== undefined || body.schedule !== undefined || body.isPrivate !== undefined)
+    ) {
       session.groupInfoState[groupId] = {
         ...existingInfo,
         ...(body.rules !== undefined ? { rules: body.rules } : {}),
         ...(body.schedule !== undefined ? { schedule: body.schedule } : {}),
+        ...(body.isPrivate !== undefined ? { isPrivate: body.isPrivate } : {}),
         updatedAt: new Date().toISOString(),
       };
     }
     return HttpResponse.json(apiResponse(updatedGroup, 'Group updated successfully'));
   }),
 
-  // GRP-2
+  // GRP-2 — legacy path, kept unchanged (mirrors the real backend: reserved
+  // for a different future purpose, not used by the client anymore).
   http.get('/api/groups/:groupId/info', ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
@@ -301,6 +310,48 @@ export const groupHandlers: HttpHandler[] = [
       return HttpResponse.json(apiError('Group not found'), { status: 404 });
     }
     return HttpResponse.json(apiResponse(info, 'Info retrieved successfully'));
+  }),
+
+  // B19/GRP-9: canonical GET path, matches PUT .../generalData below — the
+  // client's useGroupGeneralData hook calls this one, not /info above. Same
+  // groupInfoState backing as /info here (it's one fixture map either way),
+  // even though the real backend keeps the two as separate DTOs/methods.
+  http.get('/api/groups/:groupId/generalData', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const info = groupsSessions.get(sessionIdFromRequest(request)).groupInfoState[groupId];
+    if (!info) {
+      return HttpResponse.json(apiError('Group not found'), { status: 404 });
+    }
+    return HttpResponse.json(apiResponse(info, 'General data retrieved successfully'));
+  }),
+
+  // B19/GRP-9: dedicated write path for the fields GET .../generalData reads
+  // back — owner/admin only in the real backend, kept unenforced here like
+  // every other mutating handler in this file (auth-only, no role check).
+  http.put('/api/groups/:groupId/generalData', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const session = groupsSessions.get(sessionIdFromRequest(request));
+    const existingInfo = session.groupInfoState[groupId];
+    if (!existingInfo) {
+      return HttpResponse.json(apiError('Group not found'), { status: 404 });
+    }
+    const body = (await request.json()) as UpdateGroupGeneralDataPayload;
+    const updatedInfo: GroupInfo = {
+      ...existingInfo,
+      ...(body.groupName !== undefined ? { groupName: body.groupName } : {}),
+      ...(body.description !== undefined ? { description: body.description } : {}),
+      ...(body.avatarUrl !== undefined ? { avatarUrl: body.avatarUrl } : {}),
+      ...(body.coverUrl !== undefined ? { coverUrl: body.coverUrl } : {}),
+      ...(body.rules !== undefined ? { rules: body.rules } : {}),
+      ...(body.schedule !== undefined ? { schedule: body.schedule } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+    session.groupInfoState[groupId] = updatedInfo;
+    return HttpResponse.json(apiResponse(updatedInfo, 'Group general data updated successfully'));
   }),
 
   http.get('/api/groups/:groupId/settings', ({ request, params }) => {

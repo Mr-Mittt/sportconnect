@@ -144,10 +144,14 @@ export const mockGroupSettings: GroupSettings = {
 };
 
 // GRP-2: rules/schedule for mockOwnedGroup — GET /api/groups/:groupId/info,
-// written via the existing PUT /api/groups/:groupId (updateGroup) endpoint.
+// written via PUT /api/groups/:groupId/generalData (B19/GRP-9).
 export const mockGroupInfo: GroupInfo = {
   groupId: mockOwnedGroup.id,
   groupName: mockOwnedGroup.groupName,
+  isPrivate: mockOwnedGroup.isPrivate,
+  description: null,
+  avatarUrl: null,
+  coverUrl: null,
   rules: null,
   schedule: null,
   updatedAt: '2026-06-05T10:00:00',

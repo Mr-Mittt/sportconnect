@@ -92,7 +92,7 @@ interface GroupSettingsTabProps {
     key: K,
     value: UpdateGroupSettingsPayload[K],
   ) => void;
-  /** GRP-2 (rules/schedule) — undefined while loading, per `useGroupInfo`. */
+  /** GRP-2 (rules/schedule) — undefined while loading, per `useGroupGeneralData`. */
   groupInfo: GroupInfo | undefined;
   isGroupInfoLoading: boolean;
   isGroupInfoError: boolean;

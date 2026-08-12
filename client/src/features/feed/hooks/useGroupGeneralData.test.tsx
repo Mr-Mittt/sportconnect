@@ -4,12 +4,16 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import type { GroupInfo } from '../types';
-import { useGroupInfo } from './useGroupInfo';
+import { useGroupGeneralData } from './useGroupGeneralData';
 
 function groupInfo(overrides: Partial<GroupInfo> = {}): GroupInfo {
   return {
     groupId: 1,
     groupName: 'Riverside Ballers',
+    isPrivate: false,
+    description: null,
+    avatarUrl: null,
+    coverUrl: null,
     rules: null,
     schedule: null,
     updatedAt: '2026-07-15T00:00:00',
@@ -23,19 +27,19 @@ function wrapper(queryClient: QueryClient) {
   };
 }
 
-describe('useGroupInfo', () => {
+describe('useGroupGeneralData', () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it('calls GET /groups/{groupId}/info when enabled', async () => {
+  it('calls GET /groups/{groupId}/generalData when enabled', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
       data: { success: true, message: '', data: groupInfo({ rules: 'Be nice' }), timestamp: '' },
     });
 
-    const { result } = renderHook(() => useGroupInfo(1, true), { wrapper: wrapper(queryClient) });
+    const { result } = renderHook(() => useGroupGeneralData(1, true), { wrapper: wrapper(queryClient) });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(apiClient.get).toHaveBeenCalledWith('/groups/1/info');
+    expect(apiClient.get).toHaveBeenCalledWith('/groups/1/generalData');
     expect(result.current.data?.rules).toBe('Be nice');
   });
 
@@ -43,7 +47,7 @@ describe('useGroupInfo', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const getSpy = vi.spyOn(apiClient, 'get');
 
-    renderHook(() => useGroupInfo(1, false), { wrapper: wrapper(queryClient) });
+    renderHook(() => useGroupGeneralData(1, false), { wrapper: wrapper(queryClient) });
 
     expect(getSpy).not.toHaveBeenCalled();
   });
@@ -52,7 +56,7 @@ describe('useGroupInfo', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const getSpy = vi.spyOn(apiClient, 'get');
 
-    renderHook(() => useGroupInfo(undefined, true), { wrapper: wrapper(queryClient) });
+    renderHook(() => useGroupGeneralData(undefined, true), { wrapper: wrapper(queryClient) });
 
     expect(getSpy).not.toHaveBeenCalled();
   });
