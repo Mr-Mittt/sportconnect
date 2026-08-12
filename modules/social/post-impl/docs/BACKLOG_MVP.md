@@ -847,7 +847,12 @@ to close it in the same pass rather than file a follow-up; (3) `PostServiceImpl.
 unguarded pattern (`likePost` checked existence only, `unlikePost` checked nothing at all about
 the post). Spotted after the initial pass shipped; the user asked to fix it in the same branch
 rather than file a separate ticket. Actual shipped scope is 7 single-item paths, not the 5
-originally named. Full detail: `modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`.
+originally named. (4) the first pass had unit-only coverage (mocked `PostGate`/`GroupService`/
+`UserFriendService`) — asked whether IT coverage existed, it didn't, so added a 19-case real-HTTP
+`PostAccessGateIntegrationTest`, which in turn surfaced and fixed three pre-existing gaps in
+`server/src/test/resources/schema.sql` (missing `groups.recurrence_*` columns, missing
+`comment_likes` table, missing `friendships` table — none previously exercised by any IT test).
+Full detail: `modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`.
 
 ---
 

@@ -305,8 +305,13 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   pattern (`likePost` checked existence only, `unlikePost` checked nothing about the post at all)
   and were fixed the same way. New `PostGateSpec` unit-tests the gate directly;
   `PostServiceImplSpec`/`CommentServiceImplSpec` updated for the new fetch-then-gate shape plus
-  `Forbidden`/`NotFound` cases per method. `:modules:social:post-impl:test` and `:server:test`
-  (incl. `PostControllerIntegrationTest`) both green.
+  `Forbidden`/`NotFound` cases per method. Also added real IT coverage (post-merge, asked whether
+  it existed — it didn't): 19-case `PostAccessGateIntegrationTest` exercising all 7 gated methods
+  over real `MockMvc` HTTP + real Spring wiring + H2, which surfaced and fixed three latent gaps in
+  `server/src/test/resources/schema.sql` (missing `groups.recurrence_*` columns from
+  `GROUP-RECUR-1`, a missing `comment_likes` table, a missing `friendships` table — none previously
+  exercised by any IT test). `:modules:social:post-impl:test` and `:server:test` (incl.
+  `PostControllerIntegrationTest` and the new class) both green.
 - **A15 (`DONE`, 2026-08-10, `modules/social/post-impl/docs/A15_DROP_POST_CROSS_DOMAIN_FKS.md`),
   absorbed A13 (2026-08-10, user decision):** originally filed 2026-08-07 as A13 —
   `posts.sport_id` is the one cross-domain `sport_id` column with a real DB-level FK

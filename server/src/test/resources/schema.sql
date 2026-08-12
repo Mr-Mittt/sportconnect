@@ -85,6 +85,13 @@ CREATE TABLE IF NOT EXISTS groups (
     is_active BOOLEAN DEFAULT TRUE,
     rules VARCHAR(2000) NOT NULL DEFAULT '',
     schedule VARCHAR(2000) NOT NULL DEFAULT '',
+    -- GROUP-RECUR-1 (V033/V036) — needed for a real @SpringBootTest to persist a Group entity,
+    -- which has mapped these fields since that ticket shipped.
+    recurrence_day_of_week VARCHAR(10),
+    recurrence_time TIME,
+    recurrence_duration_minutes INTEGER,
+    recurrence_location_id BIGINT,
+    recurrence_location_note VARCHAR(500),
     sport_id BIGINT,
     created_by UUID NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -102,6 +109,19 @@ CREATE TABLE IF NOT EXISTS group_members (
     FOREIGN KEY (group_id) REFERENCES groups(id),
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (role_id) REFERENCES group_roles(id)
+);
+
+-- Two rows per friendship pair, mirrors V019 — needed for a real @SpringBootTest to exercise
+-- PostGate's friends-visibility branch (A14, modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md),
+-- which calls UserFriendService.areFriends() for real.
+CREATE TABLE IF NOT EXISTS friendships (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
+    friend_id UUID NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_friendship_pair UNIQUE(user_id, friend_id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (friend_id) REFERENCES users(id)
 );
 
 -- Create posts table
@@ -177,4 +197,16 @@ CREATE TABLE IF NOT EXISTS post_likes (
     FOREIGN KEY (post_id) REFERENCES posts(id),
     FOREIGN KEY (user_id) REFERENCES users(id),
     UNIQUE (post_id, user_id)
+);
+
+-- Create comment_likes table (needed once a real @SpringBootTest first exercised
+-- likeComment/unlikeComment for real — A14, modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md)
+CREATE TABLE IF NOT EXISTS comment_likes (
+    id BIGSERIAL PRIMARY KEY,
+    comment_id BIGINT NOT NULL,
+    user_id UUID NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    FOREIGN KEY (comment_id) REFERENCES comments(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE (comment_id, user_id)
 );
