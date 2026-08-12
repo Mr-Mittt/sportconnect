@@ -300,8 +300,7 @@ class PostServiceImplSpec extends Specification {
         postService.createPost(userId, request)
 
         then:
-        1 * groupService.isGroupOwner(groupId, userId) >> false
-        1 * groupService.isGroupAdmin(groupId, userId) >> false
+        1 * groupService.canManagePosts(groupId, userId) >> false
         0 * postRepository.save(_)
         thrown(BadRequestException)
     }
@@ -318,8 +317,7 @@ class PostServiceImplSpec extends Specification {
         def result = postService.createPost(userId, request)
 
         then:
-        1 * groupService.isGroupOwner(groupId, userId) >> true
-        0 * groupService.isGroupAdmin(groupId, userId)
+        1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.save({ Post p -> p.postType == PostType.GROUP_BROADCAST }) >> savedPost(PostType.GROUP_BROADCAST, groupId)
         stubCounts()
         result.postType == PostType.GROUP_BROADCAST
@@ -337,8 +335,7 @@ class PostServiceImplSpec extends Specification {
         def result = postService.createPost(userId, request)
 
         then:
-        1 * groupService.isGroupOwner(groupId, userId) >> false
-        1 * groupService.isGroupAdmin(groupId, userId) >> true
+        1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.save(_ as Post) >> savedPost(PostType.GROUP_BROADCAST, groupId)
         stubCounts()
         result.postType == PostType.GROUP_BROADCAST
@@ -356,7 +353,7 @@ class PostServiceImplSpec extends Specification {
         postService.createPost(userId, request)
 
         then:
-        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.existsActiveGroupBroadcast(groupId) >> true
         0 * postRepository.save(_)
         thrown(BadRequestException)
@@ -374,7 +371,7 @@ class PostServiceImplSpec extends Specification {
         def result = postService.createPost(userId, request)
 
         then:
-        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.existsActiveGroupBroadcast(groupId) >> false
         1 * postRepository.save({ Post p ->
             p.broadcastEndTime.isAfter(LocalDateTime.now().plusHours(23)) &&
@@ -397,7 +394,7 @@ class PostServiceImplSpec extends Specification {
         postService.createPost(userId, request)
 
         then:
-        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.existsActiveGroupBroadcast(groupId) >> false
         0 * postRepository.save(_)
         thrown(BadRequestException)
@@ -419,7 +416,7 @@ class PostServiceImplSpec extends Specification {
         def result = postService.createPost(userId, request)
 
         then:
-        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.existsActiveGroupBroadcast(groupId) >> false
         1 * postRepository.save({ Post p -> p.broadcastEndTime == futureTime }) >> saved
         stubCounts()
@@ -655,7 +652,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.save(_ as Post) >> post
         stubCounts()
         result != null
@@ -675,8 +672,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-        1 * groupService.isGroupOwner(groupId, userId) >> false
-        1 * groupService.isGroupAdmin(groupId, userId) >> true
+        1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.save(_ as Post) >> post
         stubCounts()
         result != null
@@ -696,8 +692,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-        1 * groupService.isGroupOwner(groupId, userId) >> false
-        1 * groupService.isGroupAdmin(groupId, userId) >> false
+        1 * groupService.canManagePosts(groupId, userId) >> false
         0 * postRepository.save(_)
         thrown(BadRequestException)
     }
@@ -773,7 +768,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-        1 * groupService.isGroupOwner(groupId, callerId) >> true
+        1 * groupService.canManagePosts(groupId, callerId) >> true
         1 * postRepository.save({ Post p -> !p.isActive }) >> post
     }
 
@@ -787,8 +782,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-        1 * groupService.isGroupOwner(groupId, callerId) >> false
-        1 * groupService.isGroupAdmin(groupId, callerId) >> true
+        1 * groupService.canManagePosts(groupId, callerId) >> true
         1 * postRepository.save({ Post p -> !p.isActive }) >> post
     }
 
@@ -802,8 +796,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-        1 * groupService.isGroupOwner(groupId, callerId) >> false
-        1 * groupService.isGroupAdmin(groupId, callerId) >> false
+        1 * groupService.canManagePosts(groupId, callerId) >> false
         thrown(BadRequestException)
     }
 
@@ -865,7 +858,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.save({ Post p -> p.broadcastEndTime == newEndTime }) >> post
         stubCounts()
         result != null
@@ -881,8 +874,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-        1 * groupService.isGroupOwner(groupId, userId) >> false
-        1 * groupService.isGroupAdmin(groupId, userId) >> true
+        1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.save(_ as Post) >> post
         stubCounts()
         result != null
@@ -898,8 +890,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-        1 * groupService.isGroupOwner(groupId, userId) >> false
-        1 * groupService.isGroupAdmin(groupId, userId) >> false
+        1 * groupService.canManagePosts(groupId, userId) >> false
         0 * postRepository.save(_)
         thrown(BadRequestException)
     }
@@ -913,7 +904,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-        1 * groupService.isGroupOwner(groupId, userId) >> true
+        1 * groupService.canManagePosts(groupId, userId) >> true
         0 * postRepository.save(_)
         thrown(BadRequestException)
     }

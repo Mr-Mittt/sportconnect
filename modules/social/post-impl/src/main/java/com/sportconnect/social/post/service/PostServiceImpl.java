@@ -91,9 +91,7 @@ public class PostServiceImpl implements PostService {
         if (postType == PostType.GROUP_POST && !groupService.isGroupMember(groupId, userId)) {
             throw new BadRequestException("You must be a group member to post in this group");
         }
-        if (postType == PostType.GROUP_BROADCAST
-                && !groupService.isGroupOwner(groupId, userId)
-                && !groupService.isGroupAdmin(groupId, userId)) {
+        if (postType == PostType.GROUP_BROADCAST && !groupService.canManagePosts(groupId, userId)) {
             throw new BadRequestException("Only group owners and admins can create broadcast posts");
         }
 
@@ -242,8 +240,7 @@ public class PostServiceImpl implements PostService {
         boolean isCreator = post.getUserId().equals(userId);
         boolean isBroadcastModerator = post.getPostType() == PostType.GROUP_BROADCAST
                 && post.getGroupId() != null
-                && (groupService.isGroupOwner(post.getGroupId(), userId) ||
-                    groupService.isGroupAdmin(post.getGroupId(), userId));
+                && groupService.canManagePosts(post.getGroupId(), userId);
 
         if (!isCreator && !isBroadcastModerator) {
             throw new BadRequestException("You can only update your own posts");
@@ -277,8 +274,7 @@ public class PostServiceImpl implements PostService {
 
         boolean isOwner = post.getUserId().equals(userId);
         boolean isGroupModerator = post.getGroupId() != null &&
-                (groupService.isGroupOwner(post.getGroupId(), userId) ||
-                 groupService.isGroupAdmin(post.getGroupId(), userId));
+                groupService.canManagePosts(post.getGroupId(), userId);
 
         if (!isOwner && !isGroupModerator) {
             throw new BadRequestException("You do not have permission to delete this post");
@@ -519,8 +515,7 @@ public class PostServiceImpl implements PostService {
         }
 
         boolean isModerator = post.getGroupId() != null &&
-                (groupService.isGroupOwner(post.getGroupId(), callerId) ||
-                 groupService.isGroupAdmin(post.getGroupId(), callerId));
+                groupService.canManagePosts(post.getGroupId(), callerId);
         if (!isModerator) {
             throw new BadRequestException("Only group owners and admins can extend a broadcast");
         }

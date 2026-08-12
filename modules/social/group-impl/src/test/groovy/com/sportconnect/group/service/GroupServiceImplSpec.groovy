@@ -368,6 +368,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(regularMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
 
         and: "exception is thrown"
         thrown(BadRequestException)
@@ -451,6 +452,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * groupRepository.existsByGroupName("Taken Name") >> true
         0 * groupRepository.save(_)
 
@@ -479,6 +481,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * groupRepository.existsByGroupName("Racing Name") >> false
         1 * groupRepository.save(_ as Group) >> { throw new org.springframework.dao.DataIntegrityViolationException("duplicate key") }
 
@@ -688,6 +691,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
@@ -728,6 +732,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> defaultGroupType.maxMembers
@@ -761,6 +766,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(regularMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
 
         and: "exception is thrown"
         thrown(BadRequestException)
@@ -930,6 +936,156 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * groupRepository.existsByIdAndIsActiveTrue(999L) >> false
+
+        and:
+        result == false
+    }
+
+    // ─── canManageMembers / canManagePosts (B20: both delegate to the private hasManagerRole,
+    // a single findByGroupIdAndUserId + findById(roleId) lookup instead of composing
+    // isGroupOwner/isGroupAdmin) ──────────────────────────────────────────────
+
+    def "canManageMembers should return true when user is owner"() {
+        given: "user is owner"
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()
+
+        when:
+        def result = groupService.canManageMembers(testGroup.id, userId)
+
+        then:
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
+
+        and:
+        result == true
+    }
+
+    def "canManageMembers should return true when user is admin"() {
+        given: "user is admin"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
+
+        when:
+        def result = groupService.canManageMembers(testGroup.id, userId)
+
+        then:
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        1 * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
+
+        and:
+        result == true
+    }
+
+    def "canManageMembers should return false when user is a regular member"() {
+        given: "user is a regular member"
+        def regularMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(memberRole.id).build()
+
+        when:
+        def result = groupService.canManageMembers(testGroup.id, userId)
+
+        then:
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(regularMember)
+        1 * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
+
+        and:
+        result == false
+    }
+
+    def "canManageMembers should return false when user is not a member"() {
+        when:
+        def result = groupService.canManageMembers(testGroup.id, userId)
+
+        then: "no membership row, so the role lookup is never reached"
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.empty()
+        0 * groupRoleRepository.findById(_)
+
+        and:
+        result == false
+    }
+
+    def "canManageMembers should return false when the group is soft-deleted, even if the user would otherwise qualify"() {
+        when:
+        def result = groupService.canManageMembers(testGroup.id, userId)
+
+        then: "the active check short-circuits before any membership/role lookup"
+        1 * groupRepository.existsByIdAndIsActiveTrue(testGroup.id) >> false
+        0 * groupMemberRepository.findByGroupIdAndUserId(_, _)
+        0 * groupRoleRepository.findById(_)
+
+        and:
+        result == false
+    }
+
+    def "canManagePosts should return true when user is owner"() {
+        given: "user is owner"
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()
+
+        when:
+        def result = groupService.canManagePosts(testGroup.id, userId)
+
+        then:
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
+
+        and:
+        result == true
+    }
+
+    def "canManagePosts should return true when user is admin"() {
+        given: "user is admin"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(adminRole.id).build()
+
+        when:
+        def result = groupService.canManagePosts(testGroup.id, userId)
+
+        then:
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        1 * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
+
+        and:
+        result == true
+    }
+
+    def "canManagePosts should return false when user is a regular member"() {
+        given: "user is a regular member"
+        def regularMember = GroupMember.builder()
+                .groupId(testGroup.id).userId(userId).roleId(memberRole.id).build()
+
+        when:
+        def result = groupService.canManagePosts(testGroup.id, userId)
+
+        then:
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(regularMember)
+        1 * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
+
+        and:
+        result == false
+    }
+
+    def "canManagePosts should return false when user is not a member"() {
+        when:
+        def result = groupService.canManagePosts(testGroup.id, userId)
+
+        then: "no membership row, so the role lookup is never reached"
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.empty()
+        0 * groupRoleRepository.findById(_)
+
+        and:
+        result == false
+    }
+
+    def "canManagePosts should return false when the group is soft-deleted, even if the user would otherwise qualify"() {
+        when:
+        def result = groupService.canManagePosts(testGroup.id, userId)
+
+        then: "the active check short-circuits before any membership/role lookup"
+        1 * groupRepository.existsByIdAndIsActiveTrue(testGroup.id) >> false
+        0 * groupMemberRepository.findByGroupIdAndUserId(_, _)
+        0 * groupRoleRepository.findById(_)
 
         and:
         result == false
@@ -1194,8 +1350,9 @@ class GroupServiceImplSpec extends Specification {
 
         then: "group is found, permission is checked, and rules/schedule are saved"
         1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         1 * groupRepository.save({ Group g -> g.rules == "Be respectful" && g.schedule == "Weekends only" }) >> testGroup
 
@@ -1224,6 +1381,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         1 * groupRepository.save({ Group g -> g.description == "Updated description" }) >> testGroup
 
         and: "response is returned"
@@ -1251,6 +1409,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(regularMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         0 * groupRepository.save(_ as Group)
 
         and: "exception is thrown"
@@ -1293,6 +1452,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * groupRepository.existsByGroupName("Taken Name") >> true
         0 * groupRepository.save(_ as Group)
 
@@ -1319,8 +1479,8 @@ class GroupServiceImplSpec extends Specification {
 
         then: "group is found, permission is checked, and rules/schedule are saved"
         1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
-        // isGroupOwner short-circuits canManageMembers — isGroupAdmin (and group_admin lookup) never called
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        // canManageMembers (B20's hasManagerRole) does a single findById(roleId) lookup, not findByRoleName
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         1 * groupRepository.save({ Group g -> g.rules == "Be respectful" && g.schedule == "Weekends only" }) >> testGroup
@@ -1749,6 +1909,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         1 * pinnedPostRepository.countByGroupId(testGroup.id) >> 0L
         1 * pinnedPostRepository.existsByGroupIdAndPostId(testGroup.id, 42L) >> false
         1 * postService.getPostById(42L, userId) >> postResponse
@@ -1772,6 +1933,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * pinnedPostRepository.countByGroupId(testGroup.id) >> 10L
         0 * pinnedPostRepository.save(_)
 
@@ -1791,6 +1953,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * pinnedPostRepository.countByGroupId(testGroup.id) >> 1L
         1 * pinnedPostRepository.existsByGroupIdAndPostId(testGroup.id, 42L) >> true
         0 * pinnedPostRepository.save(_)
@@ -1813,6 +1976,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * pinnedPostRepository.countByGroupId(testGroup.id) >> 0L
         1 * pinnedPostRepository.existsByGroupIdAndPostId(testGroup.id, 42L) >> false
         1 * postService.getPostById(42L, userId) >> foreignPost
@@ -1836,6 +2000,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * pinnedPostRepository.countByGroupId(testGroup.id) >> 0L
         1 * pinnedPostRepository.existsByGroupIdAndPostId(testGroup.id, 42L) >> false
         1 * postService.getPostById(42L, userId) >> feedPost
@@ -1858,6 +2023,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(regularMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         0 * pinnedPostRepository.save(_)
 
         and: "exception is thrown"
@@ -1876,6 +2042,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * pinnedPostRepository.deleteByGroupIdAndPostId(testGroup.id, 42L)
     }
 
@@ -1892,6 +2059,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(regularMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         0 * pinnedPostRepository.deleteByGroupIdAndPostId(_, _)
 
         and: "exception is thrown"
@@ -1963,10 +2131,9 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, inviteeId, _) >> false
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
-        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(memberRole.id).build())
+        1 * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         1 * invitationRepository.save(_ as GroupInvitation) >> savedInvitation
         1 * invitationInviterRepository.save(_)
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
@@ -2117,10 +2284,9 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationInviterRepository.save({ it.invitationId == 99L && it.inviterId == memberBId })
 
         and: "member B has no approval rights, so the status is untouched — still pending_owner"
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
-        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, memberBId) >> Optional.of(
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, memberBId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(memberBId).roleId(memberRole.id).build())
+        1 * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         0 * invitationRepository.save(_)
 
         and: "the response lists both co-inviters, oldest first"
@@ -2156,10 +2322,9 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationInviterRepository.save({ it.invitationId == 99L && it.inviterId == userId })
 
         and: "userId is an admin, so joining as a co-inviter auto-approves the still-pending_owner row (B11 rule 1's reasoning, applied to B14)"
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
-        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(adminRole.id).build())
+        1 * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, otherUserId, "pending") >> Optional.empty()
         1 * invitationRepository.save({ it.id == 99L && it.status == "pending_user" && it.reviewedBy == userId }) >> { GroupInvitation inv -> inv }
 
@@ -2194,9 +2359,9 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.findByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> Optional.of(existing)
         1 * invitationInviterRepository.existsByInvitationIdAndInviterId(99L, userId) >> false
         1 * invitationInviterRepository.save({ it.invitationId == 99L && it.inviterId == userId })
-        2 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
-        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        1 * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, otherUserId, "pending") >> Optional.of(pendingJoinRequest)
         1 * invitationRepository.save({ it.id == 99L && it.status == "accepted" && it.reviewedBy == userId }) >> { GroupInvitation inv -> inv }
 
@@ -2239,10 +2404,9 @@ class GroupServiceImplSpec extends Specification {
         0 * invitationInviterRepository.existsByInvitationIdAndInviterId(_, _)
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
-        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(memberRole.id).build())
+        1 * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         1 * invitationRepository.save(_ as GroupInvitation) >> savedInvitation
         1 * invitationInviterRepository.save({ it.invitationId == 2L && it.inviterId == userId })
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
@@ -2273,10 +2437,9 @@ class GroupServiceImplSpec extends Specification {
         0 * invitationInviterRepository.existsByInvitationIdAndInviterId(_, _)
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
-        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(memberRole.id).build())
+        1 * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         1 * invitationRepository.save(_ as GroupInvitation) >> savedInvitation
         1 * invitationInviterRepository.save({ it.invitationId == 3L && it.inviterId == userId })
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
@@ -2306,9 +2469,9 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> false
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build())
+        1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, otherUserId, "pending") >> Optional.empty()
         1 * invitationRepository.save({ it.status == "pending_user" && it.reviewedBy == userId }) >> savedInvitation
         1 * invitationInviterRepository.save(_)
@@ -2348,8 +2511,9 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> false
         2 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         2 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
-        2 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, otherUserId, "pending") >> Optional.of(pendingJoinRequest)
         1 * invitationRepository.save({ it.status == "accepted" && it.reviewedBy == userId }) >> savedInvitation
         1 * invitationInviterRepository.save(_)
@@ -2383,9 +2547,9 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build())
+        1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, inviteeId, "pending") >> Optional.empty()
         1 * invitationRepository.save({ it.status == "pending_user" }) >> { GroupInvitation inv -> inv }
     }
@@ -2401,9 +2565,7 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
-        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
         thrown(BadRequestException)
     }
 
@@ -2418,9 +2580,9 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build())
+        1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         thrown(BadRequestException)
     }
 
@@ -2440,8 +2602,9 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
-        2 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * joinRequestRepository.findByGroupIdAndUserIdAndStatus(testGroup.id, inviteeId, "pending") >> Optional.of(pendingJoinRequest)
         1 * invitationRepository.save({ it.status == "accepted" && it.reviewedBy == userId }) >> { GroupInvitation inv -> inv }
 
@@ -2580,9 +2743,9 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build())
+        1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * invitationRepository.save({ it.status == "declined_by_owner" })
     }
 
@@ -2595,9 +2758,7 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
-        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
         thrown(BadRequestException)
     }
 
@@ -2620,8 +2781,8 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
         1 * invitationRepository.findByGroupIdAndStatus(testGroup.id, "pending_owner", pageable) >> page
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([1L]) >> []
@@ -2651,9 +2812,7 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
-        2 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
+        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
         thrown(BadRequestException)
     }
 
@@ -2677,9 +2836,9 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
-        // isGroupOwner short-circuits canManageMembers — isGroupAdmin (and group_admin lookup) never called
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        // canManageMembers (B20's hasManagerRole) does a single findById(roleId) lookup, not findByRoleName
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
         1 * invitationRepository.findByGroupIdAndStatus(testGroup.id, "declined_by_user", pageable) >> page
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([1L]) >> []
@@ -2935,6 +3094,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.of(targetMember)
         1 * groupMemberRepository.deleteByGroupIdAndUserId(testGroup.id, otherUserId)
@@ -2962,6 +3122,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(callerMember)
         0 * groupMemberRepository.deleteByGroupIdAndUserId(_, _)
         thrown(BadRequestException)
@@ -2981,6 +3142,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.of(ownerMember)
         0 * groupMemberRepository.deleteByGroupIdAndUserId(_, _)
@@ -3092,6 +3254,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         1 * groupSettingsRepository.findByGroupIdForUpdate(testGroup.id) >> Optional.of(settings)
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
@@ -3151,6 +3314,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.of(targetMember)
         1 * groupMemberRepository.deleteByGroupIdAndUserId(testGroup.id, otherUserId)
@@ -3206,6 +3370,7 @@ class GroupServiceImplSpec extends Specification {
         1 * joinRequestRepository.findById(1L) >> Optional.of(joinRequest)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * joinRequestRepository.save({
             GroupJoinRequest req -> req.status == "declined" && req.reviewedBy == userId
@@ -3236,6 +3401,7 @@ class GroupServiceImplSpec extends Specification {
         1 * joinRequestRepository.findById(1L) >> Optional.of(joinRequest)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(callerMember)
         0 * joinRequestRepository.save(_)
         thrown(BadRequestException)
@@ -3255,6 +3421,7 @@ class GroupServiceImplSpec extends Specification {
         1 * joinRequestRepository.findById(1L) >> Optional.of(joinRequest)
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         0 * joinRequestRepository.save(_)
         thrown(BadRequestException)
@@ -3277,6 +3444,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
         1 * userFriendService.areFriends(userId, otherUserId) >> true
@@ -3311,6 +3479,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
         1 * userFriendService.areFriends(userId, otherUserId) >> true
@@ -3347,6 +3516,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
         1 * userFriendService.areFriends(userId, otherUserId) >> true
@@ -3380,6 +3550,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(callerMember)
         0 * invitationRepository.save(_)
         thrown(BadRequestException)
@@ -3397,6 +3568,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> true
         0 * invitationRepository.save(_)
@@ -3415,6 +3587,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
         1 * userFriendService.areFriends(userId, otherUserId) >> false
@@ -3434,6 +3607,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
         1 * userFriendService.areFriends(userId, otherUserId) >> true
