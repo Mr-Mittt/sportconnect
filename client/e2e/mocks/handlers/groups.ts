@@ -299,7 +299,8 @@ export const groupHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(updatedGroup, 'Group updated successfully'));
   }),
 
-  // GRP-2
+  // GRP-2 — legacy path, kept unchanged (mirrors the real backend: reserved
+  // for a different future purpose, not used by the client anymore).
   http.get('/api/groups/:groupId/info', ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
@@ -311,9 +312,24 @@ export const groupHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(info, 'Info retrieved successfully'));
   }),
 
-  // B19/GRP-9: dedicated write path for the fields GET .../info reads back —
-  // owner/admin only in the real backend, kept unenforced here like every
-  // other mutating handler in this file (auth-only, no role check).
+  // B19/GRP-9: canonical GET path, matches PUT .../generalData below — the
+  // client's useGroupGeneralData hook calls this one, not /info above. Same
+  // groupInfoState backing as /info here (it's one fixture map either way),
+  // even though the real backend keeps the two as separate DTOs/methods.
+  http.get('/api/groups/:groupId/generalData', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const info = groupsSessions.get(sessionIdFromRequest(request)).groupInfoState[groupId];
+    if (!info) {
+      return HttpResponse.json(apiError('Group not found'), { status: 404 });
+    }
+    return HttpResponse.json(apiResponse(info, 'General data retrieved successfully'));
+  }),
+
+  // B19/GRP-9: dedicated write path for the fields GET .../generalData reads
+  // back — owner/admin only in the real backend, kept unenforced here like
+  // every other mutating handler in this file (auth-only, no role check).
   http.put('/api/groups/:groupId/generalData', async ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
