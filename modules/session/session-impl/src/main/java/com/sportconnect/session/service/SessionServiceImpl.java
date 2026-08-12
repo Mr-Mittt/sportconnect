@@ -6,6 +6,7 @@ import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.location.api.dto.LocationResponse;
 import com.sportconnect.location.api.service.LocationService;
+import com.sportconnect.session.access.SessionGate;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
@@ -21,6 +22,10 @@ import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionParticipant;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
+import com.sportconnect.social.post.api.dto.CommentResponse;
+import com.sportconnect.social.post.api.dto.CreateCommentRequest;
+import com.sportconnect.social.post.api.service.CommentService;
+import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
@@ -58,6 +63,13 @@ public class SessionServiceImpl implements SessionService {
     private final UserService userService;
     private final SportService sportService;
     private final UserSportProfileService userSportProfileService;
+    // SESSION-10/A17: session-impl -> post-api is one-way — post-impl has no dependency back on
+    // session-api (PostGate makes SESSION_POST unconditionally unavailable via /api/posts/**), so
+    // there's no circular bean dependency here and no @Lazy needed, unlike GroupServiceImpl's own
+    // postService field (which mirrors group-impl <-> post-impl's real bidirectional dependency).
+    private final PostService postService;
+    private final CommentService commentService;
+    private final SessionGate sessionGate;
 
     @Override
     @Transactional
@@ -94,8 +106,15 @@ public class SessionServiceImpl implements SessionService {
         boolean autoApprove = Boolean.TRUE.equals(request.getAutoApprove());
         int initialSlot = request.getInitialSlot() != null ? request.getInitialSlot() : 0;
 
+        // SESSION-10/A17: the companion SESSION_POST is created first, inline in this same
+        // @Transactional method, so a failure here rolls back the whole session creation instead
+        // of leaving a session with no comment-thread anchor. post-impl never sees a sessionId —
+        // it hands back the new post's id, which becomes this session's own postId.
+        Long postId = postService.createSessionPost(userId, "Session: " + request.getTitle());
+
         Session session = Session.builder()
                 .groupId(groupId)
+                .postId(postId)
                 .sessionType(sessionType)
                 .createdBy(userId)
                 .sportId(sportId)
@@ -385,6 +404,58 @@ public class SessionServiceImpl implements SessionService {
         return toResponsePage(sessions, userId);
     }
 
+    @Override
+    @Transactional
+    public CommentResponse createSessionComment(Long sessionId, UUID userId, CreateCommentRequest request) {
+        Session session = requireSessionAccess(sessionId, userId);
+        return commentService.createSessionComment(session.getPostId(), userId, request);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CommentResponse> getSessionComments(Long sessionId, UUID callerId, Pageable pageable) {
+        Session session = requireSessionAccess(sessionId, callerId);
+        return commentService.getSessionPostComments(session.getPostId(), callerId, pageable);
+    }
+
+    @Override
+    @Transactional
+    public void likeSessionComment(Long sessionId, Long commentId, UUID userId) {
+        Session session = requireSessionAccess(sessionId, userId);
+        commentService.likeSessionComment(session.getPostId(), commentId, userId);
+    }
+
+    @Override
+    @Transactional
+    public void unlikeSessionComment(Long sessionId, Long commentId, UUID userId) {
+        Session session = requireSessionAccess(sessionId, userId);
+        commentService.unlikeSessionComment(session.getPostId(), commentId, userId);
+    }
+
+    @Override
+    @Transactional
+    public void likeSession(Long sessionId, UUID userId) {
+        Session session = requireSessionAccess(sessionId, userId);
+        postService.likeSessionPost(session.getPostId(), userId);
+    }
+
+    @Override
+    @Transactional
+    public void unlikeSession(Long sessionId, UUID userId) {
+        Session session = requireSessionAccess(sessionId, userId);
+        postService.unlikeSessionPost(session.getPostId(), userId);
+    }
+
+    /** SESSION-10/A17 — the sole gate standing between a caller and a session's comment thread or
+     * its own like, since post-impl's own PostGate makes SESSION_POST unconditionally unavailable.
+     * Delegates to SessionGate (this module's own ResourceGate&lt;Session&gt;, same shape as
+     * post-impl's PostGate) rather than reimplementing the two-question logic here. */
+    private Session requireSessionAccess(Long sessionId, UUID callerId) {
+        Session session = sessionRepository.findById(sessionId).orElse(null);
+        return sessionGate.require(session, callerId,
+                "Session not found", "You don't have access to this session");
+    }
+
     private Session findSessionOrThrow(Long sessionId) {
         return sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "id", sessionId));
@@ -452,6 +523,7 @@ public class SessionServiceImpl implements SessionService {
         return sessions.stream()
                 .map(session -> SessionResponse.builder()
                         .id(session.getId())
+                        .postId(session.getPostId())
                         .groupId(session.getGroupId())
                         .sessionType(session.getSessionType())
                         .createdBy(session.getCreatedBy())

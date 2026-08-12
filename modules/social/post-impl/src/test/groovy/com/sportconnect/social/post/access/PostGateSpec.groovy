@@ -180,4 +180,39 @@ class PostGateSpec extends Specification {
         !result
         0 * groupService.isGroupMember(_, _)
     }
+
+    // ── isAvailable / isVisibleTo — SESSION_POST ────────────────────────────
+    // SESSION-10/A17: deliberately unconditional — post-impl has no session-api dependency, so
+    // there's nothing to delegate to. A SESSION_POST is invisible via /api/posts/** for every
+    // caller, including an actual session participant; session-api's own comment-proxy endpoints
+    // are the only path in (see SessionGate in session-impl).
+
+    def "SESSION_POST is never available, regardless of active flag"() {
+        given:
+        def p = post(PostType.SESSION_POST)
+
+        when:
+        def result = postGate.isAvailable(p)
+
+        then:
+        !result
+        0 * groupService._
+    }
+
+    def "SESSION_POST is never visible, even to its own author"() {
+        given:
+        def p = post(PostType.SESSION_POST)
+
+        when:
+        def resultOwner = postGate.isVisibleTo(p, ownerId)
+        def resultViewer = postGate.isVisibleTo(p, viewerId)
+        def resultAnonymous = postGate.isVisibleTo(p, null)
+
+        then:
+        !resultOwner
+        !resultViewer
+        !resultAnonymous
+        0 * groupService._
+        0 * userFriendService._
+    }
 }

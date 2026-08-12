@@ -92,11 +92,20 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   check (e.g. a `Post`'s availability checking its parent `Group`'s active status via `group-api`).
   Full design, code sketches, and rationale: `documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md`.
   Summarized as a durable rule in root `CLAUDE.md`'s "Resource access" section.
-- **Rejected:** a session's discussion thread modeled as a `Post` (`PostType.SESSION_POST`) to reuse
-  comment/like/cache infra for free — a stronger form of something `SESSION_COMMENTS_VISION.md`
-  already rejected; would weld `session-impl` to `post-impl` at the schema level and require a
-  bidirectional `-api` dependency. Also rejected: a fully generic annotation/AOP visibility framework
-  (no reusable logic across domains to justify the ceremony) and controller-layer/query-only checks.
+- **Rejected, then reversed 2026-08-12 (twice):** a session's discussion thread modeled as a `Post`
+  (`PostType.SESSION_POST`) to reuse comment/like/cache infra for free — originally rejected as a
+  stronger form of something `SESSION_COMMENTS_VISION.md` already rejected, on the grounds that it
+  would weld `session-impl` to `post-impl` at the schema level and require a bidirectional `-api`
+  dependency. Reopened and accepted for **SESSION-10** after direct discussion with the user — an
+  interim pass built exactly the bidirectional shape the ADR warned about (justified at the time
+  since `group-impl` ↔ `post-impl` already has the same shape via B3/B9), then was replaced
+  same-day with a stricter **one-way** design at the user's request: `post-impl` carries zero
+  dependency on `session-api`, a `SESSION_POST` is unconditionally invisible via `/api/posts/**`
+  for every caller, and `session-impl` reaches `post-impl`'s comment infra only through internal
+  bypass methods it alone calls, after its own `SessionGate` authorizes the caller. See §3's Session
+  module entry and `modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md` for the full path.
+  Also rejected, unchanged: a fully generic annotation/AOP visibility framework (no reusable logic
+  across domains to justify the ceremony) and controller-layer/query-only checks.
 - **Concrete bugs found while designing this:** `GroupServiceImpl.isGroupMember/isGroupOwner/
   isGroupAdmin` never check `group.isActive` — a former member of a soft-deleted group can still pass
   every one of these checks (8 call sites in `post-impl`, 1 in `session-impl`); fix belongs in
@@ -104,7 +113,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `BadRequestException` (A2) vs. `ForbiddenException` (A3) for the same category of access denial —
   to be standardized on `ForbiddenException` going forward via this gate's convention.
 - **Delta on `SESSION_COMMENTS_VISION.md`:** a group-linked session's comment thread (SESSION-10,
-  not yet implemented) should also be visible to group members, not just `SessionParticipant`s — the
+  `DONE` 2026-08-12) should also be visible to group members, not just `SessionParticipant`s — the
   vision doc's original decision was participant-only even for group-linked sessions.
 - **Tickets filed (2026-08-11):** `group-impl` **B18** (active-group fix), `common` **C2**
   (`ResourceGate<T>`), `post-impl` **A14** redesigned against this ADR, `session-impl` **SESSION-10**
@@ -114,8 +123,10 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   — `isAvailable`/`isVisibleTo` plus a `require()` default throwing `NotFoundException`/
   `ForbiddenException` in that fixed order; zero domain dependency, no logic, shape only. `DONE`.
   Details: `modules/common/docs/C2_RESOURCE_GATE.md`. `PostGate` implemented 2026-08-12
-  (`post-impl` A14, `modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`); `SessionGate`
-  (SESSION-10) still `TODO`.
+  (`post-impl` A14, `modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`). SESSION-10
+  (2026-08-12) *does* implement the standalone `SessionGate` this ADR originally specced — an
+  interim design routed gating through `PostGate` calling into `session-api` instead, but was
+  replaced same-day per the reversal note above.
 
 ---
 
@@ -362,9 +373,9 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   all pass. 12 of 26 e2e specs failed on a `seedAuthenticatedSession` login timeout — confirmed
   pre-existing/environmental by re-running the same specs against a stashed pre-A12 baseline
   (identical failure count and point), not a regression from this change.
-- **MVP backlog:** 20 tickets (A1–A12, A14–A16, B1–B6) in
+- **MVP backlog:** 21 tickets (A1–A12, A14–A17, B1–B6) in
   `modules/social/post-impl/docs/BACKLOG_MVP.md` — A13 no longer a standalone entry (merged into
-  A15); all 20 `DONE`
+  A15); all 21 `DONE`
 - **A1 (2026-06-30):** JWT-based identity — all `@RequestParam userId` removed from `PostController`; write endpoints use `@AuthenticationPrincipal`, read endpoints use `Authentication` + `SecurityUtils.extractUserId()`; `GET /api/posts/user/{userId}` renamed to `GET /api/posts/mine`
 - **A2 (2026-06-30):** Fix post delete permission — `PostServiceImpl.deletePost()` now allows group owner/admin to delete GROUP_POST and GROUP_BROADCAST posts in their group (reuses existing `GroupService.isGroupOwner/isGroupAdmin`)
 - **A3 (2026-07-01):** Group posts membership gate — `getGroupPosts()` now throws `ForbiddenException` for unauthenticated or non-member callers; `ForbiddenException` added to `modules/common`
@@ -385,6 +396,13 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   internally — migrated all four to the new `canManagePosts(groupId, userId)` cross-domain call
   instead. Pure call-count reduction, no behavior change. `:modules:social:post-impl:test` and
   `:server:test` both green.
+- **A17 (2026-08-12, `DONE`, `modules/social/post-impl/docs/A17_SESSION_POST.md`):** this module's
+  half of `session-impl`'s **SESSION-10** — new `PostType.SESSION_POST` + internal-only
+  `PostService.createSessionPost` (spoof-guarded like B9's `GROUP_SYSTEM`) + four `CommentService`
+  bypass methods for `session-impl` to call. `PostGate.isAvailable` makes `SESSION_POST`
+  unconditionally unavailable — this module carries **no** dependency on `session-api`, by design
+  (an interim version did add one; reverted same-day). See the session module's §3 entry and §2.11
+  above for the full cross-module design record and both ADR reversals.
 
 #### `modules:social:group-api` + `modules:social:group-impl`
 - `Group`, `GroupMember`, `GroupRole` (pre-seeded: owner/admin/member), `GroupJoinRequest`, `GroupSettings` entities
@@ -2509,6 +2527,52 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `getSessionParticipants` itself ships unchanged. Live-verified against a running backend +
   Postgres (not just Spock): null/JOINED/INVITED→decline/REQUESTED→cancel all confirmed via curl.
   Client follow-up filed as **CLIENT-SESSION-9** (`client/docs/BACKLOG_MVP.md`, `TODO`).
+- **SESSION-10 (`DONE`, 2026-08-12,
+  `modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md`)** — session comments, but not as
+  originally specced: instead of a new domain-scoped `SessionComment`/`SessionCommentLike` entity
+  pair, every `Session` now gets a companion `Post` (`PostType.SESSION_POST`, post-impl's **A17**),
+  created synchronously in the same transaction as the session, used purely as a comment-thread
+  anchor. This reverses both `SESSION_COMMENTS_VISION.md` and the ADR §7 rejection of the same idea
+  (both docs carry supersession notes) — see §2.11 above. Shipped in two passes: an **interim**
+  design routed gating through `PostGate` calling into new `session-api` methods (bidirectional
+  `-api` dependency, and the client called `post-impl`'s `/api/posts/{postId}/comments` directly
+  via `SessionResponse.postId`) — this produced a real circular Spring bean dependency (`PostGate →
+  SessionServiceImpl → PostServiceImpl → PostGate`), fixed with `@Lazy` on `SessionServiceImpl`'s
+  `PostService` dependency, same fix `GroupServiceImpl` already uses for its own `group-impl ↔
+  post-impl` cycle. The user then asked for a **one-way** dependency instead: `post-impl` now
+  carries **zero** dependency on `session-api` — `PostGate.isAvailable` makes `SESSION_POST`
+  unconditionally unavailable via `/api/posts/**` for every caller. `post-api`'s `CommentService`
+  gained four bypass methods (`createSessionComment` etc., skipping `PostGate`, same shape as B9's
+  `createSystemPost`); `session-impl` finally implements the standalone `SessionGate implements
+  ResourceGate<Session>` the ADR originally specced, and new `session-api` endpoints
+  (`GET/POST /api/sessions/{sessionId}/comments`, `.../comments/{commentId}/like`) are the client's
+  only path to a session's comments. `session-api` gained a new `post-api` dependency (to reference
+  `CommentResponse`/`CreateCommentRequest`, same precedent as `group-api`). With the bidirectional
+  edge gone, so is the circular bean — `SessionServiceImpl` reverted to plain
+  `@RequiredArgsConstructor`. The interim version of `SessionPostAccessGateIntegrationTest` (real
+  MockMvc + Spring wiring + H2) is what caught the bean cycle before Spock (mocked collaborators)
+  could have; it was rewritten for the final design. `V050`/`V051` migrations unchanged across both
+  passes; `V051` truncates `sessions`/`session_participants` (no dev data worth a backfill) to add
+  `sessions.post_id NOT NULL UNIQUE`. **Post-ship IDOR fix (same day):** a user question ("should
+  the bypass methods check post type too?") surfaced a sharper gap — `likeSessionComment`/
+  `unlikeSessionComment` took a client-supplied `commentId` never cross-checked against the
+  session the caller was actually authorized for, so a participant of session A could like/unlike
+  a comment belonging to session B's thread (or any other post's) by id alone. Fixed by adding a
+  `postId` parameter `SessionServiceImpl` fills with its own resolved `session.getPostId()`
+  (never client-supplied) and `CommentServiceImpl` verifies against the comment's real parent post;
+  `createSessionComment`/`getSessionPostComments` also gained a `postType == SESSION_POST` check.
+  Two new IT tests reproduce the exact cross-session and cross-post-type scenarios. **Also same
+  day:** new `POST/DELETE /api/sessions/{sessionId}/like` (same bypass shape as comments, applied
+  to the `SESSION_POST` anchor itself — `PostService.likeSessionPost`/`unlikeSessionPost`); and a
+  `SessionController` auth-extraction cleanup — every endpoint now uses `@PreAuthorize
+  ("hasRole('USER')")` + `Authentication authentication` + `SecurityUtils.extractUserId()`,
+  uniformly (deliberately simpler than `PostController`'s own mixed A1 convention, which pairs
+  `@AuthenticationPrincipal` with mutation/"MY OWN" endpoints and `Authentication`+`SecurityUtils`
+  with "viewing a resource by id" ones) — `@PreAuthorize` and the extraction mechanism are
+  orthogonal (an AOP gate evaluated before the method runs vs. how the method reads the
+  already-authenticated principal), so combining `@PreAuthorize` with `Authentication`+
+  `SecurityUtils` instead of `@AuthenticationPrincipal` is a valid, deliberate choice, not a
+  workaround.
 - **SESSION-11 (`DONE`, 2026-08-10,
   `modules/session/docs/SESSION-11_DROP_CROSS_DOMAIN_FKS.md`):** dropped the 4 cross-domain
   DB-level FKs found in the 2026-08-10 sweep — `sessions_created_by_fkey`,
@@ -2535,9 +2599,8 @@ explicit go-ahead at each step (full story in A3's summary doc):
   no module actually implements them, so there's no owning backlog to file a fix-the-schema ticket
   against; flagged here in case someone wants to scope either "build the feature" or "drop the dead
   table" later, same "leftover placeholder, leave it alone" status as `sport-impl`'s `FacilityType`.
-- **MVP backlog (session module):** 9 of 11 tickets `DONE` (SESSION-1 through SESSION-9,
-  SESSION-11); SESSION-10 and SESSION-8 remain `TODO` (queue order: SESSION-10, then SESSION-8 —
-  user-reordered 2026-08-10 to put SESSION-11's architecture cleanup first, ahead of both).
+- **MVP backlog (session module):** 10 of 11 tickets `DONE` (SESSION-1 through SESSION-11 except
+  SESSION-8); SESSION-8 remains `TODO`.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

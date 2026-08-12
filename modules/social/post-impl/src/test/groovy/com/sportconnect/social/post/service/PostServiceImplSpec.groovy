@@ -220,6 +220,35 @@ class PostServiceImplSpec extends Specification {
         })
     }
 
+    // ── createSessionPost (SESSION-10/A17) ────────────────────────────────────
+
+    def "createPost rejects caller-supplied SESSION_POST postType"() {
+        given: "a caller tries to self-author a session post"
+        def request = CreatePostRequest.builder()
+                .content("fake session post")
+                .postType(PostType.SESSION_POST)
+                .build()
+
+        when:
+        postService.createPost(userId, request)
+
+        then:
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "createSessionPost creates a SESSION_POST authored by the given user, never groupId-scoped"() {
+        when:
+        def resultId = postService.createSessionPost(userId, "Session: Sunday badminton")
+
+        then:
+        1 * postRepository.save({
+            Post p -> p.postType == PostType.SESSION_POST && p.groupId == null &&
+                    p.userId == userId && p.content == "Session: Sunday badminton"
+        }) >> savedPost(PostType.SESSION_POST)
+        resultId == postId
+    }
+
     // ── createPost — GROUP_POST ───────────────────────────────────────────────
 
     def "createPost GROUP_POST without groupId throws BadRequestException"() {
@@ -749,6 +778,21 @@ class PostServiceImplSpec extends Specification {
         thrown(BadRequestException)
     }
 
+    def "updatePost rejects SESSION_POST posts even for the nominal author"() {
+        given:
+        def post = savedPost(PostType.SESSION_POST)
+        def request = CreatePostRequest.builder().content("rewritten").build()
+
+        when:
+        postService.updatePost(postId, userId, request)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * groupService._
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
     // ── deletePost ────────────────────────────────────────────────────────────
 
     def "deletePost soft deletes post when user is owner"() {
@@ -821,6 +865,20 @@ class PostServiceImplSpec extends Specification {
     def "deletePost rejects GROUP_SYSTEM posts even for the group owner"() {
         given: "the post is authored (per B9) by the current owner, who tries to delete it"
         def post = savedPost(PostType.GROUP_SYSTEM, groupId)
+
+        when:
+        postService.deletePost(postId, userId)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * groupService._
+        0 * postRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "deletePost rejects SESSION_POST posts even for the nominal author"() {
+        given:
+        def post = savedPost(PostType.SESSION_POST)
 
         when:
         postService.deletePost(postId, userId)
@@ -1054,5 +1112,88 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findById(postId) >> Optional.of(post)
         1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
         thrown(ForbiddenException)
+    }
+
+    // ── likeSessionPost / unlikeSessionPost (SESSION-10/A17) — bypass PostGate ─
+
+    def "likeSessionPost bypasses PostGate, only checks the post is an active SESSION_POST"() {
+        given:
+        def post = savedPost(PostType.SESSION_POST)
+
+        when:
+        postService.likeSessionPost(postId, userId)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * postGate._
+        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
+        1 * postLikeRepository.save(_ as PostLike) >> new PostLike()
+        1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":likes"])
+    }
+
+    def "likeSessionPost throws BadRequestException when already liked"() {
+        given:
+        def post = savedPost(PostType.SESSION_POST)
+
+        when:
+        postService.likeSessionPost(postId, userId)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
+        thrown(BadRequestException)
+    }
+
+    def "likeSessionPost throws NotFoundException when the post doesn't exist"() {
+        when:
+        postService.likeSessionPost(postId, userId)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.empty()
+        0 * postGate._
+        thrown(NotFoundException)
+    }
+
+    def "likeSessionPost throws NotFoundException when the post exists but isn't a SESSION_POST"() {
+        given:
+        def post = savedPost(PostType.USER_FEED)
+
+        when:
+        postService.likeSessionPost(postId, userId)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * postGate._
+        0 * postLikeRepository._
+        thrown(NotFoundException)
+    }
+
+    def "unlikeSessionPost bypasses PostGate, only checks the post is an active SESSION_POST"() {
+        given:
+        def post = savedPost(PostType.SESSION_POST)
+
+        when:
+        postService.unlikeSessionPost(postId, userId)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * postGate._
+        1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
+        1 * postLikeRepository.deleteByPostIdAndUserId(postId, userId)
+        1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":likes"])
+    }
+
+    def "unlikeSessionPost throws NotFoundException when the post exists but isn't a SESSION_POST"() {
+        given:
+        def post = savedPost(PostType.GROUP_POST, groupId)
+
+        when:
+        postService.unlikeSessionPost(postId, userId)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * postGate._
+        0 * postLikeRepository._
+        thrown(NotFoundException)
     }
 }

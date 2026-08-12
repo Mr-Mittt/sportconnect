@@ -2,6 +2,20 @@
 
 **Last updated:** 2026-08-07
 
+> **Superseded 2026-08-12 — SESSION-10 shipped, but not this way.** The "reuse Post's actual
+> `Comment` entity/table" alternative this doc rejects below (see "Comment shape") was reconsidered
+> a second time and **accepted**, after `documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md` §7 also
+> re-rejected an even stronger form of it and was itself superseded. Every `Session` now gets a
+> companion `Post` (`PostType.SESSION_POST`) that exists purely as a comment-thread anchor —
+> comments are `post-impl`'s real `Comment` entity, reused via internal bypass methods on
+> `CommentService`, not a new `SessionComment` table. The underlying `Post` is invisible via
+> `/api/posts/**` for everyone; the client reaches comments only through new `session-api` endpoints
+> (`GET/POST /api/sessions/{sessionId}/comments`, `.../comments/{commentId}/like`) — there is no
+> `session-scoped` reuse of `post-impl`'s own REST surface. The **access-gating decisions below are
+> unchanged** (participants-only, `JOINED`/`REQUESTED`/`INVITED`, widened for group-linked sessions
+> per the ADR §6 delta) — only the storage/entity decision and the API surface reversed. Full design
+> record: `modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md`.
+
 ## Vision statement
 
 Give session participants a lightweight, persistent place to discuss a specific session — right

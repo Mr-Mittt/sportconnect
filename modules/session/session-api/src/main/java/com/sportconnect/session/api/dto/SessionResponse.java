@@ -17,6 +17,12 @@ public class SessionResponse {
 
     private Long id;
 
+    /** SESSION-10/A17 — the id of this session's companion SESSION_POST (post-impl), created
+     * synchronously at session-creation time. Comment endpoints are the existing
+     * {@code /api/posts/{postId}/comments} ones — the client calls them directly with this id,
+     * there is no session-scoped comment endpoint. */
+    private Long postId;
+
     private Long groupId;
 
     private SessionType sessionType;

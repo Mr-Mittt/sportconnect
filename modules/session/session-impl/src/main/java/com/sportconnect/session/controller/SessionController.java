@@ -1,5 +1,6 @@
 package com.sportconnect.session.controller;
 
+import com.sportconnect.common.auth.SecurityUtils;
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
@@ -10,6 +11,8 @@ import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.session.api.service.SessionService;
+import com.sportconnect.social.post.api.dto.CommentResponse;
+import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,7 +25,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -52,10 +55,9 @@ public class SessionController {
     @PostMapping
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<SessionResponse>> createSession(
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @Valid @RequestBody CreateSessionRequest request) {
-        UUID userId = UUID.fromString(userIdStr);
-        SessionResponse response = sessionService.createSession(userId, request);
+        SessionResponse response = sessionService.createSession(SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Session created successfully", response));
     }
@@ -70,9 +72,8 @@ public class SessionController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<SessionResponse>> getSession(
             @PathVariable Long sessionId,
-            @AuthenticationPrincipal String callerIdStr) {
-        UUID callerId = UUID.fromString(callerIdStr);
-        SessionResponse response = sessionService.getSession(sessionId, callerId);
+            Authentication authentication) {
+        SessionResponse response = sessionService.getSession(sessionId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success("Session retrieved successfully", response));
     }
 
@@ -82,12 +83,13 @@ public class SessionController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not visible to the caller")
     })
     @GetMapping("/group/{groupId}")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> getGroupSessions(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             Pageable pageable) {
-        UUID userId = UUID.fromString(userIdStr);
-        Page<SessionResponse> response = sessionService.getGroupSessions(groupId, userId, pageable);
+        Page<SessionResponse> response = sessionService.getGroupSessions(
+                groupId, SecurityUtils.extractUserId(authentication), pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
@@ -99,10 +101,10 @@ public class SessionController {
     @GetMapping("/mine")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> getMySessions(
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             Pageable pageable) {
-        UUID userId = UUID.fromString(userIdStr);
-        Page<SessionResponse> response = sessionService.getSessionsCreatedByUser(userId, pageable);
+        Page<SessionResponse> response = sessionService.getSessionsCreatedByUser(
+                SecurityUtils.extractUserId(authentication), pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
@@ -114,11 +116,11 @@ public class SessionController {
     @GetMapping("/discover")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> discoverSessions(
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @RequestParam(required = false) Long sportId,
             @PageableDefault(sort = "scheduledStart", direction = Sort.Direction.ASC) Pageable pageable) {
-        UUID userId = UUID.fromString(userIdStr);
-        Page<SessionResponse> response = sessionService.discoverSessions(userId, sportId, pageable);
+        Page<SessionResponse> response = sessionService.discoverSessions(
+                SecurityUtils.extractUserId(authentication), sportId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
@@ -130,11 +132,11 @@ public class SessionController {
     @GetMapping("/joined")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> getJoinedSessions(
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @RequestParam(required = false) SessionStatus status,
             Pageable pageable) {
-        UUID userId = UUID.fromString(userIdStr);
-        Page<SessionResponse> response = sessionService.getJoinedSessions(userId, status, pageable);
+        Page<SessionResponse> response = sessionService.getJoinedSessions(
+                SecurityUtils.extractUserId(authentication), status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
@@ -149,10 +151,10 @@ public class SessionController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<SessionResponse>> updateSession(
             @PathVariable Long sessionId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @Valid @RequestBody UpdateSessionRequest request) {
-        UUID userId = UUID.fromString(userIdStr);
-        SessionResponse response = sessionService.updateSession(sessionId, userId, request);
+        SessionResponse response = sessionService.updateSession(
+                sessionId, SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.ok(ApiResponse.success("Session updated successfully", response));
     }
 
@@ -167,10 +169,10 @@ public class SessionController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<SessionResponse>> cancelSession(
             @PathVariable Long sessionId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @Valid @RequestBody(required = false) CancelSessionRequest request) {
-        UUID userId = UUID.fromString(userIdStr);
-        SessionResponse response = sessionService.cancelSession(sessionId, userId, request);
+        SessionResponse response = sessionService.cancelSession(
+                sessionId, SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.ok(ApiResponse.success("Session cancelled successfully", response));
     }
 
@@ -185,9 +187,8 @@ public class SessionController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> joinSession(
             @PathVariable Long sessionId,
-            @AuthenticationPrincipal String userIdStr) {
-        UUID userId = UUID.fromString(userIdStr);
-        sessionService.joinSession(sessionId, userId);
+            Authentication authentication) {
+        sessionService.joinSession(sessionId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success("Joined session successfully", null));
     }
 
@@ -201,9 +202,8 @@ public class SessionController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> leaveSession(
             @PathVariable Long sessionId,
-            @AuthenticationPrincipal String userIdStr) {
-        UUID userId = UUID.fromString(userIdStr);
-        sessionService.leaveSession(sessionId, userId);
+            Authentication authentication) {
+        sessionService.leaveSession(sessionId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success("Left session successfully", null));
     }
 
@@ -216,12 +216,11 @@ public class SessionController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<SessionParticipantResponse>>> getSessionParticipants(
             @PathVariable Long sessionId,
-            @AuthenticationPrincipal String callerIdStr,
+            Authentication authentication,
             @RequestParam(required = false) ParticipantStatus status,
             Pageable pageable) {
-        UUID callerId = UUID.fromString(callerIdStr);
-        Page<SessionParticipantResponse> response =
-                sessionService.getSessionParticipants(sessionId, callerId, status, pageable);
+        Page<SessionParticipantResponse> response = sessionService.getSessionParticipants(
+                sessionId, SecurityUtils.extractUserId(authentication), status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Participants retrieved successfully", response));
     }
 
@@ -235,9 +234,8 @@ public class SessionController {
     public ResponseEntity<ApiResponse<Void>> approveParticipant(
             @PathVariable Long sessionId,
             @PathVariable UUID userId,
-            @AuthenticationPrincipal String callerIdStr) {
-        UUID callerId = UUID.fromString(callerIdStr);
-        sessionService.approveParticipant(sessionId, callerId, userId);
+            Authentication authentication) {
+        sessionService.approveParticipant(sessionId, SecurityUtils.extractUserId(authentication), userId);
         return ResponseEntity.ok(ApiResponse.success("Participant approved successfully", null));
     }
 
@@ -251,10 +249,108 @@ public class SessionController {
     public ResponseEntity<ApiResponse<Void>> rejectParticipant(
             @PathVariable Long sessionId,
             @PathVariable UUID userId,
-            @AuthenticationPrincipal String callerIdStr,
+            Authentication authentication,
             @Valid @RequestBody(required = false) RejectParticipantRequest request) {
-        UUID callerId = UUID.fromString(callerIdStr);
-        sessionService.rejectParticipant(sessionId, callerId, userId, request);
+        sessionService.rejectParticipant(sessionId, SecurityUtils.extractUserId(authentication), userId, request);
         return ResponseEntity.ok(ApiResponse.success("Participant rejected successfully", null));
+    }
+
+    @Operation(summary = "List a session's comments", description = "SESSION-10/A17 — participant (JOINED/REQUESTED/INVITED) or, for a group-linked session, a group member. The underlying post is invisible via /api/posts/** — this is the only way to read a session's comment thread.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Comments (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a participant or group member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
+    })
+    @GetMapping("/{sessionId}/comments")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Page<CommentResponse>>> getSessionComments(
+            @PathVariable Long sessionId,
+            Authentication authentication,
+            Pageable pageable) {
+        Page<CommentResponse> response = sessionService.getSessionComments(
+                sessionId, SecurityUtils.extractUserId(authentication), pageable);
+        return ResponseEntity.ok(ApiResponse.success("Comments retrieved successfully", response));
+    }
+
+    @Operation(summary = "Comment on a session", description = "Same gating as getSessionComments.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Comment created"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a participant or group member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
+    })
+    @PostMapping("/{sessionId}/comments")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<CommentResponse>> createSessionComment(
+            @PathVariable Long sessionId,
+            Authentication authentication,
+            @Valid @RequestBody CreateCommentRequest request) {
+        CommentResponse response = sessionService.createSessionComment(
+                sessionId, SecurityUtils.extractUserId(authentication), request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Comment created successfully", response));
+    }
+
+    @Operation(summary = "Like a session comment", description = "Same gating as getSessionComments.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Liked"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a participant or group member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session or comment not found")
+    })
+    @PostMapping("/{sessionId}/comments/{commentId}/like")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> likeSessionComment(
+            @PathVariable Long sessionId,
+            @PathVariable Long commentId,
+            Authentication authentication) {
+        sessionService.likeSessionComment(sessionId, commentId, SecurityUtils.extractUserId(authentication));
+        return ResponseEntity.ok(ApiResponse.success("Comment liked successfully", null));
+    }
+
+    @Operation(summary = "Unlike a session comment", description = "Same gating as getSessionComments.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Unliked"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a participant or group member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session or comment not found")
+    })
+    @DeleteMapping("/{sessionId}/comments/{commentId}/like")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> unlikeSessionComment(
+            @PathVariable Long sessionId,
+            @PathVariable Long commentId,
+            Authentication authentication) {
+        sessionService.unlikeSessionComment(sessionId, commentId, SecurityUtils.extractUserId(authentication));
+        return ResponseEntity.ok(ApiResponse.success("Comment unliked successfully", null));
+    }
+
+    @Operation(summary = "Like a session", description = "Likes the session's own SESSION_POST anchor — same gating as getSessionComments (participant, or group member for a group-linked session). The underlying post is invisible via /api/posts/{postId}/like — this is the only way to like a session.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Liked"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Already liked"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a participant or group member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
+    })
+    @PostMapping("/{sessionId}/like")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> likeSession(
+            @PathVariable Long sessionId,
+            Authentication authentication) {
+        sessionService.likeSession(sessionId, SecurityUtils.extractUserId(authentication));
+        return ResponseEntity.ok(ApiResponse.success("Session liked successfully", null));
+    }
+
+    @Operation(summary = "Unlike a session", description = "Same gating as likeSession.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Unliked"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not currently liked"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a participant or group member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
+    })
+    @DeleteMapping("/{sessionId}/like")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> unlikeSession(
+            @PathVariable Long sessionId,
+            Authentication authentication) {
+        sessionService.unlikeSession(sessionId, SecurityUtils.extractUserId(authentication));
+        return ResponseEntity.ok(ApiResponse.success("Session unliked successfully", null));
     }
 }

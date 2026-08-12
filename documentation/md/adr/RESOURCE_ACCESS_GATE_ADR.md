@@ -1,8 +1,11 @@
 # ADR: Resource Access — Availability vs. Visibility Gates
 
 **Status:** Decided (design), tickets filed 2026-08-11. `common` C2 (`ResourceGate<T>`) and
-`post-impl` A14 (`PostGate`) implemented 2026-08-12 — see §9 for per-ticket status;
-`session-impl` SESSION-10 (`SessionGate`) still not implemented. Written 2026-08-10
+`post-impl` A14 (`PostGate`) implemented 2026-08-12 — see §9 for per-ticket status. `session-impl`
+SESSION-10 shipped 2026-08-12 too, and — after a second design pass — *did* land as the standalone
+`SessionGate` this ADR originally specced in §6; see §7's supersession note for the full path
+(an interim bidirectional design shipped first, then was replaced by a one-way
+`session-impl → post-api` dependency with `SessionGate` as the sole gate). Written 2026-08-10
 while scoping `post-impl`'s A14 (`modules/social/post-impl/docs/BACKLOG_MVP.md`) — enforcing
 visibility/group-membership on single-item post paths. The discussion widened past A14 itself into
 a durable, cross-cutting rule for how *every* domain with per-item access rules (today: `post-impl`;
@@ -220,6 +223,35 @@ public boolean isVisibleTo(Session session, UUID viewerId) {
   how every other cross-domain reference in this codebase works. SESSION-10 keeps its own
   domain-scoped `SessionComment`/`SessionCommentLike` tables, shape copied from `post-impl`'s
   comments, entity not shared — unchanged from the vision doc.
+
+  > **Superseded 2026-08-12, in two passes.** This exact alternative was reopened, discussed
+  > directly with the user, and accepted for SESSION-10 (not `GROUP_SESSION_POST` — just
+  > `SESSION_POST`, and only as a comment-thread anchor, not the session's "core content"). A first
+  > implementation pass built the bidirectional dependency this section warned about (`post-impl` →
+  > `session-api` for `PostGate`'s gating, `session-impl` → `post-api` to create the anchor),
+  > reasoning that the objection was weaker than stated since `group-impl` ↔ `post-impl` already has
+  > the identical shape (B3 + B9). That pass worked (it did trigger, and fix, the exact circular
+  > Spring bean dependency this note originally predicted — `PostGate → SessionServiceImpl →
+  > PostServiceImpl → PostGate`, fixed with `@Lazy` on `SessionServiceImpl`'s `PostService`
+  > dependency) but the user then asked for something stricter than "not unprecedented": a genuinely
+  > **one-way** dependency, with a `SESSION_POST` fully invisible via `/api/posts/**` for every
+  > caller, reachable only through `session-api`.
+  >
+  > **What actually shipped (second pass):** `post-impl` has **no** dependency on `session-api` at
+  > all — `PostGate.isAvailable` returns `false` unconditionally for `SESSION_POST` (not
+  > viewer-dependent; even the gate's `isVisibleTo` case, never reached in practice, returns `false`
+  > too). `post-api`'s `CommentService` gained four bypass methods (`createSessionComment`,
+  > `getSessionPostComments`, `likeSessionComment`, `unlikeSessionComment`) that skip `PostGate`
+  > entirely — same shape as B9's `createSystemPost` bypassing `createPost`'s validation. `session-api`
+  > gained matching proxy methods on `SessionService`, and `session-impl` finally got the
+  > `SessionGate implements ResourceGate<Session>` this ADR originally specced in §6 (a `@Component`,
+  > not just inlined logic) — the sole gate between a caller and a session's comments, since
+  > `post-impl` never checks. `session-api` also gained a new `post-api` dependency (to reference
+  > `CommentResponse`/`CreateCommentRequest` in its own method signatures) — same precedent as
+  > `group-api`'s existing `post-api` dependency for `PinnedPostResponse`. With `post-impl → session-api`
+  > gone, so is the circular bean dependency — `SessionServiceImpl` reverted to plain
+  > `@RequiredArgsConstructor`, no `@Lazy` needed. Full design record:
+  > `modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md`.
 - **A fully generic, annotation/AOP-driven visibility framework in `common`** (e.g.
   `@RequiresVisibility` + a Spring aspect dispatching to a registered gate) — real value if the
   *logic* were reusable across domains, which it isn't; would add a real ceremony/discoverability
@@ -265,6 +297,9 @@ public boolean isVisibleTo(Session session, UUID viewerId) {
   A14's own scope, spotted as a post-merge follow-up — had the identical unguarded pattern and
   were gated the same way, bringing the actual count to 7 single-item paths, not the 5 originally
   identified. Detail: `modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`.
-- **`session-impl` SESSION-10** (`TODO`, gating redesigned) — implement `SessionGate` from the
-  start against `ResourceGate<T>`, including §6's group-member widening as part of its initial
-  scope, not a follow-up.
+- **`session-impl` SESSION-10** (`DONE`, 2026-08-12, gating redesigned twice) — after an interim
+  design that expressed §6's rule via `PostGate` calling into `session-api`, the final shape
+  implements `SessionGate implements ResourceGate<Session>` exactly as originally specced here (a
+  real `@Component`, not just inlined logic) — `session-impl`'s own comment-proxy endpoints call
+  `sessionGate.require(...)` directly; `post-impl` never checks. See §7's supersession note for the
+  full path. Detail: `modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md`.

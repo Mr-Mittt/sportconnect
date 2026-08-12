@@ -5,6 +5,12 @@ dependencies {
     // LocationResponse is embedded directly in SessionResponse
     implementation project(':modules:location:location-api')
 
+    // SESSION-10/A17: CommentResponse/CreateCommentRequest appear directly in SessionService's
+    // comment-proxy method signatures (createSessionComment/getSessionComments/...) — same
+    // precedent as group-api depending on post-api for PostResponse in GroupResponse/
+    // PinnedPostResponse.
+    implementation project(':modules:social:post-api')
+
     // Spring Web
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'

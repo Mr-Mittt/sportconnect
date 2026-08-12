@@ -7,10 +7,11 @@ dependencies {
     implementation project(':modules:session:session-api')
     implementation project(':modules:common')
     implementation project(':modules:social:group-api')
-    // group-api's GroupResponse references post-api's PostResponse (pinned posts); group-api
-    // exposes post-api as 'implementation' not 'api', so it isn't transitive — needed directly
-    // here for the Groovy compiler to fully resolve GroupResponse (same reason group-impl
-    // depends on post-api directly).
+    // Originally needed only because group-api's GroupResponse references post-api's
+    // PostResponse (pinned posts) and group-api exposes post-api as 'implementation' not 'api'
+    // (not transitive). SESSION-10/A17 gave it a second, real reason: SessionServiceImpl injects
+    // PostService.createSessionPost to create each session's companion SESSION_POST inline in
+    // the same transaction as session creation.
     implementation project(':modules:social:post-api')
     implementation project(':modules:user:user-api')
     implementation project(':modules:sport:sport-api')

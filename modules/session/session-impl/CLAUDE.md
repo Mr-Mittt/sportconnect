@@ -11,7 +11,7 @@ fields. See `modules/location/location-impl/CLAUDE.md` for that side of the boun
 | `modules/session/session-api` | SessionService interface + all DTOs |
 | `modules/common` | ApiResponse<T>, shared exceptions |
 | `modules/social/group-api` | Permission checks (`canManageMembers`/`isGroupMember`), `getGroup` for private-group visibility |
-| `modules/social/post-api` | Not used directly — needed only because `group-api`'s `GroupResponse` references `PostResponse` (pinned posts) and `group-api` doesn't expose that dependency transitively (`implementation`, not `api`); Groovy's compiler needs it resolvable to compile Spock specs against `GroupResponse` |
+| `modules/social/post-api` | Originally needed only because `group-api`'s `GroupResponse` references `PostResponse` (pinned posts). SESSION-10 gave it a second, real reason: `createSession` calls `PostService.createSessionPost` inline to create each session's companion `SESSION_POST`, and the comment-proxy methods (`createSessionComment` etc.) call `CommentService`'s bypass methods. Plain `@RequiredArgsConstructor` — no `@Lazy` needed, since `post-impl` has no dependency back on this module (unlike `group-impl`'s `postService` field, which mirrors a real bidirectional dependency with `post-impl`) |
 | `modules/user/user-api` | Batch `UserService.getUsersByIds` — creator/participant enrichment |
 | `modules/sport/sport-api` | Batch `SportService.getSportsByIds` — `sportName` enrichment |
 | `modules/location/location-api` | Batch `LocationService.getLocationsByIds`/single `getLocation` — location enrichment + sport-match validation |
@@ -20,11 +20,12 @@ fields. See `modules/location/location-impl/CLAUDE.md` for that side of the boun
 
 | Class | Purpose |
 |---|---|
-| `Session` | `groupId` nullable (null = standalone), `sessionType` discriminator, `locationId` (NOT NULL, references `locations`), `locationNote` (nullable free text, e.g. "Court 3" — scoped to this session, never written back to the shared `Location`), `status` (`SCHEDULED`/`ONGOING`/`COMPLETED`/`CANCELLED`), `cancelReason`/`cancelledBy`/`cancelledAt` (set only by `cancelSession`) |
+| `Session` | `groupId` nullable (null = standalone), `postId` (NOT NULL, unique, no DB FK — SESSION-10, id of the companion `SESSION_POST` in `post-impl`, created synchronously by `createSession`), `sessionType` discriminator, `locationId` (NOT NULL, references `locations`), `locationNote` (nullable free text, e.g. "Court 3" — scoped to this session, never written back to the shared `Location`), `status` (`SCHEDULED`/`ONGOING`/`COMPLETED`/`CANCELLED`), `cancelReason`/`cancelledBy`/`cancelledAt` (set only by `cancelSession`) |
 | `SessionParticipant` | Join/leave; row kept (status flipped) on leave, not deleted |
 | `SessionServiceImpl` | All business rules below; batch-resolves creator/sport/location/participant-count/cancelledBy in `mapToResponses` — never per-row |
 | `SessionGenerationService` | Internal only (not on `session-api`) — drives `SCHEDULED`→`ONGOING`→`COMPLETED` automatically, generates the next recurring occurrence. See SESSION-2 in `docs/BACKLOG_MVP.md`. |
 | `SessionGenerationJob` | `@Scheduled`: hourly `generateUpcomingSessions`; every-15-min `startOngoingSessions` and `closePastSessions` |
+| `SessionGate` (`access/`) | `ResourceGate<Session>` (SESSION-10) — the sole gate on a session's comment thread *and* its own like; `post-impl` never checks (its own `PostGate` makes `SESSION_POST` unconditionally unavailable). Same shape as `post-impl`'s `PostGate`, no shared logic |
 
 ## Endpoints
 
@@ -38,7 +39,31 @@ POST   /api/sessions/{sessionId}/cancel        same gating; soft — sets status
 POST   /api/sessions/{sessionId}/join          rejected if the session is CANCELLED
 DELETE /api/sessions/{sessionId}/leave         JOINED->LEFT, or INVITED->LEFT ("decline")/REQUESTED->LEFT ("cancel my request") — SESSION-9
 GET    /api/sessions/{sessionId}/participants  paginated, JOINED-only
+GET    /api/sessions/{sessionId}/comments                      participant or group-member (SESSION-10) — see SessionGate
+POST   /api/sessions/{sessionId}/comments                      same gating
+POST   /api/sessions/{sessionId}/comments/{commentId}/like      same gating
+DELETE /api/sessions/{sessionId}/comments/{commentId}/like      same gating
+POST   /api/sessions/{sessionId}/like                           same gating — likes the SESSION_POST anchor itself
+DELETE /api/sessions/{sessionId}/like                           same gating
 ```
+
+**Auth-extraction convention:** every endpoint in this controller uses `@PreAuthorize
+("hasRole('USER')")` + `Authentication authentication` + `SecurityUtils.extractUserId(authentication)`
+— uniform across the whole file, unlike `PostController`'s mixed convention (A1: `@AuthenticationPrincipal`
+for "MY OWN"/mutation endpoints, `Authentication`+`SecurityUtils` for "viewing a resource by id"
+ones). `@PreAuthorize` and the extraction mechanism are orthogonal — the former is an AOP gate
+evaluated *before* the method runs (throws 403 if the caller lacks `ROLE_USER`), the latter is just
+how the method reads the already-authenticated principal — so combining
+`@PreAuthorize("hasRole('USER')")` with `Authentication`/`SecurityUtils.extractUserId()` instead of
+`@AuthenticationPrincipal` is a deliberate, valid choice here for one canonical extraction path
+across the file, not a workaround. `@PreAuthorize("hasRole('USER')")` is currently redundant with
+`SecurityConfig`'s global `.anyRequest().authenticated()` (every authenticated user gets `ROLE_USER`
+today, no separate ADMIN/VENDOR role wired into JWTs yet) but kept everywhere as an explicit,
+self-documenting gate per the existing `PostController` precedent.
+
+Deleting a session comment has no proxy endpoint here — `DELETE /api/posts/comments/{commentId}`
+(post-impl) already works unchanged, since `deleteComment` was never gated by `PostGate` (it's
+ownership-only), so there's nothing this module needs to wrap.
 
 ## Run Tests
 
@@ -62,7 +87,20 @@ GET    /api/sessions/{sessionId}/participants  paginated, JOINED-only
    delete anywhere in this service.
 5. `getGroupSessions` calls `groupService.getGroup(groupId, currentUserId)` first — this reuses
    the *existing* private-group membership gate rather than reimplementing it.
-6. **SESSION-9:** every `SessionResponse`-returning method resolves `callerParticipation` — the
+6. **SESSION-10:** `createSession` calls `postService.createSessionPost(userId, "Session: " + title)`
+   inline, before persisting the `Session`, in the same `@Transactional` method — a post-creation
+   failure rolls back the whole session creation. The returned id becomes `Session.postId`.
+   Comments are `post-impl`'s real `Comment` entity, reused via `CommentService`'s bypass methods
+   (`createSessionComment` etc., which skip `post-impl`'s own `PostGate`) — but the client only
+   ever calls **this module's** `GET/POST /api/sessions/{sessionId}/comments` endpoints, never
+   `post-impl`'s directly (those 404 unconditionally for a `SESSION_POST`, for every caller).
+   `SessionServiceImpl`'s comment-proxy methods gate via `SessionGate.require(session, callerId,
+   ...)` (participant status, widened to group membership for a group-linked session) before
+   delegating — this module is the **only** place that check happens. The same shape extends to
+   `likeSession`/`unlikeSession` (liking the `SESSION_POST` anchor itself, delegating to `PostService
+   .likeSessionPost`/`unlikeSessionPost`) — both share the private `requireSessionAccess` helper
+   with the comment-proxy methods. See `modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md`.
+7. **SESSION-9:** every `SessionResponse`-returning method resolves `callerParticipation` — the
    caller's own `SessionParticipant` row for that session (null if none), batch-resolved in
    `mapToResponses` via `findBySessionIdInAndUserId`. Drives the client's action button
    (Join/Accept/Decline/Cancel/Leave) on both the session card and `SessionDetailModal`. `null`
