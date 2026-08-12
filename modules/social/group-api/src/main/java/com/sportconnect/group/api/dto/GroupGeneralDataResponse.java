@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class GroupInfoResponse {
+public class GroupGeneralDataResponse {
     private Long groupId;
     private String groupName;
     private Boolean isPrivate;

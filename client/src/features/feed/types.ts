@@ -234,8 +234,13 @@ export interface CreateGroupPayload {
 
 // UpdateGroupRequest — partial update, only non-null fields are applied
 // server-side (GroupController.updateGroup's own @Operation description).
-// Owner or admin only; GRP-1 only ever sent `isPrivate` — GRP-2 adds
-// rules/schedule as the second use of this same payload/endpoint.
+// Owner or admin only; GRP-1 only ever sent `isPrivate` — this is the field
+// this payload is still used for (GroupsPage's Privacy toggle,
+// immediate-apply). `rules`/`schedule` are kept here for backend back-compat
+// only (same reasoning as A10 keeping a legacy `sportId` param) — GRP-9
+// moved the client's actual rules/schedule writes to
+// UpdateGroupGeneralDataPayload/PUT .../generalData below; don't send
+// rules/schedule through this payload for new code.
 export interface UpdateGroupPayload {
   groupName?: string;
   description?: string;
@@ -246,17 +251,43 @@ export interface UpdateGroupPayload {
   schedule?: string;
 }
 
-// GroupInfoResponse (GET /api/groups/{groupId}/info) — rules/schedule text.
-// Writable via the existing UpdateGroupPayload/updateGroup endpoint above,
-// but GroupResponse itself never returns them — this is the only response
-// shape that does, hence a dedicated query hook (useGroupInfo) rather than
-// reusing Group.
+// UpdateGroupGeneralDataRequest (PUT /api/groups/{groupId}/generalData, B19)
+// — owner or admin only, partial update. GRP-9's dedicated write path for
+// the fields GroupInfo (below) reads back; isPrivate deliberately excluded
+// (stays on UpdateGroupPayload/PUT /{groupId} as its own immediate-apply
+// toggle). Settings tab's General section only sends rules/schedule today —
+// the other fields exist for future UI, same "grow the DTO, not the
+// endpoint" reasoning the user asked for when this ticket was scoped.
+export interface UpdateGroupGeneralDataPayload {
+  groupName?: string;
+  description?: string;
+  avatarUrl?: string;
+  coverUrl?: string;
+  rules?: string;
+  schedule?: string;
+}
+
+// GroupGeneralDataResponse (GET/PUT /api/groups/{groupId}/generalData) — the
+// "general data" projection of Group. GroupResponse itself never returns
+// these fields, this is the only response shape that does, hence a
+// dedicated query hook (useGroupGeneralData) rather than reusing Group.
+// (There's also a legacy GET /{groupId}/info returning a near-identical
+// GroupInfoResponse shape — kept unchanged server-side for a different
+// future purpose, not used by this client.) Privacy-gated server-side, same
+// shape as GET /{groupId}: a non-member of a private group (including an
+// anonymous caller) gets a stub — only groupId/groupName/isPrivate
+// populated, every other field null — rather than a 403/404; a public
+// group, or any member of a private one, gets every field populated.
 export interface GroupInfo {
   groupId: number;
   groupName: string;
+  isPrivate: boolean;
+  description: string | null;
+  avatarUrl: string | null;
+  coverUrl: string | null;
   rules: string | null;
   schedule: string | null;
-  updatedAt: string; // ISO timestamp
+  updatedAt: string | null; // ISO timestamp, null on the private-non-member stub
 }
 
 // GroupSettingsResponse (GET/PUT /api/groups/{groupId}/settings). B7 replaced

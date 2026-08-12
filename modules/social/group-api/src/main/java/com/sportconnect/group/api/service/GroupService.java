@@ -3,6 +3,7 @@ package com.sportconnect.group.api.service;
 import com.sportconnect.group.api.dto.CreateGroupRequest;
 import com.sportconnect.group.api.dto.CreateInvitationRequest;
 import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
+import com.sportconnect.group.api.dto.GroupGeneralDataResponse;
 import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
@@ -13,6 +14,7 @@ import com.sportconnect.group.api.dto.GroupSearchResponse;
 import com.sportconnect.group.api.dto.GroupSettingsResponse;
 import com.sportconnect.group.api.dto.JoinRequestResponse;
 import com.sportconnect.group.api.dto.PinnedPostResponse;
+import com.sportconnect.group.api.dto.UpdateGroupGeneralDataRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRecurrenceRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
@@ -99,7 +101,37 @@ public interface GroupService {
     void cancelJoinRequest(Long requestId, UUID callerId);
 
     // Group Info
-    GroupInfoResponse getGroupInfo(Long groupId);
+    /**
+     * Legacy path (backs {@code GET /{groupId}/info}), kept unchanged — reserved for a different
+     * future purpose, not general data going forward (use {@link #getGroupGeneralData} for that).
+     * Privacy-gated, same shape as {@link #getGroup}: a private group's info is visible in full
+     * only to its members (owner/admin/member); a non-member (including a {@code null}
+     * {@code currentUserId}) gets a stub response — {@code groupId}/{@code groupName}/
+     * {@code isPrivate} only, every other field {@code null} — rather than a thrown exception, so
+     * a caller can still show "this group is private" without a special-case error path. A public
+     * group, or any member of a private one, gets every field populated.
+     */
+    GroupInfoResponse getGroupInfo(Long groupId, UUID currentUserId);
+
+    /**
+     * Canonical read path for "general data" (B19/GRP-9), matching {@link #updateGroupGeneralData}
+     * — a separate DTO from {@link #getGroupInfo}/{@link GroupInfoResponse} even though the fields
+     * currently line up 1:1, since the two paths are expected to diverge (see {@link #getGroupInfo}).
+     * Same privacy gate as {@link #getGroupInfo}: full data for a public group or any member of a
+     * private one; a {@code groupId}/{@code groupName}/{@code isPrivate}-only stub otherwise.
+     */
+    GroupGeneralDataResponse getGroupGeneralData(Long groupId, UUID currentUserId);
+
+    /**
+     * Owner or admin only (same permission model as {@link #updateGroup}), partial update.
+     * Scoped write path for the "general data" fields {@link #getGroupGeneralData} reads back
+     * (groupName/description/avatarUrl/coverUrl/rules/schedule) — a subset of what
+     * {@link #updateGroup}/{@link UpdateGroupRequest} also accepts (isPrivate excluded; that stays
+     * on the generic update-group endpoint as its own immediate-apply toggle). Kept as a separate
+     * method/DTO rather than folded into {@link #updateGroup} so a caller editing only this data
+     * doesn't need the wider {@link UpdateGroupRequest} shape.
+     */
+    GroupGeneralDataResponse updateGroupGeneralData(Long groupId, UUID userId, UpdateGroupGeneralDataRequest request);
 
     // Group Settings
     GroupSettingsResponse getGroupSettings(Long groupId, UUID userId);

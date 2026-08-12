@@ -207,7 +207,6 @@ export function GroupsPage() {
   const settingsGuard = useSettingsUnsavedGuard(
     selectedGroupId ?? undefined,
     activeGroupTab === 'settings',
-    currentUserId,
   );
   const guardedSetActiveGroupTab = (tab: GroupTabKey) =>
     settingsGuard.guard(() => setActiveGroupTab(tab));

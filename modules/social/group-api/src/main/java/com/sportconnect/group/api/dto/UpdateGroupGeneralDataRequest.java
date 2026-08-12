@@ -1,0 +1,29 @@
+package com.sportconnect.group.api.dto;
+
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UpdateGroupGeneralDataRequest {
+
+    @Size(min = 3, max = 100, message = "Group name must be between 3 and 100 characters")
+    private String groupName;
+
+    @Size(max = 5000, message = "Description cannot exceed 5000 characters")
+    private String description;
+
+    private String avatarUrl;
+    private String coverUrl;
+
+    @Size(max = 10000, message = "Rules cannot exceed 10000 characters")
+    private String rules;
+
+    @Size(max = 5000, message = "Schedule cannot exceed 5000 characters")
+    private String schedule;
+}

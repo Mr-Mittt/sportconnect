@@ -6,6 +6,7 @@ import com.sportconnect.common.exception.NotFoundException;
 import com.sportconnect.group.api.dto.CreateGroupRequest;
 import com.sportconnect.group.api.dto.CreateInvitationRequest;
 import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
+import com.sportconnect.group.api.dto.GroupGeneralDataResponse;
 import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
@@ -16,6 +17,7 @@ import com.sportconnect.group.api.dto.GroupSearchResponse;
 import com.sportconnect.group.api.dto.GroupSettingsResponse;
 import com.sportconnect.group.api.dto.JoinRequestResponse;
 import com.sportconnect.group.api.dto.PinnedPostResponse;
+import com.sportconnect.group.api.dto.UpdateGroupGeneralDataRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRecurrenceRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
@@ -827,13 +829,117 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     @Transactional(readOnly = true)
-    public GroupInfoResponse getGroupInfo(Long groupId) {
+    public GroupInfoResponse getGroupInfo(Long groupId, UUID currentUserId) {
         Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
                 .orElseThrow(() -> new NotFoundException("Group not found"));
 
+        if (!isGroupGeneralDataVisible(groupId, group, currentUserId)) {
+            return GroupInfoResponse.builder()
+                    .groupId(group.getId())
+                    .groupName(group.getGroupName())
+                    .isPrivate(true)
+                    .build();
+        }
+
+        return mapToGroupInfoResponse(group);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public GroupGeneralDataResponse getGroupGeneralData(Long groupId, UUID currentUserId) {
+        Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
+                .orElseThrow(() -> new NotFoundException("Group not found"));
+
+        if (!isGroupGeneralDataVisible(groupId, group, currentUserId)) {
+            return GroupGeneralDataResponse.builder()
+                    .groupId(group.getId())
+                    .groupName(group.getGroupName())
+                    .isPrivate(true)
+                    .build();
+        }
+
+        return mapToGroupGeneralDataResponse(group);
+    }
+
+    // Shared by getGroupInfo/getGroupGeneralData — same privacy gate as getGroup, but the callers
+    // return a stub instead of throwing: a non-member of a private group still learns the group is
+    // private, just nothing else.
+    private boolean isGroupGeneralDataVisible(Long groupId, Group group, UUID currentUserId) {
+        return !Boolean.TRUE.equals(group.getIsPrivate())
+                || (currentUserId != null && isGroupMember(groupId, currentUserId));
+    }
+
+    @Override
+    @Transactional
+    public GroupGeneralDataResponse updateGroupGeneralData(Long groupId, UUID userId, UpdateGroupGeneralDataRequest request) {
+        Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
+                .orElseThrow(() -> new NotFoundException("Group not found"));
+
+        // Check permission (owner or admin) — same model as updateGroup
+        if (!canManageMembers(groupId, userId)) {
+            throw new BadRequestException("Only group owner or admin can update group");
+        }
+
+        if (request.getGroupName() != null && !request.getGroupName().equals(group.getGroupName())) {
+            if (groupRepository.existsByGroupName(request.getGroupName())) {
+                throw new BadRequestException("Group name already exists");
+            }
+            group.setGroupName(request.getGroupName());
+        }
+
+        if (request.getDescription() != null) {
+            group.setDescription(request.getDescription());
+        }
+
+        if (request.getAvatarUrl() != null) {
+            group.setAvatarUrl(request.getAvatarUrl());
+        }
+
+        if (request.getCoverUrl() != null) {
+            group.setCoverUrl(request.getCoverUrl());
+        }
+
+        if (request.getRules() != null) {
+            group.setRules(request.getRules());
+        }
+
+        if (request.getSchedule() != null) {
+            group.setSchedule(request.getSchedule());
+        }
+
+        // Same TOCTOU backstop as updateGroup — groupName is the only unique constraint on `groups`.
+        try {
+            group = groupRepository.save(group);
+        } catch (DataIntegrityViolationException e) {
+            throw new BadRequestException("Group name already exists");
+        }
+        log.info("Updated general data for group {} by user {}", groupId, userId);
+
+        return mapToGroupGeneralDataResponse(group);
+    }
+
+    private GroupInfoResponse mapToGroupInfoResponse(Group group) {
         return GroupInfoResponse.builder()
                 .groupId(group.getId())
                 .groupName(group.getGroupName())
+                .isPrivate(group.getIsPrivate())
+                .description(group.getDescription())
+                .avatarUrl(group.getAvatarUrl())
+                .coverUrl(group.getCoverUrl())
+                .rules(group.getRules())
+                .schedule(group.getSchedule())
+                .updatedAt(group.getUpdatedAt())
+                .build();
+    }
+
+    private GroupGeneralDataResponse mapToGroupGeneralDataResponse(Group group) {
+        return GroupGeneralDataResponse.builder()
+                .groupId(group.getId())
+                .groupName(group.getGroupName())
+                .isPrivate(group.getIsPrivate())
+                .description(group.getDescription())
+                .avatarUrl(group.getAvatarUrl())
+                .coverUrl(group.getCoverUrl())
                 .rules(group.getRules())
                 .schedule(group.getSchedule())
                 .updatedAt(group.getUpdatedAt())

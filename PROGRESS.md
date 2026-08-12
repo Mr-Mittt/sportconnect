@@ -427,6 +427,24 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   Postgres: created a group, confirmed `is-owner`/`is-member` both `true`, soft-deleted the group
   via the existing owner-only `DELETE` endpoint, re-checked all three permission endpoints — all
   now correctly `false`. `:modules:social:group-impl:test` (151) and `:server:test` both green.
+- **B19 (2026-08-11, `DONE`, `modules/social/group-impl/docs/B19_GROUP_GENERAL_DATA_ENDPOINT.md`):**
+  new `PUT /api/groups/{groupId}/generalData` (`UpdateGroupGeneralDataRequest`:
+  `groupName`/`description`/`avatarUrl`/`coverUrl`/`rules`/`schedule`), alongside the existing `GET
+  /{groupId}/info` — closes the asymmetry where that read endpoint had no scoped write counterpart
+  and the client had to write `rules`/`schedule` through the generic `updateGroup`/`PUT
+  /{groupId}` (`GroupResponse`, which never carries those fields) and manually patch its query
+  cache from what it *sent* rather than the server's actual response. `GroupInfoResponse` expanded
+  with `description`/`avatarUrl`/`coverUrl` for read/write symmetry.
+  `GroupServiceImpl.updateGroupGeneralData` mirrors `updateGroup`'s exact permission
+  (owner-or-admin)/partial-update/name-conflict-backstop shape; `getGroupInfo` and this method now
+  share one `mapToGroupInfoResponse` helper. `isPrivate` deliberately excluded — stays on
+  `updateGroup` as its own immediate-apply toggle. `UpdateGroupRequest`/`PUT /{groupId}` keeps
+  accepting `rules`/`schedule` too (not removed) — back-compat precedent, same reasoning as A10
+  keeping the legacy `sportId` filter param. Confirmed with the user via two decisions before
+  implementing: add alongside (not replacing) `GET /info`, and scope the write DTO to the full
+  field set now rather than just `rules`/`schedule`, so future UI doesn't need another backend
+  ticket. Unblocks client **GRP-9**. `:modules:social:group-impl:test` and `:server:test`
+  (`GroupControllerTest`) both green.
 
 #### `server`
 - `SportConnectApplication.java` — main entry point with full component scan
@@ -1636,6 +1654,20 @@ fixed at the test level (tolerate the auto-load race; wait for Home Feed's page-
 touching its Sport filter). 7/7 consecutive full-suite runs green after, vs. 3/3 consecutive failures
 at the same two spots before. Full root-cause writeup in `GRP-8_INVITATION_LIFECYCLE_POLISH.md`'s
 "Follow-up" section.
+
+**GRP-9 DONE** (2026-08-11): moved the Settings tab General section's rules/schedule save off the
+generic `useUpdateGroup`/`PUT /{groupId}` and onto the new dedicated `useUpdateGroupGeneralData`/
+`PUT /{groupId}/generalData` (backend **B19**, filed and shipped same session). Removed a
+workaround along the way: the old path patched the `groupInfo` query cache manually from what was
+*sent*, since `updateGroup`'s `GroupResponse` return shape never carries `rules`/`schedule`; the
+new endpoint returns a real `GroupInfoResponse`, so the cache is now set from the server's actual
+response, matching every other mutation hook in the codebase. `currentUserId` dropped from
+`useSettingsUnsavedGuard`'s signature (dead once the old `useUpdateGroup(currentUserId)` instance
+was removed) — `GroupsPage.tsx`'s call site updated. `GroupInfo`/`UpdateGroupGeneralDataPayload`
+types expanded to match B19's DTO (`description`/`avatarUrl`/`coverUrl` alongside
+`rules`/`schedule`) — no new UI for those fields yet, matching B19's own scope decision. New MSW
+handler for `PUT /api/groups/:groupId/generalData`. `pnpm vitest run` 795/795 green, `tsc -b`
+clean, lint clean.
 
 **Chat tickets moved to V1 (2026-07-26, user decision):** CHAT-1/CHAT-2/CHAT-3/CHAT-4 (real-time
 group chat via PubNub + persistence) deprioritized out of the MVP backlog in full. Backend queue file

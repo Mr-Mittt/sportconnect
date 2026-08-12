@@ -961,41 +961,343 @@ class GroupServiceImplSpec extends Specification {
         result.totalElements == 1
     }
 
-    def "getGroupInfo should return rules and schedule when group exists"() {
-        given: "a group with rules and schedule"
+    def "getGroupInfo should return full info when group is public"() {
+        given: "a public group with rules and schedule"
         def groupWithInfo = Group.builder()
                 .id(1L)
                 .groupName("Test Group")
+                .description("A group about testing")
+                .avatarUrl("https://example.com/avatar.png")
+                .coverUrl("https://example.com/cover.png")
                 .rules("No spamming")
                 .schedule("Every Sunday 9am")
+                .isPrivate(false)
                 .isActive(true)
                 .createdBy(userId)
                 .updatedAt(java.time.LocalDateTime.now())
                 .build()
 
         when: "getting group info"
-        def result = groupService.getGroupInfo(1L)
+        def result = groupService.getGroupInfo(1L, otherUserId)
 
-        then: "group is found and info is returned"
+        then: "group is found and full info is returned"
         1 * groupRepository.findByIdAndIsActiveTrue(1L) >> Optional.of(groupWithInfo)
+        0 * groupMemberRepository.existsByGroupIdAndUserId(_, _)
 
         and: "result contains correct fields"
         result != null
         result.groupId == 1L
         result.groupName == "Test Group"
+        result.isPrivate == false
+        result.description == "A group about testing"
+        result.avatarUrl == "https://example.com/avatar.png"
+        result.coverUrl == "https://example.com/cover.png"
         result.rules == "No spamming"
         result.schedule == "Every Sunday 9am"
     }
 
     def "getGroupInfo should throw NotFoundException when group does not exist"() {
         when: "getting info for a non-existent group"
-        groupService.getGroupInfo(999L)
+        groupService.getGroupInfo(999L, userId)
 
         then: "group not found"
         1 * groupRepository.findByIdAndIsActiveTrue(999L) >> Optional.empty()
 
         and: "exception is thrown"
         thrown(NotFoundException)
+    }
+
+    def "getGroupInfo should return only groupName and isPrivate when group is private and caller is not a member"() {
+        given: "a private group"
+        testGroup.isPrivate = true
+        def privateGroup = testGroup
+
+        when: "a non-member requests the group's info"
+        def result = groupService.getGroupInfo(privateGroup.id, otherUserId)
+
+        then: "membership is checked and denied"
+        1 * groupRepository.findByIdAndIsActiveTrue(privateGroup.id) >> Optional.of(privateGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(privateGroup.id, otherUserId) >> false
+
+        and: "only the stub fields are populated"
+        result.groupId == privateGroup.id
+        result.groupName == privateGroup.groupName
+        result.isPrivate == true
+        result.description == null
+        result.avatarUrl == null
+        result.coverUrl == null
+        result.rules == null
+        result.schedule == null
+        result.updatedAt == null
+    }
+
+    def "getGroupInfo should return only groupName and isPrivate when group is private and caller is anonymous"() {
+        given: "a private group"
+        testGroup.isPrivate = true
+        def privateGroup = testGroup
+
+        when: "an unauthenticated caller requests the group's info"
+        def result = groupService.getGroupInfo(privateGroup.id, null)
+
+        then: "denied without a membership lookup"
+        1 * groupRepository.findByIdAndIsActiveTrue(privateGroup.id) >> Optional.of(privateGroup)
+        0 * groupMemberRepository.existsByGroupIdAndUserId(_, _)
+
+        and: "only the stub fields are populated"
+        result.groupName == privateGroup.groupName
+        result.isPrivate == true
+        result.rules == null
+    }
+
+    def "getGroupInfo should return full info when group is private and caller is a member"() {
+        given: "a private group"
+        testGroup.isPrivate = true
+        testGroup.rules = "Be respectful"
+        def privateGroup = testGroup
+
+        when: "a member requests the group's info"
+        def result = groupService.getGroupInfo(privateGroup.id, userId)
+
+        then: "membership is confirmed and full info is returned"
+        1 * groupRepository.findByIdAndIsActiveTrue(privateGroup.id) >> Optional.of(privateGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(privateGroup.id, userId) >> true
+
+        and: "result contains full fields"
+        result.groupId == privateGroup.id
+        result.isPrivate == true
+        result.rules == "Be respectful"
+    }
+
+    def "getGroupGeneralData should return full data when group is public"() {
+        given: "a public group with rules and schedule"
+        def groupWithInfo = Group.builder()
+                .id(1L)
+                .groupName("Test Group")
+                .description("A group about testing")
+                .avatarUrl("https://example.com/avatar.png")
+                .coverUrl("https://example.com/cover.png")
+                .rules("No spamming")
+                .schedule("Every Sunday 9am")
+                .isPrivate(false)
+                .isActive(true)
+                .createdBy(userId)
+                .updatedAt(java.time.LocalDateTime.now())
+                .build()
+
+        when: "getting group general data"
+        def result = groupService.getGroupGeneralData(1L, otherUserId)
+
+        then: "group is found and full data is returned"
+        1 * groupRepository.findByIdAndIsActiveTrue(1L) >> Optional.of(groupWithInfo)
+        0 * groupMemberRepository.existsByGroupIdAndUserId(_, _)
+
+        and: "result contains correct fields"
+        result != null
+        result.groupId == 1L
+        result.groupName == "Test Group"
+        result.isPrivate == false
+        result.description == "A group about testing"
+        result.avatarUrl == "https://example.com/avatar.png"
+        result.coverUrl == "https://example.com/cover.png"
+        result.rules == "No spamming"
+        result.schedule == "Every Sunday 9am"
+    }
+
+    def "getGroupGeneralData should throw NotFoundException when group does not exist"() {
+        when: "getting general data for a non-existent group"
+        groupService.getGroupGeneralData(999L, userId)
+
+        then: "group not found"
+        1 * groupRepository.findByIdAndIsActiveTrue(999L) >> Optional.empty()
+
+        and: "exception is thrown"
+        thrown(NotFoundException)
+    }
+
+    def "getGroupGeneralData should return only groupName and isPrivate when group is private and caller is not a member"() {
+        given: "a private group"
+        testGroup.isPrivate = true
+        def privateGroup = testGroup
+
+        when: "a non-member requests the group's general data"
+        def result = groupService.getGroupGeneralData(privateGroup.id, otherUserId)
+
+        then: "membership is checked and denied"
+        1 * groupRepository.findByIdAndIsActiveTrue(privateGroup.id) >> Optional.of(privateGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(privateGroup.id, otherUserId) >> false
+
+        and: "only the stub fields are populated"
+        result.groupId == privateGroup.id
+        result.groupName == privateGroup.groupName
+        result.isPrivate == true
+        result.description == null
+        result.avatarUrl == null
+        result.coverUrl == null
+        result.rules == null
+        result.schedule == null
+        result.updatedAt == null
+    }
+
+    def "getGroupGeneralData should return only groupName and isPrivate when group is private and caller is anonymous"() {
+        given: "a private group"
+        testGroup.isPrivate = true
+        def privateGroup = testGroup
+
+        when: "an unauthenticated caller requests the group's general data"
+        def result = groupService.getGroupGeneralData(privateGroup.id, null)
+
+        then: "denied without a membership lookup"
+        1 * groupRepository.findByIdAndIsActiveTrue(privateGroup.id) >> Optional.of(privateGroup)
+        0 * groupMemberRepository.existsByGroupIdAndUserId(_, _)
+
+        and: "only the stub fields are populated"
+        result.groupName == privateGroup.groupName
+        result.isPrivate == true
+        result.rules == null
+    }
+
+    def "getGroupGeneralData should return full data when group is private and caller is a member"() {
+        given: "a private group"
+        testGroup.isPrivate = true
+        testGroup.rules = "Be respectful"
+        def privateGroup = testGroup
+
+        when: "a member requests the group's general data"
+        def result = groupService.getGroupGeneralData(privateGroup.id, userId)
+
+        then: "membership is confirmed and full data is returned"
+        1 * groupRepository.findByIdAndIsActiveTrue(privateGroup.id) >> Optional.of(privateGroup)
+        1 * groupMemberRepository.existsByGroupIdAndUserId(privateGroup.id, userId) >> true
+
+        and: "result contains full fields"
+        result.groupId == privateGroup.id
+        result.isPrivate == true
+        result.rules == "Be respectful"
+    }
+
+    def "updateGroupGeneralData should update group when user is owner"() {
+        given: "a request with rules and schedule"
+        def request = UpdateGroupGeneralDataRequest.builder()
+                .rules("Be respectful")
+                .schedule("Weekends only")
+                .build()
+
+        and: "user is owner"
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(ownerRole.id)
+                .build()
+
+        when: "updating general data"
+        def response = groupService.updateGroupGeneralData(testGroup.id, userId, request)
+
+        then: "group is found, permission is checked, and rules/schedule are saved"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        1 * groupRepository.save({ Group g -> g.rules == "Be respectful" && g.schedule == "Weekends only" }) >> testGroup
+
+        and: "response is returned"
+        response != null
+    }
+
+    def "updateGroupGeneralData should update group when user is admin"() {
+        given: "a request updating the description"
+        def request = UpdateGroupGeneralDataRequest.builder()
+                .description("Updated description")
+                .build()
+
+        and: "user is admin"
+        def adminMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(adminRole.id)
+                .build()
+
+        when: "updating general data"
+        def response = groupService.updateGroupGeneralData(testGroup.id, userId, request)
+
+        then: "group is updated"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        1 * groupRepository.save({ Group g -> g.description == "Updated description" }) >> testGroup
+
+        and: "response is returned"
+        response != null
+    }
+
+    def "updateGroupGeneralData should throw BadRequestException when user is a regular member"() {
+        given: "a request with a new description"
+        def request = UpdateGroupGeneralDataRequest.builder()
+                .description("Updated description")
+                .build()
+
+        and: "user is a regular member"
+        def regularMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(memberRole.id)
+                .build()
+
+        when: "trying to update general data"
+        groupService.updateGroupGeneralData(testGroup.id, userId, request)
+
+        then: "user is not authorized"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(regularMember)
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        0 * groupRepository.save(_ as Group)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
+    }
+
+    def "updateGroupGeneralData should throw NotFoundException when group does not exist"() {
+        given: "a request"
+        def request = UpdateGroupGeneralDataRequest.builder().description("Updated description").build()
+
+        when: "trying to update general data for a non-existent group"
+        groupService.updateGroupGeneralData(999L, userId, request)
+
+        then: "group not found"
+        1 * groupRepository.findByIdAndIsActiveTrue(999L) >> Optional.empty()
+        0 * groupRepository.save(_ as Group)
+
+        and: "exception is thrown"
+        thrown(NotFoundException)
+    }
+
+    def "updateGroupGeneralData should throw BadRequestException when new group name already exists"() {
+        given: "a request renaming to a name already taken by another group"
+        def request = UpdateGroupGeneralDataRequest.builder()
+                .groupName("Taken Name")
+                .build()
+
+        and: "user is owner"
+        def ownerMember = GroupMember.builder()
+                .groupId(testGroup.id)
+                .userId(userId)
+                .roleId(ownerRole.id)
+                .build()
+
+        when: "trying to update general data"
+        groupService.updateGroupGeneralData(testGroup.id, userId, request)
+
+        then: "group is found, permission passes, but the name conflicts"
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        1 * groupRepository.existsByGroupName("Taken Name") >> true
+        0 * groupRepository.save(_ as Group)
+
+        and: "exception is thrown"
+        thrown(BadRequestException)
     }
 
     def "updateGroup should update rules and schedule when provided"() {

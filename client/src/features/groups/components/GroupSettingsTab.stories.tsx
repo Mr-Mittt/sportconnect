@@ -34,6 +34,10 @@ const groupSettings: GroupSettings = {
 const groupInfo: GroupInfo = {
   groupId: 1,
   groupName: 'Riverside Ballers',
+  isPrivate: false,
+  description: null,
+  avatarUrl: null,
+  coverUrl: null,
   rules: 'Be on time. Bring both light and dark shirts.',
   schedule: 'Every Tuesday, 7pm at Riverside Courts.',
   updatedAt: '2026-07-15T00:00:00',

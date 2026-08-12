@@ -5,6 +5,7 @@ import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.group.api.dto.CreateGroupRequest;
 import com.sportconnect.group.api.dto.CreateInvitationRequest;
 import com.sportconnect.group.api.dto.CreateJoinRequestRequest;
+import com.sportconnect.group.api.dto.GroupGeneralDataResponse;
 import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
@@ -16,6 +17,7 @@ import com.sportconnect.group.api.dto.JoinRequestResponse;
 import com.sportconnect.group.api.dto.PinPostRequest;
 import com.sportconnect.group.api.dto.PinnedPostResponse;
 import com.sportconnect.group.api.dto.RejectInvitationRequest;
+import com.sportconnect.group.api.dto.UpdateGroupGeneralDataRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRecurrenceRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
@@ -32,7 +34,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -72,9 +73,9 @@ public class GroupController {
     @PostMapping
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<GroupResponse>> createGroup(
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @Valid @RequestBody CreateGroupRequest request) {
-        GroupResponse response = groupService.createGroup(UUID.fromString(userIdStr), request);
+        GroupResponse response = groupService.createGroup(SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Group created successfully", response));
     }
@@ -87,6 +88,7 @@ public class GroupController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
     @GetMapping("/{groupId}")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<GroupResponse>> getGroup(
             @PathVariable Long groupId,
             Authentication authentication) {
@@ -100,6 +102,7 @@ public class GroupController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/user/{userId}")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<GroupResponse>>> getUserGroups(
             @PathVariable UUID userId,
             Pageable pageable) {
@@ -113,13 +116,14 @@ public class GroupController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/public")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<GroupSearchResponse>>> getPublicGroups(
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @RequestParam(required = false) Long sportId,
             @RequestParam(required = false) List<Long> sportIds,
             @RequestParam(required = false) String keyword,
             Pageable pageable) {
-        UUID currentUserId = userIdStr != null ? UUID.fromString(userIdStr) : null;
+        UUID currentUserId = SecurityUtils.extractUserId(authentication);
         Page<GroupSearchResponse> response = groupService.getPublicGroups(currentUserId, sportId, sportIds, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -135,9 +139,9 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<GroupResponse>> updateGroup(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @Valid @RequestBody UpdateGroupRequest request) {
-        GroupResponse response = groupService.updateGroup(groupId, UUID.fromString(userIdStr), request);
+        GroupResponse response = groupService.updateGroup(groupId, SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.ok(ApiResponse.success("Group updated successfully", response));
     }
 
@@ -152,8 +156,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> deleteGroup(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.deleteGroup(groupId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        groupService.deleteGroup(groupId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.<Void>success("Group deleted successfully", null));
     }
 
@@ -173,9 +177,9 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> addMember(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @RequestParam UUID targetUserId) {
-        groupService.addMember(groupId, UUID.fromString(userIdStr), targetUserId);
+        groupService.addMember(groupId, SecurityUtils.extractUserId(authentication), targetUserId);
         return ResponseEntity.ok(ApiResponse.<Void>success("Invitation sent — awaiting the user's acceptance", null));
     }
 
@@ -191,8 +195,8 @@ public class GroupController {
     public ResponseEntity<ApiResponse<Void>> removeMember(
             @PathVariable Long groupId,
             @PathVariable UUID targetUserId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.removeMember(groupId, UUID.fromString(userIdStr), targetUserId);
+            Authentication authentication) {
+        groupService.removeMember(groupId, SecurityUtils.extractUserId(authentication), targetUserId);
         return ResponseEntity.ok(ApiResponse.<Void>success("Member removed successfully", null));
     }
 
@@ -208,9 +212,9 @@ public class GroupController {
     public ResponseEntity<ApiResponse<Void>> updateMemberRole(
             @PathVariable Long groupId,
             @PathVariable UUID targetUserId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @RequestParam String newRoleName) {
-        groupService.updateMemberRole(groupId, UUID.fromString(userIdStr), targetUserId, newRoleName);
+        groupService.updateMemberRole(groupId, SecurityUtils.extractUserId(authentication), targetUserId, newRoleName);
         return ResponseEntity.ok(ApiResponse.<Void>success("Member role updated successfully", null));
     }
 
@@ -221,6 +225,7 @@ public class GroupController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
     @GetMapping("/{groupId}/members")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<GroupMemberResponse>>> getGroupMembers(
             @PathVariable Long groupId,
             Authentication authentication,
@@ -240,9 +245,9 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> transferOwnership(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @RequestParam UUID newOwnerId) {
-        groupService.transferOwnership(groupId, UUID.fromString(userIdStr), newOwnerId);
+        groupService.transferOwnership(groupId, SecurityUtils.extractUserId(authentication), newOwnerId);
         return ResponseEntity.ok(ApiResponse.<Void>success("Ownership transferred successfully", null));
     }
 
@@ -257,8 +262,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> leaveGroup(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.leaveMember(groupId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        groupService.leaveMember(groupId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.<Void>success("Left group successfully", null));
     }
 
@@ -274,9 +279,9 @@ public class GroupController {
     @PostMapping("/join-requests")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<JoinRequestResponse>> createJoinRequest(
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @Valid @RequestBody CreateJoinRequestRequest request) {
-        JoinRequestResponse response = groupService.createJoinRequest(UUID.fromString(userIdStr), request);
+        JoinRequestResponse response = groupService.createJoinRequest(SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Join request sent successfully", response));
     }
@@ -292,8 +297,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> acceptJoinRequest(
             @PathVariable Long requestId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.acceptJoinRequest(requestId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        groupService.acceptJoinRequest(requestId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.<Void>success("Join request accepted", null));
     }
 
@@ -308,8 +313,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> declineJoinRequest(
             @PathVariable Long requestId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.declineJoinRequest(requestId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        groupService.declineJoinRequest(requestId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.<Void>success("Join request declined", null));
     }
 
@@ -324,9 +329,9 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<JoinRequestResponse>>> getGroupJoinRequests(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             Pageable pageable) {
-        Page<JoinRequestResponse> response = groupService.getGroupJoinRequests(groupId, UUID.fromString(userIdStr), pageable);
+        Page<JoinRequestResponse> response = groupService.getGroupJoinRequests(groupId, SecurityUtils.extractUserId(authentication), pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -355,8 +360,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> cancelJoinRequest(
             @PathVariable Long requestId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.cancelJoinRequest(requestId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        groupService.cancelJoinRequest(requestId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.<Void>success("Join request cancelled", null));
     }
 
@@ -371,9 +376,46 @@ public class GroupController {
     @GetMapping("/{groupId}/info")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<GroupInfoResponse>> getGroupInfo(
-            @PathVariable Long groupId) {
-        GroupInfoResponse response = groupService.getGroupInfo(groupId);
+            @PathVariable Long groupId,
+            Authentication authentication) {
+        GroupInfoResponse response = groupService.getGroupInfo(groupId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "Get a group's general data", description = "Privacy-gated like GET /{groupId}: "
+            + "a non-member of a private group gets a stub (groupId/groupName/isPrivate only); everyone else gets every field. "
+            + "Canonical path, matches PUT /{groupId}/generalData — GET /{groupId}/info above is kept unchanged "
+            + "for its own separate purpose, not reused here.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "General data found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
+    })
+    @GetMapping("/{groupId}/generalData")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<GroupGeneralDataResponse>> getGroupGeneralData(
+            @PathVariable Long groupId,
+            Authentication authentication) {
+        GroupGeneralDataResponse response = groupService.getGroupGeneralData(groupId, SecurityUtils.extractUserId(authentication));
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "Update a group's general data", description = "Owner or admin only. Partial update — only non-null fields are applied. "
+            + "Scoped write path for the fields getGroupGeneralData reads back (groupName/description/avatarUrl/coverUrl/rules/schedule).")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "General data updated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, not owner/admin, or name already exists"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
+    })
+    @PutMapping("/{groupId}/generalData")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<GroupGeneralDataResponse>> updateGroupGeneralData(
+            @PathVariable Long groupId,
+            Authentication authentication,
+            @Valid @RequestBody UpdateGroupGeneralDataRequest request) {
+        GroupGeneralDataResponse response = groupService.updateGroupGeneralData(groupId, SecurityUtils.extractUserId(authentication), request);
+        return ResponseEntity.ok(ApiResponse.success("Group general data updated successfully", response));
     }
 
     // Group Settings
@@ -389,8 +431,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<GroupSettingsResponse>> getGroupSettings(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr) {
-        GroupSettingsResponse response = groupService.getGroupSettings(groupId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        GroupSettingsResponse response = groupService.getGroupSettings(groupId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -405,9 +447,9 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<GroupSettingsResponse>> updateGroupSettings(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @Valid @RequestBody UpdateGroupSettingsRequest request) {
-        GroupSettingsResponse response = groupService.updateGroupSettings(groupId, UUID.fromString(userIdStr), request);
+        GroupSettingsResponse response = groupService.updateGroupSettings(groupId, SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.ok(ApiResponse.success("Settings updated successfully", response));
     }
 
@@ -424,8 +466,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<GroupRecurrenceResponse>> getGroupRecurrence(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr) {
-        GroupRecurrenceResponse response = groupService.getGroupRecurrence(groupId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        GroupRecurrenceResponse response = groupService.getGroupRecurrence(groupId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -440,9 +482,9 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<GroupRecurrenceResponse>> updateGroupRecurrence(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @Valid @RequestBody UpdateGroupRecurrenceRequest request) {
-        GroupRecurrenceResponse response = groupService.updateGroupRecurrence(groupId, UUID.fromString(userIdStr), request);
+        GroupRecurrenceResponse response = groupService.updateGroupRecurrence(groupId, SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.ok(ApiResponse.success("Recurrence schedule updated successfully", response));
     }
 
@@ -459,9 +501,9 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<PinnedPostResponse>> pinPost(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @Valid @RequestBody PinPostRequest request) {
-        PinnedPostResponse response = groupService.pinPost(groupId, UUID.fromString(userIdStr), request.getPostId());
+        PinnedPostResponse response = groupService.pinPost(groupId, SecurityUtils.extractUserId(authentication), request.getPostId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Post pinned successfully", response));
     }
@@ -478,8 +520,8 @@ public class GroupController {
     public ResponseEntity<ApiResponse<Void>> unpinPost(
             @PathVariable Long groupId,
             @PathVariable Long postId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.unpinPost(groupId, UUID.fromString(userIdStr), postId);
+            Authentication authentication) {
+        groupService.unpinPost(groupId, SecurityUtils.extractUserId(authentication), postId);
         return ResponseEntity.ok(ApiResponse.<Void>success("Post unpinned successfully", null));
     }
 
@@ -494,8 +536,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<List<PinnedPostResponse>>> getPinnedPosts(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr) {
-        List<PinnedPostResponse> response = groupService.getPinnedPosts(groupId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        List<PinnedPostResponse> response = groupService.getPinnedPosts(groupId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -512,9 +554,9 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<GroupInvitationResponse>> createInvitation(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @Valid @RequestBody CreateInvitationRequest request) {
-        GroupInvitationResponse response = groupService.createInvitation(groupId, UUID.fromString(userIdStr), request);
+        GroupInvitationResponse response = groupService.createInvitation(groupId, SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Invitation sent successfully", response));
     }
@@ -530,8 +572,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> approveInvitation(
             @PathVariable Long invitationId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.approveInvitation(invitationId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        groupService.approveInvitation(invitationId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.<Void>success("Invitation approved", null));
     }
 
@@ -546,8 +588,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> declineInvitation(
             @PathVariable Long invitationId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.declineInvitation(invitationId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        groupService.declineInvitation(invitationId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.<Void>success("Invitation declined", null));
     }
 
@@ -562,8 +604,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> acceptInvitation(
             @PathVariable Long invitationId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.acceptInvitation(invitationId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        groupService.acceptInvitation(invitationId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.<Void>success("Invitation accepted", null));
     }
 
@@ -578,10 +620,10 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> rejectInvitation(
             @PathVariable Long invitationId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             @RequestBody(required = false) @Valid RejectInvitationRequest request) {
         String reason = request != null ? request.getReason() : null;
-        groupService.rejectInvitation(invitationId, UUID.fromString(userIdStr), reason);
+        groupService.rejectInvitation(invitationId, SecurityUtils.extractUserId(authentication), reason);
         return ResponseEntity.ok(ApiResponse.<Void>success("Invitation rejected", null));
     }
 
@@ -596,9 +638,9 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<GroupInvitationResponse>>> getGroupInvitations(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             Pageable pageable) {
-        Page<GroupInvitationResponse> response = groupService.getGroupInvitations(groupId, UUID.fromString(userIdStr), pageable);
+        Page<GroupInvitationResponse> response = groupService.getGroupInvitations(groupId, SecurityUtils.extractUserId(authentication), pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -610,9 +652,9 @@ public class GroupController {
     @GetMapping("/invitations/user")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<GroupInvitationResponse>>> getUserPendingInvitations(
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             Pageable pageable) {
-        Page<GroupInvitationResponse> response = groupService.getUserPendingInvitations(UUID.fromString(userIdStr), pageable);
+        Page<GroupInvitationResponse> response = groupService.getUserPendingInvitations(SecurityUtils.extractUserId(authentication), pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -627,9 +669,9 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<GroupInvitationResponse>>> getMemberSentInvitations(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             Pageable pageable) {
-        Page<GroupInvitationResponse> response = groupService.getMemberSentInvitations(groupId, UUID.fromString(userIdStr), pageable);
+        Page<GroupInvitationResponse> response = groupService.getMemberSentInvitations(groupId, SecurityUtils.extractUserId(authentication), pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -646,9 +688,9 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<GroupInvitationResponse>>> getDeclinedInvitations(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr,
+            Authentication authentication,
             Pageable pageable) {
-        Page<GroupInvitationResponse> response = groupService.getDeclinedInvitations(groupId, UUID.fromString(userIdStr), pageable);
+        Page<GroupInvitationResponse> response = groupService.getDeclinedInvitations(groupId, SecurityUtils.extractUserId(authentication), pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -663,8 +705,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> cancelInvitation(
             @PathVariable Long invitationId,
-            @AuthenticationPrincipal String userIdStr) {
-        groupService.cancelInvitation(invitationId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        groupService.cancelInvitation(invitationId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.<Void>success("Invitation cancelled", null));
     }
 
@@ -679,8 +721,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Boolean>> isGroupOwner(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr) {
-        boolean isOwner = groupService.isGroupOwner(groupId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        boolean isOwner = groupService.isGroupOwner(groupId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success(isOwner));
     }
 
@@ -693,8 +735,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Boolean>> isGroupAdmin(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr) {
-        boolean isAdmin = groupService.isGroupAdmin(groupId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        boolean isAdmin = groupService.isGroupAdmin(groupId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success(isAdmin));
     }
 
@@ -707,8 +749,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Boolean>> isGroupMember(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr) {
-        boolean isMember = groupService.isGroupMember(groupId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        boolean isMember = groupService.isGroupMember(groupId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success(isMember));
     }
 
@@ -721,8 +763,8 @@ public class GroupController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<String>> getUserRole(
             @PathVariable Long groupId,
-            @AuthenticationPrincipal String userIdStr) {
-        String role = groupService.getUserRoleInGroup(groupId, UUID.fromString(userIdStr));
+            Authentication authentication) {
+        String role = groupService.getUserRoleInGroup(groupId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success(role));
     }
 }

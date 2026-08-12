@@ -43,6 +43,10 @@ function groupInfo(overrides: Partial<GroupInfo> = {}): GroupInfo {
   return {
     groupId: 1,
     groupName: 'Riverside Ballers',
+    isPrivate: false,
+    description: null,
+    avatarUrl: null,
+    coverUrl: null,
     rules: 'Be on time.',
     schedule: 'Tuesdays at 7pm.',
     updatedAt: '2026-07-15T00:00:00',
