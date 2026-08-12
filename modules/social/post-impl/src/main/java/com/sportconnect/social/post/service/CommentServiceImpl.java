@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.NotFoundException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
+import com.sportconnect.social.post.access.PostGate;
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import com.sportconnect.social.post.api.service.CommentService;
@@ -53,13 +54,13 @@ public class CommentServiceImpl implements CommentService {
     private final UserService userService;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    private final PostGate postGate;
 
     @Override
     @Transactional
     public CommentResponse createComment(Long postId, UUID userId, CreateCommentRequest request) {
-        if (!postRepository.existsById(postId)) {
-            throw new NotFoundException("Post not found");
-        }
+        postGate.require(postRepository.findById(postId).orElse(null), userId,
+                "Post not found", "You don't have access to this post");
 
         if (request.getParentCommentId() != null && !commentRepository.existsById(request.getParentCommentId())) {
             throw new NotFoundException("Parent comment not found");
@@ -99,8 +100,8 @@ public class CommentServiceImpl implements CommentService {
     @Override
     @Transactional(readOnly = true)
     public Page<CommentResponse> getPostComments(Long postId, UUID currentUserId, Pageable pageable) {
-        postRepository.findByIdAndIsActiveTrue(postId)
-                .orElseThrow(() -> new NotFoundException("Post not found"));
+        postGate.require(postRepository.findById(postId).orElse(null), currentUserId,
+                "Post not found", "You don't have access to this post");
 
         Page<Comment> rootCommentsPage = commentRepository
                 .findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable);
@@ -155,9 +156,10 @@ public class CommentServiceImpl implements CommentService {
     @Override
     @Transactional
     public void likeComment(Long commentId, UUID userId) {
-        if (!commentRepository.existsById(commentId)) {
-            throw new NotFoundException("Comment not found");
-        }
+        Comment comment = commentRepository.findByIdAndIsActiveTrue(commentId)
+                .orElseThrow(() -> new NotFoundException("Comment not found"));
+        postGate.require(postRepository.findById(comment.getPostId()).orElse(null), userId,
+                "Post not found", "You don't have access to this post");
 
         if (commentLikeRepository.existsByCommentIdAndUserId(commentId, userId)) {
             throw new BadRequestException("You have already liked this comment");
@@ -176,6 +178,11 @@ public class CommentServiceImpl implements CommentService {
     @Override
     @Transactional
     public void unlikeComment(Long commentId, UUID userId) {
+        Comment comment = commentRepository.findByIdAndIsActiveTrue(commentId)
+                .orElseThrow(() -> new NotFoundException("Comment not found"));
+        postGate.require(postRepository.findById(comment.getPostId()).orElse(null), userId,
+                "Post not found", "You don't have access to this post");
+
         if (!commentLikeRepository.existsByCommentIdAndUserId(commentId, userId)) {
             throw new BadRequestException("You have not liked this comment");
         }

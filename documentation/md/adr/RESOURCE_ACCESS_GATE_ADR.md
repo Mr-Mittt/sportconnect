@@ -1,6 +1,8 @@
 # ADR: Resource Access — Availability vs. Visibility Gates
 
-**Status:** Decided (design), tickets filed 2026-08-11, not yet implemented. Written 2026-08-10
+**Status:** Decided (design), tickets filed 2026-08-11. `common` C2 (`ResourceGate<T>`) and
+`post-impl` A14 (`PostGate`) implemented 2026-08-12 — see §9 for per-ticket status;
+`session-impl` SESSION-10 (`SessionGate`) still not implemented. Written 2026-08-10
 while scoping `post-impl`'s A14 (`modules/social/post-impl/docs/BACKLOG_MVP.md`) — enforcing
 visibility/group-membership on single-item post paths. The discussion widened past A14 itself into
 a durable, cross-cutting rule for how *every* domain with per-item access rules (today: `post-impl`;
@@ -245,14 +247,24 @@ public boolean isVisibleTo(Session session, UUID viewerId) {
 
 ## 9. Filed tickets (2026-08-11)
 
-- **`group-impl` B18** — fix `isGroupMember`/`isGroupOwner`/`isGroupAdmin` to require
-  `group.isActive`; add `isGroupActive(Long groupId)` to `GroupService` (§5.1). No dependency on the
-  items below, but lands first — both A14's `PostGate.isAvailable` and SESSION-10's
-  `SessionGate.isAvailable` call `isGroupActive`.
-- **`common` C2** — add `ResourceGate<T>` (§4) plus a short Javadoc pointing back to this ADR.
-- **`post-impl` A14** (redesigned) — implement `PostGate`, apply to the 5 single-item paths named in
-  A14's existing scope; standardize on `ForbiddenException` per §5.2 for this ticket's own denial
-  cases (existing call sites outside A14's scope migrate opportunistically, not in this pass).
-- **`session-impl` SESSION-10** (gating redesigned) — implement `SessionGate` from the start against
-  `ResourceGate<T>`, including §6's group-member widening as part of its initial scope, not a
-  follow-up.
+- **`group-impl` B18** (`DONE`, 2026-08-11) — fix `isGroupMember`/`isGroupOwner`/`isGroupAdmin` to
+  require `group.isActive`; add `isGroupActive(Long groupId)` to `GroupService` (§5.1). No
+  dependency on the items below, but lands first — both A14's `PostGate.isAvailable` and
+  SESSION-10's `SessionGate.isAvailable` call `isGroupActive`.
+- **`common` C2** (`DONE`, 2026-08-11) — add `ResourceGate<T>` (§4) plus a short Javadoc pointing
+  back to this ADR.
+- **`post-impl` A14** (`DONE`, 2026-08-12, redesigned) — implemented `PostGate`, applied to the 5
+  single-item paths named in A14's existing scope; standardized on `ForbiddenException` per §5.2
+  for this ticket's own denial cases (existing call sites outside A14's scope migrate
+  opportunistically, not in this pass). Two deltas beyond this section's original scope, both
+  user-directed during implementation: `likeComment`/`unlikeComment` also gate the comment's own
+  availability before the parent-post `PostGate` check (not just the post, as originally written
+  here); `friends`-visibility (§7's out-of-scope item for A14 specifically) was implemented for
+  real rather than left deferred, since `UserFriendService.areFriends` already existed with no new
+  dependency; and `PostServiceImpl.likePost`/`unlikePost` — never named anywhere in this ADR or
+  A14's own scope, spotted as a post-merge follow-up — had the identical unguarded pattern and
+  were gated the same way, bringing the actual count to 7 single-item paths, not the 5 originally
+  identified. Detail: `modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`.
+- **`session-impl` SESSION-10** (`TODO`, gating redesigned) — implement `SessionGate` from the
+  start against `ResourceGate<T>`, including §6's group-member widening as part of its initial
+  scope, not a follow-up.

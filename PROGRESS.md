@@ -113,8 +113,9 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - **C2 (2026-08-11):** `ResourceGate<T>` implemented in `modules/common` exactly per the ADR §4 shape
   — `isAvailable`/`isVisibleTo` plus a `require()` default throwing `NotFoundException`/
   `ForbiddenException` in that fixed order; zero domain dependency, no logic, shape only. `DONE`.
-  `PostGate`/`SessionGate` (A14, SESSION-10) still `TODO`. Details:
-  `modules/common/docs/C2_RESOURCE_GATE.md`.
+  Details: `modules/common/docs/C2_RESOURCE_GATE.md`. `PostGate` implemented 2026-08-12
+  (`post-impl` A14, `modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`); `SessionGate`
+  (SESSION-10) still `TODO`.
 
 ---
 
@@ -284,14 +285,28 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - `Hashtag`, `PostHashtag`, `UserFollow` entities (tables exist; UserFollow → replaced by Friendship in B1)
 - `PostServiceImpl`, `CommentServiceImpl`
 - `PostController` — 16 endpoints: create/read/update/delete posts, like/unlike, comment CRUD, feed, group posts, active broadcasts, broadcast end-time extension
-- **A14 filed (2026-08-08, `TODO`):** found while designing SESSION-10's participant-status comment
-  gating — checked how the equivalent post/group-membership gate works today for comparison.
-  `getGroupPosts` (list) correctly checks `isGroupMember`, but every single-item path
-  (`getPostById`, `getPostComments`, `createComment`, `likeComment`, `unlikeComment`) only checks
-  the post exists/is active — never `visibility`, never group membership. A non-member of a private
-  group with a `postId` (leaked link, guessed id, cached from before leaving) can currently read,
-  comment on, and like that group's posts. Confirms why SESSION-10 doesn't reuse `post-impl`'s
-  comment service — this gating barely exists for posts' own simpler case.
+- **A14 (`DONE`, 2026-08-12, `modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`):** filed
+  2026-08-08 while designing SESSION-10's participant-status comment gating, redesigned 2026-08-11
+  against `documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md`. Implemented `PostGate`
+  (`com.sportconnect.social.post.access`), `post-impl`'s own `ResourceGate<Post>` — `isAvailable`
+  checks not-soft-deleted + parent group still active (B18's `isGroupActive`); `isVisibleTo`
+  switches on `postType` (owner/public/friends for `USER_FEED` via `UserFriendService.areFriends`,
+  group membership for `GROUP_POST`/`GROUP_BROADCAST`/`GROUP_SYSTEM`). Applied to 7 single-item
+  paths (`getPostById`, `getPostComments`, `createComment`, `likeComment`, `unlikeComment`,
+  `likePost`, `unlikePost` — the last two only 5 were originally named, see delta below) —
+  `ForbiddenException` replaces the previous silent pass-through for a visible-but-unauthorized
+  caller. Three deltas beyond the ADR's own text, all user-directed: `likeComment`/`unlikeComment`
+  now also gate the comment's own availability (new `CommentRepository.findByIdAndIsActiveTrue`)
+  before the parent-post gate — closing a gap where a comment on an unavailable post stayed
+  likeable, and where `unlikeComment` had no existence check at all; `friends`-visibility is
+  now genuinely enforced (not deferred) since `UserFriendService.areFriends` already existed with
+  no new dependency; and `PostServiceImpl.likePost`/`unlikePost` — never named in this ticket or
+  the ADR, spotted as a post-merge follow-up in the same session — had the identical unguarded
+  pattern (`likePost` checked existence only, `unlikePost` checked nothing about the post at all)
+  and were fixed the same way. New `PostGateSpec` unit-tests the gate directly;
+  `PostServiceImplSpec`/`CommentServiceImplSpec` updated for the new fetch-then-gate shape plus
+  `Forbidden`/`NotFound` cases per method. `:modules:social:post-impl:test` and `:server:test`
+  (incl. `PostControllerIntegrationTest`) both green.
 - **A15 (`DONE`, 2026-08-10, `modules/social/post-impl/docs/A15_DROP_POST_CROSS_DOMAIN_FKS.md`),
   absorbed A13 (2026-08-10, user decision):** originally filed 2026-08-07 as A13 —
   `posts.sport_id` is the one cross-domain `sport_id` column with a real DB-level FK
@@ -342,9 +357,9 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   all pass. 12 of 26 e2e specs failed on a `seedAuthenticatedSession` login timeout — confirmed
   pre-existing/environmental by re-running the same specs against a stashed pre-A12 baseline
   (identical failure count and point), not a regression from this change.
-- **MVP backlog:** 20 tickets (A1–A12, A14–A15, B1–B6) in
+- **MVP backlog:** 20 tickets (A1–A12, A14–A16, B1–B6) in
   `modules/social/post-impl/docs/BACKLOG_MVP.md` — A13 no longer a standalone entry (merged into
-  A15); A1–A12, A15, B1–B6 `DONE`; A14 `TODO`
+  A15); all 20 `DONE`
 - **A1 (2026-06-30):** JWT-based identity — all `@RequestParam userId` removed from `PostController`; write endpoints use `@AuthenticationPrincipal`, read endpoints use `Authentication` + `SecurityUtils.extractUserId()`; `GET /api/posts/user/{userId}` renamed to `GET /api/posts/mine`
 - **A2 (2026-06-30):** Fix post delete permission — `PostServiceImpl.deletePost()` now allows group owner/admin to delete GROUP_POST and GROUP_BROADCAST posts in their group (reuses existing `GroupService.isGroupOwner/isGroupAdmin`)
 - **A3 (2026-07-01):** Group posts membership gate — `getGroupPosts()` now throws `ForbiddenException` for unauthenticated or non-member callers; `ForbiddenException` added to `modules/common`

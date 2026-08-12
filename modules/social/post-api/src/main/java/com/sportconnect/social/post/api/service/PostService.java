@@ -24,6 +24,13 @@ public interface PostService {
      */
     void createSystemPost(Long groupId, UUID authorUserId, String content);
 
+    /**
+     * Gated by {@code post-impl}'s {@code PostGate} (A14 —
+     * {@code documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md}): throws {@code NotFoundException}
+     * if the post doesn't exist, is soft-deleted, or its parent group is inactive; throws {@code
+     * ForbiddenException} if it exists but {@code currentUserId} can't see it (non-member of a
+     * group post, non-owner of a private/friends post they're not friends with).
+     */
     PostResponse getPostById(Long postId, UUID currentUserId);
 
     /**
@@ -45,8 +52,10 @@ public interface PostService {
     
     void deletePost(Long postId, UUID userId);
     
+    /** Same {@code PostGate} contract as {@link #getPostById} — gates on the post before recording the like. */
     void likePost(Long postId, UUID userId);
 
+    /** Same {@code PostGate} contract as {@link #getPostById} — gates on the post before removing the like. */
     void unlikePost(Long postId, UUID userId);
 
     Page<PostResponse> getPostsByHashtag(String tag, UUID currentUserId, Pageable pageable);

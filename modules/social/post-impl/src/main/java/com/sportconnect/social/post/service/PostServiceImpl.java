@@ -6,6 +6,7 @@ import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.NotFoundException;
 import com.sportconnect.group.api.service.GroupService;
+import com.sportconnect.social.post.access.PostGate;
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreatePostRequest;
 import com.sportconnect.social.post.api.dto.PostMediaResponse;
@@ -71,6 +72,7 @@ public class PostServiceImpl implements PostService {
     private final HashtagService hashtagService;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    private final PostGate postGate;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
     @Override
@@ -165,8 +167,8 @@ public class PostServiceImpl implements PostService {
     @Override
     @Transactional(readOnly = true)
     public PostResponse getPostById(Long postId, UUID currentUserId) {
-        Post post = postRepository.findByIdAndIsActiveTrue(postId)
-                .orElseThrow(() -> new NotFoundException("Post not found"));
+        Post post = postGate.require(postRepository.findById(postId).orElse(null), currentUserId,
+                "Post not found", "You don't have access to this post");
         List<Post> single = List.of(post);
         return mapToResponse(post, currentUserId, hashtagService.getTagsForPost(post.getId()),
                 getUsersForPosts(single));
@@ -290,9 +292,8 @@ public class PostServiceImpl implements PostService {
     @Override
     @Transactional
     public void likePost(Long postId, UUID userId) {
-        if (!postRepository.existsById(postId)) {
-            throw new NotFoundException("Post not found");
-        }
+        postGate.require(postRepository.findById(postId).orElse(null), userId,
+                "Post not found", "You don't have access to this post");
 
         if (postLikeRepository.existsByPostIdAndUserId(postId, userId)) {
             throw new BadRequestException("You have already liked this post");
@@ -311,6 +312,9 @@ public class PostServiceImpl implements PostService {
     @Override
     @Transactional
     public void unlikePost(Long postId, UUID userId) {
+        postGate.require(postRepository.findById(postId).orElse(null), userId,
+                "Post not found", "You don't have access to this post");
+
         if (!postLikeRepository.existsByPostIdAndUserId(postId, userId)) {
             throw new BadRequestException("You have not liked this post");
         }

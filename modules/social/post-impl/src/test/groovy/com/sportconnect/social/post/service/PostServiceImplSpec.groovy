@@ -5,6 +5,7 @@ import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.group.api.service.GroupService
+import com.sportconnect.social.post.access.PostGate
 import com.sportconnect.social.post.api.dto.CreatePostRequest
 import com.sportconnect.social.post.api.dto.PostType
 import com.sportconnect.social.post.entity.Post
@@ -42,9 +43,10 @@ class PostServiceImplSpec extends Specification {
     ValueOperations<String, String> valueOps = Mock()
     ZSetOperations<String, String> zSetOps = Mock()
     ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules()
+    PostGate postGate = Mock()
 
     @Subject
-    PostServiceImpl postService = new PostServiceImpl(postRepository, postLikeRepository, commentRepository, postHashtagRepository, groupService, userFriendService, userService, hashtagService, stringRedisTemplate, objectMapper)
+    PostServiceImpl postService = new PostServiceImpl(postRepository, postLikeRepository, commentRepository, postHashtagRepository, groupService, userFriendService, userService, hashtagService, stringRedisTemplate, objectMapper, postGate)
 
     def setup() {
         stringRedisTemplate.opsForValue() >> valueOps
@@ -433,7 +435,8 @@ class PostServiceImplSpec extends Specification {
         def result = postService.getPostById(postId, userId)
 
         then:
-        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         // Redis cache miss → DB fallback
         1 * postLikeRepository.countByPostId(postId) >> 5L
         1 * commentRepository.countByPostIdAndIsActiveTrue(postId) >> 3L
@@ -452,7 +455,8 @@ class PostServiceImplSpec extends Specification {
         def result = postService.getPostById(postId, userId)
 
         then:
-        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         valueOps.get("post:" + postId + ":likes") >> "7"
         valueOps.get("post:" + postId + ":comments") >> "2"
         0 * postLikeRepository.countByPostId(_)
@@ -467,8 +471,22 @@ class PostServiceImplSpec extends Specification {
         postService.getPostById(postId, userId)
 
         then:
-        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.empty()
+        1 * postRepository.findById(postId) >> Optional.empty()
+        1 * postGate.require(null, userId, _, _) >> { throw new NotFoundException("Post not found") }
         thrown(NotFoundException)
+    }
+
+    def "getPostById throws ForbiddenException when caller cannot view the post"() {
+        given:
+        def post = savedPost()
+
+        when:
+        postService.getPostById(postId, userId)
+
+        then:
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+        thrown(ForbiddenException)
     }
 
     // ── getUserPosts ──────────────────────────────────────────────────────────
@@ -935,22 +953,30 @@ class PostServiceImplSpec extends Specification {
     // ── likePost / unlikePost ─────────────────────────────────────────────────
 
     def "likePost creates like when not already liked"() {
+        given:
+        def post = savedPost()
+
         when:
         postService.likePost(postId, userId)
 
         then:
-        1 * postRepository.existsById(postId) >> true
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
         1 * postLikeRepository.save(_ as PostLike) >> new PostLike()
         1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":likes"])
     }
 
     def "likePost throws BadRequestException when already liked"() {
+        given:
+        def post = savedPost()
+
         when:
         postService.likePost(postId, userId)
 
         then:
-        1 * postRepository.existsById(postId) >> true
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
         thrown(BadRequestException)
     }
@@ -960,26 +986,73 @@ class PostServiceImplSpec extends Specification {
         postService.likePost(postId, userId)
 
         then:
-        1 * postRepository.existsById(postId) >> false
+        1 * postRepository.findById(postId) >> Optional.empty()
+        1 * postGate.require(null, userId, _, _) >> { throw new NotFoundException("Post not found") }
         thrown(NotFoundException)
     }
 
+    def "likePost throws ForbiddenException when caller cannot view the post"() {
+        given:
+        def post = savedPost()
+
+        when:
+        postService.likePost(postId, userId)
+
+        then:
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+        thrown(ForbiddenException)
+    }
+
     def "unlikePost removes like when liked"() {
+        given:
+        def post = savedPost()
+
         when:
         postService.unlikePost(postId, userId)
 
         then:
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
         1 * postLikeRepository.deleteByPostIdAndUserId(postId, userId)
         1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":likes"])
     }
 
     def "unlikePost throws BadRequestException when not liked"() {
+        given:
+        def post = savedPost()
+
         when:
         postService.unlikePost(postId, userId)
 
         then:
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
         thrown(BadRequestException)
+    }
+
+    def "unlikePost throws NotFoundException when post does not exist"() {
+        when:
+        postService.unlikePost(postId, userId)
+
+        then:
+        1 * postRepository.findById(postId) >> Optional.empty()
+        1 * postGate.require(null, userId, _, _) >> { throw new NotFoundException("Post not found") }
+        thrown(NotFoundException)
+    }
+
+    def "unlikePost throws ForbiddenException when caller cannot view the post"() {
+        given:
+        def post = savedPost()
+
+        when:
+        postService.unlikePost(postId, userId)
+
+        then:
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+        thrown(ForbiddenException)
     }
 }
