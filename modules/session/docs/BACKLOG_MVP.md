@@ -29,7 +29,8 @@
 | 8 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `DONE` |
 | 9 | SESSION-11 | Drop DB-level FKs on session tables' cross-domain columns | `DONE` |
 | 10 | SESSION-10 | Session comments — reuses post-impl's Comment via a companion `SESSION_POST` anchor | `DONE` |
-| 11 | SESSION-8 | Session discover ranking algorithm | `TODO` |
+| 11 | SESSION-12 | Partial index on `sessions` scoped to `status = SCHEDULED` for the generation job's hot queries | `TODO` |
+| 12 | SESSION-8 | Session discover ranking algorithm | `TODO` |
 
 ---
 
@@ -457,3 +458,41 @@ dropping.
 **Out of scope:** `sessions.sport_id` (already correctly FK-free, nothing to do); the intra-domain
 `session_participants.session_id → sessions.id` FK — same domain, correctly scoped, nothing to
 remove; any change to any JPA entity, service, or repository in this module.
+
+## SESSION-12 — Partial index on `sessions` scoped to `status = SCHEDULED`
+
+**Filed:** 2026-08-12. `V031__create_sessions_table.sql` indexes `(status, scheduled_start)` —
+`idx_sessions_status_scheduled_start` — a plain, unscoped composite covering all four
+`SessionStatus` values. Confirmed by reading the migration directly (see SESSION-1's entry above),
+not assumed.
+
+The index's real hot consumer is `SessionRepository.findSessionsToStart` (`status = :status AND
+scheduledStart <= :now AND scheduledEndAt > :now`, called with `status=SCHEDULED` only), driven by
+`SessionGenerationJob.startOngoingSessions` on a fixed **15-minute** `@Scheduled` cadence per
+`session-impl`'s `CLAUDE.md`. Sessions are never deleted or purged — cancelled sessions are kept
+soft (`SESSION-3`), completed ones stay rows forever — so the table's `COMPLETED`/`CANCELLED` share
+only grows over time while the fraction still `SCHEDULED` at any moment stays comparatively small
+and roughly constant. A plain index across all four statuses grows with the whole table's history;
+a partial index scoped to `status = 'SCHEDULED'` would instead track only the live/pending slice
+this query actually cares about, same "partial index on the actual hot query" reasoning as
+SESSION-7 (`sport_id`, standalone-only) and SESSION-4's discover index.
+
+**Migration (sketch, confirm exact shape at pickup):**
+```sql
+CREATE INDEX idx_sessions_scheduled_status_only ON sessions(scheduled_start, scheduled_end_at)
+    WHERE status = 'SCHEDULED';
+```
+Register in `db.changelog-master.xml` per the usual convention, next sequential `Vxxx` file.
+Whether the existing unscoped `idx_sessions_status_scheduled_start` should be dropped once this
+ships, or left in place (it still serves the `status IN (SCHEDULED, ONGOING)`
+`findSessionsToComplete` query, which a `status = 'SCHEDULED'`-only partial index can't fully
+cover — that query is explicitly out of scope for this ticket, not overlooked) is this ticket's
+call at pickup, not decided here.
+
+**No code changes** — pure index addition/possible-drop, nothing in `SessionServiceImpl`/
+`SessionRepository` changes.
+
+**Verification:** no new Spock tests (no new logic). `EXPLAIN ANALYZE` `findSessionsToStart`'s
+generated query against a populated `sessions` table (real mix of terminal and `SCHEDULED` rows,
+not just fixture-sized) and confirm the planner picks the new partial index over the existing
+composite or a seq scan.
