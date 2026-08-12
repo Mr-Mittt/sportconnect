@@ -39,6 +39,7 @@
 | 18 | A11 | Broadcast-expiry timezone mismatch — investigated 2026-08-10, not reproducible, no code change | `DONE` |
 | 19 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `DONE` |
 | 20 | A14 | Enforce post visibility/group-membership on single-item paths (getPostById, comments, likes) — not just list endpoints | `TODO` |
+| 21 | A16 | Consume `group-impl`'s new `canManagePosts` instead of composing `isGroupOwner`/`isGroupAdmin` | `DONE` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
 
@@ -913,5 +914,31 @@ cascade has likely never fired in practice — grep for any test or migration th
 `comment_likes.comment_id`, `post_hashtags.post_id`/`hashtag_id`, `post_media.post_id`,
 `post_reports.post_id`, `post_shares.post_id` — all correctly scoped, nothing to remove; any
 change to any JPA entity, service, or repository in this module.
+
+---
+
+### A16 · Consume `group-impl`'s `canManagePosts` instead of composing `isGroupOwner`/`isGroupAdmin`
+**Status:** `DONE` (2026-08-12) · **Summary:** see
+`modules/social/group-impl/docs/B20_CAN_MANAGE_SELF_CONTAINED_QUERY.md` (this module is the
+consumer side of that ticket, not where the design decision was made)
+**Type:** Refactor (Efficiency) · **Filed:** 2026-08-12, spotted by the user directly: this module
+had four call sites composing `groupService.isGroupOwner(...) || groupService.isGroupAdmin(...)`
+(`createPost`'s `GROUP_BROADCAST` guard, `updatePost`'s broadcast-moderator check, `deletePost`'s
+group-moderator check, `updateBroadcastEndTime`'s moderator check) — exactly the pattern B20 had
+just replaced inside `group-impl` itself with a single `canManagePosts(groupId, userId)` call.
+
+**What changed:** `PostServiceImpl.java` — all four call sites now call
+`groupService.canManagePosts(groupId, userId)` (already on the `GroupService` `-api` interface, no
+new cross-domain method needed) instead of composing the two. Behavior is identical (owner or
+admin still qualifies) — this is a pure call-count reduction, same reasoning as B20: one RPC into
+`group-impl` instead of up to two. `PostServiceImplSpec.groovy` updated accordingly (each pair of
+`isGroupOwner`/`isGroupAdmin` stubs collapsed into one `canManagePosts` stub returning the same
+combined boolean).
+
+**Verification:** `./gradlew :modules:social:post-impl:test` and `./gradlew :server:test` both
+green.
+
+**Out of scope:** `isGroupMember` (used by `createPost`'s `GROUP_POST` gate, unrelated — no
+owner/admin composition there, nothing to change).
 
 ---

@@ -358,6 +358,13 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - **A7 (2026-07-03):** Fix N+1 in `CommentServiceImpl.getPostComments` — `mapToResponse` no longer calls `userService.getUserById()` or re-queries replies per comment/reply; new batched `CommentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc()` + `UserService.getUsersByIds()` resolve the whole page's replies and authors in 2 queries total instead of 2 per comment; recursion into replies now happens over an in-memory map, naturally bounded to 1 level by A4's existing nesting rule (confirmed, not assumed); 1 test rewritten to exercise the real batched code path instead of an unrealistic `createComment`-based scenario
 - **A8 (2026-07-08):** `server:test` needs Redis — chose Testcontainers over making the Redis-backed paths degrade gracefully (that would've meant adding fallback logic to ~10 call sites across `PostServiceImpl`/`CommentServiceImpl` that don't have any today, since `getCount()` — called on every response, not just like/unlike — has no try/catch); `BaseIT` gets a singleton `GenericContainer` Redis (`redis:7-alpine`), started once per JVM via a static initializer + bound via `@DynamicPropertySource`, reaped automatically by Testcontainers' Ryuk sidecar; no new Gradle dependency needed for the container itself, but `org.testcontainers:testcontainers` had to be bumped `1.19.3` → `2.0.5` (the old version hardcodes a stale Docker API version rejected by current Docker engines); the sibling `org.testcontainers:postgresql:1.19.3` dependency was confirmed dead (zero references anywhere in `server/src/test`) and removed rather than version-matched; `application-test.yml`'s dead `spring.data.redis.enabled: false` line removed alongside it
 - **(2026-07-08):** Investigated and removed `JavaRevision.java`/`JavaRevisionTest.groovy` — a personal Java pass-by-reference scratch demo (not app code) swept into an unrelated feature commit back in March, asserting a stale/wrong expected value ever since; user confirmed deletion over fixing the assertion or leaving it. `server:test` is now fully green (27/27)
+- **A16 (2026-08-12, `DONE`, `modules/social/post-impl/docs/BACKLOG_MVP.md`):** user spotted this
+  module's own four `groupService.isGroupOwner(...) || groupService.isGroupAdmin(...)` call sites
+  (`createPost`'s `GROUP_BROADCAST` guard, `updatePost`/`deletePost`/`updateBroadcastEndTime`'s
+  moderator checks) right after group-impl's **B20** eliminated the identical composition
+  internally — migrated all four to the new `canManagePosts(groupId, userId)` cross-domain call
+  instead. Pure call-count reduction, no behavior change. `:modules:social:post-impl:test` and
+  `:server:test` both green.
 
 #### `modules:social:group-api` + `modules:social:group-impl`
 - `Group`, `GroupMember`, `GroupRole` (pre-seeded: owner/admin/member), `GroupJoinRequest`, `GroupSettings` entities
@@ -445,6 +452,22 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   field set now rather than just `rules`/`schedule`, so future UI doesn't need another backend
   ticket. Unblocks client **GRP-9**. `:modules:social:group-impl:test` and `:server:test`
   (`GroupControllerTest`) both green.
+- **B20 (2026-08-12, `DONE`, `modules/social/group-impl/docs/B20_CAN_MANAGE_SELF_CONTAINED_QUERY.md`):**
+  `canManageMembers`/`canManagePosts` composed `isGroupOwner || isGroupAdmin`, each of which
+  independently re-checked `isGroupActive`, re-fetched the caller's `GroupMember` row, and
+  re-resolved a role by name — redundant work on every non-owner caller (the `||` only
+  short-circuits when the caller *is* the owner). Refactored both to a new private
+  `hasManagerRole(groupId, userId)` helper: one `isGroupActive` check, one
+  `findByGroupIdAndUserId`, one `findById(roleId)` role lookup (mirroring `getUserRoleInGroup`'s
+  existing pattern) compared against `"group_owner"`/`"group_admin"`. `isGroupOwner`/
+  `isGroupAdmin`/`isGroupMember`/`isGroupActive` themselves unchanged — confirmed they still have
+  standalone callers (`/permissions/is-owner`/`is-admin` endpoints, B7 tier logic) so weren't
+  touched. Confirmed with the user before implementing that the client doesn't consume the
+  standalone `/permissions/is-owner`/`is-admin` endpoints (only a planned future check for a
+  not-yet-built "create broadcast" action), so this was a safe internal-only refactor with no
+  client-facing behavior change. `:modules:social:group-impl:test` green. Same-session follow-up:
+  `post-impl` **A16** migrated its own 4 identical `isGroupOwner || isGroupAdmin` call sites to
+  `canManagePosts` too.
 
 #### `server`
 - `SportConnectApplication.java` — main entry point with full component scan

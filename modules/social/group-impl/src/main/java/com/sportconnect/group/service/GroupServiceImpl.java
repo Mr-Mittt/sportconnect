@@ -1150,13 +1150,23 @@ public class GroupServiceImpl implements GroupService {
     @Override
     @Transactional(readOnly = true)
     public boolean canManageMembers(Long groupId, UUID userId) {
-        return isGroupOwner(groupId, userId) || isGroupAdmin(groupId, userId);
+        return hasManagerRole(groupId, userId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public boolean canManagePosts(Long groupId, UUID userId) {
-        return isGroupOwner(groupId, userId) || isGroupAdmin(groupId, userId);
+        return hasManagerRole(groupId, userId);
+    }
+
+    private boolean hasManagerRole(Long groupId, UUID userId) {
+        if (!isGroupActive(groupId)) return false;
+
+        return groupMemberRepository.findByGroupIdAndUserId(groupId, userId)
+                .map(member -> groupRoleRepository.findById(member.getRoleId())
+                        .map(role -> "group_owner".equals(role.getRoleName()) || "group_admin".equals(role.getRoleName()))
+                        .orElse(false))
+                .orElse(false);
     }
 
     @Override

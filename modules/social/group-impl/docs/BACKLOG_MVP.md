@@ -46,6 +46,7 @@
 | 25 | B17 | Drop DB-level FKs on group-impl tables' cross-domain columns | `DONE` |
 | 26 | B18 | Require `group.isActive` in `isGroupMember`/`isGroupOwner`/`isGroupAdmin`; add `isGroupActive()` | `DONE` |
 | 27 | B19 | Dedicated `PUT /{groupId}/generalData` endpoint — unblocks client GRP-9 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
+| 28 | B20 | Make `canManageMembers`/`canManagePosts` self-contained instead of composing `isGroupOwner`/`isGroupAdmin` | `DONE` |
 
 ---
 
@@ -252,6 +253,37 @@ mirrors `updateGroup`'s permission + partial-update + name-conflict-backstop sha
 UI for the newly-added `groupName`/`description`/`avatarUrl`/`coverUrl` write fields (client's
 GRP-9 only wires `rules`/`schedule` through the new endpoint, matching what the Settings tab
 General section actually edits today).
+
+---
+
+### B20 · Make `canManageMembers`/`canManagePosts` self-contained instead of composing `isGroupOwner`/`isGroupAdmin`
+**Status:** `DONE` (2026-08-12) · **Summary:**
+`modules/social/group-impl/docs/B20_CAN_MANAGE_SELF_CONTAINED_QUERY.md`
+**Type:** Refactor (Efficiency)
+
+**Filed:** 2026-08-12, surfaced in conversation auditing whether `canManageMembers` double-checks
+`group.isActive` (B18) — it does, redundantly: `canManageMembers` = `isGroupOwner || isGroupAdmin`,
+and both independently re-run `isGroupActive`, `findByGroupIdAndUserId`, and a `findByRoleName`
+lookup, so any non-owner caller triggers each of those queries twice for no new information. Same
+for `canManagePosts` (identical composition).
+
+**Decision (confirmed with user):** safe to refactor — `canManageMembers`/`canManagePosts` have no
+standalone controller endpoint of their own (only ~13 internal call sites); `isGroupOwner`/
+`isGroupAdmin` themselves stay untouched since they have standalone callers
+(`/permissions/is-owner`/`is-admin`, B7 tier logic). Confirmed the client doesn't consume those two
+standalone endpoints today (only a *planned* future check in
+`client/docs/sporthub-auth-feed-integration-tickets.md`), so there's no shipped consumer whose
+behavior could regress either way.
+
+**What shipped:** new private `hasManagerRole(groupId, userId)` helper in `GroupServiceImpl` — one
+`isGroupActive` check, one `findByGroupIdAndUserId`, one `findById(roleId)` role lookup (mirroring
+`getUserRoleInGroup`'s existing pattern) compared against `"group_owner"`/`"group_admin"`.
+`canManageMembers`/`canManagePosts` now both delegate to it instead of composing `isGroupOwner`/
+`isGroupAdmin`. `isGroupOwner`/`isGroupAdmin`/`isGroupMember`/`isGroupActive` unchanged.
+
+**Out of scope:** `isGroupOwner`/`isGroupAdmin`/`isGroupMember`/`isGroupActive` (unchanged); the
+client's planned `/permissions/is-owner`/`is-admin` consumption for the future "create broadcast"
+action (not built yet).
 
 ## Tickets
 
