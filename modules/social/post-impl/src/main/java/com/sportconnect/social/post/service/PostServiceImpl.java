@@ -9,6 +9,7 @@ import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.social.post.access.PostGate;
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreatePostRequest;
+import com.sportconnect.social.post.api.dto.PostLikeInfoResponse;
 import com.sportconnect.social.post.api.dto.PostMediaResponse;
 import com.sportconnect.social.post.api.dto.PostResponse;
 import com.sportconnect.social.post.api.dto.PostType;
@@ -42,6 +43,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -377,6 +379,45 @@ public class PostServiceImpl implements PostService {
         if (post == null || post.getPostType() != PostType.SESSION_POST) {
             throw new NotFoundException("Post not found");
         }
+    }
+
+    /**
+     * Real batch DB query, not the per-post {@code getCount}-with-Redis-cache-fallback pattern
+     * {@code mapToResponse} uses for a regular post's own like count — that Redis key is only
+     * ever populated by a call through {@code getCount} itself, which nothing in the
+     * {@code SESSION_POST} path ever reaches ({@code likeSessionPost}/{@code unlikeSessionPost}'s
+     * {@code INCR_IF_EXISTS}/{@code DECR_IF_EXISTS} are no-ops against a key that was never
+     * initialized), so a Redis-first lookup would silently read nothing for every session. A
+     * direct grouped count avoids that gap entirely, at the cost of not sharing that cache — an
+     * acceptable trade for a batch size bounded by one page of sessions.
+     */
+    @Override
+    public Map<Long, PostLikeInfoResponse> getSessionPostLikeInfo(List<Long> postIds, UUID currentUserId) {
+        List<Long> distinctIds = postIds.stream().distinct().collect(Collectors.toList());
+        if (distinctIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<Long> validIds = postRepository.findByIdInAndIsActiveTrue(distinctIds).stream()
+                .filter(post -> post.getPostType() == PostType.SESSION_POST)
+                .map(Post::getId)
+                .collect(Collectors.toList());
+        if (validIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<Long, Long> likeCounts = postLikeRepository.countGroupedByPostIdIn(validIds).stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
+        Set<Long> likedByCurrentUser = currentUserId == null
+                ? Set.of()
+                : new HashSet<>(postLikeRepository.findLikedPostIdsByUserIdAndPostIdIn(currentUserId, validIds));
+
+        return validIds.stream().collect(Collectors.toMap(
+                id -> id,
+                id -> PostLikeInfoResponse.builder()
+                        .likeCount(likeCounts.getOrDefault(id, 0L))
+                        .isLikedByCurrentUser(likedByCurrentUser.contains(id))
+                        .build()));
     }
 
     private List<CommentResponse> getPreviewComments(Long postId) {

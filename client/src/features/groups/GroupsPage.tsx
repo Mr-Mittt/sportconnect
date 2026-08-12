@@ -946,6 +946,21 @@ export function GroupsPage() {
           isApprovingParticipant={discoverModalData.isApprovingParticipant}
           onRejectParticipant={discoverModalData.onRejectParticipant}
           isRejectingParticipant={discoverModalData.isRejectingParticipant}
+          onToggleLike={discoverModalData.onToggleLike}
+          isTogglingLike={discoverModalData.isTogglingLike}
+          currentUser={{ fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
+          comments={discoverModalData.comments}
+          isCommentsLoading={discoverModalData.isCommentsLoading}
+          isCommentsError={discoverModalData.isCommentsError}
+          isCommentsForbidden={discoverModalData.isCommentsForbidden}
+          hasMoreComments={discoverModalData.hasMoreComments}
+          isFetchingMoreComments={discoverModalData.isFetchingMoreComments}
+          onFetchMoreComments={discoverModalData.onFetchMoreComments}
+          onAddComment={discoverModalData.onAddComment}
+          onAddCommentReply={discoverModalData.onAddCommentReply}
+          isPostingComment={discoverModalData.isPostingComment}
+          onDeleteComment={discoverModalData.onDeleteComment}
+          onToggleCommentLike={discoverModalData.onToggleCommentLike}
         />
       </main>
     </ModalAnchorProvider>

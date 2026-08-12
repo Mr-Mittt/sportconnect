@@ -52,6 +52,10 @@ export interface Session {
   /** SESSION-6: false = non-invited joiners land in REQUESTED, awaiting creator/owner-admin
    * approval. An INVITED row always bypasses this gate regardless of this value. */
   autoApprove: boolean;
+  /** Like state of this session's own SESSION_POST anchor (backend-side, SESSION-10's
+   * "post-ship addition" — `POST/DELETE /sessions/{id}/like`). */
+  likeCount: number;
+  isLikedByCurrentUser: boolean;
   createdAt: string;
   updatedAt: string;
 }

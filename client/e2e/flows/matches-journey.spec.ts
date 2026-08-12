@@ -38,6 +38,12 @@ import { expect, test } from '../mocks/test.ts';
  * only in Discover; joining it moves it into "My sessions" without a
  * reload (both queries share the `sessionKeys.all` invalidation root).
  * Step 10 covers the search filter and the panel collapse toggle.
+ *
+ * CLIENT-SESSION-8: steps 3b/3c (inserted right after step 3, reusing the same "Sunday pickup
+ * run" session before step 4 cancels it). 3b covers the Discussion section — reading the seeded
+ * comment (`e2e/mocks/handlers/sessions.ts`'s `commentsState`) and posting a new one via
+ * `POST /api/sessions/{sessionId}/comments`. 3c covers the heart button — like then unlike via
+ * `POST`/`DELETE /api/sessions/{sessionId}/like`, asserting the count round-trips 0 -> 1 -> 0.
  */
 
 test('Matches journey', async ({ page }) => {
@@ -75,6 +81,36 @@ test('Matches journey', async ({ page }) => {
     await dialog.getByRole('button', { name: 'Leave' }).click();
     await expect(dialog.getByRole('button', { name: 'Join' })).toBeVisible();
     await expect(dialog.getByText('Participants (0/10)')).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Close' }).click();
+  });
+
+  await test.step('3b. Discussion section — reads the seeded comment, posts a new one (CLIENT-SESSION-8)', async () => {
+    await page.getByRole('button', { name: /Sunday pickup run/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
+    const discussion = dialog.getByRole('region', { name: 'Discussion' });
+
+    await expect(discussion.getByText('What time are we meeting at the courts?')).toBeVisible();
+
+    await discussion.getByRole('textbox', { name: 'Add a comment' }).fill('7pm works for me!');
+    await discussion.getByRole('button', { name: 'Post' }).click();
+    await expect(discussion.getByText('7pm works for me!')).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Close' }).click();
+  });
+
+  await test.step('3c. heart button likes/unlikes the session (CLIENT-SESSION-8)', async () => {
+    await page.getByRole('button', { name: /Sunday pickup run/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
+
+    const likeButton = dialog.getByRole('button', { name: 'Like', exact: true });
+    await expect(likeButton).toHaveText('0');
+    await likeButton.click();
+
+    const unlikeButton = dialog.getByRole('button', { name: 'Unlike', exact: true });
+    await expect(unlikeButton).toHaveText('1');
+    await unlikeButton.click();
+    await expect(dialog.getByRole('button', { name: 'Like', exact: true })).toHaveText('0');
 
     await dialog.getByRole('button', { name: 'Close' }).click();
   });

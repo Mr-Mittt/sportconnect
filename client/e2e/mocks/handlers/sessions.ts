@@ -1,5 +1,6 @@
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
+import type { Comment, CreateCommentPayload } from '../../../src/features/feed/types.ts';
 import type { ParticipantStatus, Session, SessionParticipant } from '../../../src/shared/types/session.ts';
 import {
   mockDiscoverableSession,
@@ -54,6 +55,12 @@ interface SessionsSession {
   participantsState: Record<number, SessionParticipant[]>;
   nextSessionId: number;
   nextParticipantId: number;
+  // CLIENT-SESSION-8: session comment threads, keyed by the domain sessionId (unlike
+  // feed.ts's commentsState, which is keyed by postId — session comments are reached only
+  // through /sessions/{sessionId}/comments, never a postId in the URL). Same "small stateful
+  // fake backend, not a fixed responder" reasoning as feed.ts's own commentsState.
+  commentsState: Record<number, Comment[]>;
+  nextCommentId: number;
 }
 
 // CLIENT-SESSION-1's own stateful fake backend, same "not a fixed responder"
@@ -77,10 +84,73 @@ function defaultSessionsSession(): SessionsSession {
     },
     nextSessionId: 100,
     nextParticipantId: 100,
+    // CLIENT-SESSION-8: mockSession (the creator/caller's own standalone session, so the
+    // Discussion section's visibility gate always passes for it) starts with one pre-seeded
+    // comment, so matches-journey.spec.ts has something to read before it posts a new one.
+    commentsState: {
+      [mockSession.id]: [
+        {
+          id: 1,
+          postId: mockSession.id,
+          userId: mockFriend.id,
+          userFullName: mockFriend.fullName,
+          userAvatarUrl: null,
+          content: 'What time are we meeting at the courts?',
+          parentCommentId: null,
+          likeCount: 0,
+          replyCount: 0,
+          isLikedByCurrentUser: false,
+          replies: [],
+          createdAt: '2026-08-01T09:00:00',
+          updatedAt: '2026-08-01T09:00:00',
+        },
+      ],
+    },
+    nextCommentId: 100,
   };
 }
 
 const sessionsSessions = createSessionStore(defaultSessionsSession);
+
+/** Locates a session comment (root or one-level reply) across every session's thread — same
+ * shape as feed.ts's own `locateComment`, keyed by domain sessionId instead of postId. */
+function locateSessionComment(
+  session: SessionsSession,
+  commentId: number,
+): { sessionId: number; parentCommentId: number | null } | null {
+  for (const [sessionIdKey, comments] of Object.entries(session.commentsState)) {
+    for (const comment of comments) {
+      if (comment.id === commentId) return { sessionId: Number(sessionIdKey), parentCommentId: null };
+      if (comment.replies.some((reply) => reply.id === commentId)) {
+        return { sessionId: Number(sessionIdKey), parentCommentId: comment.id };
+      }
+    }
+  }
+  return null;
+}
+
+function transformSessionComment(
+  session: SessionsSession,
+  sessionId: number,
+  commentId: number,
+  transform: (comment: Comment) => Comment,
+): void {
+  session.commentsState = {
+    ...session.commentsState,
+    [sessionId]: (session.commentsState[sessionId] ?? []).map((comment) => {
+      if (comment.id === commentId) return transform(comment);
+      if (comment.replies.some((reply) => reply.id === commentId)) {
+        return {
+          ...comment,
+          replies: comment.replies.map((reply) =>
+            reply.id === commentId ? transform(reply) : reply,
+          ),
+        };
+      }
+      return comment;
+    }),
+  };
+}
 
 export const sessionHandlers: HttpHandler[] = [
   http.post('/api/sessions', async ({ request }) => {
@@ -135,6 +205,8 @@ export const sessionHandlers: HttpHandler[] = [
       feeAmountVnd: body.feeType === 'FIXED' ? (body.feeAmountVnd ?? null) : null,
       initialSlot,
       autoApprove: body.autoApprove ?? false,
+      likeCount: 0,
+      isLikedByCurrentUser: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -390,9 +462,173 @@ export const sessionHandlers: HttpHandler[] = [
     row.rejectReason = body.reason ?? null;
     return HttpResponse.json(apiResponse(null, 'Participant rejected successfully'));
   }),
+
+  // CLIENT-SESSION-8: this mock doesn't simulate the real backend's 403 for a non-participant
+  // (SessionGate) — every seeded/created session here is reachable only by its creator/owner in
+  // practice, so the happy path is what's worth faking. Real access-gating is IT-tested
+  // server-side (SessionPostAccessGateIntegrationTest), same "mock doesn't simulate every 4xx"
+  // precedent participants/approve/reject above already follow.
+  http.get('/api/sessions/:sessionId/comments', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sessionId = Number(params.sessionId);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    return HttpResponse.json(
+      apiResponse(mockPageResponse(session.commentsState[sessionId] ?? []), 'Comments retrieved successfully'),
+    );
+  }),
+
+  http.post('/api/sessions/:sessionId/comments', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sessionId = Number(params.sessionId);
+    const body = (await request.json()) as CreateCommentPayload;
+    if (!body.content) {
+      return HttpResponse.json(apiError('Validation failed'), { status: 400 });
+    }
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const created: Comment = {
+      id: session.nextCommentId++,
+      postId: sessionId,
+      userId: mockUser.id,
+      userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+      userAvatarUrl: mockUser.avatarUrl,
+      content: body.content,
+      parentCommentId: body.parentCommentId ?? null,
+      likeCount: 0,
+      replyCount: 0,
+      isLikedByCurrentUser: false,
+      replies: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    if (body.parentCommentId === undefined) {
+      session.commentsState = {
+        ...session.commentsState,
+        [sessionId]: [created, ...(session.commentsState[sessionId] ?? [])],
+      };
+    } else {
+      session.commentsState = {
+        ...session.commentsState,
+        [sessionId]: (session.commentsState[sessionId] ?? []).map((comment) =>
+          comment.id === body.parentCommentId
+            ? { ...comment, replyCount: comment.replyCount + 1, replies: [...comment.replies, created] }
+            : comment,
+        ),
+      };
+    }
+    return HttpResponse.json(apiResponse(created, 'Comment created successfully'), { status: 201 });
+  }),
+
+  http.post('/api/sessions/:sessionId/comments/:commentId/like', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const commentId = Number(params.commentId);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const located = locateSessionComment(session, commentId);
+    if (!located) return HttpResponse.json(apiError('Comment not found'), { status: 404 });
+    transformSessionComment(session, located.sessionId, commentId, (comment) => ({
+      ...comment,
+      isLikedByCurrentUser: true,
+      likeCount: comment.likeCount + 1,
+    }));
+    return HttpResponse.json(apiResponse(null, 'Comment liked successfully'));
+  }),
+
+  http.delete('/api/sessions/:sessionId/comments/:commentId/like', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const commentId = Number(params.commentId);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const located = locateSessionComment(session, commentId);
+    if (!located) return HttpResponse.json(apiError('Comment not found'), { status: 404 });
+    transformSessionComment(session, located.sessionId, commentId, (comment) => ({
+      ...comment,
+      isLikedByCurrentUser: false,
+      likeCount: Math.max(0, comment.likeCount - 1),
+    }));
+    return HttpResponse.json(apiResponse(null, 'Comment unliked successfully'));
+  }),
+
+  // CLIENT-SESSION-8: likes/unlikes the session's own SESSION_POST anchor (SESSION-10 "post-ship
+  // addition"). Same "mock doesn't simulate every 4xx" precedent as the comment handlers above.
+  http.post('/api/sessions/:sessionId/like', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sessionId = Number(params.sessionId);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const existing = session.sessionsState.find((candidate) => candidate.id === sessionId);
+    if (!existing) {
+      return HttpResponse.json(apiError('Session not found'), { status: 404 });
+    }
+    if (existing.isLikedByCurrentUser) {
+      return HttpResponse.json(apiError('Already liked'), { status: 400 });
+    }
+    session.sessionsState = session.sessionsState.map((candidate) =>
+      candidate.id === sessionId
+        ? { ...candidate, isLikedByCurrentUser: true, likeCount: candidate.likeCount + 1 }
+        : candidate,
+    );
+    return HttpResponse.json(apiResponse(null, 'Session liked successfully'));
+  }),
+
+  http.delete('/api/sessions/:sessionId/like', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sessionId = Number(params.sessionId);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const existing = session.sessionsState.find((candidate) => candidate.id === sessionId);
+    if (!existing) {
+      return HttpResponse.json(apiError('Session not found'), { status: 404 });
+    }
+    if (!existing.isLikedByCurrentUser) {
+      return HttpResponse.json(apiError('Not currently liked'), { status: 400 });
+    }
+    session.sessionsState = session.sessionsState.map((candidate) =>
+      candidate.id === sessionId
+        ? { ...candidate, isLikedByCurrentUser: false, likeCount: Math.max(0, candidate.likeCount - 1) }
+        : candidate,
+    );
+    return HttpResponse.json(apiResponse(null, 'Session unliked successfully'));
+  }),
 ];
 
 /** Test-only reset — used by the mock server's `/__mock/sessions/:id/reset`. */
 export function resetSessionHandlersState(sessionId: string): void {
   sessionsSessions.reset(sessionId);
+}
+
+/**
+ * CLIENT-SESSION-8: cross-store fallback for feed.ts's `DELETE /api/posts/comments/:commentId`
+ * handler — the real backend's `Comment` table (and this one endpoint) is genuinely shared
+ * between feed comments and session comments (SESSION-10's `SESSION_POST` reuse), so a comment
+ * id feed.ts's own store doesn't recognize might belong to a session's thread instead. Returns
+ * `true` if it was found (and deleted) here, so the caller knows not to 404.
+ */
+export function deleteSessionCommentIfPresent(mockServerSessionId: string, commentId: number): boolean {
+  const session = sessionsSessions.get(mockServerSessionId);
+  const located = locateSessionComment(session, commentId);
+  if (!located) return false;
+  if (located.parentCommentId === null) {
+    session.commentsState = {
+      ...session.commentsState,
+      [located.sessionId]: (session.commentsState[located.sessionId] ?? []).filter(
+        (comment) => comment.id !== commentId,
+      ),
+    };
+  } else {
+    session.commentsState = {
+      ...session.commentsState,
+      [located.sessionId]: (session.commentsState[located.sessionId] ?? []).map((comment) =>
+        comment.id === located.parentCommentId
+          ? {
+              ...comment,
+              replyCount: Math.max(0, comment.replyCount - 1),
+              replies: comment.replies.filter((reply) => reply.id !== commentId),
+            }
+          : comment,
+      ),
+    };
+  }
+  return true;
 }

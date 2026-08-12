@@ -1,6 +1,7 @@
 import { IconChevronsLeft, IconChevronsRight, IconPlus } from '@tabler/icons-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useAuthStore } from '@/app/authStore';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
@@ -31,6 +32,7 @@ export function MatchesPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- read once, on mount only; not resynced if the URL param changes later
 
   const data = useMatchesPageData(initialSessionId);
+  const user = useAuthStore((state) => state.user)!;
 
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
   const addSportMutation = useAddSportProfile(data.currentUserId);
@@ -220,6 +222,21 @@ export function MatchesPage() {
         isApprovingParticipant={data.isApprovingParticipant}
         onRejectParticipant={data.onRejectParticipant}
         isRejectingParticipant={data.isRejectingParticipant}
+        onToggleLike={data.onToggleLike}
+        isTogglingLike={data.isTogglingLike}
+        currentUser={{ fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
+        comments={data.comments}
+        isCommentsLoading={data.isCommentsLoading}
+        isCommentsError={data.isCommentsError}
+        isCommentsForbidden={data.isCommentsForbidden}
+        hasMoreComments={data.hasMoreComments}
+        isFetchingMoreComments={data.isFetchingMoreComments}
+        onFetchMoreComments={data.onFetchMoreComments}
+        onAddComment={data.onAddComment}
+        onAddCommentReply={data.onAddCommentReply}
+        isPostingComment={data.isPostingComment}
+        onDeleteComment={data.onDeleteComment}
+        onToggleCommentLike={data.onToggleCommentLike}
       />
 
       <AddSportModal

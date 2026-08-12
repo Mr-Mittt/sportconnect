@@ -2608,8 +2608,39 @@ explicit go-ahead at each step (full story in A3's summary doc):
   no module actually implements them, so there's no owning backlog to file a fix-the-schema ticket
   against; flagged here in case someone wants to scope either "build the feature" or "drop the dead
   table" later, same "leftover placeholder, leave it alone" status as `sport-impl`'s `FacilityType`.
-- **MVP backlog (session module):** 11 of 12 tickets `DONE` (SESSION-1 through SESSION-12 except
+- **MVP backlog (session module):** 12 of 13 tickets `DONE` (SESSION-1 through SESSION-13 except
   SESSION-8); SESSION-8 remains `TODO`.
+- **CLIENT-SESSION-8 (`DONE`, 2026-08-12,
+  `client/docs/CLIENT-SESSION-8_SESSION_COMMENTS.md`):** an inline "Discussion" section in
+  `SessionDetailModal` (list + post + delete-own-comment, one-level reply nesting, per-comment
+  likes — reuses `CommentItem`, now with `onHashtagClick` made optional since session comments
+  render as plain text). Rendered inline, not a second nested Dialog (this codebase's
+  `SessionDetailModal` is already one, and stacking two broke earlier `CreateSessionModal`
+  attempts) — unlike Post's own `CommentSection`. Visibility gate is the backend's real 403, not a
+  client-side approximation: the client has no `callerParticipation` yet (CLIENT-SESSION-9,
+  `TODO`), so `useSessionCommentsData` always attempts the fetch and hides the section entirely on
+  a 403 rather than showing an error. Wired through the two hooks that actually assemble
+  `SessionDetailModal`'s props (`useMatchesPageData`, `useDiscoverModalData` — shared by
+  Home Feed/Groups/Friends). Found and fixed a real pre-existing test-hygiene gap along the way:
+  `MatchesPage.test.tsx`'s `afterEach` reset the auth store's `user` to `null` without an explicit
+  `cleanup()` first (Vitest runs `afterEach` hooks inside-out), harmless until this ticket's
+  `currentUser` prop started dereferencing `user` — fixed with the same explicit `cleanup()`
+  `HomeFeedPage.test.tsx`/`FriendsPage.test.tsx` already had. **Same-day delta:** also added the
+  "like the session" heart button (originally out of scope) at direct user request — found a real
+  backend gap first (`SessionResponse` had no `likeCount`/`isLikedByCurrentUser`; SESSION-10's
+  like endpoints were write-only with no way to read state back), filed and shipped as backend
+  ticket **SESSION-13** (`modules/session/docs/BACKLOG_MVP.md`, `DONE`) before building the
+  client button against it.
+- **SESSION-13 (`DONE`, 2026-08-12,
+  `modules/session/docs/BACKLOG_MVP.md` § SESSION-13):** `PostService.getSessionPostLikeInfo`
+  (new cross-domain batch method, `post-api`/`post-impl`) + `SessionResponse.likeCount`/
+  `isLikedByCurrentUser` (`session-api`), batch-resolved in `SessionServiceImpl.mapToResponses`
+  alongside the existing creator/sport/location/participant-count batch resolution — same no-N+1
+  discipline applied across the `session-impl` ↔ `post-impl` boundary. Uses a real batch DB query
+  rather than the per-post Redis-cache pattern regular posts use for likeCount — that cache was
+  never populated for `SESSION_POST` likes in the first place, since nothing ever called
+  `getCount` on that path. Filed and shipped mid-pickup on CLIENT-SESSION-8, the client ticket
+  that needed it.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

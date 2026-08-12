@@ -15,8 +15,11 @@ interface CommentItemProps {
   onReply: (parentCommentId: number, content: string) => void;
   isSubmittingReply: boolean;
   /** A hashtag inside a comment's own text is clickable too (FEED-6
-   * follow-up) — same convention as PostCard's `onHashtagClick('#tag')`. */
-  onHashtagClick: (tag: string) => void;
+   * follow-up) — same convention as PostCard's `onHashtagClick('#tag')`.
+   * Optional (CLIENT-SESSION-8): omit it to render `comment.content` as
+   * plain text instead — session comments have no hashtag-click destination,
+   * unlike Post comments. */
+  onHashtagClick?: (tag: string) => void;
 }
 
 function initialsFor(fullName: string): string {
@@ -75,11 +78,15 @@ export function CommentItem({
               <span className="text-2sm font-medium text-text-primary">{comment.userFullName}</span>
               <span className="text-2xs text-text-muted">{formatRelativeTime(comment.createdAt)}</span>
             </div>
-            <HashtagText
-              text={comment.content}
-              onHashtagClick={onHashtagClick}
-              className="text-2sm text-text-primary"
-            />
+            {onHashtagClick !== undefined ? (
+              <HashtagText
+                text={comment.content}
+                onHashtagClick={onHashtagClick}
+                className="text-2sm text-text-primary"
+              />
+            ) : (
+              <p className="text-2sm text-text-primary">{comment.content}</p>
+            )}
           </div>
           <div className="mt-1 flex items-center gap-3 px-1">
             <button

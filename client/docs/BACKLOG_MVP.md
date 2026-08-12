@@ -130,7 +130,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 59 | CLIENT-SESSION-6 | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `DONE` |
 | 60 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
 | 61 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `DONE` |
-| 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `TODO` |
+| 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `DONE` |
 | 63 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 | 64 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) | `TODO` |
 | 65 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
@@ -2797,10 +2797,11 @@ joins that same deferred list. This ticket only removes the "component doesn't e
 same "component ships ahead of the page" precedent `LocationPicker` set for `CreateSessionModal`.
 
 ### CLIENT-SESSION-8 · Session comments — discussion section in Session Detail modal
-**Status:** `TODO` · **Type:** Feature · **Dependency:** SESSION-10
-(`modules/session/docs/BACKLOG_MVP.md`, backend, `TODO`) · **Filed:** 2026-08-07 · **Spec:**
-`documentation/md/vision/SESSION_COMMENTS_VISION.md` (vision session — full ticket spec via
-`/feature` at pickup)
+**Status:** `DONE` (2026-08-12) · **Type:** Feature · **Dependency:** SESSION-10
+(`modules/session/docs/BACKLOG_MVP.md`, backend, `DONE` 2026-08-12) · **Filed:** 2026-08-07 ·
+**Spec:** `documentation/md/vision/SESSION_COMMENTS_VISION.md` (vision session; superseded on
+storage/API shape by SESSION-10's second design pass, unchanged on access-gating decisions) ·
+**Summary:** `client/docs/CLIENT-SESSION-8_SESSION_COMMENTS.md`
 
 **What ships:** a comment section rendered below the existing session details in
 `SessionDetailModal`, for participant discussion. Visible only when the caller has a
@@ -2813,6 +2814,25 @@ standalone and group-linked sessions — no conditional on `groupId`.
 **Explicitly out of scope:** live updates, new-comment notifications, moderation UI for
 creator/owner, locking the thread on cancellation — see SESSION-10's own out-of-scope list, same
 source of truth.
+
+**Delta (2026-08-12, at pickup):** three design forks resolved with the user before implementing.
+**Render shape:** inline `<section>` directly inside `SessionDetailModal`'s existing scrollable
+content, not a second nested Dialog like Post's own `CommentSection` — this codebase has a
+documented rule against nesting a second Dialog inside `SessionDetailModal` (broke earlier
+`CreateSessionModal` attempts). **Visibility gate:** the client has no `callerParticipation` field
+yet (that's CLIENT-SESSION-9, still `TODO`) — rather than approximate visibility from partial
+client-side data, `useSessionCommentsData` always attempts the fetch and reads a 403 as "hide the
+section entirely," making the backend the sole authority. **Hashtags:** none — `CommentItem`'s
+`onHashtagClick` was made optional (renders plain text when omitted) rather than inventing a
+navigation destination nothing asked for. Full writeup, including a real pre-existing test-hygiene
+bug found and fixed along the way: `client/docs/CLIENT-SESSION-8_SESSION_COMMENTS.md`.
+
+**Delta (2026-08-12, same day, folded in at user request):** added the "like the session" heart
+button too — originally out of scope. Found a real backend gap first (`SessionResponse` had no
+`likeCount`/`isLikedByCurrentUser` — SESSION-10's like endpoints were write-only), filed and
+shipped as backend ticket **SESSION-13** (`modules/session/docs/BACKLOG_MVP.md`, `DONE`) before
+building the client button against it. See the summary doc's Delta section for the full design
+(same 403-as-gate philosophy extended to liking, real not inert in `useDiscoverModalData`).
 
 ### CLIENT-SESSION-9 · Wire Join/Accept/Decline/Cancel/Leave button on session card + Session Detail modal
 **Status:** `TODO` · **Type:** Feature · **Dependency:** SESSION-9

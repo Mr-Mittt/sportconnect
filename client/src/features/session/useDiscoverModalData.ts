@@ -4,8 +4,11 @@ import { filterDiscoverSessions } from './discoverSearch';
 import { useDiscoverSessions } from './hooks/useDiscoverSessions';
 import { useJoinSession } from './hooks/useJoinSession';
 import { useLeaveSession } from './hooks/useLeaveSession';
+import { useLikeSession } from './hooks/useLikeSession';
 import { useSession } from './hooks/useSession';
 import { useSessionParticipants } from './hooks/useSessionParticipants';
+import { useUnlikeSession } from './hooks/useUnlikeSession';
+import { useSessionCommentsData } from './useSessionCommentsData';
 import type { SessionListItem, SessionSearchMode } from './types';
 
 const noop = () => {};
@@ -54,6 +57,14 @@ export function useDiscoverModalData(sportId: number | undefined) {
 
   const joinMutation = useJoinSession();
   const leaveMutation = useLeaveSession();
+  const likeMutation = useLikeSession();
+  const unlikeMutation = useUnlikeSession();
+
+  // CLIENT-SESSION-8: the detail dialog's Discussion section. A session reached from Discover
+  // is, by construction, one the caller hasn't joined — the comments GET will legitimately 403
+  // for most of them, and `isCommentsForbidden` correctly hides the section; no special-casing
+  // needed here beyond calling the same hook `useMatchesPageData` uses.
+  const sessionCommentsData = useSessionCommentsData(selectedSessionId ?? undefined, isDetailOpen);
 
   return {
     isDiscoverModalOpen,
@@ -84,6 +95,21 @@ export function useDiscoverModalData(sportId: number | undefined) {
     onLeave: () => selectedSessionId !== null && leaveMutation.mutate(selectedSessionId),
     isLeaving: leaveMutation.isPending,
     isLeaveError: leaveMutation.isError,
+    // Real, not inert (unlike cancel/approval below) — SESSION_POST like gates on the same
+    // SessionGate as the Discussion section, which isn't structurally guaranteed false for a
+    // Discover-sourced session (a REQUESTED/INVITED row doesn't exclude it from Discover, only
+    // JOINED/self-created do — see CLIENT-SESSION-6). A caller without access simply gets a
+    // 403 the mutation doesn't surface, same accepted gap as clicking Join on a session that
+    // just filled up elsewhere.
+    onToggleLike: () => {
+      if (selectedSessionId === null) return;
+      if (sessionQuery.data?.isLikedByCurrentUser) {
+        unlikeMutation.mutate(selectedSessionId);
+      } else {
+        likeMutation.mutate(selectedSessionId);
+      }
+    },
+    isTogglingLike: likeMutation.isPending || unlikeMutation.isPending,
 
     // Inert — canManage is always false, so SessionDetailModal never renders cancel/approval UI.
     onConfirmCancel: noop,
@@ -96,5 +122,7 @@ export function useDiscoverModalData(sportId: number | undefined) {
     isApprovingParticipant: false,
     onRejectParticipant: noop,
     isRejectingParticipant: false,
+
+    ...sessionCommentsData,
   };
 }
