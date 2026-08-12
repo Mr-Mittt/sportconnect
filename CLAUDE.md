@@ -205,6 +205,21 @@ The `User` entity uses PostGIS geography (`geography(Point, 4326)`) for the `loc
 
 Tests are written with the **Spock Framework** (Groovy), not JUnit. Test files live in `src/test/groovy/` within each module. Use `Mock()` for dependencies and `@Subject` on the class under test. Run tests via `useJUnitPlatform()` (Spock runs on the JUnit platform).
 
+**Integration tests for authorization boundaries.** Any endpoint that enforces authorization or
+visibility — a new access-control check, or a change to an existing one (e.g. a new
+`ResourceGate<T>` implementation, an ownership/membership check, a role gate) — needs coverage in
+`server/src/test/java/com/sportconnect/integration/` (real `MockMvc` request through real Spring
+wiring and a real DB round-trip), not just a Spock unit test with the check's own collaborators
+mocked out. A unit test proves a service *calls* the check correctly; only an IT test proves the
+check actually rejects/accepts through the real request pipeline — real cross-domain service
+wiring, and real exception-to-HTTP-status mapping (`GlobalExceptionHandler`). This is deliberately
+scoped to the boundary, not the whole API surface: a routine CRUD/read endpoint with no
+access-control logic of its own doesn't need one. The `:server:test` H2 schema
+(`server/src/test/resources/schema.sql`) is a hand-maintained mirror of the real Postgres
+migrations, built up lazily — a table/column only gets added the first time some test needs it —
+so a new IT test may need to add missing schema there first; that's expected, not a sign something
+is wrong.
+
 ### Frontend
 
 The old CRA client (AuthContext/GroupContext, localStorage tokens) was removed on 2026-07-06 for a from-scratch rebuild. The new client's stack (Vite, React 18 + TS strict, Tailwind, shadcn/ui, Zustand + TanStack Query, Vitest, Storybook, Playwright + MSW) and all conventions are defined in `client/CLAUDE.md`; the build order is `client/docs/BACKLOG_MVP.md`.
