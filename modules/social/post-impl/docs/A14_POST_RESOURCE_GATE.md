@@ -125,13 +125,53 @@ direct link/id, never surfaced in a feed.
   `ForbiddenException` cases for all seven methods, added `NotFoundException` cases for
   `unlikeComment`'s and `unlikePost`'s previously-uncovered existence checks.
 
+## Delta — added real IT coverage (post-merge, same session)
+
+The first pass shipped with unit-only coverage: `PostGateSpec` (mocked `GroupService`/
+`UserFriendService`) tests the gate's branch logic in isolation, and the updated
+`PostServiceImplSpec`/`CommentServiceImplSpec` mock `PostGate` itself — they prove each service
+method *calls* the gate correctly, not that the gate actually rejects/accepts over a real HTTP
+request with real Spring wiring. Asked directly whether this ticket had IT coverage; it didn't, so
+added `server/src/test/java/com/sportconnect/integration/PostAccessGateIntegrationTest.java` — 19
+cases, one `MockMvc` HTTP call per case, through real `PostController`/`PostServiceImpl`/
+`CommentServiceImpl`/`PostGate`/`GroupServiceImpl`/`UserFriendServiceImpl` beans and a real H2
+round trip. Covers, for each of the 7 gated methods where applicable: non-member of a
+`GROUP_POST`'s group → 403, group member → 200/201; non-owner of a `private` post → 403, owner →
+200; non-friend of a `friends` post → 403, accepted friend → 200; a soft-deleted post → 404; a post
+whose group is itself soft-deleted (B18) → 404 even for the former owner; a non-existent comment on
+`unlikeComment` → 404 (previously uncovered anywhere).
+
+Fixtures are inserted directly via `GroupRepository`/`GroupMemberRepository`/`FriendshipRepository`
+rather than through `GroupService.addMember` (friendship + invitation-acceptance round trip, B9) or
+the friend-request flow — this class tests `PostGate`'s read of that state, not the group/
+friendship write paths, which have their own coverage.
+
+**Test-schema gaps this surfaced and fixed** (`server/src/test/resources/schema.sql`, H2, used by
+every `:server:test` run — real Postgres migrations were already correct, only the hand-maintained
+test mirror had drifted):
+- `groups` was missing the five `recurrence_*` columns `GROUP-RECUR-1` (V033/V036) added to the
+  `Group` entity — any `@SpringBootTest` persisting a real `Group` row failed outright. Nothing
+  had exercised this before since existing group IT tests (`GroupControllerTest`) mock
+  `GroupService` entirely rather than touching the DB.
+- `comment_likes` had no table at all — only `post_likes` existed. Nothing had exercised
+  `likeComment`/`unlikeComment` against a real DB before this ticket.
+- `friendships` didn't exist either — nothing had exercised `UserFriendService.areFriends` for
+  real in this test profile before. Added mirroring the real `V019` migration (two-row-per-pair
+  shape).
+
+None of these are new gaps — they're pre-existing holes in the test-only schema mirror that
+happened to never be hit because nothing had previously written a real end-to-end test touching
+group persistence, comment likes, or friendships. Fixing them here is a one-time schema catch-up,
+not new production risk.
+
 ## Verification
 
 - `./gradlew :modules:social:post-impl:test` — green.
-- `./gradlew :server:test` — green, including `PostControllerIntegrationTest.shouldCreatePost`
-  and `shouldReturnPostsByHashtagWithoutThrowing` against a real Spring context + Redis.
+- `./gradlew :server:test` — green, including `PostControllerIntegrationTest.shouldCreatePost`,
+  `shouldReturnPostsByHashtagWithoutThrowing`, and all 19 new `PostAccessGateIntegrationTest`
+  cases, against a real Spring context + real H2 DB + Redis.
 - N+1 check: `PostGate`'s cross-domain calls (`isGroupActive`, `isGroupMember`, `areFriends`) only
-  run on these five single-item paths, never inside a `.map()`/loop over a `Page`/`List` — no new
-  N+1 introduced. Per-request round-trip cost is accepted at MVP scale per the ADR's open
+  run on these single-item paths, never inside a `.map()`/loop over a `Page`/`List` — no new N+1
+  introduced. Per-request round-trip cost is accepted at MVP scale per the ADR's open
   questions (§8) — a future caching concern for `group-impl`/`user-impl`'s own `-api`
   implementations if it ever becomes a bottleneck, not something `PostGate` itself should own.
