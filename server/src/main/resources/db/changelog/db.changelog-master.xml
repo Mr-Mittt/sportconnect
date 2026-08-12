@@ -131,4 +131,7 @@
     <!-- SESSION-10: sessions.post_id — every Session's companion SESSION_POST, created synchronously at session creation -->
     <include file="db/changelog/changes/V051__add_session_post_id.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-12: partial index on sessions(scheduled_start) WHERE status = 'SCHEDULED', for the generation job's hot findSessionsToStart query -->
+    <include file="db/changelog/changes/V052__add_sessions_scheduled_status_partial_index.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

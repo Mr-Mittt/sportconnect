@@ -29,7 +29,7 @@
 | 8 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `DONE` |
 | 9 | SESSION-11 | Drop DB-level FKs on session tables' cross-domain columns | `DONE` |
 | 10 | SESSION-10 | Session comments — reuses post-impl's Comment via a companion `SESSION_POST` anchor | `DONE` |
-| 11 | SESSION-12 | Partial index on `sessions` scoped to `status = SCHEDULED` for the generation job's hot queries | `TODO` |
+| 11 | SESSION-12 | Partial index on `sessions` scoped to `status = SCHEDULED` for the generation job's hot queries | `DONE` |
 | 12 | SESSION-8 | Session discover ranking algorithm | `TODO` |
 
 ---
@@ -461,6 +461,9 @@ remove; any change to any JPA entity, service, or repository in this module.
 
 ## SESSION-12 — Partial index on `sessions` scoped to `status = SCHEDULED`
 
+**Status:** `DONE` (2026-08-12) · **Full writeup:**
+`modules/session/docs/SESSION-12_PARTIAL_SCHEDULED_STATUS_INDEX.md`
+
 **Filed:** 2026-08-12. `V031__create_sessions_table.sql` indexes `(status, scheduled_start)` —
 `idx_sessions_status_scheduled_start` — a plain, unscoped composite covering all four
 `SessionStatus` values. Confirmed by reading the migration directly (see SESSION-1's entry above),
@@ -496,3 +499,11 @@ call at pickup, not decided here.
 generated query against a populated `sessions` table (real mix of terminal and `SCHEDULED` rows,
 not just fixture-sized) and confirm the planner picks the new partial index over the existing
 composite or a seq scan.
+
+**Delta (2026-08-12, at pickup):** both open calls above resolved. Existing
+`idx_sessions_status_scheduled_start` **kept**, not dropped — still serves
+`findSessionsToComplete`. Index shipped as **`scheduled_start` alone**, not
+`(scheduled_start, scheduled_end_at)` as sketched — `scheduled_end_at > :now` stays a cheap
+in-memory `Filter` on the already-small partial match set, confirmed via `EXPLAIN`. Shipped as
+`V052__add_sessions_scheduled_status_partial_index.sql`. Full writeup:
+`modules/session/docs/SESSION-12_PARTIAL_SCHEDULED_STATUS_INDEX.md`.

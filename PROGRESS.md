@@ -2583,6 +2583,15 @@ explicit go-ahead at each step (full story in A3's summary doc):
   migration's `sessions.sport_id` already gets it right (plain `Long`, no FK) — `created_by`/
   `cancelled_by`/`location_id` were missed despite that. Schema-only; all four were already
   `NO ACTION` (no cascade to lose) and already plain `UUID`/`Long` fields at the JPA layer.
+- **SESSION-12 (`DONE`, 2026-08-12,
+  `modules/session/docs/SESSION-12_PARTIAL_SCHEDULED_STATUS_INDEX.md`):** added
+  `idx_sessions_scheduled_status_only` — a partial index on `sessions(scheduled_start) WHERE
+  status = 'SCHEDULED'` (`V052`) — targeting `SessionGenerationJob.startOngoingSessions`'s
+  15-minute `findSessionsToStart` query. Sessions are never purged, so the existing unscoped
+  `idx_sessions_status_scheduled_start` grows with the table's whole history; the new partial
+  index tracks only the live/pending slice instead, kept alongside the old one (which still
+  serves `findSessionsToComplete`'s `status IN (SCHEDULED, ONGOING)` query). Schema-only, no
+  code changes; confirmed via `EXPLAIN` that the planner picks the new index.
 - **LOC-3 (`DONE`, 2026-08-10,
   `modules/location/location-impl/docs/LOC-3_DROP_LOCATION_CROSS_DOMAIN_FKS.md`):** dropped the 2
   cross-domain DB-level FKs found in the 2026-08-10 sweep — `locations_created_by_fkey`,
@@ -2599,7 +2608,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   no module actually implements them, so there's no owning backlog to file a fix-the-schema ticket
   against; flagged here in case someone wants to scope either "build the feature" or "drop the dead
   table" later, same "leftover placeholder, leave it alone" status as `sport-impl`'s `FacilityType`.
-- **MVP backlog (session module):** 10 of 11 tickets `DONE` (SESSION-1 through SESSION-11 except
+- **MVP backlog (session module):** 11 of 12 tickets `DONE` (SESSION-1 through SESSION-12 except
   SESSION-8); SESSION-8 remains `TODO`.
 
 ### Partner Finding System (designed, not implemented)
