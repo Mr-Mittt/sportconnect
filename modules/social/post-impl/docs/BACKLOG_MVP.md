@@ -38,7 +38,7 @@
 | 17 | A15 | Drop DB-level FKs on post-impl tables' cross-domain columns (user_id chain, posts.group_id, and posts.sport_id — absorbs A13) | `DONE` |
 | 18 | A11 | Broadcast-expiry timezone mismatch — investigated 2026-08-10, not reproducible, no code change | `DONE` |
 | 19 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `DONE` |
-| 20 | A14 | Enforce post visibility/group-membership on single-item paths (getPostById, comments, likes) — not just list endpoints | `TODO` |
+| 20 | A14 | Enforce post visibility/group-membership on single-item paths (getPostById, comments, likes) — not just list endpoints | `DONE` |
 | 21 | A16 | Consume `group-impl`'s new `canManagePosts` instead of composing `isGroupOwner`/`isGroupAdmin` | `DONE` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
@@ -763,7 +763,9 @@ first checking, as this ticket did, whether the client already resolves the conc
 ---
 
 ### A14 · Enforce post visibility/group-membership on single-item paths, not just list endpoints
-**Status:** `TODO` · **Type:** Bug Fix (Security) · **Filed:** 2026-08-08, found while designing
+**Status:** `DONE` (2026-08-12) · **Summary:**
+`modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`
+**Type:** Bug Fix (Security) · **Filed:** 2026-08-08, found while designing
 `SESSION-10`'s comment access-gating (`modules/session/docs/BACKLOG_MVP.md`) — comparing how a
 session's `SessionParticipant`-status gate would need to work led to checking how the equivalent
 post/group-membership gate actually works today, surfacing this gap. **Redesigned 2026-08-11**
@@ -830,6 +832,22 @@ is a change from the ticket's original 400-convention note) from `getPostById`/`
 `createComment`/`likeComment`/`unlikeComment` on that group's post; a member still succeeds on all
 five (regression guard); a `public`/non-group post is unaffected for any caller; a post whose group
 has been soft-deleted (B18) now 404s via `isAvailable` instead of remaining reachable.
+
+**Resolution (2026-08-12):** implemented exactly as designed above — `PostGate`
+(`com.sportconnect.social.post.access`) implements `ResourceGate<Post>`, applied to all 5 methods.
+Two deltas beyond this entry's own text, both confirmed with the user before implementing: (1)
+`likeComment`/`unlikeComment` also gate the comment's own availability (new
+`CommentRepository.findByIdAndIsActiveTrue`) before the parent-post `PostGate` check — closes a
+gap this entry didn't call out, where a comment on an unavailable/invisible post stayed likeable,
+and where `unlikeComment` had no comment-existence check at all; (2) `friends`-visibility is now
+genuinely enforced (`UserFriendService.areFriends`), not left deferred as this entry's "out of
+scope" originally said — the dependency already existed with zero new coupling, so the user chose
+to close it in the same pass rather than file a follow-up; (3) `PostServiceImpl.likePost`/
+`unlikePost` — never named anywhere in this entry or the ADR — turned out to have the identical
+unguarded pattern (`likePost` checked existence only, `unlikePost` checked nothing at all about
+the post). Spotted after the initial pass shipped; the user asked to fix it in the same branch
+rather than file a separate ticket. Actual shipped scope is 7 single-item paths, not the 5
+originally named. Full detail: `modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`.
 
 ---
 

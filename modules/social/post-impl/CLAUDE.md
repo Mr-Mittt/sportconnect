@@ -19,6 +19,7 @@ in the DB and as JPA entities but have **no service implementation yet**.
 | `PostServiceImpl` | Feed, CRUD, likes; enforces ownership on update/delete; does NOT extract hashtags |
 | `CommentServiceImpl` | Comments + nested replies; `mapToResponse()` is recursive |
 | `PostRepository` | `findPublicPosts()` = `visibility='public' AND groupId IS NULL` |
+| `PostGate` (`access/`) | `ResourceGate<Post>` (A14) — availability + visibility for the single-item paths (`getPostById`, `getPostComments`, `createComment`, `likeComment`, `unlikeComment`, `likePost`, `unlikePost`); list endpoints (`getGroupPosts`, feeds) keep their own pre-query membership checks, untouched by this gate |
 
 ## What's Implemented vs. Stubbed
 
@@ -61,4 +62,4 @@ DELETE /api/posts/comments/{commentId}/like
 - Double-like is blocked by both a unique DB constraint AND a `BadRequestException` in the service — keep both.
 - `PostMedia.thumbnailUrl` is only set when the URL string contains `"video"` — all other media gets a null thumbnail.
 - Location uses the same JTS pattern as user-impl: `longitude=X, latitude=Y`, SRID 4326.
-- `visibility='friends'` is stored but not enforced — there is no friend graph, so it currently behaves like private.
+- `visibility='friends'` is enforced (A14, via `PostGate` + `UserFriendService.areFriends`) on the 5 single-item paths listed above — but only there. List endpoints (`getPersonalizedFeed`, etc.) don't select on `friends`-visibility at all today, so a `friends`-visibility post never appears in anyone's feed regardless of friendship — it's only reachable by direct link/id.

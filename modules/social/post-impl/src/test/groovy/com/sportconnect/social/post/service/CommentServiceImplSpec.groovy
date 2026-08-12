@@ -2,7 +2,9 @@ package com.sportconnect.social.post.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.NotFoundException
+import com.sportconnect.social.post.access.PostGate
 import com.sportconnect.social.post.api.dto.CommentResponse
 import com.sportconnect.social.post.api.dto.CreateCommentRequest
 import com.sportconnect.social.post.entity.Comment
@@ -34,6 +36,7 @@ class CommentServiceImplSpec extends Specification {
     ValueOperations<String, String> valueOps = Mock()
     ZSetOperations<String, String> zSetOps = Mock()
     ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules()
+    PostGate postGate = Mock()
 
     @Subject
     CommentServiceImpl commentService = new CommentServiceImpl(
@@ -42,7 +45,8 @@ class CommentServiceImplSpec extends Specification {
             postRepository,
             userService,
             stringRedisTemplate,
-            objectMapper
+            objectMapper,
+            postGate
     )
 
     def setup() {
@@ -60,6 +64,9 @@ class CommentServiceImplSpec extends Specification {
                 .content("Test comment")
                 .parentCommentId(null)
                 .build()
+
+        and: "a post"
+        def post = Post.builder().id(postId).isActive(true).build()
 
         and: "a saved comment"
         def savedComment = Comment.builder()
@@ -83,7 +90,8 @@ class CommentServiceImplSpec extends Specification {
         def result = commentService.createComment(postId, userId, request)
 
         then: "post exists"
-        1 * postRepository.existsById(postId) >> true
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * commentRepository.save(_ as Comment) >> savedComment
         1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":comments"])
         // countByCommentId called once from mapToResponse, once from buildPreviewResponse in addToPreviewCache
@@ -115,10 +123,31 @@ class CommentServiceImplSpec extends Specification {
         commentService.createComment(postId, userId, request)
 
         then: "post not found"
-        1 * postRepository.existsById(postId) >> false
+        1 * postRepository.findById(postId) >> Optional.empty()
+        1 * postGate.require(null, userId, _, _) >> { throw new NotFoundException("Post not found") }
 
         and: "exception is thrown"
         thrown(NotFoundException)
+    }
+
+    def "createComment should throw ForbiddenException when caller cannot view the post"() {
+        given: "a create comment request"
+        def request = CreateCommentRequest.builder()
+                .content("Test comment")
+                .build()
+
+        and: "a post the caller can't see"
+        def post = Post.builder().id(postId).isActive(true).build()
+
+        when: "trying to comment on a post outside the caller's access"
+        commentService.createComment(postId, userId, request)
+
+        then: "post exists but is not visible"
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+
+        and: "exception is thrown"
+        thrown(ForbiddenException)
     }
 
     def "createComment should create reply to parent comment"() {
@@ -128,6 +157,9 @@ class CommentServiceImplSpec extends Specification {
                 .content("Reply comment")
                 .parentCommentId(parentCommentId)
                 .build()
+
+        and: "a post"
+        def post = Post.builder().id(postId).isActive(true).build()
 
         and: "a saved reply"
         def savedComment = Comment.builder()
@@ -151,7 +183,8 @@ class CommentServiceImplSpec extends Specification {
         def result = commentService.createComment(postId, userId, request)
 
         then: "post and parent comment exist"
-        1 * postRepository.existsById(postId) >> true
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * commentRepository.existsById(parentCommentId) >> true
         1 * commentRepository.save(_ as Comment) >> savedComment
         1 * stringRedisTemplate.execute(_ as RedisScript, ["comment:" + parentCommentId + ":replies"])
@@ -173,12 +206,14 @@ class CommentServiceImplSpec extends Specification {
                 .content("Reply comment")
                 .parentCommentId(parentCommentId)
                 .build()
+        def post = Post.builder().id(postId).isActive(true).build()
 
         when: "trying to create reply"
         commentService.createComment(postId, userId, request)
 
         then: "post exists but parent comment not found"
-        1 * postRepository.existsById(postId) >> true
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * commentRepository.existsById(parentCommentId) >> false
 
         and: "exception is thrown"
@@ -214,7 +249,8 @@ class CommentServiceImplSpec extends Specification {
         def result = commentService.getPostComments(postId, userId, pageable)
 
         then: "post is active"
-        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
 
         and: "comments are retrieved"
         1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> page
@@ -238,10 +274,27 @@ class CommentServiceImplSpec extends Specification {
         commentService.getPostComments(postId, userId, pageable)
 
         then: "post not found as active"
-        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.empty()
+        1 * postRepository.findById(postId) >> Optional.empty()
+        1 * postGate.require(null, userId, _, _) >> { throw new NotFoundException("Post not found") }
 
         and: "exception is thrown"
         thrown(NotFoundException)
+    }
+
+    def "getPostComments should throw ForbiddenException when caller cannot view the post"() {
+        given: "a pageable and a post the caller can't see"
+        def pageable = PageRequest.of(0, 20)
+        def post = Post.builder().id(postId).isActive(true).build()
+
+        when: "getting comments outside the caller's access"
+        commentService.getPostComments(postId, userId, pageable)
+
+        then: "post exists but is not visible"
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+
+        and: "exception is thrown"
+        thrown(ForbiddenException)
     }
 
     def "deleteComment should soft delete comment when user is owner"() {
@@ -295,11 +348,17 @@ class CommentServiceImplSpec extends Specification {
     }
 
     def "likeComment should create like when not already liked"() {
+        given: "an active comment on a visible post"
+        def comment = Comment.builder().id(commentId).postId(postId).isActive(true).build()
+        def post = Post.builder().id(postId).isActive(true).build()
+
         when: "liking a comment"
         commentService.likeComment(commentId, userId)
 
         then: "like is created"
-        1 * commentRepository.existsById(commentId) >> true
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
         1 * commentLikeRepository.save(_ as CommentLike) >> new CommentLike()
         1 * stringRedisTemplate.execute(_ as RedisScript, ["comment:" + commentId + ":likes"])
@@ -310,18 +369,41 @@ class CommentServiceImplSpec extends Specification {
         commentService.likeComment(commentId, userId)
 
         then: "comment not found"
-        1 * commentRepository.existsById(commentId) >> false
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.empty()
 
         and: "exception is thrown"
         thrown(NotFoundException)
     }
 
+    def "likeComment should throw ForbiddenException when caller cannot view the parent post"() {
+        given: "an active comment on a post the caller can't see"
+        def comment = Comment.builder().id(commentId).postId(postId).isActive(true).build()
+        def post = Post.builder().id(postId).isActive(true).build()
+
+        when: "trying to like the comment"
+        commentService.likeComment(commentId, userId)
+
+        then: "comment exists but its post is not visible"
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+
+        and: "exception is thrown"
+        thrown(ForbiddenException)
+    }
+
     def "likeComment should throw BadRequestException when already liked"() {
+        given: "an active comment on a visible post"
+        def comment = Comment.builder().id(commentId).postId(postId).isActive(true).build()
+        def post = Post.builder().id(postId).isActive(true).build()
+
         when: "trying to like an already liked comment"
         commentService.likeComment(commentId, userId)
 
         then: "comment exists and is already liked"
-        1 * commentRepository.existsById(commentId) >> true
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> true
 
         and: "exception is thrown"
@@ -329,20 +411,45 @@ class CommentServiceImplSpec extends Specification {
     }
 
     def "unlikeComment should remove like when liked"() {
+        given: "an active comment on a visible post"
+        def comment = Comment.builder().id(commentId).postId(postId).isActive(true).build()
+        def post = Post.builder().id(postId).isActive(true).build()
+
         when: "unliking a comment"
         commentService.unlikeComment(commentId, userId)
 
         then: "like is removed"
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> true
         1 * commentLikeRepository.deleteByCommentIdAndUserId(commentId, userId)
         1 * stringRedisTemplate.execute(_ as RedisScript, ["comment:" + commentId + ":likes"])
     }
 
+    def "unlikeComment should throw NotFoundException when comment does not exist"() {
+        when: "trying to unlike a non-existent comment"
+        commentService.unlikeComment(commentId, userId)
+
+        then: "comment not found"
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.empty()
+
+        and: "exception is thrown"
+        thrown(NotFoundException)
+    }
+
     def "unlikeComment should throw BadRequestException when not liked"() {
+        given: "an active comment on a visible post"
+        def comment = Comment.builder().id(commentId).postId(postId).isActive(true).build()
+        def post = Post.builder().id(postId).isActive(true).build()
+
         when: "trying to unlike a comment that wasn't liked"
         commentService.unlikeComment(commentId, userId)
 
         then: "comment is not liked"
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
 
         and: "exception is thrown"
@@ -385,7 +492,8 @@ class CommentServiceImplSpec extends Specification {
         def result = commentService.getPostComments(postId, userId, pageable)
 
         then: "post is active, root comments and their replies are each fetched once for the whole page"
-        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([parentComment])
         1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([1L]) >> [replyComment]
         // both parent and reply are authored by the same user here — one batched call covers both
@@ -420,7 +528,8 @@ class CommentServiceImplSpec extends Specification {
         def result = commentService.getPostComments(postId, userId, pageable)
 
         then:
-        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
         1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([comment])
         valueOps.get("comment:" + commentId + ":likes") >> "4"
         valueOps.get("comment:" + commentId + ":replies") >> "6"
@@ -451,7 +560,8 @@ class CommentServiceImplSpec extends Specification {
         def result = commentService.getPostComments(postId, userId, pageable)
 
         then: "post is active"
-        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
 
         and: "comments are retrieved, but the author id resolves to nothing (deleted/missing user)"
         1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([comment])
