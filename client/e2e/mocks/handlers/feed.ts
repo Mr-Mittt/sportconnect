@@ -20,6 +20,7 @@ import {
 import { hoursFromNow } from '../../../src/shared/lib/mockClock.ts';
 import { consumeCreatePostFailOnce, getOverrides } from '../overrides.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
+import { deleteSessionCommentIfPresent } from './sessions.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
@@ -372,7 +373,15 @@ export const feedHandlers: HttpHandler[] = [
     const commentId = Number(params.commentId);
     const session = feedSessions.get(sessionIdFromRequest(request));
     const located = locateComment(session, commentId);
-    if (!located) return HttpResponse.json(apiError('Comment not found'), { status: 404 });
+    if (!located) {
+      // CLIENT-SESSION-8: the real backend's DELETE /api/posts/comments/{commentId} is
+      // genuinely shared between feed comments and session comments (SESSION-10's
+      // SESSION_POST reuse) — this comment id might belong to a session's thread instead.
+      if (deleteSessionCommentIfPresent(sessionIdFromRequest(request), commentId)) {
+        return HttpResponse.json(apiResponse(null, 'Comment deleted successfully'));
+      }
+      return HttpResponse.json(apiError('Comment not found'), { status: 404 });
+    }
 
     if (located.parentCommentId === null) {
       session.commentsState = {

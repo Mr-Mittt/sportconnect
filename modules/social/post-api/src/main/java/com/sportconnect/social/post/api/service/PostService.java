@@ -1,6 +1,7 @@
 package com.sportconnect.social.post.api.service;
 
 import com.sportconnect.social.post.api.dto.CreatePostRequest;
+import com.sportconnect.social.post.api.dto.PostLikeInfoResponse;
 import com.sportconnect.social.post.api.dto.PostResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -89,6 +90,21 @@ public interface PostService {
 
     /** Same bypass contract as {@link #likeSessionPost}. */
     void unlikeSessionPost(Long postId, UUID userId);
+
+    /**
+     * Batch equivalent of a per-post like lookup, for {@code session-impl}'s
+     * {@code mapToResponses} to resolve every session's {@code SESSION_POST}
+     * {@code likeCount}/{@code isLikedByCurrentUser} in one round trip instead of one call per
+     * session (no-N+1 rule, applies across domain boundaries same as {@link #getPostsByIds}).
+     * Bypasses {@code PostGate} same as {@link #likeSessionPost} — intended only for
+     * {@code SessionServiceImpl} to call, after it has already resolved which sessions/postIds
+     * it's mapping. Any {@code postId} that doesn't resolve to a real, active
+     * {@code SESSION_POST} is silently absent from the result map (same "resolve what you can,
+     * skip the rest" precedent as {@link #getPostsByIds}) — {@code currentUserId} may be
+     * {@code null} (unauthenticated/system caller), in which case every entry's
+     * {@code isLikedByCurrentUser} is {@code false}.
+     */
+    Map<Long, PostLikeInfoResponse> getSessionPostLikeInfo(List<Long> postIds, UUID currentUserId);
 
     Page<PostResponse> getPostsByHashtag(String tag, UUID currentUserId, Pageable pageable);
 

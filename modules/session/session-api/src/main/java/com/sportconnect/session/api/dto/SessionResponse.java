@@ -18,9 +18,10 @@ public class SessionResponse {
     private Long id;
 
     /** SESSION-10/A17 — the id of this session's companion SESSION_POST (post-impl), created
-     * synchronously at session-creation time. Comment endpoints are the existing
-     * {@code /api/posts/{postId}/comments} ones — the client calls them directly with this id,
-     * there is no session-scoped comment endpoint. */
+     * synchronously at session-creation time, unconditionally invisible via {@code
+     * /api/posts/**}. The client never uses this id directly — comments/likes go through this
+     * module's own session-scoped endpoints ({@code /api/sessions/{sessionId}/comments...},
+     * {@code /api/sessions/{sessionId}/like}), which resolve it internally. */
     private Long postId;
 
     private Long groupId;
@@ -78,6 +79,15 @@ public class SessionResponse {
      * Join/Accept/Decline/Cancel/Leave button on both the session card and SessionDetailModal:
      * null or LEFT -> Join, INVITED -> Accept/Decline, REQUESTED -> Cancel, JOINED -> Leave. */
     private SessionParticipantResponse callerParticipation;
+
+    /** Like state of this session's own SESSION_POST anchor (SESSION-10 "post-ship addition" —
+     * {@code likeSession}/{@code unlikeSession}), batch-resolved via
+     * {@code PostService.getSessionPostLikeInfo}. Never null — 0/false for a session whose
+     * postId somehow doesn't resolve (shouldn't happen; postId is set once at creation and
+     * never changes). */
+    private Long likeCount;
+
+    private Boolean isLikedByCurrentUser;
 
     private LocalDateTime createdAt;
 

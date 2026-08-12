@@ -70,6 +70,7 @@ class SessionServiceImplSpec extends Specification {
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
         sessionParticipantRepository.countBySessionIdsAndStatus(_, _) >> []
         sessionParticipantRepository.findBySessionIdInAndUserId(_, _) >> []
+        postService.getSessionPostLikeInfo(_, _) >> [:]
     }
 
     def "createSession creates a standalone session open to any user"() {
@@ -901,6 +902,7 @@ class SessionServiceImplSpec extends Specification {
         sportService.getSportsByIds(_) >> [:]
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
         sessionParticipantRepository.findBySessionIdInAndUserId(_, _) >> []
+        postService.getSessionPostLikeInfo(_, _) >> [:]
         // 1 real JOINED row (the creator, auto-joined) + initialSlot(2) = 3.
         1 * sessionParticipantRepository.countBySessionIdsAndStatus(_, _) >> [countRow]
         result.participantCount == 3L
@@ -1154,5 +1156,48 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionGate.require(session, userId, _, _) >> session
         1 * postService.unlikeSessionPost(999L, userId)
+    }
+
+    // ── SessionResponse.likeCount / isLikedByCurrentUser (batch, via mapToResponses) ─
+
+    def "getSession resolves likeCount/isLikedByCurrentUser from PostService.getSessionPostLikeInfo, keyed by the session's postId"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .capacity(10).feeType(FeeType.FREE).initialSlot(0).build()
+
+        when:
+        def result = sessionService.getSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        userService.getUsersByIds(_) >> [:]
+        sportService.getSportsByIds(_) >> [:]
+        locationService.getLocationsByIds(_) >> [1L: basketballLocation]
+        sessionParticipantRepository.countBySessionIdsAndStatus(_, _) >> []
+        sessionParticipantRepository.findBySessionIdInAndUserId(_, _) >> []
+        1 * postService.getSessionPostLikeInfo([999L], userId) >>
+                [999L: com.sportconnect.social.post.api.dto.PostLikeInfoResponse.builder()
+                        .likeCount(5L).isLikedByCurrentUser(true).build()]
+        result.likeCount == 5L
+        result.isLikedByCurrentUser == true
+    }
+
+    def "getSession defaults likeCount/isLikedByCurrentUser to 0/false when the post isn't in the batch result"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .capacity(10).feeType(FeeType.FREE).initialSlot(0).build()
+
+        when:
+        def result = sessionService.getSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        interaction { stubBatchEnrichment() }
+        result.likeCount == 0L
+        result.isLikedByCurrentUser == false
     }
 }

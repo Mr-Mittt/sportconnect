@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import type { Comment } from '@/features/feed/types';
 import type { Location } from '@/shared/types/location';
 import type { Session, SessionParticipant } from '@/shared/types/session';
 import { SessionDetailModal } from './SessionDetailModal';
@@ -48,6 +49,8 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     feeAmountVnd: null,
     initialSlot: 0,
     autoApprove: false,
+    likeCount: 0,
+    isLikedByCurrentUser: false,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     ...overrides,
@@ -107,6 +110,21 @@ const baseProps = {
   isApprovingParticipant: false,
   onRejectParticipant: () => {},
   isRejectingParticipant: false,
+  onToggleLike: () => {},
+  isTogglingLike: false,
+  currentUser: { fullName: 'Jordan Lee', avatarUrl: null },
+  comments: [] as Comment[],
+  isCommentsLoading: false,
+  isCommentsError: false,
+  isCommentsForbidden: false,
+  hasMoreComments: false,
+  isFetchingMoreComments: false,
+  onFetchMoreComments: () => {},
+  onAddComment: () => {},
+  onAddCommentReply: () => {},
+  isPostingComment: false,
+  onDeleteComment: () => {},
+  onToggleCommentLike: () => {},
 };
 
 describe('SessionDetailModal', () => {
@@ -305,5 +323,70 @@ describe('SessionDetailModal', () => {
     await user.click(screen.getByRole('button', { name: 'Never mind' }));
     expect(screen.queryByLabelText('Reject reason for Alex Chen')).not.toBeInTheDocument();
     expect(onRejectParticipant).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the Discussion section, including comments and the composer', async () => {
+    const user = userEvent.setup();
+    const onAddComment = vi.fn();
+    const comment: Comment = {
+      id: 1,
+      postId: 1,
+      userId: 'user-1',
+      userFullName: 'Priya Shah',
+      userAvatarUrl: null,
+      content: 'What time are we meeting?',
+      parentCommentId: null,
+      likeCount: 0,
+      replyCount: 0,
+      isLikedByCurrentUser: false,
+      replies: [],
+      createdAt: '2026-07-03T10:00:00',
+      updatedAt: '2026-07-03T10:00:00',
+    };
+    render(<SessionDetailModal {...baseProps} comments={[comment]} onAddComment={onAddComment} />);
+    expect(screen.getByRole('region', { name: 'Discussion' })).toBeInTheDocument();
+    expect(screen.getByText('What time are we meeting?')).toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: 'Add a comment' }), 'Nice one!');
+    await user.click(screen.getByRole('button', { name: 'Post' }));
+    expect(onAddComment).toHaveBeenCalledWith('Nice one!');
+  });
+
+  it('hides the Discussion section entirely when isCommentsForbidden', () => {
+    render(<SessionDetailModal {...baseProps} isCommentsForbidden />);
+    expect(screen.queryByRole('region', { name: 'Discussion' })).not.toBeInTheDocument();
+  });
+
+  it('renders a heart button reflecting like state and calling onToggleLike on click', async () => {
+    const user = userEvent.setup();
+    const onToggleLike = vi.fn();
+    const { rerender } = render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ likeCount: 2, isLikedByCurrentUser: false })}
+        onToggleLike={onToggleLike}
+      />,
+    );
+
+    const likeButton = screen.getByRole('button', { name: 'Like' });
+    expect(likeButton).toHaveTextContent('2');
+    await user.click(likeButton);
+    expect(onToggleLike).toHaveBeenCalledTimes(1);
+
+    // Controlled: rendering follows props, same convention as PostCard/CommentSection.
+    rerender(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ likeCount: 3, isLikedByCurrentUser: true })}
+        onToggleLike={onToggleLike}
+      />,
+    );
+    const unlikeButton = screen.getByRole('button', { name: 'Unlike' });
+    expect(unlikeButton).toHaveAttribute('aria-pressed', 'true');
+    expect(unlikeButton).toHaveTextContent('3');
+  });
+
+  it('disables the heart button while isTogglingLike', () => {
+    render(<SessionDetailModal {...baseProps} isTogglingLike />);
+    expect(screen.getByRole('button', { name: 'Like' })).toBeDisabled();
   });
 });

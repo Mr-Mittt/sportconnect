@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -148,6 +148,12 @@ describe('MatchesPage', () => {
   });
 
   afterEach(() => {
+    // Explicit unmount before clearing the session (CLIENT-SESSION-8): Vitest runs afterEach
+    // hooks inside-out (this file's hook before src/test/setup.ts's global `cleanup()`), so
+    // without this, MatchesPage briefly re-renders with authStore.user === null while still
+    // mounted — and it non-null-asserts user (guaranteed by ProtectedRoute in the real app),
+    // which throws. Same fix HomeFeedPage.test.tsx/FriendsPage.test.tsx already apply.
+    cleanup();
     useAuthStore.setState({ user: null, accessToken: null, isBootstrapping: false });
   });
 

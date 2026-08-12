@@ -1196,4 +1196,74 @@ class PostServiceImplSpec extends Specification {
         0 * postLikeRepository._
         thrown(NotFoundException)
     }
+
+    // ── getSessionPostLikeInfo (batch, no-N+1 for SessionServiceImpl.mapToResponses) ─
+
+    def "getSessionPostLikeInfo returns like count + isLikedByCurrentUser per postId in one batch"() {
+        given:
+        def post1 = Post.builder().id(1L).userId(userId).postType(PostType.SESSION_POST)
+                .content("c").visibility("public").media([]).hashtags([])
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def post2 = Post.builder().id(2L).userId(userId).postType(PostType.SESSION_POST)
+                .content("c").visibility("public").media([]).hashtags([])
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+
+        when:
+        def result = postService.getSessionPostLikeInfo([1L, 2L], userId)
+
+        then:
+        1 * postRepository.findByIdInAndIsActiveTrue([1L, 2L]) >> [post1, post2]
+        1 * postLikeRepository.countGroupedByPostIdIn([1L, 2L]) >> [[1L, 3L] as Object[]]
+        1 * postLikeRepository.findLikedPostIdsByUserIdAndPostIdIn(userId, [1L, 2L]) >> [2L]
+        result.size() == 2
+        result[1L].likeCount == 3L
+        result[1L].isLikedByCurrentUser == false
+        result[2L].likeCount == 0L
+        result[2L].isLikedByCurrentUser == true
+    }
+
+    def "getSessionPostLikeInfo silently drops a postId that isn't an active SESSION_POST"() {
+        given:
+        def sessionPost = Post.builder().id(1L).userId(userId).postType(PostType.SESSION_POST)
+                .content("c").visibility("public").media([]).hashtags([])
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+        def feedPost = Post.builder().id(2L).userId(userId).postType(PostType.USER_FEED)
+                .content("c").visibility("public").media([]).hashtags([])
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+
+        when:
+        def result = postService.getSessionPostLikeInfo([1L, 2L, 99L], userId)
+
+        then:
+        1 * postRepository.findByIdInAndIsActiveTrue([1L, 2L, 99L]) >> [sessionPost, feedPost]
+        1 * postLikeRepository.countGroupedByPostIdIn([1L]) >> []
+        1 * postLikeRepository.findLikedPostIdsByUserIdAndPostIdIn(userId, [1L]) >> []
+        result.keySet() == [1L] as Set
+    }
+
+    def "getSessionPostLikeInfo returns empty map for an empty postIds list, no repository calls"() {
+        when:
+        def result = postService.getSessionPostLikeInfo([], userId)
+
+        then:
+        0 * postRepository._
+        0 * postLikeRepository._
+        result.isEmpty()
+    }
+
+    def "getSessionPostLikeInfo treats a null currentUserId as nobody having liked anything"() {
+        given:
+        def post = Post.builder().id(1L).userId(userId).postType(PostType.SESSION_POST)
+                .content("c").visibility("public").media([]).hashtags([])
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+
+        when:
+        def result = postService.getSessionPostLikeInfo([1L], null)
+
+        then:
+        1 * postRepository.findByIdInAndIsActiveTrue([1L]) >> [post]
+        1 * postLikeRepository.countGroupedByPostIdIn([1L]) >> []
+        0 * postLikeRepository.findLikedPostIdsByUserIdAndPostIdIn(_, _)
+        result[1L].isLikedByCurrentUser == false
+    }
 }

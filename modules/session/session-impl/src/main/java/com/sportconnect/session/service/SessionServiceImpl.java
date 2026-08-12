@@ -24,6 +24,7 @@ import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
+import com.sportconnect.social.post.api.dto.PostLikeInfoResponse;
 import com.sportconnect.social.post.api.service.CommentService;
 import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.sport.api.dto.SportResponse;
@@ -481,9 +482,11 @@ public class SessionServiceImpl implements SessionService {
     }
 
     /**
-     * Batch-resolves creator/sport/location/participant-count/caller's-own-participation for a
-     * list of sessions in one round trip each — never per-row calls in a loop, per the no-N+1
-     * rule. callerId (SESSION-9) resolves each SessionResponse.callerParticipation.
+     * Batch-resolves creator/sport/location/participant-count/caller's-own-participation/
+     * SESSION_POST-like-info for a list of sessions in one round trip each — never per-row calls
+     * in a loop, per the no-N+1 rule. callerId (SESSION-9) resolves each
+     * SessionResponse.callerParticipation and (session-like heart button) whose posts callerId
+     * has liked.
      */
     private List<SessionResponse> mapToResponses(List<Session> sessions, UUID callerId) {
         if (sessions.isEmpty()) {
@@ -498,6 +501,7 @@ public class SessionServiceImpl implements SessionService {
         List<Long> sportIds = sessions.stream().map(Session::getSportId).distinct().collect(Collectors.toList());
         List<Long> locationIds = sessions.stream().map(Session::getLocationId).distinct().collect(Collectors.toList());
         List<Long> sessionIds = sessions.stream().map(Session::getId).collect(Collectors.toList());
+        List<Long> postIds = sessions.stream().map(Session::getPostId).distinct().collect(Collectors.toList());
 
         Map<UUID, UserResponse> users = userService.getUsersByIds(userIds);
         Map<Long, SportResponse> sports = sportIds.isEmpty() ? Collections.emptyMap() : sportService.getSportsByIds(sportIds);
@@ -519,6 +523,7 @@ public class SessionServiceImpl implements SessionService {
                         .rejectReason(p.getRejectReason())
                         .createdAt(p.getCreatedAt())
                         .build()));
+        Map<Long, PostLikeInfoResponse> postLikeInfo = postService.getSessionPostLikeInfo(postIds, callerId);
 
         return sessions.stream()
                 .map(session -> SessionResponse.builder()
@@ -554,6 +559,10 @@ public class SessionServiceImpl implements SessionService {
                         .autoApprove(session.getAutoApprove())
                         .initialSlot(session.getInitialSlot())
                         .callerParticipation(callerParticipations.get(session.getId()))
+                        .likeCount(Optional.ofNullable(postLikeInfo.get(session.getPostId()))
+                                .map(PostLikeInfoResponse::getLikeCount).orElse(0L))
+                        .isLikedByCurrentUser(Optional.ofNullable(postLikeInfo.get(session.getPostId()))
+                                .map(PostLikeInfoResponse::getIsLikedByCurrentUser).orElse(false))
                         .createdAt(session.getCreatedAt())
                         .updatedAt(session.getUpdatedAt())
                         .build())

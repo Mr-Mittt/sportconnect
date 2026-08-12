@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { Comment } from '@/features/feed/types';
 import type { Location } from '@/shared/types/location';
 import type { Session, SessionParticipant } from '@/shared/types/session';
 import { SessionDetailModal } from './SessionDetailModal';
@@ -44,6 +45,8 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     feeAmountVnd: null,
     initialSlot: 0,
     autoApprove: false,
+    likeCount: 2,
+    isLikedByCurrentUser: false,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     ...overrides,
@@ -116,6 +119,21 @@ const meta = {
     isApprovingParticipant: false,
     onRejectParticipant: () => {},
     isRejectingParticipant: false,
+    onToggleLike: () => {},
+    isTogglingLike: false,
+    currentUser: { fullName: 'Jordan Lee', avatarUrl: null },
+    comments: [],
+    isCommentsLoading: false,
+    isCommentsError: false,
+    isCommentsForbidden: false,
+    hasMoreComments: false,
+    isFetchingMoreComments: false,
+    onFetchMoreComments: () => {},
+    onAddComment: () => {},
+    onAddCommentReply: () => {},
+    isPostingComment: false,
+    onDeleteComment: () => {},
+    onToggleCommentLike: () => {},
   },
 } satisfies Meta<typeof SessionDetailModal>;
 
@@ -183,7 +201,37 @@ export const UncappedCapacity: Story = {
   args: { session: makeSession({ capacity: 9999 }) },
 };
 
+export const Liked: Story = {
+  args: { session: makeSession({ likeCount: 3, isLikedByCurrentUser: true }) },
+};
+
 /** CLIENT-SESSION-4: only renders for a canManage caller with at least one REQUESTED row. */
 export const ApprovalQueue: Story = {
   args: { canManage: true, requestedParticipants },
+};
+
+const discussionComment: Comment = {
+  id: 1,
+  postId: 1,
+  userId: 'user-1',
+  userFullName: 'Priya Shah',
+  userAvatarUrl: null,
+  content: 'What time are we meeting at the courts?',
+  parentCommentId: null,
+  likeCount: 1,
+  replyCount: 0,
+  isLikedByCurrentUser: false,
+  replies: [],
+  createdAt: '2026-07-03T10:00:00',
+  updatedAt: '2026-07-03T10:00:00',
+};
+
+/** CLIENT-SESSION-8: the inline Discussion section, populated. */
+export const WithDiscussion: Story = {
+  args: { comments: [discussionComment] },
+};
+
+/** CLIENT-SESSION-8: a 403 on the comments fetch hides the whole Discussion section. */
+export const DiscussionForbidden: Story = {
+  args: { isCommentsForbidden: true },
 };

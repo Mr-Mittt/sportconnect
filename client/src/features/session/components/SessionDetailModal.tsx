@@ -1,5 +1,6 @@
 import { IconCoin, IconMapPin, IconUsers } from '@tabler/icons-react';
 import { useState } from 'react';
+import type { Comment } from '@/features/feed/types';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { directionsUrl } from '@/shared/lib/mapsLinks';
 import { UNCAPPED_CAPACITY } from '@/shared/lib/sessionCapacity';
@@ -11,6 +12,7 @@ import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import type { Session, SessionParticipant } from '../types';
+import { SessionCommentSection } from './SessionCommentSection';
 
 interface SessionDetailModalProps {
   isOpen: boolean;
@@ -50,6 +52,28 @@ interface SessionDetailModalProps {
   isApprovingParticipant: boolean;
   onRejectParticipant: (userId: string, reason: string) => void;
   isRejectingParticipant: boolean;
+
+  /** Likes/unlikes the session's own SESSION_POST anchor — reads state from
+   * `session.likeCount`/`session.isLikedByCurrentUser` (SESSION-10 "post-ship addition"). */
+  onToggleLike: () => void;
+  isTogglingLike: boolean;
+
+  /** CLIENT-SESSION-8: the caller's own identity for the comment composer avatar — same
+   * `{ fullName, avatarUrl }` shape `CreatePostForm` already takes, sourced from the page's own
+   * `useAuthStore` read rather than threaded through the page-data hook. */
+  currentUser: { fullName: string; avatarUrl: string | null } | undefined;
+  comments: Comment[];
+  isCommentsLoading: boolean;
+  isCommentsError: boolean;
+  isCommentsForbidden: boolean;
+  hasMoreComments: boolean;
+  isFetchingMoreComments: boolean;
+  onFetchMoreComments: () => void;
+  onAddComment: (content: string) => void;
+  onAddCommentReply: (parentCommentId: number, content: string) => void;
+  isPostingComment: boolean;
+  onDeleteComment: (comment: Comment) => void;
+  onToggleCommentLike: (comment: Comment) => void;
 }
 
 function initialsFor(fullName: string): string {
@@ -81,6 +105,21 @@ function initialsFor(fullName: string): string {
  * inline optional-reason box per row (same idiom as the cancel-reason reveal above, not a second
  * nested Dialog/Popover — see `CreateSessionModal`'s notes on why that pattern breaks here),
  * Approve is immediate.
+ *
+ * CLIENT-SESSION-8 adds a "Discussion" section (`SessionCommentSection`) rendered inline after
+ * the Participants/Waiting-for-approval sections — an inline block, not a second nested Dialog
+ * (same nesting constraint noted above), unlike Post's own `CommentSection`. Visibility is
+ * `isCommentsForbidden`-gated rather than computed here: the client has no reliable
+ * client-side signal for whether the caller is a participant (that's CLIENT-SESSION-9's
+ * `callerParticipation`, not yet built) — a 403 from the backend on the comments fetch is the
+ * real gate, and `SessionCommentSection` renders nothing when it's true.
+ *
+ * The heart button (like/unlike the session's own SESSION_POST anchor) renders inside
+ * `SessionCommentSection`, directly above the comment thread — same placement Post's own
+ * `CommentSection` uses for its like button (right under the repeated content, before the
+ * comments), not up in this modal's own status/detail area. Controlled entirely by
+ * `session.likeCount`/`session.isLikedByCurrentUser` (backend-resolved, no client-side
+ * optimistic state).
  */
 export function SessionDetailModal({
   isOpen,
@@ -109,6 +148,21 @@ export function SessionDetailModal({
   isApprovingParticipant,
   onRejectParticipant,
   isRejectingParticipant,
+  onToggleLike,
+  isTogglingLike,
+  currentUser,
+  comments,
+  isCommentsLoading,
+  isCommentsError,
+  isCommentsForbidden,
+  hasMoreComments,
+  isFetchingMoreComments,
+  onFetchMoreComments,
+  onAddComment,
+  onAddCommentReply,
+  isPostingComment,
+  onDeleteComment,
+  onToggleCommentLike,
 }: SessionDetailModalProps) {
   const [isCancelFormOpen, setIsCancelFormOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -333,6 +387,27 @@ export function SessionDetailModal({
                   )}
                 </section>
               )}
+
+              <SessionCommentSection
+                currentUserId={currentUserId}
+                currentUser={currentUser}
+                likeCount={session.likeCount}
+                isLikedByCurrentUser={session.isLikedByCurrentUser}
+                onToggleLike={onToggleLike}
+                isTogglingLike={isTogglingLike}
+                comments={comments}
+                isLoading={isCommentsLoading}
+                isError={isCommentsError}
+                isForbidden={isCommentsForbidden}
+                hasMore={hasMoreComments}
+                isFetchingMore={isFetchingMoreComments}
+                onFetchMore={onFetchMoreComments}
+                onAddComment={onAddComment}
+                onAddReply={onAddCommentReply}
+                isPosting={isPostingComment}
+                onDeleteComment={onDeleteComment}
+                onToggleCommentLike={onToggleCommentLike}
+              />
 
               {isJoinError && (
                 <p role="alert" className="text-2sm text-text-danger">

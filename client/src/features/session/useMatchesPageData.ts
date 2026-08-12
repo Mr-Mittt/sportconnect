@@ -12,14 +12,17 @@ import { useGroupSessionsForGroups } from './hooks/useGroupSessions';
 import { useJoinedSessions } from './hooks/useJoinedSessions';
 import { useJoinSession } from './hooks/useJoinSession';
 import { useLeaveSession } from './hooks/useLeaveSession';
+import { useLikeSession } from './hooks/useLikeSession';
 import { useMySessions } from './hooks/useMySessions';
 import { useRejectParticipant } from './hooks/useRejectParticipant';
 import { useRequestedParticipants } from './hooks/useRequestedParticipants';
 import { useSession } from './hooks/useSession';
 import { useSessionParticipants } from './hooks/useSessionParticipants';
+import { useUnlikeSession } from './hooks/useUnlikeSession';
 import { dedupeSessionsById, groupSessionsByDate } from './groupSessionsByDate';
 import { filterDiscoverSessions } from './discoverSearch';
 import { useCreateSessionModalData } from './useCreateSessionModalData';
+import { useSessionCommentsData } from './useSessionCommentsData';
 import type { SessionListItem, SessionSearchMode } from './types';
 
 const CAN_MANAGE_ROLES = new Set(['group_owner', 'group_admin']);
@@ -149,6 +152,8 @@ export function useMatchesPageData(initialSessionId: number | null) {
   const joinMutation = useJoinSession();
   const leaveMutation = useLeaveSession();
   const cancelMutation = useCancelSession();
+  const likeMutation = useLikeSession();
+  const unlikeMutation = useUnlikeSession();
 
   // CLIENT-SESSION-4: the approval queue only ever fires for a canManage caller — gating the
   // query on it too (not just hiding the section) avoids a request that would 400 for anyone else.
@@ -158,6 +163,9 @@ export function useMatchesPageData(initialSessionId: number | null) {
   );
   const approveParticipantMutation = useApproveParticipant();
   const rejectParticipantMutation = useRejectParticipant();
+
+  // CLIENT-SESSION-8: the detail dialog's Discussion section.
+  const sessionCommentsData = useSessionCommentsData(selectedSessionId ?? undefined, isDetailOpen);
 
   return {
     activeSport,
@@ -204,6 +212,15 @@ export function useMatchesPageData(initialSessionId: number | null) {
       cancelMutation.mutate({ sessionId: selectedSessionId, payload: { reason: reason || undefined } }),
     isCancelling: cancelMutation.isPending,
     isCancelError: cancelMutation.isError,
+    onToggleLike: () => {
+      if (selectedSessionId === null) return;
+      if (sessionQuery.data?.isLikedByCurrentUser) {
+        unlikeMutation.mutate(selectedSessionId);
+      } else {
+        likeMutation.mutate(selectedSessionId);
+      }
+    },
+    isTogglingLike: likeMutation.isPending || unlikeMutation.isPending,
 
     requestedParticipants: requestedParticipantsQuery.data?.content ?? [],
     isRequestedParticipantsLoading: requestedParticipantsQuery.isLoading,
@@ -216,5 +233,7 @@ export function useMatchesPageData(initialSessionId: number | null) {
       selectedSessionId !== null &&
       rejectParticipantMutation.mutate({ sessionId: selectedSessionId, userId, reason }),
     isRejectingParticipant: rejectParticipantMutation.isPending,
+
+    ...sessionCommentsData,
   };
 }

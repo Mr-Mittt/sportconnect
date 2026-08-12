@@ -25,7 +25,11 @@ favorites round-trip step 8, `mocks/handlers/locations.ts`'s favorite/unfavorite
 handlers), `CLIENT-SESSION-6_STANDALONE_DISCOVERY.md` (splits `/matches` into a Discover grid +
 collapsible "My sessions" panel; extends `matches-journey.spec.ts` with steps 9-10, new
 `mocks/handlers/sessions.ts` `GET /sessions/discover`/`GET /sessions/joined` handlers, and a new
-`mockDiscoverableSession` fixture).
+`mockDiscoverableSession` fixture), `CLIENT-SESSION-8_SESSION_COMMENTS.md` (new inline "Discussion"
+section + heart button in `SessionDetailModal`; extends `matches-journey.spec.ts` with steps
+3b/3c, new `mocks/handlers/sessions.ts` comment + like endpoints, a `deleteSessionCommentIfPresent`
+cross-store fallback for `mocks/handlers/feed.ts`'s shared `DELETE /api/posts/comments/:commentId`,
+and a new cross-domain `PostService.getSessionPostLikeInfo` batch method backend-side).
 
 ---
 
@@ -173,7 +177,7 @@ e2e/
     post-deep-link.spec.ts
     group-chat.spec.ts        # CHAT-10
     direct-chat.spec.ts       # CHAT-10
-    matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6
+    matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
@@ -527,11 +531,12 @@ path other specs already exercise incidentally.
 | `loading a shared post link directly renders the post + comments, even outside the feed's first page` | `seedPaginatedFeedOnNextLoad(mockSessionId)` (21-post fixture) → direct `seedAuthenticatedSession(page, '/posts/1020')` (post **1020**, index 20 — only reachable via "Load more" on page 0) → dialog renders the right post/comments on a cold load; closing returns to `/` with the normal Home Feed visible | Drives the real "shared link, not logged in yet" flow end-to-end (redirect to `/login`, bounce back) — the same generic mechanism AUTH-8's step 7 already covers, not something FEED-12 built itself. Proves the dialog doesn't depend on the feed having paginated the post into view first. |
 | `opening comments from the feed updates the URL, and closing returns to it` | Click a post's "View comments" from `/` → URL becomes `/posts/{id}` → Close → URL back to `/` | Confirms the in-feed path is also URL-addressable now (`navigate` push on open, `replace` on close), not just the direct-load path above |
 
-### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6, one `test()` with 10 steps)
+### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8, one `test()` with 10 steps + steps 3b/3c)
 
 `/matches` (real page, replacing `ComingSoonPage`) — list/create/join/leave/cancel, plus
 CLIENT-SESSION-4's invite/auto-approve fields and approval queue, plus CLIENT-SESSION-5's
-favorite-locations round trip, plus CLIENT-SESSION-6's Discover grid / "My sessions" panel split.
+favorite-locations round trip, plus CLIENT-SESSION-6's Discover grid / "My sessions" panel split,
+plus CLIENT-SESSION-8's inline "Discussion" section.
 Fixtures: `mockSession` (standalone, created by the test user, `participantCount: 0`),
 `mockGroupSession` (linked to `mockGroup`, created by someone else — the test user is only a
 `group_member`, proving Cancel stays hidden), `mockOwnedGroupSession` ("Ladder night", the test
@@ -560,6 +565,8 @@ steps 9-10 are what's actually new.
 | 1. load | `mockSession`/`mockGroupSession` render (My sessions), `mockDiscoverableSession` renders in the Discover region | |
 | 2. sport filter | Filtering to Pickleball narrows to `mockSession`; "All" restores both | SPORT-3: renamed from Basketball. Filters both panels — `mockDiscoverableSession` (Badminton) isn't asserted here, covered by step 9 instead |
 | 3. join/leave | Open `mockSession`'s detail → Join → "Leave" appears, participant count 0→1 → Leave → back to "Join", count 1→0 | |
+| 3b. Discussion | Reopen `mockSession`'s detail → `region` "Discussion" shows the pre-seeded comment → post a new one → it appears | CLIENT-SESSION-8. Reuses `mockSession` before step 4 cancels it — the thread stays open regardless of `SessionStatus`, but this step targets the still-`SCHEDULED` case. `isCommentsForbidden` is never exercised here — this mock doesn't simulate the real backend's 403 for a non-participant (see the handler file's own note) |
+| 3c. heart button | Reopen `mockSession`'s detail → "Like" button shows count 0 → click → "Unlike" shows count 1 → click → back to "Like"/0 | CLIENT-SESSION-8. `mockSession` starts `isLikedByCurrentUser: false`/`likeCount: 0`; the round trip proves both `POST` and `DELETE /api/sessions/{id}/like` |
 | 4. cancel | Cancel session → reason field → Confirm cancel → "Cancelled" + reason shown; list card reflects it without a reload | Creator of a standalone session can manage it |
 | 5. group session, member-only | Open `mockGroupSession`'s detail → no "Cancel session" button, Join still available | The test user is a `group_member`, not owner/admin, and didn't create it |
 | 6. create | "Create session" → pick Pickleball → "Choose location" (opens the favorites dropdown) → "Choose a location…" → search "Riverside" → select `mockLocation` → fill start time/title → invite `mockFriend` (badge appears) → check "Auto approve join request" (warning appears) → submit → dialog closes, new session appears in the list | SPORT-3: renamed from Basketball. Two dialogs/a dropdown all open in sequence (`CreateSessionModal`, its `LocationFavoritesDropdown`, and the nested `LocationPicker`) — the dropdown's own menu items are queried via `page.getByRole('menuitem', ...)`, not scoped to `createDialog`, since `DropdownMenuContent` portals as a DOM sibling of the Dialog, not a descendant |

@@ -219,6 +219,8 @@ function sessionFixture(overrides: Partial<Session> & Pick<Session, 'id' | 'spor
     feeAmountVnd: null,
     initialSlot: 0,
     autoApprove: false,
+    likeCount: 0,
+    isLikedByCurrentUser: false,
     createdAt: '2026-06-01T10:00:00',
     updatedAt: '2026-06-01T10:00:00',
     ...overrides,

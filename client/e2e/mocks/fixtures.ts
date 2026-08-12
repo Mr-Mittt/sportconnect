@@ -540,6 +540,8 @@ export const mockSession: Session = {
   // empty participantsState (the join/leave/cancel journey's own premise) would land in
   // REQUESTED instead of JOINED.
   autoApprove: true,
+  likeCount: 0,
+  isLikedByCurrentUser: false,
   createdAt: '2026-06-20T10:00:00',
   updatedAt: '2026-06-20T10:00:00',
 };
@@ -575,6 +577,8 @@ export const mockGroupSession: Session = {
   feeAmountVnd: null,
   initialSlot: 0,
   autoApprove: true, // pre-existing fixture — same backfill reasoning as mockSession above.
+  likeCount: 0,
+  isLikedByCurrentUser: false,
   createdAt: '2026-06-21T10:00:00',
   updatedAt: '2026-06-21T10:00:00',
 };
@@ -613,6 +617,8 @@ export const mockOwnedGroupSession: Session = {
   feeAmountVnd: null,
   initialSlot: 0,
   autoApprove: true, // pre-existing fixture — same backfill reasoning as mockSession above.
+  likeCount: 0,
+  isLikedByCurrentUser: false,
   createdAt: '2026-06-22T10:00:00',
   updatedAt: '2026-06-22T10:00:00',
 };
@@ -676,6 +682,8 @@ export const mockDiscoverableSession: Session = {
   feeAmountVnd: null,
   initialSlot: 0,
   autoApprove: true,
+  likeCount: 0,
+  isLikedByCurrentUser: false,
   createdAt: '2026-06-23T10:00:00',
   updatedAt: '2026-06-23T10:00:00',
 };

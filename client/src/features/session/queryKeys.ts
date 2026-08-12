@@ -15,4 +15,7 @@ export const sessionKeys = {
    * default), this is the REQUESTED-only approval queue (canManage-gated backend-side). */
   requestedParticipants: (sessionId: number) =>
     [...sessionKeys.all, 'requestedParticipants', sessionId] as const,
+  /** CLIENT-SESSION-8: the session's comment thread (SESSION-10's SESSION_POST-anchored
+   * comments, reached only through the session-scoped /sessions/{id}/comments endpoints). */
+  comments: (sessionId: number) => [...sessionKeys.all, 'comments', sessionId] as const,
 };
