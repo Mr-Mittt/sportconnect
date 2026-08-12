@@ -4,5 +4,6 @@ public enum PostType {
     USER_FEED,
     GROUP_POST,
     GROUP_BROADCAST,
-    GROUP_SYSTEM
+    GROUP_SYSTEM,
+    SESSION_POST
 }

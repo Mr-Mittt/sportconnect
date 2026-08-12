@@ -210,3 +210,48 @@ CREATE TABLE IF NOT EXISTS comment_likes (
     FOREIGN KEY (user_id) REFERENCES users(id),
     UNIQUE (comment_id, user_id)
 );
+
+-- Create sessions / session_participants tables (needed once a real @SpringBootTest first
+-- exercised PostGate's SESSION_POST case for real — SESSION-10/A17,
+-- documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md §7's supersession note). Cross-domain columns
+-- (created_by, cancelled_by, location_id, sport_id, group_id, post_id) carry no FK, mirroring
+-- SESSION-11/A15's production drop of those constraints — session_id on session_participants is
+-- in-domain and keeps its FK.
+CREATE TABLE IF NOT EXISTS sessions (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT,
+    post_id BIGINT NOT NULL UNIQUE,
+    session_type VARCHAR(30) NOT NULL,
+    created_by UUID NOT NULL,
+    sport_id BIGINT NOT NULL,
+    title VARCHAR(200),
+    description TEXT,
+    location_id BIGINT NOT NULL,
+    location_note VARCHAR(500),
+    scheduled_start TIMESTAMP NOT NULL,
+    scheduled_end_at TIMESTAMP,
+    status VARCHAR(20) NOT NULL DEFAULT 'SCHEDULED',
+    capacity INTEGER NOT NULL DEFAULT 9999,
+    fee_type VARCHAR(10) NOT NULL DEFAULT 'FREE',
+    fee_amount_vnd BIGINT,
+    initial_slot INTEGER NOT NULL DEFAULT 0,
+    auto_approve BOOLEAN NOT NULL DEFAULT FALSE,
+    cancel_reason VARCHAR(500),
+    cancelled_by UUID,
+    cancelled_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    CONSTRAINT unique_group_session_start UNIQUE (group_id, scheduled_start)
+);
+
+CREATE TABLE IF NOT EXISTS session_participants (
+    id BIGSERIAL PRIMARY KEY,
+    session_id BIGINT NOT NULL,
+    user_id UUID NOT NULL,
+    status VARCHAR(10) NOT NULL DEFAULT 'JOINED',
+    reject_reason VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES sessions(id),
+    CONSTRAINT unique_session_user UNIQUE (session_id, user_id)
+);

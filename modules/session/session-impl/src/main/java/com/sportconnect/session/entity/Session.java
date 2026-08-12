@@ -41,6 +41,12 @@ public class Session {
     @Column(name = "group_id")
     private Long groupId;
 
+    /** SESSION-10/A17 — id of this session's companion SESSION_POST (post-impl), created
+     * synchronously in the same transaction as this session, used as the comment-thread anchor
+     * for SessionDetailModal. No DB-level FK — cross-domain references are IDs only. */
+    @Column(name = "post_id", nullable = false, unique = true)
+    private Long postId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "session_type", nullable = false, length = 30)
     private SessionType sessionType;

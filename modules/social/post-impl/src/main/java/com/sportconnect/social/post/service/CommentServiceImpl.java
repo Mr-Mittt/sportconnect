@@ -8,9 +8,11 @@ import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.social.post.access.PostGate;
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
+import com.sportconnect.social.post.api.dto.PostType;
 import com.sportconnect.social.post.api.service.CommentService;
 import com.sportconnect.social.post.entity.Comment;
 import com.sportconnect.social.post.entity.CommentLike;
+import com.sportconnect.social.post.entity.Post;
 import com.sportconnect.social.post.repository.CommentLikeRepository;
 import com.sportconnect.social.post.repository.CommentRepository;
 import com.sportconnect.social.post.repository.PostRepository;
@@ -61,7 +63,17 @@ public class CommentServiceImpl implements CommentService {
     public CommentResponse createComment(Long postId, UUID userId, CreateCommentRequest request) {
         postGate.require(postRepository.findById(postId).orElse(null), userId,
                 "Post not found", "You don't have access to this post");
+        return doCreateComment(postId, userId, request);
+    }
 
+    @Override
+    @Transactional
+    public CommentResponse createSessionComment(Long postId, UUID userId, CreateCommentRequest request) {
+        requireSessionPost(postId);
+        return doCreateComment(postId, userId, request);
+    }
+
+    private CommentResponse doCreateComment(Long postId, UUID userId, CreateCommentRequest request) {
         if (request.getParentCommentId() != null && !commentRepository.existsById(request.getParentCommentId())) {
             throw new NotFoundException("Parent comment not found");
         }
@@ -87,6 +99,18 @@ public class CommentServiceImpl implements CommentService {
         return mapToResponse(comment, userId, userService.getUsersByIds(List.of(userId)), Map.of());
     }
 
+    /** SESSION-10/A17 bypass precheck — existence/active AND {@code postType == SESSION_POST}, no
+     * {@code PostGate} call. The type check matters on its own: without it, a caller of these
+     * bypass methods (always {@code SessionServiceImpl}, after it has already done its own
+     * authorization for the session in question) could act on any active post's comments, not
+     * just a session's anchor. */
+    private void requireSessionPost(Long postId) {
+        Post post = postRepository.findByIdAndIsActiveTrue(postId).orElse(null);
+        if (post == null || post.getPostType() != PostType.SESSION_POST) {
+            throw new NotFoundException("Post not found");
+        }
+    }
+
     /**
      * {@inheritDoc}
      *
@@ -102,7 +126,17 @@ public class CommentServiceImpl implements CommentService {
     public Page<CommentResponse> getPostComments(Long postId, UUID currentUserId, Pageable pageable) {
         postGate.require(postRepository.findById(postId).orElse(null), currentUserId,
                 "Post not found", "You don't have access to this post");
+        return doGetPostComments(postId, currentUserId, pageable);
+    }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CommentResponse> getSessionPostComments(Long postId, UUID currentUserId, Pageable pageable) {
+        requireSessionPost(postId);
+        return doGetPostComments(postId, currentUserId, pageable);
+    }
+
+    private Page<CommentResponse> doGetPostComments(Long postId, UUID currentUserId, Pageable pageable) {
         Page<Comment> rootCommentsPage = commentRepository
                 .findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable);
 
@@ -160,7 +194,22 @@ public class CommentServiceImpl implements CommentService {
                 .orElseThrow(() -> new NotFoundException("Comment not found"));
         postGate.require(postRepository.findById(comment.getPostId()).orElse(null), userId,
                 "Post not found", "You don't have access to this post");
+        doLikeComment(commentId, userId);
+    }
 
+    @Override
+    @Transactional
+    public void likeSessionComment(Long postId, Long commentId, UUID userId) {
+        Comment comment = commentRepository.findByIdAndIsActiveTrue(commentId)
+                .orElseThrow(() -> new NotFoundException("Comment not found"));
+        if (!comment.getPostId().equals(postId)) {
+            throw new NotFoundException("Comment not found");
+        }
+        requireSessionPost(postId);
+        doLikeComment(commentId, userId);
+    }
+
+    private void doLikeComment(Long commentId, UUID userId) {
         if (commentLikeRepository.existsByCommentIdAndUserId(commentId, userId)) {
             throw new BadRequestException("You have already liked this comment");
         }
@@ -182,7 +231,22 @@ public class CommentServiceImpl implements CommentService {
                 .orElseThrow(() -> new NotFoundException("Comment not found"));
         postGate.require(postRepository.findById(comment.getPostId()).orElse(null), userId,
                 "Post not found", "You don't have access to this post");
+        doUnlikeComment(commentId, userId);
+    }
 
+    @Override
+    @Transactional
+    public void unlikeSessionComment(Long postId, Long commentId, UUID userId) {
+        Comment comment = commentRepository.findByIdAndIsActiveTrue(commentId)
+                .orElseThrow(() -> new NotFoundException("Comment not found"));
+        if (!comment.getPostId().equals(postId)) {
+            throw new NotFoundException("Comment not found");
+        }
+        requireSessionPost(postId);
+        doUnlikeComment(commentId, userId);
+    }
+
+    private void doUnlikeComment(Long commentId, UUID userId) {
         if (!commentLikeRepository.existsByCommentIdAndUserId(commentId, userId)) {
             throw new BadRequestException("You have not liked this comment");
         }

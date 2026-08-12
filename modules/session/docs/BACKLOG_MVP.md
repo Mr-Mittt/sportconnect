@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/session/session-impl`
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-12
 
 ---
 
@@ -28,7 +28,7 @@
 | 7 | SESSION-7 | Partial index on `sessions.sport_id` for standalone sport filtering | `DONE` (bundled into SESSION-4) |
 | 8 | SESSION-9 | Expose the caller's own participant status (any status) via getSessionParticipants | `DONE` |
 | 9 | SESSION-11 | Drop DB-level FKs on session tables' cross-domain columns | `DONE` |
-| 10 | SESSION-10 | Session comments — participant discussion thread on `SessionDetailModal` | `TODO` |
+| 10 | SESSION-10 | Session comments — reuses post-impl's Comment via a companion `SESSION_POST` anchor | `DONE` |
 | 11 | SESSION-8 | Session discover ranking algorithm | `TODO` |
 
 ---
@@ -315,52 +315,69 @@ all transitioning to `LEFT` via the existing `DELETE /sessions/{id}/leave`. Full
 `modules/session/docs/SESSION-9_CALLER_PARTICIPATION_STATUS.md`. Client follow-up filed as
 **CLIENT-SESSION-9** (`client/docs/BACKLOG_MVP.md`).
 
-## SESSION-10 — Session comments: participant discussion thread
+## SESSION-10 — Session comments: reuses post-impl's Comment via a companion SESSION_POST
+
+**Status:** `DONE` (2026-08-12) · **Full design record:**
+`modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md`
 
 **Filed:** 2026-08-07, from a `/vision` session — see
-`documentation/md/vision/SESSION_COMMENTS_VISION.md` for the full discussion, rejected
-alternatives, and open questions. **Gating redesigned 2026-08-11** against
-`documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md` (§6) — read the ADR before implementing; this
-entry is a summary, not the full design record. The vision doc's "reuse Post's actual `Comment`
-entity" alternative was reconsidered and re-rejected during that ADR discussion (in a stronger
-form — a whole session as a `Post`) for the same domain-scoped-tables reason; nothing about the
-entity/table decision below has changed.
+`documentation/md/vision/SESSION_COMMENTS_VISION.md` for the original discussion. **Redesigned
+twice, 2026-08-12** (superseding both that vision doc and
+`documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md` §7's rejection of reusing `Post`, both of which
+now carry supersession notes): rather than a new domain-scoped `SessionComment`/`SessionCommentLike`
+entity pair, every `Session` gets one companion `Post` (`PostType.SESSION_POST`, post-impl A17),
+created synchronously in the same transaction as the session, used purely as a comment-thread
+anchor. Comments are `post-impl`'s *real*, already-shipped `Comment` entity, reused via internal
+bypass methods on `CommentService` — but the client never touches `post-impl`'s endpoints directly:
+`GET/POST /api/sessions/{sessionId}/comments` and `.../comments/{commentId}/like` are new
+`session-api` endpoints, and the underlying `SESSION_POST` is unconditionally invisible via
+`/api/posts/**` for everyone, including the session's own creator/participants.
 
-New `SessionComment` entity, domain-scoped to `modules/session` (this repo's domain-scoped-tables
-rule means it does **not** reuse `post-impl`'s `Comment` entity/table, even though the shape
-matches — no cross-domain JPA relationship, no shared table). Shape mirrors `post-impl`'s comments:
-one level of nesting via a `parentCommentId` (replies cannot themselves be replied to, same
-enforcement as `post-impl`'s `CommentServiceImpl`), per-comment likes via a `SessionCommentLike`
-join, and the same Redis preview-cache pattern `post-impl` uses.
+**Why two reversals:** the ADR's stated objection was the bidirectional cross-domain dependency
+reuse requires (`session-impl → post-api` to create the anchor, `post-impl → session-api` to gate
+it). An interim pass built exactly that, reasoning it wasn't unprecedented (`group-impl ↔
+post-impl` already has the same shape, B3 + B9) — and it worked, after fixing the predicted
+circular Spring bean dependency with `@Lazy` (same fix `GroupServiceImpl` already uses). The user
+then asked for something stricter: a genuinely **one-way** dependency, with `post-impl` carrying
+zero awareness of sessions. See the SESSION-10 doc for the full path through both passes.
 
-**Gating — implement `ResourceGate<Session>` (`common`'s C2), same shape `post-impl`'s A14 uses for
-`PostGate`, no shared logic:**
+**Gating — `session-impl` finally gets the standalone `SessionGate implements ResourceGate<Session>`
+the ADR originally specced in §6:**
 ```java
 class SessionGate implements ResourceGate<Session> {
-    private final GroupService groupService; // group-api — new session-impl dependency
-
     public boolean isAvailable(Session session) {
-        return session.getGroupId() == null || groupService.isGroupActive(session.getGroupId()); // B18
+        return session.getGroupId() == null || groupService.isGroupActive(session.getGroupId());
     }
-
     public boolean isVisibleTo(Session session, UUID viewerId) {
-        boolean isParticipant = participantStatusIn(session, viewerId, JOINED, REQUESTED, INVITED);
-        boolean isGroupMember = session.getGroupId() != null && groupService.isGroupMember(session.getGroupId(), viewerId);
-        return isParticipant || isGroupMember; // widened — see delta below
+        boolean isParticipant = /* JOINED/REQUESTED/INVITED */;
+        return isParticipant || (session.getGroupId() != null && groupService.isGroupMember(session.getGroupId(), viewerId));
     }
 }
 ```
-Readable/postable by callers with a `SessionParticipant` row in `JOINED`, `REQUESTED`, or `INVITED`
-status — `LEFT` loses access. No public read for non-participants of a **standalone** session (e.g.
-someone browsing it from Discover before joining) — `isVisibleTo` returns `false` for them since
-`session.getGroupId()` is null.
+`SessionServiceImpl`'s comment-proxy methods (`createSessionComment`/`getSessionComments`/
+`likeSessionComment`/`unlikeSessionComment`) call `sessionGate.require(...)` then delegate to
+`CommentService`'s bypass methods, keyed on `session.getPostId()`. `post-impl` never checks — its
+own `PostGate` already made the post unconditionally unavailable.
 
-**Delta from the original vision-doc decision:** for a **group-linked** session, group members are
-now also visible/postable, not just `SessionParticipant`s — the original decision
-(`SESSION_COMMENTS_VISION.md`) scoped this participants-only even for group-linked sessions
-("independent of the group's own ongoing chat channel"); the ADR discussion revisited this
-specifically and widened it, since a group-linked session's thread is also effectively a group post.
-Standalone sessions are unaffected by this delta — still strictly participant-only.
+**Delta from the original vision-doc decision (unchanged by either redesign):** for a
+**group-linked** session, group members are also visible/postable, not just `SessionParticipant`s —
+the original decision (`SESSION_COMMENTS_VISION.md`) scoped this participants-only even for
+group-linked sessions; the ADR discussion widened it, since a group-linked session's thread is also
+effectively a group post. Standalone sessions are unaffected — still strictly participant-only.
+
+**Post-ship additions (same day):** `POST/DELETE /api/sessions/{sessionId}/like` — same bypass
+shape extended to the `SESSION_POST` anchor's own like/unlike (`PostService.likeSessionPost`/
+`unlikeSessionPost`, delegating from `SessionServiceImpl` via the same `SessionGate`). Also fixed
+a real IDOR in the comment-like bypass (a caller authorized for one session could like/unlike a
+comment on a *different* session's thread by id alone) — `likeSessionComment`/`unlikeSessionComment`
+now take an explicit `postId` cross-checked against the comment's real parent. `SessionController`
+also had its auth-extraction unified: every endpoint uses `@PreAuthorize("hasRole('USER')")` +
+`Authentication authentication` + `SecurityUtils.extractUserId()`, uniformly — simpler than
+`PostController`'s own mixed A1 convention (`@AuthenticationPrincipal` for mutation/"MY OWN"
+endpoints, `Authentication`+`SecurityUtils` for "viewing a resource by id" ones). `@PreAuthorize`
+and the extraction mechanism are orthogonal (an AOP gate evaluated before the method runs vs. how
+the method reads the already-authenticated principal), so pairing `@PreAuthorize` with
+`Authentication`+`SecurityUtils` instead of `@AuthenticationPrincipal` is valid and deliberate.
 
 **Delete:** own comment only — no creator/owner moderation capability in v1.
 

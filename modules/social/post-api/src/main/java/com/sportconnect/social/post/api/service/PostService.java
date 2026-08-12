@@ -25,6 +25,21 @@ public interface PostService {
     void createSystemPost(Long groupId, UUID authorUserId, String content);
 
     /**
+     * Creates a {@code SESSION_POST} directly, bypassing {@link #createPost}'s validation. Not
+     * reachable via the public {@code POST /api/posts} endpoint — {@code createPost} rejects
+     * caller-supplied {@code postType == SESSION_POST} outright, same spoofing guard as {@code
+     * GROUP_SYSTEM}. Intended only for {@code SessionServiceImpl.createSession} to call, inline in
+     * the same transaction, so a session and its comment-thread anchor are created or rolled back
+     * together. The post is never {@code groupId}-scoped (even for a group-linked session) and
+     * carries no {@code sessionId} — {@code post-impl} never needs to resolve which session a post
+     * belongs to; {@code session-impl} holds the reverse link ({@code Session.postId}) and is the
+     * side that resolves it (see {@code PostGate}'s {@code SESSION_POST} case, which calls back
+     * into {@code session-api} with the post's own id). Returns the new post's id so the caller can
+     * persist it as {@code Session.postId}.
+     */
+    Long createSessionPost(UUID authorUserId, String content);
+
+    /**
      * Gated by {@code post-impl}'s {@code PostGate} (A14 —
      * {@code documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md}): throws {@code NotFoundException}
      * if the post doesn't exist, is soft-deleted, or its parent group is inactive; throws {@code
@@ -57,6 +72,23 @@ public interface PostService {
 
     /** Same {@code PostGate} contract as {@link #getPostById} — gates on the post before removing the like. */
     void unlikePost(Long postId, UUID userId);
+
+    /**
+     * SESSION-10/A17 — bypasses {@code PostGate} entirely, delegating to the same like logic
+     * {@link #likePost} uses. Intended only for {@code SessionServiceImpl} to call, after it has
+     * already done its own participant/group-member authorization via its own {@code SessionGate}
+     * — a {@code SESSION_POST} is otherwise invisible via {@code /api/posts/**}. Throws {@code
+     * NotFoundException} if {@code postId} doesn't resolve to an active {@code SESSION_POST} —
+     * same {@code postType} check {@code CommentService}'s bypass methods use, and for the same
+     * reason: without it, this method could like any post, not just a session's anchor. No
+     * secondary-id cross-check is needed here (unlike {@code CommentService.likeSessionComment}'s
+     * {@code commentId}) — {@code postId} is the only thing being acted on, and
+     * {@code SessionServiceImpl} always passes its own resolved {@code session.getPostId()}.
+     */
+    void likeSessionPost(Long postId, UUID userId);
+
+    /** Same bypass contract as {@link #likeSessionPost}. */
+    void unlikeSessionPost(Long postId, UUID userId);
 
     Page<PostResponse> getPostsByHashtag(String tag, UUID currentUserId, Pageable pageable);
 

@@ -84,6 +84,9 @@ public class PostServiceImpl implements PostService {
         if (postType == PostType.GROUP_SYSTEM) {
             throw new BadRequestException("GROUP_SYSTEM posts cannot be created directly");
         }
+        if (postType == PostType.SESSION_POST) {
+            throw new BadRequestException("SESSION_POST posts cannot be created directly");
+        }
         if (postType == PostType.USER_FEED && groupId != null) {
             throw new BadRequestException("USER_FEED posts cannot be associated with a group");
         }
@@ -165,6 +168,21 @@ public class PostServiceImpl implements PostService {
     }
 
     @Override
+    @Transactional
+    public Long createSessionPost(UUID authorUserId, String content) {
+        Post post = Post.builder()
+                .userId(authorUserId)
+                .groupId(null)
+                .postType(PostType.SESSION_POST)
+                .content(content)
+                .visibility("private")
+                .build();
+        post = postRepository.save(post);
+        log.info("Created SESSION_POST {} authored by {}", post.getId(), authorUserId);
+        return post.getId();
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public PostResponse getPostById(Long postId, UUID currentUserId) {
         Post post = postGate.require(postRepository.findById(postId).orElse(null), currentUserId,
@@ -238,6 +256,9 @@ public class PostServiceImpl implements PostService {
         if (post.getPostType() == PostType.GROUP_SYSTEM) {
             throw new BadRequestException("GROUP_SYSTEM posts cannot be edited");
         }
+        if (post.getPostType() == PostType.SESSION_POST) {
+            throw new BadRequestException("SESSION_POST posts cannot be edited");
+        }
 
         boolean isCreator = post.getUserId().equals(userId);
         boolean isBroadcastModerator = post.getPostType() == PostType.GROUP_BROADCAST
@@ -273,6 +294,9 @@ public class PostServiceImpl implements PostService {
         if (post.getPostType() == PostType.GROUP_SYSTEM) {
             throw new BadRequestException("GROUP_SYSTEM posts cannot be deleted");
         }
+        if (post.getPostType() == PostType.SESSION_POST) {
+            throw new BadRequestException("SESSION_POST posts cannot be deleted");
+        }
 
         boolean isOwner = post.getUserId().equals(userId);
         boolean isGroupModerator = post.getGroupId() != null &&
@@ -294,7 +318,17 @@ public class PostServiceImpl implements PostService {
     public void likePost(Long postId, UUID userId) {
         postGate.require(postRepository.findById(postId).orElse(null), userId,
                 "Post not found", "You don't have access to this post");
+        doLikePost(postId, userId);
+    }
 
+    @Override
+    @Transactional
+    public void likeSessionPost(Long postId, UUID userId) {
+        requireSessionPost(postId);
+        doLikePost(postId, userId);
+    }
+
+    private void doLikePost(Long postId, UUID userId) {
         if (postLikeRepository.existsByPostIdAndUserId(postId, userId)) {
             throw new BadRequestException("You have already liked this post");
         }
@@ -314,7 +348,17 @@ public class PostServiceImpl implements PostService {
     public void unlikePost(Long postId, UUID userId) {
         postGate.require(postRepository.findById(postId).orElse(null), userId,
                 "Post not found", "You don't have access to this post");
+        doUnlikePost(postId, userId);
+    }
 
+    @Override
+    @Transactional
+    public void unlikeSessionPost(Long postId, UUID userId) {
+        requireSessionPost(postId);
+        doUnlikePost(postId, userId);
+    }
+
+    private void doUnlikePost(Long postId, UUID userId) {
         if (!postLikeRepository.existsByPostIdAndUserId(postId, userId)) {
             throw new BadRequestException("You have not liked this post");
         }
@@ -322,6 +366,17 @@ public class PostServiceImpl implements PostService {
         postLikeRepository.deleteByPostIdAndUserId(postId, userId);
         stringRedisTemplate.execute(DECR_IF_EXISTS, List.of("post:" + postId + ":likes"));
         log.info("User {} unliked post {}", userId, postId);
+    }
+
+    /** SESSION-10/A17 bypass precheck — existence/active AND {@code postType == SESSION_POST}, no
+     * {@code PostGate} call. Same shape and reasoning as {@code CommentServiceImpl}'s identically
+     * named helper — kept as its own copy here rather than shared, consistent with how this
+     * codebase always writes each domain's/class's own cross-cutting checks locally. */
+    private void requireSessionPost(Long postId) {
+        Post post = postRepository.findByIdAndIsActiveTrue(postId).orElse(null);
+        if (post == null || post.getPostType() != PostType.SESSION_POST) {
+            throw new NotFoundException("Post not found");
+        }
     }
 
     private List<CommentResponse> getPreviewComments(Long postId) {

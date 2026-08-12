@@ -8,6 +8,8 @@ import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
+import com.sportconnect.social.post.api.dto.CommentResponse;
+import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -103,4 +105,35 @@ public interface SessionService {
      * became optional.
      */
     Page<SessionResponse> getJoinedSessions(UUID userId, SessionStatus status, Pageable pageable);
+
+    /**
+     * SESSION-10/A17 — the only path to a session's comment thread; {@code post-impl}'s own {@code
+     * PostGate} makes the underlying {@code SESSION_POST} unconditionally unavailable via {@code
+     * /api/posts/**}, so this module owns both the authorization (participant status —
+     * JOINED/REQUESTED/INVITED — or, for a group-linked session, group membership; the ADR §6
+     * widened rule) and the delegation to {@code post-api}'s bypass method
+     * ({@code CommentService.createSessionComment}, which skips {@code PostGate}). Throws {@code
+     * ResourceNotFoundException} if the session doesn't exist or its parent group is inactive,
+     * {@code ForbiddenException} if it exists but {@code userId} isn't authorized.
+     */
+    CommentResponse createSessionComment(Long sessionId, UUID userId, CreateCommentRequest request);
+
+    /** Same authorization/delegation contract as {@link #createSessionComment}. */
+    Page<CommentResponse> getSessionComments(Long sessionId, UUID callerId, Pageable pageable);
+
+    /** Same authorization/delegation contract as {@link #createSessionComment}. */
+    void likeSessionComment(Long sessionId, Long commentId, UUID userId);
+
+    /** Same authorization/delegation contract as {@link #createSessionComment}. */
+    void unlikeSessionComment(Long sessionId, Long commentId, UUID userId);
+
+    /**
+     * Like the session itself (its {@code SESSION_POST} anchor) — same authorization contract as
+     * {@link #createSessionComment}, delegating to {@code post-api}'s {@code
+     * PostService.likeSessionPost} bypass method.
+     */
+    void likeSession(Long sessionId, UUID userId);
+
+    /** Same authorization/delegation contract as {@link #likeSession}. */
+    void unlikeSession(Long sessionId, UUID userId);
 }

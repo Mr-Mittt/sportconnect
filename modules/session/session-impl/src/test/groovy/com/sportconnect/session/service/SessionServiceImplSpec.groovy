@@ -1,11 +1,14 @@
 package com.sportconnect.session.service
 
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ForbiddenException
+import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.group.api.dto.GroupResponse
 import com.sportconnect.group.api.service.GroupService
 import com.sportconnect.location.api.dto.LocationResponse
 import com.sportconnect.location.api.service.LocationService
+import com.sportconnect.session.access.SessionGate
 import com.sportconnect.session.api.dto.CancelSessionRequest
 import com.sportconnect.session.api.dto.CreateSessionRequest
 import com.sportconnect.session.api.dto.FeeType
@@ -18,6 +21,10 @@ import com.sportconnect.session.entity.Session
 import com.sportconnect.session.entity.SessionParticipant
 import com.sportconnect.session.repository.SessionParticipantRepository
 import com.sportconnect.session.repository.SessionRepository
+import com.sportconnect.social.post.api.dto.CommentResponse
+import com.sportconnect.social.post.api.dto.CreateCommentRequest
+import com.sportconnect.social.post.api.service.CommentService
+import com.sportconnect.social.post.api.service.PostService
 import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.api.service.UserSportProfileService
@@ -38,14 +45,24 @@ class SessionServiceImplSpec extends Specification {
     UserService userService = Mock()
     SportService sportService = Mock()
     UserSportProfileService userSportProfileService = Mock()
+    PostService postService = Mock()
+    CommentService commentService = Mock()
+    SessionGate sessionGate = Mock()
 
     @Subject
     SessionServiceImpl sessionService = new SessionServiceImpl(
             sessionRepository, sessionParticipantRepository, groupService, locationService, userService,
-            sportService, userSportProfileService)
+            sportService, userSportProfileService, postService, commentService, sessionGate)
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
     def tennisLocation = LocationResponse.builder().id(2L).sportId(2L).name("Tennis Court").build()
+
+    def setup() {
+        // SESSION-10/A17: every createSession call creates a companion SESSION_POST first — a
+        // lenient default so tests that aren't specifically about this behavior don't each need
+        // to stub it themselves, same convention as stubBatchEnrichment().
+        postService.createSessionPost(_, _) >> 999L
+    }
 
     private void stubBatchEnrichment() {
         userService.getUsersByIds(_) >> [:]
@@ -955,5 +972,187 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionRepository.save({ Session s -> s.feeType == FeeType.SPLIT && s.feeAmountVnd == null }) >> session
         interaction { stubBatchEnrichment() }
+    }
+
+    // ── createSession — companion SESSION_POST (SESSION-10/A17) ────────────────
+
+    def "createSession creates the companion SESSION_POST before saving, and uses the returned id as postId"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).title("Sunday badminton")
+                .scheduledStart(LocalDateTime.now().plusDays(1)).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * postService.createSessionPost(userId, "Session: Sunday badminton") >> 42L
+        1 * sessionRepository.save({ Session s -> s.postId == 42L }) >> Session.builder().id(1L).postId(42L).build()
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession creates the companion SESSION_POST for a group-linked session too"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .groupId(5L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+        def group = GroupResponse.builder().id(5L).sportId(1L).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * groupService.canManageMembers(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> group
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * postService.createSessionPost(userId, _) >> 43L
+        1 * sessionRepository.save({ Session s -> s.postId == 43L && s.groupId == 5L }) >> Session.builder().id(2L).postId(43L).groupId(5L).build()
+        interaction { stubBatchEnrichment() }
+    }
+
+    // ── session comment proxy (SESSION-10/A17) ──────────────────────────────
+    // Gates via SessionGate (a real ResourceGate<Session>, its own SessionGateSpec covers the
+    // branch logic — see documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md §7's supersession note),
+    // then delegates to CommentService's bypass methods. sessionGate is mocked here — these tests
+    // only assert the gate is consulted and its result drives the outcome.
+
+    def "createSessionComment gates via SessionGate then delegates to CommentService.createSessionComment"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateCommentRequest.builder().content("see you there").build()
+        def session = Session.builder().id(1L).postId(999L).build()
+        def response = CommentResponse.builder().id(5L).postId(999L).content(request.content).build()
+
+        when:
+        def result = sessionService.createSessionComment(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * commentService.createSessionComment(999L, userId, request) >> response
+        result == response
+    }
+
+    def "createSessionComment propagates SessionGate's rejection without calling CommentService"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateCommentRequest.builder().content("x").build()
+        def session = Session.builder().id(1L).postId(999L).build()
+
+        when:
+        sessionService.createSessionComment(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, userId, _, _) >> { throw new ForbiddenException("You don't have access to this session's comments") }
+        0 * commentService._
+        thrown(ForbiddenException)
+    }
+
+    def "createSessionComment rejects a nonexistent session before ever consulting SessionGate's isVisibleTo"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateCommentRequest.builder().content("x").build()
+
+        when:
+        sessionService.createSessionComment(999L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(999L) >> Optional.empty()
+        1 * sessionGate.require(null, userId, _, _) >> { throw new NotFoundException("Session not found") }
+        0 * commentService._
+        thrown(NotFoundException)
+    }
+
+    def "getSessionComments gates via SessionGate then delegates to CommentService.getSessionPostComments"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+        def session = Session.builder().id(1L).postId(999L).build()
+        def page = new PageImpl<>([CommentResponse.builder().id(5L).postId(999L).build()])
+
+        when:
+        def result = sessionService.getSessionComments(1L, callerId, pageable)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, callerId, _, _) >> session
+        1 * commentService.getSessionPostComments(999L, callerId, pageable) >> page
+        result == page
+    }
+
+    def "likeSessionComment gates via SessionGate then delegates to CommentService.likeSessionComment"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).build()
+
+        when:
+        sessionService.likeSessionComment(1L, 5L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * commentService.likeSessionComment(999L, 5L, userId)
+    }
+
+    def "unlikeSessionComment gates via SessionGate then delegates to CommentService.unlikeSessionComment"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).build()
+
+        when:
+        sessionService.unlikeSessionComment(1L, 5L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * commentService.unlikeSessionComment(999L, 5L, userId)
+    }
+
+    // ── likeSession / unlikeSession (SESSION-10/A17) ────────────────────────────
+
+    def "likeSession gates via SessionGate then delegates to PostService.likeSessionPost"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).build()
+
+        when:
+        sessionService.likeSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * postService.likeSessionPost(999L, userId)
+    }
+
+    def "likeSession propagates SessionGate's rejection without calling PostService"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).build()
+
+        when:
+        sessionService.likeSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, userId, _, _) >> { throw new ForbiddenException("You don't have access to this session") }
+        0 * postService.likeSessionPost(_, _)
+        thrown(ForbiddenException)
+    }
+
+    def "unlikeSession gates via SessionGate then delegates to PostService.unlikeSessionPost"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).build()
+
+        when:
+        sessionService.unlikeSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * postService.unlikeSessionPost(999L, userId)
     }
 }

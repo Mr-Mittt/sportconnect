@@ -7,6 +7,7 @@ import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.social.post.access.PostGate
 import com.sportconnect.social.post.api.dto.CommentResponse
 import com.sportconnect.social.post.api.dto.CreateCommentRequest
+import com.sportconnect.social.post.api.dto.PostType
 import com.sportconnect.social.post.entity.Comment
 import com.sportconnect.social.post.entity.CommentLike
 import com.sportconnect.social.post.entity.Post
@@ -573,5 +574,173 @@ class CommentServiceImplSpec extends Specification {
 
         and: "the fallback name is used instead of a 500"
         result.content[0].userFullName == "Unknown User"
+    }
+
+    // ── SESSION-10/A17 bypass methods — skip PostGate entirely ─────────────────
+
+    def "createSessionComment bypasses PostGate, only checks the post is an active SESSION_POST"() {
+        given:
+        def request = CreateCommentRequest.builder().content("see you there").build()
+        def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
+        def savedComment = Comment.builder().id(commentId).postId(postId).userId(userId)
+                .content(request.content).isActive(true).createdAt(LocalDateTime.now()).build()
+        def user = UserResponse.builder().id(userId).firstName("Test").lastName("User").build()
+
+        when:
+        def result = commentService.createSessionComment(postId, userId, request)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * postGate._
+        1 * commentRepository.save(_ as Comment) >> savedComment
+        // countByCommentId called once from mapToResponse, once from buildPreviewResponse in addToPreviewCache
+        2 * commentLikeRepository.countByCommentId(commentId) >> 0L
+        1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
+        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        1 * userService.getUserById(userId) >> user
+        result.content == request.content
+    }
+
+    def "createSessionComment throws NotFoundException when the post doesn't exist"() {
+        given:
+        def request = CreateCommentRequest.builder().content("x").build()
+
+        when:
+        commentService.createSessionComment(postId, userId, request)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.empty()
+        0 * postGate._
+        thrown(NotFoundException)
+    }
+
+    def "createSessionComment throws NotFoundException when the post exists but isn't a SESSION_POST"() {
+        given: "an otherwise-valid active post of a different type"
+        def request = CreateCommentRequest.builder().content("x").build()
+        def post = Post.builder().id(postId).postType(PostType.USER_FEED).isActive(true).build()
+
+        when:
+        commentService.createSessionComment(postId, userId, request)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * postGate._
+        0 * commentRepository.save(_)
+        thrown(NotFoundException)
+    }
+
+    def "getSessionPostComments bypasses PostGate, only checks the post is an active SESSION_POST"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
+        def comment = Comment.builder().id(commentId).postId(postId).userId(userId)
+                .content("hi").isActive(true).createdAt(LocalDateTime.now()).build()
+        def user = UserResponse.builder().id(userId).firstName("Test").lastName("User").build()
+
+        when:
+        def result = commentService.getSessionPostComments(postId, userId, pageable)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * postGate._
+        1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([comment])
+        1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([commentId]) >> []
+        1 * commentLikeRepository.countByCommentId(commentId) >> 0L
+        1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
+        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        result.content.size() == 1
+    }
+
+    def "getSessionPostComments throws NotFoundException when the post exists but isn't a SESSION_POST"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        def post = Post.builder().id(postId).postType(PostType.GROUP_POST).isActive(true).build()
+
+        when:
+        commentService.getSessionPostComments(postId, userId, pageable)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * postGate._
+        0 * commentRepository._
+        thrown(NotFoundException)
+    }
+
+    def "likeSessionComment bypasses PostGate, only checks the comment belongs to the given SESSION_POST"() {
+        given:
+        def comment = Comment.builder().id(commentId).postId(postId).isActive(true).build()
+        def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
+
+        when:
+        commentService.likeSessionComment(postId, commentId, userId)
+
+        then:
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * postGate._
+        1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
+        1 * commentLikeRepository.save(_ as CommentLike) >> new CommentLike()
+    }
+
+    def "likeSessionComment throws NotFoundException when the parent post doesn't exist"() {
+        given:
+        def comment = Comment.builder().id(commentId).postId(postId).isActive(true).build()
+
+        when:
+        commentService.likeSessionComment(postId, commentId, userId)
+
+        then:
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.empty()
+        0 * postGate._
+        thrown(NotFoundException)
+    }
+
+    def "likeSessionComment throws NotFoundException when the comment belongs to a different post (cross-session IDOR)"() {
+        given: "a caller authorized against postId, but commentId actually belongs to some other post"
+        def otherPostId = 999L
+        def comment = Comment.builder().id(commentId).postId(otherPostId).isActive(true).build()
+
+        when:
+        commentService.likeSessionComment(postId, commentId, userId)
+
+        then:
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
+        0 * postRepository._
+        0 * postGate._
+        0 * commentLikeRepository._
+        thrown(NotFoundException)
+    }
+
+    def "unlikeSessionComment bypasses PostGate, only checks the comment belongs to the given SESSION_POST"() {
+        given:
+        def comment = Comment.builder().id(commentId).postId(postId).isActive(true).build()
+        def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
+
+        when:
+        commentService.unlikeSessionComment(postId, commentId, userId)
+
+        then:
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * postGate._
+        1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> true
+        1 * commentLikeRepository.deleteByCommentIdAndUserId(commentId, userId)
+    }
+
+    def "unlikeSessionComment throws NotFoundException when the comment belongs to a different post (cross-session IDOR)"() {
+        given:
+        def otherPostId = 999L
+        def comment = Comment.builder().id(commentId).postId(otherPostId).isActive(true).build()
+
+        when:
+        commentService.unlikeSessionComment(postId, commentId, userId)
+
+        then:
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
+        0 * postRepository._
+        0 * postGate._
+        0 * commentLikeRepository._
+        thrown(NotFoundException)
     }
 }

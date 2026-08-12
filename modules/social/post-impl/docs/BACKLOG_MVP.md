@@ -40,6 +40,7 @@
 | 19 | A12 | Revisit A9's `sportName` join — sports are static reference data, client may not need it server-resolved | `DONE` |
 | 20 | A14 | Enforce post visibility/group-membership on single-item paths (getPostById, comments, likes) — not just list endpoints | `DONE` |
 | 21 | A16 | Consume `group-impl`'s new `canManagePosts` instead of composing `isGroupOwner`/`isGroupAdmin` | `DONE` |
+| 22 | A17 | `SESSION_POST` — post-impl side of SESSION-10's comment-thread reuse (`PostType`, `createSessionPost`, `PostGate` delegation to session-api) | `DONE` |
 
 **Note:** F1 (Frontend — personalized feed) moved to `client/docs/BACKLOG_MVP.md`.
 
@@ -963,5 +964,25 @@ green.
 
 **Out of scope:** `isGroupMember` (used by `createPost`'s `GROUP_POST` gate, unrelated — no
 owner/admin composition there, nothing to change).
+
+### A17 · `SESSION_POST` — post-impl side of SESSION-10's comment-thread reuse
+**Status:** `DONE` (2026-08-12) · **Summary:** see `A17_SESSION_POST.md` in this same docs folder
+(full cross-module design record in
+`modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md`)
+**Type:** New Feature · **Filed/built:** 2026-08-12, alongside `session-impl`'s SESSION-10, in two
+passes. Adds `PostType.SESSION_POST` + `PostService.createSessionPost` (internal, spoof-guarded
+like B9's `GROUP_SYSTEM`) + four `CommentService` bypass methods (`createSessionComment`,
+`getSessionPostComments`, `likeSessionComment`, `unlikeSessionComment`) that skip `PostGate`,
+intended only for `session-impl` to call. `PostGate.isAvailable` makes `SESSION_POST`
+unconditionally unavailable — **not** a delegation to `session-api`: an interim design did exactly
+that (reversing `documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md` §7's rejection of a bidirectional
+dependency), but was replaced same-day with this one-way shape at the user's request. `post-impl`
+carries **no** dependency on `session-api` — see the ADR's supersession note and the SESSION-10 doc
+for the full path through both passes. **Post-ship (same day):** added `likeSessionPost`/
+`unlikeSessionPost` (same bypass shape, applied to the post itself, `PostServiceImpl.likePost`/
+`unlikePost` refactored into shared `do*` helpers the same way `CommentServiceImpl` already was);
+fixed a real IDOR in `likeSessionComment`/`unlikeSessionComment` (now take an explicit `postId`
+cross-checked against the comment's real parent, closing a gap where a caller authorized for one
+session could like/unlike a comment on a different session's thread by id alone).
 
 ---
