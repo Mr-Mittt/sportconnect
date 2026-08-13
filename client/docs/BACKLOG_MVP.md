@@ -131,8 +131,8 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 60 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
 | 61 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `DONE` |
 | 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `DONE` |
-| 63 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
-| 64 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) | `TODO` |
+| 63 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) — **reordered ahead of SPORT-2, user decision 2026-08-13; SESSION-9 backend shipped 2026-08-08, no longer blocking** | `TODO` |
+| 64 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 | 65 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
 
 **Dependencies:**
@@ -256,7 +256,7 @@ GRP-8 (new, filed 2026-07-24, amended same day) — GRP-3, GRP-4, GRP-7 (all DON
 | SESSION-5: session capacity + fee/pricing | `modules/session/docs/BACKLOG_MVP.md` · SESSION-5 | a future client ticket (not yet filed) — capacity/fee fields in `CreateSessionModal` + display | `DONE` (2026-08-02) |
 | SESSION-6: join-approval workflow + invite-friends-at-creation | `modules/session/docs/BACKLOG_MVP.md` · SESSION-6 | CLIENT-SESSION-4 — invite/auto-approve UI + approval queue | `DONE` (2026-08-02) |
 | LOC-2: favorite locations | `modules/location/docs/BACKLOG_MVP.md` · LOC-2 | a future client ticket (not yet filed) — favorite heart toggle + `CreateSessionModal` favorites dropdown | `DONE` (2026-08-01) |
-| SESSION-9: expose the caller's own participant status via getSessionParticipants | `modules/session/docs/BACKLOG_MVP.md` · SESSION-9 | a future client ticket (not yet filed) — `SessionDetailModal`'s Join/Leave button needs to become 4-state (Join/Leave/"Accept this session"/"Waiting for approval") based on the caller's own status; scoped down from CLIENT-SESSION-4 to just this (user decision, 2026-08-03) — CLIENT-SESSION-4's invite-UI + approval-queue scope is unaffected, still `TODO` | `TODO` |
+| SESSION-9: expose the caller's own participant status via `callerParticipation` on `SessionResponse` | `modules/session/docs/BACKLOG_MVP.md` · SESSION-9 | CLIENT-SESSION-9 — session card + `SessionDetailModal` Join/Accept/Decline/Cancel/Leave button; scoped down from CLIENT-SESSION-4 to just this (user decision, 2026-08-03) — CLIENT-SESSION-4's invite-UI + approval-queue scope is unaffected, still `TODO` | `DONE` (2026-08-08) |
 | ~~Chat module (new `modules/social/chat-impl`, never existed beyond a docs folder, since deleted)~~ | ARCHIVED (2026-07-26) — see `documentation/md/archive/chat/` — fresh chat re-plan pending | ~~CHAT-2, CHAT-4~~ | `N/A` |
 
 ---
