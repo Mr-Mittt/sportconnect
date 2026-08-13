@@ -67,6 +67,7 @@ const makeMatch = (
   autoApprove: false,
   likeCount: 0,
   isLikedByCurrentUser: false,
+  callerParticipation: null,
   createdAt: '2026-06-01T10:00:00',
   updatedAt: '2026-06-01T10:00:00',
   id,
@@ -90,6 +91,8 @@ const renderMatches = (
       onSelectMatch={() => {}}
       onCreateMatch={() => {}}
       onJoinMatch={() => {}}
+      onParticipationAction={() => {}}
+      isParticipationActionPending={() => false}
       {...overrides}
     />,
   );
@@ -154,7 +157,7 @@ describe('UpcomingMatches', () => {
     const onSelectMatch = vi.fn();
     renderMatches({ onSelectMatch });
 
-    await user.click(screen.getByRole('button', { name: /Warriors vs Riverside/ }));
+    await user.click(screen.getByRole('button', { name: /Warriors vs Riverside — View details/ }));
     expect(onSelectMatch).toHaveBeenCalledWith(1);
 
     await user.click(screen.getByRole('button', { name: /Singles ladder match/ }));
@@ -193,5 +196,24 @@ describe('UpcomingMatches', () => {
   it('falls back to "{sportName} session" when title is null', () => {
     renderMatches({ matches: [{ ...matches[0], title: null }] });
     expect(screen.getByText('football session')).toBeInTheDocument();
+  });
+
+  it('shows a Join action for a SCHEDULED match the caller has no row on, and calls onParticipationAction', async () => {
+    const user = userEvent.setup();
+    const onParticipationAction = vi.fn();
+    renderMatches({ matches: [matches[0]], onParticipationAction });
+    await user.click(screen.getByRole('button', { name: /Warriors vs Riverside — Join/ }));
+    expect(onParticipationAction).toHaveBeenCalledWith(1, 'JOIN');
+  });
+
+  it('hides the participation action for a CANCELLED match', () => {
+    renderMatches({ matches: [matches[2]] });
+    expect(screen.getByRole('button', { name: /Singles ladder match/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /join|leave/i })).not.toBeInTheDocument();
+  });
+
+  it('disables the participation action while pending', () => {
+    renderMatches({ matches: [matches[0]], isParticipationActionPending: (id) => id === 1 });
+    expect(screen.getByRole('button', { name: /Warriors vs Riverside — Join/ })).toBeDisabled();
   });
 });

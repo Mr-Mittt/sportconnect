@@ -55,6 +55,7 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
     autoApprove: false,
     likeCount: 0,
     isLikedByCurrentUser: false,
+    callerParticipation: null,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     groupName: null,
@@ -74,6 +75,8 @@ const renderPanel = (overrides: Partial<React.ComponentProps<typeof SessionDisco
       isError={false}
       sportsByKey={sportsByKey}
       onViewDetails={() => {}}
+      onParticipationAction={() => {}}
+      isParticipationActionPending={() => false}
       {...overrides}
     />,
   );
@@ -84,7 +87,7 @@ describe('SessionDiscoverPanel', () => {
     const onViewDetails = vi.fn();
     renderPanel({ onViewDetails });
 
-    await user.click(screen.getByRole('button', { name: new RegExp('Weekend 5-a-side') }));
+    await user.click(screen.getByRole('button', { name: /Weekend 5-a-side — View details/ }));
     expect(onViewDetails).toHaveBeenCalledWith(1);
   });
 

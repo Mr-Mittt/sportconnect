@@ -118,6 +118,8 @@ export function MatchesPage() {
           isError={data.isDiscoverError}
           sportsByKey={data.sportsByKey}
           onViewDetails={data.onViewDetails}
+          onParticipationAction={data.onParticipationAction}
+          isParticipationActionPending={data.isParticipationActionPending}
           gridClassName={discoverGridClassName}
         />
 
@@ -163,6 +165,8 @@ export function MatchesPage() {
                     isCollapsed={data.collapsedDateKeys.has(group.dateKey)}
                     onToggleCollapsed={data.toggleDateGroupCollapsed}
                     onViewDetails={data.onViewDetails}
+                    onParticipationAction={data.onParticipationAction}
+                    isParticipationActionPending={data.isParticipationActionPending}
                   />
                 ))}
               </div>
@@ -205,7 +209,7 @@ export function MatchesPage() {
         isParticipantsLoading={data.isParticipantsLoading}
         isParticipantsError={data.isParticipantsError}
         currentUserId={data.currentUserId ?? ''}
-        canManage={data.canManageSelected}
+        canManage={data.canManage}
         onJoin={data.onJoin}
         isJoining={data.isJoining}
         isJoinError={data.isJoinError}

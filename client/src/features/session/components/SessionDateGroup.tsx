@@ -1,4 +1,5 @@
 import { IconChevronDown, IconChevronRight } from '@tabler/icons-react';
+import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import { SessionListCard } from './SessionListCard';
 import type { SessionDateGroup as SessionDateGroupData } from '../groupSessionsByDate';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -8,6 +9,9 @@ interface SessionDateGroupProps extends SessionDateGroupData {
   isCollapsed: boolean;
   onToggleCollapsed: (dateKey: string) => void;
   onViewDetails: (sessionId: number) => void;
+  /** CLIENT-SESSION-9: threaded straight through to each `SessionListCard`. */
+  onParticipationAction: (sessionId: number, kind: ParticipationActionKind) => void;
+  isParticipationActionPending: (sessionId: number) => boolean;
 }
 
 /**
@@ -24,6 +28,8 @@ export function SessionDateGroup({
   isCollapsed,
   onToggleCollapsed,
   onViewDetails,
+  onParticipationAction,
+  isParticipationActionPending,
 }: SessionDateGroupProps) {
   return (
     <div>
@@ -51,6 +57,8 @@ export function SessionDateGroup({
               session={session}
               sportsByKey={sportsByKey}
               onViewDetails={onViewDetails}
+              onParticipationAction={onParticipationAction}
+              isParticipationActionPending={isParticipationActionPending}
             />
           ))}
         </div>

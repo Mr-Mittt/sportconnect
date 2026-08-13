@@ -23,8 +23,12 @@ import { expect, test } from '../mocks/test.ts';
  * CLIENT-SESSION-1 update: matches are real now (modules/session via
  * e2e/mocks/handlers/sessions.ts's stateful fixtures — mockSession/Pickleball,
  * mockGroupSession/Badminton, mockOwnedGroupSession/Pickleball). The old
- * spots-left/full CTA is gone — every card shows a status badge + a single
+ * spots-left/full CTA is gone — every card shows a status badge + a
  * "View details" CTA, which now has a real destination (step 6, rewritten).
+ * CLIENT-SESSION-9 update: "View details" opens SessionDetailModal in place instead of
+ * navigating to /matches (step 6, rewritten again) — and each card may render a second
+ * participation-action button (Join/Accept/Cancel/Leave) next to it, so `matchCtas` below is
+ * scoped to "view details" specifically, not every button on the rail card.
  *
  * SPORT-3 update: the real sport catalog shrank to exactly 2 active sports
  * (Badminton, Pickleball — sport-impl's A6). mockUser now holds a profile
@@ -136,11 +140,13 @@ test('Home Feed journey', async ({ page }) => {
     await expect(dialog).not.toBeVisible();
   });
 
-  await test.step('6. match CTA — "View details" navigates to the Matches page with the session pre-opened', async () => {
+  await test.step('6. match CTA — "View details" opens SessionDetailModal in place, no navigation (CLIENT-SESSION-9)', async () => {
     await matchCtas.first().click();
-    await expect(page).toHaveURL(/\/matches\?session=\d+/);
     await expect(page.getByRole('dialog')).toBeVisible();
-    await page.goto('/'); // back to Home Feed for the remaining steps
+    // No navigation — the modal opens over Home Feed, not the Matches page.
+    await expect(page).toHaveURL('/');
+    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByRole('dialog')).not.toBeVisible();
   });
 
   await test.step('7. "Add sport" — every catalog sport already held (real SPORT-1/SPORT-3 data) renders aria-disabled (HF-2 behavior)', async () => {

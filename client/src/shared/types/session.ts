@@ -56,6 +56,12 @@ export interface Session {
    * "post-ship addition" — `POST/DELETE /sessions/{id}/like`). */
   likeCount: number;
   isLikedByCurrentUser: boolean;
+  /** SESSION-9: the caller's own SessionParticipant row for this session, or null if they have
+   * none. userFullName/userAvatarUrl are unset on it (the caller already knows their own
+   * identity) — only id/sessionId/userId/status/rejectReason/createdAt are meaningful. Drives
+   * the Join/Accept/Decline/Cancel/Leave action on both the session card and SessionDetailModal:
+   * null or LEFT -> Join, INVITED -> Accept/Decline, REQUESTED -> Cancel, JOINED -> Leave. */
+  callerParticipation: SessionParticipant | null;
   createdAt: string;
   updatedAt: string;
 }

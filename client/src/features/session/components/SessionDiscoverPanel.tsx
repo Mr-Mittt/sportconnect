@@ -1,4 +1,5 @@
 import { IconSearch } from '@tabler/icons-react';
+import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { SessionListItem, SessionSearchMode } from '../types';
 import { SessionListCard } from './SessionListCard';
@@ -28,6 +29,9 @@ interface SessionDiscoverPanelProps {
   isError: boolean;
   sportsByKey: Record<SportKey, SportProfile>;
   onViewDetails: (sessionId: number) => void;
+  /** CLIENT-SESSION-9: threaded straight through to each `SessionListCard`. */
+  onParticipationAction: (sessionId: number, kind: ParticipationActionKind) => void;
+  isParticipationActionPending: (sessionId: number) => boolean;
 
   /** Defaults to a fixed 2-column grid. `MatchesPage` overrides this to flip to 3 columns when
    * its "My sessions" panel is collapsed — `SessionDiscoverModal` uses the default. */
@@ -50,6 +54,8 @@ export function SessionDiscoverPanel({
   isError,
   sportsByKey,
   onViewDetails,
+  onParticipationAction,
+  isParticipationActionPending,
   gridClassName = DEFAULT_GRID_CLASS_NAME,
 }: SessionDiscoverPanelProps) {
   return (
@@ -120,6 +126,8 @@ export function SessionDiscoverPanel({
               session={session}
               sportsByKey={sportsByKey}
               onViewDetails={onViewDetails}
+              onParticipationAction={onParticipationAction}
+              isParticipationActionPending={isParticipationActionPending}
             />
           ))}
         </div>

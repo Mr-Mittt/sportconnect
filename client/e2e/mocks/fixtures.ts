@@ -542,6 +542,9 @@ export const mockSession: Session = {
   autoApprove: true,
   likeCount: 0,
   isLikedByCurrentUser: false,
+  // Overwritten per-response by sessions.ts's resolveCallerParticipation (SESSION-9) — this
+  // static value only matters as this store's initial seed.
+  callerParticipation: null,
   createdAt: '2026-06-20T10:00:00',
   updatedAt: '2026-06-20T10:00:00',
 };
@@ -579,6 +582,7 @@ export const mockGroupSession: Session = {
   autoApprove: true, // pre-existing fixture — same backfill reasoning as mockSession above.
   likeCount: 0,
   isLikedByCurrentUser: false,
+  callerParticipation: null, // overwritten per-response — see mockSession's note above.
   createdAt: '2026-06-21T10:00:00',
   updatedAt: '2026-06-21T10:00:00',
 };
@@ -619,6 +623,7 @@ export const mockOwnedGroupSession: Session = {
   autoApprove: true, // pre-existing fixture — same backfill reasoning as mockSession above.
   likeCount: 0,
   isLikedByCurrentUser: false,
+  callerParticipation: null, // overwritten per-response — see mockSession's note above.
   createdAt: '2026-06-22T10:00:00',
   updatedAt: '2026-06-22T10:00:00',
 };
@@ -684,6 +689,7 @@ export const mockDiscoverableSession: Session = {
   autoApprove: true,
   likeCount: 0,
   isLikedByCurrentUser: false,
+  callerParticipation: null, // overwritten per-response — see mockSession's note above.
   createdAt: '2026-06-23T10:00:00',
   updatedAt: '2026-06-23T10:00:00',
 };

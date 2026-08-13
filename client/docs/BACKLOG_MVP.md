@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-14
 
 ---
 
@@ -80,6 +80,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14g | HF-17 | Regenerate visual-regression baselines (follow-up from FEED-6's real trending hashtags) | `DONE` |
 | 14h | HF-18 | Regenerate visual-regression baselines (follow-up from FEED-7's real group broadcasts) | `DONE` |
 | 14i | HF-19 | Regenerate visual-regression baselines (follow-up from GRP-6's app-wide Dialog position/size changes) | `DONE` |
+| 14j | HF-20 | Regenerate visual-regression baselines (follow-up from CLIENT-SESSION-9's `UpcomingMatches` second button) | `DONE` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -131,9 +132,10 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 60 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
 | 61 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `DONE` |
 | 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `DONE` |
-| 63 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) — **reordered ahead of SPORT-2, user decision 2026-08-13; SESSION-9 backend shipped 2026-08-08, no longer blocking** | `TODO` |
-| 64 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
-| 65 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
+| 63 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) — **reordered ahead of SPORT-2, user decision 2026-08-13; SESSION-9 backend shipped 2026-08-08, no longer blocking** | `DONE` |
+| 64 | CLIENT-SESSION-10 | Session card + `SessionDetailModal` UX/UI enhancement pass — **new ticket, not in either epic, filed inserted right after CLIENT-SESSION-9** (2026-08-13) | `TODO` |
+| 65 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 66 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
 
 **Dependencies:**
 ```
@@ -744,6 +746,41 @@ shrink-wrapping tightly — correct, matches the intended design, not a renderin
 Playwright locally this round (Windows-vs-Linux font-rendering noise floor already well-established
 since HF-12 — the provided artifact is itself the Linux-rendered authoritative baseline, so a local
 diff run would add noise, not signal).
+
+### HF-20 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
+**Status:** `DONE` (2026-08-14) · **Type:** Infrastructure (Testing) · **Dependency:** CLIENT-SESSION-9's
+`UpcomingMatches` second button · **Summary:** `client/docs/CLIENT-SESSION-9_PARTICIPATION_ACTION.md`
+
+**Found while verifying CLIENT-SESSION-9's dialog-anchor bug fix:** ran the `visual-regression`
+project locally against isolated diagnostic ports (same setup used to verify the dialog fix) — all
+18 baselines show diffs, but only 6 are a real content/layout change:
+- **`home-feed-default-*`/`home-feed-pickleball-*` (6 of 9 home-feed baselines):** genuine
+  **image-dimension change** (e.g. `home-feed-default-375`: expected 375×1566, received
+  375×1546 — 20px shorter), not just anti-aliasing. Real cause: `UpcomingMatches`' rail card
+  gained a second button (the participation action, next to "View details") — same
+  "only the causally-connected baselines move" pattern HF-16/HF-19 already established. Both
+  `default`/`pickleball` states render real session/match data (Upcoming Matches is populated);
+  `home-feed-empty-*` doesn't (0 rail cards), so it's unaffected content-wise.
+- **`home-feed-empty-*` (3 of 9) and all 9 `post-modal-*`:** same image dimensions as committed,
+  1–3% pixel-ratio diffs — matches the already-documented Windows-vs-Linux font-rendering noise
+  floor (HF-12 onward), not caused by this change. Not evidence of anything to fix.
+
+**To execute:** identical process to HF-12..HF-19 — trigger the `client-ci` workflow's
+`update-baselines` manual dispatch on GitHub, download the `visual-baselines` artifact, replace
+`client/e2e/visual/__screenshots__/` with its contents, commit. Worth a human visual check that the
+Upcoming Matches rail card's new participation button renders correctly (matches `SessionListCard`'s
+same button, right label per `getParticipationAction`) and nothing else drifted unexpectedly.
+
+**Executed:** `update-baselines` dispatch run, `visual-baselines.zip` downloaded and extracted.
+Confirmed via SHA-256 comparison against the committed set before overwriting: **exactly the
+predicted 6 files changed** (`home-feed-default-*`/`home-feed-pickleball-*`, all 3 breakpoints) —
+the other 12 (`home-feed-empty-*` ×3, `post-modal-*` ×9) came back byte-identical to what was
+already committed, confirming those were purely the local Windows-vs-Linux font-rendering noise
+flagged above, not anything this dispatch needed to fix. Human visual check of
+`home-feed-default-1280` confirmed each Upcoming Matches card now shows two buttons side by side
+("View details" + the participation action, "Join" for all three fixture sessions since none are
+JOINED/INVITED/REQUESTED for the fixture user) — correct, matches the intended
+CLIENT-SESSION-9 design, nothing else drifted.
 
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·
@@ -2835,7 +2872,7 @@ building the client button against it. See the summary doc's Delta section for t
 (same 403-as-gate philosophy extended to liking, real not inert in `useDiscoverModalData`).
 
 ### CLIENT-SESSION-9 · Wire Join/Accept/Decline/Cancel/Leave button on session card + Session Detail modal
-**Status:** `TODO` · **Type:** Feature · **Dependency:** SESSION-9
+**Status:** `DONE` (2026-08-13) · **Type:** Feature · **Dependency:** SESSION-9
 (`modules/session/docs/BACKLOG_MVP.md`, backend, `DONE`) · **Filed:** 2026-08-08 · **Backend
 summary:** `modules/session/docs/SESSION-9_CALLER_PARTICIPATION_STATUS.md`
 
@@ -2856,6 +2893,81 @@ no new endpoint on the backend side, just a different button label/icon dependin
 **Explicitly out of scope:** the invite-friend search + multi-select and approval-queue UI for
 reviewing *other* users' `REQUESTED` rows (`CLIENT-SESSION-4`, already `DONE`); anything on
 `getSessionParticipants` (unchanged by SESSION-9, not part of this ticket).
+
+**Delta (2026-08-13, at pickup):** the card's own action button shows one action only —
+Accept-only for INVITED, not Accept+Decline — user decision at pickup (3 layout options presented
+with previews; picked "View details + one action button", Decline stays inside
+`SessionDetailModal` only, to avoid a 3rd button on a compact card, especially the narrower
+`UpcomingMatches` rail card). Card restructured from a single full-card `<button>` into two
+sibling buttons, which broke every existing e2e/component-test selector that opened a card by
+title-only regex (both buttons' `aria-label`s now contain the title) — fixed across
+`matches-journey.spec.ts` and 6 component test files; see
+`client/docs/CLIENT-SESSION-9_PARTICIPATION_ACTION.md` for the full list. E2E could not be run
+live in this sandbox (confirmed pre-existing: an unmodified spec fails identically) — verified via
+full static review + `tsc`/`lint`/unit-test suite instead.
+
+**Delta (2026-08-13, same day, user-reported):** the Upcoming rail's "View details"
+(`UpcomingMatches`, on Home Feed/Groups/Friends) used to navigate to `/matches?session={id}`,
+switching the user away from whatever page they were on — user flagged this as unwanted. Fixed to
+open `SessionDetailModal` in place instead, reusing each page's existing
+`discoverModalData.onViewDetails` (already wired for the Discover flow's own "View details"
+clicks) — turned out to need one line changed per page, no new hook. Scope confirmed with the
+user: applies to all three rail-hosting pages, and the in-place modal is view + Join/Leave only —
+no Cancel session / approval queue even for a session the caller manages (a rail session,
+unlike a Discover-sourced one, genuinely can be self-managed; full manager parity stays reachable
+only via "See all" → the Matches page). `home-feed-journey.spec.ts` step 6 rewritten to assert
+no URL change instead of a redirect to `/matches`.
+
+**Delta (2026-08-13, same day, reverses the above):** user saw the gap live (approval queue
+missing from the rail's modal for a session they manage, working correctly from Matches) and
+asked for full manager parity after all. `canManage`/cancel/approval-queue logic extracted out of
+`useMatchesPageData` into a new shared `useSessionDetailModalData(sessionId)` hook — both
+`useMatchesPageData` and `useDiscoverModalData` (the rail/Discover modal's detail slice) now use
+it, replacing `useDiscoverModalData`'s old hardcoded `canManage: false`. See
+`client/docs/CLIENT-SESSION-9_PARTICIPATION_ACTION.md`'s own delta section for the full writeup.
+
+### CLIENT-SESSION-10 · Session card + `SessionDetailModal` UX/UI enhancement pass
+**Status:** `TODO` · **Type:** Design/polish · **Dependency:** CLIENT-SESSION-9 (`DONE`) ·
+**Filed:** 2026-08-13, inserted right after CLIENT-SESSION-9 in queue order (user decision) — no
+code dependency, just sequenced immediately after the ticket whose rough edges motivated it.
+
+CLIENT-SESSION-9 wired the session card's and `SessionDetailModal`'s Join/Accept/Decline/Cancel/
+Leave actions functionally, under real space/scope constraints decided at pickup — this ticket is
+the follow-up design pass to revisit those constraints with actual visual design, not just
+functional wiring. **Not scoped/designed yet** — candidate areas to evaluate at pickup (not
+predetermined; confirm against an actual mockup/design-reference before committing to any of
+these, same "don't assume, check first" approach as every other ticket in this file):
+
+- **Card action-button layout.** CLIENT-SESSION-9 picked "View details + one action button"
+  under real width constraints (`UpcomingMatches`' rail card is the tightest), with INVITED
+  showing Accept-only on the card (Decline is modal-only). Worth revisiting with a real design —
+  e.g. does Decline deserve a compact affordance on the card too (icon-only button, overflow
+  menu), or does the current split hold up under actual visual review.
+- **No visual indicator of the caller's own status on the card itself.** Today the only signal
+  that "you're invited" / "you requested to join" / "you're in" is the action button's label
+  (Accept / Cancel / Leave) — there's no badge/pill distinct from the session's own status badge
+  (Scheduled/Ongoing/etc.). A quick scan of a session list can't currently distinguish "I'm
+  invited to this" from "I haven't interacted with this at all" without reading each button.
+- **`SessionDetailModal`'s action area has no icons**, unlike every other row in the modal
+  (location, participants, fee all lead with a Tabler icon) — Join/Accept/Decline/Cancel/Leave are
+  bare text `Button`s. Worth a consistency pass once real icon choices are picked (this file's
+  session cards/modal never had a `design-reference-*.html` the way the Home Feed epic's
+  components did, so there's no existing mockup to match against — this ticket may need to
+  produce one, or work directly with the user on live design decisions instead, same as most
+  session-feature tickets have so far).
+- **Participants list only shows JOINED rows** (`SessionDetailModal`'s "Participants (N)"
+  section) — a regular (non-managing) participant has no visibility into who else is
+  invited/pending, only the manager-only approval queue shows REQUESTED rows, and nothing shows
+  INVITED rows to anyone but the invitee themselves (indirectly, via their own action button).
+  Worth deciding whether that's the right visibility model or a gap.
+- **Pending-action feedback is a plain text swap** ("Join" → "Working…", per CLIENT-SESSION-9's
+  a11y-motivated choice to keep the button's `aria-label` on the idle action name throughout) —
+  no spinner/skeleton treatment. Worth a design opinion on whether text-only pending state reads
+  clearly enough in practice.
+
+**Explicitly not committed to any of the above** — this ticket exists to hold the list until
+someone scopes it for real, same as SESSION-8's own "signal candidates to evaluate at pickup, not
+predetermined" framing. **Not scheduled** — filed for later prioritization, no target date.
 
 ### SPORT-3 · Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config
 **Status:** `DONE` (2026-08-07) · **Type:** Data layer (real integration) · **Dependency:** soft — **A6**

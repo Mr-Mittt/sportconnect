@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/session/session-impl`
-**Last updated:** 2026-08-12
+**Last updated:** 2026-08-13
 
 ---
 
@@ -32,6 +32,7 @@
 | 11 | SESSION-12 | Partial index on `sessions` scoped to `status = SCHEDULED` for the generation job's hot queries | `DONE` |
 | 12 | SESSION-8 | Session discover ranking algorithm | `TODO` |
 | 13 | SESSION-13 | `SessionResponse.likeCount`/`isLikedByCurrentUser` + `PostService.getSessionPostLikeInfo` batch method | `DONE` |
+| 14 | SESSION-14 | Reduce `mapToResponses`' round trips (2 points) | `TODO` |
 
 ---
 
@@ -556,3 +557,68 @@ post-impl:test`, `:modules:session:session-impl:test`, and `:server:test` all gr
 **Out of scope:** any change to `likeSession`/`unlikeSession` themselves (SESSION-10, unchanged);
 an IT test — this isn't a new access-control boundary, just new read-only fields resolved through
 an already-gated write path's sibling data.
+
+## SESSION-14 — Reduce `mapToResponses`' round trips (2 points)
+
+**Filed:** 2026-08-13. `SessionServiceImpl.mapToResponses` — the shared batch-resolution path
+behind every session-returning endpoint (`getSession`, `discoverSessions`, `getGroupSessions`,
+`getSessionsCreatedByUser`, `getJoinedSessions`, create/update/cancel) — currently issues **8–9
+DB round trips per call** (a single `getSession(sessionId, callerId)` was used to count these
+live): `sessionRepository.findById`, `userRepository.findAllById` (creator/cancelledBy),
+`sportRepository.findAll` (only on a cold `@Cacheable("sports")` — free in steady state),
+`locationRepository.findByIdIn`, `sessionParticipantRepository.countBySessionIdsAndStatus`
+(JOINED count), `sessionParticipantRepository.findBySessionIdInAndUserId` (SESSION-9's
+`callerParticipation`), and `PostService.getSessionPostLikeInfo`'s own 3 queries
+(`postRepository.findByIdInAndIsActiveTrue`, `postLikeRepository.countGroupedByPostIdIn`,
+`postLikeRepository.findLikedPostIdsByUserIdAndPostIdIn`). None of this is N+1 in the classic
+sense (every query is already batch-shaped, list-safe) — this ticket is about round-trip count on
+the already-batched path, not fixing a scaling bug.
+
+**Two mergeable pairs identified (not yet implemented — scoping only):**
+
+1. **Post-like count + caller-liked flag → 1 query** (low risk). `countGroupedByPostIdIn` and
+   `findLikedPostIdsByUserIdAndPostIdIn` both hit `PostLikeRepository` for the same `postIds`.
+   Mergeable via one grouped, conditional-aggregation query:
+   ```java
+   @Query("SELECT pl.postId, COUNT(pl), SUM(CASE WHEN pl.userId = :userId THEN 1 ELSE 0 END) "
+        + "FROM PostLike pl WHERE pl.postId IN :postIds GROUP BY pl.postId")
+   List<Object[]> countAndCallerLikedGroupedByPostIdIn(
+       @Param("postIds") List<Long> postIds, @Param("userId") UUID userId);
+   ```
+   Same table, same aggregate shape (`GROUP BY` already caps to one row per post) — no data-volume
+   tradeoff. Lives in `post-impl` (`PostLikeRepository`/`PostServiceImpl.getSessionPostLikeInfo`),
+   so this half of the ticket touches a different module than the one below.
+
+2. **Participant JOINED-count + caller's own row → 1 query** (medium risk — shared code path).
+   `countBySessionIdsAndStatus` (aggregate) and `findBySessionIdInAndUserId` (caller's own row,
+   any status) both hit `SessionParticipantRepository` for the same `sessionIds`. Mergeable into
+   one row-fetch query, deriving both values in Java:
+   ```java
+   @Query("SELECT sp FROM SessionParticipant sp WHERE sp.sessionId IN :sessionIds "
+        + "AND (sp.status = 'JOINED' OR sp.userId = :callerId)")
+   List<SessionParticipant> findJoinedOrCallerBySessionIdIn(
+       @Param("sessionIds") List<Long> sessionIds, @Param("callerId") UUID callerId);
+   // then group by sessionId in Java: count JOINED entries for participantCount,
+   // find the row with userId == callerId for callerParticipation
+   ```
+   Real tradeoff: swaps an aggregate `COUNT` for fetching full rows — a session with hundreds of
+   JOINED participants pulls more bytes per query (still one round trip; latency usually still
+   dominates over payload at this scale, but worth confirming before committing). Bigger blast
+   radius than #1: this is `session-impl`'s own core batch-resolution path, exercised by every
+   session list/detail endpoint — needs full `SessionServiceImplSpec`/`:server:test` coverage
+   before landing, not just a `getSession`-scoped check.
+
+**Not reducible, by design — do not attempt:**
+- **Users/Sports/Locations queries** — separate domain modules (`user-api`/`sport-api`/
+  `location-api`). `CLAUDE.md`'s architecture rule forbids collapsing cross-domain queries into a
+  SQL join ("Cross-domain communication through `-api` interfaces only"; "Cross-domain references
+  use IDs only — no JPA `@ManyToOne` across domain boundaries") — these calls have to stay
+  independent, swappable-to-a-real-RPC interfaces for a future microservice split. Sports is
+  already `@Cacheable`, so it's already a non-issue in steady state.
+- **Post existence/type check** (`findByIdInAndIsActiveTrue`) — defensive validation that
+  `Session.postId` resolves to a real active `SESSION_POST`. Technically droppable (`postId` is
+  set once at creation and never changes — see SESSION-10's own notes), but that trades a safety
+  net for one query. Flagged, not recommended, unless this endpoint becomes a profiled bottleneck.
+
+**Expected result if #1 and #2 both land:** 8–9 queries → **6** for a single `getSession()` call
+(~25–33% fewer round trips). **Not scheduled** — filed for later prioritization, no target date.

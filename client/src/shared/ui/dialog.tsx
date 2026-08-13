@@ -55,9 +55,20 @@ function DialogContent({ className, children, style, fixedHeight = false, ...pro
   // cover banner (a specific group selected). `null` outside those pages'
   // `ModalAnchorProvider`, which keeps today's viewport-centered position.
   const anchorBottom = useModalAnchor();
+  // The anchor row can scroll out of the viewport if the caller scrolled the page before opening
+  // a modal — anchorBottom then goes negative (found live: a rail "View details" click after
+  // scrolling past the sport switcher), and positioning a `position: fixed` modal from it would
+  // render the whole modal off-screen above the viewport, Close button included. Falls back to
+  // the same centered treatment used when there's no anchor configured at all — the anchoring
+  // context is equally unavailable either way, and this reuses an already-correct code path
+  // instead of inventing a new "pinned near top" state. (anchorBottom > window.innerHeight is
+  // the symmetric case — the anchor pushed below the viewport — included for completeness, not
+  // reachable in practice today since the sport switcher/group pill row sit at the top of the
+  // page layout and can only scroll up, never down, from their initial position.)
+  const anchored = anchorBottom !== null && anchorBottom > 0 && anchorBottom < window.innerHeight;
 
   let computedStyle: React.CSSProperties | undefined;
-  if (anchorBottom !== null) {
+  if (anchored) {
     const top = anchorBottom + ANCHOR_GAP_PX;
     const available = `calc(100vh - ${top}px - ${ANCHOR_BOTTOM_MARGIN_PX}px)`;
     computedStyle = {
@@ -78,8 +89,8 @@ function DialogContent({ className, children, style, fixedHeight = false, ...pro
         style={{ ...computedStyle, ...style }}
         className={cn(
           'shadow-card fixed left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-col overflow-hidden rounded-xl border-hairline border-border-strong bg-surface-2',
-          anchorBottom === null && 'top-1/2 -translate-y-1/2',
-          anchorBottom === null && !fixedHeight && 'max-h-[85vh]',
+          !anchored && 'top-1/2 -translate-y-1/2',
+          !anchored && !fixedHeight && 'max-h-[85vh]',
           className,
         )}
         {...props}
