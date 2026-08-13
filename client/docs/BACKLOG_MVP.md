@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-08-13
+**Last updated:** 2026-08-14
 
 ---
 
@@ -80,6 +80,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 14g | HF-17 | Regenerate visual-regression baselines (follow-up from FEED-6's real trending hashtags) | `DONE` |
 | 14h | HF-18 | Regenerate visual-regression baselines (follow-up from FEED-7's real group broadcasts) | `DONE` |
 | 14i | HF-19 | Regenerate visual-regression baselines (follow-up from GRP-6's app-wide Dialog position/size changes) | `DONE` |
+| 14j | HF-20 | Regenerate visual-regression baselines (follow-up from CLIENT-SESSION-9's `UpcomingMatches` second button) | `DONE` |
 | **Phase 5 — Auth integration (epic is draft — review first; BE-1/BE-2 shipped 2026-07-08, no longer blocking)** | | | |
 | 15 | MSW-0 | Mock Service Worker handler setup | `DONE` |
 | 16 | AUTH-0 | Types, API client, auth store | `DONE` |
@@ -745,6 +746,41 @@ shrink-wrapping tightly — correct, matches the intended design, not a renderin
 Playwright locally this round (Windows-vs-Linux font-rendering noise floor already well-established
 since HF-12 — the provided artifact is itself the Linux-rendered authoritative baseline, so a local
 diff run would add noise, not signal).
+
+### HF-20 · Regenerate visual-regression baselines — follow-up ticket, not in the epic
+**Status:** `DONE` (2026-08-14) · **Type:** Infrastructure (Testing) · **Dependency:** CLIENT-SESSION-9's
+`UpcomingMatches` second button · **Summary:** `client/docs/CLIENT-SESSION-9_PARTICIPATION_ACTION.md`
+
+**Found while verifying CLIENT-SESSION-9's dialog-anchor bug fix:** ran the `visual-regression`
+project locally against isolated diagnostic ports (same setup used to verify the dialog fix) — all
+18 baselines show diffs, but only 6 are a real content/layout change:
+- **`home-feed-default-*`/`home-feed-pickleball-*` (6 of 9 home-feed baselines):** genuine
+  **image-dimension change** (e.g. `home-feed-default-375`: expected 375×1566, received
+  375×1546 — 20px shorter), not just anti-aliasing. Real cause: `UpcomingMatches`' rail card
+  gained a second button (the participation action, next to "View details") — same
+  "only the causally-connected baselines move" pattern HF-16/HF-19 already established. Both
+  `default`/`pickleball` states render real session/match data (Upcoming Matches is populated);
+  `home-feed-empty-*` doesn't (0 rail cards), so it's unaffected content-wise.
+- **`home-feed-empty-*` (3 of 9) and all 9 `post-modal-*`:** same image dimensions as committed,
+  1–3% pixel-ratio diffs — matches the already-documented Windows-vs-Linux font-rendering noise
+  floor (HF-12 onward), not caused by this change. Not evidence of anything to fix.
+
+**To execute:** identical process to HF-12..HF-19 — trigger the `client-ci` workflow's
+`update-baselines` manual dispatch on GitHub, download the `visual-baselines` artifact, replace
+`client/e2e/visual/__screenshots__/` with its contents, commit. Worth a human visual check that the
+Upcoming Matches rail card's new participation button renders correctly (matches `SessionListCard`'s
+same button, right label per `getParticipationAction`) and nothing else drifted unexpectedly.
+
+**Executed:** `update-baselines` dispatch run, `visual-baselines.zip` downloaded and extracted.
+Confirmed via SHA-256 comparison against the committed set before overwriting: **exactly the
+predicted 6 files changed** (`home-feed-default-*`/`home-feed-pickleball-*`, all 3 breakpoints) —
+the other 12 (`home-feed-empty-*` ×3, `post-modal-*` ×9) came back byte-identical to what was
+already committed, confirming those were purely the local Windows-vs-Linux font-rendering noise
+flagged above, not anything this dispatch needed to fix. Human visual check of
+`home-feed-default-1280` confirmed each Upcoming Matches card now shows two buttons side by side
+("View details" + the participation action, "Join" for all three fixture sessions since none are
+JOINED/INVITED/REQUESTED for the fixture user) — correct, matches the intended
+CLIENT-SESSION-9 design, nothing else drifted.
 
 ### MSW-0 · Mock Service Worker handler setup
 **Status:** `DONE` (2026-07-08) · **Type:** Infrastructure (Testing) · **Dependency:** HF-00 · **Spec:** AUTH/FEED epic § MSW-0 ·
