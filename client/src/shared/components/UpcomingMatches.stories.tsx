@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
-import type { Session } from '@/shared/types/session';
+import type { ParticipantStatus, Session, SessionParticipant } from '@/shared/types/session';
 import { UpcomingMatches } from './UpcomingMatches';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
@@ -62,9 +62,23 @@ function makeSession(overrides: Partial<Session> & Pick<Session, 'id' | 'sportId
     autoApprove: false,
     likeCount: 0,
     isLikedByCurrentUser: false,
+    callerParticipation: null,
     createdAt: '2026-06-01T10:00:00',
     updatedAt: '2026-06-01T10:00:00',
     ...overrides,
+  };
+}
+
+function makeCallerParticipation(status: ParticipantStatus): SessionParticipant {
+  return {
+    id: 1,
+    sessionId: 1,
+    userId: 'user-1',
+    userFullName: '',
+    userAvatarUrl: null,
+    status,
+    rejectReason: null,
+    createdAt: '2026-06-01T10:00:00',
   };
 }
 
@@ -116,6 +130,8 @@ const meta = {
     onSelectMatch: () => {},
     onCreateMatch: () => {},
     onJoinMatch: () => {},
+    onParticipationAction: () => {},
+    isParticipationActionPending: () => false,
   },
   // Constrain to the right rail's width so stories match the page context
   decorators: [(Story) => <div style={{ maxWidth: 360 }}>{Story()}</div>],
@@ -145,4 +161,13 @@ export const EmptyForSport: Story = {
 /** Six matches in, four rendered — the rest are behind "See all". */
 export const CappedAtFour: Story = {
   args: { matches: manyFootballMatches, activeSport: 'all' },
+};
+
+/** CLIENT-SESSION-9: the SCHEDULED match's card gets a Leave action (caller is JOINED) next to
+ * "View details" — the ONGOING match still shows Join (no row), the CANCELLED one shows neither. */
+export const CallerJoined: Story = {
+  args: {
+    matches: [{ ...matches[0], callerParticipation: makeCallerParticipation('JOINED') }, matches[1], matches[2]],
+    activeSport: 'all',
+  },
 };

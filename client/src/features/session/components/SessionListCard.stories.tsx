@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
+import type { ParticipantStatus, SessionParticipant } from '@/shared/types/session';
 import type { SessionListItem } from '../types';
 import { SessionListCard } from './SessionListCard';
 
@@ -53,6 +54,7 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
     autoApprove: false,
     likeCount: 0,
     isLikedByCurrentUser: false,
+    callerParticipation: null,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     groupName: null,
@@ -60,10 +62,28 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
   };
 }
 
+function makeCallerParticipation(status: ParticipantStatus): SessionParticipant {
+  return {
+    id: 1,
+    sessionId: 1,
+    userId: 'user-1',
+    userFullName: '',
+    userAvatarUrl: null,
+    status,
+    rejectReason: null,
+    createdAt: '2026-07-01T10:00:00',
+  };
+}
+
 const meta = {
   title: 'Session/SessionListCard',
   component: SessionListCard,
-  args: { sportsByKey, onViewDetails: () => {} },
+  args: {
+    sportsByKey,
+    onViewDetails: () => {},
+    onParticipationAction: () => {},
+    isParticipationActionPending: (): boolean => false,
+  },
   decorators: [(Story) => <div style={{ maxWidth: 400 }}>{Story()}</div>],
 } satisfies Meta<typeof SessionListCard>;
 
@@ -104,4 +124,20 @@ export const FixedFee: Story = {
 
 export const Uncapped: Story = {
   args: { session: makeSession({ id: 10, capacity: 9999 }) },
+};
+
+export const CallerJoined: Story = {
+  args: { session: makeSession({ id: 11, callerParticipation: makeCallerParticipation('JOINED') }) },
+};
+
+export const CallerInvited: Story = {
+  args: { session: makeSession({ id: 12, callerParticipation: makeCallerParticipation('INVITED') }) },
+};
+
+export const CallerRequested: Story = {
+  args: { session: makeSession({ id: 13, callerParticipation: makeCallerParticipation('REQUESTED') }) },
+};
+
+export const ParticipationActionPending: Story = {
+  args: { session: makeSession({ id: 14 }), isParticipationActionPending: () => true },
 };

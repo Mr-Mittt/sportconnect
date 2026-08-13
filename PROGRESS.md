@@ -2641,6 +2641,33 @@ explicit go-ahead at each step (full story in A3's summary doc):
   never populated for `SESSION_POST` likes in the first place, since nothing ever called
   `getCount` on that path. Filed and shipped mid-pickup on CLIENT-SESSION-8, the client ticket
   that needed it.
+- **CLIENT-SESSION-9 (`DONE`, 2026-08-13,
+  `client/docs/CLIENT-SESSION-9_PARTICIPATION_ACTION.md`):** the session card
+  (`SessionListCard`/`UpcomingMatches`) and `SessionDetailModal` now derive their
+  Join/Accept/Decline/Cancel/Leave action from `SessionResponse.callerParticipation` (SESSION-9)
+  instead of the modal's old `participants`-array lookup. Card gets one new sibling button next to
+  "View details" (Accept-only for INVITED — Decline stays modal-only, user decision); shared
+  derivation logic lives in `shared/lib/sessionParticipation.ts`. E2E updated but could not be run
+  live in this sandbox (pre-existing environment limitation, confirmed via an unmodified spec
+  failing identically) — full unit/component suite (822 tests), `tsc`, and `lint` all green.
+  **Same-day follow-up:** the Upcoming rail's "View details" (Home Feed/Groups/Friends) used to
+  navigate to `/matches?session={id}`, switching the user away from whatever page they were on —
+  now opens `SessionDetailModal` in place instead, reusing each page's existing
+  `discoverModalData.onViewDetails` (view + Join/Leave only, no Cancel/approval queue, by user
+  decision — full manager parity stays reachable only via the Matches page).
+  **Same-day bug fix (user-reported):** adding a sport profile from inside the zero-profile
+  "add a sport first" gate (SessionDiscoverModal/CreateSessionModal/rail) left the Discover
+  session list showing 0 results — `GET /sessions/discover` is gated server-side to the caller's
+  active sport profiles, and `useAddSportProfile` never invalidated that cached (empty) query
+  after adding one, only the profiles query itself. Fixed by also invalidating every
+  `sessionKeys.discover(*)` entry on settle.
+  **Same-day delta (user-reported, reverses the "view + Join/Leave only" scope choice above):**
+  the rail's in-place modal now has full manager parity with the Matches page (Cancel session +
+  approval queue, when the caller manages that session) — extracted the whole `SessionDetailModal`
+  data slice (real `canManage`, join/leave/cancel, approval queue, likes, comments) out of
+  `useMatchesPageData` into a new shared `useSessionDetailModalData(sessionId)` hook, now used by
+  both `useMatchesPageData` and `useDiscoverModalData` instead of the latter's old hardcoded
+  `canManage: false`/inert cancel-approval stubs.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

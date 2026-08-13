@@ -47,9 +47,23 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     autoApprove: false,
     likeCount: 2,
     isLikedByCurrentUser: false,
+    callerParticipation: null,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     ...overrides,
+  };
+}
+
+function makeCallerParticipation(status: SessionParticipant['status']): SessionParticipant {
+  return {
+    id: 99,
+    sessionId: 1,
+    userId: 'user-3',
+    userFullName: '',
+    userAvatarUrl: null,
+    status,
+    rejectReason: null,
+    createdAt: '2026-07-01T10:00:00',
   };
 }
 
@@ -143,7 +157,15 @@ type Story = StoryObj<typeof meta>;
 export const NotJoinedYet: Story = {};
 
 export const AlreadyJoined: Story = {
-  args: { currentUserId: 'user-1' },
+  args: { session: makeSession({ callerParticipation: makeCallerParticipation('JOINED') }) },
+};
+
+export const InvitedPendingAcceptDecline: Story = {
+  args: { session: makeSession({ callerParticipation: makeCallerParticipation('INVITED') }) },
+};
+
+export const RequestedPendingApproval: Story = {
+  args: { session: makeSession({ callerParticipation: makeCallerParticipation('REQUESTED') }) },
 };
 
 export const ManagerCanCancel: Story = {

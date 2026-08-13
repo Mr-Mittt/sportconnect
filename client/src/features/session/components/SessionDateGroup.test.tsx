@@ -54,6 +54,7 @@ function makeSession(overrides: Partial<SessionListItem> & Pick<SessionListItem,
     autoApprove: false,
     likeCount: 0,
     isLikedByCurrentUser: false,
+    callerParticipation: null,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     groupName: null,
@@ -72,6 +73,8 @@ describe('SessionDateGroup', () => {
         isCollapsed={false}
         onToggleCollapsed={() => {}}
         onViewDetails={() => {}}
+        onParticipationAction={() => {}}
+        isParticipationActionPending={() => false}
       />,
     );
     expect(screen.getByText('Today')).toBeInTheDocument();
@@ -89,6 +92,8 @@ describe('SessionDateGroup', () => {
         isCollapsed
         onToggleCollapsed={() => {}}
         onViewDetails={() => {}}
+        onParticipationAction={() => {}}
+        isParticipationActionPending={() => false}
       />,
     );
     expect(screen.getByText('Today')).toBeInTheDocument();
@@ -107,6 +112,8 @@ describe('SessionDateGroup', () => {
         isCollapsed={false}
         onToggleCollapsed={onToggleCollapsed}
         onViewDetails={() => {}}
+        onParticipationAction={() => {}}
+        isParticipationActionPending={() => false}
       />,
     );
     await user.click(screen.getByRole('button', { name: 'Collapse Jul 31, 2026' }));
@@ -125,9 +132,11 @@ describe('SessionDateGroup', () => {
         isCollapsed={false}
         onToggleCollapsed={() => {}}
         onViewDetails={onViewDetails}
+        onParticipationAction={() => {}}
+        isParticipationActionPending={() => false}
       />,
     );
-    await user.click(screen.getByRole('button', { name: /Sunday pickup run/ }));
+    await user.click(screen.getByRole('button', { name: /Sunday pickup run — View details/ }));
     expect(onViewDetails).toHaveBeenCalledWith(42);
   });
 });

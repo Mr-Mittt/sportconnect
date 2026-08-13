@@ -67,7 +67,7 @@ test('Matches journey', async ({ page }) => {
   });
 
   await test.step('3. join then leave the standalone session', async () => {
-    await page.getByRole('button', { name: /Sunday pickup run/ }).click();
+    await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
     // mockSession has a real chosen capacity (10, CLIENT-SESSION-3) — not the 9999 "uncapped"
     // sentinel — so Participants shows "N/10", not the plain "N" the sentinel would render.
@@ -86,7 +86,7 @@ test('Matches journey', async ({ page }) => {
   });
 
   await test.step('3b. Discussion section — reads the seeded comment, posts a new one (CLIENT-SESSION-8)', async () => {
-    await page.getByRole('button', { name: /Sunday pickup run/ }).click();
+    await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
     const discussion = dialog.getByRole('region', { name: 'Discussion' });
 
@@ -100,7 +100,7 @@ test('Matches journey', async ({ page }) => {
   });
 
   await test.step('3c. heart button likes/unlikes the session (CLIENT-SESSION-8)', async () => {
-    await page.getByRole('button', { name: /Sunday pickup run/ }).click();
+    await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
 
     const likeButton = dialog.getByRole('button', { name: 'Like', exact: true });
@@ -116,7 +116,7 @@ test('Matches journey', async ({ page }) => {
   });
 
   await test.step('4. cancel the standalone session (creator can manage it)', async () => {
-    await page.getByRole('button', { name: /Sunday pickup run/ }).click();
+    await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
 
     await dialog.getByRole('button', { name: 'Cancel session' }).click();
@@ -127,17 +127,30 @@ test('Matches journey', async ({ page }) => {
     await expect(dialog.getByText('Reason: Court closed for maintenance.')).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
 
-    // List reflects the cancellation without a manual reload.
-    await expect(page.getByRole('button', { name: /Sunday pickup run/ })).toContainText('Cancelled');
+    // List reflects the cancellation without a manual reload. The card's status badge sits
+    // outside its buttons now (CLIENT-SESSION-9 split "View details" into two sibling buttons),
+    // so this checks the card's own text, not a button's accessible name/content.
+    await expect(page.getByText('Sunday pickup run')).toBeVisible();
+    await expect(page.getByText('Cancelled', { exact: true })).toBeVisible();
+    // A CANCELLED session has no participation action — only "View details" remains.
+    await expect(page.getByRole('button', { name: /Sunday pickup run — Join/ })).not.toBeVisible();
   });
 
   await test.step('5. a group session the caller only belongs to hides Cancel, but Join/Leave still work', async () => {
-    await page.getByRole('button', { name: /Friday 5-a-side/ }).click();
+    await page.getByRole('button', { name: /Friday 5-a-side — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Friday 5-a-side' });
 
     await expect(dialog.getByRole('button', { name: 'Cancel session' })).not.toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Join' })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
+  });
+
+  await test.step('5b. Join and Leave directly from the session card, no dialog required (CLIENT-SESSION-9)', async () => {
+    await page.getByRole('button', { name: /Friday 5-a-side — Join/ }).click();
+    await expect(page.getByRole('button', { name: /Friday 5-a-side — Leave/ })).toBeVisible();
+
+    await page.getByRole('button', { name: /Friday 5-a-side — Leave/ }).click();
+    await expect(page.getByRole('button', { name: /Friday 5-a-side — Join/ })).toBeVisible();
   });
 
   await test.step('6. create a standalone session, searching an existing location', async () => {
@@ -178,7 +191,7 @@ test('Matches journey', async ({ page }) => {
   });
 
   await test.step('7. approval queue: approve one requester, reject the other', async () => {
-    await page.getByRole('button', { name: /Ladder night/ }).click();
+    await page.getByRole('button', { name: /Ladder night — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Ladder night' });
     const approvalSection = dialog.getByRole('region', { name: 'Waiting for approval' });
 
@@ -245,7 +258,9 @@ test('Matches journey', async ({ page }) => {
     await expect(discoverSection.getByText(mockDiscoverableSession.title!)).toBeVisible();
     await expect(mySessionsSection.getByText(mockDiscoverableSession.title!)).not.toBeVisible();
 
-    await discoverSection.getByRole('button', { name: new RegExp(mockDiscoverableSession.title!) }).click();
+    await discoverSection
+      .getByRole('button', { name: new RegExp(`${mockDiscoverableSession.title} — View details`) })
+      .click();
     const dialog = page.getByRole('dialog', { name: mockDiscoverableSession.title! });
     await dialog.getByRole('button', { name: 'Join' }).click();
     await expect(dialog.getByRole('button', { name: 'Leave' })).toBeVisible();

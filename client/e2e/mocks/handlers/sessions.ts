@@ -36,6 +36,21 @@ function requireAuth(request: Request): Response | null {
   return null;
 }
 
+/**
+ * SESSION-9: the real backend now attaches the caller's own `SessionParticipant` row (or null)
+ * to every session-returning response as `callerParticipation`. This mock backend mirrors that
+ * here rather than baking a static value into each fixture, so a card's Join/Accept/Cancel/Leave
+ * action actually differs per session as the journey joins/leaves/accepts through it.
+ */
+function resolveCallerParticipation(session: SessionsSession, sessionId: number): SessionParticipant | null {
+  const participants = session.participantsState[sessionId] ?? [];
+  return participants.find((p) => p.userId === mockUser.id) ?? null;
+}
+
+function withCallerParticipation(session: SessionsSession, target: Session): Session {
+  return { ...target, callerParticipation: resolveCallerParticipation(session, target.id) };
+}
+
 function mockPageResponse<T>(content: T[]) {
   return {
     content,
@@ -207,6 +222,8 @@ export const sessionHandlers: HttpHandler[] = [
       autoApprove: body.autoApprove ?? false,
       likeCount: 0,
       isLikedByCurrentUser: false,
+      // Creator auto-join isn't simulated (see the comment above) — no row exists yet either way.
+      callerParticipation: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -233,18 +250,20 @@ export const sessionHandlers: HttpHandler[] = [
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const groupId = Number(params.groupId);
-    const results = sessionsSessions
-      .get(sessionIdFromRequest(request))
-      .sessionsState.filter((candidate) => candidate.groupId === groupId);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const results = session.sessionsState
+      .filter((candidate) => candidate.groupId === groupId)
+      .map((candidate) => withCallerParticipation(session, candidate));
     return HttpResponse.json(apiResponse(mockPageResponse(results), 'Sessions retrieved successfully'));
   }),
 
   http.get('/api/sessions/mine', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
-    const results = sessionsSessions
-      .get(sessionIdFromRequest(request))
-      .sessionsState.filter((candidate) => candidate.groupId === null && candidate.createdBy === mockUser.id);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const results = session.sessionsState
+      .filter((candidate) => candidate.groupId === null && candidate.createdBy === mockUser.id)
+      .map((candidate) => withCallerParticipation(session, candidate));
     return HttpResponse.json(apiResponse(mockPageResponse(results), 'Sessions retrieved successfully'));
   }),
 
@@ -267,7 +286,12 @@ export const sessionHandlers: HttpHandler[] = [
       );
       return !alreadyJoined;
     });
-    return HttpResponse.json(apiResponse(mockPageResponse(results), 'Sessions retrieved successfully'));
+    return HttpResponse.json(
+      apiResponse(
+        mockPageResponse(results.map((candidate) => withCallerParticipation(session, candidate))),
+        'Sessions retrieved successfully',
+      ),
+    );
   }),
 
   http.get('/api/sessions/joined', ({ request }) => {
@@ -281,18 +305,22 @@ export const sessionHandlers: HttpHandler[] = [
         (p) => p.userId === mockUser.id && p.status === 'JOINED',
       );
     });
-    return HttpResponse.json(apiResponse(mockPageResponse(results), 'Sessions retrieved successfully'));
+    return HttpResponse.json(
+      apiResponse(
+        mockPageResponse(results.map((candidate) => withCallerParticipation(session, candidate))),
+        'Sessions retrieved successfully',
+      ),
+    );
   }),
 
   http.get('/api/sessions/:sessionId', ({ request, params }) => {
     const sessionId = Number(params.sessionId);
-    const found = sessionsSessions
-      .get(sessionIdFromRequest(request))
-      .sessionsState.find((candidate) => candidate.id === sessionId);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const found = session.sessionsState.find((candidate) => candidate.id === sessionId);
     if (!found) {
       return HttpResponse.json(apiError('Session not found'), { status: 404 });
     }
-    return HttpResponse.json(apiResponse(found, 'Session retrieved successfully'));
+    return HttpResponse.json(apiResponse(withCallerParticipation(session, found), 'Session retrieved successfully'));
   }),
 
   http.put('/api/sessions/:sessionId', async ({ request, params }) => {
@@ -309,7 +337,7 @@ export const sessionHandlers: HttpHandler[] = [
     session.sessionsState = session.sessionsState.map((candidate) =>
       candidate.id === sessionId ? updated : candidate,
     );
-    return HttpResponse.json(apiResponse(updated, 'Session updated successfully'));
+    return HttpResponse.json(apiResponse(withCallerParticipation(session, updated), 'Session updated successfully'));
   }),
 
   http.post('/api/sessions/:sessionId/cancel', async ({ request, params }) => {
@@ -339,7 +367,7 @@ export const sessionHandlers: HttpHandler[] = [
     session.sessionsState = session.sessionsState.map((candidate) =>
       candidate.id === sessionId ? updated : candidate,
     );
-    return HttpResponse.json(apiResponse(updated, 'Session cancelled successfully'));
+    return HttpResponse.json(apiResponse(withCallerParticipation(session, updated), 'Session cancelled successfully'));
   }),
 
   http.post('/api/sessions/:sessionId/join', ({ request, params }) => {

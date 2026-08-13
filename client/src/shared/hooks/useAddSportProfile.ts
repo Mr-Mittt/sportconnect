@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
+import { sessionKeys } from '@/features/session/queryKeys';
 import type { ApiResponse } from '@/shared/types/api';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
 import { sportProfilesQueryKey } from './useSportProfilesForUser';
@@ -43,6 +44,13 @@ export function useAddSportProfile(userId: string | undefined) {
     onSettled: () => {
       if (userId === undefined) return;
       queryClient.invalidateQueries({ queryKey: sportProfilesQueryKey(userId) });
+      // GET /sessions/discover is gated server-side to sports the caller holds an active
+      // profile for (see useDiscoverSessions's own doc comment) — without this, a Discover
+      // view opened while the caller had zero profiles (e.g. SessionDiscoverModal/
+      // CreateSessionModal's own "no sport profiles yet" gate) keeps serving its cached empty
+      // result after a profile is added, since nothing else re-triggers that query. Partial key
+      // (no sportId suffix) invalidates every discover cache entry, not just one sportId's.
+      queryClient.invalidateQueries({ queryKey: [...sessionKeys.all, 'discover'] });
     },
   });
 }

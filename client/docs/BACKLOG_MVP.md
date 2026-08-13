@@ -131,7 +131,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 60 | CLIENT-SESSION-7 | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
 | 61 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `DONE` |
 | 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `DONE` |
-| 63 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) — **reordered ahead of SPORT-2, user decision 2026-08-13; SESSION-9 backend shipped 2026-08-08, no longer blocking** | `TODO` |
+| 63 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) — **reordered ahead of SPORT-2, user decision 2026-08-13; SESSION-9 backend shipped 2026-08-08, no longer blocking** | `DONE` |
 | 64 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 | 65 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
 
@@ -2835,7 +2835,7 @@ building the client button against it. See the summary doc's Delta section for t
 (same 403-as-gate philosophy extended to liking, real not inert in `useDiscoverModalData`).
 
 ### CLIENT-SESSION-9 · Wire Join/Accept/Decline/Cancel/Leave button on session card + Session Detail modal
-**Status:** `TODO` · **Type:** Feature · **Dependency:** SESSION-9
+**Status:** `DONE` (2026-08-13) · **Type:** Feature · **Dependency:** SESSION-9
 (`modules/session/docs/BACKLOG_MVP.md`, backend, `DONE`) · **Filed:** 2026-08-08 · **Backend
 summary:** `modules/session/docs/SESSION-9_CALLER_PARTICIPATION_STATUS.md`
 
@@ -2856,6 +2856,38 @@ no new endpoint on the backend side, just a different button label/icon dependin
 **Explicitly out of scope:** the invite-friend search + multi-select and approval-queue UI for
 reviewing *other* users' `REQUESTED` rows (`CLIENT-SESSION-4`, already `DONE`); anything on
 `getSessionParticipants` (unchanged by SESSION-9, not part of this ticket).
+
+**Delta (2026-08-13, at pickup):** the card's own action button shows one action only —
+Accept-only for INVITED, not Accept+Decline — user decision at pickup (3 layout options presented
+with previews; picked "View details + one action button", Decline stays inside
+`SessionDetailModal` only, to avoid a 3rd button on a compact card, especially the narrower
+`UpcomingMatches` rail card). Card restructured from a single full-card `<button>` into two
+sibling buttons, which broke every existing e2e/component-test selector that opened a card by
+title-only regex (both buttons' `aria-label`s now contain the title) — fixed across
+`matches-journey.spec.ts` and 6 component test files; see
+`client/docs/CLIENT-SESSION-9_PARTICIPATION_ACTION.md` for the full list. E2E could not be run
+live in this sandbox (confirmed pre-existing: an unmodified spec fails identically) — verified via
+full static review + `tsc`/`lint`/unit-test suite instead.
+
+**Delta (2026-08-13, same day, user-reported):** the Upcoming rail's "View details"
+(`UpcomingMatches`, on Home Feed/Groups/Friends) used to navigate to `/matches?session={id}`,
+switching the user away from whatever page they were on — user flagged this as unwanted. Fixed to
+open `SessionDetailModal` in place instead, reusing each page's existing
+`discoverModalData.onViewDetails` (already wired for the Discover flow's own "View details"
+clicks) — turned out to need one line changed per page, no new hook. Scope confirmed with the
+user: applies to all three rail-hosting pages, and the in-place modal is view + Join/Leave only —
+no Cancel session / approval queue even for a session the caller manages (a rail session,
+unlike a Discover-sourced one, genuinely can be self-managed; full manager parity stays reachable
+only via "See all" → the Matches page). `home-feed-journey.spec.ts` step 6 rewritten to assert
+no URL change instead of a redirect to `/matches`.
+
+**Delta (2026-08-13, same day, reverses the above):** user saw the gap live (approval queue
+missing from the rail's modal for a session they manage, working correctly from Matches) and
+asked for full manager parity after all. `canManage`/cancel/approval-queue logic extracted out of
+`useMatchesPageData` into a new shared `useSessionDetailModalData(sessionId)` hook — both
+`useMatchesPageData` and `useDiscoverModalData` (the rail/Discover modal's detail slice) now use
+it, replacing `useDiscoverModalData`'s old hardcoded `canManage: false`. See
+`client/docs/CLIENT-SESSION-9_PARTICIPATION_ACTION.md`'s own delta section for the full writeup.
 
 ### SPORT-3 · Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config
 **Status:** `DONE` (2026-08-07) · **Type:** Data layer (real integration) · **Dependency:** soft — **A6**

@@ -15,6 +15,7 @@ import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
 import { SessionDetailModal } from '@/features/session/components/SessionDetailModal';
 import { SessionDiscoverModal } from '@/features/session/components/SessionDiscoverModal';
+import { useSessionParticipationAction } from '@/features/session/hooks/useSessionParticipationAction';
 import { useCreateSessionModalData } from '@/features/session/useCreateSessionModalData';
 import { useDiscoverModalData } from '@/features/session/useDiscoverModalData';
 import { AddSportIntroDialog } from '@/shared/components/AddSportIntroDialog';
@@ -448,6 +449,9 @@ export function GroupsPage() {
   const createSessionModalData = useCreateSessionModalData();
   const activeSessionSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
   const discoverModalData = useDiscoverModalData(activeSessionSportId);
+  // CLIENT-SESSION-9: separate instance from discoverModalData's own — this one backs the rail
+  // card's action button, that one backs the Discover modal's result-grid cards.
+  const railParticipationAction = useSessionParticipationAction();
   // Chat only (user decision, after Members/Settings/Posts all being forced
   // to the same viewport-derived height left short tabs with a large empty
   // gap below them — found live): the group box's height reaches the
@@ -663,9 +667,11 @@ export function GroupsPage() {
               activeSport={activeSport}
               sportsByKey={sportsByKey}
               onSeeAll={() => navigate('/matches')}
-              onSelectMatch={(sessionId) => navigate(`/matches?session=${sessionId}`)}
+              onSelectMatch={discoverModalData.onViewDetails}
               onCreateMatch={createSessionModalData.openCreateModal}
               onJoinMatch={discoverModalData.openDiscoverModal}
+              onParticipationAction={railParticipationAction.onParticipationAction}
+              isParticipationActionPending={railParticipationAction.isParticipationActionPending}
             />
             <TrendingHashtags
               hashtags={data.hashtags}
@@ -914,6 +920,8 @@ export function GroupsPage() {
           isError={discoverModalData.isDiscoverError}
           sportsByKey={sportsByKey}
           onViewDetails={discoverModalData.onViewDetails}
+          onParticipationAction={discoverModalData.onParticipationAction}
+          isParticipationActionPending={discoverModalData.isParticipationActionPending}
           availableSports={availableSports}
           onAddSport={addSportMutation.mutate}
           isAddingSport={addSportMutation.isPending}

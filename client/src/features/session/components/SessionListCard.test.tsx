@@ -57,6 +57,7 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
     autoApprove: false,
     likeCount: 0,
     isLikedByCurrentUser: false,
+    callerParticipation: null,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     groupName: null,
@@ -64,9 +65,20 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
   };
 }
 
+const noopParticipationAction = () => {};
+const noPendingAction = () => false;
+
 describe('SessionListCard', () => {
   it('renders the title, status, location, and participant count', () => {
-    render(<SessionListCard session={makeSession()} sportsByKey={sportsByKey} onViewDetails={() => {}} />);
+    render(
+      <SessionListCard
+        session={makeSession()}
+        sportsByKey={sportsByKey}
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
     expect(screen.getByText('Sunday pickup run')).toBeInTheDocument();
     expect(screen.getByText('Scheduled')).toBeInTheDocument();
     expect(screen.getByText('Riverside Courts')).toBeInTheDocument();
@@ -74,13 +86,27 @@ describe('SessionListCard', () => {
   });
 
   it('falls back to "{sportName} session" when title is null', () => {
-    render(<SessionListCard session={makeSession({ title: null })} sportsByKey={sportsByKey} onViewDetails={() => {}} />);
+    render(
+      <SessionListCard
+        session={makeSession({ title: null })}
+        sportsByKey={sportsByKey}
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
     expect(screen.getByText('Basketball session')).toBeInTheDocument();
   });
 
   it('singularizes "1 participant"', () => {
     render(
-      <SessionListCard session={makeSession({ participantCount: 1 })} sportsByKey={sportsByKey} onViewDetails={() => {}} />,
+      <SessionListCard
+        session={makeSession({ participantCount: 1 })}
+        sportsByKey={sportsByKey}
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
     );
     expect(screen.getByText('1 participant')).toBeInTheDocument();
   });
@@ -91,17 +117,33 @@ describe('SessionListCard', () => {
         session={makeSession({ participantCount: 3, capacity: 10 })}
         sportsByKey={sportsByKey}
         onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
       />,
     );
     expect(screen.getByText('3/10 participants')).toBeInTheDocument();
   });
 
   it('shows the fee — Free, Split cost, or a formatted VND amount', () => {
-    const { rerender } = render(<SessionListCard session={makeSession()} sportsByKey={sportsByKey} onViewDetails={() => {}} />);
+    const { rerender } = render(
+      <SessionListCard
+        session={makeSession()}
+        sportsByKey={sportsByKey}
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
     expect(screen.getByText('Free')).toBeInTheDocument();
 
     rerender(
-      <SessionListCard session={makeSession({ feeType: 'SPLIT' })} sportsByKey={sportsByKey} onViewDetails={() => {}} />,
+      <SessionListCard
+        session={makeSession({ feeType: 'SPLIT' })}
+        sportsByKey={sportsByKey}
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
     );
     expect(screen.getByText('Split cost')).toBeInTheDocument();
 
@@ -110,16 +152,93 @@ describe('SessionListCard', () => {
         session={makeSession({ feeType: 'FIXED', feeAmountVnd: 50000 })}
         sportsByKey={sportsByKey}
         onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
       />,
     );
     expect(screen.getByText('50 000 ₫')).toBeInTheDocument();
   });
 
-  it('calls onViewDetails with the session id when clicked', async () => {
+  it('calls onViewDetails with the session id when "View details" is clicked', async () => {
     const user = userEvent.setup();
     const onViewDetails = vi.fn();
-    render(<SessionListCard session={makeSession({ id: 42 })} sportsByKey={sportsByKey} onViewDetails={onViewDetails} />);
-    await user.click(screen.getByRole('button'));
+    render(
+      <SessionListCard
+        session={makeSession({ id: 42 })}
+        sportsByKey={sportsByKey}
+        onViewDetails={onViewDetails}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /view details/i }));
     expect(onViewDetails).toHaveBeenCalledWith(42);
+  });
+
+  it('shows a Join action for a session the caller has no row on, and calls onParticipationAction', async () => {
+    const user = userEvent.setup();
+    const onParticipationAction = vi.fn();
+    render(
+      <SessionListCard
+        session={makeSession({ id: 42 })}
+        sportsByKey={sportsByKey}
+        onViewDetails={() => {}}
+        onParticipationAction={onParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /join/i }));
+    expect(onParticipationAction).toHaveBeenCalledWith(42, 'JOIN');
+  });
+
+  it('shows a Leave action when the caller is JOINED', () => {
+    render(
+      <SessionListCard
+        session={makeSession({
+          callerParticipation: {
+            id: 1,
+            sessionId: 1,
+            userId: 'user-1',
+            userFullName: '',
+            userAvatarUrl: null,
+            status: 'JOINED',
+            rejectReason: null,
+            createdAt: '2026-07-01T10:00:00',
+          },
+        })}
+        sportsByKey={sportsByKey}
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /leave/i })).toBeInTheDocument();
+  });
+
+  it('hides the participation action for a CANCELLED session', () => {
+    render(
+      <SessionListCard
+        session={makeSession({ status: 'CANCELLED' })}
+        sportsByKey={sportsByKey}
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /view details/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /join|leave/i })).not.toBeInTheDocument();
+  });
+
+  it('disables the participation action while pending', () => {
+    render(
+      <SessionListCard
+        session={makeSession({ id: 42 })}
+        sportsByKey={sportsByKey}
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={(sessionId) => sessionId === 42}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /join/i })).toBeDisabled();
   });
 });

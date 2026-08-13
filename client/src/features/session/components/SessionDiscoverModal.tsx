@@ -1,4 +1,5 @@
 import { AddSportFields, type AddSportProfileSubmission } from '@/shared/components/AddSportFields';
+import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import type { SessionListItem, SessionSearchMode } from '../types';
@@ -20,6 +21,9 @@ interface SessionDiscoverModalProps {
   isError: boolean;
   sportsByKey: Record<SportKey, SportProfile>;
   onViewDetails: (sessionId: number) => void;
+  /** CLIENT-SESSION-9: threaded straight through to `SessionDiscoverPanel`. */
+  onParticipationAction: (sessionId: number, kind: ParticipationActionKind) => void;
+  isParticipationActionPending: (sessionId: number) => boolean;
 
   /** CLIENT-SESSION-7 follow-up: when the caller has zero sport profiles (`sportsByKey` empty),
    * the Discover panel is replaced by an inline "add a sport first" prompt (`AddSportFields`) —
@@ -50,6 +54,8 @@ export function SessionDiscoverModal({
   isError,
   sportsByKey,
   onViewDetails,
+  onParticipationAction,
+  isParticipationActionPending,
   availableSports,
   onAddSport,
   isAddingSport,
@@ -88,6 +94,8 @@ export function SessionDiscoverModal({
               isError={isError}
               sportsByKey={sportsByKey}
               onViewDetails={onViewDetails}
+              onParticipationAction={onParticipationAction}
+              isParticipationActionPending={isParticipationActionPending}
             />
           </div>
         )}

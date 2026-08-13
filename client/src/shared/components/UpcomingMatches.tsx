@@ -4,6 +4,8 @@ import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { formatParticipantCount } from '@/shared/lib/sessionCapacity';
+import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
+import { getParticipationAction } from '@/shared/lib/sessionParticipation';
 import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
 import { getSportIcon } from '@/shared/lib/sportIcons';
 import { formatStartTime } from '@/shared/lib/startTime';
@@ -17,12 +19,19 @@ interface UpcomingMatchesProps {
   activeSport: SportKey | 'all';
   sportsByKey: Record<SportKey, SportProfile>;
   onSeeAll: () => void;
+  /** Opens `SessionDetailModal` in place on the hosting page (not a navigation) — CLIENT-SESSION-9
+   * follow-up: previously navigated to `/matches?session={id}`, switching the user away from
+   * whatever page they were on. Each hosting page passes its own `discoverModalData.onViewDetails`. */
   onSelectMatch: (sessionId: number) => void;
   /** CLIENT-SESSION-7: empty-state-only CTAs (see the empty-state branch below) — opens the
    * hosting page's create-session modal / Discover modal. Kept as separate props (not literally
    * `onSeeAll` reused) so each can point somewhere more specific than the populated list does. */
   onCreateMatch: () => void;
   onJoinMatch: () => void;
+  /** CLIENT-SESSION-9: the card's single participation action (Join/Accept/Cancel/Leave), same
+   * derivation and same "Decline stays modal-only" scoping as `SessionListCard`'s own prop. */
+  onParticipationAction: (sessionId: number, kind: ParticipationActionKind) => void;
+  isParticipationActionPending: (sessionId: number) => boolean;
   /**
    * Max matches rendered after the sport filter; the rest live behind
    * "See all" (cap of 4 decided on the HF-4 backlog entry — the epic left it open).
@@ -32,12 +41,19 @@ interface UpcomingMatchesProps {
 
 /**
  * Right-rail card listing the user's upcoming sessions, filtered by the same
- * activeSport as the Feed (HF-7 shares the state). Presentational: the single
- * "View details" CTA only reports the session via onSelectMatch — join/leave/
- * cancel live in the Matches page's detail dialog, not here (CLIENT-SESSION-1:
- * cheaply knowing "have I joined" per card isn't available without fetching
- * each session's participants, so this card shows a status badge instead of a
- * join button).
+ * activeSport as the Feed (HF-7 shares the state).
+ *
+ * CLIENT-SESSION-9: each row has two sibling buttons — "View details" and its own participation
+ * action, derived from `session.callerParticipation`. Previously only "View details" existed here
+ * (CLIENT-SESSION-1: cheaply knowing "have I joined" per card wasn't available without fetching
+ * each session's participants) — `callerParticipation` now makes that cheap. "View details"
+ * originally navigated to `/matches?session={id}`; a same-day follow-up switched it to open
+ * `SessionDetailModal` in place instead (via the hosting page's own `discoverModalData`), so
+ * clicking it no longer switches the user away from Home Feed/Groups/Friends. The modal opened
+ * this way never shows manager-only actions (Cancel session, approval queue) even for a session
+ * the caller manages — same simplification `useDiscoverModalData` already made for its own
+ * Discover-sourced sessions (`canManage` hardcoded `false`); those stay reachable only via the
+ * Matches page (`onSeeAll`).
  *
  * CLIENT-SESSION-7: the empty state (only, not the populated list) also
  * renders "Create a match"/"Join a match" CTAs — the hosting page decides
@@ -51,6 +67,8 @@ export function UpcomingMatches({
   onSelectMatch,
   onCreateMatch,
   onJoinMatch,
+  onParticipationAction,
+  isParticipationActionPending,
   maxVisible = 4,
 }: UpcomingMatchesProps) {
   const filtered =
@@ -97,6 +115,8 @@ export function UpcomingMatches({
             const sportKey = sportKeyForId(match.sportId);
             const sport = sportKey !== undefined ? sportsByKey[sportKey] : undefined;
             const title = match.title ?? `${match.sportName} session`;
+            const action = getParticipationAction(match);
+            const isActionPending = isParticipationActionPending(match.id);
             return (
               <div key={match.id} className="border-hairline rounded-lg border-border p-2.5">
                 <div className="mb-1 flex items-center gap-1.5">
@@ -140,16 +160,29 @@ export function UpcomingMatches({
                   </span>
                   <span>{formatParticipantCount(match.participantCount, match.capacity)}</span>
                 </div>
-                <button
-                  type="button"
-                  // Three sibling cards would otherwise expose identical
-                  // "View details" names to a screen reader
-                  aria-label={`${title} — View details`}
-                  onClick={() => onSelectMatch(match.id)}
-                  className="border-hairline w-full cursor-pointer rounded-lg border-border-strong py-1.25 text-xs text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-                >
-                  View details
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    // Three sibling cards would otherwise expose identical
+                    // "View details" names to a screen reader
+                    aria-label={`${title} — View details`}
+                    onClick={() => onSelectMatch(match.id)}
+                    className="border-hairline flex-1 cursor-pointer rounded-lg border-border-strong py-1.25 text-xs text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                  >
+                    View details
+                  </button>
+                  {action !== null && (
+                    <button
+                      type="button"
+                      aria-label={`${title} — ${action.label}`}
+                      disabled={isActionPending}
+                      onClick={() => onParticipationAction(match.id, action.kind)}
+                      className="border-hairline flex-1 cursor-pointer rounded-lg border-border-strong py-1.25 text-xs text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isActionPending ? 'Working…' : action.label}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}

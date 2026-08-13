@@ -29,7 +29,13 @@ collapsible "My sessions" panel; extends `matches-journey.spec.ts` with steps 9-
 section + heart button in `SessionDetailModal`; extends `matches-journey.spec.ts` with steps
 3b/3c, new `mocks/handlers/sessions.ts` comment + like endpoints, a `deleteSessionCommentIfPresent`
 cross-store fallback for `mocks/handlers/feed.ts`'s shared `DELETE /api/posts/comments/:commentId`,
-and a new cross-domain `PostService.getSessionPostLikeInfo` batch method backend-side).
+and a new cross-domain `PostService.getSessionPostLikeInfo` batch method backend-side),
+`CLIENT-SESSION-9_PARTICIPATION_ACTION.md` (session cards get their own Join/Accept/Cancel/Leave
+button, derived from `session.callerParticipation`; extends `matches-journey.spec.ts` with a new
+step 5b and disambiguates several existing steps' card-click selectors, `mocks/handlers/sessions.ts`
+now attaches `callerParticipation` to every session-returning response; same-day follow-up makes
+the Upcoming rail's "View details" open `SessionDetailModal` in place instead of navigating to
+`/matches`, rewriting `home-feed-journey.spec.ts` step 6).
 
 ---
 
@@ -177,7 +183,7 @@ e2e/
     post-deep-link.spec.ts
     group-chat.spec.ts        # CHAT-10
     direct-chat.spec.ts       # CHAT-10
-    matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8
+    matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
@@ -316,7 +322,7 @@ helpers called.
 | 3. "All" | Filters clear back to 3 | |
 | 4. like toggle | `likeCount` 3→4→3, `aria-pressed` flips | Optimistic — no network wait asserted |
 | 5. hashtag click | Opens `HashtagPostsModal` with 2 matching posts (`mockPost`+`mockGroupPost`, both tagged `fridayrun`); reachable from both an inline post tag and the Trending row; Escape closes it; **no URL change** | Modal, not a route — user decision, see FEED-6's delta |
-| 6. match CTA | "View details" navigates to `/matches?session={id}` with the detail dialog pre-opened, then returns to `/` for the remaining steps | CLIENT-SESSION-1: real destination now (was a deliberate no-op before the session backend existed); matches come from `mocks/handlers/sessions.ts`'s default 3-session fixture set |
+| 6. match CTA | "View details" opens `SessionDetailModal` in place, no URL change → Close returns to the rail | CLIENT-SESSION-9 (same-day follow-up): previously navigated to `/matches?session={id}`, switching the user away from Home Feed — now reuses the page's own `discoverModalData.onViewDetails`, same as clicking a card inside the Discover modal. Matches come from `mocks/handlers/sessions.ts`'s default 3-session fixture set |
 | 7. "Add sport" | `aria-disabled="true"` | **SPORT-3:** relies on the fixture user holding a profile for every sport the live catalog serves (2), not a numeric "3-sport cap" anymore |
 | 8. delete | "..." menu only on the caller's own post (not Priya Shah's); delete removes it, count 3→2 | |
 
@@ -531,12 +537,17 @@ path other specs already exercise incidentally.
 | `loading a shared post link directly renders the post + comments, even outside the feed's first page` | `seedPaginatedFeedOnNextLoad(mockSessionId)` (21-post fixture) → direct `seedAuthenticatedSession(page, '/posts/1020')` (post **1020**, index 20 — only reachable via "Load more" on page 0) → dialog renders the right post/comments on a cold load; closing returns to `/` with the normal Home Feed visible | Drives the real "shared link, not logged in yet" flow end-to-end (redirect to `/login`, bounce back) — the same generic mechanism AUTH-8's step 7 already covers, not something FEED-12 built itself. Proves the dialog doesn't depend on the feed having paginated the post into view first. |
 | `opening comments from the feed updates the URL, and closing returns to it` | Click a post's "View comments" from `/` → URL becomes `/posts/{id}` → Close → URL back to `/` | Confirms the in-feed path is also URL-addressable now (`navigate` push on open, `replace` on close), not just the direct-load path above |
 
-### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8, one `test()` with 10 steps + steps 3b/3c)
+### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9, one `test()` with 10 steps + steps 3b/3c/5b)
 
 `/matches` (real page, replacing `ComingSoonPage`) — list/create/join/leave/cancel, plus
 CLIENT-SESSION-4's invite/auto-approve fields and approval queue, plus CLIENT-SESSION-5's
 favorite-locations round trip, plus CLIENT-SESSION-6's Discover grid / "My sessions" panel split,
-plus CLIENT-SESSION-8's inline "Discussion" section.
+plus CLIENT-SESSION-8's inline "Discussion" section, plus CLIENT-SESSION-9's card-level
+Join/Accept/Cancel/Leave action button. CLIENT-SESSION-9 also split each session card's single
+"View details" button into two sibling buttons ("View details" + the participation action, when
+one applies), so every step that opens a card by clicking on its title now disambiguates via
+`{ name: /<title> — View details/ }` instead of a bare title regex — both buttons' aria-labels
+contain the title.
 Fixtures: `mockSession` (standalone, created by the test user, `participantCount: 0`),
 `mockGroupSession` (linked to `mockGroup`, created by someone else — the test user is only a
 `group_member`, proving Cancel stays hidden), `mockOwnedGroupSession` ("Ladder night", the test
@@ -569,6 +580,7 @@ steps 9-10 are what's actually new.
 | 3c. heart button | Reopen `mockSession`'s detail → "Like" button shows count 0 → click → "Unlike" shows count 1 → click → back to "Like"/0 | CLIENT-SESSION-8. `mockSession` starts `isLikedByCurrentUser: false`/`likeCount: 0`; the round trip proves both `POST` and `DELETE /api/sessions/{id}/like` |
 | 4. cancel | Cancel session → reason field → Confirm cancel → "Cancelled" + reason shown; list card reflects it without a reload | Creator of a standalone session can manage it |
 | 5. group session, member-only | Open `mockGroupSession`'s detail → no "Cancel session" button, Join still available | The test user is a `group_member`, not owner/admin, and didn't create it |
+| 5b. card-level Join/Leave | Click `mockGroupSession`'s own "Join" button on its card (not the modal) → card's button flips to "Leave" → click it → flips back to "Join" | CLIENT-SESSION-9. No dialog opens for either click — proves the card's own action button round-trips through `sessionKeys.all` invalidation the same way the modal's Join/Leave already did |
 | 6. create | "Create session" → pick Pickleball → "Choose location" (opens the favorites dropdown) → "Choose a location…" → search "Riverside" → select `mockLocation` → fill start time/title → invite `mockFriend` (badge appears) → check "Auto approve join request" (warning appears) → submit → dialog closes, new session appears in the list | SPORT-3: renamed from Basketball. Two dialogs/a dropdown all open in sequence (`CreateSessionModal`, its `LocationFavoritesDropdown`, and the nested `LocationPicker`) — the dropdown's own menu items are queried via `page.getByRole('menuitem', ...)`, not scoped to `createDialog`, since `DropdownMenuContent` portals as a DOM sibling of the Dialog, not a descendant |
 | 7. approval queue | Open `mockOwnedGroupSession`'s ("Ladder night") detail → "Waiting for approval (2)" shows both requesters → Approve one (moves into Participants) → Reject the other with a reason → section disappears | Only renders for `canManage`; reject reveals an inline optional-reason box, not a second dialog |
 | 8. favorite a location, then pick it from the favorites dropdown | Open a new create form → dropdown shows "No favorites yet." → open `LocationPicker`, search "Riverside" → click the heart on `mockLocation`'s row (aria-label flips to "Unfavorite …") → select it → reopen the dropdown → the just-favorited location now lists instead of the empty state → selecting it sets the location again | Confirms `LocationFavoritesDropdown`'s real Radix `DropdownMenu` (`modal={false}`) actually works nested inside the Dialog — CLIENT-SESSION-2 had reverted an earlier attempt after it appeared broken live; CLIENT-SESSION-5 found and fixed the real cause (see its summary doc) |

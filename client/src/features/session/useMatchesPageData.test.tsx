@@ -102,6 +102,7 @@ function makeSession(overrides: Partial<Session> & Pick<Session, 'id' | 'status'
     autoApprove: false,
     likeCount: 0,
     isLikedByCurrentUser: false,
+    callerParticipation: null,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     ...overrides,
@@ -292,7 +293,7 @@ describe('useMatchesPageData', () => {
     await waitFor(() => expect(postSpy).toHaveBeenCalledWith('/sessions/7/join'));
   });
 
-  it('canManageSelected is true for the standalone creator', async () => {
+  it('canManage is true for the standalone creator', async () => {
     mockGets({
       '/sessions/7': () =>
         apiResponse(
@@ -303,10 +304,10 @@ describe('useMatchesPageData', () => {
 
     const { result } = renderHook(() => useMatchesPageData(7), { wrapper });
     await waitFor(() => expect(result.current.selectedSession?.id).toBe(7));
-    expect(result.current.canManageSelected).toBe(true);
+    expect(result.current.canManage).toBe(true);
   });
 
-  it('canManageSelected is false for a standalone session created by someone else', async () => {
+  it('canManage is false for a standalone session created by someone else', async () => {
     mockGets({
       '/sessions/7': () =>
         apiResponse(
@@ -317,7 +318,7 @@ describe('useMatchesPageData', () => {
 
     const { result } = renderHook(() => useMatchesPageData(7), { wrapper });
     await waitFor(() => expect(result.current.selectedSession?.id).toBe(7));
-    expect(result.current.canManageSelected).toBe(false);
+    expect(result.current.canManage).toBe(false);
   });
 
   it('submitCreate posts the payload and closes the create modal on success', async () => {

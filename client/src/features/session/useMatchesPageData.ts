@@ -5,27 +5,16 @@ import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import { useApproveParticipant } from './hooks/useApproveParticipant';
-import { useCancelSession } from './hooks/useCancelSession';
 import { useDiscoverSessions } from './hooks/useDiscoverSessions';
 import { useGroupSessionsForGroups } from './hooks/useGroupSessions';
 import { useJoinedSessions } from './hooks/useJoinedSessions';
-import { useJoinSession } from './hooks/useJoinSession';
-import { useLeaveSession } from './hooks/useLeaveSession';
-import { useLikeSession } from './hooks/useLikeSession';
 import { useMySessions } from './hooks/useMySessions';
-import { useRejectParticipant } from './hooks/useRejectParticipant';
-import { useRequestedParticipants } from './hooks/useRequestedParticipants';
-import { useSession } from './hooks/useSession';
-import { useSessionParticipants } from './hooks/useSessionParticipants';
-import { useUnlikeSession } from './hooks/useUnlikeSession';
+import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
 import { dedupeSessionsById, groupSessionsByDate } from './groupSessionsByDate';
 import { filterDiscoverSessions } from './discoverSearch';
 import { useCreateSessionModalData } from './useCreateSessionModalData';
-import { useSessionCommentsData } from './useSessionCommentsData';
+import { useSessionDetailModalData } from './useSessionDetailModalData';
 import type { SessionListItem, SessionSearchMode } from './types';
-
-const CAN_MANAGE_ROLES = new Set(['group_owner', 'group_admin']);
 
 /**
  * The Matches page's data boundary — composes every session query/mutation this ticket needs
@@ -136,36 +125,14 @@ export function useMatchesPageData(initialSessionId: number | null) {
   const createSessionModalData = useCreateSessionModalData();
 
   // --- Session detail ---
+  // Card-level participation action (SessionListCard/SessionDateGroup in the Discover/My
+  // sessions lists) — separate mutation instance from the one useSessionDetailModalData owns
+  // internally for the modal's own Join/Leave (both invalidate the same sessionKeys.all root, so
+  // this is a harmless duplicate, not a correctness issue — see that hook's own doc comment).
+  const { onParticipationAction, isParticipationActionPending } = useSessionParticipationAction();
+
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(initialSessionId);
-  const isDetailOpen = selectedSessionId !== null;
-  const sessionQuery = useSession(selectedSessionId ?? undefined, isDetailOpen);
-  const participantsQuery = useSessionParticipants(selectedSessionId ?? undefined, isDetailOpen);
-
-  const canManageSelected = useMemo(() => {
-    const session = sessionQuery.data;
-    if (session === undefined || currentUserId === undefined) return false;
-    if (session.groupId === null) return session.createdBy === currentUserId;
-    const group = groups.find((candidate) => candidate.id === session.groupId);
-    return group?.currentUserRole !== null && CAN_MANAGE_ROLES.has(group?.currentUserRole ?? '');
-  }, [sessionQuery.data, currentUserId, groups]);
-
-  const joinMutation = useJoinSession();
-  const leaveMutation = useLeaveSession();
-  const cancelMutation = useCancelSession();
-  const likeMutation = useLikeSession();
-  const unlikeMutation = useUnlikeSession();
-
-  // CLIENT-SESSION-4: the approval queue only ever fires for a canManage caller — gating the
-  // query on it too (not just hiding the section) avoids a request that would 400 for anyone else.
-  const requestedParticipantsQuery = useRequestedParticipants(
-    selectedSessionId ?? undefined,
-    isDetailOpen && canManageSelected,
-  );
-  const approveParticipantMutation = useApproveParticipant();
-  const rejectParticipantMutation = useRejectParticipant();
-
-  // CLIENT-SESSION-8: the detail dialog's Discussion section.
-  const sessionCommentsData = useSessionCommentsData(selectedSessionId ?? undefined, isDetailOpen);
+  const sessionDetailData = useSessionDetailModalData(selectedSessionId);
 
   return {
     activeSport,
@@ -193,47 +160,14 @@ export function useMatchesPageData(initialSessionId: number | null) {
     selectedSessionId,
     onViewDetails: (sessionId: number) => setSelectedSessionId(sessionId),
     closeDetail: () => setSelectedSessionId(null),
-    selectedSession: sessionQuery.data,
-    isSessionLoading: sessionQuery.isLoading,
-    isSessionError: sessionQuery.isError,
-    participants: participantsQuery.data?.content ?? [],
-    isParticipantsLoading: participantsQuery.isLoading,
-    isParticipantsError: participantsQuery.isError,
+    onParticipationAction,
+    isParticipationActionPending,
+
+    ...sessionDetailData,
+    // Overrides sessionDetailData's own currentUserId (which falls back to '' for the modal's
+    // prop convention) with the real string | undefined this page's other callers need —
+    // MatchesPage.tsx's useAddSportProfile(data.currentUserId) relies on undefined meaning
+    // "no user yet", not an empty string.
     currentUserId,
-    canManageSelected,
-    onJoin: () => selectedSessionId !== null && joinMutation.mutate(selectedSessionId),
-    isJoining: joinMutation.isPending,
-    isJoinError: joinMutation.isError,
-    onLeave: () => selectedSessionId !== null && leaveMutation.mutate(selectedSessionId),
-    isLeaving: leaveMutation.isPending,
-    isLeaveError: leaveMutation.isError,
-    onConfirmCancel: (reason: string) =>
-      selectedSessionId !== null &&
-      cancelMutation.mutate({ sessionId: selectedSessionId, payload: { reason: reason || undefined } }),
-    isCancelling: cancelMutation.isPending,
-    isCancelError: cancelMutation.isError,
-    onToggleLike: () => {
-      if (selectedSessionId === null) return;
-      if (sessionQuery.data?.isLikedByCurrentUser) {
-        unlikeMutation.mutate(selectedSessionId);
-      } else {
-        likeMutation.mutate(selectedSessionId);
-      }
-    },
-    isTogglingLike: likeMutation.isPending || unlikeMutation.isPending,
-
-    requestedParticipants: requestedParticipantsQuery.data?.content ?? [],
-    isRequestedParticipantsLoading: requestedParticipantsQuery.isLoading,
-    isRequestedParticipantsError: requestedParticipantsQuery.isError,
-    onApproveParticipant: (userId: string) =>
-      selectedSessionId !== null &&
-      approveParticipantMutation.mutate({ sessionId: selectedSessionId, userId }),
-    isApprovingParticipant: approveParticipantMutation.isPending,
-    onRejectParticipant: (userId: string, reason: string) =>
-      selectedSessionId !== null &&
-      rejectParticipantMutation.mutate({ sessionId: selectedSessionId, userId, reason }),
-    isRejectingParticipant: rejectParticipantMutation.isPending,
-
-    ...sessionCommentsData,
   };
 }

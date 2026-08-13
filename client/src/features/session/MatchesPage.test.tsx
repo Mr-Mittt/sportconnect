@@ -196,7 +196,7 @@ describe('MatchesPage', () => {
     render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
     await screen.findByText('Sunday pickup run');
 
-    await user.click(screen.getByRole('button', { name: /Sunday pickup run/ }));
+    await user.click(screen.getByRole('button', { name: /Sunday pickup run — View details/ }));
     const dialog = await screen.findByRole('dialog');
     expect(await within(dialog).findByText('Riverside Courts')).toBeInTheDocument();
   });
@@ -207,7 +207,7 @@ describe('MatchesPage', () => {
     render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
     await screen.findByText('Sunday pickup run');
 
-    await user.click(screen.getByRole('button', { name: /Sunday pickup run/ }));
+    await user.click(screen.getByRole('button', { name: /Sunday pickup run — View details/ }));
     const dialog = await screen.findByRole('dialog');
     expect(await within(dialog).findByText('Riverside Courts')).toBeInTheDocument();
   });

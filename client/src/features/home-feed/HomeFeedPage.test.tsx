@@ -221,6 +221,7 @@ function sessionFixture(overrides: Partial<Session> & Pick<Session, 'id' | 'spor
     autoApprove: false,
     likeCount: 0,
     isLikedByCurrentUser: false,
+    callerParticipation: null,
     createdAt: '2026-06-01T10:00:00',
     updatedAt: '2026-06-01T10:00:00',
     ...overrides,
@@ -322,7 +323,7 @@ describe('HomeFeedPage', () => {
     await user.click(screen.getByRole('button', { name: 'Basketball' }));
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(getMatchCtas()).toHaveLength(1);
-    expect(screen.getByRole('button', { name: /Sunday pickup run/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sunday pickup run — View details/ })).toBeInTheDocument();
     // Global cards unchanged (epic open question #1 resolution)
     expect(trendingCard().getByText('#fridayrun')).toBeInTheDocument();
     expect(broadcastsCard().getByText('Riverside Ballers')).toBeInTheDocument();

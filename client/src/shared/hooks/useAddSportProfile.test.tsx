@@ -3,6 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { act, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
+import { sessionKeys } from '@/features/session/queryKeys';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
 import { sportProfilesQueryKey } from './useSportProfilesForUser';
 import { useAddSportProfile } from './useAddSportProfile';
@@ -85,6 +86,24 @@ describe('useAddSportProfile', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: sportProfilesQueryKey('user-1') });
+  });
+
+  it('invalidates discover-session queries too, since GET /sessions/discover is gated to the caller\'s sport profiles', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    // Simulates SessionDiscoverModal opening while the caller had zero profiles — cached empty.
+    queryClient.setQueryData(sessionKeys.discover(undefined), { content: [] });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
+      data: { success: true, message: '', data: profile({ id: 9 }), timestamp: '' },
+    });
+
+    const { result } = renderHook(() => useAddSportProfile('user-1'), { wrapper: wrapper(queryClient) });
+
+    act(() => result.current.mutate({ sportId: 6, skillLevel: 'beginner' }));
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: [...sessionKeys.all, 'discover'] });
+    expect(queryClient.getQueryState(sessionKeys.discover(undefined))?.isInvalidated).toBe(true);
   });
 
   it('does not touch the cache when userId is undefined', async () => {

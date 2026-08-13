@@ -51,9 +51,23 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     autoApprove: false,
     likeCount: 0,
     isLikedByCurrentUser: false,
+    callerParticipation: null,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
     ...overrides,
+  };
+}
+
+function makeCallerParticipation(status: SessionParticipant['status']): SessionParticipant {
+  return {
+    id: 99,
+    sessionId: 1,
+    userId: 'user-2',
+    userFullName: '',
+    userAvatarUrl: null,
+    status,
+    rejectReason: null,
+    createdAt: '2026-07-01T10:00:00',
   };
 }
 
@@ -192,7 +206,7 @@ describe('SessionDetailModal', () => {
     expect(screen.getByText('50 000 ₫')).toBeInTheDocument();
   });
 
-  it('shows Join (not Leave) when the current user has not joined', async () => {
+  it('shows only Join when the caller has no participation row', async () => {
     const user = userEvent.setup();
     const onJoin = vi.fn();
     render(<SessionDetailModal {...baseProps} onJoin={onJoin} />);
@@ -200,23 +214,87 @@ describe('SessionDetailModal', () => {
     await user.click(joinButton);
     expect(onJoin).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Leave' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
   });
 
-  it('shows Leave (not Join) when the current user is a JOINED participant', async () => {
+  it('shows only Join when the caller previously LEFT', () => {
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ callerParticipation: makeCallerParticipation('LEFT') })}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Join' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Leave' })).not.toBeInTheDocument();
+  });
+
+  it('shows only Leave when the caller is JOINED', async () => {
     const user = userEvent.setup();
     const onLeave = vi.fn();
-    render(<SessionDetailModal {...baseProps} currentUserId="user-1" onLeave={onLeave} />);
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ callerParticipation: makeCallerParticipation('JOINED') })}
+        onLeave={onLeave}
+      />,
+    );
     await user.click(screen.getByRole('button', { name: 'Leave' }));
     expect(onLeave).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Join' })).not.toBeInTheDocument();
   });
 
-  it('hides Join/Leave for a COMPLETED or CANCELLED session', () => {
-    const { rerender } = render(<SessionDetailModal {...baseProps} session={makeSession({ status: 'COMPLETED' })} />);
-    expect(screen.queryByRole('button', { name: /Join|Leave/ })).not.toBeInTheDocument();
+  it('shows Accept and Decline when the caller is INVITED — Accept calls onJoin, Decline calls onLeave', async () => {
+    const user = userEvent.setup();
+    const onJoin = vi.fn();
+    const onLeave = vi.fn();
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ callerParticipation: makeCallerParticipation('INVITED') })}
+        onJoin={onJoin}
+        onLeave={onLeave}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Join' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Leave' })).not.toBeInTheDocument();
 
-    rerender(<SessionDetailModal {...baseProps} session={makeSession({ status: 'CANCELLED' })} />);
-    expect(screen.queryByRole('button', { name: /Join|Leave/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Decline' }));
+    expect(onLeave).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Accept' }));
+    expect(onJoin).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows only Cancel when the caller is REQUESTED — calls onLeave', async () => {
+    const user = userEvent.setup();
+    const onLeave = vi.fn();
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ callerParticipation: makeCallerParticipation('REQUESTED') })}
+        onLeave={onLeave}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Join' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onLeave).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the participation action for a COMPLETED or CANCELLED session regardless of caller status', () => {
+    const { rerender } = render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ status: 'COMPLETED', callerParticipation: makeCallerParticipation('JOINED') })}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /Join|Leave|Accept|Decline|Cancel/ })).not.toBeInTheDocument();
+
+    rerender(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ status: 'CANCELLED', callerParticipation: makeCallerParticipation('JOINED') })}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /Join|Leave|Accept|Decline|Cancel/ })).not.toBeInTheDocument();
   });
 
   it('shows the cancelled info block with reason', () => {

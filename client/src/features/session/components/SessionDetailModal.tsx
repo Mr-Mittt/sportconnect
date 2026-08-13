@@ -4,6 +4,7 @@ import type { Comment } from '@/features/feed/types';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { directionsUrl } from '@/shared/lib/mapsLinks';
 import { UNCAPPED_CAPACITY } from '@/shared/lib/sessionCapacity';
+import { getParticipationAction } from '@/shared/lib/sessionParticipation';
 import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
 import { formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
@@ -88,12 +89,20 @@ function initialsFor(fullName: string): string {
 
 /**
  * CLIENT-SESSION-1's session detail — full info, participants, and the real actions the list
- * card doesn't have room for: join/leave (derived from whether `currentUserId` appears
- * `JOINED` in `participants` — no separate "am I joined" field exists on `SessionResponse`) and
- * cancel (creator/owner/admin only, `canManage`). Cancelling reveals an inline optional-reason
- * field + Confirm/Never mind, not `window.confirm` — matches this codebase's existing
+ * card doesn't have room for: join/accept/decline/cancel/leave and cancel-the-session
+ * (creator/owner/admin only, `canManage`). Cancelling reveals an inline optional-reason field +
+ * Confirm/Never mind, not `window.confirm` — matches this codebase's existing
  * no-native-confirm-dialogs convention. Presentational and controlled: the parent
  * (`useMatchesPageData`) owns every query/mutation and passes state + callbacks down.
+ *
+ * CLIENT-SESSION-9 replaced the old "isJoined" derivation (`participants.some(...JOINED)` — a
+ * false negative for anyone INVITED/REQUESTED, since `participants` only ever holds JOINED rows
+ * for a non-manager caller) with `session.callerParticipation`, driving a 4-state action area:
+ * null/LEFT -> Join, INVITED -> Accept + Decline, REQUESTED -> Cancel, JOINED -> Leave. Accept
+ * reuses the existing `onJoin`/`isJoining` props (an invitee's own join call always resolves
+ * straight to JOINED); Decline/Cancel reuse the existing `onLeave`/`isLeaving` props (SESSION-9
+ * widened `leaveSession` to accept INVITED/REQUESTED rows too) — no prop-signature change from
+ * CLIENT-SESSION-1.
  *
  * CLIENT-SESSION-4 adds a "Waiting for approval" section between Participants and the Join/Leave
  * button, mirroring `GroupMembersTab`'s empty-hides pattern: it only renders when
@@ -108,11 +117,11 @@ function initialsFor(fullName: string): string {
  *
  * CLIENT-SESSION-8 adds a "Discussion" section (`SessionCommentSection`) rendered inline after
  * the Participants/Waiting-for-approval sections — an inline block, not a second nested Dialog
- * (same nesting constraint noted above), unlike Post's own `CommentSection`. Visibility is
- * `isCommentsForbidden`-gated rather than computed here: the client has no reliable
- * client-side signal for whether the caller is a participant (that's CLIENT-SESSION-9's
- * `callerParticipation`, not yet built) — a 403 from the backend on the comments fetch is the
- * real gate, and `SessionCommentSection` renders nothing when it's true.
+ * (same nesting constraint noted above), unlike Post's own `CommentSection`. Visibility stayed
+ * `isCommentsForbidden`-gated rather than switched to `callerParticipation` once CLIENT-SESSION-9
+ * shipped it — a 403 from the backend on the comments fetch remains the real gate (e.g. a
+ * REQUESTED caller isn't a participant yet and still shouldn't see the thread), and
+ * `SessionCommentSection` renders nothing when it's true.
  *
  * The heart button (like/unlike the session's own SESSION_POST anchor) renders inside
  * `SessionCommentSection`, directly above the comment thread — same placement Post's own
@@ -171,9 +180,10 @@ export function SessionDetailModal({
   const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  const isJoined = participants.some(
-    (participant) => participant.userId === currentUserId && participant.status === 'JOINED',
-  );
+  // SESSION-9/CLIENT-SESSION-9: derived from `session.callerParticipation`, not a lookup into
+  // `participants` (which only ever holds JOINED rows for a non-manager — see the Participants
+  // section below).
+  const participationAction = session !== undefined ? getParticipationAction(session) : null;
   const canJoinOrLeave = session !== undefined && (session.status === 'SCHEDULED' || session.status === 'ONGOING');
 
   return (
@@ -411,23 +421,41 @@ export function SessionDetailModal({
 
               {isJoinError && (
                 <p role="alert" className="text-2sm text-text-danger">
-                  Couldn't join this session. Try again.
+                  Couldn't complete that action. Try again.
                 </p>
               )}
               {isLeaveError && (
                 <p role="alert" className="text-2sm text-text-danger">
-                  Couldn't leave this session. Try again.
+                  Couldn't complete that action. Try again.
                 </p>
               )}
 
-              {canJoinOrLeave && (
-                <Button
-                  variant={isJoined ? 'outline' : 'primary'}
-                  disabled={isJoining || isLeaving}
-                  onClick={isJoined ? onLeave : onJoin}
-                >
-                  {isJoined ? (isLeaving ? 'Leaving…' : 'Leave') : isJoining ? 'Joining…' : 'Join'}
-                </Button>
+              {participationAction !== null && (
+                <div className="flex gap-2">
+                  {participationAction.kind === 'ACCEPT' && (
+                    <Button variant="outline" disabled={isJoining || isLeaving} onClick={onLeave}>
+                      {isLeaving ? 'Declining…' : 'Decline'}
+                    </Button>
+                  )}
+                  <Button
+                    variant={
+                      participationAction.kind === 'JOIN' || participationAction.kind === 'ACCEPT'
+                        ? 'primary'
+                        : 'outline'
+                    }
+                    disabled={isJoining || isLeaving}
+                    onClick={
+                      participationAction.kind === 'JOIN' || participationAction.kind === 'ACCEPT'
+                        ? onJoin
+                        : onLeave
+                    }
+                  >
+                    {participationAction.kind === 'JOIN' && (isJoining ? 'Joining…' : 'Join')}
+                    {participationAction.kind === 'ACCEPT' && (isJoining ? 'Accepting…' : 'Accept')}
+                    {participationAction.kind === 'CANCEL' && (isLeaving ? 'Cancelling…' : 'Cancel')}
+                    {participationAction.kind === 'LEAVE' && (isLeaving ? 'Leaving…' : 'Leave')}
+                  </Button>
+                </div>
               )}
 
               {canManage && canJoinOrLeave && !isCancelFormOpen && (

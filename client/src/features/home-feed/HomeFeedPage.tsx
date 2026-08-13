@@ -10,6 +10,7 @@ import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
 import { SessionDetailModal } from '@/features/session/components/SessionDetailModal';
 import { SessionDiscoverModal } from '@/features/session/components/SessionDiscoverModal';
+import { useSessionParticipationAction } from '@/features/session/hooks/useSessionParticipationAction';
 import { useCreateSessionModalData } from '@/features/session/useCreateSessionModalData';
 import { useDiscoverModalData } from '@/features/session/useDiscoverModalData';
 import { AddSportModal } from '@/shared/components/AddSportModal';
@@ -185,6 +186,9 @@ export function HomeFeedPage() {
   const createSessionModalData = useCreateSessionModalData();
   const activeSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
   const discoverModalData = useDiscoverModalData(activeSportId);
+  // CLIENT-SESSION-9: separate instance from discoverModalData's own — this one backs the rail
+  // card's action button, that one backs the Discover modal's result-grid cards.
+  const railParticipationAction = useSessionParticipationAction();
 
   return (
     <ModalAnchorProvider value={modalAnchorBottom}>
@@ -247,9 +251,11 @@ export function HomeFeedPage() {
               activeSport={activeSport}
               sportsByKey={sportsByKey}
               onSeeAll={() => navigate('/matches')}
-              onSelectMatch={(sessionId) => navigate(`/matches?session=${sessionId}`)}
+              onSelectMatch={discoverModalData.onViewDetails}
               onCreateMatch={createSessionModalData.openCreateModal}
               onJoinMatch={discoverModalData.openDiscoverModal}
+              onParticipationAction={railParticipationAction.onParticipationAction}
+              isParticipationActionPending={railParticipationAction.isParticipationActionPending}
             />
             <TrendingHashtags
               hashtags={data.hashtags}
@@ -381,6 +387,8 @@ export function HomeFeedPage() {
           sessions={discoverModalData.discoverSessions}
           isLoading={discoverModalData.isDiscoverLoading}
           isError={discoverModalData.isDiscoverError}
+          onParticipationAction={discoverModalData.onParticipationAction}
+          isParticipationActionPending={discoverModalData.isParticipationActionPending}
           sportsByKey={sportsByKey}
           onViewDetails={discoverModalData.onViewDetails}
           availableSports={availableSports}

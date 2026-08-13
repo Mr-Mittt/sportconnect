@@ -4,6 +4,7 @@ import { useAuthStore } from '@/app/authStore';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
 import { SessionDetailModal } from '@/features/session/components/SessionDetailModal';
 import { SessionDiscoverModal } from '@/features/session/components/SessionDiscoverModal';
+import { useSessionParticipationAction } from '@/features/session/hooks/useSessionParticipationAction';
 import { useCreateSessionModalData } from '@/features/session/useCreateSessionModalData';
 import { useDiscoverModalData } from '@/features/session/useDiscoverModalData';
 import { GroupBroadcasts } from '@/shared/components/GroupBroadcasts';
@@ -70,6 +71,9 @@ export function FriendsPage() {
 
   const createSessionModalData = useCreateSessionModalData();
   const discoverModalData = useDiscoverModalData(undefined);
+  // CLIENT-SESSION-9: separate instance from discoverModalData's own — this one backs the rail
+  // card's action button, that one backs the Discover modal's result-grid cards.
+  const railParticipationAction = useSessionParticipationAction();
 
   // CLIENT-SESSION-7 follow-up: no existing "Add sport" entry point on this page (no
   // SportSwitcher pill row) — this mutation/list exists solely for the zero-sport-profiles gate
@@ -155,9 +159,11 @@ export function FriendsPage() {
               activeSport="all"
               sportsByKey={sportsByKey}
               onSeeAll={() => navigate('/matches')}
-              onSelectMatch={(sessionId) => navigate(`/matches?session=${sessionId}`)}
+              onSelectMatch={discoverModalData.onViewDetails}
               onCreateMatch={createSessionModalData.openCreateModal}
               onJoinMatch={discoverModalData.openDiscoverModal}
+              onParticipationAction={railParticipationAction.onParticipationAction}
+              isParticipationActionPending={railParticipationAction.isParticipationActionPending}
             />
             <TrendingHashtags
               hashtags={hashtagsQuery.data}
@@ -209,6 +215,8 @@ export function FriendsPage() {
           isError={discoverModalData.isDiscoverError}
           sportsByKey={sportsByKey}
           onViewDetails={discoverModalData.onViewDetails}
+          onParticipationAction={discoverModalData.onParticipationAction}
+          isParticipationActionPending={discoverModalData.isParticipationActionPending}
           availableSports={availableSports}
           onAddSport={addSportMutation.mutate}
           isAddingSport={addSportMutation.isPending}
