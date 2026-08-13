@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-13
 
 ---
 
@@ -132,8 +132,9 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 61 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `DONE` |
 | 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `DONE` |
 | 63 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) — **reordered ahead of SPORT-2, user decision 2026-08-13; SESSION-9 backend shipped 2026-08-08, no longer blocking** | `DONE` |
-| 64 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
-| 65 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
+| 64 | CLIENT-SESSION-10 | Session card + `SessionDetailModal` UX/UI enhancement pass — **new ticket, not in either epic, filed inserted right after CLIENT-SESSION-9** (2026-08-13) | `TODO` |
+| 65 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 66 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
 
 **Dependencies:**
 ```
@@ -2888,6 +2889,49 @@ asked for full manager parity after all. `canManage`/cancel/approval-queue logic
 `useMatchesPageData` and `useDiscoverModalData` (the rail/Discover modal's detail slice) now use
 it, replacing `useDiscoverModalData`'s old hardcoded `canManage: false`. See
 `client/docs/CLIENT-SESSION-9_PARTICIPATION_ACTION.md`'s own delta section for the full writeup.
+
+### CLIENT-SESSION-10 · Session card + `SessionDetailModal` UX/UI enhancement pass
+**Status:** `TODO` · **Type:** Design/polish · **Dependency:** CLIENT-SESSION-9 (`DONE`) ·
+**Filed:** 2026-08-13, inserted right after CLIENT-SESSION-9 in queue order (user decision) — no
+code dependency, just sequenced immediately after the ticket whose rough edges motivated it.
+
+CLIENT-SESSION-9 wired the session card's and `SessionDetailModal`'s Join/Accept/Decline/Cancel/
+Leave actions functionally, under real space/scope constraints decided at pickup — this ticket is
+the follow-up design pass to revisit those constraints with actual visual design, not just
+functional wiring. **Not scoped/designed yet** — candidate areas to evaluate at pickup (not
+predetermined; confirm against an actual mockup/design-reference before committing to any of
+these, same "don't assume, check first" approach as every other ticket in this file):
+
+- **Card action-button layout.** CLIENT-SESSION-9 picked "View details + one action button"
+  under real width constraints (`UpcomingMatches`' rail card is the tightest), with INVITED
+  showing Accept-only on the card (Decline is modal-only). Worth revisiting with a real design —
+  e.g. does Decline deserve a compact affordance on the card too (icon-only button, overflow
+  menu), or does the current split hold up under actual visual review.
+- **No visual indicator of the caller's own status on the card itself.** Today the only signal
+  that "you're invited" / "you requested to join" / "you're in" is the action button's label
+  (Accept / Cancel / Leave) — there's no badge/pill distinct from the session's own status badge
+  (Scheduled/Ongoing/etc.). A quick scan of a session list can't currently distinguish "I'm
+  invited to this" from "I haven't interacted with this at all" without reading each button.
+- **`SessionDetailModal`'s action area has no icons**, unlike every other row in the modal
+  (location, participants, fee all lead with a Tabler icon) — Join/Accept/Decline/Cancel/Leave are
+  bare text `Button`s. Worth a consistency pass once real icon choices are picked (this file's
+  session cards/modal never had a `design-reference-*.html` the way the Home Feed epic's
+  components did, so there's no existing mockup to match against — this ticket may need to
+  produce one, or work directly with the user on live design decisions instead, same as most
+  session-feature tickets have so far).
+- **Participants list only shows JOINED rows** (`SessionDetailModal`'s "Participants (N)"
+  section) — a regular (non-managing) participant has no visibility into who else is
+  invited/pending, only the manager-only approval queue shows REQUESTED rows, and nothing shows
+  INVITED rows to anyone but the invitee themselves (indirectly, via their own action button).
+  Worth deciding whether that's the right visibility model or a gap.
+- **Pending-action feedback is a plain text swap** ("Join" → "Working…", per CLIENT-SESSION-9's
+  a11y-motivated choice to keep the button's `aria-label` on the idle action name throughout) —
+  no spinner/skeleton treatment. Worth a design opinion on whether text-only pending state reads
+  clearly enough in practice.
+
+**Explicitly not committed to any of the above** — this ticket exists to hold the list until
+someone scopes it for real, same as SESSION-8's own "signal candidates to evaluate at pickup, not
+predetermined" framing. **Not scheduled** — filed for later prioritization, no target date.
 
 ### SPORT-3 · Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config
 **Status:** `DONE` (2026-08-07) · **Type:** Data layer (real integration) · **Dependency:** soft — **A6**
