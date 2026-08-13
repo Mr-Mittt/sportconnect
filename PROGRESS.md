@@ -2668,6 +2668,15 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `useMatchesPageData` into a new shared `useSessionDetailModalData(sessionId)` hook, now used by
   both `useMatchesPageData` and `useDiscoverModalData` instead of the latter's old hardcoded
   `canManage: false`/inert cancel-approval stubs.
+  **Same-day bug fix (found live via `home-feed-journey.spec.ts`):** any modal on a
+  `ModalAnchorProvider` page (Home Feed/Groups/Friends), opened after the user scrolled the sport
+  switcher/pill row out of the viewport, rendered entirely off-screen — `DialogContent`
+  (`shared/ui/dialog.tsx`) trusted `useAnchorBottom`'s viewport-relative value unclamped, so a
+  scrolled-off anchor produced a negative `position: fixed` `top`. Fixed by falling back to the
+  existing centered layout whenever the anchor isn't currently within the viewport, reasoned
+  through against 2 other options with the user first. New `shared/ui/dialog.test.tsx` (this
+  component had no tests before); verified against the original failure end-to-end (full e2e
+  suite, 49/49 passing).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

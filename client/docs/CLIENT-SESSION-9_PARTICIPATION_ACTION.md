@@ -232,3 +232,56 @@ scenarios were needed — just the `canManageSelected` → `canManage` rename in
 823/823 passing (one run hit 10 pure worker-startup timeouts under heavy sandbox load — confirmed
 infrastructure flakiness, not real failures, by re-running those 10 files in isolation: 36/36
 passing).
+
+## Bug fix (2026-08-13, found live via `home-feed-journey.spec.ts` step 6)
+
+**Symptom (user-reported):** `e2e/flows/home-feed-journey.spec.ts` step 6 (the rail's in-place
+"View details" delta above) failed with `locator.click: Test timeout of 30000ms exceeded` /
+`element is outside of the viewport` clicking the modal's Close button. Not reproducible in this
+sandbox at first — Playwright couldn't get past login at all, traced to `reuseExistingServer:
+true` silently reusing the user's own persistent dev server on :5173 (wired to the real backend
+on :8080, not the mock server), unrelated to the actual bug. Re-ran against isolated ports
+(9877/5199) via a temporary Playwright config to get a clean reproduction.
+
+**Root cause:** `DialogContent` (`shared/ui/dialog.tsx`) positions an anchored modal at
+`top: anchorBottom + ANCHOR_GAP_PX`, where `anchorBottom` (`shared/lib/modalAnchor.ts`'s
+`useAnchorBottom`) is the sport switcher's `getBoundingClientRect().bottom` — correctly
+viewport-relative, so it goes **negative** once the switcher scrolls above the viewport. The
+value was used unclamped, so a `position: fixed` modal opened after the page had scrolled past
+its anchor rendered entirely above the visible viewport (Close button included) — confirmed via
+a diagnostic screenshot: the modal was genuinely present in the DOM, `top: -137px`, ~450px above
+the visible area. Not `SessionDetailModal`- or CLIENT-SESSION-9-specific — any modal on any
+`ModalAnchorProvider` page (Home Feed/Groups/Friends), opened after the anchor scrolls out of
+view, hits this. CLIENT-SESSION-9's rail-modal delta just opened the first code path that reaches
+"open an anchored modal without a full page navigation resetting scroll to 0 first" — in this
+spec, clicking the Trending card's hashtag row (step 5c) scrolls the page via Playwright's normal
+scroll-into-view-before-click behavior (page taller than the 720px test viewport), and the scroll
+position persists after that dialog closes.
+
+**Fix — reasoned through 3 options with the user before implementing:**
+1. *Clamp `top` to a minimum* (`Math.max(anchorBottom + GAP, MARGIN)`) — smallest patch, but the
+   modal ends up pinned near the viewport top with no visual connection to anything.
+2. ***Chosen:*** *fall back to the existing centered layout* (the same one already used when
+   `anchorBottom === null`) whenever the anchor isn't currently within the viewport
+   (`anchorBottom > 0 && anchorBottom < window.innerHeight`) — reuses an already-correct,
+   already-shipped code path instead of inventing a new "pinned near top" state, and doesn't move
+   the page.
+3. *Scroll the anchor back into view before opening* — rejected: visible scroll-jump right as the
+   modal opens, needs open/scroll timing coordination, touches every call site that opens an
+   anchored modal.
+
+`shared/ui/dialog.tsx`: replaced the `anchorBottom !== null` branch condition with a new
+`anchored` boolean (`anchorBottom !== null && anchorBottom > 0 && anchorBottom < window.innerHeight`)
+used everywhere `anchorBottom === null` was previously checked. The `anchorBottom > window.innerHeight`
+half of the check (anchor pushed *below* the viewport) is included for completeness but not
+reachable in practice today — the sport switcher/group pill row sit at the top of the page layout
+and can only scroll up, never down, from their initial position.
+
+**Tests:** new `shared/ui/dialog.test.tsx` (this component had no direct tests before) — anchored
+positioning when the anchor is in-viewport, falls back to centered when the anchor's bottom edge
+is negative (the regression case) or exceeds `window.innerHeight`, and falls back to centered when
+there's no anchor at all (unchanged prior behavior). Verified end-to-end against the original
+failure: re-ran `home-feed-journey.spec.ts` against the fix (now passing) and the **full e2e
+suite** (49/49 passing, including `matches-journey.spec.ts`) via the same isolated-port diagnostic
+setup. `pnpm exec tsc -b` clean, `pnpm lint` clean, `pnpm exec vitest run` full suite: 827/827
+passing (121 files, up from 823/120 — the 4 new dialog tests).
