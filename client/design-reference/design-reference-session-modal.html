@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SportHub - session detail modal design exploration (proposal, not an approved baseline — see note in-page)</title>
+<style>
+  /* ============================================================
+     Tokens — SportHub's real design system (client/src/index.css),
+     carried over 1:1. Light-only, no dark-mode block — same
+     convention as every other design-reference/*.html file in this
+     folder (they're all fixed-light static baselines).
+     One new token: --amber (pending/waiting state) — CLAUDE.md
+     reserves amber app-wide for warning semantics, which "awaiting
+     approval" genuinely is.
+     ============================================================ */
+  :root {
+    --surface-0: #f7f7f4;
+    --surface-1: #f1efe8;
+    --surface-2: #ffffff;
+
+    --text-primary: #1a1a18;
+    --text-secondary: #5f5e5a;
+    --text-muted: #6e6d66;
+    --text-accent: #185fa5;
+    --text-danger: #a32d2d;
+    --text-success: #15803d;
+
+    --bg-accent: #e6f1fb;
+    --accent-solid: #185fa5;
+
+    --border: rgba(44, 44, 42, 0.12);
+    --border-strong: rgba(44, 44, 42, 0.24);
+    --border-accent: #378add;
+    --overlay: rgba(26, 26, 24, 0.55);
+
+    --teal-50: #e1f5ee;
+    --teal-800: #085041;
+
+    --amber-50: #fbf1de;
+    --amber-800: #7a4f06;
+
+    --shadow-card: 0 1px 3px rgba(44, 44, 42, 0.08), 0 20px 48px rgba(44, 44, 42, 0.16);
+    --shadow-menu: 0 1px 3px rgba(44, 44, 42, 0.08), 0 4px 14px rgba(44, 44, 42, 0.14);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  button { font-family: inherit; }
+
+  /* -------- reference note -------- */
+  .ref-note {
+    max-width: 620px;
+    margin: 20px auto 0;
+    padding: 10px 14px;
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-1);
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .ref-note b { color: var(--text-primary); font-weight: 600; }
+
+  /* -------- faint app backdrop, to sell "this sits over the app" -------- */
+  .backdrop {
+    max-width: 960px;
+    margin: 18px auto 0;
+    padding: 18px 20px 120px;
+    filter: blur(1.5px) saturate(0.9);
+    opacity: 0.55;
+    pointer-events: none;
+    user-select: none;
+  }
+  .backdrop-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .backdrop-brand { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .backdrop-nav { display: flex; gap: 18px; }
+  .backdrop-pill { width: 64px; height: 22px; border-radius: 999px; background: var(--surface-1); }
+  .backdrop-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .backdrop-card { height: 130px; border-radius: 12px; background: var(--surface-2); border: 0.5px solid var(--border); }
+
+  /* -------- scrim + modal -------- */
+  .scrim {
+    position: fixed;
+    inset: 0;
+    background: var(--overlay);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 48px 16px 40px;
+  }
+  .modal {
+    width: 100%;
+    max-width: 528px;
+    max-height: calc(100vh - 88px);
+    background: var(--surface-2);
+    border-radius: 16px;
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* -------- header -------- */
+  .modal-header {
+    padding: 18px 20px 16px;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .eyebrow-row { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; min-width: 0; }
+  .sport-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--teal-50); color: var(--teal-800);
+    font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 999px;
+  }
+  .close-btn {
+    border: none; background: transparent; color: var(--text-secondary); cursor: pointer;
+    width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: -2px;
+  }
+  .close-btn:hover { background: var(--surface-1); color: var(--text-primary); }
+  .close-btn:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 1px; }
+  h1.session-title { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 600; color: var(--text-accent);
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+
+  /* -------- scroll body -------- */
+  .modal-body { overflow-y: auto; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 18px; }
+
+  .meta-grid { display: flex; flex-direction: column; gap: 10px; }
+  .meta-row { display: flex; align-items: flex-start; gap: 10px; }
+  .meta-icon { color: var(--text-muted); flex-shrink: 0; margin-top: 1px; }
+  .meta-main { font-size: 13.5px; color: var(--text-primary); line-height: 1.45; }
+  .meta-sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; line-height: 1.4; }
+  .directions-link {
+    display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;
+    font-size: 12.5px; color: var(--text-accent); text-decoration: none; font-weight: 500;
+  }
+  .directions-link:hover { text-decoration: underline; }
+  .host-row { display: flex; align-items: center; gap: 8px; }
+  .avatar {
+    border-radius: 999px; display: flex; align-items: center; justify-content: center;
+    font-weight: 600; flex-shrink: 0; background: var(--surface-1); color: var(--text-primary);
+  }
+
+  .description { font-size: 13.5px; color: var(--text-secondary); line-height: 1.55; margin: 0; }
+
+  .divider { border: none; border-top: 0.5px solid var(--border); margin: 0; }
+
+  /* -------- section heading -------- */
+  .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .section-title { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+  button.section-title { width: 100%; background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
+  .section-chevron { margin-left: auto; transition: transform 0.15s ease; color: var(--text-muted); flex-shrink: 0; }
+  .players-section:not(.collapsed) .section-chevron,
+  .approval-section:not(.collapsed) .section-chevron { transform: rotate(180deg); }
+  .approval-section.collapsed .approval-card { display: none; }
+  .section-title svg { color: var(--text-muted); }
+  .capacity-count { font-size: 12px; color: var(--text-muted); white-space: nowrap; font-weight: 400; }
+
+  .capacity-track { height: 5px; border-radius: 999px; background: var(--surface-1); overflow: hidden; margin-top: 8px; }
+  .capacity-fill { height: 100%; background: var(--teal-800); border-radius: 999px; }
+
+  .avatar-stack { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+  .players-section:not(.collapsed) .avatar-stack { display: none; }
+  .players-section.collapsed .roster { display: none; }
+  .avatar-stack .avatar { border: 0.5px solid var(--border); width: 30px; height: 30px; font-size: 11px; cursor: default; }
+  .avatar-stack .avatar-more {
+    background: var(--surface-1); color: var(--text-secondary); font-size: 10.5px;
+  }
+
+  .roster { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .roster-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px;
+    border: 0.5px solid var(--border); border-radius: 999px; background: var(--surface-2);
+  }
+  .roster-chip:hover { background: var(--surface-1); }
+  .roster-chip .avatar { width: 22px; height: 22px; font-size: 9.5px; }
+  .roster-name { font-size: 12.5px; color: var(--text-primary); white-space: nowrap; }
+  .roster-qualifier { font-size: 12.5px; color: var(--text-muted); }
+  .host-badge {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
+    color: var(--text-accent); background: var(--bg-accent); padding: 2px 6px; border-radius: 5px;
+  }
+
+  /* -------- waiting for approval -------- */
+  .approval-card {
+    border: 0.5px solid var(--amber-800);
+    border-color: color-mix(in srgb, var(--amber-800) 35%, transparent);
+    background: var(--amber-50);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .approval-row { display: flex; flex-direction: column; gap: 8px; }
+  .approval-row + .approval-row { padding-top: 10px; border-top: 0.5px solid rgba(122, 79, 6, 0.18); }
+  .approval-main { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .approval-person { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .approval-person .avatar { width: 26px; height: 26px; font-size: 10.5px; }
+  .approval-name { font-size: 13px; color: var(--text-primary); }
+  .approval-note { font-size: 11.5px; color: var(--amber-800); opacity: 0.9; }
+  .approval-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  .btn {
+    font-size: 12.5px; font-weight: 600; border-radius: 8px; cursor: pointer;
+    padding: 6px 12px; border: 0.5px solid var(--border-strong); background: var(--surface-2);
+    color: var(--text-primary); line-height: 1.3;
+  }
+  .btn:hover { background: var(--surface-1); }
+  .btn:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 1px; }
+  .btn-primary { background: var(--accent-solid); border-color: var(--accent-solid); color: #fff; }
+  .btn-primary:hover { filter: brightness(1.06); }
+  .btn-ghost { border-color: transparent; background: transparent; }
+  .btn-ghost:hover { background: var(--surface-1); }
+  .btn-danger-outline { border-color: var(--border-strong); color: var(--text-danger); }
+
+  .reason-box {
+    border: 0.5px solid var(--border); border-radius: 9px; background: var(--surface-2);
+    padding: 8px; display: flex; flex-direction: column; gap: 7px;
+  }
+  .reason-box input {
+    font-size: 12.5px; border: 0.5px solid var(--border); border-radius: 7px; padding: 6px 8px;
+    background: var(--surface-1); color: var(--text-primary); width: 100%;
+  }
+  .reason-box input:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 1px; }
+  .reason-actions { display: flex; gap: 6px; }
+  .approval-row:not(.rejecting) .reason-box { display: none; }
+
+  /* -------- discussion -------- */
+  .discussion { display: flex; flex-direction: column; gap: 12px; }
+  .like-btn {
+    display: inline-flex; align-items: center; gap: 5px; width: fit-content;
+    border: none; background: none; cursor: pointer; padding: 3px 4px; border-radius: 6px;
+    font-size: 12.5px; font-weight: 500; color: var(--text-danger);
+  }
+  .like-btn:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 1px; }
+  .like-btn.muted { color: var(--text-secondary); }
+
+  .comment { display: flex; gap: 9px; }
+  .comment .avatar { width: 28px; height: 28px; font-size: 10.5px; }
+  .comment-body { flex: 1; min-width: 0; }
+  .comment-bubble {
+    background: var(--surface-1); border-radius: 12px; padding: 7px 11px; display: inline-block; max-width: 100%;
+  }
+  .comment-author { font-size: 12.5px; font-weight: 600; color: var(--text-primary); margin-right: 6px; }
+  .comment-text { font-size: 13px; color: var(--text-primary); line-height: 1.5; word-wrap: break-word; }
+  .comment-meta { display: flex; align-items: center; gap: 12px; margin-top: 4px; padding-left: 3px; }
+  .comment-meta-item {
+    font-size: 11.5px; color: var(--text-muted); background: none; border: none; cursor: pointer;
+    padding: 0; font-weight: 500;
+  }
+  .comment-meta-item:hover { color: var(--text-secondary); text-decoration: underline; }
+  .comment-meta-item.liked { color: var(--text-danger); }
+  .like-icon-btn { display: inline-flex; align-items: center; gap: 4px; }
+  .comment-meta-item.delete { color: var(--text-danger); opacity: 0.75; }
+  .comment-replies { margin-top: 10px; margin-left: 4px; padding-left: 14px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+
+  .view-more {
+    align-self: center; font-size: 11.5px; font-weight: 600; color: var(--text-secondary);
+    border: 0.5px solid var(--border); background: none; border-radius: 999px; padding: 6px 14px; cursor: pointer;
+  }
+  .view-more:hover { background: var(--surface-1); }
+
+  .composer { display: flex; align-items: center; gap: 8px; padding-top: 2px; }
+  .composer .avatar { width: 28px; height: 28px; font-size: 10.5px; flex-shrink: 0; }
+  .composer-input {
+    flex: 1; min-width: 0; font-size: 13px; padding: 8px 12px; border-radius: 999px;
+    border: 0.5px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+  }
+  .composer-input::placeholder { color: var(--text-muted); }
+  .composer-input:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 1px; }
+  .send-btn {
+    width: 32px; height: 32px; border-radius: 999px; border: none; cursor: pointer; flex-shrink: 0;
+    background: var(--accent-solid); color: #fff; display: flex; align-items: center; justify-content: center;
+  }
+  .send-btn:hover { filter: brightness(1.06); }
+  .send-btn:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 2px; }
+
+  /* -------- footer actions -------- */
+  .modal-footer {
+    padding: 14px 20px 18px; border-top: 0.5px solid var(--border); flex-shrink: 0;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .footer-actions { display: flex; gap: 8px; }
+  .footer-actions .btn { flex: 1; }
+
+  @media (max-width: 480px) {
+    .scrim { padding: 0; align-items: stretch; }
+    .modal { max-width: none; max-height: none; height: 100%; border-radius: 0; }
+    .backdrop { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="ref-note">
+  <b>Design exploration — not an approved baseline, not implementation.</b> Filled with realistic
+  content (participants, an approval queue, a threaded comment discussion) so real layout problems —
+  name truncation, avatar crowding, long addresses, nested replies — show up while designing, not
+  lorem ipsum. To show every UI state at once, the viewer here is both the host <i>and</i> a joined
+  participant, and one approval row is pinned open in its reject-reason state. Tokens are carried
+  over 1:1 from <code>client/src/index.css</code>; one new token added — <code>--amber</code>, for the
+  "awaiting approval" state, using the color <code>client/CLAUDE.md</code> already reserves app-wide
+  for warning semantics.
+  <br /><br />
+  <b>Known deltas from the current <code>SessionDetailModal.tsx</code></b> (flagged when this was
+  reviewed, not yet reconciled): modal is centered/anchored at <code>max-w-md</code> (448px) with a
+  fixed 60vh height in the real component, not top-pinned at 528px like here; the real header has no
+  sport chip, just a centered title + close button; the fee row's real icon is <code>IconCoin</code>
+  (this mock draws a clock by mistake); the capacity bar, avatar stack, and amber approval card are
+  proposed additions with no equivalent today; Leave/Cancel session buttons scroll with the body in
+  the real component rather than sitting in a pinned footer.
+</div>
+
+<div class="backdrop" aria-hidden="true">
+  <div class="backdrop-topbar">
+    <div class="backdrop-brand">SportHub</div>
+    <div class="backdrop-nav">
+      <div class="backdrop-pill"></div>
+      <div class="backdrop-pill"></div>
+      <div class="backdrop-pill"></div>
+    </div>
+  </div>
+  <div class="backdrop-cards">
+    <div class="backdrop-card"></div>
+    <div class="backdrop-card"></div>
+  </div>
+</div>
+
+<div class="scrim">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="session-title">
+
+    <div class="modal-header">
+      <div class="header-top">
+        <div class="eyebrow-row">
+          <span class="sport-chip">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 8l8 8M16 8l-8 8"></path></svg>
+            Badminton
+          </span>
+          <h1 id="session-title" class="session-title">Sunday Evening Badminton — Central Turf Park</h1>
+        </div>
+        <button class="close-btn" type="button" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <span class="status-pill"><span class="status-dot"></span>Scheduled · Sun, Aug 16 · 6:00 PM</span>
+    </div>
+
+    <div class="modal-body">
+
+      <div class="meta-grid">
+        <div class="meta-row">
+          <span class="meta-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z"></path><circle cx="12" cy="9.5" r="2.4"></circle></svg>
+          </span>
+          <div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div class="meta-main">Central Turf Park</div>
+            <a class="directions-link" style="margin-top:0;" href="#" onclick="return false;">
+              Get directions
+            </a>
+            </div>
+            <div class="meta-sub">12 River Rd, Ba Đình, Hà Nội</div>
+            <div class="meta-sub">Court 3 — ask front desk for racket rental if you need one</div>
+          </div>
+        </div>
+
+        <div class="meta-row">
+          <span class="meta-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5l3 1.8"></path></svg>
+          </span>
+          <div class="meta-main">50,000 ₫ <span style="color:var(--text-muted); font-weight:400;">per player, paid at the court</span></div>
+        </div>
+
+      </div>
+
+      <p class="description">Casual doubles, mixed skill level welcome — this is a standing weekly one, not a tournament. Bring your own racket if you have a favorite; we'll have a few house rackets and extra shuttles on hand either way.</p>
+
+      <hr class="divider" />
+
+      <div class="players-section">
+        <div class="section-head">
+          <button class="section-title" type="button" aria-expanded="true" onclick="this.closest('.players-section').classList.toggle('collapsed'); this.setAttribute('aria-expanded', String(!this.closest('.players-section').classList.contains('collapsed')));">
+            Players <span class="capacity-count">(6 / 8)</span>
+            <svg class="section-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+        </div>
+        <div class="capacity-track"><div class="capacity-fill" style="width:75%;"></div></div>
+
+        <div class="avatar-stack">
+          <div class="avatar" style="background:var(--bg-accent);color:var(--text-accent);" title="Priya Shah (host)">PS</div>
+          <div class="avatar" title="Owen Clarke">OC</div>
+          <div class="avatar" title="Marcus Webb (you)">MW</div>
+          <div class="avatar" title="Hana Fujimori">HF</div>
+          <div class="avatar" title="Diego Álvarez">DA</div>
+          <div class="avatar" title="Ines Novak">IN</div>
+        </div>
+
+        <div class="roster">
+          <div class="roster-chip">
+            <div class="avatar" style="background:var(--bg-accent);color:var(--text-accent);">PS</div>
+            <span class="roster-name">Priya Shah <span class="roster-qualifier">(host)</span></span>
+          </div>
+          <div class="roster-chip">
+            <div class="avatar">OC</div>
+            <span class="roster-name">Owen Clarke</span>
+          </div>
+          <div class="roster-chip">
+            <div class="avatar">MW</div>
+            <span class="roster-name">Marcus Webb <span class="roster-qualifier">(you)</span></span>
+          </div>
+          <div class="roster-chip">
+            <div class="avatar">HF</div>
+            <span class="roster-name">Hana Fujimori</span>
+          </div>
+          <div class="roster-chip">
+            <div class="avatar">DA</div>
+            <span class="roster-name">Diego Álvarez</span>
+          </div>
+          <div class="roster-chip">
+            <div class="avatar">IN</div>
+            <span class="roster-name">Ines Novak</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="approval-section">
+        <button class="section-title" type="button" aria-expanded="true" onclick="this.closest('.approval-section').classList.toggle('collapsed'); this.setAttribute('aria-expanded', String(!this.closest('.approval-section').classList.contains('collapsed')));">
+          Waiting for approval <span class="capacity-count">(2)</span>
+          <svg class="section-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+        </button>
+
+        <div class="approval-card">
+          <div class="approval-row">
+            <div class="approval-main">
+              <div class="approval-person">
+                <div class="avatar" style="width:26px;height:26px;font-size:10.5px;">LT</div>
+                <span class="approval-name">Leo Tanaka</span>
+              </div>
+              <div class="approval-actions">
+                <button class="btn" type="button" onclick="openReject(this)">Reject</button>
+                <button class="btn btn-primary" type="button">Approve</button>
+              </div>
+            </div>
+            <div class="reason-box">
+              <input type="text" placeholder="Reason (optional)" aria-label="Reject reason for Leo Tanaka" />
+              <div class="reason-actions">
+                <button class="btn btn-primary" type="button">Confirm reject</button>
+                <button class="btn btn-ghost" type="button" onclick="closeReject(this)">Never mind</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="approval-row">
+            <div class="approval-main">
+              <div class="approval-person">
+                <div class="avatar" style="width:26px;height:26px;font-size:10.5px;">SM</div>
+                <span class="approval-name">Sofia Marchetti</span>
+              </div>
+              <div class="approval-actions">
+                <button class="btn" type="button" onclick="openReject(this)">Reject</button>
+                <button class="btn btn-primary" type="button">Approve</button>
+              </div>
+            </div>
+            <div class="reason-box">
+              <input type="text" placeholder="Reason (optional)" aria-label="Reject reason for Sofia Marchetti" />
+              <div class="reason-actions">
+                <button class="btn btn-primary" type="button">Confirm reject</button>
+                <button class="btn btn-ghost" type="button" onclick="closeReject(this)">Never mind</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="discussion">
+        <button class="like-btn" type="button" aria-pressed="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 21s-7.5-4.9-10-9.6C.5 7.8 2.6 4 6.4 4c2 0 3.7 1.1 5.6 3.3C13.9 5.1 15.6 4 17.6 4 21.4 4 23.5 7.8 22 11.4 19.5 16.1 12 21 12 21Z"></path></svg>
+          9
+        </button>
+
+        <div class="comment">
+          <div class="avatar">OC</div>
+          <div class="comment-body">
+            <div class="comment-bubble">
+              <span class="comment-author">Owen Clarke</span>
+              <span class="comment-text">Anyone bringing a spare racket? Mine snapped a string last week and I haven't restrung it 😅</span>
+            </div>
+            <div class="comment-meta">
+              <span class="comment-meta-item">2h</span>
+              <button class="comment-meta-item like-icon-btn" type="button" aria-label="Like"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 21s-7.5-4.9-10-9.6C.5 7.8 2.6 4 6.4 4c2 0 3.7 1.1 5.6 3.3C13.9 5.1 15.6 4 17.6 4 21.4 4 23.5 7.8 22 11.4 19.5 16.1 12 21 12 21Z"></path></svg></button>
+              <button class="comment-meta-item" type="button">Reply</button>
+            </div>
+
+            <div class="comment-replies">
+              <div class="comment">
+                <div class="avatar" style="background:var(--bg-accent);color:var(--text-accent);">PS</div>
+                <div class="comment-body">
+                  <div class="comment-bubble">
+                    <span class="comment-author">Priya Shah</span>
+                    <span class="comment-text">Got two spares, I'll bring them — save one for you.</span>
+                  </div>
+                  <div class="comment-meta">
+                    <span class="comment-meta-item">1h</span>
+                    <button class="comment-meta-item like-icon-btn liked" type="button" aria-label="Liked" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 21s-7.5-4.9-10-9.6C.5 7.8 2.6 4 6.4 4c2 0 3.7 1.1 5.6 3.3C13.9 5.1 15.6 4 17.6 4 21.4 4 23.5 7.8 22 11.4 19.5 16.1 12 21 12 21Z"></path></svg>2</button>
+                    <button class="comment-meta-item" type="button">Reply</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="comment">
+          <div class="avatar">MW</div>
+          <div class="comment-body">
+            <div class="comment-bubble">
+              <span class="comment-author">Marcus Webb</span>
+              <span class="comment-text">Court 3's overhead light was flickering last time — worth flagging to the front desk before we start.</span>
+            </div>
+            <div class="comment-meta">
+              <span class="comment-meta-item">55m</span>
+              <button class="comment-meta-item like-icon-btn" type="button" aria-label="Like"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 21s-7.5-4.9-10-9.6C.5 7.8 2.6 4 6.4 4c2 0 3.7 1.1 5.6 3.3C13.9 5.1 15.6 4 17.6 4 21.4 4 23.5 7.8 22 11.4 19.5 16.1 12 21 12 21Z"></path></svg></button>
+              <button class="comment-meta-item" type="button">Reply</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="comment">
+          <div class="avatar">HF</div>
+          <div class="comment-body">
+            <div class="comment-bubble">
+              <span class="comment-author">Hana Fujimori</span>
+              <span class="comment-text">Might be 10 min late, stuck finishing up at work — please start the first rotation without me.</span>
+            </div>
+            <div class="comment-meta">
+              <span class="comment-meta-item">40m</span>
+              <button class="comment-meta-item like-icon-btn liked" type="button" aria-label="Liked" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 21s-7.5-4.9-10-9.6C.5 7.8 2.6 4 6.4 4c2 0 3.7 1.1 5.6 3.3C13.9 5.1 15.6 4 17.6 4 21.4 4 23.5 7.8 22 11.4 19.5 16.1 12 21 12 21Z"></path></svg>3</button>
+              <button class="comment-meta-item" type="button">Reply</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="comment">
+          <div class="avatar" style="background:var(--bg-accent);color:var(--text-accent);">PS</div>
+          <div class="comment-body">
+            <div class="comment-bubble">
+              <span class="comment-author">Priya Shah</span>
+              <span class="comment-text">No worries Hana — see everyone at 6!</span>
+            </div>
+            <div class="comment-meta">
+              <span class="comment-meta-item">12m</span>
+              <button class="comment-meta-item like-icon-btn" type="button" aria-label="Like"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 21s-7.5-4.9-10-9.6C.5 7.8 2.6 4 6.4 4c2 0 3.7 1.1 5.6 3.3C13.9 5.1 15.6 4 17.6 4 21.4 4 23.5 7.8 22 11.4 19.5 16.1 12 21 12 21Z"></path></svg></button>
+              <button class="comment-meta-item" type="button">Reply</button>
+              <button class="comment-meta-item delete" type="button">Delete</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="view-more" type="button">View more comments</button>
+      </div>
+
+    </div>
+
+    <div class="modal-footer">
+      <div class="composer">
+        <div class="avatar" style="background:var(--bg-accent);color:var(--text-accent);">PS</div>
+        <input class="composer-input" type="text" placeholder="Add a comment…" aria-label="Add a comment" />
+        <button class="send-btn" type="button" aria-label="Post comment">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"></path><path d="M22 2 15 22l-4-9-9-4 20-7Z"></path></svg>
+        </button>
+      </div>
+      <div class="footer-actions">
+        <button class="btn btn-danger-outline" type="button">Leave</button>
+        <button class="btn" type="button">Cancel session</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+<script>
+  function openReject(btn) {
+    const row = btn.closest('.approval-row');
+    row.closest('.approval-card').querySelectorAll('.approval-row').forEach(r => r.classList.toggle('rejecting', r === row));
+    const input = row.querySelector('.reason-box input');
+    if (input) input.focus();
+  }
+  function closeReject(btn) {
+    btn.closest('.approval-row').classList.remove('rejecting');
+  }
+</script>
+</body>
+</html>

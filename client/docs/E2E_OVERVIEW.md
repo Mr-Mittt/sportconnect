@@ -69,18 +69,26 @@ polls its `url` until it responds, before running any test:
 ```ts
 webServer: [
   { command: 'node e2e/mocks/mockServer.ts', url: `${MOCK_SERVER_URL}/__mock/health`, reuseExistingServer: !process.env.CI },
-  { command: 'pnpm dev', url: 'http://localhost:5173', reuseExistingServer: !process.env.CI,
+  { command: 'pnpm exec vite --port 5174 --strictPort', url: 'http://localhost:5174', reuseExistingServer: !process.env.CI,
     env: { VITE_API_PROXY_TARGET: MOCK_SERVER_URL } },
 ],
 ```
 
+(Calls `vite` directly rather than `pnpm dev -- --port ...` — on this setup pnpm doesn't strip the `--`
+separator before forwarding to the `dev` script, so Vite received a literal `"--"` argument and
+silently fell back to its default port 5173, ignoring `--port` entirely. `pnpm exec vite` sidesteps
+the ambiguity; `package.json`'s `dev` script is just `vite` with no extra flags, so nothing is lost.)
+
 1. **Mock server** (`e2e/mocks/mockServer.ts`) — plain `node:http` `createServer` + `.listen()`, no
    framework. Readiness probe: `GET /__mock/health` → `{"status":"ok"}`, answered the instant
    `.listen()`'s callback fires.
-2. **Vite dev server** (`pnpm dev`) — same dev server a developer would run by hand, except Playwright
-   passes it `VITE_API_PROXY_TARGET` pointing at the mock server. `vite.config.ts` reads that env var
-   for its `/api` proxy target, falling back to `http://localhost:8080` (the real backend) when unset —
-   so a bare `pnpm dev` run outside Playwright is completely unaffected by any of this. **CHAT-10:**
+2. **Vite dev server** (`pnpm dev`) — same dev server a developer would run by hand, except on its own
+   dedicated port (**5174**, not 5173 — deliberately distinct from plain `pnpm dev` so this
+   Playwright-managed instance can never collide with a developer's own concurrent dev session), and
+   Playwright passes it `VITE_API_PROXY_TARGET` pointing at the mock server. `vite.config.ts` reads
+   that env var for its `/api` proxy target, falling back to `http://localhost:8080` (the real
+   backend) when unset — so a bare `pnpm dev` run outside Playwright is completely unaffected by any
+   of this. **CHAT-10:**
    also passes `VITE_CHAT_PROXY_TARGET`, the equivalent for the separate `/api/chat` proxy entry
    (chat is its own backend, `services/chat`, normally `:8081` — without this it silently targeted a
    real chat service that doesn't exist in CI/most local setups, and every `/api/chat/**` e2e request
@@ -93,13 +101,24 @@ webServer: [
 mock server you started by hand, or a leftover process from an earlier interrupted run), Playwright
 reuses it instead of spawning a new one. In CI this is always `false`: CI always starts fresh.
 
-**Gotcha, hit for real during MSW-1's own verification:** if a previous `pnpm e2e`/`pnpm dev` run gets
-interrupted (Ctrl+C, crashed shell) without its child processes dying, `reuseExistingServer` will
-happily reuse the stale one on the next run — including a *stale Vite instance still proxying to the
-old target*, or one that grabbed a different port because 5173 was taken (`vite` silently tries
-5174/5175/... next). Symptom: every request 500s with a generic Vite error page, not a mock-server
-JSON error. Fix: `netstat -ano | findstr :5173` (or `:5174`/`:5175`/`:9876`) and kill the stragglers
-before re-running.
+**Gotcha, hit for real repeatedly (MSW-1's own verification, CLIENT-SESSION-3, CLIENT-SESSION-9,
+FEED-3, GRP-2, GRP-8):** if a previous `pnpm e2e`/`pnpm dev` run gets interrupted (Ctrl+C, crashed
+shell, or — in a sandboxed/background tool environment — a command timeout that moves the process to
+the background without letting Playwright's own teardown run) without its child processes dying,
+`reuseExistingServer` will happily reuse the stale one on the next run, including a *stale Vite
+instance still proxying to the old target*. Symptom: every request 500s with a generic Vite error
+page, not a mock-server JSON error, or (pre-fix) a login that inexplicably fails with "Invalid email
+or password" against a stale server that never got the current run's mock state. Fix: `netstat -ano |
+findstr :5174` (or `:9876` for the mock server) and kill the stragglers before re-running.
+
+**Distinct port (5174, not 5173) + `--strictPort`:** this Playwright-managed Vite instance runs on
+its own dedicated port so it can never collide with a developer's own concurrent `pnpm dev` session,
+and `--strictPort` makes it fail loudly if 5174 is already taken rather than Vite's default behavior
+of silently trying 5175/5176/... next — which used to cause Playwright to poll the *wrong* server's
+health check while a stale process sat on the port it actually wanted. This does **not** eliminate
+the stale-process gotcha above (an orphaned process from a previous run still gets reused by
+`reuseExistingServer` on the *same* dedicated port) — it only removes port drift and collision with a
+real dev session as contributing factors.
 
 ### Request handling
 
@@ -550,7 +569,7 @@ one applies), so every step that opens a card by clicking on its title now disam
 contain the title.
 Fixtures: `mockSession` (standalone, created by the test user, `participantCount: 0`),
 `mockGroupSession` (linked to `mockGroup`, created by someone else — the test user is only a
-`group_member`, proving Cancel stays hidden), `mockOwnedGroupSession` ("Ladder night", the test
+`group_member`), `mockOwnedGroupSession` ("Ladder night", the test
 user is `group_owner` — `canManage` true), `mockDiscoverableSession` ("Weekend 5-a-side",
 standalone, created by someone else, Badminton (SPORT-3: was Soccer) — a sport the test user holds an active profile for —
 the only fixture eligible for `GET /sessions/discover`; every other session fixture is either
@@ -575,14 +594,13 @@ steps 9-10 are what's actually new.
 |---|---|---|
 | 1. load | `mockSession`/`mockGroupSession` render (My sessions), `mockDiscoverableSession` renders in the Discover region | |
 | 2. sport filter | Filtering to Pickleball narrows to `mockSession`; "All" restores both | SPORT-3: renamed from Basketball. Filters both panels — `mockDiscoverableSession` (Badminton) isn't asserted here, covered by step 9 instead |
-| 3. join/leave | Open `mockSession`'s detail → Join → "Leave" appears, participant count 0→1 → Leave → back to "Join", count 1→0 | |
-| 3b. Discussion | Reopen `mockSession`'s detail → `region` "Discussion" shows the pre-seeded comment → post a new one → it appears | CLIENT-SESSION-8. Reuses `mockSession` before step 4 cancels it — the thread stays open regardless of `SessionStatus`, but this step targets the still-`SCHEDULED` case. `isCommentsForbidden` is never exercised here — this mock doesn't simulate the real backend's 403 for a non-participant (see the handler file's own note) |
+| 3. join | Open `mockSession`'s detail → Join → participant count 0→1 → neither Join nor Leave shows afterward | `mockSession` is created by the test user; CLIENT-SESSION-10 hides the plain Leave action for the creator — the Leave mutation itself stays covered by step 5b on `mockGroupSession`, which the test user didn't create. **Step 4 removed** (was: cancel the session via "Cancel session" → reason → Confirm cancel) — CLIENT-SESSION-10 post-ship removed the Cancel session button from `SessionDetailModal` entirely, user decision; there's no longer any UI path to cancel a session, so nothing replaces this step. Numbering keeps the gap (3 → 5) rather than renumbering every later step for a cosmetic concern |
+| 3b. Discussion | Reopen `mockSession`'s detail → `region` "Discussion" shows the pre-seeded comment → post a new one → it appears | CLIENT-SESSION-8. Reuses `mockSession`, still `SCHEDULED` (the session that used to be cancelled in the now-removed step 4) — the thread stays open regardless of `SessionStatus`, but this step targets the still-`SCHEDULED` case. `isCommentsForbidden` is never exercised here — this mock doesn't simulate the real backend's 403 for a non-participant (see the handler file's own note). CLIENT-SESSION-10 moved the composer (`SessionCommentComposer`) out of the "Discussion" region into the dialog's pinned footer — the composer's own textbox/Post-button queries are scoped to `dialog`, not `discussion`, from this step onward |
 | 3c. heart button | Reopen `mockSession`'s detail → "Like" button shows count 0 → click → "Unlike" shows count 1 → click → back to "Like"/0 | CLIENT-SESSION-8. `mockSession` starts `isLikedByCurrentUser: false`/`likeCount: 0`; the round trip proves both `POST` and `DELETE /api/sessions/{id}/like` |
-| 4. cancel | Cancel session → reason field → Confirm cancel → "Cancelled" + reason shown; list card reflects it without a reload | Creator of a standalone session can manage it |
-| 5. group session, member-only | Open `mockGroupSession`'s detail → no "Cancel session" button, Join still available | The test user is a `group_member`, not owner/admin, and didn't create it |
+| 5. group session, member-only | Open `mockGroupSession`'s detail → Join still available | The test user is a `group_member`, not owner/admin, and didn't create it |
 | 5b. card-level Join/Leave | Click `mockGroupSession`'s own "Join" button on its card (not the modal) → card's button flips to "Leave" → click it → flips back to "Join" | CLIENT-SESSION-9. No dialog opens for either click — proves the card's own action button round-trips through `sessionKeys.all` invalidation the same way the modal's Join/Leave already did |
 | 6. create | "Create session" → pick Pickleball → "Choose location" (opens the favorites dropdown) → "Choose a location…" → search "Riverside" → select `mockLocation` → fill start time/title → invite `mockFriend` (badge appears) → check "Auto approve join request" (warning appears) → submit → dialog closes, new session appears in the list | SPORT-3: renamed from Basketball. Two dialogs/a dropdown all open in sequence (`CreateSessionModal`, its `LocationFavoritesDropdown`, and the nested `LocationPicker`) — the dropdown's own menu items are queried via `page.getByRole('menuitem', ...)`, not scoped to `createDialog`, since `DropdownMenuContent` portals as a DOM sibling of the Dialog, not a descendant |
-| 7. approval queue | Open `mockOwnedGroupSession`'s ("Ladder night") detail → "Waiting for approval (2)" shows both requesters → Approve one (moves into Participants) → Reject the other with a reason → section disappears | Only renders for `canManage`; reject reveals an inline optional-reason box, not a second dialog |
+| 7. approval queue | Open `mockOwnedGroupSession`'s ("Ladder night") detail → "Waiting for approval (2)" shows both requesters → Approve one (moves into Players) → Reject the other with a reason → section disappears | Only renders for `canManage`; reject reveals an inline optional-reason box, not a second dialog. CLIENT-SESSION-10 renamed the "Participants" section to "Players" |
 | 8. favorite a location, then pick it from the favorites dropdown | Open a new create form → dropdown shows "No favorites yet." → open `LocationPicker`, search "Riverside" → click the heart on `mockLocation`'s row (aria-label flips to "Unfavorite …") → select it → reopen the dropdown → the just-favorited location now lists instead of the empty state → selecting it sets the location again | Confirms `LocationFavoritesDropdown`'s real Radix `DropdownMenu` (`modal={false}`) actually works nested inside the Dialog — CLIENT-SESSION-2 had reverted an earlier attempt after it appeared broken live; CLIENT-SESSION-5 found and fixed the real cause (see its summary doc) |
 | 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverSessions`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED` row for, same exclusion rule as the real backend |
 | 10. search filters Discover; the panel toggle hides/shows My sessions | Typing a non-matching string into the search box shows "No sessions match your search." in Discover; the "Hide my sessions"/"Show my sessions" button toggles the whole `region` "My sessions" | Search is client-side only (`useMatchesPageData`'s `discoverSessions` memo), not a new backend query |

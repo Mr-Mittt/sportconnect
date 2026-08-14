@@ -444,6 +444,12 @@ export function GroupsPage() {
 
   const modalAnchorRef = useRef<HTMLDivElement>(null);
   const modalAnchorBottom = useAnchorBottom(modalAnchorRef);
+  // Every modal on this page anchors under the group pill row specifically (user decision) —
+  // separate from `modalAnchorRef` above, which still measures through the group cover banner
+  // too (when one's rendered) for `groupChatBoxHeight` below; that's an unrelated sizing concern
+  // (the Chat tab's box genuinely starts below the banner+tabs) and would be wrong if it moved.
+  const pillRowAnchorRef = useRef<HTMLDivElement>(null);
+  const pillRowAnchorBottom = useAnchorBottom(pillRowAnchorRef);
 
   // CLIENT-SESSION-7: UpcomingMatches' empty-state CTAs — same pattern as HomeFeedPage.
   const createSessionModalData = useCreateSessionModalData();
@@ -482,7 +488,7 @@ export function GroupsPage() {
   }, [activeGroupTab, selectedGroupId]);
 
   return (
-    <ModalAnchorProvider value={modalAnchorBottom}>
+    <ModalAnchorProvider value={pillRowAnchorBottom}>
       <main className="py-4">
         <h1 className="sr-only">Groups</h1>
         <div className="mb-3">
@@ -498,15 +504,12 @@ export function GroupsPage() {
             }}
           />
         </div>
-        {/* Every modal on this page positions below whichever of these two is
-          currently rendered (user decision) — the group pill row when "All"
-          groups are shown, or the cover banner once a specific group is
-          selected. One ref on the wrapper covers both cases: it measures
-          GroupSpaceSwitcher's bottom edge when GroupCoverBanner isn't
-          rendered, and GroupCoverBanner's bottom edge (the last child) when
-          it is. */}
+        {/* Every modal on this page positions below the group pill row specifically (user
+          decision) — regardless of whether the cover banner is also showing underneath it.
+          `modalAnchorRef` on the outer wrapper still measures through the banner too, for
+          `groupChatBoxHeight` below (a separate, correct concern). */}
         <div ref={modalAnchorRef}>
-          <div className="mb-4">
+          <div className="mb-4" ref={pillRowAnchorRef}>
             <GroupSpaceSwitcher
               groups={data.groups}
               selectedGroupId={selectedGroupId}
@@ -666,6 +669,7 @@ export function GroupsPage() {
               matches={data.upcomingMatches}
               activeSport={activeSport}
               sportsByKey={sportsByKey}
+              currentUserId={discoverModalData.currentUserId ?? ''}
               onSeeAll={() => navigate('/matches')}
               onSelectMatch={discoverModalData.onViewDetails}
               onCreateMatch={createSessionModalData.openCreateModal}
@@ -919,6 +923,7 @@ export function GroupsPage() {
           isLoading={discoverModalData.isDiscoverLoading}
           isError={discoverModalData.isDiscoverError}
           sportsByKey={sportsByKey}
+          currentUserId={discoverModalData.currentUserId ?? ''}
           onViewDetails={discoverModalData.onViewDetails}
           onParticipationAction={discoverModalData.onParticipationAction}
           isParticipationActionPending={discoverModalData.isParticipationActionPending}
@@ -931,6 +936,7 @@ export function GroupsPage() {
           isOpen={discoverModalData.selectedSessionId !== null}
           onClose={discoverModalData.closeDetail}
           session={discoverModalData.selectedSession}
+          sportsByKey={sportsByKey}
           isLoading={discoverModalData.isSessionLoading}
           isError={discoverModalData.isSessionError}
           participants={discoverModalData.participants}

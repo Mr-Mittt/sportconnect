@@ -66,21 +66,23 @@ test('Matches journey', async ({ page }) => {
     await expect(page.getByText('Friday 5-a-side')).toBeVisible();
   });
 
-  await test.step('3. join then leave the standalone session', async () => {
+  await test.step('3. join the standalone session (creator never sees Leave)', async () => {
     await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
     // mockSession has a real chosen capacity (10, CLIENT-SESSION-3) — not the 9999 "uncapped"
-    // sentinel — so Participants shows "N/10", not the plain "N" the sentinel would render.
-    await expect(dialog.getByText('Participants (0/10)')).toBeVisible();
+    // sentinel — so Players shows "N/10", not the plain "N" the sentinel would render.
+    // CLIENT-SESSION-10 renamed the section "Participants" -> "Players".
+    await expect(dialog.getByText('Players (0/10)')).toBeVisible();
 
     await dialog.getByRole('button', { name: 'Join' }).click();
-    await expect(dialog.getByRole('button', { name: 'Leave' })).toBeVisible();
-    await expect(dialog.getByText('Participants (1/10)')).toBeVisible();
+    await expect(dialog.getByText('Players (1/10)')).toBeVisible();
     await expect(dialog.getByText('Jordan Lee', { exact: true })).toBeVisible();
-
-    await dialog.getByRole('button', { name: 'Leave' }).click();
-    await expect(dialog.getByRole('button', { name: 'Join' })).toBeVisible();
-    await expect(dialog.getByText('Participants (0/10)')).toBeVisible();
+    // mockSession is created by the test user themselves — once JOINED, the creator doesn't get
+    // the plain participant Leave action (CLIENT-SESSION-10 post-ship), so neither Join nor Leave
+    // shows here. The Leave mutation itself is still exercised e2e on a session the test user
+    // didn't create — step 5b, mockGroupSession's card.
+    await expect(dialog.getByRole('button', { name: 'Leave' })).not.toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Join' })).not.toBeVisible();
 
     await dialog.getByRole('button', { name: 'Close' }).click();
   });
@@ -92,8 +94,10 @@ test('Matches journey', async ({ page }) => {
 
     await expect(discussion.getByText('What time are we meeting at the courts?')).toBeVisible();
 
-    await discussion.getByRole('textbox', { name: 'Add a comment' }).fill('7pm works for me!');
-    await discussion.getByRole('button', { name: 'Post' }).click();
+    // CLIENT-SESSION-10 moved the composer out of the Discussion region into the dialog's pinned
+    // footer (SessionCommentComposer) — scoped from the dialog, not the region, from here on.
+    await dialog.getByRole('textbox', { name: 'Add a comment' }).fill('7pm works for me!');
+    await dialog.getByRole('button', { name: 'Post comment' }).click();
     await expect(discussion.getByText('7pm works for me!')).toBeVisible();
 
     await dialog.getByRole('button', { name: 'Close' }).click();
@@ -115,32 +119,17 @@ test('Matches journey', async ({ page }) => {
     await dialog.getByRole('button', { name: 'Close' }).click();
   });
 
-  await test.step('4. cancel the standalone session (creator can manage it)', async () => {
-    await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
-    const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
+  // Step 4 used to cancel the standalone session here (Cancel session -> reason -> Confirm
+  // cancel -> Cancelled badge). CLIENT-SESSION-10 post-ship: the Cancel session button was
+  // removed from SessionDetailModal entirely (user decision) — there is no longer any UI path to
+  // cancel a session, so that flow is gone rather than reworked. Numbering keeps the gap (jumps
+  // 3c -> 5) rather than renumbering every later step + docs/E2E_OVERVIEW.md's table for a purely
+  // cosmetic concern.
 
-    await dialog.getByRole('button', { name: 'Cancel session' }).click();
-    await dialog.getByLabel('Cancellation reason').fill('Court closed for maintenance.');
-    await dialog.getByRole('button', { name: 'Confirm cancel' }).click();
-
-    await expect(dialog.getByText('Cancelled', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('Reason: Court closed for maintenance.')).toBeVisible();
-    await dialog.getByRole('button', { name: 'Close' }).click();
-
-    // List reflects the cancellation without a manual reload. The card's status badge sits
-    // outside its buttons now (CLIENT-SESSION-9 split "View details" into two sibling buttons),
-    // so this checks the card's own text, not a button's accessible name/content.
-    await expect(page.getByText('Sunday pickup run')).toBeVisible();
-    await expect(page.getByText('Cancelled', { exact: true })).toBeVisible();
-    // A CANCELLED session has no participation action — only "View details" remains.
-    await expect(page.getByRole('button', { name: /Sunday pickup run — Join/ })).not.toBeVisible();
-  });
-
-  await test.step('5. a group session the caller only belongs to hides Cancel, but Join/Leave still work', async () => {
+  await test.step('5. a group session the caller only belongs to — Join/Leave still work', async () => {
     await page.getByRole('button', { name: /Friday 5-a-side — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Friday 5-a-side' });
 
-    await expect(dialog.getByRole('button', { name: 'Cancel session' })).not.toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Join' })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
   });

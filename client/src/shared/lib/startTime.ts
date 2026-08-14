@@ -21,3 +21,15 @@ export function formatStartTime(iso: string, now: Date = new Date()): string {
   }
   return format(date, 'MMM d, h:mm a');
 }
+
+/**
+ * CLIENT-SESSION-10: `SessionDetailModal`'s header status row — always "EEE, MMM d · h:mm a"
+ * ("Sun, Aug 16 · 6:00 PM"), per design-reference-session-modal.html. Deliberately distinct from
+ * `formatStartTime` above: the header is a persistent, single display a user reads once and takes
+ * in fully, so it always shows the full weekday + date rather than `formatStartTime`'s
+ * relative-shorthand ("Today"/"Tomorrow"/weekday-only) built for compact, frequently-rescanned
+ * card rows.
+ */
+export function formatSessionHeaderDateTime(iso: string): string {
+  return format(new Date(iso), "EEE, MMM d '·' h:mm a");
+}

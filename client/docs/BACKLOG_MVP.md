@@ -2927,7 +2927,8 @@ it, replacing `useDiscoverModalData`'s old hardcoded `canManage: false`. See
 `client/docs/CLIENT-SESSION-9_PARTICIPATION_ACTION.md`'s own delta section for the full writeup.
 
 ### CLIENT-SESSION-10 · Session card + `SessionDetailModal` UX/UI enhancement pass
-**Status:** `TODO` · **Type:** Design/polish · **Dependency:** CLIENT-SESSION-9 (`DONE`) ·
+**Status:** `DONE` (2026-08-14) · **Type:** Design/polish · **Dependency:** CLIENT-SESSION-9 (`DONE`) ·
+**Summary:** `client/docs/CLIENT-SESSION-10_SESSION_MODAL_UX_UI_PASS.md`
 **Filed:** 2026-08-13, inserted right after CLIENT-SESSION-9 in queue order (user decision) — no
 code dependency, just sequenced immediately after the ticket whose rough edges motivated it.
 
@@ -2968,6 +2969,15 @@ these, same "don't assume, check first" approach as every other ticket in this f
 **Explicitly not committed to any of the above** — this ticket exists to hold the list until
 someone scopes it for real, same as SESSION-8's own "signal candidates to evaluate at pickup, not
 predetermined" framing. **Not scheduled** — filed for later prioritization, no target date.
+
+**Delta (2026-08-14, at implementation):** the 5 candidate areas resolved as: **scope is
+`SessionDetailModal` only** — the card-layout/status-badge questions are a real follow-up, not
+built here; **action buttons get icons** (Join/Accept/Decline/Cancel/Leave, not Approve/Reject or
+"Cancel session"); **participant-visibility model stays unchanged**; **pending feedback gets a
+real spinner**, not just the text swap. The design source was a hand-edited
+`design-reference-session-modal.html` the user iterated on directly (not produced by this ticket's
+implementer) — see `client/docs/CLIENT-SESSION-10_SESSION_MODAL_UX_UI_PASS.md` for the full
+build-vs-mockup delta list (a dropped status dot, a `getRampFillClass` addition, etc.).
 
 ### SPORT-3 · Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config
 **Status:** `DONE` (2026-08-07) · **Type:** Data layer (real integration) · **Dependency:** soft — **A6**

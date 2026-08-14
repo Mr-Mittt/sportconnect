@@ -18,7 +18,10 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: [['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:5173',
+    // Deliberately not 5173 (plain `pnpm dev`'s port) — a distinct port means this
+    // Playwright-managed server can never collide with a developer's own concurrent `pnpm dev`
+    // session. See the webServer entry below for the matching `--port`/`--strictPort`.
+    baseURL: 'http://localhost:5174',
     trace: 'on-first-retry',
     // Headed locally (visible browser window) for easier debugging; headless
     // in CI, which has no display server — same CI-conditional pattern as
@@ -49,8 +52,15 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: 'pnpm dev',
-      url: 'http://localhost:5173',
+      // Distinct port from plain `pnpm dev` (5173) — see the `use.baseURL` comment above. Calls
+      // `vite` directly (not `pnpm dev -- --port ...`) — pnpm on this setup doesn't strip the
+      // `--` separator before forwarding, so vite received a literal "--" arg and silently fell
+      // back to its default port 5173, ignoring --port entirely (confirmed live). `--strictPort`
+      // makes Vite fail loudly if 5174 is taken instead of its default behavior of silently
+      // trying 5175/5176/... next, which historically caused Playwright to poll the *wrong*
+      // server's health check while a stale process sat on 5174 (see docs/E2E_OVERVIEW.md).
+      command: 'pnpm exec vite --port 5174 --strictPort',
+      url: 'http://localhost:5174',
       reuseExistingServer: !process.env.CI,
       // MSW-1: routes the app's own /api calls to the mock server instead of
       // the real backend, only for this Playwright-managed dev server —

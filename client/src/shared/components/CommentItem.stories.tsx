@@ -48,7 +48,9 @@ export const WithAvatarImage: Story = {
   args: { comment: { ...baseComment, userAvatarUrl: 'https://i.pravatar.cc/56?img=12' } },
 };
 
-export const OwnCommentShowsDelete: Story = {
+/** The "..." options menu (Edit — disabled, no backend endpoint yet — + Delete) only renders for
+ * the caller's own comment. */
+export const OwnCommentShowsOptionsMenu: Story = {
   args: { comment: baseComment, currentUserId: 'user-marcus' },
 };
 

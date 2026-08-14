@@ -158,6 +158,7 @@ export function FriendsPage() {
               matches={upcomingMatchesQuery.data}
               activeSport="all"
               sportsByKey={sportsByKey}
+              currentUserId={discoverModalData.currentUserId ?? ''}
               onSeeAll={() => navigate('/matches')}
               onSelectMatch={discoverModalData.onViewDetails}
               onCreateMatch={createSessionModalData.openCreateModal}
@@ -214,6 +215,7 @@ export function FriendsPage() {
           isLoading={discoverModalData.isDiscoverLoading}
           isError={discoverModalData.isDiscoverError}
           sportsByKey={sportsByKey}
+          currentUserId={discoverModalData.currentUserId ?? ''}
           onViewDetails={discoverModalData.onViewDetails}
           onParticipationAction={discoverModalData.onParticipationAction}
           isParticipationActionPending={discoverModalData.isParticipationActionPending}
@@ -226,6 +228,7 @@ export function FriendsPage() {
           isOpen={discoverModalData.selectedSessionId !== null}
           onClose={discoverModalData.closeDetail}
           session={discoverModalData.selectedSession}
+          sportsByKey={sportsByKey}
           isLoading={discoverModalData.isSessionLoading}
           isError={discoverModalData.isSessionError}
           participants={discoverModalData.participants}

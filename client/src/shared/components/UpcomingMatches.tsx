@@ -18,6 +18,8 @@ interface UpcomingMatchesProps {
   matches: Session[];
   activeSport: SportKey | 'all';
   sportsByKey: Record<SportKey, SportProfile>;
+  /** Post-ship: same "creator doesn't get the plain Leave action" rule as `SessionListCard`. */
+  currentUserId: string;
   onSeeAll: () => void;
   /** Opens `SessionDetailModal` in place on the hosting page (not a navigation) — CLIENT-SESSION-9
    * follow-up: previously navigated to `/matches?session={id}`, switching the user away from
@@ -63,6 +65,7 @@ export function UpcomingMatches({
   matches,
   activeSport,
   sportsByKey,
+  currentUserId,
   onSeeAll,
   onSelectMatch,
   onCreateMatch,
@@ -117,8 +120,17 @@ export function UpcomingMatches({
             const title = match.title ?? `${match.sportName} session`;
             const action = getParticipationAction(match);
             const isActionPending = isParticipationActionPending(match.id);
+            // Same "creator doesn't get the plain Leave action" rule as SessionListCard.
+            const isLeaveHiddenForCreator = action?.kind === 'LEAVE' && match.createdBy === currentUserId;
+            // Mouse-only convenience on top of the explicit, fully keyboard-accessible "View
+            // details" button below — same reasoning as SessionListCard's own card-click handler.
             return (
-              <div key={match.id} className="border-hairline rounded-lg border-border p-2.5">
+              // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+              <div
+                key={match.id}
+                className="border-hairline rounded-lg border-border p-2.5"
+                onClick={() => onSelectMatch(match.id)}
+              >
                 <div className="mb-1 flex items-center gap-1.5">
                   {sport !== undefined && (
                     <span
@@ -135,10 +147,15 @@ export function UpcomingMatches({
                       })}
                     </span>
                   )}
-                  <div className="text-xs font-medium leading-snug text-text-primary">{title}</div>
+                  <div
+                    className="min-w-0 flex-1 truncate text-xs font-medium leading-snug text-text-primary"
+                    title={title}
+                  >
+                    {title}
+                  </div>
                   <span
                     className={cn(
-                      'ml-auto shrink-0 text-2xs font-medium',
+                      'shrink-0 text-2xs font-medium',
                       SESSION_STATUS_CLASSES[match.status],
                     )}
                   >
@@ -153,7 +170,7 @@ export function UpcomingMatches({
                   <IconMapPin className="size-3 shrink-0" aria-hidden="true" />
                   {match.location.name}
                 </div>
-                <div className="mb-2 flex items-center gap-2 text-2xs text-text-secondary">
+                <div className="mb-2 flex items-center justify-between gap-2 text-2xs text-text-secondary">
                   <span className="flex items-center gap-1">
                     <IconCoin className="size-3 shrink-0" aria-hidden="true" />
                     {formatFeeDisplay(match.feeType, match.feeAmountVnd)}
@@ -166,17 +183,23 @@ export function UpcomingMatches({
                     // Three sibling cards would otherwise expose identical
                     // "View details" names to a screen reader
                     aria-label={`${title} — View details`}
-                    onClick={() => onSelectMatch(match.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectMatch(match.id);
+                    }}
                     className="border-hairline flex-1 cursor-pointer rounded-lg border-border-strong py-1.25 text-xs text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                   >
                     View details
                   </button>
-                  {action !== null && (
+                  {action !== null && !isLeaveHiddenForCreator && (
                     <button
                       type="button"
                       aria-label={`${title} — ${action.label}`}
                       disabled={isActionPending}
-                      onClick={() => onParticipationAction(match.id, action.kind)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onParticipationAction(match.id, action.kind);
+                      }}
                       className="border-hairline flex-1 cursor-pointer rounded-lg border-border-strong py-1.25 text-xs text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {isActionPending ? 'Working…' : action.label}

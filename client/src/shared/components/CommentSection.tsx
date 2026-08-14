@@ -1,4 +1,4 @@
-import { IconHeart, IconHeartFilled } from '@tabler/icons-react';
+import { IconHeart, IconHeartFilled, IconSend } from '@tabler/icons-react';
 import { createElement, useState } from 'react';
 import type { Comment, Post } from '@/features/feed/types';
 import { MAX_COMMENT_LENGTH } from '@/features/feed/types';
@@ -114,7 +114,7 @@ export function CommentSection({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent fixedHeight>
+      <DialogContent fixedHeight fixedHeightVh={72} className="max-w-[35rem]">
         <DialogTitle className="sr-only">Comments on {displayName}'s post</DialogTitle>
 
         {/* FEED-12: the post header (below) only ever renders once `post` is
@@ -255,12 +255,13 @@ export function CommentSection({
           />
           <Button
             variant="primary"
-            size="sm"
+            size="icon"
+            aria-label="Post comment"
             onClick={submitComment}
             disabled={content.trim().length === 0 || isPosting}
-            className={cn('cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
+            className={cn('cursor-pointer rounded-full disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
           >
-            Post
+            <IconSend className="size-4" aria-hidden="true" />
           </Button>
         </div>
       </DialogContent>

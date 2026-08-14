@@ -28,11 +28,6 @@ const meta = {
   component: SessionCommentSection,
   args: {
     currentUserId: 'user-marcus',
-    currentUser: { fullName: 'Jordan Lee', avatarUrl: null },
-    likeCount: 2,
-    isLikedByCurrentUser: false,
-    onToggleLike: () => {},
-    isTogglingLike: false,
     comments: [],
     isLoading: false,
     isError: false,
@@ -40,7 +35,6 @@ const meta = {
     hasMore: false,
     isFetchingMore: false,
     onFetchMore: () => {},
-    onAddComment: () => {},
     onAddReply: () => {},
     isPosting: false,
     onDeleteComment: () => {},
@@ -89,8 +83,4 @@ export const WithMoreToLoad: Story = {
 /** CLIENT-SESSION-8's visibility gate — a 403 on the comments fetch renders nothing at all. */
 export const Forbidden: Story = {
   args: { comments: [], isForbidden: true },
-};
-
-export const Liked: Story = {
-  args: { comments: [makeComment()], likeCount: 5, isLikedByCurrentUser: true },
 };

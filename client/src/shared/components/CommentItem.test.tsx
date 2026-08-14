@@ -65,7 +65,7 @@ describe('CommentItem', () => {
     expect(onToggleLike).toHaveBeenCalledWith(comment);
   });
 
-  it('shows the delete button only for the caller’s own comment', () => {
+  it('shows the "..." options menu only for the caller’s own comment', () => {
     const { rerender } = render(
       <CommentItem
         comment={makeComment({ userId: 'someone-else' })}
@@ -77,7 +77,7 @@ describe('CommentItem', () => {
         onHashtagClick={noop}
       />,
     );
-    expect(screen.queryByRole('button', { name: 'Delete comment' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Comment options' })).not.toBeInTheDocument();
 
     rerender(
       <CommentItem
@@ -90,10 +90,10 @@ describe('CommentItem', () => {
         onHashtagClick={noop}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Delete comment' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Comment options' })).toBeInTheDocument();
   });
 
-  it('delete button reports the comment', async () => {
+  it('options menu: Delete reports the comment, Edit is present but disabled (no backend endpoint yet)', async () => {
     const user = userEvent.setup();
     const onDelete = vi.fn();
     const comment = makeComment({ userId: 'user-marcus' });
@@ -108,7 +108,12 @@ describe('CommentItem', () => {
         onHashtagClick={noop}
       />,
     );
-    await user.click(screen.getByRole('button', { name: 'Delete comment' }));
+    await user.click(screen.getByRole('button', { name: 'Comment options' }));
+
+    const editItem = await screen.findByText('Edit');
+    expect(editItem.closest('[role="menuitem"]')).toHaveAttribute('data-disabled');
+
+    await user.click(screen.getByText('Delete'));
     expect(onDelete).toHaveBeenCalledWith(comment);
   });
 

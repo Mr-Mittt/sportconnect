@@ -61,6 +61,11 @@
   --color-purple-50: #eeedfe; /* Tennis bg */
   --color-purple-800: #3c3489; /* Tennis text */
 
+  /* CLIENT-SESSION-10: the "waiting for approval" queue's card treatment — the first real use of
+     the amber CLAUDE.md already reserves app-wide for warning semantics (not a sport ramp). */
+  --color-amber-50: #fbf1de;
+  --color-amber-800: #7a4f06;
+
   /*
    * Decorative-only accent for the Login/Register CommunityIllustration's
    * central hub icon + its connector lines (design-reference-login.html).

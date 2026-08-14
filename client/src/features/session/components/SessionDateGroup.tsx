@@ -6,6 +6,7 @@ import type { SportKey, SportProfile } from '@/shared/types/sport';
 
 interface SessionDateGroupProps extends SessionDateGroupData {
   sportsByKey: Record<SportKey, SportProfile>;
+  currentUserId: string;
   isCollapsed: boolean;
   onToggleCollapsed: (dateKey: string) => void;
   onViewDetails: (sessionId: number) => void;
@@ -25,6 +26,7 @@ export function SessionDateGroup({
   dateLabel,
   sessions,
   sportsByKey,
+  currentUserId,
   isCollapsed,
   onToggleCollapsed,
   onViewDetails,
@@ -56,6 +58,7 @@ export function SessionDateGroup({
               key={session.id}
               session={session}
               sportsByKey={sportsByKey}
+              currentUserId={currentUserId}
               onViewDetails={onViewDetails}
               onParticipationAction={onParticipationAction}
               isParticipationActionPending={isParticipationActionPending}

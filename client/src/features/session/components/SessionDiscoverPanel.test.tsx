@@ -74,6 +74,7 @@ const renderPanel = (overrides: Partial<React.ComponentProps<typeof SessionDisco
       isLoading={false}
       isError={false}
       sportsByKey={sportsByKey}
+      currentUserId="user-2"
       onViewDetails={() => {}}
       onParticipationAction={() => {}}
       isParticipationActionPending={() => false}

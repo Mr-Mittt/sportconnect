@@ -87,6 +87,7 @@ const renderMatches = (
       matches={matches}
       activeSport="all"
       sportsByKey={sportsByKey}
+      currentUserId="user-2"
       onSeeAll={() => {}}
       onSelectMatch={() => {}}
       onCreateMatch={() => {}}
@@ -215,5 +216,39 @@ describe('UpcomingMatches', () => {
   it('disables the participation action while pending', () => {
     renderMatches({ matches: [matches[0]], isParticipationActionPending: (id) => id === 1 });
     expect(screen.getByRole('button', { name: /Warriors vs Riverside — Join/ })).toBeDisabled();
+  });
+
+  it('hides Leave for the session creator, even when JOINED', () => {
+    const joinedByCreator: Session = {
+      ...matches[0],
+      callerParticipation: {
+        id: 1,
+        sessionId: 1,
+        userId: 'user-1',
+        userFullName: '',
+        userAvatarUrl: null,
+        status: 'JOINED',
+        rejectReason: null,
+        createdAt: '2026-06-01T10:00:00',
+      },
+    };
+    renderMatches({ matches: [joinedByCreator], currentUserId: 'user-1' }); // matches createdBy
+    expect(screen.queryByRole('button', { name: /leave/i })).not.toBeInTheDocument();
+  });
+
+  it('clicking the card itself opens details too, without double-firing when a nested button is clicked', async () => {
+    const user = userEvent.setup();
+    const onSelectMatch = vi.fn();
+    const onParticipationAction = vi.fn();
+    renderMatches({ matches: [matches[0]], onSelectMatch, onParticipationAction });
+
+    await user.click(screen.getByText('Warriors vs Riverside'));
+    expect(onSelectMatch).toHaveBeenCalledWith(1);
+    expect(onSelectMatch).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: /Warriors vs Riverside — Join/ }));
+    expect(onParticipationAction).toHaveBeenCalledWith(1, 'JOIN');
+    // The card's own click handler must not also fire from a click on the nested button.
+    expect(onSelectMatch).toHaveBeenCalledTimes(1);
   });
 });

@@ -90,16 +90,48 @@ describe('groupSessionsByDate', () => {
     expect(groups[0].sessions.map((s) => s.id)).toEqual([2, 1]);
   });
 
-  it('sorts groups descending by date — a further-future day sorts above a nearer one', () => {
+  it('upcoming days (today or later) sort ascending — soonest first', () => {
     const groups = groupSessionsByDate(
       [
-        makeSession({ id: 1, scheduledStart: '2026-08-06T10:00:00' }),
-        makeSession({ id: 2, scheduledStart: '2026-08-08T10:00:00' }),
+        makeSession({ id: 1, scheduledStart: '2026-08-08T10:00:00' }),
+        makeSession({ id: 2, scheduledStart: '2026-08-05T10:00:00' }), // today
+        makeSession({ id: 3, scheduledStart: '2026-08-06T10:00:00' }),
+      ],
+      now,
+    );
+    expect(groups.map((g) => g.dateKey)).toEqual(['2026-08-05', '2026-08-06', '2026-08-08']);
+  });
+
+  it('past days (before today) sort descending — most recent first', () => {
+    const groups = groupSessionsByDate(
+      [
+        makeSession({ id: 1, scheduledStart: '2026-07-20T10:00:00' }),
+        makeSession({ id: 2, scheduledStart: '2026-08-04T10:00:00' }),
         makeSession({ id: 3, scheduledStart: '2026-07-31T10:00:00' }),
       ],
       now,
     );
-    expect(groups.map((g) => g.dateKey)).toEqual(['2026-08-08', '2026-08-06', '2026-07-31']);
+    expect(groups.map((g) => g.dateKey)).toEqual(['2026-08-04', '2026-07-31', '2026-07-20']);
+  });
+
+  it('the whole upcoming zone (ascending) sorts entirely above the whole past zone (descending)', () => {
+    const groups = groupSessionsByDate(
+      [
+        makeSession({ id: 1, scheduledStart: '2026-07-20T10:00:00' }), // past, oldest
+        makeSession({ id: 2, scheduledStart: '2026-08-08T10:00:00' }), // upcoming, furthest
+        makeSession({ id: 3, scheduledStart: '2026-08-05T10:00:00' }), // today
+        makeSession({ id: 4, scheduledStart: '2026-08-04T10:00:00' }), // past, most recent
+        makeSession({ id: 5, scheduledStart: '2026-08-06T10:00:00' }), // upcoming, soonest
+      ],
+      now,
+    );
+    expect(groups.map((g) => g.dateKey)).toEqual([
+      '2026-08-05', // today — upcoming zone, ascending
+      '2026-08-06',
+      '2026-08-08',
+      '2026-08-04', // past zone, descending
+      '2026-07-20',
+    ]);
   });
 
   it('returns an empty array for an empty input', () => {

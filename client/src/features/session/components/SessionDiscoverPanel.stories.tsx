@@ -72,6 +72,7 @@ const meta = {
   component: SessionDiscoverPanel,
   args: {
     sportsByKey,
+    currentUserId: 'user-2', // not the sessions' creator (createdBy: 'user-1') by default
     onSearchModeChange: () => {},
     onSearchTextChange: () => {},
     onViewDetails: () => {},

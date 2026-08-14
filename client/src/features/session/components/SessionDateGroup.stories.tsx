@@ -65,6 +65,7 @@ const meta = {
   component: SessionDateGroup,
   args: {
     sportsByKey,
+    currentUserId: 'user-2', // not the sessions' creator (createdBy: 'user-1') by default
     onToggleCollapsed: () => {},
     onViewDetails: () => {},
     onParticipationAction: () => {},

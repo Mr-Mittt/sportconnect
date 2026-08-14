@@ -2677,6 +2677,16 @@ explicit go-ahead at each step (full story in A3's summary doc):
   through against 2 other options with the user first. New `shared/ui/dialog.test.tsx` (this
   component had no tests before); verified against the original failure end-to-end (full e2e
   suite, 49/49 passing).
+- **CLIENT-SESSION-10 (`DONE`, 2026-08-14,
+  `client/docs/CLIENT-SESSION-10_SESSION_MODAL_UX_UI_PASS.md`):** `SessionDetailModal` UX/UI pass —
+  custom header with a sport chip, a capacity meter + collapsible "Players" section (renamed from
+  "Participants") with avatar-stack/roster-chip views, the "waiting for approval" queue wrapped in
+  a new amber card (first real use of the amber warning token), icons + a loading spinner on the
+  Join/Accept/Decline/Cancel/Leave buttons, and the comment composer extracted into its own
+  `SessionCommentComposer` component pinned in the dialog's footer. Modal-only by user decision —
+  `SessionListCard`'s own layout/status-badge questions stay a follow-up. Full suite green
+  (832 Vitest, 49 e2e via real Chromium, `tsc`/`lint` clean); Storybook not visually screenshotted
+  (browser extension unavailable in this sandbox, same as prior tickets).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

@@ -13,3 +13,16 @@ const badgeClassesByRamp: Record<string, string> = {
 export function getRampBadgeClasses(ramp: string): string {
   return badgeClassesByRamp[ramp] ?? 'bg-surface-1 text-text-primary';
 }
+
+/** CLIENT-SESSION-10: solid fill for a progress meter (e.g. SessionDetailModal's capacity bar) —
+ * reuses each ramp's existing `-800` shade rather than inventing a second color per ramp. */
+const fillClassesByRamp: Record<string, string> = {
+  teal: 'bg-teal-800',
+  coral: 'bg-coral-800',
+  purple: 'bg-purple-800',
+};
+
+export function getRampFillClass(ramp: string | undefined): string {
+  if (ramp === undefined) return 'bg-text-muted';
+  return fillClassesByRamp[ramp] ?? 'bg-text-muted';
+}

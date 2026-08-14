@@ -157,15 +157,15 @@ describe('CommentSection', () => {
     render(<CommentSection {...baseProps} onAddComment={onAddComment} />);
     const input = screen.getByRole('textbox', { name: 'Add a comment' });
     await user.type(input, 'Nice one!');
-    await user.click(screen.getByRole('button', { name: 'Post' }));
+    await user.click(screen.getByRole('button', { name: 'Post comment' }));
     expect(onAddComment).toHaveBeenCalledWith('Nice one!');
     expect(input).toHaveValue('');
   });
 
-  it('Post button stays disabled (muted) while the composer is empty, solid once there is text', async () => {
+  it('send button stays disabled (muted) while the composer is empty, solid once there is text', async () => {
     const user = userEvent.setup();
     render(<CommentSection {...baseProps} />);
-    const postBtn = screen.getByRole('button', { name: 'Post' });
+    const postBtn = screen.getByRole('button', { name: 'Post comment' });
     expect(postBtn).toBeDisabled();
     await user.type(screen.getByRole('textbox', { name: 'Add a comment' }), 'x');
     expect(postBtn).not.toBeDisabled();
@@ -186,7 +186,9 @@ describe('CommentSection', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Like comment' }));
     expect(onToggleCommentLike).toHaveBeenCalledWith(comment);
-    await user.click(screen.getByRole('button', { name: 'Delete comment' }));
+
+    await user.click(screen.getByRole('button', { name: 'Comment options' }));
+    await user.click(await screen.findByText('Delete'));
     expect(onDeleteComment).toHaveBeenCalledWith(comment);
   });
 

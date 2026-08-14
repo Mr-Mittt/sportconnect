@@ -70,6 +70,7 @@ describe('SessionDateGroup', () => {
         dateLabel="Today"
         sessions={[makeSession({ id: 1 }), makeSession({ id: 2, title: 'Evening scrimmage' })]}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         isCollapsed={false}
         onToggleCollapsed={() => {}}
         onViewDetails={() => {}}
@@ -89,6 +90,7 @@ describe('SessionDateGroup', () => {
         dateLabel="Today"
         sessions={[makeSession({ id: 1 })]}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         isCollapsed
         onToggleCollapsed={() => {}}
         onViewDetails={() => {}}
@@ -109,6 +111,7 @@ describe('SessionDateGroup', () => {
         dateLabel="Jul 31, 2026"
         sessions={[makeSession({ id: 1 })]}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         isCollapsed={false}
         onToggleCollapsed={onToggleCollapsed}
         onViewDetails={() => {}}
@@ -129,6 +132,7 @@ describe('SessionDateGroup', () => {
         dateLabel="Today"
         sessions={[makeSession({ id: 42 })]}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         isCollapsed={false}
         onToggleCollapsed={() => {}}
         onViewDetails={onViewDetails}
