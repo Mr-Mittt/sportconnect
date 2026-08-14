@@ -1,22 +1,8 @@
-import { IconHeart, IconHeartFilled } from '@tabler/icons-react';
-import { useState } from 'react';
 import type { Comment } from '@/features/feed/types';
-import { MAX_COMMENT_LENGTH } from '@/features/feed/types';
 import { CommentItem } from '@/shared/components/CommentItem';
-import { cn } from '@/shared/lib/utils';
-import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
-import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 
 interface SessionCommentSectionProps {
   currentUserId: string | undefined;
-  currentUser: { fullName: string; avatarUrl: string | null } | undefined;
-  /** Like state of the session itself (its SESSION_POST anchor) — rendered here, directly above
-   * the comment thread, same placement as Post's own `CommentSection` (like button sits right
-   * under the repeated post content, before the comments list). */
-  likeCount: number;
-  isLikedByCurrentUser: boolean;
-  onToggleLike: () => void;
-  isTogglingLike: boolean;
   comments: Comment[];
   isLoading: boolean;
   isError: boolean;
@@ -28,21 +14,10 @@ interface SessionCommentSectionProps {
   hasMore: boolean;
   isFetchingMore: boolean;
   onFetchMore: () => void;
-  onAddComment: (content: string) => void;
   onAddReply: (parentCommentId: number, content: string) => void;
   isPosting: boolean;
   onDeleteComment: (comment: Comment) => void;
   onToggleCommentLike: (comment: Comment) => void;
-}
-
-function initialsFor(fullName: string): string {
-  return fullName
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
 }
 
 /**
@@ -56,14 +31,16 @@ function initialsFor(fullName: string): string {
  * which has no "Comments" label either, just the like button then the thread directly. `aria-label`
  * on the wrapping `<section>` still names the region for assistive tech/tests, without a visible
  * on-screen label.
+ *
+ * CLIENT-SESSION-10: no longer owns the comment composer — `SessionDetailModal` renders
+ * `SessionCommentComposer` separately in its pinned footer (design-reference-session-modal.html).
+ * Post-ship: no longer owns the session-like button either — `SessionDetailModal` renders it as a
+ * sibling directly above this section's own hairline-top border (was previously the first thing
+ * inside it, below that border) — same `isCommentsForbidden` gate keeps it hidden together with
+ * the rest of the Discussion content. This component is now just the thread + "view more".
  */
 export function SessionCommentSection({
   currentUserId,
-  currentUser,
-  likeCount,
-  isLikedByCurrentUser,
-  onToggleLike,
-  isTogglingLike,
   comments,
   isLoading,
   isError,
@@ -71,44 +48,15 @@ export function SessionCommentSection({
   hasMore,
   isFetchingMore,
   onFetchMore,
-  onAddComment,
   onAddReply,
   isPosting,
   onDeleteComment,
   onToggleCommentLike,
 }: SessionCommentSectionProps) {
-  const [content, setContent] = useState('');
-
   if (isForbidden) return null;
-
-  const submitComment = () => {
-    const trimmed = content.trim();
-    if (trimmed.length === 0) return;
-    onAddComment(trimmed);
-    setContent('');
-  };
 
   return (
     <section aria-label="Discussion" className="border-hairline-t flex flex-col gap-2 border-border pt-3">
-      <button
-        type="button"
-        aria-pressed={isLikedByCurrentUser}
-        aria-label={isLikedByCurrentUser ? 'Unlike' : 'Like'}
-        onClick={onToggleLike}
-        disabled={isTogglingLike}
-        className={cn(
-          'flex w-fit cursor-pointer items-center gap-1 rounded p-0.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default',
-          isLikedByCurrentUser ? 'text-text-danger' : 'text-text-secondary',
-        )}
-      >
-        {isLikedByCurrentUser ? (
-          <IconHeartFilled className="size-4" aria-hidden="true" />
-        ) : (
-          <IconHeart className="size-4" aria-hidden="true" />
-        )}
-        {likeCount}
-      </button>
-
       {isLoading && <p className="text-2xs text-text-muted">Loading comments…</p>}
       {isError && (
         <p role="alert" className="text-2xs text-text-danger">
@@ -143,36 +91,6 @@ export function SessionCommentSection({
           )}
         </div>
       )}
-
-      <div className="flex items-center gap-2 pt-1">
-        <Avatar className="size-7 shrink-0">
-          {currentUser?.avatarUrl != null && <AvatarImage src={currentUser.avatarUrl} alt="" />}
-          <AvatarFallback className="bg-surface-1 text-2xs text-text-primary">
-            {currentUser !== undefined ? initialsFor(currentUser.fullName) : ''}
-          </AvatarFallback>
-        </Avatar>
-        <input
-          type="text"
-          value={content}
-          onChange={(event) => setContent(event.target.value.slice(0, MAX_COMMENT_LENGTH))}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') submitComment();
-          }}
-          placeholder="Add a comment…"
-          aria-label="Add a comment"
-          maxLength={MAX_COMMENT_LENGTH}
-          className="min-w-0 flex-1 rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-        />
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={submitComment}
-          disabled={content.trim().length === 0 || isPosting}
-          className={cn('cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
-        >
-          Post
-        </Button>
-      </div>
     </section>
   );
 }

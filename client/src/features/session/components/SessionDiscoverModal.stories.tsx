@@ -73,6 +73,7 @@ const meta = {
     searchText: '',
     onSearchTextChange: () => {},
     sportsByKey,
+    currentUserId: 'user-2',
     onViewDetails: () => {},
     onParticipationAction: () => {},
     isParticipationActionPending: () => false,

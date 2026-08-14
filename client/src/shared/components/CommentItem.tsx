@@ -1,10 +1,16 @@
-import { IconHeart, IconHeartFilled, IconTrash } from '@tabler/icons-react';
+import { IconDotsVertical, IconHeart, IconHeartFilled, IconPencil, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import { MAX_COMMENT_LENGTH, type Comment } from '@/features/feed/types';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
 import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/ui/dropdown-menu';
 import { HashtagText } from './HashtagText';
 
 interface CommentItemProps {
@@ -39,6 +45,18 @@ function initialsFor(fullName: string): string {
  * renders for root comments (`comment.parentCommentId === null`) — matching
  * that same server-side constraint rather than relying on a caller-supplied
  * flag.
+ *
+ * Own-comment options (top-right of the comment, next to the author/timestamp row) are a
+ * `DropdownMenu` — same "..." options-menu pattern `PostCard` already uses for a caller's own
+ * post (`IconDotsVertical` trigger + `DropdownMenuItem`s). `modal={false}` is required here
+ * (unlike PostCard's, which isn't always inside a Dialog): `CommentItem` is always rendered
+ * inside a Dialog (`CommentSection`/`SessionDetailModal`), and a default-modal DropdownMenu
+ * nested inside a Dialog silently fails to open — same root cause `CreateSessionModal`'s
+ * `LocationFavoritesDropdown` hit and fixed first (see its own notes).
+ * **Edit is UI scaffolding only** — disabled, no backend `updateComment` endpoint exists yet
+ * (checked directly against `CommentService`/`CommentServiceImpl`, confirmed absent). Shown
+ * disabled rather than wired to a no-op, so it doesn't look like a working save that silently
+ * discards the caller's edit.
  */
 export function CommentItem({
   comment,
@@ -77,6 +95,29 @@ export function CommentItem({
             <div className="flex items-center gap-1.5">
               <span className="text-2sm font-medium text-text-primary">{comment.userFullName}</span>
               <span className="text-2xs text-text-muted">{formatRelativeTime(comment.createdAt)}</span>
+              {isOwnComment && (
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Comment options"
+                      className="ml-auto cursor-pointer rounded p-0.5 text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                    >
+                      <IconDotsVertical className="size-3.5" aria-hidden="true" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-36">
+                    <DropdownMenuItem disabled className="cursor-not-allowed opacity-50">
+                      <IconPencil className="size-3.5" aria-hidden="true" />
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => onDelete(comment)} className="text-text-danger">
+                      <IconTrash className="size-3.5" aria-hidden="true" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
             {onHashtagClick !== undefined ? (
               <HashtagText
@@ -113,16 +154,6 @@ export function CommentItem({
                 className="cursor-pointer rounded p-0.5 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
               >
                 Reply
-              </button>
-            )}
-            {isOwnComment && (
-              <button
-                type="button"
-                aria-label="Delete comment"
-                onClick={() => onDelete(comment)}
-                className="ml-auto cursor-pointer rounded p-0.5 text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-              >
-                <IconTrash className="size-3.5" aria-hidden="true" />
               </button>
             )}
           </div>

@@ -26,12 +26,23 @@ export interface SessionDateGroup {
 }
 
 /**
- * Groups sessions by the local calendar day of `scheduledStart`, most-recent-day first (a
- * session further in the future sorts above one happening sooner — matches the redesigned
- * Matches page's "My sessions" panel as designed, folding Scheduled/Ongoing in alongside
- * Completed/Cancelled into one date-grouped list rather than a separate upcoming/history
- * split). Each group's own sessions are sorted ascending (soonest-in-that-day first).
+ * Groups sessions by the local calendar day of `scheduledStart`, in two zones (folding
+ * Scheduled/Ongoing in alongside Completed/Cancelled into one date-grouped list rather than a
+ * separate upcoming/history split — matches the redesigned Matches page's "My sessions" panel):
+ * - Today and every future day sort ascending, soonest first, at the top (Today, Tomorrow, ...).
+ * - Every day before today sorts descending, most-recent first, below the upcoming zone
+ *   (Yesterday, 2 days ago, ...).
+ * Each group's own sessions are sorted ascending (soonest-in-that-day first) regardless of zone.
  */
+function compareDateKeys(a: string, b: string, todayKey: string): number {
+  const aIsUpcoming = a >= todayKey;
+  const bIsUpcoming = b >= todayKey;
+  if (aIsUpcoming !== bIsUpcoming) {
+    return aIsUpcoming ? -1 : 1;
+  }
+  return aIsUpcoming ? a.localeCompare(b) : b.localeCompare(a);
+}
+
 export function groupSessionsByDate(
   sessions: SessionListItem[],
   now: Date = new Date(),
@@ -50,7 +61,7 @@ export function groupSessionsByDate(
   }
 
   return [...byDate.entries()]
-    .sort(([a], [b]) => b.localeCompare(a))
+    .sort(([a], [b]) => compareDateKeys(a, b, todayKey))
     .map(([dateKey, groupSessions]) => ({
       dateKey,
       dateLabel: dateKey === todayKey ? 'Today' : format(new Date(dateKey), 'MMM d, yyyy'),

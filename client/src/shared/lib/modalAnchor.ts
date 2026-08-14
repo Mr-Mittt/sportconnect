@@ -3,10 +3,12 @@ import { createContext, useContext, useEffect, useState, type RefObject } from '
 /**
  * Viewport-relative bottom edge (px) of the page element every modal on the
  * current page should appear below (user decision) — the sport pill row on
- * Home Feed, the group pill row or group cover banner on the Groups page
- * (whichever is currently rendered). `null` means "no page-level anchor
- * configured" — `DialogContent` falls back to its default centered position,
- * so any modal used outside one of these pages is unaffected.
+ * Home Feed, the group pill row on the Groups page (specifically the pill
+ * row, even when the group cover banner also renders underneath it — a
+ * group's own `GroupsPage` tracks that banner separately for unrelated
+ * sizing, not for this). `null` means "no page-level anchor configured" —
+ * `DialogContent` falls back to its default centered position, so any modal
+ * used outside one of these pages is unaffected.
  */
 const ModalAnchorContext = createContext<number | null>(null);
 

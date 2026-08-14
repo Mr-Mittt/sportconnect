@@ -126,6 +126,7 @@ const meta = {
   component: UpcomingMatches,
   args: {
     sportsByKey,
+    currentUserId: 'user-2', // not the matches' creator (createdBy: 'user-1') by default
     onSeeAll: () => {},
     onSelectMatch: () => {},
     onCreateMatch: () => {},

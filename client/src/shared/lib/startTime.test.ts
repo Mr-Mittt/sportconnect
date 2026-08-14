@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatStartTime } from './startTime';
+import { formatSessionHeaderDateTime, formatStartTime } from './startTime';
 
 describe('formatStartTime', () => {
   // Local-time fixtures on purpose: the formatter renders in the viewer's
@@ -29,5 +29,16 @@ describe('formatStartTime', () => {
   it('is calendar-day based, not 24h based', () => {
     const lateNow = new Date(2026, 6, 6, 23, 0);
     expect(formatStartTime(at(7, 1, 0), lateNow)).toBe('Tomorrow, 1:00 AM');
+  });
+});
+
+describe('formatSessionHeaderDateTime', () => {
+  const at = (day: number, hour: number, minute: number) =>
+    new Date(2026, 6, day, hour, minute).toISOString();
+
+  it('always includes weekday + date + time, regardless of proximity', () => {
+    // Same day as formatStartTime's "Today" case (Mon Jul 6) — no relative shorthand here.
+    expect(formatSessionHeaderDateTime(at(6, 19, 0))).toBe('Mon, Jul 6 · 7:00 PM');
+    expect(formatSessionHeaderDateTime(at(20, 10, 0))).toBe('Mon, Jul 20 · 10:00 AM');
   });
 });

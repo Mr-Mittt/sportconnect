@@ -40,20 +40,32 @@ function DialogOverlay({
 
 interface DialogContentProps extends React.ComponentProps<typeof DialogPrimitive.Content> {
   /**
-   * Fixed (not shrink-to-fit) height at `60vh`, for modals whose content
-   * amount varies a lot — CommentSection and JoinGroupModal only (user
-   * decision). Every other modal keeps shrinking to fit its content, up to
-   * whatever ceiling applies (the anchored available space, or `85vh` when
-   * centered).
+   * Fixed (not shrink-to-fit) height at `60vh` by default, for modals whose content amount
+   * varies a lot — CommentSection, SessionDetailModal, and JoinGroupModal (user decision). Every
+   * other modal keeps shrinking to fit its content, up to whatever ceiling applies (the anchored
+   * available space, or `85vh` when centered).
    */
   fixedHeight?: boolean;
+  /**
+   * Override the `60vh` default (e.g. CommentSection/SessionDetailModal at `72` — 20% taller,
+   * user decision). No effect unless `fixedHeight` is also set.
+   */
+  fixedHeightVh?: number;
 }
 
-function DialogContent({ className, children, style, fixedHeight = false, ...props }: DialogContentProps) {
+function DialogContent({
+  className,
+  children,
+  style,
+  fixedHeight = false,
+  fixedHeightVh = FIXED_HEIGHT_VH,
+  ...props
+}: DialogContentProps) {
   // Page-level anchor (user decision) — Home Feed positions modals below the
-  // sport pill row, Groups below the group pill row ("All") or the group
-  // cover banner (a specific group selected). `null` outside those pages'
-  // `ModalAnchorProvider`, which keeps today's viewport-centered position.
+  // sport pill row, Groups below the group pill row specifically (even when
+  // a group's cover banner also renders underneath it). `null` outside those
+  // pages' `ModalAnchorProvider`, which keeps today's viewport-centered
+  // position.
   const anchorBottom = useModalAnchor();
   // The anchor row can scroll out of the viewport if the caller scrolled the page before opening
   // a modal — anchorBottom then goes negative (found live: a rail "View details" click after
@@ -75,10 +87,10 @@ function DialogContent({ className, children, style, fixedHeight = false, ...pro
       top,
       // Fixed height is still capped by the space actually available below
       // the anchor, so it can never push past the viewport bottom.
-      ...(fixedHeight ? { height: `min(${FIXED_HEIGHT_VH}vh, ${available})` } : { maxHeight: available }),
+      ...(fixedHeight ? { height: `min(${fixedHeightVh}vh, ${available})` } : { maxHeight: available }),
     };
   } else if (fixedHeight) {
-    computedStyle = { height: `${FIXED_HEIGHT_VH}vh` };
+    computedStyle = { height: `${fixedHeightVh}vh` };
   }
 
   return (
@@ -88,6 +100,10 @@ function DialogContent({ className, children, style, fixedHeight = false, ...pro
         data-slot="dialog-content"
         style={{ ...computedStyle, ...style }}
         className={cn(
+          // `max-w-md` (448px) is the default; CommentSection/SessionDetailModal override it via
+          // `className="max-w-[35rem]"` (25% wider, user decision) — `cn()`'s tailwind-merge
+          // correctly drops the base `max-w-md` when a caller's `className` sets another
+          // max-width, same mechanism `fixedHeightVh` uses for height.
           'shadow-card fixed left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-col overflow-hidden rounded-xl border-hairline border-border-strong bg-surface-2',
           !anchored && 'top-1/2 -translate-y-1/2',
           !anchored && !fixedHeight && 'max-h-[85vh]',

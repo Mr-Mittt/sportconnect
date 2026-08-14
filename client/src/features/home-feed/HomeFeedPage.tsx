@@ -250,6 +250,7 @@ export function HomeFeedPage() {
               matches={data.upcomingMatches}
               activeSport={activeSport}
               sportsByKey={sportsByKey}
+              currentUserId={discoverModalData.currentUserId ?? ''}
               onSeeAll={() => navigate('/matches')}
               onSelectMatch={discoverModalData.onViewDetails}
               onCreateMatch={createSessionModalData.openCreateModal}
@@ -390,6 +391,7 @@ export function HomeFeedPage() {
           onParticipationAction={discoverModalData.onParticipationAction}
           isParticipationActionPending={discoverModalData.isParticipationActionPending}
           sportsByKey={sportsByKey}
+          currentUserId={discoverModalData.currentUserId ?? ''}
           onViewDetails={discoverModalData.onViewDetails}
           availableSports={availableSports}
           onAddSport={addSportMutation.mutate}
@@ -400,6 +402,7 @@ export function HomeFeedPage() {
           isOpen={discoverModalData.selectedSessionId !== null}
           onClose={discoverModalData.closeDetail}
           session={discoverModalData.selectedSession}
+          sportsByKey={sportsByKey}
           isLoading={discoverModalData.isSessionLoading}
           isError={discoverModalData.isSessionError}
           participants={discoverModalData.participants}

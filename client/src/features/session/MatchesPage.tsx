@@ -117,6 +117,7 @@ export function MatchesPage() {
           isLoading={data.isDiscoverLoading}
           isError={data.isDiscoverError}
           sportsByKey={data.sportsByKey}
+          currentUserId={data.currentUserId ?? ''}
           onViewDetails={data.onViewDetails}
           onParticipationAction={data.onParticipationAction}
           isParticipationActionPending={data.isParticipationActionPending}
@@ -162,6 +163,7 @@ export function MatchesPage() {
                     dateLabel={group.dateLabel}
                     sessions={group.sessions}
                     sportsByKey={data.sportsByKey}
+                    currentUserId={data.currentUserId ?? ''}
                     isCollapsed={data.collapsedDateKeys.has(group.dateKey)}
                     onToggleCollapsed={data.toggleDateGroupCollapsed}
                     onViewDetails={data.onViewDetails}
@@ -203,6 +205,7 @@ export function MatchesPage() {
         isOpen={data.selectedSessionId !== null}
         onClose={closeDetail}
         session={data.selectedSession}
+        sportsByKey={data.sportsByKey}
         isLoading={data.isSessionLoading}
         isError={data.isSessionError}
         participants={data.participants}

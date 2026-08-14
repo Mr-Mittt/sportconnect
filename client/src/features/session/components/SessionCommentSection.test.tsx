@@ -23,15 +23,9 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
   };
 }
 
-const currentUser = { fullName: 'Jordan Lee', avatarUrl: null };
 const noop = () => {};
 const baseProps = {
   currentUserId: 'user-marcus',
-  currentUser,
-  likeCount: 0,
-  isLikedByCurrentUser: false,
-  onToggleLike: noop,
-  isTogglingLike: false,
   comments: [] as Comment[],
   isLoading: false,
   isError: false,
@@ -39,7 +33,6 @@ const baseProps = {
   hasMore: false,
   isFetchingMore: false,
   onFetchMore: noop,
-  onAddComment: noop,
   onAddReply: noop,
   isPosting: false,
   onDeleteComment: noop,
@@ -102,26 +95,6 @@ describe('SessionCommentSection', () => {
     expect(onFetchMore).toHaveBeenCalledTimes(1);
   });
 
-  it('submits a new comment via the composer and clears it', async () => {
-    const user = userEvent.setup();
-    const onAddComment = vi.fn();
-    render(<SessionCommentSection {...baseProps} onAddComment={onAddComment} />);
-    const input = screen.getByRole('textbox', { name: 'Add a comment' });
-    await user.type(input, 'Nice one!');
-    await user.click(screen.getByRole('button', { name: 'Post' }));
-    expect(onAddComment).toHaveBeenCalledWith('Nice one!');
-    expect(input).toHaveValue('');
-  });
-
-  it('Post button stays disabled while the composer is empty, solid once there is text', async () => {
-    const user = userEvent.setup();
-    render(<SessionCommentSection {...baseProps} />);
-    const postBtn = screen.getByRole('button', { name: 'Post' });
-    expect(postBtn).toBeDisabled();
-    await user.type(screen.getByRole('textbox', { name: 'Add a comment' }), 'x');
-    expect(postBtn).not.toBeDisabled();
-  });
-
   it('reply/delete/like on a comment call through to their handlers', async () => {
     const user = userEvent.setup();
     const onToggleCommentLike = vi.fn();
@@ -137,57 +110,23 @@ describe('SessionCommentSection', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Like comment' }));
     expect(onToggleCommentLike).toHaveBeenCalledWith(comment);
-    await user.click(screen.getByRole('button', { name: 'Delete comment' }));
+
+    await user.click(screen.getByRole('button', { name: 'Comment options' }));
+    await user.click(await screen.findByText('Delete'));
     expect(onDeleteComment).toHaveBeenCalledWith(comment);
   });
 
-  it('submits a reply via the reply box (distinct from the main composer\'s own Post button)', async () => {
+  it('submits a reply via the reply box', async () => {
     const user = userEvent.setup();
     const onAddReply = vi.fn();
-    const onAddComment = vi.fn();
     const comment = makeComment();
-    render(
-      <SessionCommentSection
-        {...baseProps}
-        comments={[comment]}
-        onAddReply={onAddReply}
-        onAddComment={onAddComment}
-      />,
-    );
+    render(<SessionCommentSection {...baseProps} comments={[comment]} onAddReply={onAddReply} />);
     await user.click(screen.getByRole('button', { name: 'Reply' }));
     await user.type(screen.getByRole('textbox', { name: `Reply to ${comment.userFullName}` }), 'Sounds good');
-    // Two "Post" buttons exist simultaneously here: the reply box's own, and the main composer's
-    // (always rendered below the list) — the reply's is the first in DOM order.
-    const postButtons = screen.getAllByRole('button', { name: 'Post' });
-    expect(postButtons).toHaveLength(2);
-    await user.click(postButtons[0]);
+    // CLIENT-SESSION-10: the main composer moved out of this component (now `SessionCommentComposer`,
+    // rendered by SessionDetailModal) — the reply box's own "Post" is the only one here now.
+    await user.click(screen.getByRole('button', { name: 'Post' }));
     expect(onAddReply).toHaveBeenCalledWith(comment.id, 'Sounds good');
-    expect(onAddComment).not.toHaveBeenCalled();
-  });
-
-  it('renders a heart button above the thread reflecting like state and calling onToggleLike', async () => {
-    const user = userEvent.setup();
-    const onToggleLike = vi.fn();
-    const { rerender } = render(
-      <SessionCommentSection {...baseProps} likeCount={2} isLikedByCurrentUser={false} onToggleLike={onToggleLike} />,
-    );
-
-    const likeButton = screen.getByRole('button', { name: 'Like' });
-    expect(likeButton).toHaveTextContent('2');
-    await user.click(likeButton);
-    expect(onToggleLike).toHaveBeenCalledTimes(1);
-
-    rerender(
-      <SessionCommentSection {...baseProps} likeCount={3} isLikedByCurrentUser onToggleLike={onToggleLike} />,
-    );
-    const unlikeButton = screen.getByRole('button', { name: 'Unlike' });
-    expect(unlikeButton).toHaveAttribute('aria-pressed', 'true');
-    expect(unlikeButton).toHaveTextContent('3');
-  });
-
-  it('disables the heart button while isTogglingLike', () => {
-    render(<SessionCommentSection {...baseProps} isTogglingLike />);
-    expect(screen.getByRole('button', { name: 'Like' })).toBeDisabled();
   });
 
   it('renders no visible "Discussion" text — the section is named via aria-label only', () => {

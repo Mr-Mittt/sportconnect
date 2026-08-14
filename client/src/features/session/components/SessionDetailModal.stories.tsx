@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { Comment } from '@/features/feed/types';
 import type { Location } from '@/shared/types/location';
 import type { Session, SessionParticipant } from '@/shared/types/session';
+import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { SessionDetailModal } from './SessionDetailModal';
 
 const location: Location = {
@@ -103,6 +104,14 @@ const requestedParticipants: SessionParticipant[] = [
   },
 ];
 
+// Storybook doesn't run Vitest's global `sportCatalogStore` seed (src/test/setup.ts) — the sport
+// chip in the header just renders nothing if `sportKeyForId` can't resolve. Sport shown in the
+// stories below matches the `sportId: 6` fixtures (Basketball), same convention as the rest of
+// this file's pre-SPORT-3 fixture keys (see SPORT-3's own notes on why this stayed unmigrated).
+const sportsByKey: Record<SportKey, SportProfile> = {
+  basketball: { key: 'basketball', label: 'Basketball', icon: 'ball-basketball', colorRamp: 'coral' },
+};
+
 const meta = {
   title: 'Session/SessionDetailModal',
   component: SessionDetailModal,
@@ -110,6 +119,7 @@ const meta = {
     isOpen: true,
     onClose: () => {},
     session: makeSession(),
+    sportsByKey,
     isLoading: false,
     isError: false,
     participants,
@@ -166,10 +176,6 @@ export const InvitedPendingAcceptDecline: Story = {
 
 export const RequestedPendingApproval: Story = {
   args: { session: makeSession({ callerParticipation: makeCallerParticipation('REQUESTED') }) },
-};
-
-export const ManagerCanCancel: Story = {
-  args: { canManage: true },
 };
 
 export const Loading: Story = {

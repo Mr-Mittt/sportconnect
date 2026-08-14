@@ -80,6 +80,7 @@ const meta = {
   component: SessionListCard,
   args: {
     sportsByKey,
+    currentUserId: 'user-2', // not the session's creator (createdBy: 'user-1') by default
     onViewDetails: () => {},
     onParticipationAction: () => {},
     isParticipationActionPending: (): boolean => false,
@@ -128,6 +129,15 @@ export const Uncapped: Story = {
 
 export const CallerJoined: Story = {
   args: { session: makeSession({ id: 11, callerParticipation: makeCallerParticipation('JOINED') }) },
+};
+
+/** Post-ship: the creator never gets the card's own Leave action either, same rule
+ * `SessionDetailModal` applies — no participation action button renders at all here. */
+export const CallerJoinedAsCreator: Story = {
+  args: {
+    currentUserId: 'user-1', // matches makeSession()'s default createdBy
+    session: makeSession({ id: 15, callerParticipation: makeCallerParticipation('JOINED') }),
+  },
 };
 
 export const CallerInvited: Story = {

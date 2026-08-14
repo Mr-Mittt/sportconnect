@@ -85,7 +85,7 @@ test('Feed/groups journey', async ({ page, mockSessionId }) => {
 
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Add a comment').fill('Great turnout today!');
-    await dialog.getByRole('button', { name: 'Post', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Post comment' }).click();
     await expect(dialog.getByText('Great turnout today!')).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
 

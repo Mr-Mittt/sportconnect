@@ -74,6 +74,7 @@ describe('SessionListCard', () => {
       <SessionListCard
         session={makeSession()}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={() => {}}
         onParticipationAction={noopParticipationAction}
         isParticipationActionPending={noPendingAction}
@@ -90,6 +91,7 @@ describe('SessionListCard', () => {
       <SessionListCard
         session={makeSession({ title: null })}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={() => {}}
         onParticipationAction={noopParticipationAction}
         isParticipationActionPending={noPendingAction}
@@ -103,6 +105,7 @@ describe('SessionListCard', () => {
       <SessionListCard
         session={makeSession({ participantCount: 1 })}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={() => {}}
         onParticipationAction={noopParticipationAction}
         isParticipationActionPending={noPendingAction}
@@ -116,6 +119,7 @@ describe('SessionListCard', () => {
       <SessionListCard
         session={makeSession({ participantCount: 3, capacity: 10 })}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={() => {}}
         onParticipationAction={noopParticipationAction}
         isParticipationActionPending={noPendingAction}
@@ -129,6 +133,7 @@ describe('SessionListCard', () => {
       <SessionListCard
         session={makeSession()}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={() => {}}
         onParticipationAction={noopParticipationAction}
         isParticipationActionPending={noPendingAction}
@@ -140,6 +145,7 @@ describe('SessionListCard', () => {
       <SessionListCard
         session={makeSession({ feeType: 'SPLIT' })}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={() => {}}
         onParticipationAction={noopParticipationAction}
         isParticipationActionPending={noPendingAction}
@@ -151,6 +157,7 @@ describe('SessionListCard', () => {
       <SessionListCard
         session={makeSession({ feeType: 'FIXED', feeAmountVnd: 50000 })}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={() => {}}
         onParticipationAction={noopParticipationAction}
         isParticipationActionPending={noPendingAction}
@@ -166,6 +173,7 @@ describe('SessionListCard', () => {
       <SessionListCard
         session={makeSession({ id: 42 })}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={onViewDetails}
         onParticipationAction={noopParticipationAction}
         isParticipationActionPending={noPendingAction}
@@ -182,6 +190,7 @@ describe('SessionListCard', () => {
       <SessionListCard
         session={makeSession({ id: 42 })}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={() => {}}
         onParticipationAction={onParticipationAction}
         isParticipationActionPending={noPendingAction}
@@ -207,6 +216,7 @@ describe('SessionListCard', () => {
           },
         })}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={() => {}}
         onParticipationAction={noopParticipationAction}
         isParticipationActionPending={noPendingAction}
@@ -215,11 +225,62 @@ describe('SessionListCard', () => {
     expect(screen.getByRole('button', { name: /leave/i })).toBeInTheDocument();
   });
 
+  it('hides Leave for the session creator, even when JOINED', () => {
+    render(
+      <SessionListCard
+        session={makeSession({
+          callerParticipation: {
+            id: 1,
+            sessionId: 1,
+            userId: 'user-1',
+            userFullName: '',
+            userAvatarUrl: null,
+            status: 'JOINED',
+            rejectReason: null,
+            createdAt: '2026-07-01T10:00:00',
+          },
+        })}
+        sportsByKey={sportsByKey}
+        currentUserId="user-1" // matches makeSession()'s default createdBy
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /leave/i })).not.toBeInTheDocument();
+  });
+
+  it('clicking the card itself opens details too, without double-firing when a nested button is clicked', async () => {
+    const user = userEvent.setup();
+    const onViewDetails = vi.fn();
+    const onParticipationAction = vi.fn();
+    render(
+      <SessionListCard
+        session={makeSession({ id: 42 })}
+        sportsByKey={sportsByKey}
+        currentUserId="user-2"
+        onViewDetails={onViewDetails}
+        onParticipationAction={onParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+
+    await user.click(screen.getByText('Sunday pickup run'));
+    expect(onViewDetails).toHaveBeenCalledWith(42);
+    expect(onViewDetails).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: /join/i }));
+    expect(onParticipationAction).toHaveBeenCalledWith(42, 'JOIN');
+    // The card's own click handler must not also fire from a click on the nested button.
+    expect(onViewDetails).toHaveBeenCalledTimes(1);
+  });
+
   it('hides the participation action for a CANCELLED session', () => {
     render(
       <SessionListCard
         session={makeSession({ status: 'CANCELLED' })}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={() => {}}
         onParticipationAction={noopParticipationAction}
         isParticipationActionPending={noPendingAction}
@@ -234,6 +295,7 @@ describe('SessionListCard', () => {
       <SessionListCard
         session={makeSession({ id: 42 })}
         sportsByKey={sportsByKey}
+        currentUserId="user-2"
         onViewDetails={() => {}}
         onParticipationAction={noopParticipationAction}
         isParticipationActionPending={(sessionId) => sessionId === 42}

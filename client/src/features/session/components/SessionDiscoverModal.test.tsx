@@ -74,6 +74,7 @@ const baseProps = {
   isLoading: false,
   isError: false,
   sportsByKey,
+  currentUserId: 'user-2',
   onViewDetails: () => {},
   onParticipationAction: () => {},
   isParticipationActionPending: () => false,

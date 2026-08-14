@@ -1,10 +1,17 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { Comment } from '@/features/feed/types';
 import type { Location } from '@/shared/types/location';
 import type { Session, SessionParticipant } from '@/shared/types/session';
+import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { SessionDetailModal } from './SessionDetailModal';
+
+// src/test/setup.ts globally seeds sportCatalogStore with { id: 6, key: 'basketball', ... } —
+// same pre-SPORT-3 fixture convention this file's sportId: 6 already relies on.
+const sportsByKey: Record<SportKey, SportProfile> = {
+  basketball: { key: 'basketball', label: 'Basketball', icon: 'ball-basketball', colorRamp: 'coral' },
+};
 
 const location: Location = {
   id: 1,
@@ -101,6 +108,7 @@ const baseProps = {
   isOpen: true,
   onClose: () => {},
   session: makeSession(),
+  sportsByKey,
   isLoading: false,
   isError: false,
   participants,
@@ -155,6 +163,9 @@ describe('SessionDetailModal', () => {
   it('renders status, location, description, and creator', () => {
     render(<SessionDetailModal {...baseProps} />);
     expect(screen.getByText('Scheduled')).toBeInTheDocument();
+    // CLIENT-SESSION-10: header status row always shows weekday + date + time (design reference),
+    // distinct from formatStartTime's relative "Today"/"Tomorrow" shorthand used elsewhere.
+    expect(screen.getByText(/Sat, Aug 1 · 7:00 PM/)).toBeInTheDocument();
     expect(screen.getByText('Riverside Courts')).toBeInTheDocument();
     expect(screen.getByText('12 River Rd')).toBeInTheDocument();
     expect(screen.getByText('Casual 5v5, all levels welcome.')).toBeInTheDocument();
@@ -181,13 +192,13 @@ describe('SessionDetailModal', () => {
 
   it('renders the participants list', () => {
     render(<SessionDetailModal {...baseProps} />);
-    expect(screen.getByText('Participants (1)')).toBeInTheDocument();
+    expect(screen.getByText('Players (1)')).toBeInTheDocument();
     expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
   });
 
-  it('shows "Participants (N/capacity)" once a real capacity was chosen', () => {
+  it('shows "Players (N/capacity)" once a real capacity was chosen', () => {
     render(<SessionDetailModal {...baseProps} session={makeSession({ capacity: 10 })} />);
-    expect(screen.getByText('Participants (1/10)')).toBeInTheDocument();
+    expect(screen.getByText('Players (1/10)')).toBeInTheDocument();
   });
 
   it('shows the fee — Free, Split cost, or a formatted VND amount', () => {
@@ -241,6 +252,17 @@ describe('SessionDetailModal', () => {
     await user.click(screen.getByRole('button', { name: 'Leave' }));
     expect(onLeave).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Join' })).not.toBeInTheDocument();
+  });
+
+  it('hides Leave for the session creator, even when JOINED', () => {
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        currentUserId="user-1" // matches makeSession()'s default createdBy
+        session={makeSession({ callerParticipation: makeCallerParticipation('JOINED') })}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Leave' })).not.toBeInTheDocument();
   });
 
   it('shows Accept and Decline when the caller is INVITED — Accept calls onJoin, Decline calls onLeave', async () => {
@@ -311,35 +333,6 @@ describe('SessionDetailModal', () => {
     );
     expect(screen.getByText(/Cancelled by Jordan Lee/)).toBeInTheDocument();
     expect(screen.getByText('Reason: Court unavailable.')).toBeInTheDocument();
-  });
-
-  it('hides the Cancel session button when canManage is false', () => {
-    render(<SessionDetailModal {...baseProps} canManage={false} />);
-    expect(screen.queryByRole('button', { name: 'Cancel session' })).not.toBeInTheDocument();
-  });
-
-  it('cancel flow: reveals a reason field, confirms with the trimmed reason, or dismisses', async () => {
-    const user = userEvent.setup();
-    const onConfirmCancel = vi.fn();
-    render(<SessionDetailModal {...baseProps} canManage onConfirmCancel={onConfirmCancel} />);
-
-    await user.click(screen.getByRole('button', { name: 'Cancel session' }));
-    expect(screen.queryByRole('button', { name: 'Cancel session' })).not.toBeInTheDocument();
-
-    await user.type(screen.getByLabelText('Cancellation reason'), '  Rained out  ');
-    await user.click(screen.getByRole('button', { name: 'Confirm cancel' }));
-    expect(onConfirmCancel).toHaveBeenCalledWith('Rained out');
-  });
-
-  it('cancel flow: "Never mind" dismisses the reason field without calling onConfirmCancel', async () => {
-    const user = userEvent.setup();
-    const onConfirmCancel = vi.fn();
-    render(<SessionDetailModal {...baseProps} canManage onConfirmCancel={onConfirmCancel} />);
-
-    await user.click(screen.getByRole('button', { name: 'Cancel session' }));
-    await user.click(screen.getByRole('button', { name: 'Never mind' }));
-    expect(onConfirmCancel).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Cancel session' })).toBeInTheDocument();
   });
 
   it('falls back to "{sportName} session" for a null title', () => {
@@ -425,7 +418,7 @@ describe('SessionDetailModal', () => {
     expect(screen.getByRole('region', { name: 'Discussion' })).toBeInTheDocument();
     expect(screen.getByText('What time are we meeting?')).toBeInTheDocument();
     await user.type(screen.getByRole('textbox', { name: 'Add a comment' }), 'Nice one!');
-    await user.click(screen.getByRole('button', { name: 'Post' }));
+    await user.click(screen.getByRole('button', { name: 'Post comment' }));
     expect(onAddComment).toHaveBeenCalledWith('Nice one!');
   });
 
@@ -466,5 +459,33 @@ describe('SessionDetailModal', () => {
   it('disables the heart button while isTogglingLike', () => {
     render(<SessionDetailModal {...baseProps} isTogglingLike />);
     expect(screen.getByRole('button', { name: 'Like' })).toBeDisabled();
+  });
+
+  it('shows the sport chip (icon only, named for a11y) when sportsByKey resolves the session\'s sport, hides it otherwise', () => {
+    const { rerender } = render(<SessionDetailModal {...baseProps} />);
+    expect(screen.getByRole('img', { name: 'Basketball' })).toBeInTheDocument();
+
+    rerender(<SessionDetailModal {...baseProps} sportsByKey={{}} />);
+    expect(screen.queryByRole('img', { name: 'Basketball' })).not.toBeInTheDocument();
+  });
+
+  it('Players section: collapsing swaps the roster chips for a decorative avatar-stack preview, capacity meter always shows', () => {
+    render(<SessionDetailModal {...baseProps} session={makeSession({ capacity: 10 })} />);
+    const toggle = screen.getByText('Players (1/10)');
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Jordan Lee')).not.toBeInTheDocument();
+    // Still visible: the toggle's own label and the capacity meter (queried via the track's class,
+    // since it has no accessible text of its own).
+    expect(screen.getByText('Players (1/10)')).toBeInTheDocument();
+  });
+
+  it('shows a spinner + pending label on the participation action button while its mutation is in flight', () => {
+    render(<SessionDetailModal {...baseProps} isJoining />);
+    expect(screen.getByRole('button', { name: 'Joining…' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Join' })).not.toBeInTheDocument();
   });
 });

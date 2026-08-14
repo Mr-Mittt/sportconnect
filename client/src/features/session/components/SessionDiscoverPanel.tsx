@@ -28,6 +28,7 @@ interface SessionDiscoverPanelProps {
   isLoading: boolean;
   isError: boolean;
   sportsByKey: Record<SportKey, SportProfile>;
+  currentUserId: string;
   onViewDetails: (sessionId: number) => void;
   /** CLIENT-SESSION-9: threaded straight through to each `SessionListCard`. */
   onParticipationAction: (sessionId: number, kind: ParticipationActionKind) => void;
@@ -53,6 +54,7 @@ export function SessionDiscoverPanel({
   isLoading,
   isError,
   sportsByKey,
+  currentUserId,
   onViewDetails,
   onParticipationAction,
   isParticipationActionPending,
@@ -125,6 +127,7 @@ export function SessionDiscoverPanel({
               key={session.id}
               session={session}
               sportsByKey={sportsByKey}
+              currentUserId={currentUserId}
               onViewDetails={onViewDetails}
               onParticipationAction={onParticipationAction}
               isParticipationActionPending={isParticipationActionPending}
