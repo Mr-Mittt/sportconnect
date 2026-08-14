@@ -133,9 +133,10 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 61 | SPORT-3 | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `DONE` |
 | 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `DONE` |
 | 63 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) — **reordered ahead of SPORT-2, user decision 2026-08-13; SESSION-9 backend shipped 2026-08-08, no longer blocking** | `DONE` |
-| 64 | CLIENT-SESSION-10 | Session card + `SessionDetailModal` UX/UI enhancement pass — **new ticket, not in either epic, filed inserted right after CLIENT-SESSION-9** (2026-08-13) | `TODO` |
-| 65 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
-| 66 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
+| 64 | CLIENT-SESSION-10 | Session card + `SessionDetailModal` UX/UI enhancement pass — **new ticket, not in either epic, filed inserted right after CLIENT-SESSION-9** (2026-08-13) | `DONE` |
+| 65 | SPORT-4 | Use the real per-sport `iconUrl` instead of the Tabler stand-in — **new ticket, not in either epic, filed 2026-08-14, inserted ahead of SPORT-2 (user decision)** | `TODO` |
+| 66 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 67 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
 
 **Dependencies:**
 ```
@@ -3096,6 +3097,9 @@ as B19's backend scope decision).
 
 **Status:** `TODO` · **Type:** Enhancement (visual accuracy) · **Dependency:** none · **Filed:**
 2026-08-14, raised directly by the user after noticing Badminton renders a tennis-ball icon.
+**Queue order:** inserted ahead of SPORT-2 (user decision, 2026-08-14) — no code dependency between
+the two, just priority; was initially missing from the Implementation Order table entirely (filed
+straight into the Tickets section without a table row) until this was caught and fixed the same day.
 
 **Problem, verified against the actual code:** `GET /api/sports` already returns a real, correct,
 sport-specific `iconUrl` per sport (`SportResponse.iconUrl`, `modules/sport/sport-api`), backed by
