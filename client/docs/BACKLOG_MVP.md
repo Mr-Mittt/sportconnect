@@ -3079,3 +3079,40 @@ General section save at the new endpoint instead of the generic one.
 **Out of scope:** any UI for editing `groupName`/`description`/`avatarUrl`/`coverUrl` (not part of
 this ticket — those fields exist on the payload/response types for future tickets to wire up, same
 as B19's backend scope decision).
+
+---
+
+### SPORT-4 · Use the real per-sport `iconUrl` instead of the Tabler stand-in
+
+**Status:** `TODO` · **Type:** Enhancement (visual accuracy) · **Dependency:** none · **Filed:**
+2026-08-14, raised directly by the user after noticing Badminton renders a tennis-ball icon.
+
+**Problem, verified against the actual code:** `GET /api/sports` already returns a real, correct,
+sport-specific `iconUrl` per sport (`SportResponse.iconUrl`, `modules/sport/sport-api`), backed by
+real PNG assets under `modules/sport/sport-impl/src/main/resources/images/sports/` (e.g.
+`badminton.png` — crossed rackets + shuttlecock, `pickleball.png` — paddle + ball) and served for
+real at `/images/sports/*.png` (`WebConfig`'s `/images/**` resource handler, `permitAll` in
+`SecurityConfig`). The client fetches this response in full (`SportResponse` already has `iconUrl`
+typed, `shared/types/sport.ts`) but `useSportCatalog.ts`'s `SportCatalogEntry` mapping
+(`useSportCatalog.ts:35-42`) keeps only `{ id, key, name }` and drops `iconUrl` on the floor.
+Instead, `sportProfileConfig.ts`'s hand-curated `SPORT_PROFILE_CONFIG` invents a Tabler icon name as
+a stand-in per sport — e.g. Badminton is mapped to `'ball-tennis'` (`IconBallTennis`, a tennis
+ball+racket icon) because SPORT-3 found Tabler has no dedicated badminton icon (see
+`sportIcons.ts:14-16`). That stand-in is what actually renders today, across all 8 call sites of
+`getSportIcon()`: `SportSwitcher`, `PostCard`, `CommentSection`, `SessionListCard`,
+`GroupCoverBanner`, `JoinGroupModal`, `UpcomingMatches`, `CreatePostForm`.
+
+**What ships (needs design decision at pickup, not assumed here):**
+- Thread `iconUrl` through `SportCatalogEntry` → wherever `SportProfile`/config lookups build the
+  per-sport icon, so the real backend asset is reachable instead of discarded.
+- Decide how the real PNG interacts with the app's "Tabler icons, outline style only" convention
+  (`client/CLAUDE.md`) — these are colored/filled raster art, not outline icons, so this is a real
+  design call, not a mechanical swap: fully replace Tabler icons for sports with `<img
+  src={iconUrl}>` everywhere, or keep Tabler elsewhere and use the real icon only in specific
+  higher-fidelity spots (e.g. `SportSwitcher`, `GroupCoverBanner`). Resolve explicitly at pickup.
+- Update all 8 `getSportIcon()` call sites to match whatever direction is chosen, plus Storybook
+  stories and visual-regression baselines for anything visually affected.
+
+**Out of scope:** changing the backend `iconUrl` assets or endpoint (already correct/complete);
+re-litigating Pickleball's `tournament` Tabler stand-in unless the direction chosen above
+naturally replaces it too.
