@@ -7,9 +7,9 @@ import type { SessionListItem } from '../types';
 import { SessionDiscoverModal } from './SessionDiscoverModal';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
-  football: { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' },
-  basketball: { key: 'basketball', label: 'Basketball', icon: 'ball-basketball', colorRamp: 'coral' },
-  tennis: { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' },
+  football: { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' },
+  basketball: { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'coral' },
+  tennis: { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'purple' },
 };
 
 const location: Location = {

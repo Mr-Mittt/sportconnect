@@ -6,7 +6,7 @@ import { PostCard } from './PostCard';
 const football: SportProfile = {
   key: 'football',
   label: 'Football',
-  icon: 'ball-football',
+  iconUrl: '/images/sports/football.png',
   colorRamp: 'teal',
 };
 

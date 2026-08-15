@@ -10,7 +10,7 @@ import { SessionDetailModal } from './SessionDetailModal';
 // src/test/setup.ts globally seeds sportCatalogStore with { id: 6, key: 'basketball', ... } —
 // same pre-SPORT-3 fixture convention this file's sportId: 6 already relies on.
 const sportsByKey: Record<SportKey, SportProfile> = {
-  basketball: { key: 'basketball', label: 'Basketball', icon: 'ball-basketball', colorRamp: 'coral' },
+  basketball: { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'coral' },
 };
 
 const location: Location = {

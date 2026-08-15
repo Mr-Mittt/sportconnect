@@ -19,9 +19,9 @@ afterEach(() => {
 // useSportCatalogStore.getState().setCatalog(...) itself to override this default.
 beforeEach(() => {
   useSportCatalogStore.getState().setCatalog([
-    { id: 5, key: 'football', name: 'Football' },
-    { id: 6, key: 'basketball', name: 'Basketball' },
-    { id: 2, key: 'tennis', name: 'Tennis' },
+    { id: 5, key: 'football', name: 'Football', iconUrl: '/images/sports/football.png' },
+    { id: 6, key: 'basketball', name: 'Basketball', iconUrl: '/images/sports/basketball.png' },
+    { id: 2, key: 'tennis', name: 'Tennis', iconUrl: '/images/sports/tennis.png' },
   ]);
 });
 

@@ -4,11 +4,9 @@ import {
   IconHeartFilled,
   IconMessageCircle,
 } from '@tabler/icons-react';
-import { createElement } from 'react';
 import type { Post } from '@/features/feed/types';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
-import { getSportIcon } from '@/shared/lib/sportIcons';
 import { cn } from '@/shared/lib/utils';
 import type { SportProfile } from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
@@ -19,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
 import { HashtagText } from './HashtagText';
+import { SportIcon } from './SportIcon';
 
 interface PostCardProps {
   post: Post;
@@ -133,9 +132,7 @@ export function PostCard({
               getRampBadgeClasses(sport.colorRamp),
             )}
           >
-            {/* createElement keeps the lookup out of a capitalized render-local,
-                which react-hooks/static-components would flag as a new component */}
-            {createElement(getSportIcon(sport.icon), { className: 'size-3', 'aria-hidden': true })}
+            <SportIcon iconUrl={sport.iconUrl} className="size-3" />
             {sport.label}
           </span>
         )}

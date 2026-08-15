@@ -4,14 +4,14 @@ import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { Feed } from './Feed';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
-  football: { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' },
+  football: { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' },
   basketball: {
     key: 'basketball',
     label: 'Basketball',
-    icon: 'ball-basketball',
+    iconUrl: '/images/sports/basketball.png',
     colorRamp: 'coral',
   },
-  tennis: { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' },
+  tennis: { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'purple' },
 };
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000).toISOString();

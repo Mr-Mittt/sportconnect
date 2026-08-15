@@ -21,7 +21,7 @@ const group: Group = {
   pinnedPosts: null,
 };
 
-const sport: SportProfile = { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' };
+const sport: SportProfile = { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' };
 
 // Self-contained placeholder photo (no network dependency) — a simple green
 // gradient standing in for a real uploaded cover.

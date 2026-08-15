@@ -1,4 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { extname, join, normalize } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getResponse } from 'msw';
 import { handlers } from './handlers/index.ts';
 import { resetChatHandlersState } from './handlers/chat.ts';
@@ -41,6 +44,33 @@ import { DEFAULT_SESSION_ID, sessionIdFromRequest } from './sessionStore.ts';
  */
 
 const BASE_URL = `http://localhost:${MOCK_SERVER_PORT}`;
+
+// SPORT-4: real backend-served static assets (sport-impl's WebConfig,
+// '/images/**' -> classpath:/images/) — GET /api/sports' iconUrl field
+// points here. MSW's `handlers` array is JSON-only, so this mock server
+// serves the real PNGs directly (copied from sport-impl's own resources,
+// only the 2 active MVP sports need one today) rather than leaving every
+// <img src={iconUrl}> broken in e2e/visual-regression, same "mirror the
+// real contract exactly" reasoning the JSON handlers already follow.
+const IMAGES_DIR = fileURLToPath(new URL('./assets/images', import.meta.url));
+const CONTENT_TYPE_BY_EXT: Record<string, string> = { '.png': 'image/png' };
+
+async function serveStaticImage(res: ServerResponse, pathname: string): Promise<boolean> {
+  const relativePath = normalize(pathname.replace(/^\/images\//, ''));
+  // Reject any path that escapes IMAGES_DIR (e.g. '../../etc/passwd') —
+  // normalize() alone doesn't stop a leading '..' segment from surviving.
+  if (relativePath.startsWith('..')) return false;
+  const contentType = CONTENT_TYPE_BY_EXT[extname(relativePath)];
+  if (contentType === undefined) return false;
+  try {
+    const body = await readFile(join(IMAGES_DIR, relativePath));
+    res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=31536000' });
+    res.end(body);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 interface RequestLogEntry {
   method: string;
@@ -206,6 +236,12 @@ const server = createServer(async (req, res) => {
 
     if (url.pathname.startsWith('/__mock/')) {
       await handleAdminRoute(req, res, url.pathname);
+      return;
+    }
+
+    if (url.pathname.startsWith('/images/')) {
+      if (await serveStaticImage(res, url.pathname)) return;
+      sendJson(res, 404, { error: `No mock image at ${url.pathname}` });
       return;
     }
 

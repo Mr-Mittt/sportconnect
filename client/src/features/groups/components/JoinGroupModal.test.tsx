@@ -20,8 +20,8 @@ function result(overrides: Partial<GroupSearchResult>): GroupSearchResult {
   };
 }
 
-const football: SportProfile = { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' };
-const tennis: SportProfile = { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' };
+const football: SportProfile = { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' };
+const tennis: SportProfile = { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'purple' };
 
 function grouped(sportProfile: SportProfile, results: GroupSearchResult[]): GroupedSearchResults {
   return { sportKey: sportProfile.key, sportProfile, results };

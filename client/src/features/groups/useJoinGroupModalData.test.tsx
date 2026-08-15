@@ -54,8 +54,8 @@ function page<T>(content: T[]): PageResponse<T> {
   };
 }
 
-const football: SportProfile = { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' };
-const tennis: SportProfile = { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' };
+const football: SportProfile = { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' };
+const tennis: SportProfile = { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'purple' };
 const sportProfiles = [football, tennis];
 
 function wrapper({ children }: { children: ReactNode }) {

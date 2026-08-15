@@ -16,7 +16,7 @@ const basePerson: SelectedPerson = {
 };
 
 const sports: SportProfile[] = [
-  { key: 'basketball', label: 'Basketball', icon: 'ball-basketball', colorRamp: 'coral' },
+  { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'coral' },
 ];
 
 function renderPanel(overrides: Partial<SelectedPerson> = {}) {

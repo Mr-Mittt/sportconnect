@@ -10,7 +10,11 @@ export type SportKey = string;
 export interface SportProfile {
   key: SportKey;
   label: string;
-  icon: string; // icon name, e.g. 'ball-football'
+  /** SPORT-4: the sport's real backend-served icon (`Sport.iconUrl`), resolved
+   * via the live catalog by sportId — null when the catalog has no icon for
+   * this sport yet. Renders through `SportIcon`, which falls back to a
+   * generic icon when null. */
+  iconUrl: string | null;
   colorRamp: string; // design-token ramp name, e.g. 'teal'
 }
 
@@ -37,6 +41,9 @@ export interface SportCatalogEntry {
   id: number;
   key: SportKey;
   name: string;
+  /** SPORT-4: threaded through from `SportResponse.iconUrl` — previously
+   * dropped here. */
+  iconUrl: string | null;
 }
 
 /** 1:1 with `UserSportProfileResponse` (`modules/sport/sport-api`) — the raw

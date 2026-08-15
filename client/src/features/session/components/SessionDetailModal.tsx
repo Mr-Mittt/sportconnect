@@ -13,16 +13,16 @@ import {
   IconX,
   type Icon,
 } from '@tabler/icons-react';
-import { createElement, useState } from 'react';
+import { useState } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import type { Comment } from '@/features/feed/types';
+import { SportIcon } from '@/shared/components/SportIcon';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { directionsUrl } from '@/shared/lib/mapsLinks';
 import { getRampBadgeClasses, getRampFillClass } from '@/shared/lib/rampStyles';
 import { UNCAPPED_CAPACITY } from '@/shared/lib/sessionCapacity';
 import { getParticipationAction, type ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
-import { getSportIcon } from '@/shared/lib/sportIcons';
 import { formatSessionHeaderDateTime, formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -312,7 +312,7 @@ export function SessionDetailModal({
                     getRampBadgeClasses(sport.colorRamp),
                   )}
                 >
-                  {createElement(getSportIcon(sport.icon), { className: 'size-3', 'aria-hidden': true })}
+                  <SportIcon iconUrl={sport.iconUrl} className="size-3" />
                 </span>
               )}
               <DialogTitle className="min-w-0 truncate text-sm font-semibold text-text-primary">

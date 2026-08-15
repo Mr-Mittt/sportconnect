@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { apiClient } from '@/app/apiClient';
-import { sportKeyForId } from '@/features/feed/sportIdMap';
+import { sportIconUrlForId, sportKeyForId } from '@/features/feed/sportIdMap';
 import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
 import type { ApiResponse } from '@/shared/types/api';
 import type { SportProfile, UserSportProfileResponse } from '@/shared/types/sport';
@@ -42,7 +42,7 @@ export function useSportProfilesForUser(userId: string | undefined): {
     return (query.data ?? []).reduce<SportProfile[]>((profiles, profile) => {
       const key = profile.isActive ? sportKeyForId(profile.sportId) : undefined;
       if (key !== undefined) {
-        profiles.push({ key, ...getSportProfileConfig(key) });
+        profiles.push({ key, ...getSportProfileConfig(key), iconUrl: sportIconUrlForId(profile.sportId) });
       }
       return profiles;
     }, []);

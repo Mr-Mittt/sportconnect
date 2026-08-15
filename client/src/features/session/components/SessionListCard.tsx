@@ -1,13 +1,12 @@
 import { IconClock, IconCoin, IconMapPin, IconUsers } from '@tabler/icons-react';
-import { createElement } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
+import { SportIcon } from '@/shared/components/SportIcon';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { formatParticipantCount } from '@/shared/lib/sessionCapacity';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import { getParticipationAction } from '@/shared/lib/sessionParticipation';
 import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
-import { getSportIcon } from '@/shared/lib/sportIcons';
 import { formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -87,7 +86,7 @@ export function SessionListCard({
               getRampBadgeClasses(sport.colorRamp),
             )}
           >
-            {createElement(getSportIcon(sport.icon), { className: 'size-3.5', 'aria-hidden': true })}
+            <SportIcon iconUrl={sport.iconUrl} className="size-3.5" />
           </span>
         )}
         <div className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary" title={title}>

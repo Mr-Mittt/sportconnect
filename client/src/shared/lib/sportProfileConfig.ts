@@ -1,10 +1,10 @@
 import type { SportKey } from '@/shared/types/sport';
 
 /**
- * Static client-side label/icon/colorRamp config, keyed by the client's own
- * SportKey — not driven by the backend's `Sport.name`/`iconUrl` (same
- * approach sport-impl's A3 ticket already took for per-sport attributes;
- * SPORT-1 reused it rather than inventing a backend-driven mapping). Follows
+ * Static client-side label/colorRamp config, keyed by the client's own
+ * SportKey — not driven by the backend's `Sport.name` (same approach
+ * sport-impl's A3 ticket already took for per-sport attributes; SPORT-1
+ * reused it rather than inventing a backend-driven mapping). Follows
  * client/CLAUDE.md's ramp assignment order (teal, coral, purple, then pink,
  * then gray — never blue/green/amber/red).
  *
@@ -15,29 +15,33 @@ import type { SportKey } from '@/shared/types/sport';
  * live-derived `string` (not a closed union), a sport the catalog returns
  * with no bespoke entry here degrades through `getSportProfileConfig`'s
  * fallback below instead of a compile error.
+ *
+ * SPORT-4: dropped the `icon` field (used to hold a Tabler stand-in name,
+ * e.g. Badminton's `'ball-tennis'`) — `SportProfile.iconUrl` now comes from
+ * the live catalog's real backend-served icon instead of a hand-picked
+ * approximation here.
  */
-const SPORT_PROFILE_CONFIG: Record<SportKey, { label: string; icon: string; colorRamp: string }> = {
-  badminton: { label: 'Badminton', icon: 'ball-tennis', colorRamp: 'teal' },
-  pickleball: { label: 'Pickleball', icon: 'tournament', colorRamp: 'coral' },
+const SPORT_PROFILE_CONFIG: Record<SportKey, { label: string; colorRamp: string }> = {
+  badminton: { label: 'Badminton', colorRamp: 'teal' },
+  pickleball: { label: 'Pickleball', colorRamp: 'coral' },
 };
 
 /** Generic fallback for any catalog sport with no bespoke entry above yet —
  * e.g. one reactivated server-side before this config is updated for it.
  * Title-cases the raw key as a readable label rather than showing it
- * verbatim. Neutral ramp/icon, never blue/green/amber/red (reserved for
- * semantic meaning app-wide, per client/CLAUDE.md). */
-function fallbackSportProfileConfig(key: SportKey): { label: string; icon: string; colorRamp: string } {
+ * verbatim. Neutral ramp, never blue/green/amber/red (reserved for semantic
+ * meaning app-wide, per client/CLAUDE.md). */
+function fallbackSportProfileConfig(key: SportKey): { label: string; colorRamp: string } {
   return {
     label: key.charAt(0).toUpperCase() + key.slice(1),
-    icon: 'question-mark',
     colorRamp: 'gray',
   };
 }
 
-/** Looks up a sport's label/icon/colorRamp, falling back to a generic entry
+/** Looks up a sport's label/colorRamp, falling back to a generic entry
  * instead of `undefined` — safe to call for any `SportKey` the live catalog
  * can return, not just the ones with a bespoke entry above. Use this instead
  * of indexing `SPORT_PROFILE_CONFIG` directly. */
-export function getSportProfileConfig(key: SportKey): { label: string; icon: string; colorRamp: string } {
+export function getSportProfileConfig(key: SportKey): { label: string; colorRamp: string } {
   return SPORT_PROFILE_CONFIG[key] ?? fallbackSportProfileConfig(key);
 }

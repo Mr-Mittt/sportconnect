@@ -5,14 +5,14 @@ import type { ParticipantStatus, Session, SessionParticipant } from '@/shared/ty
 import { UpcomingMatches } from './UpcomingMatches';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
-  football: { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' },
+  football: { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' },
   basketball: {
     key: 'basketball',
     label: 'Basketball',
-    icon: 'ball-basketball',
+    iconUrl: '/images/sports/basketball.png',
     colorRamp: 'coral',
   },
-  tennis: { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' },
+  tennis: { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'purple' },
 };
 
 const SPORT_ID: Record<SportKey, number> = { football: 5, basketball: 6, tennis: 2 };

@@ -1,5 +1,4 @@
 import { IconClock, IconCoin, IconMapPin } from '@tabler/icons-react';
-import { createElement } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
@@ -7,12 +6,12 @@ import { formatParticipantCount } from '@/shared/lib/sessionCapacity';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import { getParticipationAction } from '@/shared/lib/sessionParticipation';
 import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
-import { getSportIcon } from '@/shared/lib/sportIcons';
 import { formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Session } from '@/shared/types/session';
+import { SportIcon } from './SportIcon';
 
 interface UpcomingMatchesProps {
   matches: Session[];
@@ -139,12 +138,7 @@ export function UpcomingMatches({
                         getRampBadgeClasses(sport.colorRamp),
                       )}
                     >
-                      {/* createElement keeps the lookup out of a capitalized render-local,
-                          which react-hooks/static-components would flag as a new component */}
-                      {createElement(getSportIcon(sport.icon), {
-                        className: 'size-3',
-                        'aria-hidden': true,
-                      })}
+                      <SportIcon iconUrl={sport.iconUrl} className="size-3" />
                     </span>
                   )}
                   <div

@@ -134,7 +134,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 62 | CLIENT-SESSION-8 | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `DONE` |
 | 63 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) — **reordered ahead of SPORT-2, user decision 2026-08-13; SESSION-9 backend shipped 2026-08-08, no longer blocking** | `DONE` |
 | 64 | CLIENT-SESSION-10 | Session card + `SessionDetailModal` UX/UI enhancement pass — **new ticket, not in either epic, filed inserted right after CLIENT-SESSION-9** (2026-08-13) | `DONE` |
-| 65 | SPORT-4 | Use the real per-sport `iconUrl` instead of the Tabler stand-in — **new ticket, not in either epic, filed 2026-08-14, inserted ahead of SPORT-2 (user decision)** | `TODO` |
+| 65 | SPORT-4 | Use the real per-sport `iconUrl` instead of the Tabler stand-in — **new ticket, not in either epic, filed 2026-08-14, inserted ahead of SPORT-2 (user decision)** | `DONE` |
 | 66 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 | 67 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
 
@@ -3095,7 +3095,9 @@ as B19's backend scope decision).
 
 ### SPORT-4 · Use the real per-sport `iconUrl` instead of the Tabler stand-in
 
-**Status:** `TODO` · **Type:** Enhancement (visual accuracy) · **Dependency:** none · **Filed:**
+**Status:** `DONE` (2026-08-15, client-side — see delta below) · **Summary:**
+`client/docs/SPORT-4_REAL_SPORT_ICONS.md` · **Type:** Enhancement (visual accuracy) ·
+**Dependency:** none · **Filed:**
 2026-08-14, raised directly by the user after noticing Badminton renders a tennis-ball icon.
 **Queue order:** inserted ahead of SPORT-2 (user decision, 2026-08-14) — no code dependency between
 the two, just priority; was initially missing from the Implementation Order table entirely (filed
@@ -3130,3 +3132,29 @@ ball+racket icon) because SPORT-3 found Tabler has no dedicated badminton icon (
 **Out of scope:** changing the backend `iconUrl` assets or endpoint (already correct/complete);
 re-litigating Pickleball's `tournament` Tabler stand-in unless the direction chosen above
 naturally replaces it too.
+
+**Delta (2026-08-15, at implementation):** the design decision resolved as **full replacement**
+(real PNG at every one of the 8 real per-sport badge sites, via a new shared `SportIcon` component)
+— **except `CreatePostForm`**, whose "Tag sport" toolbar glyph turned out not to be bound to any
+real `SportProfile` at all (a generic decorative icon, same role as the Location pin beside it); it
+now imports `IconBallFootball` directly rather than going through the retired lookup helper, but
+was never a real per-sport badge to begin with. Badminton/Pickleball's Tabler stand-in entries were
+removed from `sportProfileConfig.ts`. Caching: the backend's existing 1-year `Cache-Control`
+(`WebConfig.setCachePeriod`, already in place, no change needed) was confirmed sufficient — no
+client-side cache was built.
+
+**Found during implementation, not in the original ticket scope:** the first visual-regression run
+after the swap showed broken images, not just a cosmetic diff. `Sport.iconUrl` is a
+server-relative path, and `vite.config.ts`'s dev proxy only forwarded `/api`/`/api/chat` — not
+`/images`. Fixed for dev + e2e (new `/images` proxy entry; `e2e/mocks/mockServer.ts` now serves the
+real PNGs directly, MSW's JSON handlers can't). The same gap exists in **production** for a
+different reason (S3/CloudFront client vs. EC2 backend, per `INFRA-3_HOSTING_DECISION.md`) and
+that infra piece hasn't shipped — filed as a delta on **INFRA-5**
+(`infra/documentation/BACKLOG_MVP.md`) rather than solved here; not blocking this ticket's
+client-side ship. Full writeup: `client/docs/SPORT-4_REAL_SPORT_ICONS.md`.
+
+**Remaining step, not yet executed:** per this ticket's own scope, visual-regression baselines are
+included (not deferred) — 18 of the committed baselines (`app-home-feed.spec.ts`'s 9,
+`app-post-modal.spec.ts`'s 9) need regenerating via the same `update-baselines` CI dispatch process
+HF-13..HF-20 used. Not executed in this session (no `gh` CLI, no GitHub UI access) — needs to be
+run once this branch is pushed.

@@ -1,7 +1,6 @@
-import { IconMapPin, IconPhoto, IconSpeakerphone } from '@tabler/icons-react';
+import { IconBallFootball, IconMapPin, IconPhoto, IconSpeakerphone } from '@tabler/icons-react';
 import { createElement, useLayoutEffect, useRef, useState } from 'react';
 import { MAX_POST_LENGTH } from '@/features/feed/types';
-import { getSportIcon } from '@/shared/lib/sportIcons';
 import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
@@ -94,8 +93,6 @@ export function CreatePostForm({
     setIsBroadcastOn(false);
   };
 
-  const TagSportIcon = getSportIcon('ball-football');
-
   return (
     <div className="border-hairline mb-3.5 rounded-xl border-border bg-surface-2 p-3.5">
       <div className="flex gap-2.5">
@@ -139,7 +136,10 @@ export function CreatePostForm({
             onClick={onTagSportClick}
             className="flex cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
-            {createElement(TagSportIcon, { className: 'size-4', 'aria-hidden': true })}
+            {/* SPORT-4: a generic "tag a sport" glyph (same role as the Location
+                pin above), not bound to any specific SportProfile — stays a
+                plain Tabler icon rather than switching to SportIcon. */}
+            {createElement(IconBallFootball, { className: 'size-4', 'aria-hidden': true })}
             Tag sport
           </button>
           {canBroadcast && (

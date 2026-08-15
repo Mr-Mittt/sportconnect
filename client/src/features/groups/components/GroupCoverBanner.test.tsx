@@ -23,7 +23,7 @@ const group: Group = {
   pinnedPosts: null,
 };
 
-const sport: SportProfile = { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' };
+const sport: SportProfile = { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' };
 
 describe('GroupCoverBanner', () => {
   it('renders the group name and member count', () => {
@@ -54,13 +54,15 @@ describe('GroupCoverBanner', () => {
       />,
     );
     // Decorative image (alt="") has role "presentation", not "img" — query
-    // by tag directly rather than getByRole.
-    const img = container.querySelector('img');
+    // by tag directly rather than getByRole. `.object-cover` distinguishes
+    // the cover photo from the sport icon's own <img> (SPORT-4).
+    const img = container.querySelector('img.object-cover');
     expect(img).toHaveAttribute('src', 'https://example.com/riverside-cover.jpg');
   });
 
-  it('renders no image element when coverUrl is null', () => {
+  it('renders no cover-photo image element when coverUrl is null (the sport icon\'s own <img> still renders)', () => {
     const { container } = render(<GroupCoverBanner group={group} sport={sport} onBack={() => {}} />);
-    expect(container.querySelector('img')).not.toBeInTheDocument();
+    expect(container.querySelector('img.object-cover')).not.toBeInTheDocument();
+    expect(container.querySelector('img')).toHaveAttribute('src', sport.iconUrl);
   });
 });

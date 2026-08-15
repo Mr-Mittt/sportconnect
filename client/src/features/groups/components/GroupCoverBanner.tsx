@@ -1,8 +1,7 @@
 import { IconArrowLeft } from '@tabler/icons-react';
-import { createElement } from 'react';
 import type { Group } from '@/features/feed/types';
+import { SportIcon } from '@/shared/components/SportIcon';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
-import { getSportIcon } from '@/shared/lib/sportIcons';
 import type { SportProfile } from '@/shared/types/sport';
 
 interface GroupCoverBannerProps {
@@ -35,7 +34,7 @@ export function GroupCoverBanner({ group, sport, onBack }: GroupCoverBannerProps
         )}
         <span className="shadow-card relative z-10 flex size-13 items-center justify-center rounded-xl bg-surface-2">
           {sport !== undefined ? (
-            createElement(getSportIcon(sport.icon), { className: 'size-6.5', 'aria-hidden': true })
+            <SportIcon iconUrl={sport.iconUrl} className="size-6.5" />
           ) : (
             <span className="text-lg font-semibold">{group.groupName.slice(0, 1).toUpperCase()}</span>
           )}
