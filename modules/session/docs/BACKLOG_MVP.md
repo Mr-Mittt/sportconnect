@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/session/session-impl`
-**Last updated:** 2026-08-13
+**Last updated:** 2026-08-15
 
 ---
 
@@ -30,9 +30,9 @@
 | 9 | SESSION-11 | Drop DB-level FKs on session tables' cross-domain columns | `DONE` |
 | 10 | SESSION-10 | Session comments — reuses post-impl's Comment via a companion `SESSION_POST` anchor | `DONE` |
 | 11 | SESSION-12 | Partial index on `sessions` scoped to `status = SCHEDULED` for the generation job's hot queries | `DONE` |
-| 12 | SESSION-8 | Session discover ranking algorithm | `TODO` |
+| 12 | SESSION-14 | Reduce `mapToResponses`' round trips (2 points) | `TODO` |
 | 13 | SESSION-13 | `SessionResponse.likeCount`/`isLikedByCurrentUser` + `PostService.getSessionPostLikeInfo` batch method | `DONE` |
-| 14 | SESSION-14 | Reduce `mapToResponses`' round trips (2 points) | `TODO` |
+| 14 | SESSION-8 | Session discover ranking algorithm | `TODO` |
 
 ---
 
