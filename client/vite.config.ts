@@ -36,6 +36,16 @@ export default defineConfig({
       // projects only (playwright.config.ts) — plain `pnpm dev` outside
       // Playwright always targets the real backend, unaffected.
       '/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+
+      // SPORT-4: Sport.iconUrl is a real backend-served static asset
+      // (sport-impl's WebConfig, '/images/**' -> classpath:/images/), returned
+      // by GET /api/sports as a server-relative path — without this, an
+      // <img src={iconUrl}> 404s against the Vite dev server's own origin
+      // instead of reaching the backend that actually serves it. Same target
+      // resolution as '/api' (real backend in plain `pnpm dev`, the e2e mock
+      // server under Playwright — mockServer.ts serves this path with real
+      // static files for that case, see its own comment).
+      '/images': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
     },
   },
 });

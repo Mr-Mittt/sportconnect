@@ -49,7 +49,7 @@ const post: Post = {
   broadcastEndTime: null,
 };
 
-const football: SportProfile = { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' };
+const football: SportProfile = { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' };
 
 const meta = {
   title: 'Shared/CommentSection',

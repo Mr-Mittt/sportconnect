@@ -38,6 +38,7 @@ export function useSportCatalog(): {
         id: sport.id,
         key: sport.name.toLowerCase(),
         name: sport.name,
+        iconUrl: sport.iconUrl,
       })),
     [query.data],
   );

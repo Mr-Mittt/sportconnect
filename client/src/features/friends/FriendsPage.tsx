@@ -160,7 +160,7 @@ export function FriendsPage() {
               sportsByKey={sportsByKey}
               currentUserId={discoverModalData.currentUserId ?? ''}
               onSeeAll={() => navigate('/matches')}
-              onSelectMatch={discoverModalData.onViewDetails}
+              onViewDetails={discoverModalData.onViewDetails}
               onCreateMatch={createSessionModalData.openCreateModal}
               onJoinMatch={discoverModalData.openDiscoverModal}
               onParticipationAction={railParticipationAction.onParticipationAction}

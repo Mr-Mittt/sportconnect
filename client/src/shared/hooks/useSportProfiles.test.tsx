@@ -75,12 +75,15 @@ describe('useSportProfiles', () => {
     expect(result.current.isError).toBe(false);
     // SPORT-3: football/basketball/tennis have no bespoke SPORT_PROFILE_CONFIG entry anymore
     // (the real MVP catalog only has Badminton/Pickleball, A6) — getSportProfileConfig's generic
-    // fallback applies to all three (title-cased label, neutral icon/ramp). This test's fixture
-    // ids stay 5/6/2 regardless — it's exercising id->key resolution, not real production colors.
+    // fallback applies to all three (title-cased label, neutral ramp). This test's fixture ids
+    // stay 5/6/2 regardless — it's exercising id->key resolution, not real production colors.
+    // SPORT-4: iconUrl isn't part of that static fallback at all — it's resolved independently
+    // from the live catalog (test/setup.ts's global seed) by sportId, so it's populated here even
+    // though the label/colorRamp fall through to the generic config.
     expect(result.current.data).toEqual([
-      { key: 'football', label: 'Football', icon: 'question-mark', colorRamp: 'gray' },
-      { key: 'basketball', label: 'Basketball', icon: 'question-mark', colorRamp: 'gray' },
-      { key: 'tennis', label: 'Tennis', icon: 'question-mark', colorRamp: 'gray' },
+      { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'gray' },
+      { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'gray' },
+      { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'gray' },
     ]);
   });
 

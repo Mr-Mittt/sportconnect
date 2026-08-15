@@ -1,7 +1,7 @@
-import type { Icon } from '@tabler/icons-react';
+import type { ReactNode } from 'react';
 import type { GroupSearchResult } from '@/features/feed/types';
 import type { GroupedSearchResults } from '@/features/groups/useJoinGroupModalData';
-import { getSportIcon } from '@/shared/lib/sportIcons';
+import { SportIcon } from '@/shared/components/SportIcon';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { Button } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
@@ -28,7 +28,7 @@ interface JoinGroupModalProps {
 
 interface SportFilterPillProps {
   label: string;
-  PillIcon: Icon;
+  icon: ReactNode;
   isSelected: boolean;
   onClick: () => void;
 }
@@ -38,12 +38,12 @@ interface SportFilterPillProps {
  * `SportSwitcher`'s `Pill` (same active-border treatment) but is a separate
  * component, not a shared one: `SportSwitcher` is single-select
  * (`active: SportKey | 'all'`), this one is independent multi-select
- * (`aria-pressed` per pill, toggled via a `Set<SportKey>`). `PillIcon` is
+ * (`aria-pressed` per pill, toggled via a `Set<SportKey>`). `icon` is
  * resolved by the caller (same convention as `SportSwitcher`'s `Pill`) —
  * resolving it inside this component would create a new component
  * reference on every render, which `eslint-plugin-react-hooks` flags.
  */
-function SportFilterPill({ label, PillIcon, isSelected, onClick }: SportFilterPillProps) {
+function SportFilterPill({ label, icon, isSelected, onClick }: SportFilterPillProps) {
   return (
     <button
       type="button"
@@ -54,7 +54,7 @@ function SportFilterPill({ label, PillIcon, isSelected, onClick }: SportFilterPi
         isSelected ? 'border-2 border-border-accent font-medium' : 'border-hairline border-border',
       )}
     >
-      <PillIcon className="size-4" aria-hidden="true" />
+      {icon}
       {label}
     </button>
   );
@@ -62,7 +62,7 @@ function SportFilterPill({ label, PillIcon, isSelected, onClick }: SportFilterPi
 
 interface ResultSectionProps {
   label: string;
-  SectionIcon: Icon;
+  icon: ReactNode;
   results: GroupSearchResult[];
   pendingGroupIds: Set<number>;
   onRequestToJoin: (groupName: string) => void;
@@ -72,7 +72,7 @@ interface ResultSectionProps {
 /** One sport's group of search results — header icon resolved by the caller, same reasoning as `SportFilterPill`. */
 function ResultSection({
   label,
-  SectionIcon,
+  icon,
   results,
   pendingGroupIds,
   onRequestToJoin,
@@ -81,7 +81,7 @@ function ResultSection({
   return (
     <div>
       <div className="mb-2 flex items-center justify-center gap-1.5 text-2xs font-medium text-text-secondary">
-        <SectionIcon className="size-4" aria-hidden="true" />
+        {icon}
         {label}
       </div>
       <div className="flex flex-col gap-2.5">
@@ -183,7 +183,7 @@ export function JoinGroupModal({
               <SportFilterPill
                 key={sport.key}
                 label={sport.label}
-                PillIcon={getSportIcon(sport.icon)}
+                icon={<SportIcon iconUrl={sport.iconUrl} className="size-4" />}
                 isSelected={selectedSports.has(sport.key)}
                 onClick={() => onToggleSport(sport.key)}
               />
@@ -206,7 +206,7 @@ export function JoinGroupModal({
               <ResultSection
                 key={sportKey}
                 label={sportProfile.label}
-                SectionIcon={getSportIcon(sportProfile.icon)}
+                icon={<SportIcon iconUrl={sportProfile.iconUrl} className="size-4" />}
                 results={results}
                 pendingGroupIds={pendingGroupIds}
                 onRequestToJoin={onRequestToJoin}

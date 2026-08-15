@@ -2687,6 +2687,23 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `SessionListCard`'s own layout/status-badge questions stay a follow-up. Full suite green
   (832 Vitest, 49 e2e via real Chromium, `tsc`/`lint` clean); Storybook not visually screenshotted
   (browser extension unavailable in this sandbox, same as prior tickets).
+- **SPORT-4 (client-side `DONE`, 2026-08-15, `client/docs/SPORT-4_REAL_SPORT_ICONS.md`):** replaced
+  the Tabler icon stand-ins (Badminton→tennis-ball, Pickleball→tournament-bracket) with the real
+  backend-served `Sport.iconUrl` PNGs everywhere a sport badge renders (new shared `SportIcon`
+  component, 8 call sites, `sportIcons.ts`'s lookup table deleted). Surfaced and fixed a real
+  client/backend origin gap along the way: `iconUrl` is a server-relative path, and neither the Vite
+  dev proxy nor the e2e mock server forwarded `/images/**` (only `/api` was proxied) — both fixed;
+  production has the same gap for a different reason (S3/CloudFront client vs. EC2 backend, per
+  INFRA-3), tracked as a delta on **INFRA-5** rather than solved here. Full suite green (837 Vitest,
+  `tsc`/`lint` clean, Storybook builds); visual-regression baselines (18 affected) regenerated via
+  the `update-baselines` CI dispatch and human-verified against the real render.
+- **CLIENT-SESSION-11 (`DONE`, 2026-08-15,
+  `client/docs/CLIENT-SESSION-11_SHARED_SESSION_CARD.md`):** de-duped `UpcomingMatches`' right-rail
+  row and `SessionListCard` (Matches page) into one shared `SessionCard` component with a
+  `compact`/`full` size variant — the two had been hand-kept-in-line since CLIENT-SESSION-10 rather
+  than sharing an implementation, a real drift risk. Pure refactor, zero visual change: 838 Vitest
+  passing, 49/49 e2e passing, visual-regression showed only Windows-vs-Linux font-rendering noise
+  (confirmed via direct diff-image inspection — no baseline regen needed).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

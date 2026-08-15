@@ -5,9 +5,9 @@ import type { SportProfile } from '@/shared/types/sport';
 import { SportSwitcher } from './SportSwitcher';
 
 const threeSports: SportProfile[] = [
-  { key: 'football', label: 'Football', icon: 'ball-football', colorRamp: 'teal' },
-  { key: 'basketball', label: 'Basketball', icon: 'ball-basketball', colorRamp: 'coral' },
-  { key: 'tennis', label: 'Tennis', icon: 'ball-tennis', colorRamp: 'purple' },
+  { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' },
+  { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'coral' },
+  { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'purple' },
 ];
 
 describe('SportSwitcher', () => {

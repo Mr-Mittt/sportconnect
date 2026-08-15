@@ -28,3 +28,13 @@ export function sportKeyForId(sportId: number | null): SportKey | undefined {
   }
   return useSportCatalogStore.getState().byId.get(sportId)?.key;
 }
+
+/** SPORT-4: same catalog lookup as `sportKeyForId`, for the sport's real
+ * icon instead of its key — null (not just undefined) when the id doesn't
+ * resolve, matching `SportProfile.iconUrl`'s "no icon" shape directly. */
+export function sportIconUrlForId(sportId: number | null): string | null {
+  if (sportId === null) {
+    return null;
+  }
+  return useSportCatalogStore.getState().byId.get(sportId)?.iconUrl ?? null;
+}

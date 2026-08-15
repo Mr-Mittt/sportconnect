@@ -1,7 +1,7 @@
 import type { SessionStatus } from '@/shared/types/session';
 
-// Shared across UpcomingMatches (rail), SessionListCard, and SessionDetailModal so the
-// 4-state status badge reads identically everywhere a Session appears.
+// Shared across SessionCard (used at both sizes by UpcomingMatches and the Matches page) and
+// SessionDetailModal so the 4-state status badge reads identically everywhere a Session appears.
 export const SESSION_STATUS_LABEL: Record<SessionStatus, string> = {
   SCHEDULED: 'Scheduled',
   ONGOING: 'Ongoing',

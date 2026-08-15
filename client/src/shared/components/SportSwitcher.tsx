@@ -1,7 +1,8 @@
-import { IconLayoutGrid, IconPlus, type Icon } from '@tabler/icons-react';
+import { IconLayoutGrid, IconPlus } from '@tabler/icons-react';
+import type { ReactNode } from 'react';
 import { cn } from '@/shared/lib/utils';
-import { getSportIcon } from '@/shared/lib/sportIcons';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
+import { SportIcon } from './SportIcon';
 
 interface SportSwitcherProps {
   /** The user's sport profiles — without a synthetic "All" entry; this component adds it. */
@@ -18,12 +19,16 @@ interface SportSwitcherProps {
 
 interface PillProps {
   label: string;
-  PillIcon: Icon;
+  /** Pre-rendered by the caller (a `SportIcon` for a real sport, a plain
+   * Tabler icon for the synthetic "All" pill) — resolving it inside this
+   * component would create a new component reference on every render, which
+   * `eslint-plugin-react-hooks` flags. */
+  icon: ReactNode;
   isActive: boolean;
   onClick: () => void;
 }
 
-function Pill({ label, PillIcon, isActive, onClick }: PillProps) {
+function Pill({ label, icon, isActive, onClick }: PillProps) {
   return (
     <button
       type="button"
@@ -36,7 +41,7 @@ function Pill({ label, PillIcon, isActive, onClick }: PillProps) {
         isActive ? 'border-2 border-border-accent font-medium' : 'border-hairline border-border',
       )}
     >
-      <PillIcon className="size-4" aria-hidden="true" />
+      {icon}
       {label}
     </button>
   );
@@ -61,7 +66,7 @@ export function SportSwitcher({
     <div role="group" aria-label="Sport filter" className="flex flex-wrap gap-2">
       <Pill
         label="All"
-        PillIcon={IconLayoutGrid}
+        icon={<IconLayoutGrid className="size-4" aria-hidden="true" />}
         isActive={active === 'all'}
         onClick={() => onChange('all')}
       />
@@ -69,7 +74,7 @@ export function SportSwitcher({
         <Pill
           key={sport.key}
           label={sport.label}
-          PillIcon={getSportIcon(sport.icon)}
+          icon={<SportIcon iconUrl={sport.iconUrl} className="size-4" />}
           isActive={active === sport.key}
           onClick={() => onChange(sport.key)}
         />

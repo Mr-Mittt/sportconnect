@@ -1,10 +1,9 @@
 import { IconHeart, IconHeartFilled, IconSend } from '@tabler/icons-react';
-import { createElement, useState } from 'react';
+import { useState } from 'react';
 import type { Comment, Post } from '@/features/feed/types';
 import { MAX_COMMENT_LENGTH } from '@/features/feed/types';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
-import { getSportIcon } from '@/shared/lib/sportIcons';
 import { cn } from '@/shared/lib/utils';
 import type { SportProfile } from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
@@ -13,6 +12,7 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dia
 import { Skeleton } from '@/shared/ui/skeleton';
 import { CommentItem } from './CommentItem';
 import { HashtagText } from './HashtagText';
+import { SportIcon } from './SportIcon';
 
 interface CommentSectionProps {
   isOpen: boolean;
@@ -166,7 +166,7 @@ export function CommentSection({
                     getRampBadgeClasses(sport.colorRamp),
                   )}
                 >
-                  {createElement(getSportIcon(sport.icon), { className: 'size-3', 'aria-hidden': true })}
+                  <SportIcon iconUrl={sport.iconUrl} className="size-3" />
                   {sport.label}
                 </span>
               )}

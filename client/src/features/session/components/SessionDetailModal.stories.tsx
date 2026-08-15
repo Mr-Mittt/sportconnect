@@ -109,7 +109,7 @@ const requestedParticipants: SessionParticipant[] = [
 // stories below matches the `sportId: 6` fixtures (Basketball), same convention as the rest of
 // this file's pre-SPORT-3 fixture keys (see SPORT-3's own notes on why this stayed unmigrated).
 const sportsByKey: Record<SportKey, SportProfile> = {
-  basketball: { key: 'basketball', label: 'Basketball', icon: 'ball-basketball', colorRamp: 'coral' },
+  basketball: { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'coral' },
 };
 
 const meta = {
