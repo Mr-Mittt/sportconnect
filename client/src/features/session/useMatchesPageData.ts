@@ -20,7 +20,7 @@ import type { SessionListItem, SessionSearchMode } from './types';
  * The Matches page's data boundary — composes every session query/mutation this ticket needs
  * (discover + "My sessions" list aggregation, create, detail, join/leave/cancel) plus
  * `LocationPicker`'s data hook for the create form's required location field, so
- * `MatchesPage`/`SessionListCard`/`CreateSessionModal`/`SessionDetailModal` all stay
+ * `MatchesPage`/`SessionCard`/`CreateSessionModal`/`SessionDetailModal` all stay
  * presentational and controlled per `client/CLAUDE.md` — same "mega page-data hook" shape as
  * `useGroupsPageData`/`useHomeFeedData`.
  *
@@ -125,7 +125,7 @@ export function useMatchesPageData(initialSessionId: number | null) {
   const createSessionModalData = useCreateSessionModalData();
 
   // --- Session detail ---
-  // Card-level participation action (SessionListCard/SessionDateGroup in the Discover/My
+  // Card-level participation action (SessionCard/SessionDateGroup in the Discover/My
   // sessions lists) — separate mutation instance from the one useSessionDetailModalData owns
   // internally for the modal's own Join/Leave (both invalidate the same sessionKeys.all root, so
   // this is a harmless duplicate, not a correctness issue — see that hook's own doc comment).

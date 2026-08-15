@@ -1,9 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
-import type { ParticipantStatus, SessionParticipant } from '@/shared/types/session';
-import type { SessionListItem } from '../types';
-import { SessionListCard } from './SessionListCard';
+import type { ParticipantStatus, Session, SessionParticipant } from '@/shared/types/session';
+import { SessionCard } from './SessionCard';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
   football: { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' },
@@ -26,7 +25,7 @@ const location: Location = {
   updatedAt: '2026-06-01T10:00:00',
 };
 
-function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem {
+function makeSession(overrides: Partial<Session> = {}): Session {
   return {
     id: 1,
     groupId: null,
@@ -57,7 +56,6 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
     callerParticipation: null,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
-    groupName: null,
     ...overrides,
   };
 }
@@ -76,8 +74,8 @@ function makeCallerParticipation(status: ParticipantStatus): SessionParticipant 
 }
 
 const meta = {
-  title: 'Session/SessionListCard',
-  component: SessionListCard,
+  title: 'Session/SessionCard',
+  component: SessionCard,
   args: {
     sportsByKey,
     currentUserId: 'user-2', // not the session's creator (createdBy: 'user-1') by default
@@ -86,13 +84,19 @@ const meta = {
     isParticipationActionPending: (): boolean => false,
   },
   decorators: [(Story) => <div style={{ maxWidth: 400 }}>{Story()}</div>],
-} satisfies Meta<typeof SessionListCard>;
+} satisfies Meta<typeof SessionCard>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Standalone: Story = {
+export const Full: Story = {
   args: { session: makeSession() },
+};
+
+/** CLIENT-SESSION-11: the right-rail row size (`UpcomingMatches`) — same content as `Full`, just
+ * smaller badge/text/icons and no `IconUsers` before the participant count. */
+export const Compact: Story = {
+  args: { size: 'compact', session: makeSession({ id: 2 }) },
 };
 
 export const Ongoing: Story = {

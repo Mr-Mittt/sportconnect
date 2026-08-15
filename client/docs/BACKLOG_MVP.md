@@ -135,8 +135,9 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 63 | CLIENT-SESSION-9 | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) — **reordered ahead of SPORT-2, user decision 2026-08-13; SESSION-9 backend shipped 2026-08-08, no longer blocking** | `DONE` |
 | 64 | CLIENT-SESSION-10 | Session card + `SessionDetailModal` UX/UI enhancement pass — **new ticket, not in either epic, filed inserted right after CLIENT-SESSION-9** (2026-08-13) | `DONE` |
 | 65 | SPORT-4 | Use the real per-sport `iconUrl` instead of the Tabler stand-in — **new ticket, not in either epic, filed 2026-08-14, inserted ahead of SPORT-2 (user decision)** | `DONE` |
-| 66 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
-| 67 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
+| 66 | CLIENT-SESSION-11 | Extract a shared `SessionCard` (compact/full size variant) — de-dupes `UpcomingMatches`' rail row and `SessionListCard` — **new ticket, not in either epic, filed while discussing SPORT-4's `SportIcon` reuse** (2026-08-15) | `DONE` |
+| 67 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 68 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
 
 **Dependencies:**
 ```
@@ -3153,8 +3154,65 @@ that infra piece hasn't shipped — filed as a delta on **INFRA-5**
 (`infra/documentation/BACKLOG_MVP.md`) rather than solved here; not blocking this ticket's
 client-side ship. Full writeup: `client/docs/SPORT-4_REAL_SPORT_ICONS.md`.
 
-**Remaining step, not yet executed:** per this ticket's own scope, visual-regression baselines are
-included (not deferred) — 18 of the committed baselines (`app-home-feed.spec.ts`'s 9,
-`app-post-modal.spec.ts`'s 9) need regenerating via the same `update-baselines` CI dispatch process
-HF-13..HF-20 used. Not executed in this session (no `gh` CLI, no GitHub UI access) — needs to be
-run once this branch is pushed.
+**Executed (2026-08-15):** `update-baselines` dispatch run, `visual-baselines.zip` downloaded and
+extracted over `client/e2e/visual/__screenshots__/` (all 18 affected filenames confirmed before
+overwriting). Human visual check confirmed the real per-sport icons render correctly (crossed
+rackets+shuttlecock for Badminton, paddle+ball for Pickleball, not swapped) with nothing else
+drifted. Committed separately from the code change (`b54e678`), same two-step process HF-12..20
+established.
+
+---
+
+### CLIENT-SESSION-11 · Extract a shared `SessionCard` (compact/full size variant)
+
+**Status:** `DONE` (2026-08-15) · **Summary:**
+`client/docs/CLIENT-SESSION-11_SHARED_SESSION_CARD.md` · **Type:** Refactor (de-dup) ·
+**Dependency:** none · **Filed:**
+2026-08-15, raised by the user while discussing SPORT-4's `SportIcon` reuse, after confirming
+`UpcomingMatches` (the Home Feed/Groups/Friends right rail) and `SessionListCard` (the Matches
+page's "My sessions"/Discover grid card) are two separately-implemented components, not one reused
+— they were only kept *visually* in line by hand (CLIENT-SESSION-10's "brought in line for
+consistency" pass), which is a real drift risk: a future change to one has no guarantee of being
+ported to the other.
+
+**Problem, verified against the actual code:** `UpcomingMatches.tsx` (`shared/components/`) renders
+its own inline card JSX per match — icon badge, title, status, clock/pin/fee/participant rows, two
+action buttons — at a smaller size (`size-5.5` badge, `size-3` icons, `text-xs` title,
+`rounded-lg`). `SessionListCard.tsx` (`features/session/components/`, used by `SessionDateGroup`
+for the Matches page's date-grouped list and by `SessionDiscoverPanel`'s results grid) renders the
+same structure at a larger size (`size-6` badge, `size-3.5` icons, `text-sm` title, `rounded-xl`,
+plus an `IconUsers` icon before the participant count that the compact version omits). Both consume
+the same underlying data shape — `SessionListItem extends Session` with no additional fields either
+component actually reads — so unifying them is a structural no-op on the data side.
+
+**Decision (confirmed with the user before implementation):** one shared component with a
+`size: 'compact' | 'full'` prop (default `'full'`), not "make both the same size" — the rail and
+the Matches page keep their current, intentionally different visual density. This is a pure
+de-duplication refactor: no visual change on either page, just one implementation instead of two
+kept in line by hand.
+
+**What ships:**
+- New `shared/components/SessionCard.tsx` (+ `.stories.tsx`, `.test.tsx`) — the merged component,
+  moved to `shared/` since `UpcomingMatches` (a shared, cross-page component) needs it too, not
+  scoped to `features/session/` alone anymore.
+- `UpcomingMatches.tsx` renders `<SessionCard size="compact" .../>` per row instead of its own
+  inline JSX — keeps its own header/cap/"See all"/empty-state/`activeSport`-filtering logic, none
+  of which `SessionCard` owns.
+- `SessionDateGroup.tsx` / `SessionDiscoverPanel.tsx` render `<SessionCard size="full" .../>`
+  instead of `SessionListCard`.
+- `features/session/components/SessionListCard.tsx` (+ its `.test.tsx`/`.stories.tsx`) deleted.
+- `UpcomingMatches`'s `onSelectMatch` prop renamed to `onViewDetails` for naming consistency with
+  the other 3 call sites of the merged card (`HomeFeedPage`/`GroupsPage`/`FriendsPage` wiring
+  updated — value unchanged, just the prop key).
+
+**Out of scope:** any visual/behavioral change to either page — this is a refactor, not a redesign;
+zero-diff expected on visual-regression.
+
+**Executed:** 838/838 Vitest passing, `tsc`/`lint` clean, Storybook builds clean, 49/49 e2e passing
+(including `matches-journey.spec.ts` and `home-feed-journey.spec.ts`, exercising the card at both
+sizes end-to-end). Visual-regression showed the same 18 "different" results as SPORT-4's baseline
+run — confirmed via direct diff-image inspection to be pure Windows-vs-Linux font anti-aliasing
+noise (every text glyph highlighted uniformly, zero structural shift; independently confirmed by
+`app-post-modal.spec.ts`'s 9 captures, which contain no `SessionCard` content at all, diffing at
+the same ratio). **No baseline regeneration needed.** Full writeup:
+`client/docs/CLIENT-SESSION-11_SHARED_SESSION_CARD.md`.

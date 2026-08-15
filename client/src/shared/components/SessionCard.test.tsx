@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
-import type { SessionListItem } from '../types';
-import { SessionListCard } from './SessionListCard';
+import type { Session } from '@/shared/types/session';
+import { SessionCard } from './SessionCard';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
   football: { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' },
@@ -27,7 +27,7 @@ const location: Location = {
   updatedAt: '2026-06-01T10:00:00',
 };
 
-function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem {
+function makeSession(overrides: Partial<Session> = {}): Session {
   return {
     id: 1,
     groupId: null,
@@ -60,7 +60,6 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
     callerParticipation: null,
     createdAt: '2026-07-01T10:00:00',
     updatedAt: '2026-07-01T10:00:00',
-    groupName: null,
     ...overrides,
   };
 }
@@ -68,10 +67,28 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
 const noopParticipationAction = () => {};
 const noPendingAction = () => false;
 
-describe('SessionListCard', () => {
-  it('renders the title, status, location, and participant count', () => {
+describe('SessionCard', () => {
+  it('renders the title, status, location, and participant count (defaults to size="full")', () => {
     render(
-      <SessionListCard
+      <SessionCard
+        session={makeSession()}
+        sportsByKey={sportsByKey}
+        currentUserId="user-2"
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+    expect(screen.getByText('Sunday pickup run')).toBeInTheDocument();
+    expect(screen.getByText('Scheduled')).toBeInTheDocument();
+    expect(screen.getByText('Riverside Courts')).toBeInTheDocument();
+    expect(screen.getByText('3 participants')).toBeInTheDocument();
+  });
+
+  it('renders the same content at size="compact"', () => {
+    render(
+      <SessionCard
+        size="compact"
         session={makeSession()}
         sportsByKey={sportsByKey}
         currentUserId="user-2"
@@ -88,7 +105,7 @@ describe('SessionListCard', () => {
 
   it('falls back to "{sportName} session" when title is null', () => {
     render(
-      <SessionListCard
+      <SessionCard
         session={makeSession({ title: null })}
         sportsByKey={sportsByKey}
         currentUserId="user-2"
@@ -102,7 +119,7 @@ describe('SessionListCard', () => {
 
   it('singularizes "1 participant"', () => {
     render(
-      <SessionListCard
+      <SessionCard
         session={makeSession({ participantCount: 1 })}
         sportsByKey={sportsByKey}
         currentUserId="user-2"
@@ -116,7 +133,7 @@ describe('SessionListCard', () => {
 
   it('shows "N/capacity participants" once a real capacity was chosen', () => {
     render(
-      <SessionListCard
+      <SessionCard
         session={makeSession({ participantCount: 3, capacity: 10 })}
         sportsByKey={sportsByKey}
         currentUserId="user-2"
@@ -130,7 +147,7 @@ describe('SessionListCard', () => {
 
   it('shows the fee — Free, Split cost, or a formatted VND amount', () => {
     const { rerender } = render(
-      <SessionListCard
+      <SessionCard
         session={makeSession()}
         sportsByKey={sportsByKey}
         currentUserId="user-2"
@@ -142,7 +159,7 @@ describe('SessionListCard', () => {
     expect(screen.getByText('Free')).toBeInTheDocument();
 
     rerender(
-      <SessionListCard
+      <SessionCard
         session={makeSession({ feeType: 'SPLIT' })}
         sportsByKey={sportsByKey}
         currentUserId="user-2"
@@ -154,7 +171,7 @@ describe('SessionListCard', () => {
     expect(screen.getByText('Split cost')).toBeInTheDocument();
 
     rerender(
-      <SessionListCard
+      <SessionCard
         session={makeSession({ feeType: 'FIXED', feeAmountVnd: 50000 })}
         sportsByKey={sportsByKey}
         currentUserId="user-2"
@@ -170,7 +187,7 @@ describe('SessionListCard', () => {
     const user = userEvent.setup();
     const onViewDetails = vi.fn();
     render(
-      <SessionListCard
+      <SessionCard
         session={makeSession({ id: 42 })}
         sportsByKey={sportsByKey}
         currentUserId="user-2"
@@ -187,7 +204,7 @@ describe('SessionListCard', () => {
     const user = userEvent.setup();
     const onParticipationAction = vi.fn();
     render(
-      <SessionListCard
+      <SessionCard
         session={makeSession({ id: 42 })}
         sportsByKey={sportsByKey}
         currentUserId="user-2"
@@ -202,7 +219,7 @@ describe('SessionListCard', () => {
 
   it('shows a Leave action when the caller is JOINED', () => {
     render(
-      <SessionListCard
+      <SessionCard
         session={makeSession({
           callerParticipation: {
             id: 1,
@@ -227,7 +244,7 @@ describe('SessionListCard', () => {
 
   it('hides Leave for the session creator, even when JOINED', () => {
     render(
-      <SessionListCard
+      <SessionCard
         session={makeSession({
           callerParticipation: {
             id: 1,
@@ -255,7 +272,7 @@ describe('SessionListCard', () => {
     const onViewDetails = vi.fn();
     const onParticipationAction = vi.fn();
     render(
-      <SessionListCard
+      <SessionCard
         session={makeSession({ id: 42 })}
         sportsByKey={sportsByKey}
         currentUserId="user-2"
@@ -277,7 +294,7 @@ describe('SessionListCard', () => {
 
   it('hides the participation action for a CANCELLED session', () => {
     render(
-      <SessionListCard
+      <SessionCard
         session={makeSession({ status: 'CANCELLED' })}
         sportsByKey={sportsByKey}
         currentUserId="user-2"
@@ -292,7 +309,7 @@ describe('SessionListCard', () => {
 
   it('disables the participation action while pending', () => {
     render(
-      <SessionListCard
+      <SessionCard
         session={makeSession({ id: 42 })}
         sportsByKey={sportsByKey}
         currentUserId="user-2"

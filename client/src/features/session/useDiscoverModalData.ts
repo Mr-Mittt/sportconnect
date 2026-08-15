@@ -35,7 +35,7 @@ export function useDiscoverModalData(sportId: number | undefined) {
     [discoverQuery.data, searchMode, searchText],
   );
 
-  // Card-level participation action (SessionListCard in the Discover results grid) — separate
+  // Card-level participation action (SessionCard in the Discover results grid) — separate
   // mutation instance from the one useSessionDetailModalData owns internally for the modal's own
   // Join/Leave (both invalidate the same sessionKeys.all root — harmless duplicate, see that
   // hook's own doc comment).

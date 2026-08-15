@@ -1,8 +1,8 @@
 import { IconSearch } from '@tabler/icons-react';
+import { SessionCard } from '@/shared/components/SessionCard';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { SessionListItem, SessionSearchMode } from '../types';
-import { SessionListCard } from './SessionListCard';
 
 /** Only 'sessions' filters for real (see `discoverSearch.ts`) — 'location'/'gear' render
  * disabled since this app has no location/gear search or gear/equipment domain yet. */
@@ -30,7 +30,7 @@ interface SessionDiscoverPanelProps {
   sportsByKey: Record<SportKey, SportProfile>;
   currentUserId: string;
   onViewDetails: (sessionId: number) => void;
-  /** CLIENT-SESSION-9: threaded straight through to each `SessionListCard`. */
+  /** CLIENT-SESSION-9: threaded straight through to each `SessionCard`. */
   onParticipationAction: (sessionId: number, kind: ParticipationActionKind) => void;
   isParticipationActionPending: (sessionId: number) => boolean;
 
@@ -123,7 +123,7 @@ export function SessionDiscoverPanel({
       {!isLoading && !isError && sessions.length > 0 && (
         <div className={gridClassName}>
           {sessions.map((session) => (
-            <SessionListCard
+            <SessionCard
               key={session.id}
               session={session}
               sportsByKey={sportsByKey}

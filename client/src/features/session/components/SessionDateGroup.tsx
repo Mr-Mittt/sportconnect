@@ -1,6 +1,6 @@
 import { IconChevronDown, IconChevronRight } from '@tabler/icons-react';
+import { SessionCard } from '@/shared/components/SessionCard';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
-import { SessionListCard } from './SessionListCard';
 import type { SessionDateGroup as SessionDateGroupData } from '../groupSessionsByDate';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 
@@ -10,16 +10,17 @@ interface SessionDateGroupProps extends SessionDateGroupData {
   isCollapsed: boolean;
   onToggleCollapsed: (dateKey: string) => void;
   onViewDetails: (sessionId: number) => void;
-  /** CLIENT-SESSION-9: threaded straight through to each `SessionListCard`. */
+  /** CLIENT-SESSION-9: threaded straight through to each `SessionCard`. */
   onParticipationAction: (sessionId: number, kind: ParticipationActionKind) => void;
   isParticipationActionPending: (sessionId: number) => boolean;
 }
 
 /**
  * One collapsible calendar-day section of the Matches page's "My sessions" panel — a toggle
- * header (chevron + date label + rule line) plus its sessions, reusing the same
- * `SessionListCard` the Discover grid uses. `dateKey` (not `dateLabel`, which repeats as
- * "Today" across sessions/reloads) is the collapse-state identity.
+ * header (chevron + date label + rule line) plus its sessions, reusing the same `SessionCard`
+ * (`size="full"`, CLIENT-SESSION-11) the Discover grid and the right rail both use. `dateKey`
+ * (not `dateLabel`, which repeats as "Today" across sessions/reloads) is the collapse-state
+ * identity.
  */
 export function SessionDateGroup({
   dateKey,
@@ -54,7 +55,7 @@ export function SessionDateGroup({
       {!isCollapsed && (
         <div className="mt-3 flex flex-col gap-3">
           {sessions.map((session) => (
-            <SessionListCard
+            <SessionCard
               key={session.id}
               session={session}
               sportsByKey={sportsByKey}

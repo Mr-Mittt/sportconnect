@@ -89,7 +89,7 @@ const renderMatches = (
       sportsByKey={sportsByKey}
       currentUserId="user-2"
       onSeeAll={() => {}}
-      onSelectMatch={() => {}}
+      onViewDetails={() => {}}
       onCreateMatch={() => {}}
       onJoinMatch={() => {}}
       onParticipationAction={() => {}}
@@ -155,14 +155,14 @@ describe('UpcomingMatches', () => {
 
   it('reports the session id from the "View details" CTA', async () => {
     const user = userEvent.setup();
-    const onSelectMatch = vi.fn();
-    renderMatches({ onSelectMatch });
+    const onViewDetails = vi.fn();
+    renderMatches({ onViewDetails });
 
     await user.click(screen.getByRole('button', { name: /Warriors vs Riverside — View details/ }));
-    expect(onSelectMatch).toHaveBeenCalledWith(1);
+    expect(onViewDetails).toHaveBeenCalledWith(1);
 
     await user.click(screen.getByRole('button', { name: /Singles ladder match/ }));
-    expect(onSelectMatch).toHaveBeenCalledWith(3);
+    expect(onViewDetails).toHaveBeenCalledWith(3);
   });
 
   it('"See all" calls onSeeAll', async () => {
@@ -238,17 +238,17 @@ describe('UpcomingMatches', () => {
 
   it('clicking the card itself opens details too, without double-firing when a nested button is clicked', async () => {
     const user = userEvent.setup();
-    const onSelectMatch = vi.fn();
+    const onViewDetails = vi.fn();
     const onParticipationAction = vi.fn();
-    renderMatches({ matches: [matches[0]], onSelectMatch, onParticipationAction });
+    renderMatches({ matches: [matches[0]], onViewDetails, onParticipationAction });
 
     await user.click(screen.getByText('Warriors vs Riverside'));
-    expect(onSelectMatch).toHaveBeenCalledWith(1);
-    expect(onSelectMatch).toHaveBeenCalledTimes(1);
+    expect(onViewDetails).toHaveBeenCalledWith(1);
+    expect(onViewDetails).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole('button', { name: /Warriors vs Riverside — Join/ }));
     expect(onParticipationAction).toHaveBeenCalledWith(1, 'JOIN');
     // The card's own click handler must not also fire from a click on the nested button.
-    expect(onSelectMatch).toHaveBeenCalledTimes(1);
+    expect(onViewDetails).toHaveBeenCalledTimes(1);
   });
 });

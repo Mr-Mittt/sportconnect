@@ -128,7 +128,7 @@ const meta = {
     sportsByKey,
     currentUserId: 'user-2', // not the matches' creator (createdBy: 'user-1') by default
     onSeeAll: () => {},
-    onSelectMatch: () => {},
+    onViewDetails: () => {},
     onCreateMatch: () => {},
     onJoinMatch: () => {},
     onParticipationAction: () => {},

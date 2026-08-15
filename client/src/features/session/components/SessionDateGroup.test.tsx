@@ -123,7 +123,7 @@ describe('SessionDateGroup', () => {
     expect(onToggleCollapsed).toHaveBeenCalledWith('2026-07-31');
   });
 
-  it('forwards onViewDetails from the underlying SessionListCard', async () => {
+  it('forwards onViewDetails from the underlying SessionCard', async () => {
     const user = userEvent.setup();
     const onViewDetails = vi.fn();
     render(

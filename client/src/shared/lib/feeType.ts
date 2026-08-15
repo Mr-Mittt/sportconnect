@@ -1,9 +1,9 @@
 import { formatVnd } from '@/shared/lib/currency';
 import type { FeeType } from '@/shared/types/session';
 
-// Shared across CreateSessionModal (the fee-type toggle), SessionListCard, UpcomingMatches, and
-// SessionDetailModal so the fee reads identically everywhere a Session appears — same convention
-// as sessionStatus.ts's SESSION_STATUS_LABEL.
+// Shared across CreateSessionModal (the fee-type toggle), SessionCard (used at both sizes by
+// UpcomingMatches and the Matches page), and SessionDetailModal so the fee reads identically
+// everywhere a Session appears — same convention as sessionStatus.ts's SESSION_STATUS_LABEL.
 export const FEE_TYPE_LABEL: Record<FeeType, string> = {
   FREE: 'Free',
   SPLIT: 'Split cost',
