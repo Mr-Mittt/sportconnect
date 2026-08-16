@@ -1213,13 +1213,30 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdInAndIsActiveTrue([1L, 2L]) >> [post1, post2]
-        1 * postLikeRepository.countGroupedByPostIdIn([1L, 2L]) >> [[1L, 3L] as Object[]]
-        1 * postLikeRepository.findLikedPostIdsByUserIdAndPostIdIn(userId, [1L, 2L]) >> [2L]
+        1 * postLikeRepository.countAndCallerLikedGroupedByPostIdIn([1L, 2L], userId) >>
+                [[1L, 3L, 0L] as Object[], [2L, 1L, 1L] as Object[]]
         result.size() == 2
         result[1L].likeCount == 3L
         result[1L].isLikedByCurrentUser == false
-        result[2L].likeCount == 0L
+        result[2L].likeCount == 1L
         result[2L].isLikedByCurrentUser == true
+    }
+
+    def "getSessionPostLikeInfo defaults to zero/false for a valid postId with no like rows at all"() {
+        given:
+        def post = Post.builder().id(1L).userId(userId).postType(PostType.SESSION_POST)
+                .content("c").visibility("public").media([]).hashtags([])
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
+
+        when:
+        def result = postService.getSessionPostLikeInfo([1L], userId)
+
+        then:
+        1 * postRepository.findByIdInAndIsActiveTrue([1L]) >> [post]
+        // GROUP BY produces no row at all for a postId with zero PostLike rows.
+        1 * postLikeRepository.countAndCallerLikedGroupedByPostIdIn([1L], userId) >> []
+        result[1L].likeCount == 0L
+        result[1L].isLikedByCurrentUser == false
     }
 
     def "getSessionPostLikeInfo silently drops a postId that isn't an active SESSION_POST"() {
@@ -1236,8 +1253,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdInAndIsActiveTrue([1L, 2L, 99L]) >> [sessionPost, feedPost]
-        1 * postLikeRepository.countGroupedByPostIdIn([1L]) >> []
-        1 * postLikeRepository.findLikedPostIdsByUserIdAndPostIdIn(userId, [1L]) >> []
+        1 * postLikeRepository.countAndCallerLikedGroupedByPostIdIn([1L], userId) >> []
         result.keySet() == [1L] as Set
     }
 
@@ -1262,8 +1278,10 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdInAndIsActiveTrue([1L]) >> [post]
-        1 * postLikeRepository.countGroupedByPostIdIn([1L]) >> []
-        0 * postLikeRepository.findLikedPostIdsByUserIdAndPostIdIn(_, _)
+        // A null userId still reaches the merged query — SQL's `pl.userId = NULL` never matches,
+        // so callerLikedSum degrades to 0/null for every row without a separate code path.
+        1 * postLikeRepository.countAndCallerLikedGroupedByPostIdIn([1L], null) >> [[1L, 2L, 0L] as Object[]]
+        result[1L].likeCount == 2L
         result[1L].isLikedByCurrentUser == false
     }
 }

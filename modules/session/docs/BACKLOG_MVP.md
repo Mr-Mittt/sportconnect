@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/session/session-impl`
-**Last updated:** 2026-08-15
+**Last updated:** 2026-08-16
 
 ---
 
@@ -30,7 +30,7 @@
 | 9 | SESSION-11 | Drop DB-level FKs on session tables' cross-domain columns | `DONE` |
 | 10 | SESSION-10 | Session comments — reuses post-impl's Comment via a companion `SESSION_POST` anchor | `DONE` |
 | 11 | SESSION-12 | Partial index on `sessions` scoped to `status = SCHEDULED` for the generation job's hot queries | `DONE` |
-| 12 | SESSION-14 | Reduce `mapToResponses`' round trips (2 points) | `TODO` |
+| 12 | SESSION-14 | Reduce `mapToResponses`' round trips (2 points) | `DONE` |
 | 13 | SESSION-13 | `SessionResponse.likeCount`/`isLikedByCurrentUser` + `PostService.getSessionPostLikeInfo` batch method | `DONE` |
 | 14 | SESSION-8 | Session discover ranking algorithm | `TODO` |
 
@@ -622,3 +622,18 @@ the already-batched path, not fixing a scaling bug.
 
 **Expected result if #1 and #2 both land:** 8–9 queries → **6** for a single `getSession()` call
 (~25–33% fewer round trips). **Not scheduled** — filed for later prioritization, no target date.
+
+**Delta (2026-08-16, at pickup):** shipped narrower than scoped, by explicit user decision. Only
+**merge #1** landed (`countAndCallerLikedGroupedByPostIdIn`, exactly as sketched above) —
+`post-impl`, low risk. **Merge #2 was deliberately deferred, not attempted** — its payload tradeoff
+(aggregate `COUNT` → full-row fetch) and bigger blast radius on `session-impl`'s core batch path
+weren't worth taking on in the same pass; the sketch above is still accurate for whoever picks it
+up next. Net result: 8–9 queries → **7–8**, not the full **6** originally targeted.
+
+**Bundled addition (not part of the original scoping, added at pickup by user request):**
+`leaveSession` now rejects a standalone session's own creator (`BadRequestException`) — they're
+auto-`JOINED` at creation (`createSession`) and previously had no gate stopping them from leaving
+their own session via this endpoint; `cancelSession` remains their only way out. Scoped to
+standalone only — a group-linked session's creator isn't auto-joined and can still leave normally
+if they separately joined via `joinSession` (which never blocks the creator). Full writeup:
+`modules/session/docs/SESSION-14_REDUCE_MAPTORESPONSES_ROUND_TRIPS.md`.
