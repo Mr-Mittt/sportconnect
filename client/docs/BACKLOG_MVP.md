@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-16
 
 ---
 
@@ -138,6 +138,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 66 | CLIENT-SESSION-11 | Extract a shared `SessionCard` (compact/full size variant) — de-dupes `UpcomingMatches`' rail row and `SessionListCard` — **new ticket, not in either epic, filed while discussing SPORT-4's `SportIcon` reuse** (2026-08-15) | `DONE` |
 | 67 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 | 68 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
+| 69 | CLIENT-NOTIF-1 | Notification bell/dropdown — live badge + list + mark-as-read | `TODO` |
 
 **Dependencies:**
 ```
@@ -3216,3 +3217,25 @@ noise (every text glyph highlighted uniformly, zero structural shift; independen
 `app-post-modal.spec.ts`'s 9 captures, which contain no `SessionCard` content at all, diffing at
 the same ratio). **No baseline regeneration needed.** Full writeup:
 `client/docs/CLIENT-SESSION-11_SHARED_SESSION_CARD.md`.
+
+---
+
+### CLIENT-NOTIF-1 · Notification bell/dropdown — live badge + list + mark-as-read
+**Status:** `TODO`
+**Type:** New Feature
+**Depends on:** backend `modules/notification`'s NTF-1 (read endpoints) and NTF-3 (STOMP live
+delivery)
+
+**Filed:** 2026-08-16, from the notification-module vision session —
+`documentation/md/vision/NOTIFICATION_MODULE_VISION.md`.
+
+A notification bell in the shared `TopBar` (per the client's one-shell-everywhere convention):
+unread-count badge, kept live via a STOMP subscription to `/user/queue/notifications` (falls back to
+a poll if the socket disconnects — no dead badge on a lost connection). Dropdown list backed by
+`GET /api/notifications` (`use<Feature>Data()` hook wrapping TanStack Query, real backend from day
+one per this client's data-layer convention — no mock-data phase needed, the backend ships first).
+Opening/clicking a notification calls `PUT /api/notifications/{id}/read`.
+
+**Out of scope:** per-type notification preferences/mute UI (no backend support yet — single-table
+v1, per the vision doc); push notifications (tracked separately under the Phase 4–5 mobile roadmap
+in `PROGRESS.md`).

@@ -25,10 +25,13 @@ a real list of concrete triggers to design against instead of starting from a bl
 
 ### NOTIF-1 · New comment on a session you're in
 **Date added:** 2026-08-07
-**Status:** `CANDIDATE`
-**Source:** `documentation/md/vision/SESSION_COMMENTS_VISION.md` (open question, not resolved)
+**Status:** `CONFIRMED` (2026-08-16)
+**Source:** `documentation/md/vision/SESSION_COMMENTS_VISION.md` (open question, originally not
+resolved), confirmed in `documentation/md/vision/NOTIFICATION_MODULE_VISION.md`
 
-When a participant posts a comment on a session (`SESSION-10`/`CLIENT-SESSION-8`), should the
-other participants (`JOINED`/`REQUESTED`/`INVITED`) get notified? The session-comments vision
-session explicitly left this open — v1 ships as fully opt-in (you only see new comments when you
-open `SessionDetailModal`), no notification. Revisit once the notification feature is scoped.
+When a participant posts a comment on a session (`SESSION-10`/`CLIENT-SESSION-8`), the other
+participants (`JOINED`/`REQUESTED`/`INVITED`) now get notified — confirmed as part of the
+notification-module vision session, one of the v1 session-domain triggers (highest rollout
+priority of the four domains scoped: session > post > group > friend). Filed as **SESSION-15** in
+`modules/session/docs/BACKLOG_MVP.md`, `TODO`, blocked on `modules/common`'s C3 and
+`modules/notification`'s NTF-1/NTF-2.
