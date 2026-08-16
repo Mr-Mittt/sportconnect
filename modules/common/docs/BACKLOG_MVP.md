@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/common`
-**Last updated:** 2026-07-02
+**Last updated:** 2026-08-16
 
 ---
 
@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | C1 | Global exception handler for common exception types | `DONE` |
 | 2 | C2 | `ResourceGate<T>` — shared availability/visibility check shape | `DONE` |
+| 3 | C3 | Generic transactional-outbox mechanism | `TODO` |
 
 ---
 
@@ -140,3 +141,46 @@ A14, `session-impl`'s SESSION-10); any change to the existing 5 exception types 
 `NotFoundException`/`ForbiddenException` as they already exist today; a caching layer for the
 cross-domain calls each implementation makes (flagged as an open question in the ADR §8, deferred
 until a real hot-path bottleneck shows up).
+
+---
+
+### C3 · Generic transactional-outbox mechanism
+**Status:** `TODO`
+**Type:** New Feature (Architecture)
+**Scope:** One new mapped-superclass + one reusable relay component pattern in `modules/common`
+only — no change to any domain module in this ticket; each domain that wants durable async event
+publishing builds its own outbox table on top of this shape in its own ticket (see
+`modules/notification/docs/BACKLOG_MVP.md`'s NTF-1..3 and the per-domain outbox-wiring tickets:
+`post-impl`'s B7, `group-impl`'s B21, `session-impl`'s SESSION-15, `user-impl`'s U13).
+
+**Filed:** 2026-08-16, from the notification-module vision session — full design record, rejected
+alternatives, and rationale in `documentation/md/vision/NOTIFICATION_MODULE_VISION.md`.
+
+**Problem:** a domain write (e.g. a comment insert) and a durable async event about that write (e.g.
+publishing to RabbitMQ) can't commit atomically across two different systems. Publisher confirms and
+durable queues protect a message once it's actually published, but not the window between "the DB
+transaction committed" and "the publish call was issued" — if the app crashes there, the event is
+silently lost with no record it ever existed. The only fix is making the event's existence durable
+in the *same* transaction as the domain write.
+
+**Fix — add the shape, not per-domain logic:** an `OutboxEvent` `@MappedSuperclass` (id, `eventType`,
+JSON `payload`, `status` [`PENDING`/`SENT`], `createdAt`, `sentAt`) that each domain extends with its
+own concrete entity/table (e.g. `PostOutboxEvent` → `post_outbox_events`, staying inside `post-impl`
+per the domain-scoped-tables rule — `common` never owns another domain's outbox data). A reusable
+relay component (scheduled poller, or `LISTEN/NOTIFY`) pattern that any domain's outbox repository
+can register into: read `PENDING` rows, publish to RabbitMQ with publisher confirms (`correlated`
+mode) + a durable queue + persistent delivery mode, mark `SENT` on ack.
+
+Writing the outbox row is an ordinary same-transaction JPA `save()` alongside the domain write — no
+Spring `ApplicationEventPublisher`/`@TransactionalEventListener` needed on the producing side; the
+relay's own polling cadence is what guarantees "only publish for a transaction that actually
+committed," since it only ever reads rows that are already durably there.
+
+**Tests:** a Spock spec against a trivial in-module test double outbox entity, covering: a `PENDING`
+row gets published and marked `SENT`; a publish failure (nack/timeout) leaves the row `PENDING` for
+retry; already-`SENT` rows are never re-published.
+
+**Out of scope:** any concrete domain's outbox table or event types (each domain's own ticket); the
+RabbitMQ topology itself (`sportconnect.events` exchange, routing keys — scoped in
+`modules/notification/docs/BACKLOG_MVP.md`'s NTF-2); choosing poller-per-domain vs. one shared
+generic poller (left open, see the vision doc's Open Questions).

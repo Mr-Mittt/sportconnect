@@ -33,6 +33,7 @@
 | 12 | SESSION-14 | Reduce `mapToResponses`' round trips (2 points) | `DONE` |
 | 13 | SESSION-13 | `SessionResponse.likeCount`/`isLikedByCurrentUser` + `PostService.getSessionPostLikeInfo` batch method | `DONE` |
 | 14 | SESSION-8 | Session discover ranking algorithm | `TODO` |
+| 15 | SESSION-15 | Notification outbox wiring — closes NOTIF-1 | `TODO` |
 
 ---
 
@@ -637,3 +638,27 @@ their own session via this endpoint; `cancelSession` remains their only way out.
 standalone only — a group-linked session's creator isn't auto-joined and can still leave normally
 if they separately joined via `joinSession` (which never blocks the creator). Full writeup:
 `modules/session/docs/SESSION-14_REDUCE_MAPTORESPONSES_ROUND_TRIPS.md`.
+
+---
+
+## SESSION-15 — Notification outbox wiring
+**Status:** `TODO`
+**Type:** New Feature
+**Depends on:** `modules/common`'s C3 (generic transactional-outbox mechanism)
+
+**Filed:** 2026-08-16, from the notification-module vision session —
+`documentation/md/vision/NOTIFICATION_MODULE_VISION.md`. Closes `NOTIF-1`
+(`documentation/md/NOTIFICATION_USE_CASES.md`) — new session comment, previously left open in
+`SESSION_COMMENTS_VISION.md`, now confirmed.
+
+New `session_outbox_events` table (this module's own, built on C3's `OutboxEvent` shape). An outbox
+row is written, in the same transaction as the triggering write, for: a new session comment
+(recipients: other `JOINED`/`REQUESTED`/`INVITED` participants), a join request is received
+(recipient: the organizer), a join request is approved or rejected (recipient: the requester), a
+session invite is sent (recipient: the invitee). Routing keys: `session.comment.created`,
+`session.join_request.created`, `session.join_request.approved`, `session.join_request.rejected`,
+`session.invitation.created` (feeding `modules/notification`'s `sportconnect.events` consumer,
+NTF-2).
+
+**Out of scope:** the notification consumer/aggregation logic itself (`modules/notification`'s
+NTF-2); any UI change (a client ticket, once this and NTF-2/3 exist).

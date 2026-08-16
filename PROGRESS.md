@@ -569,7 +569,10 @@ These tables were created in V004/V005 but have no business logic or API:
 - `user_follows` — to be **dropped** and replaced by `friendships` table (Post MVP ticket B1)
 - `hashtags`, `post_hashtags` — extraction + service planned in Post MVP ticket B5
 - `post_shares` — deferred to V1 (no sharing in MVP)
-- `notifications` — deferred; not yet planned
+- `notifications` — dead, will be **dropped and replaced** (not reused) by a new domain-owned table
+  under `modules/notification`, per `documentation/md/vision/NOTIFICATION_MODULE_VISION.md`
+  (2026-08-16) — this table's cross-domain FKs and stale `type`/`entity_type` enum predate current
+  rules and don't cover `group`/`session`
 - `user_blocks` — deferred; not yet planned
 - `post_reports` — deferred; not yet planned
 
@@ -2321,7 +2324,16 @@ explicit go-ahead at each step (full story in A3's summary doc):
 
 ### Immediate Next (other backend completions)
 - **Complete forgot-password** — wire up UserService lookup in `AuthController`
-- **Notifications service** — in-app notifications for likes, comments, friend requests, group events
+- **Notifications service** — vision scoped 2026-08-16:
+  `documentation/md/vision/NOTIFICATION_MODULE_VISION.md`. New `modules/notification` domain
+  (event-driven via RabbitMQ, not direct cross-domain calls), a shared transactional-outbox
+  mechanism in `modules/common` (C3) that each producing domain builds on, aggregated
+  per-recipient notifications (resets on read), STOMP-over-RabbitMQ live delivery to the client.
+  Replaces the dead `V005` `notifications` table. v1 event scope, in rollout priority order:
+  session (comments, join requests/invites — closes `NOTIF-1`) > post (likes, comments, thread
+  replies) > group (join requests/invites) > friend (request received/accepted, closes `U1`'s
+  `// TODO: notify` stub). Tickets filed: `common` C3, `modules/notification` NTF-1..3, `post-impl`
+  B7, `group-impl` B21, `session` SESSION-15, `user-impl` U13, `client` CLIENT-NOTIF-1 — all `TODO`.
 
 ### Session & Location System (backend implemented 2026-07-30; client fully landed 2026-07-31)
 - Full design: `documentation/md/SESSION_LOCATION_DESIGN.md`. Two new domains:
