@@ -60,7 +60,10 @@ public interface SessionService {
      * "cancel my request" for a REQUESTED one (SESSION-9) — same endpoint as a plain leave, the
      * client just labels the button differently based on the caller's current status. Unlike
      * rejectParticipant, never sets rejectReason (that field is reserved for manager-initiated
-     * rejection).
+     * rejection). SESSION-14: rejects with BadRequestException when the caller is the creator of
+     * a standalone session (groupId null) — cancelSession is their only way out; not enforced for
+     * a group-linked session's creator, who isn't auto-joined and can leave like any other member
+     * if they choose to join one.
      */
     void leaveSession(Long sessionId, UUID userId);
 

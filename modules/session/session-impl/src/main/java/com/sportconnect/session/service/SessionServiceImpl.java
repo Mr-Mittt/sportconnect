@@ -300,6 +300,16 @@ public class SessionServiceImpl implements SessionService {
         // Also doubles as "decline" (INVITED) and "cancel my request" (REQUESTED) — SESSION-9.
         // Same LEFT target for all three; the client picks the button label from the caller's
         // current status, same as "Accept" already reusing this endpoint's sibling, joinSession.
+        // SESSION-14: a standalone session's creator is auto-JOINED at creation (createSession)
+        // and can't leave via this endpoint — cancelSession is their only way out. Scoped to
+        // standalone only: a group-linked session's creator isn't auto-joined, and if they later
+        // join like a normal member (joinSession never blocks the creator), they can leave like
+        // one too — their real ownership lever there is group role, not this participant row.
+        Session session = findSessionOrThrow(sessionId);
+        if (session.getGroupId() == null && userId.equals(session.getCreatedBy())) {
+            throw new BadRequestException("The creator cannot leave their own session — cancel it instead");
+        }
+
         SessionParticipant participant = sessionParticipantRepository
                 .findBySessionIdAndUserId(sessionId, userId)
                 .filter(p -> p.getStatus() == ParticipantStatus.JOINED

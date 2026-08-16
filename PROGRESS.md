@@ -2608,7 +2608,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   no module actually implements them, so there's no owning backlog to file a fix-the-schema ticket
   against; flagged here in case someone wants to scope either "build the feature" or "drop the dead
   table" later, same "leftover placeholder, leave it alone" status as `sport-impl`'s `FacilityType`.
-- **MVP backlog (session module):** 12 of 13 tickets `DONE` (SESSION-1 through SESSION-13 except
+- **MVP backlog (session module):** 13 of 14 tickets `DONE` (SESSION-1 through SESSION-14 except
   SESSION-8); SESSION-8 remains `TODO`.
 - **CLIENT-SESSION-8 (`DONE`, 2026-08-12,
   `client/docs/CLIENT-SESSION-8_SESSION_COMMENTS.md`):** an inline "Discussion" section in
@@ -2704,6 +2704,18 @@ explicit go-ahead at each step (full story in A3's summary doc):
   than sharing an implementation, a real drift risk. Pure refactor, zero visual change: 838 Vitest
   passing, 49/49 e2e passing, visual-regression showed only Windows-vs-Linux font-rendering noise
   (confirmed via direct diff-image inspection — no baseline regen needed).
+- **SESSION-14 (`DONE`, 2026-08-16,
+  `modules/session/docs/SESSION-14_REDUCE_MAPTORESPONSES_ROUND_TRIPS.md`):** shipped narrower than
+  originally scoped — only merge #1 (post-like count + caller-liked flag →
+  `PostLikeRepository.countAndCallerLikedGroupedByPostIdIn`, one conditional-aggregation query
+  replacing two) landed; merge #2 (participant JOINED-count + caller's row) was deliberately
+  deferred at pickup, by user decision, given its payload tradeoff and bigger blast radius on
+  `session-impl`'s core batch path — still `TODO`-shaped in the backlog entry, not filed as a new
+  ticket. **Bundled addition (same pickup, user-requested):** `leaveSession` now rejects a
+  standalone session's own creator (`BadRequestException`) — they're auto-`JOINED` at creation
+  (`createSession`) but can't leave via this endpoint, only `cancelSession`. Scoped to standalone
+  only; a group-linked session's creator isn't auto-joined and can still leave normally if they
+  joined like any other member.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

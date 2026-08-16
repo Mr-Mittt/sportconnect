@@ -107,6 +107,12 @@ ownership-only), so there's nothing this module needs to wrap.
    userFullName/userAvatarUrl inside it are intentional — it's always the caller's own identity,
    which the client already has. `leaveSession` doubles as decline/cancel for this reason — see
    its Javadoc.
+8. **SESSION-14:** `leaveSession` rejects a **standalone** session's own creator
+   (`BadRequestException`) — they're auto-`JOINED` at creation (`createSession`'s seed-participant
+   block) but have no way out via this endpoint; `cancelSession` is the only way to relinquish a
+   standalone session they created. Not enforced for a group-linked session's creator — they aren't
+   auto-joined, and `joinSession` never blocks them from joining like a normal member, so they can
+   leave like one too if they choose to join.
 
 ## Gotchas
 

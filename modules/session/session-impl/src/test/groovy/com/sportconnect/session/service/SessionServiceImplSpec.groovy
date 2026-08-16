@@ -492,11 +492,13 @@ class SessionServiceImplSpec extends Specification {
     def "leaveSession rejects when the caller has no participant row at all"() {
         given:
         def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).build()
 
         when:
         sessionService.leaveSession(1L, userId)
 
         then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
         thrown(BadRequestException)
     }
@@ -504,12 +506,14 @@ class SessionServiceImplSpec extends Specification {
     def "leaveSession rejects a row that's already LEFT"() {
         given:
         def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).build()
         def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.LEFT).build()
 
         when:
         sessionService.leaveSession(1L, userId)
 
         then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
         thrown(BadRequestException)
         0 * sessionParticipantRepository.save(_)
@@ -518,12 +522,14 @@ class SessionServiceImplSpec extends Specification {
     def "leaveSession flips a JOINED row to LEFT"() {
         given:
         def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).build()
         def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
 
         when:
         sessionService.leaveSession(1L, userId)
 
         then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
     }
@@ -531,12 +537,14 @@ class SessionServiceImplSpec extends Specification {
     def "leaveSession doubles as decline, flipping an INVITED row to LEFT"() {
         given:
         def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).build()
         def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.INVITED).build()
 
         when:
         sessionService.leaveSession(1L, userId)
 
         then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
     }
@@ -544,12 +552,43 @@ class SessionServiceImplSpec extends Specification {
     def "leaveSession doubles as cancelling my own request, flipping a REQUESTED row to LEFT"() {
         given:
         def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).build()
         def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.REQUESTED).build()
 
         when:
         sessionService.leaveSession(1L, userId)
 
         then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
+    }
+
+    def "leaveSession rejects the creator of a standalone session, even though they're auto-JOINED"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).groupId(null).createdBy(userId).build()
+
+        when:
+        sessionService.leaveSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        0 * sessionParticipantRepository._
+        thrown(BadRequestException)
+    }
+
+    def "leaveSession allows a group-linked session's creator to leave if they joined like a normal member"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).groupId(5L).createdBy(userId).build()
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
+
+        when:
+        sessionService.leaveSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
     }

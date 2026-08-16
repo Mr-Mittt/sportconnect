@@ -43,7 +43,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -389,7 +389,11 @@ public class PostServiceImpl implements PostService {
      * {@code INCR_IF_EXISTS}/{@code DECR_IF_EXISTS} are no-ops against a key that was never
      * initialized), so a Redis-first lookup would silently read nothing for every session. A
      * direct grouped count avoids that gap entirely, at the cost of not sharing that cache — an
-     * acceptable trade for a batch size bounded by one page of sessions.
+     * acceptable trade for a batch size bounded by one page of sessions. SESSION-14: like count
+     * and caller-liked flag are resolved via one merged conditional-aggregation query
+     * ({@link com.sportconnect.social.post.repository.PostLikeRepository
+     * #countAndCallerLikedGroupedByPostIdIn}) instead of two separate queries against the same
+     * table.
      */
     @Override
     public Map<Long, PostLikeInfoResponse> getSessionPostLikeInfo(List<Long> postIds, UUID currentUserId) {
@@ -406,17 +410,20 @@ public class PostServiceImpl implements PostService {
             return Collections.emptyMap();
         }
 
-        Map<Long, Long> likeCounts = postLikeRepository.countGroupedByPostIdIn(validIds).stream()
-                .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
-        Set<Long> likedByCurrentUser = currentUserId == null
-                ? Set.of()
-                : new HashSet<>(postLikeRepository.findLikedPostIdsByUserIdAndPostIdIn(currentUserId, validIds));
+        Map<Long, Long> likeCounts = new HashMap<>();
+        Map<Long, Boolean> likedByCurrentUser = new HashMap<>();
+        for (Object[] row : postLikeRepository.countAndCallerLikedGroupedByPostIdIn(validIds, currentUserId)) {
+            Long postId = (Long) row[0];
+            likeCounts.put(postId, (Long) row[1]);
+            Long callerLikedSum = (Long) row[2];
+            likedByCurrentUser.put(postId, callerLikedSum != null && callerLikedSum > 0);
+        }
 
         return validIds.stream().collect(Collectors.toMap(
                 id -> id,
                 id -> PostLikeInfoResponse.builder()
                         .likeCount(likeCounts.getOrDefault(id, 0L))
-                        .isLikedByCurrentUser(likedByCurrentUser.contains(id))
+                        .isLikedByCurrentUser(likedByCurrentUser.getOrDefault(id, false))
                         .build()));
     }
 
