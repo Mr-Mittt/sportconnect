@@ -22,6 +22,15 @@ services:
     volumes:
       - sportconnect_dev_redis:/data
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI (guest/guest)
+    volumes:
+      - sportconnect_dev_rabbitmq:/var/lib/rabbitmq
+
 volumes:
   sportconnect_dev_postgres:
   sportconnect_dev_redis:
+  sportconnect_dev_rabbitmq:
