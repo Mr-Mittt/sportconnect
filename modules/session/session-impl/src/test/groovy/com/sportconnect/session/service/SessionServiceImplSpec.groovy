@@ -17,8 +17,16 @@ import com.sportconnect.session.api.dto.RejectParticipantRequest
 import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.dto.SessionType
 import com.sportconnect.session.api.dto.UpdateSessionRequest
+import com.sportconnect.session.api.event.SessionCommentCreatedEvent
+import com.sportconnect.session.api.event.SessionInvitationCreatedEvent
+import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent
+import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent
+import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent
+import com.sportconnect.session.api.event.SessionParticipantJoinedEvent
 import com.sportconnect.session.entity.Session
+import com.sportconnect.session.entity.SessionOutboxEvent
 import com.sportconnect.session.entity.SessionParticipant
+import com.sportconnect.session.repository.SessionOutboxEventRepository
 import com.sportconnect.session.repository.SessionParticipantRepository
 import com.sportconnect.session.repository.SessionRepository
 import com.sportconnect.social.post.api.dto.CommentResponse
@@ -29,6 +37,7 @@ import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.api.service.UserSportProfileService
 import com.sportconnect.user.api.service.UserService
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import spock.lang.Specification
@@ -48,11 +57,14 @@ class SessionServiceImplSpec extends Specification {
     PostService postService = Mock()
     CommentService commentService = Mock()
     SessionGate sessionGate = Mock()
+    SessionOutboxEventRepository sessionOutboxEventRepository = Mock()
+    ObjectMapper objectMapper = new ObjectMapper()
 
     @Subject
     SessionServiceImpl sessionService = new SessionServiceImpl(
             sessionRepository, sessionParticipantRepository, groupService, locationService, userService,
-            sportService, userSportProfileService, postService, commentService, sessionGate)
+            sportService, userSportProfileService, postService, commentService, sessionGate,
+            sessionOutboxEventRepository, objectMapper)
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
     def tennisLocation = LocationResponse.builder().id(2L).sportId(2L).name("Tennis Court").build()
@@ -219,6 +231,33 @@ class SessionServiceImplSpec extends Specification {
                     invited*.userId.toSet() == [inviteeA, inviteeB].toSet()
         })
         interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession writes a session.invitation.created outbox row per invitee, with the invitee as recipient"() {
+        given:
+        def userId = UUID.randomUUID()
+        def inviteeA = UUID.randomUUID()
+        def inviteeB = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .inviteeIds([inviteeA, inviteeB])
+                .build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save(_) >> saved
+        1 * sessionParticipantRepository.saveAll(_)
+        interaction { stubBatchEnrichment() }
+        1 * sessionOutboxEventRepository.saveAll({ List<SessionOutboxEvent> events ->
+            events.size() == 2 && events.every { it.eventType == "session.invitation.created" } &&
+                    events.collect { objectMapper.readValue(it.payload, SessionInvitationCreatedEvent).recipientUserId }
+                            .toSet() == [inviteeA, inviteeB].toSet()
+        })
     }
 
     def "createSession rejects a locationId whose sport doesn't match"() {
@@ -489,6 +528,96 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.id == 9L && p.status == ParticipantStatus.JOINED }) >> existing
     }
 
+    def "joinSession writes a session.join_request.created outbox row, recipient is the organizer, when autoApprove is false"() {
+        given:
+        def organizerId = UUID.randomUUID()
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(organizerId).autoApprove(false).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
+        1 * sessionParticipantRepository.save(_) >> { SessionParticipant p -> p }
+        1 * sessionOutboxEventRepository.save({ SessionOutboxEvent e ->
+            e.eventType == "session.join_request.created" &&
+                    objectMapper.readValue(e.payload, SessionJoinRequestCreatedEvent).actorId == userId &&
+                    objectMapper.readValue(e.payload, SessionJoinRequestCreatedEvent).recipientUserId == organizerId
+        }) >> { SessionOutboxEvent e -> e }
+    }
+
+    def "joinSession writes a session.participant.joined outbox row when autoApprove is true"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).autoApprove(true).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
+        1 * sessionParticipantRepository.save(_) >> { SessionParticipant p -> p }
+        1 * sessionOutboxEventRepository.save({ SessionOutboxEvent e ->
+            e.eventType == "session.participant.joined" &&
+                    objectMapper.readValue(e.payload, SessionParticipantJoinedEvent).actorId == userId
+        }) >> { SessionOutboxEvent e -> e }
+    }
+
+    def "joinSession writes a session.participant.joined outbox row when an INVITED row resolves to JOINED"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).autoApprove(false).build()
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.INVITED).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        1 * sessionParticipantRepository.save(_) >> existing
+        1 * sessionOutboxEventRepository.save({ SessionOutboxEvent e -> e.eventType == "session.participant.joined" })
+    }
+
+    def "joinSession does not re-fire session.join_request.created when the caller is already REQUESTED"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).autoApprove(false).build()
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.REQUESTED).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        1 * sessionParticipantRepository.save(_) >> existing
+        0 * sessionOutboxEventRepository.save(_)
+    }
+
+    def "joinSession never fires an outbox event when the caller is already JOINED"() {
+        given:
+        def userId = UUID.randomUUID()
+        // autoApprove is false here on purpose: this is the pre-existing gap noted in
+        // SessionServiceImpl.joinSession — the status ternary recomputes REQUESTED for an
+        // already-JOINED caller re-invoking join on a non-autoApprove session. The guard added
+        // for SESSION-15 must still not fire anything, regardless of that recompute.
+        def session = Session.builder().id(1L).autoApprove(false).build()
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        1 * sessionParticipantRepository.save(_) >> existing
+        0 * sessionOutboxEventRepository.save(_)
+    }
+
     def "leaveSession rejects when the caller has no participant row at all"() {
         given:
         def userId = UUID.randomUUID()
@@ -651,6 +780,31 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.JOINED }) >> participant
     }
 
+    def "approveParticipant writes both session.join_request.approved (to the requester) and session.participant.joined (fan-out) outbox rows"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(callerId).status(SessionStatus.SCHEDULED).build()
+        def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.REQUESTED).build()
+
+        when:
+        sessionService.approveParticipant(1L, callerId, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(participant)
+        1 * sessionParticipantRepository.save(_) >> participant
+        1 * sessionOutboxEventRepository.save({ SessionOutboxEvent e ->
+            e.eventType == "session.join_request.approved" &&
+                    objectMapper.readValue(e.payload, SessionJoinRequestApprovedEvent).actorId == callerId &&
+                    objectMapper.readValue(e.payload, SessionJoinRequestApprovedEvent).recipientUserId == userId
+        }) >> { SessionOutboxEvent e -> e }
+        1 * sessionOutboxEventRepository.save({ SessionOutboxEvent e ->
+            e.eventType == "session.participant.joined" &&
+                    objectMapper.readValue(e.payload, SessionParticipantJoinedEvent).actorId == userId
+        }) >> { SessionOutboxEvent e -> e }
+    }
+
     def "approveParticipant rejects when no REQUESTED row exists"() {
         given:
         def callerId = UUID.randomUUID()
@@ -716,6 +870,28 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionParticipantRepository.save({ SessionParticipant p ->
             p.status == ParticipantStatus.LEFT && p.rejectReason == "Session is full"
         }) >> participant
+    }
+
+    def "rejectParticipant writes a session.join_request.rejected outbox row with the reason, recipient is the requester"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(callerId).status(SessionStatus.SCHEDULED).build()
+        def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.REQUESTED).build()
+        def request = RejectParticipantRequest.builder().reason("Session is full").build()
+
+        when:
+        sessionService.rejectParticipant(1L, callerId, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(participant)
+        1 * sessionParticipantRepository.save(_) >> participant
+        1 * sessionOutboxEventRepository.save({ SessionOutboxEvent e ->
+            def payload = objectMapper.readValue(e.payload, SessionJoinRequestRejectedEvent)
+            e.eventType == "session.join_request.rejected" &&
+                    payload.actorId == callerId && payload.recipientUserId == userId && payload.reason == "Session is full"
+        }) >> { SessionOutboxEvent e -> e }
     }
 
     def "rejectParticipant for a group-linked session requires canManageMembers"() {
@@ -1074,6 +1250,27 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionGate.require(session, userId, _, _) >> session
         1 * commentService.createSessionComment(999L, userId, request) >> response
         result == response
+    }
+
+    def "createSessionComment writes a session.comment.created outbox row with the new comment's id"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateCommentRequest.builder().content("see you there").build()
+        def session = Session.builder().id(1L).postId(999L).build()
+        def response = CommentResponse.builder().id(5L).postId(999L).content(request.content).build()
+
+        when:
+        sessionService.createSessionComment(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * commentService.createSessionComment(999L, userId, request) >> response
+        1 * sessionOutboxEventRepository.save({ SessionOutboxEvent e ->
+            def payload = objectMapper.readValue(e.payload, SessionCommentCreatedEvent)
+            e.eventType == "session.comment.created" && payload.sessionId == 1L &&
+                    payload.actorId == userId && payload.commentId == 5L
+        }) >> { SessionOutboxEvent e -> e }
     }
 
     def "createSessionComment propagates SessionGate's rejection without calling CommentService"() {

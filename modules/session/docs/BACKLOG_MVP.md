@@ -33,7 +33,8 @@
 | 12 | SESSION-14 | Reduce `mapToResponses`' round trips (2 points) | `DONE` |
 | 13 | SESSION-13 | `SessionResponse.likeCount`/`isLikedByCurrentUser` + `PostService.getSessionPostLikeInfo` batch method | `DONE` |
 | 14 | SESSION-8 | Session discover ranking algorithm | `TODO` |
-| 15 | SESSION-15 | Notification outbox wiring — closes NOTIF-1 | `TODO` |
+| 15 | SESSION-15 | Notification outbox wiring — closes NOTIF-1 | `DONE` |
+| 16 | SESSION-16 | Fix `joinSession` demoting an already-`JOINED` caller back to `REQUESTED` | `TODO` |
 
 ---
 
@@ -642,7 +643,7 @@ if they separately joined via `joinSession` (which never blocks the creator). Fu
 ---
 
 ## SESSION-15 — Notification outbox wiring
-**Status:** `TODO`
+**Status:** `DONE` — see `modules/session/docs/SESSION-15_NOTIFICATION_OUTBOX_WIRING.md`
 **Type:** New Feature
 **Depends on:** `modules/common`'s C3 (generic transactional-outbox mechanism)
 
@@ -655,10 +656,67 @@ New `session_outbox_events` table (this module's own, built on C3's `OutboxEvent
 row is written, in the same transaction as the triggering write, for: a new session comment
 (recipients: other `JOINED`/`REQUESTED`/`INVITED` participants), a join request is received
 (recipient: the organizer), a join request is approved or rejected (recipient: the requester), a
-session invite is sent (recipient: the invitee). Routing keys: `session.comment.created`,
-`session.join_request.created`, `session.join_request.approved`, `session.join_request.rejected`,
-`session.invitation.created` (feeding `modules/notification`'s `sportconnect.events` consumer,
-NTF-2).
+session invite is sent (recipient: the invitee), **and a new participant joins (recipients: other
+currently-`JOINED` participants) — added 2026-08-17, a real gap found during scoping, not
+previously logged anywhere including `NOTIFICATION_USE_CASES.md`.** Routing keys:
+`session.comment.created`, `session.join_request.created`, `session.join_request.approved`,
+`session.join_request.rejected`, `session.invitation.created`, `session.participant.joined`
+(feeding `modules/notification`'s `sportconnect.events` consumer, NTF-2).
+
+Fan-out events (`session.comment.created`, `session.participant.joined`) never bake a recipient
+into the payload — the participant set is resolved at consume time by NTF-2 (a future
+`session-api` batch method, mirroring `post-api`'s `getDistinctCommenterIds` precedent for the
+same shape of problem). Single-recipient events (join-request created/approved/rejected,
+invitation created) bake `recipientUserId` directly into the payload — `session-impl` already
+knows it unambiguously at write time, no cross-domain lookup needed later.
+
+**Scope decisions made before implementing (none resolved by this ticket's original text alone):**
+this ticket includes the actual `OutboxRelay` wiring (a `@Scheduled` `SessionOutboxRelayJob`, same
+shape as the existing `SessionGenerationJob`) that drains `session_outbox_events` and publishes to
+RabbitMQ — not just row-writing — so the pipeline can be verified against a real running broker
+now rather than accumulating `PENDING` rows until some later ticket adds a relay. This also makes
+SESSION-15 the first ticket in the app to actually publish to RabbitMQ, so it declares the durable
+`sportconnect.events` topic exchange itself (C3 explicitly scoped *declaring* it to NTF-2, but
+nothing blocks a producer from declaring it first — NTF-2 will just bind its own queue to the same
+already-existing exchange later).
 
 **Out of scope:** the notification consumer/aggregation logic itself (`modules/notification`'s
 NTF-2); any UI change (a client ticket, once this and NTF-2/3 exist).
+
+---
+
+## SESSION-16 — Fix `joinSession` demoting an already-`JOINED` caller back to `REQUESTED`
+**Status:** `TODO`
+**Type:** Bug Fix
+
+**Filed:** 2026-08-17, found while wiring SESSION-15's outbox events into `joinSession` — see
+`modules/session/docs/SESSION-15_NOTIFICATION_OUTBOX_WIRING.md`'s Key decisions section. Predates
+SESSION-15 and is unrelated to notifications; only became newly *visible* because SESSION-15's new
+outbox-firing code would otherwise have turned this into a spurious "your join request was
+received" notification to the organizer (defensively guarded against in that code — this ticket is
+about the underlying status bug itself, not the notification side effect).
+
+**Problem:** `SessionServiceImpl.joinSession`'s status ternary —
+```java
+ParticipantStatus targetStatus = participant.getStatus() == ParticipantStatus.INVITED
+        || Boolean.TRUE.equals(session.getAutoApprove())
+        ? ParticipantStatus.JOINED
+        : ParticipantStatus.REQUESTED;
+```
+never special-cases "the caller is already `JOINED`." An already-`JOINED` participant calling
+`POST /api/sessions/{sessionId}/join` again on a non-`autoApprove` session gets silently demoted
+back to `REQUESTED` — since their current status isn't `INVITED` and `autoApprove` is false, the
+ternary falls through to `REQUESTED` regardless of the fact that they're already a full member.
+
+Not believed to be reachable in normal client use (the client's own "Join" button presumably isn't
+shown once `callerParticipation.status == JOINED`, per SESSION-9), but nothing server-side
+prevents a stale client, a double-click race, or a direct API call from hitting it.
+
+**Fix (not yet designed in detail):** `joinSession` should treat an already-`JOINED` caller as a
+no-op (matching how `leaveSession`'s equivalent already-terminal states are handled), rather than
+letting the ternary run unconditionally.
+
+**Tests:** an already-`JOINED` participant calling `joinSession` again (both `autoApprove` true and
+false) stays `JOINED`, no status change, no outbox event (already covered defensively by
+`SessionServiceImplSpec`'s SESSION-15 tests on the notification side, but the underlying service
+behavior itself has no explicit no-op assertion yet).
