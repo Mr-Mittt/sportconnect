@@ -2624,7 +2624,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   no module actually implements them, so there's no owning backlog to file a fix-the-schema ticket
   against; flagged here in case someone wants to scope either "build the feature" or "drop the dead
   table" later, same "leftover placeholder, leave it alone" status as `sport-impl`'s `FacilityType`.
-- **MVP backlog (session module):** 13 of 14 tickets `DONE` (SESSION-1 through SESSION-14 except
+- **MVP backlog (session module):** 14 of 16 tickets `DONE` (SESSION-1 through SESSION-15 except
   SESSION-8); SESSION-8 remains `TODO`.
 - **CLIENT-SESSION-8 (`DONE`, 2026-08-12,
   `client/docs/CLIENT-SESSION-8_SESSION_COMMENTS.md`):** an inline "Discussion" section in
@@ -2732,6 +2732,24 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (`createSession`) but can't leave via this endpoint, only `cancelSession`. Scoped to standalone
   only; a group-linked session's creator isn't auto-joined and can still leave normally if they
   joined like any other member.
+- **SESSION-15 (`DONE`, 2026-08-17,
+  `modules/session/docs/SESSION-15_NOTIFICATION_OUTBOX_WIRING.md`):** notification outbox wiring —
+  new `session_outbox_events` table (`V054`, C3's `OutboxEvent` shape) + 6 event types (`session.
+  comment.created`, `session.join_request.created/approved/rejected`, `session.invitation.created`,
+  and `session.participant.joined` — the last one a real gap the user caught mid-session, not in
+  the original ticket text or `NOTIFICATION_USE_CASES.md`). Includes the full producer pipeline,
+  not just row-writing: `SessionOutboxRelayJob` (`@Scheduled`) actually drains and publishes to a
+  self-declared `sportconnect.events` topic exchange — SESSION-15 is the first ticket in the app to
+  publish to RabbitMQ for real, chosen specifically so this could be live-verified against the real
+  dev broker instead of waiting for NTF-2. Live-verified end-to-end via real HTTP calls (register
+  users, create a session with an invitee, confirm the outbox row reached `SENT`; had the invitee
+  join, confirmed exactly `session.participant.joined` fired). Found and fixed a real latent bug in
+  `joinSession` along the way (`SessionParticipant.status`'s `@Builder.Default = JOINED` meant a
+  brand-new participant's "previous status" silently read as `JOINED`, not absent) — caught by two
+  failing tests before it shipped. Found and *documented but did not fix* a second, unrelated
+  pre-existing bug in the same method (an already-`JOINED` caller re-invoking `joinSession` on a
+  non-`autoApprove` session gets silently demoted to `REQUESTED`) — defensively guarded in the new
+  outbox-firing code only, flagged for a separate ticket. Unblocks NTF-2.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

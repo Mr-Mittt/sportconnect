@@ -1,5 +1,7 @@
 package com.sportconnect.session.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.group.api.dto.GroupResponse;
@@ -17,9 +19,17 @@ import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
+import com.sportconnect.session.api.event.SessionCommentCreatedEvent;
+import com.sportconnect.session.api.event.SessionInvitationCreatedEvent;
+import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent;
+import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
+import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
+import com.sportconnect.session.api.event.SessionParticipantJoinedEvent;
 import com.sportconnect.session.api.service.SessionService;
 import com.sportconnect.session.entity.Session;
+import com.sportconnect.session.entity.SessionOutboxEvent;
 import com.sportconnect.session.entity.SessionParticipant;
+import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
 import com.sportconnect.social.post.api.dto.CommentResponse;
@@ -71,6 +81,8 @@ public class SessionServiceImpl implements SessionService {
     private final PostService postService;
     private final CommentService commentService;
     private final SessionGate sessionGate;
+    private final SessionOutboxEventRepository sessionOutboxEventRepository;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -145,18 +157,30 @@ public class SessionServiceImpl implements SessionService {
                     .status(ParticipantStatus.JOINED)
                     .build());
         }
+        List<SessionOutboxEvent> inviteOutboxEvents = new ArrayList<>();
         if (request.getInviteeIds() != null) {
             request.getInviteeIds().stream()
                     .filter(inviteeId -> !inviteeId.equals(userId))
                     .distinct()
-                    .forEach(inviteeId -> seedParticipants.add(SessionParticipant.builder()
-                            .sessionId(saved.getId())
-                            .userId(inviteeId)
-                            .status(ParticipantStatus.INVITED)
-                            .build()));
+                    .forEach(inviteeId -> {
+                        seedParticipants.add(SessionParticipant.builder()
+                                .sessionId(saved.getId())
+                                .userId(inviteeId)
+                                .status(ParticipantStatus.INVITED)
+                                .build());
+                        inviteOutboxEvents.add(buildOutboxEvent("session.invitation.created",
+                                SessionInvitationCreatedEvent.builder()
+                                        .sessionId(saved.getId())
+                                        .actorId(userId)
+                                        .recipientUserId(inviteeId)
+                                        .build()));
+                    });
         }
         if (!seedParticipants.isEmpty()) {
             sessionParticipantRepository.saveAll(seedParticipants);
+        }
+        if (!inviteOutboxEvents.isEmpty()) {
+            sessionOutboxEventRepository.saveAll(inviteOutboxEvents);
         }
 
         log.info("Created session {} (type={}, group={})", saved.getId(), saved.getSessionType(), saved.getGroupId());
@@ -274,8 +298,13 @@ public class SessionServiceImpl implements SessionService {
             throw new BadRequestException("Only group members can join this session");
         }
 
-        SessionParticipant participant = sessionParticipantRepository
-                .findBySessionIdAndUserId(sessionId, userId)
+        Optional<SessionParticipant> existingParticipant = sessionParticipantRepository
+                .findBySessionIdAndUserId(sessionId, userId);
+        // SESSION-15: read BEFORE falling back to the builder below — SessionParticipant.status
+        // carries @Builder.Default = JOINED, so a brand-new (no prior row) participant built via
+        // that fallback would otherwise misreport its own "previous" status as JOINED.
+        ParticipantStatus previousStatus = existingParticipant.map(SessionParticipant::getStatus).orElse(null);
+        SessionParticipant participant = existingParticipant
                 .orElseGet(() -> SessionParticipant.builder()
                         .sessionId(sessionId)
                         .userId(userId)
@@ -292,6 +321,27 @@ public class SessionServiceImpl implements SessionService {
                 : ParticipantStatus.REQUESTED;
         participant.setStatus(targetStatus);
         sessionParticipantRepository.save(participant);
+
+        // SESSION-15: only fire on a genuine state transition — an already-JOINED caller
+        // re-invoking join never fires anything here, regardless of what targetStatus recomputes
+        // to (see this method's own pre-existing gap noted in SESSION-15's doc: a JOINED caller
+        // on a non-autoApprove session recomputes to REQUESTED above, since the ternary never
+        // special-cased "already JOINED" — out of scope to fix here, but this guard keeps that
+        // gap from also spamming the organizer with a spurious join-request notification).
+        if (previousStatus != ParticipantStatus.JOINED) {
+            if (targetStatus == ParticipantStatus.REQUESTED && previousStatus != ParticipantStatus.REQUESTED) {
+                recordOutboxEvent("session.join_request.created", SessionJoinRequestCreatedEvent.builder()
+                        .sessionId(sessionId)
+                        .actorId(userId)
+                        .recipientUserId(session.getCreatedBy())
+                        .build());
+            } else if (targetStatus == ParticipantStatus.JOINED) {
+                recordOutboxEvent("session.participant.joined", SessionParticipantJoinedEvent.builder()
+                        .sessionId(sessionId)
+                        .actorId(userId)
+                        .build());
+            }
+        }
     }
 
     @Override
@@ -359,15 +409,36 @@ public class SessionServiceImpl implements SessionService {
         SessionParticipant participant = requireRequestedParticipant(sessionId, callerId, userId);
         participant.setStatus(ParticipantStatus.JOINED);
         sessionParticipantRepository.save(participant);
+
+        // Two distinct recipients: the requester (their request was approved) and every other
+        // currently-JOINED participant (a new member joined) — requireRequestedParticipant
+        // guarantees this is always a REQUESTED->JOINED transition, unlike joinSession.
+        recordOutboxEvent("session.join_request.approved", SessionJoinRequestApprovedEvent.builder()
+                .sessionId(sessionId)
+                .actorId(callerId)
+                .recipientUserId(userId)
+                .build());
+        recordOutboxEvent("session.participant.joined", SessionParticipantJoinedEvent.builder()
+                .sessionId(sessionId)
+                .actorId(userId)
+                .build());
     }
 
     @Override
     @Transactional
     public void rejectParticipant(Long sessionId, UUID callerId, UUID userId, RejectParticipantRequest request) {
         SessionParticipant participant = requireRequestedParticipant(sessionId, callerId, userId);
+        String reason = request != null ? request.getReason() : null;
         participant.setStatus(ParticipantStatus.LEFT);
-        participant.setRejectReason(request != null ? request.getReason() : null);
+        participant.setRejectReason(reason);
         sessionParticipantRepository.save(participant);
+
+        recordOutboxEvent("session.join_request.rejected", SessionJoinRequestRejectedEvent.builder()
+                .sessionId(sessionId)
+                .actorId(callerId)
+                .recipientUserId(userId)
+                .reason(reason)
+                .build());
     }
 
     /** Shared gating + lookup for approveParticipant/rejectParticipant: same creator/owner-admin
@@ -419,7 +490,15 @@ public class SessionServiceImpl implements SessionService {
     @Transactional
     public CommentResponse createSessionComment(Long sessionId, UUID userId, CreateCommentRequest request) {
         Session session = requireSessionAccess(sessionId, userId);
-        return commentService.createSessionComment(session.getPostId(), userId, request);
+        CommentResponse response = commentService.createSessionComment(session.getPostId(), userId, request);
+
+        recordOutboxEvent("session.comment.created", SessionCommentCreatedEvent.builder()
+                .sessionId(sessionId)
+                .actorId(userId)
+                .commentId(response.getId())
+                .build());
+
+        return response;
     }
 
     @Override
@@ -470,6 +549,33 @@ public class SessionServiceImpl implements SessionService {
     private Session findSessionOrThrow(Long sessionId) {
         return sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "id", sessionId));
+    }
+
+    /**
+     * Writes one {@code session_outbox_events} row in the same transaction as the triggering
+     * write (SESSION-15) — never a separate transaction, so a rollback of the caller's write also
+     * rolls this back. {@code SessionOutboxRelayJob} is the only thing that ever reads a row back
+     * out. A serialization failure here is a programmer error (the payload types are this class's
+     * own event DTOs), so it's rethrown unchecked rather than swallowed.
+     */
+    private void recordOutboxEvent(String eventType, Object payload) {
+        sessionOutboxEventRepository.save(buildOutboxEvent(eventType, payload));
+    }
+
+    /**
+     * Builds without saving — lets {@link #createSession} collect one row per invitee and persist
+     * them all via a single {@code saveAll}, same batching shape as this method's own
+     * {@code seedParticipants} list, instead of one {@code save()} per invitee in that loop.
+     */
+    private SessionOutboxEvent buildOutboxEvent(String eventType, Object payload) {
+        SessionOutboxEvent event = new SessionOutboxEvent();
+        event.setEventType(eventType);
+        try {
+            event.setPayload(objectMapper.writeValueAsString(payload));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize outbox payload for " + eventType, e);
+        }
+        return event;
     }
 
     private void requireCanModify(Session session, UUID userId) {
