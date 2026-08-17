@@ -25,7 +25,7 @@ module's own implementation work).
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | NTF-1 | Module scaffolding — entity, aggregation logic, read REST endpoints | `DONE` |
-| 2 | NTF-2 | RabbitMQ consumer — `sportconnect.events` exchange, recipient resolution | `TODO` |
+| 2 | NTF-2 | RabbitMQ consumer — `sportconnect.events` exchange, recipient resolution | `DONE` |
 | 3 | NTF-3 | STOMP-over-RabbitMQ live delivery to the client | `TODO` |
 
 ---
@@ -74,14 +74,23 @@ row); pagination/ordering. ~~read endpoints reject a deactivated caller~~ — se
 ---
 
 ## NTF-2 — RabbitMQ consumer
-**Status:** `TODO`
+**Status:** `DONE` — see `modules/notification/docs/NTF-2_RABBITMQ_CONSUMER.md`
 **Type:** New Feature
 **Depends on:** NTF-1
+
+**Delta (2026-08-17):** scoped to session events only before implementation, confirmed with the
+user — only `session-impl`'s SESSION-15 has a real producer; `post.*`/`group.*`/
+`user.friend_request.*` consumption is deferred to follow-on tickets once `post-impl` B7,
+`group-impl` B21, `user-impl` U13 ship real producers, matching the vision doc's session > post >
+group > friend rollout priority. Also added, not in the original text: a `processed_messages`
+dedup table (RabbitMQ redelivery would otherwise double-count an aggregation) and a
+`SessionService.getParticipantIdsByStatuses` status gate (no fan-out notifications for a
+`CANCELLED`/`COMPLETED` session).
 
 One topic exchange, `sportconnect.events`, routing keys shaped `<domain>.<entity>.<action>`.
 `notification-impl` declares its own durable queue bound to the patterns it cares about (e.g.
 `post.*.created`, `group.join_request.*`, `session.*`, `user.friend_request.*`), consumed via
-`@RabbitListener`.
+`@RabbitListener`. ~~(Shipped: `session.*.*` only — see Delta above.)~~
 
 **Recipient resolution per event type:**
 - Post like / comment on your post: post owner.

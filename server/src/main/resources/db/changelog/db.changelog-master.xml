@@ -140,4 +140,10 @@
     <!-- SESSION-15: session-impl's own outbox table (C3's OutboxEvent shape) -->
     <include file="db/changelog/changes/V054__create_session_outbox_events.sql" relativeToChangelogFile="false"/>
 
+    <!-- NTF-2: notification-impl's idempotency marker table for the sportconnect.events consumer -->
+    <include file="db/changelog/changes/V055__create_processed_messages.sql" relativeToChangelogFile="false"/>
+
+    <!-- SESSION-17: partial index on session_outbox_events, scoped to status = 'PENDING' -->
+    <include file="db/changelog/changes/V056__replace_session_outbox_events_status_index_with_partial.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

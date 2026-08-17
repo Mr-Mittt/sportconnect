@@ -20,14 +20,15 @@ import java.util.UUID;
  * Base class for integration tests
  * Provides common configuration and utilities for all integration tests
  * <p>
- * The real-Redis Testcontainer setup lives in {@link RedisTestContainerBase} (extracted so a test
- * needing {@code webEnvironment = RANDOM_PORT} instead of this class's {@code MOCK} +
- * {@code @AutoConfigureMockMvc} can reuse it without duplicating the container).
+ * The real-Redis/RabbitMQ Testcontainer setup lives in {@link RedisTestContainerBase}/
+ * {@link RabbitMqTestContainerBase} (extracted so a test needing {@code webEnvironment =
+ * RANDOM_PORT} instead of this class's {@code MOCK} + {@code @AutoConfigureMockMvc} can reuse
+ * them without duplicating the containers).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-public abstract class BaseIT extends RedisTestContainerBase {
+public abstract class BaseIT extends RabbitMqTestContainerBase {
 
     @Autowired
     protected MockMvc mockMvc;

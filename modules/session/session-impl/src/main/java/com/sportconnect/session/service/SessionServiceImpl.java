@@ -536,6 +536,20 @@ public class SessionServiceImpl implements SessionService {
         postService.unlikeSessionPost(session.getPostId(), userId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<UUID> getParticipantIdsByStatuses(Long sessionId, List<ParticipantStatus> statuses) {
+        Session session = sessionRepository.findById(sessionId).orElse(null);
+        if (session == null
+                || (session.getStatus() != SessionStatus.SCHEDULED && session.getStatus() != SessionStatus.ONGOING)) {
+            return Collections.emptyList();
+        }
+        return sessionParticipantRepository.findBySessionIdAndStatusIn(sessionId, statuses).stream()
+                .map(SessionParticipant::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
     /** SESSION-10/A17 — the sole gate standing between a caller and a session's comment thread or
      * its own like, since post-impl's own PostGate makes SESSION_POST unconditionally unavailable.
      * Delegates to SessionGate (this module's own ResourceGate&lt;Session&gt;, same shape as

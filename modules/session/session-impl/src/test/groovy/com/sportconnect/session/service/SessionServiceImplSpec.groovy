@@ -1394,6 +1394,78 @@ class SessionServiceImplSpec extends Specification {
         1 * postService.unlikeSessionPost(999L, userId)
     }
 
+    // ── getParticipantIdsByStatuses (NTF-2 fan-out recipient resolution) ────────────
+
+    def "getParticipantIdsByStatuses returns distinct participant ids for a SCHEDULED session"() {
+        given:
+        def session = Session.builder().id(1L).status(SessionStatus.SCHEDULED).build()
+        def u1 = UUID.randomUUID()
+        def u2 = UUID.randomUUID()
+        def rows = [
+                SessionParticipant.builder().sessionId(1L).userId(u1).status(ParticipantStatus.JOINED).build(),
+                SessionParticipant.builder().sessionId(1L).userId(u2).status(ParticipantStatus.REQUESTED).build(),
+        ]
+
+        when:
+        def result = sessionService.getParticipantIdsByStatuses(1L,
+                [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED])
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L,
+                [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED]) >> rows
+        result.toSet() == [u1, u2].toSet()
+    }
+
+    def "getParticipantIdsByStatuses returns participants for an ONGOING session too"() {
+        given:
+        def session = Session.builder().id(1L).status(SessionStatus.ONGOING).build()
+
+        when:
+        def result = sessionService.getParticipantIdsByStatuses(1L, [ParticipantStatus.JOINED])
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, [ParticipantStatus.JOINED]) >> []
+        result == []
+    }
+
+    def "getParticipantIdsByStatuses returns empty without querying participants for a CANCELLED session"() {
+        given:
+        def session = Session.builder().id(1L).status(SessionStatus.CANCELLED).build()
+
+        when:
+        def result = sessionService.getParticipantIdsByStatuses(1L, [ParticipantStatus.JOINED])
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        0 * sessionParticipantRepository.findBySessionIdAndStatusIn(_, _)
+        result == []
+    }
+
+    def "getParticipantIdsByStatuses returns empty for a COMPLETED session"() {
+        given:
+        def session = Session.builder().id(1L).status(SessionStatus.COMPLETED).build()
+
+        when:
+        def result = sessionService.getParticipantIdsByStatuses(1L, [ParticipantStatus.JOINED])
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        0 * sessionParticipantRepository.findBySessionIdAndStatusIn(_, _)
+        result == []
+    }
+
+    def "getParticipantIdsByStatuses returns empty for a nonexistent session"() {
+        when:
+        def result = sessionService.getParticipantIdsByStatuses(999L, [ParticipantStatus.JOINED])
+
+        then:
+        1 * sessionRepository.findById(999L) >> Optional.empty()
+        0 * sessionParticipantRepository.findBySessionIdAndStatusIn(_, _)
+        result == []
+    }
+
     // ── SessionResponse.likeCount / isLikedByCurrentUser (batch, via mapToResponses) ─
 
     def "getSession resolves likeCount/isLikedByCurrentUser from PostService.getSessionPostLikeInfo, keyed by the session's postId"() {

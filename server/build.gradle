@@ -77,7 +77,16 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.testcontainers:testcontainers:2.0.5'
-    
+
+    // Only transitively available at runtime (declared 'implementation', not 'api', by common/
+    // session-impl/notification-impl) — needed here at compile time for RabbitTemplate in
+    // SessionEventsConsumerIntegrationTest.
+    testImplementation 'org.springframework.boot:spring-boot-starter-amqp'
+
+    // Polling assertions for async @RabbitListener processing (NTF-2's real-RabbitMQ IT test) —
+    // a message is consumed on a background listener thread, not the test's calling thread.
+    testImplementation 'org.awaitility:awaitility:4.2.2'
+
     // Spock Framework
     testImplementation platform('org.spockframework:spock-bom:2.3-groovy-4.0')
     testImplementation 'org.spockframework:spock-core'
