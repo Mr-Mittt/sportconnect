@@ -8,6 +8,12 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-security'
 
+    // JPA — needed for OutboxEvent's @MappedSuperclass (C3); common otherwise has no entities
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // RabbitMQ client — OutboxRelay (C3) publishes via RabbitTemplate with publisher confirms
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+
     // Lombok
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'

@@ -52,7 +52,19 @@ spring:
           max-idle: 8
           min-idle: 0
           max-wait: -1ms
-  
+
+  # RabbitMQ Configuration — publisher-confirm-type: correlated is required for
+  # OutboxRelay's rabbitTemplate.invoke()/waitForConfirmsOrDie() (C3) to actually get confirms
+  # instead of firing-and-forgetting. No exchange/queue declared here — that topology is scoped
+  # to NTF-2, not this base config.
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
   # Mail Configuration (for email verification)
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}

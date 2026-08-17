@@ -21,7 +21,7 @@
 |---|---|---|---|
 | 1 | C1 | Global exception handler for common exception types | `DONE` |
 | 2 | C2 | `ResourceGate<T>` — shared availability/visibility check shape | `DONE` |
-| 3 | C3 | Generic transactional-outbox mechanism | `TODO` |
+| 3 | C3 | Generic transactional-outbox mechanism | `DONE` |
 
 ---
 
@@ -145,7 +145,7 @@ until a real hot-path bottleneck shows up).
 ---
 
 ### C3 · Generic transactional-outbox mechanism
-**Status:** `TODO`
+**Status:** `DONE` — see `modules/common/docs/C3_TRANSACTIONAL_OUTBOX.md`
 **Type:** New Feature (Architecture)
 **Scope:** One new mapped-superclass + one reusable relay component pattern in `modules/common`
 only — no change to any domain module in this ticket; each domain that wants durable async event
