@@ -24,6 +24,8 @@ include 'modules:location:location-api'
 include 'modules:location:location-impl'
 include 'modules:session:session-api'
 include 'modules:session:session-impl'
+include 'modules:notification:notification-api'
+include 'modules:notification:notification-impl'
 
 // Frontend (pnpm/Vite project wrapped by the node-gradle plugin)
 include 'client'

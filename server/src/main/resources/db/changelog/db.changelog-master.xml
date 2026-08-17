@@ -134,4 +134,7 @@
     <!-- SESSION-12: partial index on sessions(scheduled_start) WHERE status = 'SCHEDULED', for the generation job's hot findSessionsToStart query -->
     <include file="db/changelog/changes/V052__add_sessions_scheduled_status_partial_index.sql" relativeToChangelogFile="false"/>
 
+    <!-- NTF-1: replaces the dead V005 notifications table with a domain-owned, ID-only version for the new notification module -->
+    <include file="db/changelog/changes/V053__create_notification_module.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

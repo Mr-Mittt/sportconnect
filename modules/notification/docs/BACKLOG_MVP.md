@@ -24,16 +24,25 @@ module's own implementation work).
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | NTF-1 | Module scaffolding — entity, aggregation logic, read REST endpoints | `TODO` |
+| 1 | NTF-1 | Module scaffolding — entity, aggregation logic, read REST endpoints | `DONE` |
 | 2 | NTF-2 | RabbitMQ consumer — `sportconnect.events` exchange, recipient resolution | `TODO` |
 | 3 | NTF-3 | STOMP-over-RabbitMQ live delivery to the client | `TODO` |
 
 ---
 
 ## NTF-1 — Module scaffolding
-**Status:** `TODO`
+**Status:** `DONE` — see `modules/notification/docs/NTF-1_MODULE_SCAFFOLDING.md`
 **Type:** New Feature
 **Depends on:** `C3` (`modules/common` — generic transactional-outbox mechanism)
+
+**Delta (2026-08-17):** the Tests line below ("read endpoints reject a deactivated caller") was
+scoped out before implementation, confirmed with the user — no endpoint anywhere in this app does
+an explicit `isActive` re-check today (CLAUDE.md's U12 gap), and NTF-1 inherits that same gap
+rather than being the first module to close it. What actually shipped instead:
+`NotificationAccessGateIntegrationTest` (owner/non-owner/nonexistent/unauthenticated coverage for
+`markAsRead`'s ownership gate). `entityId` also ended up a plain `String`, not implied by this
+ticket's original text — `Post`/`Group`/`Session` use `Long` ids, `FriendRequest`/`Friendship` use
+`UUID`, so a typed FK-like column wasn't viable across the entity types this can point at.
 
 New `notification-api` (service interface + read-side DTOs) and `notification-impl` modules,
 following the existing `-api`/`-impl` split convention.
@@ -60,7 +69,7 @@ PUT  /api/notifications/{id}/read
 ```
 
 **Tests:** aggregation upsert (unread match bumps existing row; read row + new event starts a new
-row); read endpoints reject a deactivated caller; pagination/ordering.
+row); pagination/ordering. ~~read endpoints reject a deactivated caller~~ — see Delta above.
 
 ---
 

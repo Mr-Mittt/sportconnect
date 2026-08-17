@@ -508,6 +508,9 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `post-impl` **A16** migrated its own 4 identical `isGroupOwner || isGroupAdmin` call sites to
   `canManagePosts` too.
 
+#### `modules:notification:notification-api` + `modules:notification:notification-impl`
+- **NTF-1 (2026-08-17, `DONE`, `modules/notification/docs/NTF-1_MODULE_SCAFFOLDING.md`):** new module scaffolding — `Notification` entity (`V053` migration, replaces the dead `V005` table which had zero owning code and cross-domain FKs to `users(id)`) with ID-only `recipientUserId`/`entityId` (`entityId` is a `String`, deliberately untyped — spans domains with incompatible id types, `Long` for `Post`/`Group`/`Session`, `UUID` for `FriendRequest`/`Friendship`), aggregation upsert keyed on `(recipientUserId, type, entityType, entityId)` scoped to unread, bounded 3-entry `actorIds` via a small `UuidListConverter` (no array-column precedent in this codebase); `NotificationGate implements ResourceGate<Notification>` (trivial `isAvailable`, ownership-only `isVisibleTo`); `GET /api/notifications`, `GET /api/notifications/unread-count`, `PUT /api/notifications/{id}/read`. **Delta from the ticket's own text:** no explicit `isActive` re-check added (locked in with the user before design) — inherits the same app-wide JWT-only gating gap (U12) every other endpoint has today, rather than being the first module to close it. First real caller of `recordEvent` will be NTF-2's RabbitMQ consumer. Depends on C3 (`modules/common`'s transactional outbox).
+
 #### `server`
 - `SportConnectApplication.java` — main entry point with full component scan
 - `application.yml` — PostgreSQL, Redis, Liquibase, JWT, mail, CORS, Swagger/OpenAPI configured
