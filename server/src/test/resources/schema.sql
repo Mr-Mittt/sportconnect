@@ -255,3 +255,16 @@ CREATE TABLE IF NOT EXISTS session_participants (
     FOREIGN KEY (session_id) REFERENCES sessions(id),
     CONSTRAINT unique_session_user UNIQUE (session_id, user_id)
 );
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGSERIAL PRIMARY KEY,
+    recipient_user_id UUID NOT NULL,
+    type VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id VARCHAR(100) NOT NULL,
+    actor_ids VARCHAR(500),
+    actor_count INTEGER NOT NULL DEFAULT 0,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
