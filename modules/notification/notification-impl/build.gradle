@@ -7,11 +7,20 @@ dependencies {
     implementation project(':modules:notification:notification-api')
     implementation project(':modules:common')
 
+    // NTF-2: session-api's 6 event payload DTOs (SESSION-15) + SessionService.getParticipantIdsByStatuses,
+    // for the sportconnect.events consumer. Session-only scope for now — post-api/group-api/user-api
+    // will each be added once their own outbox-wiring tickets (B7/B21/U13) ship real producers.
+    implementation project(':modules:session:session-api')
+
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // RabbitMQ client — SessionEventsConsumer (NTF-2) listens on the sportconnect.events exchange;
+    // not transitively available from common (declared there as 'implementation', not 'api')
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
 
     // OpenAPI/Swagger annotations for controller documentation — version matches what
     // server's springdoc-openapi-starter-webmvc-ui:2.3.0 resolves (verified, not guessed)
@@ -22,6 +31,10 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
 
     // Testing - Spock Framework
+    // Spock's Mock(SessionService) must generate a full mock of the interface, including methods
+    // returning post-api's CommentResponse — session-api declares post-api as 'implementation'
+    // (not transitive), so it's not on this module's own classpath without this.
+    testImplementation project(':modules:social:post-api')
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation platform('org.spockframework:spock-bom:2.3-groovy-4.0')
     testImplementation 'org.spockframework:spock-core'

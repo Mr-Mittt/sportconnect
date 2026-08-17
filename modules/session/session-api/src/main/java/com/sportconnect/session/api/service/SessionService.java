@@ -13,6 +13,7 @@ import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface SessionService {
@@ -139,4 +140,15 @@ public interface SessionService {
 
     /** Same authorization/delegation contract as {@link #likeSession}. */
     void unlikeSession(Long sessionId, UUID userId);
+
+    /**
+     * Distinct participant ids for one session matching any of {@code statuses} — batch,
+     * no-N+1-shaped lookup for {@code notification-impl}'s fan-out recipient resolution
+     * (NTF-2: {@code session.comment.created}/{@code session.participant.joined}), same shape as
+     * {@code post-api}'s {@code getDistinctCommenterIds}. Returns an empty list without querying
+     * participants at all if the session doesn't exist or its own status isn't {@code SCHEDULED}
+     * or {@code ONGOING} — a {@code CANCELLED}/{@code COMPLETED} session never triggers a
+     * participant fan-out, even for an event published before it changed status.
+     */
+    List<UUID> getParticipantIdsByStatuses(Long sessionId, List<ParticipantStatus> statuses);
 }

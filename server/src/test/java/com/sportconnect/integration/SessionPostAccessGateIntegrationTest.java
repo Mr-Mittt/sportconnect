@@ -54,7 +54,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * pull in location/sport validation this class isn't testing) — this class is testing the gates'
  * read of that state, not the session-creation write path itself.
  */
-class SessionPostAccessGateIntegrationTest extends BaseIT {
+class SessionPostAccessGateIntegrationTest extends RedisBaseIT {
 
     private static final Integer ROLE_OWNER = 1;
     private static final Integer ROLE_MEMBER = 3;

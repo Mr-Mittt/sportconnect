@@ -279,3 +279,8 @@ CREATE TABLE IF NOT EXISTS session_outbox_events (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     sent_at TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS processed_messages (
+    message_id VARCHAR(255) PRIMARY KEY,
+    processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

@@ -1,6 +1,9 @@
 package com.sportconnect.common.outbox
 
 import org.springframework.amqp.AmqpException
+import org.springframework.amqp.core.Message
+import org.springframework.amqp.core.MessagePostProcessor
+import org.springframework.amqp.core.MessageProperties
 import org.springframework.amqp.rabbit.core.RabbitOperations
 import org.springframework.amqp.rabbit.core.RabbitTemplate
 import spock.lang.Specification
@@ -12,8 +15,9 @@ class OutboxRelaySpec extends Specification {
 
     RabbitTemplate rabbitTemplate = Mock(RabbitTemplate)
 
-    private static TestOutboxEvent pendingEvent(String type = "post.comment.created", String payload = '{"foo":"bar"}') {
+    private static TestOutboxEvent pendingEvent(String type = "post.comment.created", String payload = '{"foo":"bar"}', Long id = 42L) {
         def event = new TestOutboxEvent()
+        event.id = id
         event.eventType = type
         event.payload = payload
         event.status = OutboxEventStatus.PENDING
@@ -34,7 +38,7 @@ class OutboxRelaySpec extends Specification {
         1 * rabbitTemplate.invoke(_ as RabbitOperations.OperationsCallback) >> { args ->
             (args[0] as RabbitOperations.OperationsCallback).doInRabbit(rabbitTemplate)
         }
-        1 * rabbitTemplate.convertAndSend("sportconnect.events", "post.comment.created", '{"foo":"bar"}')
+        1 * rabbitTemplate.convertAndSend("sportconnect.events", "post.comment.created", '{"foo":"bar"}', _)
         1 * rabbitTemplate.waitForConfirmsOrDie(5000L)
 
         and:
@@ -42,6 +46,29 @@ class OutboxRelaySpec extends Specification {
         event.sentAt != null
         event.attemptCount == 1
         saved == [event]
+    }
+
+    def "drain() sets a deterministic AMQP messageId (routingKey:rowId) for consumer-side dedup"() {
+        given:
+        def event = pendingEvent("post.comment.created", '{"foo":"bar"}', 42L)
+        def relay = new OutboxRelay<TestOutboxEvent>(rabbitTemplate, "sportconnect.events",
+                { -> [event] }, { e -> e.eventType }, { e -> })
+        MessagePostProcessor capturedProcessor = null
+
+        when:
+        relay.drain()
+
+        then:
+        1 * rabbitTemplate.invoke(_ as RabbitOperations.OperationsCallback) >> { args ->
+            (args[0] as RabbitOperations.OperationsCallback).doInRabbit(rabbitTemplate)
+        }
+        1 * rabbitTemplate.convertAndSend("sportconnect.events", "post.comment.created", '{"foo":"bar"}', _ as MessagePostProcessor) >> { args ->
+            capturedProcessor = args[3] as MessagePostProcessor
+        }
+
+        and:
+        def message = new Message('{"foo":"bar"}'.bytes, new MessageProperties())
+        capturedProcessor.postProcessMessage(message).messageProperties.messageId == "post.comment.created:42"
     }
 
     def "drain() leaves a PENDING row PENDING and bumps attemptCount when publish fails"() {

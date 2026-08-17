@@ -69,9 +69,18 @@ public class OutboxRelay<T extends OutboxEvent> {
         event.setLastAttemptAt(LocalDateTime.now());
 
         String routingKey = routingKeyResolver.apply(event);
+        // Consumer-side dedup key (a redelivered message must be recognizable as "already seen"):
+        // routingKey + this row's own id is unique across every current and future producer,
+        // since routing keys are domain-prefixed by convention (e.g. "session.comment.created:42"
+        // vs a hypothetical "post.comment.created:42" never collide).
+        String messageId = routingKey + ":" + event.getId();
         try {
             rabbitTemplate.invoke(ops -> {
-                ops.convertAndSend(exchange, routingKey, event.getPayload());
+                ops.convertAndSend(exchange, routingKey, event.getPayload(),
+                        message -> {
+                            message.getMessageProperties().setMessageId(messageId);
+                            return message;
+                        });
                 ops.waitForConfirmsOrDie(confirmTimeoutMs);
                 return null;
             });

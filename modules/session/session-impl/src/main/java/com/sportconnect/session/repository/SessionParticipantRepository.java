@@ -22,6 +22,8 @@ public interface SessionParticipantRepository extends JpaRepository<SessionParti
 
     Page<SessionParticipant> findBySessionIdAndStatus(Long sessionId, ParticipantStatus status, Pageable pageable);
 
+    List<SessionParticipant> findBySessionIdAndStatusIn(Long sessionId, List<ParticipantStatus> statuses);
+
     long countBySessionIdAndStatus(Long sessionId, ParticipantStatus status);
 
     /** Batch aggregate for a page of sessions — avoids one count query per row. */
