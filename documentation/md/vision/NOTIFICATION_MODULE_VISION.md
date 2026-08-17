@@ -90,6 +90,21 @@ friend**.
   requirement) instead of the in-memory broker. Per-user delivery via Spring's
   `/user/queue/notifications` destination convention — a separate concern from the
   `sportconnect.events` exchange used for domain-event ingestion.
+- **Delivery architecture is hybrid, by design (added 2026-08-17, at NTF-3 pickup):** STOMP is
+  scoped to *web, in-app, connected-session* delivery only — it is deliberately not a mobile
+  solution and isn't meant to become one. iOS does not support WebSocket connections in the
+  background at all (a persistent socket only works while the app is foregrounded), and Android's
+  Doze mode is similarly hostile to background sockets — this is structurally the same gap Apple
+  built APNs and Google built FCM to solve, not a config problem STOMP can be tuned around. The
+  future mobile phase (`PROGRESS.md`'s Phase 4-5) already earmarks **Firebase Cloud Messaging** for
+  push notifications — that stays the plan, and is not replaced or superseded by STOMP. The two are
+  complementary, not competing: STOMP/WebSocket suits an actively-connected session (lower latency,
+  no permission prompt, no new vendor dependency), FCM suits reaching a user whose app is
+  backgrounded or closed (OS-managed, battery-efficient, the only way to reach a killed mobile app).
+  FCM was deliberately **not** pulled forward into this ticket — it requires a real new subsystem
+  (device/browser token registration, refresh, invalidation; FCM has no concept of "user," only
+  tokens) whose payoff (mobile background delivery) has no mobile client yet to receive it. Building
+  it now would be paying that cost before there's any benefit to collect.
 - **Deactivated users:** no new logic needed. Read endpoints gate on `isActive` like every other
   authenticated endpoint (per `CLAUDE.md`'s account-lifecycle rule); a deactivated user can't trigger
   events either, since they can't act at all.
@@ -102,7 +117,12 @@ friend**.
   — rejected: couples every domain to notification at compile time, doesn't map cleanly onto a
   future service-extraction seam the way an async event does.
 - **Plain Spring `ApplicationEventPublisher` as the durability mechanism** — rejected once the
-  crash-window gap was made concrete; superseded by the outbox pattern.
+  crash-window gap was made concrete; superseded by the outbox pattern. Note this is a different
+  question from NTF-3's `@TransactionalEventListener(AFTER_COMMIT)` use to trigger the *live STOMP
+  push* after `recordEvent`'s transaction commits — that one isn't a durability mechanism (a missed
+  live-update ping isn't data loss; NTF-1's REST endpoints stay the source of truth, and
+  `CLIENT-NOTIF-1` already specs a poll fallback on disconnect), just a "don't push before the write
+  is visible" ordering guard. Don't conflate the two uses of the same Spring mechanism.
 - **Redis pub/sub** (originally scoped in `REDIS_RESEARCH.MD` for this exact use case) — rejected:
   fire-and-forget, no persistence, no replay — doesn't actually close the durability gap that was
   the whole point of considering a broker.
@@ -130,6 +150,13 @@ friend**.
 - **Notification preferences** (per-type mute/opt-out, multi-channel dispatch) — explicitly deferred
   past v1 by the single-table decision. Revisit once push notifications (already tracked under the
   Phase 4–5 mobile roadmap in `PROGRESS.md`) get scoped.
+- **FCM/mobile push ticket** — not yet scoped, no ticket ID minted (there's no mobile module to file
+  it under yet). Needs its own Phase 1/2/3 pass whenever the Phase 4-5 mobile phase starts: a device/
+  browser token-registration subsystem (table, registration endpoint, refresh/invalidation handling),
+  Firebase Admin SDK wiring (new `firebase-admin` dependency, a new service-account-credential secret
+  managed the same way `services/chat`'s `JWT_SECRET`/`INTERNAL_SERVICE_SECRET` are — env-injected,
+  fails fast if missing, never a repo secret), and a decision on whether to also extend it to web
+  (FCM supports Web Push) once STOMP's limits are felt at scale, or leave web on STOMP indefinitely.
 
 ## Proposed tickets
 

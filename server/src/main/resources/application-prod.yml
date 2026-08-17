@@ -50,3 +50,9 @@ app:
 
   # Gates /internal/** — services/chat's cold-start bootstrap pull. See application.yml's comment.
   internal-service-secret: ${INTERNAL_SERVICE_SECRET}
+
+  # NTF-3: STOMP broker-relay target — see application.yml's comment for why login/passcode reuse
+  # spring.rabbitmq's own credentials.
+  stomp-relay:
+    host: ${STOMP_RELAY_HOST:${spring.rabbitmq.host}}
+    port: ${STOMP_RELAY_PORT:61613}

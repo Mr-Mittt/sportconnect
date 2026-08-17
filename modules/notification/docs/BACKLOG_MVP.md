@@ -26,7 +26,7 @@ module's own implementation work).
 |---|---|---|---|
 | 1 | NTF-1 | Module scaffolding — entity, aggregation logic, read REST endpoints | `DONE` |
 | 2 | NTF-2 | RabbitMQ consumer — `sportconnect.events` exchange, recipient resolution | `DONE` |
-| 3 | NTF-3 | STOMP-over-RabbitMQ live delivery to the client | `TODO` |
+| 3 | NTF-3 | STOMP-over-RabbitMQ live delivery to the client | `DONE` |
 
 ---
 
@@ -111,9 +111,19 @@ thread-participant case (dedup, excludes the new commenter); malformed/unroutabl
 ---
 
 ## NTF-3 — STOMP-over-RabbitMQ live delivery
-**Status:** `TODO`
+**Status:** `DONE` — see `modules/notification/docs/NTF-3_STOMP_LIVE_DELIVERY.md`
 **Type:** New Feature
 **Depends on:** NTF-2
+
+**Delta (2026-08-17):** scope explicitly confirmed as *web, in-app, connected-session* delivery
+only, after a mid-ticket architecture discussion — see
+`documentation/md/vision/NOTIFICATION_MODULE_VISION.md`'s hybrid-delivery decision and
+`PROGRESS.md` §2.7 for the full rationale. STOMP-over-WebSocket structurally cannot reach a
+backgrounded/closed mobile app (iOS forbids background WebSocket sessions outright; Android's Doze
+mode is similarly hostile) — this is **not** a gap this ticket needs to close, and STOMP is not
+meant to become a mobile solution. Mobile push notifications stay a separate, future,
+not-yet-scoped ticket built on Firebase Cloud Messaging once the Phase 4-5 mobile phase starts, per
+the vision doc's now-updated Client delivery bullet and its Open Questions section.
 
 Spring WebSocket STOMP support in broker-relay mode, pointed at RabbitMQ's STOMP plugin instead of
 the in-memory broker. Per-user delivery via Spring's `/user/queue/notifications` destination

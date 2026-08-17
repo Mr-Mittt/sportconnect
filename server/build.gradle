@@ -83,6 +83,11 @@ dependencies {
     // SessionEventsConsumerIntegrationTest.
     testImplementation 'org.springframework.boot:spring-boot-starter-amqp'
 
+    // Only transitively available at runtime (declared 'implementation', not 'api', by auth-impl) —
+    // needed here at compile time for JwtTokenService, used to mint a real access token in
+    // NotificationStompIntegrationTest (NTF-3).
+    testImplementation project(':modules:auth:auth-api')
+
     // Polling assertions for async @RabbitListener processing (NTF-2's real-RabbitMQ IT test) —
     // a message is consumed on a background listener thread, not the test's calling thread.
     testImplementation 'org.awaitility:awaitility:4.2.2'

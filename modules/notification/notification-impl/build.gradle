@@ -12,11 +12,29 @@ dependencies {
     // will each be added once their own outbox-wiring tickets (B7/B21/U13) ship real producers.
     implementation project(':modules:session:session-api')
 
+    // NTF-3: JwtTokenService — validates the JWT carried on a STOMP CONNECT frame. Same
+    // cross-domain-via-api-only interface JwtAuthenticationFilter uses internally in auth-impl.
+    implementation project(':modules:auth:auth-api')
+
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // NTF-3: STOMP-over-RabbitMQ live delivery (broker-relay mode). The dependency itself was
+    // already present, unused, at server/build.gradle — declared here too since notification-impl
+    // is where the STOMP config/interceptor/push classes actually live.
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
+    // Spring's StompBrokerRelayMessageHandler uses Reactor Netty's TCP client to connect to the
+    // STOMP broker — required on the classpath or the relay bean fails to start with
+    // "IllegalStateException: No compatible version of Reactor Netty" (discovered the hard way:
+    // it doesn't come transitively from spring-boot-starter-websocket, and its absence broke
+    // ApplicationContext startup for every @SpringBootTest in the whole server module, not just
+    // this one). Version comes from Spring Boot's own BOM (see root build.gradle), same as every
+    // other unversioned Spring dependency in this module.
+    implementation 'io.projectreactor.netty:reactor-netty'
 
     // RabbitMQ client — SessionEventsConsumer (NTF-2) listens on the sportconnect.events exchange;
     // not transitively available from common (declared there as 'implementation', not 'api')

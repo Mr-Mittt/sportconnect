@@ -1,9 +1,12 @@
 package com.sportconnect.notification.consumer
 
+import com.sportconnect.notification.api.dto.NotificationRecordResult
 import com.sportconnect.notification.api.service.NotificationService
+import com.sportconnect.notification.push.NotificationLiveUpdateEvent
 import com.sportconnect.notification.repository.ProcessedMessageRepository
 import com.sportconnect.session.api.dto.ParticipantStatus
 import com.sportconnect.session.api.service.SessionService
+import org.springframework.context.ApplicationEventPublisher
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -12,11 +15,13 @@ class SessionEventProcessorSpec extends Specification {
     ProcessedMessageRepository processedMessageRepository = Mock()
     NotificationService notificationService = Mock()
     SessionService sessionService = Mock()
+    ApplicationEventPublisher eventPublisher = Mock()
 
     @Subject
-    SessionEventProcessor processor = new SessionEventProcessor(processedMessageRepository, notificationService, sessionService)
+    SessionEventProcessor processor = new SessionEventProcessor(
+            processedMessageRepository, notificationService, sessionService, eventPublisher)
 
-    def "process() for a single-recipient event inserts the dedup marker then calls recordEvent once"() {
+    def "process() for a single-recipient event inserts the dedup marker, calls recordEvent once, and publishes a live-update event"() {
         given:
         def actorId = UUID.randomUUID()
         def recipientId = UUID.randomUUID()
@@ -27,10 +32,14 @@ class SessionEventProcessorSpec extends Specification {
 
         then:
         1 * processedMessageRepository.insertIfAbsent("mid-1") >> 1
-        1 * notificationService.recordEvent(recipientId, "session.join_request.created", "SESSION", "1", actorId)
+        1 * notificationService.recordEvent(recipientId, "session.join_request.created", "SESSION", "1", actorId) >>
+                new NotificationRecordResult(10L, 2L)
+        1 * eventPublisher.publishEvent({ NotificationLiveUpdateEvent e ->
+            e.recipientUserId() == recipientId && e.notificationId() == 10L && e.unreadCount() == 2L
+        })
     }
 
-    def "process() skips recordEvent for a single-recipient event when the recipient is the actor"() {
+    def "process() skips recordEvent and the live-update event for a single-recipient event when the recipient is the actor"() {
         given:
         def selfId = UUID.randomUUID()
         def event = ParsedSessionEvent.single("session.join_request.created", 1L, selfId, selfId)
@@ -41,9 +50,10 @@ class SessionEventProcessorSpec extends Specification {
         then:
         1 * processedMessageRepository.insertIfAbsent("mid-1") >> 1
         0 * notificationService.recordEvent(*_)
+        0 * eventPublisher.publishEvent(_)
     }
 
-    def "process() for a fan-out event resolves participants and calls recordEvent once per recipient, excluding the actor"() {
+    def "process() for a fan-out event resolves participants, calls recordEvent once per recipient excluding the actor, and publishes one live-update event per recipient"() {
         given:
         def actorId = UUID.randomUUID()
         def other1 = UUID.randomUUID()
@@ -57,12 +67,20 @@ class SessionEventProcessorSpec extends Specification {
         then:
         1 * processedMessageRepository.insertIfAbsent("mid-1") >> 1
         1 * sessionService.getParticipantIdsByStatuses(1L, statuses) >> [actorId, other1, other2]
-        1 * notificationService.recordEvent(other1, "session.comment.created", "SESSION", "1", actorId)
-        1 * notificationService.recordEvent(other2, "session.comment.created", "SESSION", "1", actorId)
+        1 * notificationService.recordEvent(other1, "session.comment.created", "SESSION", "1", actorId) >>
+                new NotificationRecordResult(11L, 1L)
+        1 * notificationService.recordEvent(other2, "session.comment.created", "SESSION", "1", actorId) >>
+                new NotificationRecordResult(12L, 3L)
         0 * notificationService.recordEvent(actorId, _, _, _, _)
+        1 * eventPublisher.publishEvent({ NotificationLiveUpdateEvent e ->
+            e.recipientUserId() == other1 && e.notificationId() == 11L && e.unreadCount() == 1L
+        })
+        1 * eventPublisher.publishEvent({ NotificationLiveUpdateEvent e ->
+            e.recipientUserId() == other2 && e.notificationId() == 12L && e.unreadCount() == 3L
+        })
     }
 
-    def "process() never touches NotificationService or SessionService when the message was already processed"() {
+    def "process() never touches NotificationService, SessionService, or the event publisher when the message was already processed"() {
         given:
         def event = ParsedSessionEvent.single("session.join_request.created", 1L, UUID.randomUUID(), UUID.randomUUID())
 
@@ -73,5 +91,6 @@ class SessionEventProcessorSpec extends Specification {
         1 * processedMessageRepository.insertIfAbsent("mid-1") >> 0
         0 * sessionService._
         0 * notificationService._
+        0 * eventPublisher._
     }
 }

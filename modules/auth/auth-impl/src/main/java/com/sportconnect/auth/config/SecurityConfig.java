@@ -88,6 +88,13 @@ public class SecurityConfig {
                         // Static resources (images, etc.)
                         .requestMatchers("/images/**").permitAll()
 
+                        // NTF-3: STOMP live-delivery WebSocket handshake. The HTTP upgrade request
+                        // itself carries no auth (a browser's native WebSocket handshake can't set
+                        // custom headers) — real auth happens at the STOMP CONNECT frame via
+                        // StompAuthChannelInterceptor (notification-impl), which reads the JWT off
+                        // the frame's own Authorization header instead.
+                        .requestMatchers("/ws/**").permitAll()
+
                         // Swagger/OpenAPI — /api-docs is this app's customized springdoc path
                         // (see application.yml); /v3/api-docs is the springdoc default, kept
                         // permitted too in case the customization is ever reverted.

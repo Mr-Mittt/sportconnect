@@ -25,9 +25,10 @@ class NotificationServiceImplSpec extends Specification {
         given:
         notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
                 recipientId, "post.comment.created", "POST", "42") >> Optional.empty()
+        notificationRepository.countByRecipientUserIdAndIsReadFalse(recipientId) >> 1L
 
         when:
-        notificationService.recordEvent(recipientId, "post.comment.created", "POST", "42", actorId)
+        def result = notificationService.recordEvent(recipientId, "post.comment.created", "POST", "42", actorId)
 
         then:
         1 * notificationRepository.save({ Notification n ->
@@ -37,7 +38,9 @@ class NotificationServiceImplSpec extends Specification {
                     n.entityId == "42" &&
                     n.actorIds == [actorId] &&
                     n.actorCount == 1
-        })
+        }) >> { Notification n -> n.tap { id = 99L } }
+        result.notificationId() == 99L
+        result.unreadCount() == 1L
     }
 
     def "recordEvent bumps actorCount and prepends a new actor onto an existing open group"() {
@@ -55,14 +58,17 @@ class NotificationServiceImplSpec extends Specification {
                 .build()
         notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
                 recipientId, "post.comment.created", "POST", "42") >> Optional.of(existing)
+        notificationRepository.countByRecipientUserIdAndIsReadFalse(recipientId) >> 1L
 
         when:
-        notificationService.recordEvent(recipientId, "post.comment.created", "POST", "42", actorId)
+        def result = notificationService.recordEvent(recipientId, "post.comment.created", "POST", "42", actorId)
 
         then:
         1 * notificationRepository.save({ Notification n ->
             n.id == 5L && n.actorIds == [actorId, priorActor] && n.actorCount == 2
-        })
+        }) >> existing
+        result.notificationId() == 5L
+        result.unreadCount() == 1L
     }
 
     def "recordEvent dedupes a repeat actor by moving it to the front without growing the list"() {
@@ -80,6 +86,7 @@ class NotificationServiceImplSpec extends Specification {
                 .build()
         notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
                 recipientId, "post.comment.created", "POST", "42") >> Optional.of(existing)
+        notificationRepository.countByRecipientUserIdAndIsReadFalse(recipientId) >> 1L
 
         when:
         notificationService.recordEvent(recipientId, "post.comment.created", "POST", "42", actorId)
@@ -87,7 +94,7 @@ class NotificationServiceImplSpec extends Specification {
         then:
         1 * notificationRepository.save({ Notification n ->
             n.actorIds == [actorId, other] && n.actorCount == 3
-        })
+        }) >> existing
     }
 
     def "recordEvent bounds actorIds to the 3 most recent distinct actors"() {
@@ -107,6 +114,7 @@ class NotificationServiceImplSpec extends Specification {
                 .build()
         notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
                 recipientId, "post.comment.created", "POST", "42") >> Optional.of(existing)
+        notificationRepository.countByRecipientUserIdAndIsReadFalse(recipientId) >> 1L
         def newActor = UUID.randomUUID()
 
         when:
@@ -115,19 +123,20 @@ class NotificationServiceImplSpec extends Specification {
         then:
         1 * notificationRepository.save({ Notification n ->
             n.actorIds == [newActor, a3, a2] && n.actorCount == 4
-        })
+        }) >> existing
     }
 
     def "a read row is never matched by recordEvent's lookup — a fresh row starts instead"() {
         given:
         notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
                 recipientId, "post.comment.created", "POST", "42") >> Optional.empty()
+        notificationRepository.countByRecipientUserIdAndIsReadFalse(recipientId) >> 1L
 
         when:
         notificationService.recordEvent(recipientId, "post.comment.created", "POST", "42", actorId)
 
         then:
-        1 * notificationRepository.save({ Notification n -> n.id == null && n.actorCount == 1 })
+        1 * notificationRepository.save({ Notification n -> n.id == null && n.actorCount == 1 }) >> { Notification n -> n }
     }
 
     def "markAsRead flips isRead when the caller owns the notification"() {

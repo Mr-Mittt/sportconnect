@@ -1,6 +1,8 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useLogout } from '@/features/auth/useLogout';
+import { useNotificationLiveSocket } from '@/features/notifications/useNotificationLiveSocket';
+import { useUnreadNotificationCount } from '@/features/notifications/useUnreadNotificationCount';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import { AuthLoadingState } from './AuthLoadingState';
@@ -55,6 +57,12 @@ export function AppShell() {
   const sportCatalog = useSportCatalog();
   useSportCatalogStore.getState().setCatalog(sportCatalog.data);
 
+  // NTF-3: live-updates the TopBar badge below via the unread-count query
+  // cache; only rendered here (inside the authenticated shell), matching
+  // the fact that every page under it already assumes a logged-in user.
+  useNotificationLiveSocket();
+  const { data: unreadCount } = useUnreadNotificationCount();
+
   if (sportCatalog.isLoading) {
     return <AuthLoadingState />;
   }
@@ -68,6 +76,7 @@ export function AppShell() {
           email: user.email,
         }}
         onLogout={logout}
+        unreadCount={unreadCount}
       />
       <NavTabs active={activeTabFromPath(pathname)} onChange={(tab) => navigate(pathByTab[tab])} />
       <Outlet />
