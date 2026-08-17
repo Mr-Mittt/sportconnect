@@ -18,7 +18,8 @@ import static org.awaitility.Awaitility.await;
 /**
  * Real end-to-end coverage for NTF-2's {@code SessionEventsConsumer} wiring (see
  * {@code modules/notification/docs/NTF-2_RABBITMQ_CONSUMER.md}) — publishes directly onto a real
- * RabbitMQ broker ({@link RabbitMqTestContainerBase}, via {@link BaseIT}) and asserts a real
+ * RabbitMQ broker (extends {@link RabbitMqTestContainerBase}, not {@code BaseIT} directly — only
+ * tests that actually need Rabbit should force that container to start) and asserts a real
  * {@code Notification} row appears, going through the actual exchange/queue/binding/
  * {@code @RabbitListener} wiring rather than mocked collaborators. This is exactly the class of
  * bug {@code SessionEventProcessorSpec}/{@code SessionEventsConsumerSpec} (Spock, mocked
@@ -32,7 +33,7 @@ import static org.awaitility.Awaitility.await;
  * {@code @Scheduled} drain) — this class is testing the consumer side of the wire, not the
  * producer side, which SESSION-15's own tests already cover.
  */
-class SessionEventsConsumerIntegrationTest extends BaseIT {
+class SessionEventsConsumerIntegrationTest extends RabbitMqTestContainerBase {
 
     private static final String EXCHANGE = "sportconnect.events";
 

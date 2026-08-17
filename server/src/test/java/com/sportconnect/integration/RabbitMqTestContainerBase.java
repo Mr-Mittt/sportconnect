@@ -6,14 +6,17 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Shared real-RabbitMQ setup for any integration test needing a reachable broker — same shape and
- * rationale as {@link RedisTestContainerBase} (a plain static field started once per test JVM
- * run, not the {@code @Testcontainers}/{@code @Container} JUnit5 extension). Chained onto
- * {@code RedisTestContainerBase} rather than duplicating it, so {@link BaseIT} gets both real
- * dependencies through one inheritance link and this container's one-time startup cost is paid
- * once for the whole {@code :server:test} run, not per test class.
+ * Real-RabbitMQ setup for the (currently few) integration tests that need a reachable broker —
+ * same container-lifecycle shape as {@link RedisTestContainerBase} (a plain static field started
+ * once per test JVM run, not the {@code @Testcontainers}/{@code @Container} JUnit5 extension), but
+ * deliberately positioned differently: this extends {@link BaseIT} (getting Redis, MockMvc, and
+ * the auth helpers for free), rather than {@code BaseIT} extending this. A test extends this class
+ * specifically — not {@code BaseIT} directly — when it needs real RabbitMQ. Keeping this out of
+ * {@code BaseIT}'s own hierarchy matters because a {@code @DynamicPropertySource} method only runs
+ * once its declaring class is loaded: if this container lived in {@code BaseIT}'s ancestry, every
+ * IT test in the suite would force-load it and start a broker most of them never use.
  */
-public abstract class RabbitMqTestContainerBase extends RedisTestContainerBase {
+public abstract class RabbitMqTestContainerBase extends BaseIT {
 
     private static final GenericContainer<?> RABBITMQ =
             new GenericContainer<>(DockerImageName.parse("rabbitmq:3-management-alpine"))

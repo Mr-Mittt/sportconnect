@@ -44,7 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * round trip, B9) or the friend-request flow — this class is testing {@code PostGate}'s read of
  * that state, not the group/friendship write paths themselves, which have their own coverage.
  */
-class PostAccessGateIntegrationTest extends BaseIT {
+class PostAccessGateIntegrationTest extends RedisBaseIT {
 
     private static final Integer ROLE_OWNER = 1;
     private static final Integer ROLE_MEMBER = 3;

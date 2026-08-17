@@ -20,15 +20,19 @@ import java.util.UUID;
  * Base class for integration tests
  * Provides common configuration and utilities for all integration tests
  * <p>
- * The real-Redis/RabbitMQ Testcontainer setup lives in {@link RedisTestContainerBase}/
- * {@link RabbitMqTestContainerBase} (extracted so a test needing {@code webEnvironment =
- * RANDOM_PORT} instead of this class's {@code MOCK} + {@code @AutoConfigureMockMvc} can reuse
- * them without duplicating the containers).
+ * Deliberately has NO real infra (Redis, RabbitMQ) in its own ancestry — a
+ * {@code @DynamicPropertySource} method only runs once its declaring class is loaded, so keeping
+ * this class infra-free means a test extending it directly starts no container it doesn't use
+ * (e.g. {@code GroupControllerTest}, whose service layer is fully mocked; {@code
+ * NotificationAccessGateIntegrationTest}, whose domain never touches Redis). A test whose request
+ * path genuinely touches real Redis-backed code (verified per class, not assumed by domain name)
+ * extends {@link RedisBaseIT} instead; one needing a real RabbitMQ broker extends
+ * {@link RabbitMqTestContainerBase}. Both of those extend this class, not the other way around.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-public abstract class BaseIT extends RabbitMqTestContainerBase {
+public abstract class BaseIT {
 
     @Autowired
     protected MockMvc mockMvc;
