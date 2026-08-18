@@ -19,9 +19,11 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [SESSION-8](MVP/SESSION-8_SESSION_DISCOVER_RANKING_ALGORITHM.md) | Session discover ranking algorithm | `TODO` |
-| 2 | [SESSION-16](MVP/SESSION-16_FIX_JOINSESSION_DEMOTING_AN_ALREADY_JOINED_CALLER_BACK.md) | Fix `joinSession` demoting an already-`JOINED` caller back to `REQUESTED` | `TODO` |
-| 3 | [SESSION-18](MVP/SESSION-18_NOTIFY_JOINED_PARTICIPANTS_WHEN_A_SESSION_TRANSITIONS_TO.md) | Notify JOINED participants when a session transitions to ONGOING | `TODO` |
+| 1 | [SESSION-16](MVP/SESSION-16_FIX_JOINSESSION_DEMOTING_AN_ALREADY_JOINED_CALLER_BACK.md) | Fix `joinSession` demoting an already-`JOINED` caller back to `REQUESTED` | `TODO` |
+| 2 | [SESSION-18](MVP/SESSION-18_NOTIFY_JOINED_PARTICIPANTS_WHEN_A_SESSION_TRANSITIONS_TO.md) | Notify JOINED participants when a session transitions to ONGOING | `TODO` |
+| 3 | [SESSION-19](MVP/SESSION-19_NOTIFY_JOINED_PARTICIPANTS_ON_LEAVE.md) | Notify JOINED participants when a participant leaves | `TODO` |
+| 4 | [SESSION-20](MVP/SESSION-20_COMMENT_NOTIFICATION_STATUS_GATE_BUG.md) | Comment notifications wrongly restricted to SCHEDULED/ONGOING sessions | `TODO` |
+| 5 | [SESSION-8](MVP/SESSION-8_SESSION_DISCOVER_RANKING_ALGORITHM.md) | Session discover ranking algorithm | `TODO` |
 
 ---
 
