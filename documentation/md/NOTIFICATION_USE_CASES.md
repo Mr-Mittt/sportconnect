@@ -35,3 +35,14 @@ notification-module vision session, one of the v1 session-domain triggers (highe
 priority of the four domains scoped: session > post > group > friend). Filed as **SESSION-15** in
 `modules/session/docs/BACKLOG_MVP.md`, `TODO`, blocked on `modules/common`'s C3 and
 `modules/notification`'s NTF-1/NTF-2.
+
+### NOTIF-2 · A JOINED participant leaves a session
+**Date added:** 2026-08-18
+**Status:** `CONFIRMED` (2026-08-18)
+**Source:** user request while reviewing session notification coverage, filed directly as `SESSION-19`
+
+When a participant who was `JOINED` leaves a session (`DELETE /api/sessions/{sessionId}/leave`),
+the other currently-`JOINED` participants get notified — confirmed, filed as **SESSION-19** in
+`modules/session/docs/BACKLOG_MVP.md`, `TODO`. Deliberately scoped to the real leave case only, not
+`leaveSession`'s other two outcomes (declining an invite, cancelling a join request) — see the
+ticket for why.
