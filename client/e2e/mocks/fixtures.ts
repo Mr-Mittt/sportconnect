@@ -694,6 +694,140 @@ export const mockDiscoverableSession: Session = {
   updatedAt: '2026-06-23T10:00:00',
 };
 
+// CLIENT-SESSION-12: group-linked to mockGroup (mockUser is already group_member there, so it
+// surfaces in "My sessions" via the group-sessions path regardless of participant status —
+// GET /sessions/group/:groupId has no status filter, unlike /sessions/mine or the JOINED-only
+// joined-sessions query). Created by someone else, with mockUser pre-seeded INVITED — this mock
+// backend has no second live identity to actually invite as, same "pre-seed the other person's
+// row" precedent as mockSessionJoinRequest.
+export const mockInvitedSession: Session = {
+  id: 5,
+  groupId: mockGroup.id,
+  sessionType: 'GROUP_RECURRING',
+  createdBy: 'other-user-id',
+  createdByFullName: 'Priya Shah',
+  sportId: mockGroup.sportId,
+  sportName: 'Badminton',
+  title: 'Tuesday drop-in',
+  description: null,
+  location: { ...mockLocation, id: 5, sportId: mockGroup.sportId, sportName: 'Badminton' },
+  locationNote: null,
+  scheduledStart: '2026-08-04T19:00:00', // fixed — see mockSession's note on hoursFromNow()
+  scheduledEndAt: null,
+  status: 'SCHEDULED',
+  cancelReason: null,
+  cancelledBy: null,
+  cancelledByFullName: null,
+  cancelledAt: null,
+  participantCount: 5,
+  capacity: 9999,
+  feeType: 'FREE',
+  feeAmountVnd: null,
+  initialSlot: 0,
+  autoApprove: true,
+  likeCount: 0,
+  isLikedByCurrentUser: false,
+  callerParticipation: null, // overwritten per-response — see mockSession's note above.
+  createdAt: '2026-06-24T10:00:00',
+  updatedAt: '2026-06-24T10:00:00',
+};
+
+/** mockUser's own pre-seeded INVITED row on mockInvitedSession — same reasoning as
+ * mockSessionJoinRequest, just for the invitee's own view instead of the owner's queue. */
+export const mockUserInvitedRow: SessionParticipant = {
+  id: 3,
+  sessionId: mockInvitedSession.id,
+  userId: mockUser.id,
+  userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  userAvatarUrl: mockUser.avatarUrl,
+  status: 'INVITED',
+  rejectReason: null,
+  createdAt: '2026-07-18T00:00:00',
+};
+
+// CLIENT-SESSION-12: same shape as mockInvitedSession, for the REQUESTED (pending organizer
+// approval) caller-side state instead.
+export const mockRequestedSession: Session = {
+  id: 6,
+  groupId: mockGroup.id,
+  sessionType: 'GROUP_RECURRING',
+  createdBy: 'other-user-id',
+  createdByFullName: 'Priya Shah',
+  sportId: mockGroup.sportId,
+  sportName: 'Badminton',
+  title: 'Wednesday scrimmage',
+  description: null,
+  location: { ...mockLocation, id: 6, sportId: mockGroup.sportId, sportName: 'Badminton' },
+  locationNote: null,
+  scheduledStart: '2026-08-05T19:00:00', // fixed — see mockSession's note on hoursFromNow()
+  scheduledEndAt: null,
+  status: 'SCHEDULED',
+  cancelReason: null,
+  cancelledBy: null,
+  cancelledByFullName: null,
+  cancelledAt: null,
+  participantCount: 5,
+  capacity: 9999,
+  feeType: 'FREE',
+  feeAmountVnd: null,
+  initialSlot: 0,
+  autoApprove: false, // must stay false — an autoApprove join instantly resolves to JOINED, never REQUESTED.
+  likeCount: 0,
+  isLikedByCurrentUser: false,
+  callerParticipation: null, // overwritten per-response — see mockSession's note above.
+  createdAt: '2026-06-25T10:00:00',
+  updatedAt: '2026-06-25T10:00:00',
+};
+
+/** mockUser's own pre-seeded REQUESTED row on mockRequestedSession. */
+export const mockUserRequestedRow: SessionParticipant = {
+  id: 4,
+  sessionId: mockRequestedSession.id,
+  userId: mockUser.id,
+  userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  userAvatarUrl: mockUser.avatarUrl,
+  status: 'REQUESTED',
+  rejectReason: null,
+  createdAt: '2026-07-19T00:00:00',
+};
+
+// CLIENT-SESSION-12: standalone + createdBy mockUser, so it surfaces via /sessions/mine (which
+// filters on groupId===null && createdBy===mockUser.id only, no status filter) without needing a
+// live cancel action — SessionDetailModal's Cancel session button was removed entirely
+// (CLIENT-SESSION-10), so there is no UI path left to reach a CANCELLED session from a fresh
+// SCHEDULED one; this fixture starts pre-cancelled instead.
+export const mockCancelledSession: Session = {
+  id: 7,
+  groupId: null,
+  sessionType: 'STANDALONE',
+  createdBy: mockUser.id,
+  createdByFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  sportId: 3,
+  sportName: 'Pickleball',
+  title: 'Monday night run',
+  description: null,
+  location: { ...mockLocation, id: 7, sportId: 3, sportName: 'Pickleball' },
+  locationNote: null,
+  scheduledStart: '2026-08-07T19:00:00', // fixed — see mockSession's note on hoursFromNow()
+  scheduledEndAt: null,
+  status: 'CANCELLED',
+  cancelReason: 'Court unavailable due to maintenance.',
+  cancelledBy: mockUser.id,
+  cancelledByFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+  cancelledAt: '2026-07-20T09:00:00',
+  participantCount: 0,
+  capacity: 10,
+  feeType: 'FREE',
+  feeAmountVnd: null,
+  initialSlot: 0,
+  autoApprove: true,
+  likeCount: 0,
+  isLikedByCurrentUser: false,
+  callerParticipation: null, // overwritten per-response — see mockSession's note above.
+  createdAt: '2026-06-26T10:00:00',
+  updatedAt: '2026-06-26T10:00:00',
+};
+
 /** Builds a Spring Data `Page<T>`-shaped response from a full content array. */
 export function mockPageResponse<T>(content: T[]): PageResponse<T> {
   return {

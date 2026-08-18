@@ -3,15 +3,20 @@ import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import type { Comment, CreateCommentPayload } from '../../../src/features/feed/types.ts';
 import type { ParticipantStatus, Session, SessionParticipant } from '../../../src/shared/types/session.ts';
 import {
+  mockCancelledSession,
   mockDiscoverableSession,
   mockFriend,
   mockGroupSession,
+  mockInvitedSession,
   mockLocation,
   mockOwnedGroupSession,
+  mockRequestedSession,
   mockSecondSessionJoinRequest,
   mockSession,
   mockSessionJoinRequest,
   mockUser,
+  mockUserInvitedRow,
+  mockUserRequestedRow,
 } from '../fixtures.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
@@ -90,12 +95,20 @@ function defaultSessionsSession(): SessionsSession {
       { ...mockGroupSession },
       { ...mockOwnedGroupSession },
       { ...mockDiscoverableSession },
+      { ...mockInvitedSession },
+      { ...mockRequestedSession },
+      { ...mockCancelledSession },
     ],
     // CLIENT-SESSION-4: mockOwnedGroupSession (mockUser is group_owner) starts with one
     // pre-seeded REQUESTED row, so the approval queue has something to show without needing a
-    // second live authenticated session.
+    // second live authenticated session. CLIENT-SESSION-12: mockInvitedSession/
+    // mockRequestedSession pre-seed mockUser's own INVITED/REQUESTED row for the same reason,
+    // one level down — the caller's own pending-invite/pending-approval view, not the owner's
+    // queue.
     participantsState: {
       [mockOwnedGroupSession.id]: [{ ...mockSessionJoinRequest }, { ...mockSecondSessionJoinRequest }],
+      [mockInvitedSession.id]: [{ ...mockUserInvitedRow }],
+      [mockRequestedSession.id]: [{ ...mockUserRequestedRow }],
     },
     nextSessionId: 100,
     nextParticipantId: 100,

@@ -2890,6 +2890,26 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `update-baselines` dispatch → download `visual-baselines` artifact → replace
   `client/e2e/visual/__screenshots__/groups-*.png` → commit, before CI's real Linux runs of this
   spec will pass clean.
+- **CLIENT-SESSION-12 (`DONE`, 2026-08-18,
+  `client/docs/MVP/CLIENT-SESSION-12_SESSION_MODALS_VISUAL_REGRESSION.md`):** dialog-scoped visual
+  regression for `SessionDetailModal` (7 states) and `CreateSessionModal` (3 states), two spec
+  files matching `app-post-modal.spec.ts`'s shape, 30 baselines. Two real Phase 2 findings reshaped
+  the plan: `SessionDetailModal`'s Cancel session button was removed entirely (CLIENT-SESSION-10),
+  so there's no live path to a `CANCELLED` session anymore; and this mock backend has no second
+  live identity (every joinable session has `autoApprove: true`, mockUser is never anyone else's
+  invitee), so mockUser's own `INVITED`/`REQUESTED` states aren't reachable live either. Added 3
+  new MSW fixtures (`mockInvitedSession`, `mockRequestedSession`, `mockCancelledSession`) as pure
+  seed data to close both gaps — same "pre-seed the other side" precedent as
+  `mockSessionJoinRequest` — confirmed with the user first since it was a real scope expansion
+  beyond state selection. Found and fixed a different flakiness mechanism than GRP-10's: a focused
+  text input's blinking caret caused ~0.01-ratio pixel diffs between consecutive local runs; fixed
+  by blurring `document.activeElement` before every screenshot, which eliminated it entirely for
+  the detail-modal spec and reduced the create-modal spec's to a level matching this suite's own
+  already-documented Windows-noise threshold. Full `pnpm exec vitest run` and `eslint .` both
+  green — no unit-tested code added, new fixtures are additive-only. `E2E_OVERVIEW.md` updated.
+  **Same remaining step as GRP-10:** baselines are Windows-rendered locally (stable, 3/3 runs for
+  the detail modal); need the `client-ci` `update-baselines` dispatch swap before CI's Linux runs
+  pass clean.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
