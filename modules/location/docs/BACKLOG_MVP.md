@@ -53,7 +53,7 @@ exists on `locations.location` but no query uses it yet).
 **Status:** `DONE` (2026-08-02, `modules/location/location-impl/docs/LOC-2_FAVORITE_LOCATIONS.md`)
 
 **Filed:** 2026-08-01, split out of the client's `CreateSessionModal` redesign
-(`client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`) — the draft requirement replaces
+(`client/docs/MVP/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`) — the draft requirement replaces
 the modal's single "Choose location" button with a dropdown of the caller's favorite locations
 (sport-filtered), plus a selectable-heart favorite toggle on `LocationPicker`'s search-result rows.
 

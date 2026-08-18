@@ -9,6 +9,7 @@ import { resetFeedSession, seedPostsState } from './handlers/feed.ts';
 import { resetFriendHandlersState } from './handlers/friends.ts';
 import { resetGroupHandlersState, seedJoinRequestsState } from './handlers/groups.ts';
 import { resetLocationHandlersState } from './handlers/locations.ts';
+import { resetNotificationHandlersState } from './handlers/notifications.ts';
 import { resetSessionHandlersState } from './handlers/sessions.ts';
 import { resetSportHandlersState, seedZeroSportProfilesState } from './handlers/sport.ts';
 import { mockJoinRequest } from './fixtures.ts';
@@ -94,6 +95,7 @@ function resetSession(sessionId: string): void {
   resetChatHandlersState(sessionId);
   resetLocationHandlersState(sessionId);
   resetSessionHandlersState(sessionId);
+  resetNotificationHandlersState(sessionId);
   resetOverrides(sessionId);
   requestLogs.delete(sessionId);
 }

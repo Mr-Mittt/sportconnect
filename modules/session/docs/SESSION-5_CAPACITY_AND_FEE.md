@@ -4,7 +4,7 @@
 
 ## Scope
 
-Split out of the `CreateSessionModal` redesign (`client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`),
+Split out of the `CreateSessionModal` redesign (`client/docs/MVP/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`),
 which deliberately excluded a "Taken slot"/"Open slot" capacity input and a "Fee" group
 (Free / Split cost / fixed VND amount) because no backend support existed. `Session` gains
 `capacity` (display-only "open slots" — "taken" stays derived from the existing

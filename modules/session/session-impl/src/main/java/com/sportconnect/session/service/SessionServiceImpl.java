@@ -550,6 +550,13 @@ public class SessionServiceImpl implements SessionService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, String> getSessionTitlesByIds(List<Long> sessionIds) {
+        return sessionRepository.findAllById(sessionIds).stream()
+                .collect(Collectors.toMap(Session::getId, Session::getTitle));
+    }
+
     /** SESSION-10/A17 — the sole gate standing between a caller and a session's comment thread or
      * its own like, since post-impl's own PostGate makes SESSION_POST unconditionally unavailable.
      * Delegates to SessionGate (this module's own ResourceGate&lt;Session&gt;, same shape as

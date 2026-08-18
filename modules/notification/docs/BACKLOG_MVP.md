@@ -27,6 +27,7 @@ module's own implementation work).
 | 1 | NTF-1 | Module scaffolding — entity, aggregation logic, read REST endpoints | `DONE` |
 | 2 | NTF-2 | RabbitMQ consumer — `sportconnect.events` exchange, recipient resolution | `DONE` |
 | 3 | NTF-3 | STOMP-over-RabbitMQ live delivery to the client | `DONE` |
+| 4 | NTF-4 | `NotificationResponse` enrichment — actor names + entity title | `DONE` |
 
 ---
 
@@ -134,3 +135,43 @@ convention — a separate exchange/purpose from `sportconnect.events`.
 
 **Tests:** integration test verifying a consumed event results in a STOMP frame on the recipient's
 subscribed destination; client reconnect behavior is a `CLIENT-NOTIF-1` concern, not this ticket's.
+
+---
+
+## NTF-4 — `NotificationResponse` enrichment — actor names + entity title
+**Status:** `DONE` (2026-08-18)
+**Type:** Enhancement
+**Depends on:** NTF-1
+
+**Filed:** 2026-08-18, discovered mid-pickup of `CLIENT-NOTIF-1` — NTF-1 deliberately shipped
+`NotificationResponse` with raw `actorIds`/`entityId` and no enrichment (see NTF-1's Key decisions:
+"no cross-domain `-api` dependency at all... actor-name/avatar enrichment... explicitly out of
+scope"). Building the client dropdown against that raw shape would leave every row unreadable
+without a name or a session title. User decision at pickup: the notification API should build
+enough data for the client rather than the client resolving names/titles itself (no batch
+users-by-id endpoint exists client-side anyway) — same "server builds it, client renders it" shape
+as `SessionResponse.createdByFullName`.
+
+`NotificationResponse` gains two fields, both batch-resolved once per page (no N+1):
+- `actors: List<NotificationActorSummary>` (`id`, `fullName`) — the bounded (≤3) `actorIds` list
+  resolved via `user-api`'s existing `UserService.getUsersByIds`. An actor id missing from the
+  batch result (e.g. a deactivated user, though `getUsersByIds` doesn't currently filter on
+  `isActive`) is simply dropped from `actors`, mirroring `getUsersByIds`'s own "missing ids are
+  absent" contract.
+- `entityTitle: String` (nullable) — for `entityType == "SESSION"` (the only type any producer
+  emits today), the session's `title`, via a new `SessionService.getSessionTitlesByIds(List<Long>)`
+  batch method on `session-api`. `null` for any other `entityType` — forward-compatible with
+  post/group/friend notification types once their own outbox wiring (B7/B21/U13) ships; this ticket
+  does not add resolvers for those.
+
+`NotificationServiceImpl.getNotifications` collects every distinct `actorId` and every distinct
+SESSION `entityId` across the whole page *before* mapping, calls each batch method once (skipped
+entirely if the page has no actors / no SESSION rows), then maps each row from the two resulting
+`Map`s — same shape as `SessionServiceImpl.mapToResponses`' existing batch-resolution pattern.
+`notification-impl`'s `build.gradle` gains a `user-api` dependency (it already depended on
+`session-api` since NTF-2).
+
+**Tests:** `NotificationServiceImplSpec` — empty page skips both enrichment calls; a SESSION
+notification resolves both `actors` and `entityTitle` in one call each; an actor id absent from
+`user-api`'s batch result is dropped from `actors`; a non-SESSION `entityType` leaves `entityTitle`
+null and never calls `getSessionTitlesByIds`.

@@ -1,4 +1,5 @@
-import { IconBell, IconChevronDown, IconLogout, IconSearch } from '@tabler/icons-react';
+import { IconChevronDown, IconLogout, IconSearch } from '@tabler/icons-react';
+import type { ReactNode } from 'react';
 import { Avatar, AvatarFallback } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import {
@@ -18,18 +19,18 @@ interface TopBarUser {
 interface TopBarProps {
   user: TopBarUser;
   onSearchClick?: () => void;
-  onNotificationsClick?: () => void;
   onLogout: () => void;
   /**
-   * NTF-3 placeholder — a bare numeric badge on the bell icon, wired to the
-   * real unread count (`useUnreadNotificationCount` + live STOMP updates via
-   * `useNotificationLiveSocket`). CLIENT-NOTIF-1 replaces this with the real
-   * bell dropdown; undefined/0 renders no badge at all.
+   * CLIENT-NOTIF-1: the real bell + dropdown (`NotificationBell`), rendered
+   * as a slot rather than TopBar owning unreadCount/click-handler props
+   * directly — TopBar stays a plain presentational component, the bell owns
+   * its own popover-open state and data hooks. Replaces NTF-3's bare
+   * `unreadCount` badge placeholder.
    */
-  unreadCount?: number;
+  notificationBell: ReactNode;
 }
 
-export function TopBar({ user, onSearchClick, onNotificationsClick, onLogout, unreadCount }: TopBarProps) {
+export function TopBar({ user, onSearchClick, onLogout, notificationBell }: TopBarProps) {
   return (
     <header className="flex items-center justify-between py-3">
       <div className="text-lg font-medium text-text-primary">SportHub</div>
@@ -37,19 +38,7 @@ export function TopBar({ user, onSearchClick, onNotificationsClick, onLogout, un
         <Button variant="ghost" size="icon" aria-label="Search" onClick={onSearchClick}>
           <IconSearch className="size-5" aria-hidden="true" />
         </Button>
-        <div className="relative">
-          <Button variant="ghost" size="icon" aria-label="Notifications" onClick={onNotificationsClick}>
-            <IconBell className="size-5" aria-hidden="true" />
-          </Button>
-          {!!unreadCount && (
-            <span
-              className="absolute top-0.5 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-solid px-1 text-2xs font-medium text-white"
-              aria-label={`${unreadCount} unread notifications`}
-            >
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          )}
-        </div>
+        {notificationBell}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

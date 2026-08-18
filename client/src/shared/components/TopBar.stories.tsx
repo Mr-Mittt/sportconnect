@@ -8,6 +8,10 @@ const meta = {
   args: {
     user: { initials: 'JL', name: 'Jordan Lee', email: 'jordan@example.com' },
     onLogout: () => {},
+    // CLIENT-NOTIF-1: TopBar itself no longer owns unreadCount/click-handler
+    // props — see Notifications/NotificationBell for the real bell's own
+    // stories (open/loading/empty/populated states).
+    notificationBell: null,
   },
 } satisfies Meta<typeof TopBar>;
 
@@ -21,14 +25,4 @@ export const AccountMenuOpen: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Your account' }));
   },
-};
-
-// NTF-3's minimal unread-count badge placeholder (CLIENT-NOTIF-1 replaces
-// this with the real bell dropdown).
-export const UnreadNotifications: Story = {
-  args: { unreadCount: 3 },
-};
-
-export const UnreadNotificationsOverflow: Story = {
-  args: { unreadCount: 128 },
 };

@@ -1,10 +1,16 @@
+import { useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useLogout } from '@/features/auth/useLogout';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
+import { useNotificationBellData } from '@/features/notifications/useNotificationBellData';
 import { useNotificationLiveSocket } from '@/features/notifications/useNotificationLiveSocket';
-import { useUnreadNotificationCount } from '@/features/notifications/useUnreadNotificationCount';
+import { SessionDetailModal } from '@/features/session/components/SessionDetailModal';
+import { useSessionDetailModalData } from '@/features/session/useSessionDetailModalData';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
+import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
+import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { AuthLoadingState } from './AuthLoadingState';
 import { NavTabs, type NavTabKey } from './NavTabs';
 import { TopBar } from './TopBar';
@@ -48,6 +54,13 @@ function initialsOf(firstName: string, lastName: string): string {
  * `sportCatalog.isLoading` (same `AuthLoadingState` idiom `ProtectedRoute`
  * already uses for AUTH-3's session bootstrap) closes the race at its
  * source: by the time any page mounts, the catalog is already in the store.
+ *
+ * CLIENT-NOTIF-1: also owns a shell-level `SessionDetailModal` instance,
+ * fed by the same `useSessionDetailModalData` every page's own in-place
+ * "View details" modal already uses — clicking a session-scoped notification
+ * opens it as an overlay on whatever page the caller is currently on, no
+ * navigation, no page switch (see `useNotificationBellData`'s own comment
+ * for why this replaced an earlier `/matches?session={id}` navigation).
  */
 export function AppShell() {
   const navigate = useNavigate();
@@ -57,11 +70,24 @@ export function AppShell() {
   const sportCatalog = useSportCatalog();
   useSportCatalogStore.getState().setCatalog(sportCatalog.data);
 
-  // NTF-3: live-updates the TopBar badge below via the unread-count query
+  // NTF-3: live-updates NotificationBell's badge via the unread-count query
   // cache; only rendered here (inside the authenticated shell), matching
   // the fact that every page under it already assumes a logged-in user.
   useNotificationLiveSocket();
-  const { data: unreadCount } = useUnreadNotificationCount();
+
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const sessionDetailData = useSessionDetailModalData(selectedSessionId);
+  const sportProfilesQuery = useSportProfiles();
+  const sportsByKey = useMemo(
+    () =>
+      Object.fromEntries(sportProfilesQuery.data.map((sport) => [sport.key, sport])) as Record<
+        SportKey,
+        SportProfile
+      >,
+    [sportProfilesQuery.data],
+  );
+
+  const notificationBell = useNotificationBellData(setSelectedSessionId);
 
   if (sportCatalog.isLoading) {
     return <AuthLoadingState />;
@@ -76,10 +102,55 @@ export function AppShell() {
           email: user.email,
         }}
         onLogout={logout}
-        unreadCount={unreadCount}
+        notificationBell={<NotificationBell {...notificationBell} />}
       />
       <NavTabs active={activeTabFromPath(pathname)} onChange={(tab) => navigate(pathByTab[tab])} />
       <Outlet />
+
+      <SessionDetailModal
+        isOpen={selectedSessionId !== null}
+        onClose={() => setSelectedSessionId(null)}
+        session={sessionDetailData.selectedSession}
+        sportsByKey={sportsByKey}
+        isLoading={sessionDetailData.isSessionLoading}
+        isError={sessionDetailData.isSessionError}
+        participants={sessionDetailData.participants}
+        isParticipantsLoading={sessionDetailData.isParticipantsLoading}
+        isParticipantsError={sessionDetailData.isParticipantsError}
+        currentUserId={sessionDetailData.currentUserId}
+        canManage={sessionDetailData.canManage}
+        onJoin={sessionDetailData.onJoin}
+        isJoining={sessionDetailData.isJoining}
+        isJoinError={sessionDetailData.isJoinError}
+        onLeave={sessionDetailData.onLeave}
+        isLeaving={sessionDetailData.isLeaving}
+        isLeaveError={sessionDetailData.isLeaveError}
+        onConfirmCancel={sessionDetailData.onConfirmCancel}
+        isCancelling={sessionDetailData.isCancelling}
+        isCancelError={sessionDetailData.isCancelError}
+        requestedParticipants={sessionDetailData.requestedParticipants}
+        isRequestedParticipantsLoading={sessionDetailData.isRequestedParticipantsLoading}
+        isRequestedParticipantsError={sessionDetailData.isRequestedParticipantsError}
+        onApproveParticipant={sessionDetailData.onApproveParticipant}
+        isApprovingParticipant={sessionDetailData.isApprovingParticipant}
+        onRejectParticipant={sessionDetailData.onRejectParticipant}
+        isRejectingParticipant={sessionDetailData.isRejectingParticipant}
+        onToggleLike={sessionDetailData.onToggleLike}
+        isTogglingLike={sessionDetailData.isTogglingLike}
+        currentUser={{ fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
+        comments={sessionDetailData.comments}
+        isCommentsLoading={sessionDetailData.isCommentsLoading}
+        isCommentsError={sessionDetailData.isCommentsError}
+        isCommentsForbidden={sessionDetailData.isCommentsForbidden}
+        hasMoreComments={sessionDetailData.hasMoreComments}
+        isFetchingMoreComments={sessionDetailData.isFetchingMoreComments}
+        onFetchMoreComments={sessionDetailData.onFetchMoreComments}
+        onAddComment={sessionDetailData.onAddComment}
+        onAddCommentReply={sessionDetailData.onAddCommentReply}
+        isPostingComment={sessionDetailData.isPostingComment}
+        onDeleteComment={sessionDetailData.onDeleteComment}
+        onToggleCommentLike={sessionDetailData.onToggleCommentLike}
+      />
     </div>
   );
 }

@@ -213,7 +213,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   U1's own summary, which had framed the crash's symptom ("prevents re-sending") as an intended
   design decision. 3 new Spock tests; live-verified against the real running backend (decline→resend
   and accept→unfriend→resend both now return `200`). Found while wiring FRIEND-1's real friend-request
-  flow — see `client/docs/FRIEND-1_FRIENDS_PAGE.md`.
+  flow — see `client/docs/MVP/FRIEND-1_FRIENDS_PAGE.md`.
 - **U10 (2026-07-22):** Crossed friend requests establish friendship immediately — if A sends B a
   request and B independently sends one back before either accepts, both requests used to sit as
   two separate `PENDING` rows (different `(sender,receiver)` pairs, no constraint conflict), leaving
@@ -520,6 +520,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - **NTF-1 (2026-08-17, `DONE`, `modules/notification/docs/NTF-1_MODULE_SCAFFOLDING.md`):** new module scaffolding — `Notification` entity (`V053` migration, replaces the dead `V005` table which had zero owning code and cross-domain FKs to `users(id)`) with ID-only `recipientUserId`/`entityId` (`entityId` is a `String`, deliberately untyped — spans domains with incompatible id types, `Long` for `Post`/`Group`/`Session`, `UUID` for `FriendRequest`/`Friendship`), aggregation upsert keyed on `(recipientUserId, type, entityType, entityId)` scoped to unread, bounded 3-entry `actorIds` via a small `UuidListConverter` (no array-column precedent in this codebase); `NotificationGate implements ResourceGate<Notification>` (trivial `isAvailable`, ownership-only `isVisibleTo`); `GET /api/notifications`, `GET /api/notifications/unread-count`, `PUT /api/notifications/{id}/read`. **Delta from the ticket's own text:** no explicit `isActive` re-check added (locked in with the user before design) — inherits the same app-wide JWT-only gating gap (U12) every other endpoint has today, rather than being the first module to close it. First real caller of `recordEvent` will be NTF-2's RabbitMQ consumer. Depends on C3 (`modules/common`'s transactional outbox).
 - **NTF-2 (2026-08-17, `DONE`, `modules/notification/docs/NTF-2_RABBITMQ_CONSUMER.md`):** `sportconnect.events` consumer — **scoped to session events only** (the ticket's original text covered all 4 domains, but only `session-impl`'s SESSION-15 has a real producer; `post-impl`/`group-impl`/`user-impl`'s outbox tickets are still `TODO`, so their consumption is deferred to follow-on tickets, matching the vision doc's session > post > group > friend rollout priority). `SessionEventsConsumer` (`@RabbitListener`, queue `notification.events.session`, pattern `session.*.*`) deserializes SESSION-15's 6 event DTOs and delegates to `SessionEventProcessor` (a separate `@Transactional` bean — `@Transactional` on a self-invoked method would've silently never gone through the Spring proxy). **Duplicate-delivery dedup built now, not deferred:** `common`'s `OutboxRelay` gained a deterministic AMQP `messageId` (`routingKey:rowId`); a new `processed_messages` marker table (`V055`) makes a RabbitMQ redelivery a safe no-op in the same transaction as the resulting `recordEvent` call(s). Fan-out events (comment created, participant joined) resolve recipients via a new `SessionService.getParticipantIdsByStatuses` (session-api), gated on the session's own status — no notifications at all for a `CANCELLED`/`COMPLETED` session, even for an event published before the status changed; single-recipient events skip self-notification. Malformed/unroutable messages are logged and dropped (permanent failures), while a genuine processing failure is left to propagate for RabbitMQ's normal retry. **Bean-name collision caught by `:server:test`, not module tests:** `session-impl`'s `SessionOutboxRabbitConfig` and this ticket's first draft both declared a `@Bean TopicExchange sportconnectEventsExchange()` — fine in isolation, `BeanDefinitionOverrideException` in the real merged `server` context. **Dedup mechanism itself was broken on the first pass — added `SessionEventsConsumerIntegrationTest` (new `RabbitMqTestContainerBase`, chained onto the existing `RedisTestContainerBase`) after the user asked whether IT coverage existed, and it immediately caught two compounding JPA bugs no Spock spec could see:** (1) `ProcessedMessage.messageId` has no `@GeneratedValue`, so Spring Data's default new-entity check silently routed `save()` through `merge()` (select-then-update) instead of `persist()` — a genuine duplicate never actually threw, it just quietly updated the same row, so redelivery doubled `actorCount` instead of being deduped; (2) forcing `persist()` via `Persistable.isNew()` surfaced that catching the resulting `DataIntegrityViolationException` in application code doesn't help — Spring/JPA marks the transaction rollback-only the instant the low-level exception occurs, so it still failed to commit with `UnexpectedRollbackException`. Fixed by replacing both with `ProcessedMessageRepository.insertIfAbsent`, a native `INSERT ... ON CONFLICT DO NOTHING` that never throws — a duplicate just returns 0 affected rows. Live-verified end-to-end against the real dev stack too: a real HTTP-triggered session invite produced a real `Notification` row; a real join produced the correctly-resolved fan-out (recipient = the other `JOINED` participant, actor correctly excluded from its own notification). Unblocks nothing further yet — NTF-3 (STOMP delivery) and the deferred post/group/friend consumption are next.
 - **NTF-3 (2026-08-17, `DONE`, `modules/notification/docs/NTF-3_STOMP_LIVE_DELIVERY.md`):** STOMP-over-RabbitMQ live delivery — Spring WebSocket STOMP in broker-relay mode (`/ws`, no SockJS), auth via `StompAuthChannelInterceptor` reading the JWT off the CONNECT frame's `Authorization` header (`auth-api`'s `JwtTokenService`, same interface `JwtAuthenticationFilter` uses internally — no query-param workaround needed, unlike `services/chat`'s WS route, since STOMP frames support custom headers). **Mid-ticket architecture pivot, confirmed with the user:** raised the question of whether STOMP makes sense given the future mobile phase — iOS forbids background WebSocket entirely, structurally the same gap FCM/APNs exist to solve. Decided **hybrid**: STOMP stays scoped to web/in-app/connected-session delivery only, FCM deferred to the (already-`PROGRESS.md`-earmarked) mobile phase as a separate future ticket — documented in the vision doc's Client delivery bullet, `PROGRESS.md` §2.7, and this ticket's own Delta note so a future reader doesn't assume STOMP extends to mobile. `SessionEventProcessor` publishes a `NotificationLiveUpdateEvent` per recipient after `recordEvent` (now returning `NotificationRecordResult(notificationId, unreadCount)` instead of `void`); `NotificationLiveUpdateListener` (`@TransactionalEventListener(AFTER_COMMIT)` — a different concern from the vision doc's earlier outbox-durability discussion of the same annotation, documented as such) pushes via `NotificationPushService`/`SimpMessagingTemplate.convertAndSendToUser`, fanning out to every tab/device the recipient has open. Payload is a lightweight ping (`notificationId`, `unreadCount`), not the full `NotificationResponse`. **`reactor-netty` had to be added** — `StompBrokerRelayMessageHandler` needs it and it doesn't come transitively from `spring-boot-starter-websocket`; missing it broke every `@SpringBootTest` in the server module, not just this ticket's own. Client: minimal `useNotificationLiveSocket`/`useUnreadNotificationCount` hooks (`@stomp/stompjs`, new dependency) wired into `AppShell`, a placeholder unread badge on `TopBar` (CLIENT-NOTIF-1 replaces it with the real dropdown), new `/ws` Vite proxy entry. New `NotificationStompIntegrationTest` (real `@SpringBootTest(RANDOM_PORT)`, real RabbitMQ+STOMP via a new `RabbitMqStompTestContainerBase`) proves a consumed session event produces a real STOMP frame end to end — hit and fixed three Windows/Testcontainers-specific gotchas along the way (file-mounting the STOMP plugin was unreliable on this host, fixed via a live `rabbitmq-plugins enable` call instead; the default host-port wait strategy was flaky, switched to a log-message wait; the broker-relay's own connection is async, needed an `isBrokerAvailable()` poll before the test's client connects). Also live-verified against the actual running dev stack (`docker compose` RabbitMQ recreated with the plugin, real `:server:bootRun`, real `@stomp/stompjs` script) both directly and through the real Vite dev proxy — full browser-visual confirmation wasn't possible in this environment (no Chrome extension connection), but everything upstream of the TopBar's own rendering (already Vitest/RTL-covered) is verified. Closes out the notification module's MVP backlog (NTF-1/2/3 all `DONE`).
+- **NTF-4 (2026-08-18, `DONE`, `modules/notification/docs/NTF-4_NOTIFICATION_RESPONSE_ENRICHMENT.md`):** filed mid-pickup of the client's `CLIENT-NOTIF-1` — NTF-1 deliberately shipped `NotificationResponse` with zero enrichment (raw `actorIds`/`entityId`), which would leave the client dropdown unrenderable. `NotificationResponse` gains `actors: List<NotificationActorSummary>` (`id`/`fullName`, batch-resolved via `user-api`'s existing `getUsersByIds`) and `entityTitle` (nullable; the session's `title` for today's SESSION-only scope, via a new `SessionService.getSessionTitlesByIds` batch method on `session-api`, `null` for any future entityType). `NotificationServiceImpl.getNotifications` collects every distinct actor/session id across the whole page before mapping, one batch call each (skipped entirely on an empty page) — same no-N+1 shape as `SessionServiceImpl`'s existing batch-resolution pattern. Same "server denormalizes a display name" precedent as `SessionResponse.createdByFullName`.
 
 #### `server`
 - `SportConnectApplication.java` — main entry point with full component scan
@@ -552,7 +553,7 @@ The original CRA-based client (auth pages, social feed, groups UI, localStorage 
 AUTH and FEED integration phases (see section 5) — this time with in-memory access tokens +
 httpOnly refresh cookie instead of localStorage.
 
-**HF-00 (scaffolding) is DONE** (2026-07-06, `client/docs/HF-00_PROJECT_SCAFFOLDING.md`): Vite 7 +
+**HF-00 (scaffolding) is DONE** (2026-07-06, `client/docs/MVP/HF-00_PROJECT_SCAFFOLDING.md`): Vite 7 +
 React 18 + TS strict + Tailwind v4 (design tokens in `src/index.css` `@theme`, 1:1 with the mockup) +
 React Router stub routes + Vitest/RTL + Storybook (addon-a11y) + Playwright (e2e +
 visual-regression projects) + ESLint 9 (jsx-a11y)/Prettier, pnpm-managed, re-wired into Gradle
@@ -621,66 +622,66 @@ Full detail in `modules/social/post-impl/docs/BACKLOG_MVP.md`.
 
 ### Client MVP Backlog (SportHub rebuild — 36 tickets, Phase 0 complete, created 2026-07-06)
 
-**HF-0 DONE** (2026-07-06, `client/docs/HF-0_SHARED_TYPES_AND_MOCK_DATA.md`): home-feed types +
+**HF-0 DONE** (2026-07-06, `client/docs/MVP/HF-0_SHARED_TYPES_AND_MOCK_DATA.md`): home-feed types +
 mock data ported from the approved mockup (dynamic timestamps, coverage criteria encoded as Vitest
 assertions).
 
-**HF-10a DONE** (2026-07-06, `client/docs/HF-10a_VISUAL_REGRESSION_HARNESS.md`): visual-regression
+**HF-10a DONE** (2026-07-06, `client/docs/MVP/HF-10a_VISUAL_REGRESSION_HARNESS.md`): visual-regression
 harness — reference mockup moved to `client/design-reference/` with the Tabler icon font vendored
 (the mockup's CDN link was a 404), 9 committed baselines (375/768/1280px × default/basketball/empty)
 under `e2e/visual/__screenshots__/`, deterministic re-runs verified. Phase 0 is complete —
 HF-1..HF-6 component tickets are unblocked and parallelizable.
 
-**HF-1 DONE** (2026-07-06, `client/docs/HF-1_TOPBAR_NAVTABS.md`): TopBar + NavTabs in `src/shared/`
+**HF-1 DONE** (2026-07-06, `client/docs/MVP/HF-1_TOPBAR_NAVTABS.md`): TopBar + NavTabs in `src/shared/`
 plus the shadcn/ui foundation (token-styled Button/Avatar, `cn()`, `components.json`, `@/` alias),
 `@tabler/icons-react`, new design-system utilities (`border-hairline`, `max-w-frame`, 11/13px type
 steps), and an `AppShell` layout route giving every page the shared shell with real NavTabs
 navigation. 13/13 unit tests, e2e click-through, Storybook stories all green.
 
-**HF-2 DONE** (2026-07-06, `client/docs/HF-2_SPORTSWITCHER.md`): shared SportSwitcher — controlled
+**HF-2 DONE** (2026-07-06, `client/docs/MVP/HF-2_SPORTSWITCHER.md`): shared SportSwitcher — controlled
 pill row with synthetic "All" pill, 2px accent active border, always-visible dashed "Add sport"
 (aria-disabled at the 3-sport cap — mockup parity decision, supersedes the spec's hide-at-cap rule),
 pills wrap on narrow screens. Sport types re-homed to `src/shared/types/sport.ts`; shared
 `getSportIcon()` registry added. 18/18 tests, 4 Storybook stories verified against the mockup.
 
-**HF-3 DONE** (2026-07-06, `client/docs/HF-3_POSTCARD_FEED.md`): PostCard + Feed — controlled like
+**HF-3 DONE** (2026-07-06, `client/docs/MVP/HF-3_POSTCARD_FEED.md`): PostCard + Feed — controlled like
 toggle (parent owns state), ramp sport badges, clickable hashtags, per-sport empty state, relative
 time via date-fns behind a shared `formatRelativeTime()` helper; new `rampStyles` static class map
 and directional `border-hairline-t/b` utilities (fixing a border-stacking bug that also affected
 NavTabs). 27/27 tests, 7 Storybook stories, badge colors verified by computed style.
 
-**HF-4 DONE** (2026-07-06, `client/docs/HF-4_UPCOMINGMATCHES.md`): UpcomingMatches right-rail card —
+**HF-4 DONE** (2026-07-06, `client/docs/MVP/HF-4_UPCOMINGMATCHES.md`): UpcomingMatches right-rail card —
 sport-filtered match list capped at 4 visible (`maxVisible` prop; spec's open question resolved),
 open/full CTAs distinct by text, per-match `aria-label`s, new shared `formatStartTime()` (future
 counterpart of `formatRelativeTime`). Mock-backed for the whole MVP — no matches backend exists.
 40/40 tests, 5 Storybook stories verified against the mockup.
 
-**HF-5 DONE** (2026-07-07, `client/docs/HF-5_TRENDINGHASHTAGS.md`): TrendingHashtags right-rail
+**HF-5 DONE** (2026-07-07, `client/docs/MVP/HF-5_TRENDINGHASHTAGS.md`): TrendingHashtags right-rail
 card — full-row clickable hashtag buttons (tag accent left, muted count right), caller-provided
 order enforced by test, long tags truncate, muted empty state. Stays global (epic open question #1
 resolved: no activeSport filter); FEED-6 later swaps mock for `GET /api/hashtags/trending`.
 44/44 tests, 3 Storybook stories verified against the mockup.
 
-**HF-6 DONE** (2026-07-07, `client/docs/HF-6_GROUPBROADCASTS.md`): GroupBroadcasts right-rail card —
+**HF-6 DONE** (2026-07-07, `client/docs/MVP/HF-6_GROUPBROADCASTS.md`): GroupBroadcasts right-rail card —
 clickable broadcast rows (spec wins over the mockup's static divs), ramp initials avatars,
 shared relative time, `line-clamp-2` messages (screenshot check caught that `block` +
 `line-clamp-2` silently disables clamping — never combine them). Global like HF-5; FEED-7 later
 swaps mock for `GET /api/posts/broadcast`. 48/48 tests, 3 Storybook stories.
 
-**HF-7 DONE** (2026-07-07, `client/docs/HF-7_HOMEFEEDPAGE.md`): HomeFeedPage assembled — the full
+**HF-7 DONE** (2026-07-07, `client/docs/MVP/HF-7_HOMEFEEDPAGE.md`): HomeFeedPage assembled — the full
 Home Feed screen is now live at `/`. `useHomeFeedData()` hook (CLAUDE.md `{ data, isLoading,
 isError }` shape supersedes the epic's flat sketch — this is the FEED/SPORT de-mock seam),
 page-local `activeSport` driving Feed + UpcomingMatches in one render pass, synchronous like
 toggle, md (768px) rail-stacking breakpoint. Verified in a real browser at 1280/375px.
 55/55 tests. **Phase 2 (page integration) complete.**
 
-**HF-8 DONE** (2026-07-07, `client/docs/HF-8_RESPONSIVE_A11Y_PASS.md`): responsive + a11y pass —
+**HF-8 DONE** (2026-07-07, `client/docs/MVP/HF-8_RESPONSIVE_A11Y_PASS.md`): responsive + a11y pass —
 committed axe/overflow gate (`e2e/flows/a11y.spec.ts`, @axe-core/playwright) at 375/768/1280.
 Sport ramps pass AA (8.3–8.9:1); two real failures found and fixed: `text-muted` darkened
 #888780→#6e6d66 (was 3.4:1; reference HTML updated, 9 baselines regenerated) and NavTabs
 overflowed 375px (now scrolls within itself). Keyboard walk verified. 8/8 e2e, 9/9 visual, 55/55 unit.
 
-**HF-10b DONE** (2026-07-07, `client/docs/HF-10B_VISUAL_REGRESSION_CI_GATE.md`): full-page visual
+**HF-10b DONE** (2026-07-07, `client/docs/MVP/HF-10B_VISUAL_REGRESSION_CI_GATE.md`): full-page visual
 regression + the repo's **first CI** (`.github/workflows/client-ci.yml`: lint/tsc/unit/e2e/visual
 on PRs touching `client/**`, + PR template). One-time human mockup-parity review passed, then
 baselines re-taken from the real page (frozen clock) — ongoing gate is tight self-regression
@@ -688,27 +689,27 @@ diffing (mockup pixel-match is impossible: computed times, SVG vs webfont icons)
 clean. Manual bootstrap remains: Linux baseline artifact swap + marking the check required
 (documented in the summary).
 
-**HF-11 DONE** (2026-07-07, `client/docs/HF-11_E2E_HOME_FEED_JOURNEY.md`): 7-step Home Feed E2E
+**HF-11 DONE** (2026-07-07, `client/docs/MVP/HF-11_E2E_HOME_FEED_JOURNEY.md`): 7-step Home Feed E2E
 journey (`e2e/flows/home-feed-journey.spec.ts`) — load, sport filter, clear, like round-trip,
 hashtag/CTA reachability (no-op callbacks asserted as such — premise corrections vs the epic),
 Add-sport at-cap state. No MSW (all mock-driven); the MSW handler follow-ups for FEED/SPORT
 tickets are recorded on the spec + backlog. 9/9 e2e, 55/55 unit.
 
-**HF-9 DONE — HOME FEED EPIC CLOSED** (2026-07-07, `client/docs/HF-9_QA_ACCEPTANCE_CHECKLIST.md`):
+**HF-9 DONE — HOME FEED EPIC CLOSED** (2026-07-07, `client/docs/MVP/HF-9_QA_ACCEPTANCE_CHECKLIST.md`):
 all 7 acceptance items executed — 6 pass with evidence (Storybook build, 56/56 unit incl. new
 repeated-toggle math test, 9/9 e2e, 9/9 visual, HF-10b token audit); item 7 (E2E green *in CI*)
 conditional — CI has never executed. Follow-up **HF-12** (CI bootstrap + first green run, mostly
 manual GitHub steps) added to the backlog as the epic's release condition. All 14 HF tickets done;
 next is Phase 5 (MSW-0/AUTH-0; re-verify auth backlog A2 first).
 
-**HF-12 DONE — CI LIVE AND GREEN** (2026-07-08, `client/docs/HF-12_CI_BOOTSTRAP.md`): repo work
+**HF-12 DONE — CI LIVE AND GREEN** (2026-07-08, `client/docs/MVP/HF-12_CI_BOOTSTRAP.md`): repo work
 pushed to GitHub; first `client-ci` runs caught a real bug (`**/lib` gitignore swallowed
 `client/src/shared/lib` — CI-only TS2307s, fixed with scoped negation); Linux baselines swapped
 via the update-baselines dispatch artifact (PR #2); **fully green run merged**. HF-9 item 7
 resolved → Home Feed epic release condition met. Caveat: branch protection unavailable (GitHub
 Free + private repo) — red checks block by convention only.
 
-**AUTH-0 DONE** (2026-07-08, `client/docs/AUTH-0_TYPES_API_CLIENT_STORE.md`): auth types
+**AUTH-0 DONE** (2026-07-08, `client/docs/MVP/AUTH-0_TYPES_API_CLIENT_STORE.md`): auth types
 (`src/features/auth/types.ts`), shared `ApiResponse<T>` envelope (`src/shared/types/api.ts`, new),
 axios `apiClient` (`withCredentials`, `/api` proxy, separately-testable `attachAuthHeader`
 interceptor), Zustand `authStore` (no persist middleware — the point). Resequenced ahead of MSW-0
@@ -718,7 +719,7 @@ found and fixed along the way: `AuthServiceImpl.toUserResponse()` was missing `a
 "reality check" had missed — added both, `HashMap` replacing the null-hostile `Map.of(...)`.
 8/8 new unit tests, 64/64 full suite, strict `tsc`, lint, and build all clean.
 
-**MSW-0 DONE** (2026-07-08, `client/docs/MSW-0_MOCK_SERVICE_WORKER_HANDLER_SETUP.md`): browser-mode
+**MSW-0 DONE** (2026-07-08, `client/docs/MVP/MSW-0_MOCK_SERVICE_WORKER_HANDLER_SETUP.md`): browser-mode
 MSW wired into a Playwright fixture (`e2e/mocks/test.ts`, `page.addInitScript` dynamic-imports
 `e2e/mocks/server.ts` by URL — `src/` never imports MSW, zero production bundle impact). Scoped to
 auth handlers only (`e2e/mocks/handlers/auth.ts`) — feed/groups/sport handlers deferred to
@@ -726,7 +727,7 @@ FEED-0/FEED-6/FEED-7/SPORT-1, same resequencing principle as AUTH-0. Self-verify
 (`e2e/flows/msw-setup.spec.ts`, 4/4 passing) asserts `response.fromServiceWorker()` since no login
 UI exists yet to drive this through. 13/13 e2e, 64/64 unit, clean build.
 
-**AUTH-1 DONE** (2026-07-09, `client/docs/AUTH-1_LOGIN.md`): Login — two-column card
+**AUTH-1 DONE** (2026-07-09, `client/docs/MVP/AUTH-1_LOGIN.md`): Login — two-column card
 (`LoginPage`/`LoginForm`/`CommunityIllustration`) built against a new `design-reference-login.html`
 the user created mid-ticket, which became the authoritative visual spec and expanded scope beyond
 the epic's plain text (OAuth buttons rendered-but-disabled per the backlog's OAuth deferral,
@@ -745,7 +746,7 @@ Verified against both MSW and the real running backend (registered a live user, 
 `AuthResponse.user`'s shape matches exactly, including AUTH-0's `avatarUrl`/`phoneNumber` fix).
 77/77 unit tests, clean build.
 
-**AUTH-2 DONE** (2026-07-09, `client/docs/AUTH-2_REGISTER.md`): Register — `RegisterPage`/
+**AUTH-2 DONE** (2026-07-09, `client/docs/MVP/AUTH-2_REGISTER.md`): Register — `RegisterPage`/
 `RegisterForm` against `POST /api/auth/register` (auto-logs-in, same `AuthResult` shape as login).
 Extracted `AuthShell` from `LoginPage`'s inlined two-column shell so Login and Register share the
 same illustration/tagline panel (no `design-reference-register.html` exists; user confirmed reusing
@@ -756,7 +757,7 @@ the real backend instead. Verified against the real running backend via a throwa
 (fresh registration → auto-login → Home Feed; duplicate email → real `"Email already registered"`
 inline, no redirect). 91/91 unit tests, clean build.
 
-**AUTH-3 DONE** (2026-07-09, `client/docs/AUTH-3_SESSION_BOOTSTRAP.md`): Session bootstrap on app
+**AUTH-3 DONE** (2026-07-09, `client/docs/MVP/AUTH-3_SESSION_BOOTSTRAP.md`): Session bootstrap on app
 load — `useSessionBootstrap()` fires `POST /api/auth/refresh` once on mount (App.tsx, every route,
 since ProtectedRoute doesn't exist yet), restoring `authStore` from the httpOnly cookie so a valid
 session survives a hard refresh; a failed refresh is the normal logged-out case, silent, no visible
@@ -773,7 +774,7 @@ signup). Fixed with a `jti` (`UUID.randomUUID()`) claim, bundled into this branc
 — see **A4** (`modules/auth/docs/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md`). 95/95 client unit tests,
 auth-impl suite green, clean build.
 
-**AUTH-4 DONE** (2026-07-10, `client/docs/AUTH-4_PROTECTED_ROUTE_LOGOUT.md`): ProtectedRoute +
+**AUTH-4 DONE** (2026-07-10, `client/docs/MVP/AUTH-4_PROTECTED_ROUTE_LOGOUT.md`): ProtectedRoute +
 logout — `AppShell`'s route now gated by `ProtectedRoute` (loading state while bootstrapping, `/login`
 redirect-back via router state, `/` redirect on `requiredRole` mismatch); `useLogout()` clears the
 session even if `POST /auth/logout` fails. Logout entry point is a new avatar dropdown menu (new
@@ -801,13 +802,13 @@ guarded so it fires exactly one time (`useState` + a conditional `setState` duri
 tripped `react-hooks/set-state-in-effect`, landing on React's own documented pattern instead).
 115/115 client unit tests, 13/13 e2e, clean build.
 
-**HF-14 DONE** (2026-07-10, `client/docs/HF-14_REGENERATE_VISUAL_BASELINES.md`): regenerated
+**HF-14 DONE** (2026-07-10, `client/docs/MVP/HF-14_REGENERATE_VISUAL_BASELINES.md`): regenerated
 Home Feed's 9 committed visual-regression baselines via the `update-baselines` CI dispatch,
 following AUTH-4's TopBar avatar-menu change (same pattern as HF-13's `cn()` follow-up). Diffed old
 vs. new before replacing (all 9 genuinely changed) and human-reviewed two of them — the avatar
 chevron renders correctly, nothing else shifted.
 
-**AUTH-5 DONE** (2026-07-11, `client/docs/AUTH-5_401_REFRESH_RETRY_INTERCEPTOR.md`): 401
+**AUTH-5 DONE** (2026-07-11, `client/docs/MVP/AUTH-5_401_REFRESH_RETRY_INTERCEPTOR.md`): 401
 refresh-retry interceptor — `apiClient.ts`'s response interceptor gained an exported
 `handleResponseError()` (same testability pattern as AUTH-0's `attachAuthHeader`): on a `401`, one
 silent `/auth/refresh` + retry via `apiClient.request()`, excluding `/auth/refresh`/`/auth/login`/
@@ -822,7 +823,7 @@ and relies on `ProtectedRoute`'s existing reactive redirect rather than a manual
 (still mock-backed pending FEED-1), so logout was the available real authenticated call. 13/13 new
 + 124/124 client-wide unit tests, clean build.
 
-**AUTH-6 DONE** (2026-07-12, `client/docs/AUTH-6_AUTH_HARDENING.md`): auth hardening — scope split
+**AUTH-6 DONE** (2026-07-12, `client/docs/MVP/AUTH-6_AUTH_HARDENING.md`): auth hardening — scope split
 during Phase 1: rate-limit error surfacing pulled out entirely after confirming the backend has no
 rate-limiting implementation at all (no filter, no `bucket4j`/`resilience4j`, no config — documented
 as an unbuilt TODO in `README_AUTH_SETUP.md`), filed as backend ticket **A5**
@@ -837,7 +838,7 @@ implementation drift (the mockup itself violates its own accessibility baseline)
 `text-muted` fix. 124/124 unit tests unaffected, 27/27 e2e (21 in the extended a11y spec) pass, clean
 build.
 
-**AUTH-8 DONE** (2026-07-13, `client/docs/AUTH-8_E2E_AUTH_JOURNEY.md`): E2E auth journey — ships 6 of
+**AUTH-8 DONE** (2026-07-13, `client/docs/MVP/AUTH-8_E2E_AUTH_JOURNEY.md`): E2E auth journey — ships 6 of
 the epic's 7 steps across two independent tests (not one continuous journey) and drops the "zero real
 network calls" acceptance criterion, all tracing to one real, instrumented finding: MSW's
 per-navigation Service Worker setup races the app's own bootstrap fetch, and the race gets *worse*
@@ -855,7 +856,7 @@ reload — reaches the same target state reliably (20/20 clean runs under repeat
 the reload version's ~35–60% failure rate) without ever risking the race. 124/124 unit tests
 unaffected, 29/29 e2e pass across 6 consecutive full-suite runs.
 
-**AUTH-7 DONE** (2026-07-13, `client/docs/AUTH-7_QA_ACCEPTANCE_CHECKLIST.md`): QA/acceptance pass
+**AUTH-7 DONE** (2026-07-13, `client/docs/MVP/AUTH-7_QA_ACCEPTANCE_CHECKLIST.md`): QA/acceptance pass
 for the whole auth epic — 5/5 items pass. Drove the real UI (no MSW) against a real running backend
 with a standalone Playwright script: register → auto-login → reload-persists-session → logout →
 deep-link-redirect → re-login, 8/8 assertions green, zero tokens ever in `localStorage`/
@@ -866,7 +867,7 @@ the backlog note). `pnpm e2e` (29/29, including both `auth-journey.spec.ts` test
 has no GitHub Actions access — flagged as a follow-up for a human to confirm on the actual
 `client-ci` run. **Phase 5 (auth integration) is now fully closed.**
 
-**FEED-0 DONE** (2026-07-13, `client/docs/FEED-0_TYPES_TANSTACK_QUERY_HOOKS_SCAFFOLD.md`): Phase 6
+**FEED-0 DONE** (2026-07-13, `client/docs/MVP/FEED-0_TYPES_TANSTACK_QUERY_HOOKS_SCAFFOLD.md`): Phase 6
 kickoff — `src/features/feed/types.ts` + 10 TanStack Query hooks (`usePersonalFeed`, `useGroupFeed`,
 `usePostsByHashtag`, `useTrendingHashtags`, `useActiveBroadcasts`, `useUserGroups`, `useLikePost`,
 `useUnlikePost`, `useDeletePost`, `useCreatePost`), plus `e2e/mocks/handlers/feed.ts`. No UI wiring —
@@ -943,7 +944,7 @@ id alone. Also traced the client-side coupling: FEED-0's `PageResponse<T>` type 
 follow-up client ticket when C12 is scheduled, same pattern as C11's own client-impact note.
 Design/ticket only — no code changed.
 
-**FEED-1 DONE** (2026-07-14, `client/docs/FEED-1_FEED_POSTCARD_REAL.md`): de-mocked Home Feed's
+**FEED-1 DONE** (2026-07-14, `client/docs/MVP/FEED-1_FEED_POSTCARD_REAL.md`): de-mocked Home Feed's
 `Feed`/`PostCard` against the real `GET /api/posts/feed` — larger than a data-source swap, since
 HF-3 shipped with zero pagination affordance (flat mock array) and a completely different `Post`
 shape. Added: real optimistic like/unlike/delete (`onMutate`/`onError`/`onSettled` against a new
@@ -968,7 +969,7 @@ real browser (Playwright, no MSW) against the real Vite dev server. `pnpm vitest
 baselines diffed at the time (real content + new delete-menu rendering, confirmed via direct image
 inspection, not a regression) — filed as follow-up **HF-15**, now also `DONE` (see below).
 
-**HF-15 DONE** (2026-07-14, `client/docs/FEED-1_FEED_POSTCARD_REAL.md`): regenerated Home Feed's
+**HF-15 DONE** (2026-07-14, `client/docs/MVP/FEED-1_FEED_POSTCARD_REAL.md`): regenerated Home Feed's
 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following FEED-1's
 real feed content + new delete-menu rendering. Only 6 of the 9 actually changed byte-for-byte
 (`default`/`basketball` at all 3 breakpoints) — the 3 `empty` state baselines came back
@@ -983,7 +984,7 @@ Linux-rendered; local Windows runs diverge on font rendering; CI is authoritativ
 direct diff-image inspection that the residual local diff is sub-pixel text-position/anti-aliasing
 noise, not a content mismatch — same text, same layout in both images.
 
-**FEED-2 DONE** (2026-07-14, `client/docs/FEED-2_COMMENTSECTION_REAL.md`): built a new real comment
+**FEED-2 DONE** (2026-07-14, `client/docs/MVP/FEED-2_COMMENTSECTION_REAL.md`): built a new real comment
 thread (`CommentSection`, opened as a modal from `PostCard`'s comment icon) — no
 `CommentSection` existed anywhere before this ticket, and no `design-reference-*.html` covered it,
 so 3 scope questions (modal vs. inline, reply-to-comment in/out of scope, pagination style) were
@@ -1009,7 +1010,7 @@ violation), `pnpm build` clean, Storybook stories visually confirmed. All 9 Home
 visual-regression baselines diff again (`PostCard`'s comment `<span>` → `<button>`) — filed
 follow-up **HF-16** (`TODO`), same HF-13/14/15 precedent.
 
-**FEED-2 addendum** (2026-07-14, same day, `client/docs/FEED-2_COMMENTSECTION_REAL.md`): a
+**FEED-2 addendum** (2026-07-14, same day, `client/docs/MVP/FEED-2_COMMENTSECTION_REAL.md`): a
 retroactive `design-reference-post-modal.html` was extracted from the shipped dialog, then hand-
 revised by the user into a richer design and the implementation brought in line with it —
 `CommentSection`'s header now shows the commented-on post (author/time/sport badge, close button
@@ -1043,7 +1044,7 @@ Linux-rendered environment); confirmed via direct diff-image inspection of the b
 `empty` state that the local diff is purely Windows/Linux font-rendering noise, not a content
 mismatch.
 
-**FEED-3 DONE** (2026-07-14, `client/docs/FEED-3_CREATEPOSTFORM_REAL.md`): built the real post
+**FEED-3 DONE** (2026-07-14, `client/docs/MVP/FEED-3_CREATEPOSTFORM_REAL.md`): built the real post
 composer (`CreatePostForm`, `src/features/home-feed/components/`) wired to `useCreatePost()` —
 content-only (5000-char limit), Photo/Location/Tag-sport stay inert per the ticket's design delta;
 only USER_FEED posts from this composer (group posting waits on FEED-4/5). `useCreatePost`'s
@@ -1075,7 +1076,7 @@ sport badges, and like/comment counts all correct, nothing else drifted. `pnpm e
 HF-12's note (CI is the authoritative Linux-rendered environment); confirmed via diff-image
 inspection the local diff is pure sub-pixel font-rendering ghosting, not a content mismatch.
 
-**FEED-4 DONE** (2026-07-15, `client/docs/FEED-4_GROUP_SWITCHING_REAL.md`): built group switching as
+**FEED-4 DONE** (2026-07-15, `client/docs/MVP/FEED-4_GROUP_SWITCHING_REAL.md`): built group switching as
 a new **Groups page** (`/groups`, replacing the `ComingSoonPage` stub), not an inline control on Home
 Feed as the epic implicitly assumed — user decision after a design discussion, since a group's own
 sport (`Group.sportId`) naturally bounds the switcher to a handful of pills per sport instead of an
@@ -1096,7 +1097,7 @@ Playwright script (not committed): confirmed all 5 requested states — both swi
 nonzero-groups button/menu collapse, composer show/hide on group selection, and sport-switch reset —
 via screenshots and `aria-pressed` assertions.
 
-**FEED-5 DONE** (2026-07-15, `client/docs/FEED-5_GROUP_CREATE_JOIN_MODALS.md`): wired real group
+**FEED-5 DONE** (2026-07-15, `client/docs/MVP/FEED-5_GROUP_CREATE_JOIN_MODALS.md`): wired real group
 creation (`POST /api/groups`) and join requests (`POST /api/groups/join-requests`) into FEED-4's
 `GroupSpaceSwitcher` entry points. Joining is by group **name**, not id (`CreateJoinRequestRequest`
 has no `groupId` field), so `JoinGroupModal` searches/browses `GET /api/groups/public` rather than
@@ -1121,7 +1122,7 @@ and requested to join a group (row flipped to "Pending" in place). Caught and fi
 during that verification: `usePublicGroups` had no `enabled` gate, so the join modal's hook kept
 fetching in the background even while closed.
 
-**SPORT-1 DONE** (2026-07-15, `client/docs/SPORT-1_SPORT_SWITCHER_REAL.md`): de-mocked
+**SPORT-1 DONE** (2026-07-15, `client/docs/MVP/SPORT-1_SPORT_SWITCHER_REAL.md`): de-mocked
 `useSportProfiles()` against the real `GET /api/sports/profiles/user/{userId}`, closing out the last
 mock-backed piece of HF-2's SportSwitcher. Mapping reuses `sportIdMap.ts`'s existing
 `sportKeyForId()` (the same bridge FEED-1/FEED-4 already use for posts/groups) rather than a second
@@ -1168,7 +1169,7 @@ Groups page composer in a browser — confirmed `POST /api/posts` now returns `2
 `postType: GROUP_POST` (previously would have been `400`), and the post renders in the group feed
 immediately. Verification script was a temporary, uncommitted scratch file.
 
-**FEED-6 DONE** (2026-07-15, `client/docs/FEED-6_TRENDINGHASHTAGS_REAL.md`): de-mocked
+**FEED-6 DONE** (2026-07-15, `client/docs/MVP/FEED-6_TRENDINGHASHTAGS_REAL.md`): de-mocked
 `shared/hooks/useTrendingHashtags.ts` against the real `GET /api/hashtags/trending`
 (FEED-0's `useTrendingHashtags`), mapping the backend's no-leading-`#` `Hashtag` shape to the
 client's `#`-prefixed `TrendingHashtag` convention. The click-through destination (unscoped by the
@@ -1225,7 +1226,7 @@ drifted. Local `pnpm exec playwright test --project=visual-regression` still rep
 "different" on Windows — expected per HF-12's own note — but diff ratios dropped back to the
 established ~0.01–0.02 sub-pixel noise floor, consistent with font-rendering divergence only.
 
-**FEED-7 DONE** (2026-07-16, `client/docs/FEED-7_GROUPBROADCASTS_REAL.md`): de-mocked
+**FEED-7 DONE** (2026-07-16, `client/docs/MVP/FEED-7_GROUPBROADCASTS_REAL.md`): de-mocked
 `shared/hooks/useGroupBroadcasts.ts` against the real `GET /api/posts/broadcast`
 (FEED-0's `useActiveBroadcasts`), resolving each broadcast's group name/initials/sport-ramp via
 `useUserGroups` (already mounted elsewhere, no extra network call). The "create broadcast" UI
@@ -1263,7 +1264,7 @@ row, correct group name/initials/message, correct posts/badges, and nothing else
 Windows — expected per HF-12's own note — diff ratios (0.01–0.04) consistent with the established
 sub-pixel font-rendering noise floor.
 
-**FEED-8 DONE** (2026-07-16, `client/docs/FEED-8_INTEGRATION_HARDENING.md`): loading skeletons +
+**FEED-8 DONE** (2026-07-16, `client/docs/MVP/FEED-8_INTEGRATION_HARDENING.md`): loading skeletons +
 error/retry states for every real-data rail surface on Home Feed and Groups (`Feed`,
 `TrendingHashtags`, `GroupBroadcasts`, plus Groups-only `GroupSpaceSwitcher`), each retrying just its
 own failed query rather than a page-level banner. `Feed` also handles the "pagination edge" case —
@@ -1277,7 +1278,7 @@ components. Live-verified against the real running backend: Home Feed/Groups ren
 golden path, no stuck loading or false error states. `SportSwitcher`'s equivalent loading gap and
 `CommentSection`'s missing retry button were both flagged as out-of-scope follow-ups, not fixed here.
 
-**FEED-10 DONE** (2026-07-16, `client/docs/FEED-10_E2E_FEED_GROUPS_JOURNEY.md`): new
+**FEED-10 DONE** (2026-07-16, `client/docs/MVP/FEED-10_E2E_FEED_GROUPS_JOURNEY.md`): new
 `e2e/flows/feed-groups-journey.spec.ts` — the 8-step epic journey (pagination, like/comment/create,
 group switching, group creation, trending/broadcasts incl. expiry exclusion, admin-vs-non-admin
 broadcast toggle) plus the SPORT-1 delta (sport filtering + an isolated zero-profiles test). Found and
@@ -1292,7 +1293,7 @@ existing spec's small fixture). `tsc -b`/`eslint` clean, `pnpm test` 341/341, `p
 from before this ticket. Live-verified the real posting flow against the running backend shows no
 false error state.
 
-**FEED-9 DONE** (2026-07-17, `client/docs/FEED-9_QA_ACCEPTANCE_CHECKLIST.md`): manual QA pass against
+**FEED-9 DONE** (2026-07-17, `client/docs/MVP/FEED-9_QA_ACCEPTANCE_CHECKLIST.md`): manual QA pass against
 a real running backend (not MSW) — registered real test accounts/group, seeded 21 posts to force a
 genuine second feed page. All 5 checklist items pass: HF-3/5/6/2 real-data swaps show no visible
 regression, pagination/optimistic-likes/comment-counts verified live, owner-vs-member broadcast
@@ -1305,7 +1306,7 @@ create-broadcast flow's `+24h` default margin masks the ~7h skew; would bite a f
 broadcast feature. `pnpm e2e` 31/31, `pnpm test` 341/341, `tsc -b` clean, all local (CI run itself
 unverified — no GitHub access this session, same caveat as AUTH-7).
 
-**MSW-1 DONE** (2026-07-17, `client/docs/MSW-1_STANDALONE_MOCK_SERVER.md`): replaced MSW's
+**MSW-1 DONE** (2026-07-17, `client/docs/MVP/MSW-1_STANDALONE_MOCK_SERVER.md`): replaced MSW's
 per-navigation browser Service Worker (a genuine race against the app's own bootstrap fetch, root-caused
 during AUTH-8) with a standalone Node HTTP server, reusing the existing `e2e/mocks/handlers/*.ts` array
 via `msw`'s own exported `getResponse()` — no new dependency. Surfaced and resolved a real design gap
@@ -1319,7 +1320,7 @@ response is now genuinely honored by the browser, which a Service-Worker-mocked 
 `pnpm test:visual` shows only the same pre-existing Windows/Linux font-rendering noise documented
 since HF-12 (confirmed via direct diff-image inspection, not a regression).
 
-**FEED-12 DONE** (2026-07-17, `client/docs/FEED-12_COMMENT_MODAL_DEEP_LINK.md`): `/posts/:postId` is
+**FEED-12 DONE** (2026-07-17, `client/docs/MVP/FEED-12_COMMENT_MODAL_DEEP_LINK.md`): `/posts/:postId` is
 now a real, URL-addressable route (Option A: renders `HomeFeedPage` underneath, dialog pre-opened) —
 `CommentSection` gets its post from a new `usePost` hook instead of a feed-cache lookup, so a shared
 link works even for a post the viewer's feed never fetched. New `toggleLikeForPost(post)` on
@@ -1334,7 +1335,7 @@ TanStack Query's default retry on a 404, so a deleted/bad-link post took ~7s to 
 this post." — fixed both, verified down to ~400ms. `pnpm e2e` 34/34 (new `post-deep-link.spec.ts`),
 `pnpm test` 351/351, `tsc -b`/`eslint` clean. `client/docs/E2E_OVERVIEW.md` updated with the new spec.
 
-**FEED-11 DONE** (2026-07-18, `client/docs/FEED-11_POST_MODAL_VISUAL_REGRESSION.md`): new
+**FEED-11 DONE** (2026-07-18, `client/docs/MVP/FEED-11_POST_MODAL_VISUAL_REGRESSION.md`): new
 `e2e/visual/app-post-modal.spec.ts` — 9 baselines (empty/populated/draft × 3 breakpoints),
 dialog-element-only screenshots (not full page), reusing `mockPost`/`mockComment` (a reply is added
 live through the real "Reply" UI, no second fixture set). `tsc -b`/`eslint` clean, `pnpm e2e` still
@@ -1359,7 +1360,7 @@ rendered paths while `/api/auth/login` still appears, and a real browser walkthr
 confirmed the Authorize dialog now takes email + password and reaches "Authorized." `:modules:
 auth:auth-impl:test` and `:server:test` both green.
 
-**GRP-1 DONE** (2026-07-20, `client/docs/GRP-1_GROUP_PAGE_RESTRUCTURE.md`): first ticket of the
+**GRP-1 DONE** (2026-07-20, `client/docs/MVP/GRP-1_GROUP_PAGE_RESTRUCTURE.md`): first ticket of the
 Groups-page epic flagged in `client/docs/BACKLOG_MVP.md`'s deferred-items table. Restructured
 `GroupsPage.tsx` to match `design-reference-group-feed.html`: new `GroupCoverBanner`, a per-group
 vertical tab nav (`GroupTabs`: Posts/Chat/Settings) replacing the always-visible composer+feed, and
@@ -1373,7 +1374,7 @@ and **GRP-2** (client, blocked on B7) to extend Settings with the remaining `Gro
 backend (register → add sport → create group → Posts/Chat/Settings tabs, owner-role Settings gating
 confirmed with real API responses).
 
-**GRP-2 DONE** (2026-07-21, `client/docs/GRP-2_SETTINGS_TAB_FULL_DATA_SET.md`): extended the Settings
+**GRP-2 DONE** (2026-07-21, `client/docs/MVP/GRP-2_SETTINGS_TAB_FULL_DATA_SET.md`): extended the Settings
 tab with the three owner-only `GroupSettings` toggles (`allowMemberPosts`/`requirePostApproval`/
 `allowMemberInvites`) plus a read-only group-type row — B7 shipped since GRP-1 filed this, replacing
 the originally-planned settable `maxMembers` field with fixed group-type tiers, so no cap number is
@@ -1403,7 +1404,7 @@ unsaved-changes dialog as the toggles, per user decision. New MSW `PUT /api/grou
 handler — didn't exist at all before, so Privacy's own e2e coverage had never exercised a real call
 to it either. 430/430 Vitest (up from 417), clean `tsc -b`/`eslint`/Storybook build, 35/35 e2e.
 
-**GRP-3 DONE** (2026-07-21, `client/docs/GRP-3_MEMBERS_TAB.md`): new Members tab in `GroupTabs`
+**GRP-3 DONE** (2026-07-21, `client/docs/MVP/GRP-3_MEMBERS_TAB.md`): new Members tab in `GroupTabs`
 (Posts → Chat → **Members** → Settings) — a "find member" filter + "Invite friend" button, then 5
 status-grouped lists loaded together on tab activation: "Waiting for group approve" (owner/admin
 only, real `GET/PUT /groups/{id}/join-requests*`, Accept/Decline), "Waiting for user accept" (B8's
@@ -1423,7 +1424,7 @@ registered two users, created a group, ran a full
 request→accept→re-fetch round trip via curl — every new endpoint's response shape matched the
 client types exactly, no divergence from the design.
 
-**GRP-6 DONE** (2026-07-21, `client/docs/GRP-6_JOIN_GROUP_MODAL_MULTI_SPORT_FILTER.md`): supersedes
+**GRP-6 DONE** (2026-07-21, `client/docs/MVP/GRP-6_JOIN_GROUP_MODAL_MULTI_SPORT_FILTER.md`): supersedes
 the narrower GRP-5 (static single-sport indicator, never built). `JoinGroupModal` header
 center-aligned (3-column grid); new interactive multi-select sport-filter pill row seeded from page
 context (page's active sport tab → just that pill; "All" → every one of the user's sports),
@@ -1491,7 +1492,7 @@ decision, matching `GroupChatTab`'s pre-CHAT-2 precedent) with real wiring filed
 (backend)/**DM-2** (client), same lineage as CHAT-1/CHAT-2. Scoping only this session, no code —
 pick up FRIEND-1 in a future `/workon`.
 
-**FRIEND-1 DONE** (2026-07-22, `client/docs/FRIEND-1_FRIENDS_PAGE.md`): built exactly as scoped
+**FRIEND-1 DONE** (2026-07-22, `client/docs/MVP/FRIEND-1_FRIENDS_PAGE.md`): built exactly as scoped
 above — `FriendRail` (search + Add-friend directory search + 4 collapsible status sections),
 `FriendProfilePanel` (cover/avatar/sport pills/collapsible Achievements/`friendshipStatus`-driven
 action bar), `FriendChatPanel` (local-state mock, `GroupChatTab`-pre-CHAT-2 precedent), all real
@@ -1510,7 +1511,7 @@ accepted-friend state on both sides. `pnpm test:visual`'s 18 failures are the pr
 Windows-vs-Linux font-rendering noise floor (HF-12..19's own precedent) on Home Feed/post-modal
 baselines — FRIEND-1 touches neither. GRP-4 (blocked on this ticket) is now unblocked.
 
-**GRP-4 DONE** (2026-07-22, `client/docs/GRP-4_INVITE_FRIEND_REAL.md`): `InviteFriendModal` now runs
+**GRP-4 DONE** (2026-07-22, `client/docs/MVP/GRP-4_INVITE_FRIEND_REAL.md`): `InviteFriendModal` now runs
 a real debounced `GET /api/users/search` and wires "Invite" to `POST
 /api/groups/{groupId}/invitations`. Non-friend results are dropped entirely (not shown disabled);
 already-a-member/already-invited friends are sorted to the end of the list, badged instead of
@@ -1558,7 +1559,7 @@ instead of creating a redundant row. GRP-7 reverted from `IN PROGRESS` to `TODO`
 same pattern as GRP-4 reverting for FRIEND-1. No client code was written before the revert (caught
 during Phase 1/2 exploration, not after implementation).
 
-**GRP-7 DONE** (2026-07-24, `client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`, resumed once
+**GRP-7 DONE** (2026-07-24, `client/docs/MVP/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`, resumed once
 B11 shipped): wired all 6 previously-unused invitation endpoints. Owner/admin approval merges into
 `GroupMembersTab`'s existing "Waiting for group approve" section — join requests and `pending_owner`
 invitations combined into one `approvalQueue`, sorted oldest-first, both row types sharing the same
@@ -1585,7 +1586,7 @@ real UI against the real backend: before the fix, the invite dialog and Members/
 sections all stayed stale; after, everything updates immediately with no manual refresh.
 
 **B12 DONE + GRP-7 addendum** (2026-07-24, `modules/social/group-impl/docs/BACKLOG_MVP.md` +
-`client/docs/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`): user-requested — a "Cancel" button on
+`client/docs/MVP/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`): user-requested — a "Cancel" button on
 a sent invitation while it's still `pending_owner`. No backend endpoint existed for this side
 (only `cancelJoinRequest`, A3); new `GroupService.cancelInvitation`/`DELETE
 /invitations/{invitationId}` mirrors `cancelJoinRequest` exactly (ownership + active-group +
@@ -1686,7 +1687,7 @@ sport-switch on accept, instead of forcing "All") and GRP-8 (add-to-profile conf
 `./gradlew :modules:social:group-impl:test` 131 green (added coverage for two previously-untested
 methods, `getGroupInvitations` and `getUserPendingInvitations`), `:server:test` 34 green.
 
-**GRP-8 DONE** (2026-07-25, `client/docs/GRP-8_INVITATION_LIFECYCLE_POLISH.md`): five-part Groups-page
+**GRP-8 DONE** (2026-07-25, `client/docs/MVP/GRP-8_INVITATION_LIFECYCLE_POLISH.md`): five-part Groups-page
 polish, all backend deps (B13/B14/B15) shipped before pickup. (1) opening a specific group now
 switches `SportSwitcher`'s active pill to match (`feedSpaceStore.selectGroup` derives it), including
 GRP-7's accept-invitation flow — no more forcing "All" first. (2) the invitee-facing Invitations
@@ -2195,7 +2196,7 @@ messages in that run get an invisible same-size spacer instead, to keep bubble a
 `FriendChatPanelView` untouched (a 1:1 DM never shows an avatar at all). 2 new tests.
 
 **Friends page rail state persistence (2026-07-25, user-requested,
-`client/docs/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
+`client/docs/MVP/FRIEND-1_FRIENDS_PAGE.md`):** leaving the Friends page and coming back now restores the
 rail's mode (friend list vs. directory search), search text, and selected person — previously all
 three reset on every remount. New `friendsPageStore` (sessionStorage-persisted, same convention as
 `feedSpaceStore`) replaces `useFriendsPageData`'s local `useState` for `query`/`isAddMode`/
@@ -2241,7 +2242,7 @@ new module) and CHAT-2/CHAT-4 (client, `client/docs/BACKLOG_MVP.md`) — sequenc
 CHAT-1 → CHAT-2 → CHAT-3 → CHAT-4. Decision + ticket scoping only this session, no code — pick up
 CHAT-1 in a future `/workon`.
 
-**HF-13 DONE** (2026-07-09, `client/docs/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
+**HF-13 DONE** (2026-07-09, `client/docs/MVP/HF-13_REGENERATE_VISUAL_BASELINES.md`): regenerated
 HF-10b's 9 committed visual-regression baselines via the `update-baselines` CI dispatch, following
 AUTH-1's `cn()` fix. Diffed old vs. new before replacing (all 9 genuinely changed, not a no-op) and
 did a human visual check on two of them — borders now render correctly on post cards, sport-switcher
@@ -2371,11 +2372,11 @@ explicit go-ahead at each step (full story in A3's summary doc):
   scheduled-job infrastructure (`SchedulingConfig` + `SessionGenerationJob`, hourly generate the
   next occurrence / 15-min start `ONGOING` + close past sessions).
 - New endpoints: `/api/locations/**`, `/api/sessions/**`, `GET`/`PUT /api/groups/{id}/recurrence`.
-- **Client:** `CLIENT-LOC-1` (`DONE`, 2026-07-31, `client/docs/CLIENT-LOC-1_LOCATIONPICKER_COMPONENT.md`)
+- **Client:** `CLIENT-LOC-1` (`DONE`, 2026-07-31, `client/docs/MVP/CLIENT-LOC-1_LOCATIONPICKER_COMPONENT.md`)
   — the shared `LocationPicker` component (search + Google-Maps-link paste-and-resolve +
   draggable OSM/Leaflet preview pin + Get Directions deep-link). New client dependency:
   `leaflet` + `react-leaflet@^4` (pinned to v4.x — v5 needs React 19, this app is on React 18.3.1).
-  `CLIENT-SESSION-1` (`DONE`, 2026-07-31, `client/docs/CLIENT-SESSION-1_SESSION_UI.md`) — the real
+  `CLIENT-SESSION-1` (`DONE`, 2026-07-31, `client/docs/MVP/CLIENT-SESSION-1_SESSION_UI.md`) — the real
   `/matches` page (replacing `ComingSoonPage`; nav tab was already wired to it), fully de-mocking
   `UpcomingMatches`: list (caller's standalone sessions + every group they belong to's sessions —
   no batch/discovery endpoint exists, a flagged backend gap), sport filter, create (standalone or
@@ -2429,7 +2430,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   notifications, matching that same precedent's own unbuilt scope. Client follow-up (invite
   search, auto-approve checkbox, approval queue UI) not filed yet.
 - **`CLIENT-SESSION-2` (`DONE`, 2026-08-03,
-  `client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`)** — `CreateSessionModal`
+  `client/docs/MVP/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`)** — `CreateSessionModal`
   redesign: standalone-only (mode toggle removed), widened `max-w-2xl`, sport pre-selected from
   context, 4 rows (Sport/Title 2:8; Location/Location-note 7:3, selected name + button on one
   line; Starts-at/Duration 7:3; Description alone), collapsible sections styled after the Friends
@@ -2445,7 +2446,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (`UpcomingMatches` empty-state buttons + create-session hook extraction across pages), originally
   also in scope, split out as CLIENT-SESSION-7 (`TODO`) instead — not started this session.
 - **`CLIENT-SESSION-3` (`DONE`, 2026-08-03,
-  `client/docs/CLIENT-SESSION-3_CAPACITY_AND_FEE.md`)** — capacity + fee/pricing fields added to
+  `client/docs/MVP/CLIENT-SESSION-3_CAPACITY_AND_FEE.md`)** — capacity + fee/pricing fields added to
   `CreateSessionModal` (SESSION-5's `capacity`/`feeType`/`feeAmountVnd`) and to the 3 read-side
   displays (`SessionListCard`, `UpcomingMatches`, `SessionDetailModal`). Capacity input is split
   into "Taken slot" (the creator + whoever's already with them, defaults to 1 when blank since the
@@ -2462,7 +2463,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   text shifts Home Feed's visual-regression baselines, same class of drift HF-13..HF-19 each
   tracked — regen needs the same manual GitHub Actions dispatch those tickets used.
 - **`CLIENT-SESSION-4` (`DONE`, 2026-08-04,
-  `client/docs/CLIENT-SESSION-4_INVITE_APPROVAL.md`)** — `CreateSessionModal` gains "Invite your
+  `client/docs/MVP/CLIENT-SESSION-4_INVITE_APPROVAL.md`)** — `CreateSessionModal` gains "Invite your
   friend" (client-side fullname filter over `useFriends()`, 3+ characters, dismissible badges,
   feeding `inviteeIds`) and "Auto approve join request" (unchecked by default, inline warning on
   check, feeding `autoApprove`) — both plain conditional `<div>`s, not a Popover/DropdownMenu
@@ -2474,7 +2475,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   session fixtures needed `autoApprove: true` (matching SESSION-6's real backfill of pre-existing
   rows), not `false` — the join/leave e2e step broke until this was fixed.
 - **`CLIENT-SESSION-5` (`DONE`, 2026-08-04,
-  `client/docs/CLIENT-SESSION-5_FAVORITE_LOCATIONS.md`)** — favorite-toggle heart on
+  `client/docs/MVP/CLIENT-SESSION-5_FAVORITE_LOCATIONS.md`)** — favorite-toggle heart on
   `LocationPicker`'s search results + a real `DropdownMenu` favorites list replacing
   `CreateSessionModal`'s plain "Choose location" button (LOC-2). CLIENT-SESSION-2 had reverted an
   earlier DropdownMenu attempt after it appeared to "never open" live; this ticket found the real
@@ -2488,7 +2489,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `GET /api/locations/:locationId` was intercepting `GET /api/locations/favorites` before it
   (caused a permanently-stuck "Loading…" in e2e, masked by TanStack Query's retry backoff).
 - **`CLIENT-SESSION-6` (`DONE`, 2026-08-05,
-  `client/docs/CLIENT-SESSION-6_STANDALONE_DISCOVERY.md`)** — `/matches` rebuilt into two panels: a
+  `client/docs/MVP/CLIENT-SESSION-6_STANDALONE_DISCOVERY.md`)** — `/matches` rebuilt into two panels: a
   **Discover** grid (`GET /sessions/discover`, sport-filtered, client-side search) and a collapsible,
   calendar-day-grouped **"My sessions"** panel (created/managed/joined, any status). Layout built
   from a user-provided design export, not the backlog's original "modal or dedicated view, TBD".
@@ -2496,7 +2497,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   status in one page) — added so "My sessions" needs one query instead of a 4-call fan-out per
   `SessionStatus`; fully backward compatible.
 - **`CLIENT-SESSION-7` (`DONE`, 2026-08-06,
-  `client/docs/CLIENT-SESSION-7_RAIL_CTAS_AND_HOOK_EXTRACTION.md`)** — `UpcomingMatches`'s empty
+  `client/docs/MVP/CLIENT-SESSION-7_RAIL_CTAS_AND_HOOK_EXTRACTION.md`)** — `UpcomingMatches`'s empty
   state gains "Create a match"/"Join a match" CTAs on Home Feed/Groups/Friends. Scope grew at
   pickup (user decision): "Join a match" opens a new `SessionDiscoverModal` (reusing a
   `SessionDiscoverPanel` extracted out of `MatchesPage`) rather than just navigating to `/matches`
@@ -2519,7 +2520,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (`modules/sport/sport-impl/docs/BACKLOG_MVP.md`, `DONE`) — data migration + a real gap found in
   `createProfile()` (checked sport exists but not that it's active) — and **SPORT-3**
   (`client/docs/BACKLOG_MVP.md`, `DONE` 2026-08-07,
-  `client/docs/SPORT-3_SPORT_CATALOG_REAL_FETCH.md`).
+  `client/docs/MVP/SPORT-3_SPORT_CATALOG_REAL_FETCH.md`).
 - **SPORT-3 (2026-08-07):** the client's sport catalog (`SPORT_PROFILE_CONFIG`/`ALL_SPORT_KEYS`/
   `SPORT_ID_BY_KEY`) was a hardcoded football/basketball/tennis config that never actually called
   `GET /api/sports`. Resolved the open design question left at filing (`SportKey` union vs. derived
@@ -2637,7 +2638,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
 - **MVP backlog (session module):** 15 of 17 tickets `DONE` (SESSION-1 through SESSION-17 except
   SESSION-8 and SESSION-16); both remain `TODO`.
 - **CLIENT-SESSION-8 (`DONE`, 2026-08-12,
-  `client/docs/CLIENT-SESSION-8_SESSION_COMMENTS.md`):** an inline "Discussion" section in
+  `client/docs/MVP/CLIENT-SESSION-8_SESSION_COMMENTS.md`):** an inline "Discussion" section in
   `SessionDetailModal` (list + post + delete-own-comment, one-level reply nesting, per-comment
   likes — reuses `CommentItem`, now with `onHashtagClick` made optional since session comments
   render as plain text). Rendered inline, not a second nested Dialog (this codebase's
@@ -2668,7 +2669,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `getCount` on that path. Filed and shipped mid-pickup on CLIENT-SESSION-8, the client ticket
   that needed it.
 - **CLIENT-SESSION-9 (`DONE`, 2026-08-13,
-  `client/docs/CLIENT-SESSION-9_PARTICIPATION_ACTION.md`):** the session card
+  `client/docs/MVP/CLIENT-SESSION-9_PARTICIPATION_ACTION.md`):** the session card
   (`SessionListCard`/`UpcomingMatches`) and `SessionDetailModal` now derive their
   Join/Accept/Decline/Cancel/Leave action from `SessionResponse.callerParticipation` (SESSION-9)
   instead of the modal's old `participants`-array lookup. Card gets one new sibling button next to
@@ -2704,7 +2705,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   component had no tests before); verified against the original failure end-to-end (full e2e
   suite, 49/49 passing).
 - **CLIENT-SESSION-10 (`DONE`, 2026-08-14,
-  `client/docs/CLIENT-SESSION-10_SESSION_MODAL_UX_UI_PASS.md`):** `SessionDetailModal` UX/UI pass —
+  `client/docs/MVP/CLIENT-SESSION-10_SESSION_MODAL_UX_UI_PASS.md`):** `SessionDetailModal` UX/UI pass —
   custom header with a sport chip, a capacity meter + collapsible "Players" section (renamed from
   "Participants") with avatar-stack/roster-chip views, the "waiting for approval" queue wrapped in
   a new amber card (first real use of the amber warning token), icons + a loading spinner on the
@@ -2713,7 +2714,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `SessionListCard`'s own layout/status-badge questions stay a follow-up. Full suite green
   (832 Vitest, 49 e2e via real Chromium, `tsc`/`lint` clean); Storybook not visually screenshotted
   (browser extension unavailable in this sandbox, same as prior tickets).
-- **SPORT-4 (client-side `DONE`, 2026-08-15, `client/docs/SPORT-4_REAL_SPORT_ICONS.md`):** replaced
+- **SPORT-4 (client-side `DONE`, 2026-08-15, `client/docs/MVP/SPORT-4_REAL_SPORT_ICONS.md`):** replaced
   the Tabler icon stand-ins (Badminton→tennis-ball, Pickleball→tournament-bracket) with the real
   backend-served `Sport.iconUrl` PNGs everywhere a sport badge renders (new shared `SportIcon`
   component, 8 call sites, `sportIcons.ts`'s lookup table deleted). Surfaced and fixed a real
@@ -2724,7 +2725,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `tsc`/`lint` clean, Storybook builds); visual-regression baselines (18 affected) regenerated via
   the `update-baselines` CI dispatch and human-verified against the real render.
 - **CLIENT-SESSION-11 (`DONE`, 2026-08-15,
-  `client/docs/CLIENT-SESSION-11_SHARED_SESSION_CARD.md`):** de-duped `UpcomingMatches`' right-rail
+  `client/docs/MVP/CLIENT-SESSION-11_SHARED_SESSION_CARD.md`):** de-duped `UpcomingMatches`' right-rail
   row and `SessionListCard` (Matches page) into one shared `SessionCard` component with a
   `compact`/`full` size variant — the two had been hand-kept-in-line since CLIENT-SESSION-10 rather
   than sharing an implementation, a real drift risk. Pure refactor, zero visual change: 838 Vitest
@@ -2767,6 +2768,29 @@ explicit go-ahead at each step (full story in A3's summary doc):
   only ever queries `status = 'PENDING'`, and `SENT` rows are never archived. Replaced (`V056`) with
   a partial index scoped to `WHERE status = 'PENDING'`, same technique already established by
   `SESSION-12`/`B16`. Verified via `EXPLAIN` with `enable_seqscan` off, same as `B16`'s check.
+- **CLIENT-NOTIF-1 (`DONE`, 2026-08-18, `client/docs/MVP/CLIENT-NOTIF-1_NOTIFICATION_BELL_DROPDOWN.md`):**
+  the real bell + dropdown in `TopBar`, replacing NTF-3's bare badge placeholder — unread badge (live
+  via NTF-3's STOMP subscription), a `Popover`-backed dropdown listing `GET /api/notifications`
+  (paginated, fetched only once opened), click-to-mark-read + open the session's detail, and a
+  client-side "Mark all read" fanning out one `PUT /{id}/read` per currently-loaded unread row (no
+  bulk endpoint exists). **Surfaced and closed a real backend gap at pickup, filed and built as its
+  own ticket (NTF-4) before any client code:** NTF-1 had deliberately shipped zero
+  actor-name/entity-title enrichment on `NotificationResponse`, which would have made the dropdown
+  unreadable — `notification-impl` now batch-resolves `actors`/`entityTitle` per page via
+  `user-api`/`session-api`, no N+1. Mid-build correction: the first `NotificationBell` draft
+  self-fetched its own data, caught against `client/CLAUDE.md`'s presentational/controlled
+  convention and refactored into a shell-level `useNotificationBellData()` hook (owned by
+  `AppShell`, same as `useSportCatalog`/`useNotificationLiveSocket`) feeding a fully prop-driven
+  component. **Two post-ship corrections, same day, before merge:** (1) bold styling scoped to just
+  the actor name(s)/`entityTitle` (`getNotificationText` now returns segments, not a string) plus a
+  light-blue-bullet-and-black-text (unread) / gray-bullet-and-gray-text (read) treatment; (2)
+  clicking a notification no longer navigates to `/matches?session={id}` — the user caught both the
+  unwanted page switch and a real bug it had (`MatchesPage`'s `?session=` param is read once at
+  mount, so navigating there again while already on `/matches` silently did nothing). Fixed by
+  giving `AppShell` its own shell-level `SessionDetailModal` (reusing `useSessionDetailModalData`),
+  opened via a plain callback with zero URL change, on whatever page the caller is on. Full suite
+  green: `:server:test` (backend), 878 Vitest, `tsc`/lint clean, Storybook builds, 51/51 e2e
+  (including a dedicated already-on-`/matches` regression case).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

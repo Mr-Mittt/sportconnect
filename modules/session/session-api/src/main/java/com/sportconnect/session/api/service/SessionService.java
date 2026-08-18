@@ -14,6 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public interface SessionService {
@@ -151,4 +152,13 @@ public interface SessionService {
      * participant fan-out, even for an event published before it changed status.
      */
     List<UUID> getParticipantIdsByStatuses(Long sessionId, List<ParticipantStatus> statuses);
+
+    /**
+     * Batch title lookup, no-N+1-shaped like {@code getParticipantIdsByStatuses} — for
+     * {@code notification-impl}'s {@code entityTitle} enrichment (NTF-4), resolving many
+     * {@code entityId}s from one page of notifications in a single call rather than one
+     * {@code getSession} per row. Missing ids are simply absent from the returned map, mirroring
+     * {@code user-api}'s {@code getUsersByIds} semantics — no exception thrown.
+     */
+    Map<Long, String> getSessionTitlesByIds(List<Long> sessionIds);
 }
