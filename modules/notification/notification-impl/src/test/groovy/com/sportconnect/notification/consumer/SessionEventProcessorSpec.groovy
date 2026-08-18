@@ -80,6 +80,25 @@ class SessionEventProcessorSpec extends Specification {
         })
     }
 
+    def "process() for a fan-out event with a null actorId (SESSION-18) notifies every resolved recipient — none are filtered out"() {
+        given:
+        def recipient1 = UUID.randomUUID()
+        def recipient2 = UUID.randomUUID()
+        def statuses = [ParticipantStatus.JOINED]
+        def event = ParsedSessionEvent.fanOut("session.status.started", 1L, null, statuses)
+
+        when:
+        processor.process("mid-1", event)
+
+        then:
+        1 * processedMessageRepository.insertIfAbsent("mid-1") >> 1
+        1 * sessionService.getParticipantIdsByStatuses(1L, statuses) >> [recipient1, recipient2]
+        1 * notificationService.recordEvent(recipient1, "session.status.started", "SESSION", "1", null) >>
+                new NotificationRecordResult(21L, 1L)
+        1 * notificationService.recordEvent(recipient2, "session.status.started", "SESSION", "1", null) >>
+                new NotificationRecordResult(22L, 2L)
+    }
+
     def "process() never touches NotificationService, SessionService, or the event publisher when the message was already processed"() {
         given:
         def event = ParsedSessionEvent.single("session.join_request.created", 1L, UUID.randomUUID(), UUID.randomUUID())

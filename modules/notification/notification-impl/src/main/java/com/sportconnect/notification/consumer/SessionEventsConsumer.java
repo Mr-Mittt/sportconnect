@@ -9,6 +9,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent;
+import com.sportconnect.session.api.event.SessionStatusStartedEvent;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -70,6 +71,11 @@ public class SessionEventsConsumer {
             case "session.participant.joined" -> {
                 SessionParticipantJoinedEvent e = objectMapper.readValue(body, SessionParticipantJoinedEvent.class);
                 yield ParsedSessionEvent.fanOut(routingKey, e.getSessionId(), e.getActorId(), PARTICIPANT_JOINED_RECIPIENT_STATUSES);
+            }
+            case "session.status.started" -> {
+                SessionStatusStartedEvent e = objectMapper.readValue(body, SessionStatusStartedEvent.class);
+                // SESSION-18: no real actor — a scheduled job made this transition, not a user.
+                yield ParsedSessionEvent.fanOut(routingKey, e.getSessionId(), null, PARTICIPANT_JOINED_RECIPIENT_STATUSES);
             }
             case "session.join_request.created" -> {
                 SessionJoinRequestCreatedEvent e = objectMapper.readValue(body, SessionJoinRequestCreatedEvent.class);

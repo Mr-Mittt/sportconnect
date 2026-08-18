@@ -4,7 +4,10 @@ import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
 import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
+import com.sportconnect.session.api.event.SessionStatusStartedEvent;
 import com.sportconnect.session.entity.Session;
+import com.sportconnect.session.entity.SessionOutboxEvent;
+import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Internal only — not exposed via {@code session-api}; its only caller is
@@ -38,6 +42,8 @@ public class SessionGenerationService {
 
     private final SessionRepository sessionRepository;
     private final GroupService groupService;
+    private final SessionOutboxEventRepository sessionOutboxEventRepository;
+    private final SessionOutboxWriter sessionOutboxWriter;
 
     @Transactional
     public void generateUpcomingSessions() {
@@ -82,7 +88,10 @@ public class SessionGenerationService {
     }
 
     /** SCHEDULED → ONGOING once scheduledStart arrives (only for sessions with a scheduledEndAt
-     * — see {@link SessionRepository#findSessionsToStart}). */
+     * — see {@link SessionRepository#findSessionsToStart}). SESSION-18: also writes one
+     * {@code session.status.started} outbox row per started session, in the same transaction — no
+     * real actor (a scheduled job made the transition), so {@link SessionStatusStartedEvent}
+     * carries no {@code actorId}, unlike every other session event. */
     @Transactional
     public void startOngoingSessions() {
         LocalDateTime now = LocalDateTime.now();
@@ -98,6 +107,13 @@ public class SessionGenerationService {
             List<Session> sessions = batch.getContent();
             sessions.forEach(s -> s.setStatus(SessionStatus.ONGOING));
             sessionRepository.saveAll(sessions);
+
+            List<SessionOutboxEvent> outboxEvents = sessions.stream()
+                    .map(s -> sessionOutboxWriter.build("session.status.started",
+                            SessionStatusStartedEvent.builder().sessionId(s.getId()).build()))
+                    .collect(Collectors.toList());
+            sessionOutboxEventRepository.saveAll(outboxEvents);
+
             log.info("Started {} session(s)", sessions.size());
         } while (batch.hasNext());
     }

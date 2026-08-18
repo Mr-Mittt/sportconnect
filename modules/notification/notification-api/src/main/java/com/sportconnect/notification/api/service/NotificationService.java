@@ -34,6 +34,8 @@ public interface NotificationService {
      * {@code actorIds} list; {@code actorCount} is bumped unconditionally (it counts total matched
      * events, not distinct actors — see {@code Notification}'s Javadoc). A row already marked read
      * is never matched — it's a closed group, and this always starts a fresh row in that case.
+     * {@code actorId} may be null (SESSION-18) for a system-triggered event with no human actor —
+     * the actor list is left untouched in that case, but {@code actorCount} still increments.
      *
      * @return the upserted row's id and the recipient's unread count immediately after this write —
      *     used by NTF-3's live-delivery push so it doesn't need a second query for the same data.

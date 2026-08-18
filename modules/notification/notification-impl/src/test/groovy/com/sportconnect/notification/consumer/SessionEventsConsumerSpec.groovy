@@ -8,6 +8,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent
+import com.sportconnect.session.api.event.SessionStatusStartedEvent
 import org.springframework.amqp.core.Message
 import org.springframework.amqp.core.MessageProperties
 import spock.lang.Specification
@@ -57,6 +58,20 @@ class SessionEventsConsumerSpec extends Specification {
         then:
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
             e.type() == "session.participant.joined" && e.fanOutStatuses() == [ParticipantStatus.JOINED]
+        })
+    }
+
+    def "dispatches session.status.started as a fan-out event scoped to JOINED only, with no actor"() {
+        given:
+        def body = objectMapper.writeValueAsString(SessionStatusStartedEvent.builder().sessionId(1L).build())
+
+        when:
+        consumer.onSessionEvent(messageWith("session.status.started", body))
+
+        then:
+        1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
+            e.type() == "session.status.started" && e.sessionId() == 1L && e.actorId() == null &&
+                    e.fanOutStatuses() == [ParticipantStatus.JOINED]
         })
     }
 
