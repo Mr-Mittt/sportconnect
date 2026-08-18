@@ -92,7 +92,7 @@ participants aren't told) — not requested, not built.
 ## SESSION-4 — Standalone session discovery
 
 **Filed:** 2026-08-01, while scoping the client's `UpcomingMatches` rail "Join a match" CTA
-(`client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`) — the same gap CLIENT-SESSION-1's
+(`client/docs/MVP/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md`) — the same gap CLIENT-SESSION-1's
 summary already flagged: `GET /sessions/mine` returns only the caller's own standalone sessions and
 `GET /sessions/group/{groupId}` only one group's — there is no way for a user to browse a standalone
 session someone else created and isn't in any of their groups.
@@ -122,7 +122,7 @@ related need surfaced during scoping, not part of the original sketch. Full writ
 ## SESSION-5 — Session capacity + fee/pricing
 
 **Filed:** 2026-08-01, split out of the `CreateSessionModal` redesign scoped in
-`client/docs/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` (draft requirements: "Taken slot"/
+`client/docs/MVP/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` (draft requirements: "Taken slot"/
 "Open slot" numeric inputs 1–24, and a "Fee" group — mutually exclusive "Free" checkbox, "Split cost"
 checkbox, or a fixed VND amount).
 
@@ -517,7 +517,7 @@ in-memory `Filter` on the already-small partial match set, confirmed via `EXPLAI
 ## SESSION-13 — `SessionResponse.likeCount`/`isLikedByCurrentUser` + `PostService.getSessionPostLikeInfo` batch method
 
 **Status:** `DONE` (2026-08-12) · **Full writeup:**
-`client/docs/CLIENT-SESSION-8_SESSION_COMMENTS.md` (this ticket is the backend half of that
+`client/docs/MVP/CLIENT-SESSION-8_SESSION_COMMENTS.md` (this ticket is the backend half of that
 client ticket's heart-button follow-up, not a separately-written summary doc)
 
 **Filed:** 2026-08-12, mid-pickup on `CLIENT-SESSION-8` (`client/docs/BACKLOG_MVP.md`) — the user

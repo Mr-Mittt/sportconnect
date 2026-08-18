@@ -9,7 +9,7 @@
 
 The product vision (`documentation/md/IDEA.md`) already names "Session" as the scheduled-activity
 concept behind the future "Session Calling"/"Game Calling" system, but no backend for it existed
-— the client's `UpcomingMatches` component (`client/docs/HF-4_UPCOMINGMATCHES.md`) was mock data
+— the client's `UpcomingMatches` component (`client/docs/MVP/HF-4_UPCOMINGMATCHES.md`) was mock data
 only. The trigger for this round: group owners/admins want to configure a **recurring** activity
 (e.g. "every Tuesday, 7pm, at Court X") with the system automatically keeping the next occurrence
 generated and past ones marked completed, configurable per group. Standalone (non-group) sessions

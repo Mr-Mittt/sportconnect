@@ -12,7 +12,7 @@ import type { Session } from '@/shared/types/session';
  * `GroupsPage`, and `FriendsPage` don't change their own call shape.
  *
  * There is no batch "sessions across my groups" endpoint (a real backend gap — see
- * `client/docs/CLIENT-SESSION-1_SESSION_UI.md`), so this fans out one query per group the
+ * `client/docs/MVP/CLIENT-SESSION-1_SESSION_UI.md`), so this fans out one query per group the
  * caller belongs to (`useGroupSessionsForGroups`, `useQueries`) and merges with the caller's
  * own standalone sessions (`useMySessions` — `GET /sessions/mine` only returns sessions the
  * caller *created*, not ones they joined; another flagged gap, not solved here). `COMPLETED`/
