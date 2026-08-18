@@ -120,12 +120,28 @@ appears in the rail) — **these also need the same `update-baselines` dispatch 
 merging, on top of this ticket's own 30 new ones. `matches-journey.spec.ts` was unaffected (asserts
 specific named sessions, not rail totals).
 
+**A second, more subtle instance of the same ripple, found by fixing the "1 pre-existing failure"
+called out above:** `friends-journey.spec.ts` failed consistently in this environment, both before
+and after this ticket's other changes — but a controlled A/B (an isolated repro test, then a fixed
+copy) proved it was **not actually pre-existing** — it was this same ripple's second bite.
+`FriendsPage` renders the same `UpcomingMatches` rail (`useUpcomingMatches` is shared across Home
+Feed/Groups/Friends), so `mockInvitedSession` ("Tuesday drop-in") also renders there with an
+`aria-label="Tuesday drop-in — Accept"` button. `friends-journey.spec.ts` step 6 used
+`page.getByRole('button', { name: 'Accept' })` — a **non-exact** substring match — which resolved
+ambiguously to both that button and the real friend-request Accept button (whose accessible name is
+exactly `"Accept"`). Playwright's own strict-mode error named the fix directly: `{ name: 'Accept',
+exact: true }` disambiguates cleanly (only the real button's name is an exact match). Verified via a
+network trace first (zero `PUT` requests logged at all — the click was landing ambiguously/failing
+silently, not a timing race), then confirmed stable across 3 consecutive runs after the fix. Grepped
+every other e2e spec for the same bare, unscoped `{ name: 'Accept' }` pattern — all other usages
+were already container-scoped (`invitationRow.getByRole(...)`, etc.), so this was the only instance.
+Full `--project=e2e` re-run after this fix: 51/51 passed.
+
 **Verification:** `pnpm exec tsc -b` clean (caught the real `document.evaluate` DOM-lib bug above),
 `pnpm exec eslint .` clean (0 errors — 2 pre-existing warnings in an unrelated file), full
 `pnpm exec vitest run` green (878/878 — this ticket adds no unit-tested code, so this just confirms
-nothing else broke), **full `pnpm exec playwright test --project=e2e` run (51 specs) — 50 passed,
-1 pre-existing failure** (`friends-journey.spec.ts`'s "accepting an incoming request" step — fails
-consistently in this environment both before and after every change in this ticket; the failing
-locator/fixture (`Hana Kim`, Friend Requests) shares nothing with anything this ticket touched,
-confirmed by grep; not fixed, out of scope). `client/docs/E2E_OVERVIEW.md` updated (§3 directory
-listing + two new §6 catalog entries + the `home-feed-journey.spec.ts` count-fix entry above).
+nothing else broke), full `pnpm exec playwright test --project=e2e` run (51 specs) — **51/51
+passed** after both ripple fixes above (initially 1, then a second, failure — both traced to this
+ticket's new fixtures and fixed, not left as "pre-existing"). `client/docs/E2E_OVERVIEW.md` updated
+(§3 directory listing + two new §6 catalog entries + the `home-feed-journey.spec.ts` count-fix entry
+above).

@@ -2911,10 +2911,15 @@ explicit go-ahead at each step (full story in A3's summary doc):
   but broke `home-feed-journey.spec.ts`'s hardcoded rail counts and made GRP-10's already-merged
   `groups-*.png` baselines stale. Fixed both (test counts + comment, regenerated all 18 GRP-10
   baselines) — user-approved before proceeding, given it touched an already-shipped ticket's
-  output. Full verification: `tsc -b`/`eslint .` clean, `vitest run` 878/878, and — new for this
-  ticket — a full `playwright test --project=e2e` run (51 specs): 50 passed, 1 pre-existing failure
-  (`friends-journey.spec.ts`, confirmed unrelated — fails consistently regardless of this ticket's
-  changes, touches nothing this ticket modified). `E2E_OVERVIEW.md` updated throughout.
+  output. **Same ripple bit a second time, more subtly**, in `friends-journey.spec.ts` (which also
+  renders the shared rail): its `page.getByRole('button', { name: 'Accept' })` (non-exact) became
+  ambiguous against the new session card's `"Tuesday drop-in — Accept"` button. Initially looked
+  pre-existing (failed consistently, unrelated-looking locator/fixture text) — a network-trace
+  check (zero `PUT` requests logged) plus an isolated A/B repro proved it was this ticket's own
+  ripple, not pre-existing; fixed with `exact: true`, verified stable 3/3 runs, grepped every other
+  spec for the same unscoped pattern (none found). Full verification: `tsc -b`/`eslint .` clean,
+  `vitest run` 878/878, and — new for this ticket — a full `playwright test --project=e2e` run
+  (51 specs): **51/51 passed** after both ripple fixes. `E2E_OVERVIEW.md` updated throughout.
   **Remaining step (same as GRP-10):** both this ticket's 30 new baselines and GRP-10's 18
   regenerated ones are Windows-rendered locally; need the `client-ci` `update-baselines` dispatch
   swap before CI's Linux runs pass clean.
