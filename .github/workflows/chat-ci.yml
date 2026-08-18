@@ -9,7 +9,7 @@
 # internal/sync) need a real Postgres reachable over the actual wire
 # protocol: this service's only driver is pgx, which speaks Postgres
 # natively and has no JDBC/H2 equivalent to fall back to (see
-# services/chat/docs/CHAT-5_REPOSITORY_CACHE_INTEGRATION_TESTS.md). A
+# services/chat/docs/MVP/CHAT-5_REPOSITORY_CACHE_INTEGRATION_TESTS.md). A
 # postgres service container plus golang-migrate provides that real
 # database, matching the same sportconnect_chat_dev name/schema the local
 # dev compose stack seeds.

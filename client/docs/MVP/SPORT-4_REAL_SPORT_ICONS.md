@@ -70,7 +70,7 @@ The first visual-regression run after the swap showed **broken images**, not jus
 `Sport.iconUrl` is a server-relative path (`/images/sports/badminton.png`), and `vite.config.ts`'s
 dev proxy only forwarded `/api` (and `/api/chat`) to the backend, not `/images`. A raw
 `<img src={iconUrl}>` therefore 404'd against the Vite dev server's own origin. The same problem
-exists in production for a different reason: `infra/documentation/INFRA-3_HOSTING_DECISION.md`
+exists in production for a different reason: `infra/documentation/MVP/INFRA-3_HOSTING_DECISION.md`
 plans the client on S3/CloudFront and the backend on a separate EC2 instance — genuinely different
 origins, and that infra piece (INFRA-5) hasn't shipped yet either.
 

@@ -28,7 +28,7 @@ const PAGE_SIZE = 20;
  * dynamically-generated `ORDER BY ph.lastInteractionAt` directly against the
  * query's root entity (`PostHashtag`), which has no such field — every call
  * throws `UnknownPathException` before returning. **Fixed 2026-07-14** —
- * see `modules/social/post-impl/docs/A10_FIX_HASHTAG_ENDPOINT_500.md` — no
+ * see `modules/social/post-impl/docs/MVP/A10_FIX_HASHTAG_ENDPOINT_500.md` — no
  * longer blocking.
  *
  * `enabled` (default `true`) gates the fetch, same reasoning as

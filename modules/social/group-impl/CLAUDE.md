@@ -128,7 +128,7 @@ GET    /api/groups/{groupId}/permissions/user-role
      crediting the invitation's approver as `reviewedBy`, and the invitation is accepted too.
    - Deliberate consequence: a single real join event can leave two `accepted` rows (one
      invitation, one join request) for the same (group, person) — no attempt is made to merge or
-     suppress either. See `modules/social/group-impl/docs/B11_JOIN_INVITATION_RACE_CONDITIONS.md`
+     suppress either. See `modules/social/group-impl/docs/MVP/B11_JOIN_INVITATION_RACE_CONDITIONS.md`
      and the note on client ticket GRP-7 (`client/docs/BACKLOG_MVP.md`) for the display-side
      follow-up.
    - Full rule diagrams: `documentation/md/adr/JOIN_GROUP_ADR.md` §5.

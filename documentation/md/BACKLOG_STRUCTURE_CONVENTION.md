@@ -142,21 +142,26 @@ exercise (that read is the exact cost this convention exists to avoid).
 
 ---
 
-## Known gap — not yet closed
+## Known gap — closed
 
-**`.claude/commands/workon.md`'s Phase 6 (step 2) still tells a fresh `/workon` run to write a
-ticket's implementation summary to the old flat path** (`client/docs/<TICKET_ID>_<TICKET_TITLE>.md`,
-etc. per module type) rather than `<root>/docs/<VERSION>/<TICKET_ID>_<TICKET_TITLE>.md`. Until that's
-updated, a ticket worked through `/workon` after a module has been retrofitted onto this convention
-will write its summary doc back into the flat `docs/` root, silently drifting the module back toward
-the old shape one ticket at a time. This is a deliberate, flagged gap, not an oversight it's safe to
-ignore — update the skill file (and re-point Phase 0b's implicit "first TODO row" instruction at the
-new Open/Done table shape) before relying on `/workon` to keep a retrofitted module's backlog clean.
+`.claude/commands/workon.md`'s Phase 6 (steps 2 and 4) and Phase 0b now branch on whichever shape a
+module's backlog is actually in (a `<VERSION>/` subfolder next to the backlog file means
+restructured; its absence means flat) — a fresh `/workon` run writes a restructured module's ticket
+summary into `<root>/docs/<VERSION>/<TICKET_ID>_<TICKET_TITLE>.md` and moves its Open row into Done
+sorted by completion date, rather than falling back to the old flat path. Closed in the same commit
+that introduced this convention doc — this section is kept only as a pointer for anyone who reads an
+older copy of this file and wonders whether the gap is still live.
 
 ---
 
 ## Reference implementation
 
-`client/docs/BACKLOG_MVP.md` + `client/docs/MVP/` — the first module retrofitted onto this
-convention (2026-08-18, 74 tickets migrated, zero content loss, verified via link-resolution and
-header-count checks). Read that pair as the concrete example if anything above is ambiguous.
+Every module/service backlog in this repo is retrofitted onto this convention as of 2026-08-18:
+`client/docs/BACKLOG_MVP.md` (`client/docs/MVP/`, 74 tickets — the original reference case), plus
+`services/chat`, `infra/documentation`, and every `modules/<domain>/docs/` or
+`modules/<domain>/<submodule>-impl/docs/` backlog (`modules/common`, `modules/location`,
+`modules/notification`, `modules/auth`, `modules/sport/sport-impl`, `modules/user/user-impl`,
+`modules/session`, `modules/social/post-impl`, `modules/social/group-impl`) — 11 backlogs total,
+zero content loss, verified via link-resolution and header-count checks on every one. New backlogs
+should start in this shape from ticket #1 (see "When to apply this" above) — there should be no flat
+`BACKLOG_<VERSION>.md` left to retrofit going forward.

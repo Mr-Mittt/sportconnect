@@ -23,7 +23,7 @@ tests · Gradle (wrapper-managed, no separate install needed)
 1. Clone the repo and open a terminal at the repo root (PowerShell, CMD, or Git Bash all work —
    examples below show PowerShell; swap `.\gradlew.bat` for `./gradlew.bat` in Git Bash).
 2. Start local dev dependencies (Postgres+PostGIS, Redis) — see
-   [`infra/documentation/INFRA-2_DEV_DOCKER_COMPOSE.md`](../infra/documentation/INFRA-2_DEV_DOCKER_COMPOSE.md)
+   [`infra/documentation/MVP/INFRA-2_DEV_DOCKER_COMPOSE.md`](../infra/documentation/MVP/INFRA-2_DEV_DOCKER_COMPOSE.md)
    for what this actually spins up:
    ```powershell
    docker compose -f infra/docker-compose.dev.yml up -d

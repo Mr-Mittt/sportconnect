@@ -101,7 +101,7 @@ in GRP-3 on purpose, so the modal's UI/UX lands independently of the real search
 
 **What ships:** replace the modal's mock result state with a real, debounced query against `GET
 /api/users/search?q=&page=&size=` (`U6`, `DONE` —
-`modules/user/user-impl/docs/U6_USER_DISCOVERY.md`), and wire each result's "Invite" action to the
+`modules/user/user-impl/docs/MVP/U6_USER_DISCOVERY.md`), and wire each result's "Invite" action to the
 existing `POST /api/groups/{groupId}/invitations` (B1, `DONE`) — which already 400s server-side if
 the inviter/invitee aren't friends (`A6`'s `UserFriendService.areFriends` gate) or if
 `allowMemberInvites` is off for the group. Surface that 400 as an inline per-result error, not a

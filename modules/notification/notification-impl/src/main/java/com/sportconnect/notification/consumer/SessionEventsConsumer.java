@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
  * NTF-2's {@code sportconnect.events} consumer — session-only scope for now (post/group/friend
  * event consumption are follow-on tickets, once {@code post-impl}/{@code group-impl}/
  * {@code user-impl} ship real producers via their own outbox-wiring tickets). See
- * {@code modules/notification/docs/NTF-2_RABBITMQ_CONSUMER.md}.
+ * {@code modules/notification/docs/MVP/NTF-2_RABBITMQ_CONSUMER.md}.
  *
  * <p>Deserialization/unrecognized-routing-key failures are caught narrowly right here — a
  * permanently malformed message will never succeed no matter how many times it's redelivered, so

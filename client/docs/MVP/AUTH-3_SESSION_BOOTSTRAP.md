@@ -71,7 +71,7 @@ second were byte-identical, colliding against `refresh_tokens.token`'s `UNIQUE` 
 AUTH-3 made this newly reachable in ordinary usage (an app-load refresh firing within a second of
 a preceding login/register — e.g. opening a second tab right after signing up). Fixed by adding a
 `jti` claim (`UUID.randomUUID()`) to `generateToken()`. Full writeup, root cause trace, and
-verification: `modules/auth/docs/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md`.
+verification: `modules/auth/docs/MVP/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md`.
 
 This was a deliberate scope decision, not scope creep: the user was asked explicitly (own branch/PR
 vs. bundled here) and chose to bundle it into this branch rather than split it into a separate
@@ -115,7 +115,7 @@ backend PR.
 Refresh-on-load restores the session from the httpOnly cookie; the refresh response's `user` object
 doubles as "who am I" (no `/api/users/me` exists). **No longer blocked** — auth backlog A2 (BE-1)
 shipped 2026-07-08; `POST /api/auth/refresh` genuinely reads/sets the cookie now. See
-`modules/auth/docs/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md`.
+`modules/auth/docs/MVP/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md`.
 
 **Deltas for later tickets:**
 - **`App.test.tsx` now always wraps `QueryClientProvider`** (`renderApp` helper used by every case,
@@ -126,7 +126,7 @@ shipped 2026-07-08; `POST /api/auth/refresh` genuinely reads/sets the cookie now
   alternative, declined):** `JwtTokenServiceImpl.generateToken()` had no random component, so two
   refresh tokens for the same user within the same second collided on `refresh_tokens.token`'s
   `UNIQUE` constraint (500). Fixed with a `jti` claim. See **A4**
-  (`modules/auth/docs/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md`) — not a client-side concern for AUTH-4/5
+  (`modules/auth/docs/MVP/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md`) — not a client-side concern for AUTH-4/5
   to work around, the fix is already in place.
 - **`useSessionBootstrap()` is called once, at the app root (`App.tsx`), regardless of route** —
   AUTH-4's `ProtectedRoute` should read `authStore.isBootstrapping`/`user` rather than re-triggering

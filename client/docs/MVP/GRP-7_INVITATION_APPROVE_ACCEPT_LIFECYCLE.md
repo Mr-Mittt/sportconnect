@@ -3,7 +3,7 @@
 **Status:** `DONE` (2026-07-24, follow-up fix same day — see "Follow-up fix" below)
 **Type:** Feature
 **Dependencies:** GRP-3 (`DONE`), GRP-4 (`DONE`), backend B11 (`DONE`,
-`modules/social/group-impl/docs/B11_JOIN_INVITATION_RACE_CONDITIONS.md`)
+`modules/social/group-impl/docs/MVP/B11_JOIN_INVITATION_RACE_CONDITIONS.md`)
 **Filed:** 2026-07-23, discovered while closing out GRP-4
 
 ## Problem
@@ -235,7 +235,7 @@ diagrams — a UML use case diagram and per-flow sequence diagrams) written to
 B11 is `DONE`.**
 
 **Backend:** B11 is now `DONE` (2026-07-23,
-`modules/social/group-impl/docs/B11_JOIN_INVITATION_RACE_CONDITIONS.md`) — unblocked. B11 changed 3
+`modules/social/group-impl/docs/MVP/B11_JOIN_INVITATION_RACE_CONDITIONS.md`) — unblocked. B11 changed 3
 service methods' business rules (`createInvitation`, `approveInvitation`, `createJoinRequest`), all
 without any response-contract change: `createJoinRequest`'s short-circuit case (a `pending_user`
 invitation already exists) was resolved by always creating a real `GroupJoinRequest` row — directly

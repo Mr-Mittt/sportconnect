@@ -13,7 +13,7 @@ is the living reference, that one is the point-in-time implementation record), `
 (replaces `group-members.spec.ts`'s step 3 with a real search + invite), `GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md`
 (new `group-invitations.spec.ts` — the merged approval queue + the Invitations section's accept/reject),
 `GRP-8_INVITATION_LIFECYCLE_POLISH.md` (extends `group-invitations.spec.ts` with 2 new tests + a new
-`seed-join-requests` admin route), `services/chat/docs/CHAT-10_E2E_MSW_HANDLERS.md` (new
+`seed-join-requests` admin route), `services/chat/docs/MVP/CHAT-10_E2E_MSW_HANDLERS.md` (new
 `group-chat.spec.ts`/`direct-chat.spec.ts`, `mocks/handlers/chat.ts`, `mocks/fakeChatSocket.ts` — real,
 MSW-backed e2e coverage for the two chat surfaces CHAT-8/CHAT-9 wired up, including the WebSocket-vs-MSW
 resolution `friends-journey.spec.ts` had flagged as still open), `CLIENT-SESSION-1_SESSION_UI.md` (new

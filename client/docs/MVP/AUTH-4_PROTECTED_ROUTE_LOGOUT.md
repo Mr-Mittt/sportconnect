@@ -191,7 +191,7 @@ redirect-back after login.
 **Delta (2026-07-08):** auth backlog A3 (BE-2) has **shipped** — `POST /api/auth/logout` no
 longer takes a `userId` query param at all; it derives the caller from the `Authorization: Bearer`
 header (401 if missing/invalid). Implement against `POST /api/auth/logout` with no query string.
-See `modules/auth/docs/A3_FIX_LOGOUT_AUTHORIZATION.md`.
+See `modules/auth/docs/MVP/A3_FIX_LOGOUT_AUTHORIZATION.md`.
 
 **Deltas for later tickets:**
 - **Logout entry point is an avatar dropdown menu** (`TopBar`'s `user`/`onLogout` props, new

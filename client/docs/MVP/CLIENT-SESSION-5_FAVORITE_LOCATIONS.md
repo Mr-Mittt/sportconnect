@@ -2,7 +2,7 @@
 
 **Status:** DONE (2026-08-04) · **Dependency:** CLIENT-SESSION-2 (the location field it
 populates), CLIENT-LOC-1 (`LocationPicker`, already `DONE`) · **Backend contract:**
-`modules/location/location-impl/docs/LOC-2_FAVORITE_LOCATIONS.md`
+`modules/location/docs/MVP/LOC-2_FAVORITE_LOCATIONS.md`
 
 ## Scope (approved plan)
 
@@ -133,7 +133,7 @@ display (LOC-2 doesn't expose one).
 field it populates), CLIENT-LOC-1 (`LocationPicker`, already `DONE`) · **Filed:** 2026-08-03 ·
 **Spec:** `CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` § "Fields explicitly excluded"
 (original draft requirements), backend contract:
-`modules/location/location-impl/docs/LOC-2_FAVORITE_LOCATIONS.md` · **Summary:**
+`modules/location/docs/MVP/LOC-2_FAVORITE_LOCATIONS.md` · **Summary:**
 `client/docs/CLIENT-SESSION-5_FAVORITE_LOCATIONS.md`
 
 **What ships:** a favorite-toggle heart on `LocationPicker`'s search-result rows, wired to the real

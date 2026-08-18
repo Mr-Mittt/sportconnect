@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Real end-to-end coverage for A14's {@code PostGate} (see
- * {@code modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md}) — every case here goes through
+ * {@code modules/social/post-impl/docs/MVP/A14_POST_RESOURCE_GATE.md}) — every case here goes through
  * a real {@code MockMvc} HTTP request, real {@code PostController}/{@code PostServiceImpl}/
  * {@code CommentServiceImpl}/{@code PostGate}/{@code GroupServiceImpl}/{@code
  * UserFriendServiceImpl} beans, and a real H2-backed DB round trip — not mocked collaborators.

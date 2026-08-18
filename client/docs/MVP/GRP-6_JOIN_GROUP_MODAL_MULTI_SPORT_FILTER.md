@@ -30,7 +30,7 @@ The approved plan (client/docs/BACKLOG_MVP.md's GRP-6 entry, restated):
    independently. Before implementation started, the user reversed this in favor of a real backend
    multi-sport filter instead, trading a small additive backend change (**A10**) for much simpler
    client state — one combined query, one `isLoading`/`isError` pair, no per-section loading/error
-   juggling. A10 shipped first (`modules/social/group-impl/docs/A10_MULTI_SPORT_FILTER_PUBLIC_GROUPS.md`);
+   juggling. A10 shipped first (`modules/social/group-impl/docs/MVP/A10_MULTI_SPORT_FILTER_PUBLIC_GROUPS.md`);
    this ticket then built against the real new endpoint.
 5. **Grouped results** — group the single flat response by `sportId` (already present per row)
    into ordered sections matching the filter pills, rendered client-side.
@@ -173,7 +173,7 @@ subsumed by this ticket's interactive multi-select filter; GRP-5 is not built.
 user), but the user specified a materially richer fix instead of a static indicator: an interactive,
 multi-select sport filter — pre-seeded from page context — with results grouped by sport.
 
-**A10 shipped (2026-07-21, `modules/social/group-impl/docs/A10_MULTI_SPORT_FILTER_PUBLIC_GROUPS.md`)
+**A10 shipped (2026-07-21, `modules/social/group-impl/docs/MVP/A10_MULTI_SPORT_FILTER_PUBLIC_GROUPS.md`)
 — no longer blocked.** The first design pass planned a client-side fan-out (one `usePublicGroups`
 request per selected sport, each section resolving independently). User decision reversed this in
 favor of a real backend multi-sport filter instead — simpler client state (a single query, one

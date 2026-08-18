@@ -111,7 +111,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   dependency on `session-api`, a `SESSION_POST` is unconditionally invisible via `/api/posts/**`
   for every caller, and `session-impl` reaches `post-impl`'s comment infra only through internal
   bypass methods it alone calls, after its own `SessionGate` authorizes the caller. See §3's Session
-  module entry and `modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md` for the full path.
+  module entry and `modules/session/docs/MVP/SESSION-10_SESSION_POST_COMMENTS.md` for the full path.
   Also rejected, unchanged: a fully generic annotation/AOP visibility framework (no reusable logic
   across domains to justify the ceremony) and controller-layer/query-only checks.
 - **Concrete bugs found while designing this:** `GroupServiceImpl.isGroupMember/isGroupOwner/
@@ -130,8 +130,8 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - **C2 (2026-08-11):** `ResourceGate<T>` implemented in `modules/common` exactly per the ADR §4 shape
   — `isAvailable`/`isVisibleTo` plus a `require()` default throwing `NotFoundException`/
   `ForbiddenException` in that fixed order; zero domain dependency, no logic, shape only. `DONE`.
-  Details: `modules/common/docs/C2_RESOURCE_GATE.md`. `PostGate` implemented 2026-08-12
-  (`post-impl` A14, `modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`). SESSION-10
+  Details: `modules/common/docs/MVP/C2_RESOURCE_GATE.md`. `PostGate` implemented 2026-08-12
+  (`post-impl` A14, `modules/social/post-impl/docs/MVP/A14_POST_RESOURCE_GATE.md`). SESSION-10
   (2026-08-12) *does* implement the standalone `SessionGate` this ADR originally specced — an
   interim design routed gating through `PostGate` calling into `session-api` instead, but was
   replaced same-day per the reversal note above.
@@ -147,7 +147,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - Shared exceptions: `ResourceNotFoundException`, `BadRequestException`, `UnauthorizedException`
 - **C1 (2026-07-03):** Global exception handler — new `GlobalExceptionHandler` (`@RestControllerAdvice`) maps all 5 shared exception types to their correct HTTP status (400/403/401/404) plus `MethodArgumentNotValidException` → 400 with field-level errors and a catch-all `Exception` → 500 (no leaked details), all wrapped in `ApiResponse`; before this fix, every one of these fell through to Spring's default 500 across the **entire application** since none had a handler or `@ResponseStatus`; auto-registered via component scan, zero changes needed at any of the ~100+ existing throw sites; first test infrastructure of any kind added to `modules/common` (MockMvc standalone setup, 7 new Spock tests)
 - **C2 (2026-08-11):** `ResourceGate<T>` — shared availability/visibility check shape (`com.sportconnect.common.access`), two boolean methods (`isAvailable`, `isVisibleTo`) plus a `require()` default enforcing availability-before-visibility and the `NotFoundException`/`ForbiddenException` convention; zero domain dependency, no shared logic, `modules/common` has never imported a domain type here. See `documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md`.
-- **C3 (2026-08-17):** Generic transactional-outbox mechanism (`com.sportconnect.common.outbox`) — `OutboxEvent` `@MappedSuperclass` (eventType/payload/status/attemptCount/timestamps, no table of its own) + `OutboxRelay<T>`, a reusable poll-publish-mark-sent component each domain instantiates from its own `@Scheduled` job (same shape as `session-impl`'s `SessionGenerationJob`), publishing via `RabbitTemplate` with publisher confirms. First JPA entity and first RabbitMQ dependency in `modules/common`; added a `rabbitmq` service to `infra/docker-compose.dev.yml` and `spring.rabbitmq.*` config to all three `application*.yml` profiles. No exchange/queue topology declared — that stays NTF-2's job. Prerequisite for `post-impl` B7, `group-impl` B21, `session-impl` SESSION-15, `user-impl` U13. See `modules/common/docs/C3_TRANSACTIONAL_OUTBOX.md`.
+- **C3 (2026-08-17):** Generic transactional-outbox mechanism (`com.sportconnect.common.outbox`) — `OutboxEvent` `@MappedSuperclass` (eventType/payload/status/attemptCount/timestamps, no table of its own) + `OutboxRelay<T>`, a reusable poll-publish-mark-sent component each domain instantiates from its own `@Scheduled` job (same shape as `session-impl`'s `SessionGenerationJob`), publishing via `RabbitTemplate` with publisher confirms. First JPA entity and first RabbitMQ dependency in `modules/common`; added a `rabbitmq` service to `infra/docker-compose.dev.yml` and `spring.rabbitmq.*` config to all three `application*.yml` profiles. No exchange/queue topology declared — that stays NTF-2's job. Prerequisite for `post-impl` B7, `group-impl` B21, `session-impl` SESSION-15, `user-impl` U13. See `modules/common/docs/MVP/C3_TRANSACTIONAL_OUTBOX.md`.
 - **MVP backlog:** 3 tickets (C1, C2, C3) in `modules/common/docs/BACKLOG_MVP.md`, all **`DONE`**
 
 #### `modules:auth:auth-api` + `modules:auth:auth-impl`
@@ -158,7 +158,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - `SecurityConfig` — stateless, CORS for localhost:3000/5173, public endpoints configured
 - `AuthController` endpoints: `POST /api/auth/register`, `/login`, `/refresh`, `/logout`, `/verify-email`, `/forgot-password` (placeholder), `/reset-password`
 - `EmailVerificationService`, `PasswordResetService`, `EmailService`
-- **A6 (2026-08-10, `DONE`, `modules/auth/docs/A6_DROP_AUTH_TABLES_USER_ID_FKS.md`):** dropped the
+- **A6 (2026-08-10, `DONE`, `modules/auth/docs/MVP/A6_DROP_AUTH_TABLES_USER_ID_FKS.md`):** dropped the
   3 cross-domain DB-level FKs found in the 2026-08-10 sweep (following post-impl's A13
   precedent) — `email_verifications_user_id_fkey`, `password_reset_tokens_user_id_fkey`,
   `refresh_tokens_user_id_fkey` — via `V044__drop_auth_tables_user_id_fks.sql`. Schema-only;
@@ -173,7 +173,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - `UserRepository` custom queries, `UserServiceImpl` full CRUD + soft delete + geospatial updates
 - `UserController` at `/api/users/**`
 - `UserPreference` entity
-- **U1 (friendship system, DONE):** see `modules/user/user-impl/docs/U1_FRIENDSHIP_SYSTEM.md`
+- **U1 (friendship system, DONE):** see `modules/user/user-impl/docs/MVP/U1_FRIENDSHIP_SYSTEM.md`
 - **U2 (2026-07-02):** JWT-based identity + soft-delete query fix — `updateProfile()` now requires
   caller to match the target `userId` (`ForbiddenException` otherwise); `getUserByEmail`/
   `getUserByUsername` now filter `isActive=true` so soft-deleted users 404 instead of leaking; fixed a
@@ -255,7 +255,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - **A3 (2026-07-03):** Flexible per-sport attributes — `attributes JSONB` column added to `user_sport_profiles` (V025) for sport-specific data (e.g. dominant hand, stroke style) that doesn't fit a fixed schema; first JSONB column in the codebase, uses Hibernate 6's native `@JdbcTypeCode(SqlTypes.JSON)` mapping (no extra library needed, verified against the project's actual Hibernate version before implementing); `updateProfile()` merges new attribute keys rather than replacing wholesale; serialized size capped at ~4KB (`BadRequestException` if exceeded); 4 new/changed Spock tests. **Verification gap:** the JSONB column/Hibernate JSON mapping could not be validated against a live Postgres in this sandbox — recommend a real DB run before merging.
 - **A4 (2026-07-03):** Batch sport lookup in `getUserProfiles` — replaced a per-profile `sportRepository.findById()` with one `findAllById()` call; ticketed and fixed for cleanliness/consistency only, not performance (confirmed this list can never exceed 3 items, per the max-3-profiles rule — never a real N+1 scaling risk); 1 new Spock test (empty-input guard)
 - **A5 (2026-08-07,
-  `modules/sport/sport-impl/docs/A5_CACHE_SPORT_LOOKUPS.md`):** cached sport lookups —
+  `modules/sport/sport-impl/docs/MVP/A5_CACHE_SPORT_LOOKUPS.md`):** cached sport lookups —
   `spring-boot-starter-cache` + `ConcurrentMapCacheManager`, one cached master map
   (`SportLookupCache.getAllSportsById()`, own bean to avoid an AOP self-invocation trap) backing
   `getSportById`/`getSportsByIds`/`getAllActiveSports`/`getAllSports` instead of independently
@@ -267,7 +267,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   actually executed under Gradle; once fixed, surfaced ~76 pre-existing `UUID`-instead-of-`Long` id
   bugs across all 4 of this module's test files, all fixed.
 - **A6 (2026-08-07,
-  `modules/sport/sport-impl/docs/A6_MVP_SPORT_RESTRICTION.md`):** MVP sport restriction — user
+  `modules/sport/sport-impl/docs/MVP/A6_MVP_SPORT_RESTRICTION.md`):** MVP sport restriction — user
   decision to launch with only Badminton + Pickleball active; migration `V043` deactivates all 10
   other seeded sports (data-only `UPDATE`, no explicit rollback block — the inverse is trivially
   symmetric). Audited every `Sport`/`SportResponse` read path against the module's own documented
@@ -305,7 +305,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - `Hashtag`, `PostHashtag`, `UserFollow` entities (tables exist; UserFollow → replaced by Friendship in B1)
 - `PostServiceImpl`, `CommentServiceImpl`
 - `PostController` — 16 endpoints: create/read/update/delete posts, like/unlike, comment CRUD, feed, group posts, active broadcasts, broadcast end-time extension
-- **A14 (`DONE`, 2026-08-12, `modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md`):** filed
+- **A14 (`DONE`, 2026-08-12, `modules/social/post-impl/docs/MVP/A14_POST_RESOURCE_GATE.md`):** filed
   2026-08-08 while designing SESSION-10's participant-status comment gating, redesigned 2026-08-11
   against `documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md`. Implemented `PostGate`
   (`com.sportconnect.social.post.access`), `post-impl`'s own `ResourceGate<Post>` — `isAvailable`
@@ -332,7 +332,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `GROUP-RECUR-1`, a missing `comment_likes` table, a missing `friendships` table — none previously
   exercised by any IT test). `:modules:social:post-impl:test` and `:server:test` (incl.
   `PostControllerIntegrationTest` and the new class) both green.
-- **A15 (`DONE`, 2026-08-10, `modules/social/post-impl/docs/A15_DROP_POST_CROSS_DOMAIN_FKS.md`),
+- **A15 (`DONE`, 2026-08-10, `modules/social/post-impl/docs/MVP/A15_DROP_POST_CROSS_DOMAIN_FKS.md`),
   absorbed A13 (2026-08-10, user decision):** originally filed 2026-08-07 as A13 —
   `posts.sport_id` is the one cross-domain `sport_id` column with a real DB-level FK
   (`REFERENCES sports(id)`), unlike `groups`/`locations`/`sessions`' plain unenforced `BIGINT`s
@@ -350,7 +350,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `notifications`/`social_accounts`/`user_blocks`/`user_sessions` found in the same sweep (flagged
   separately, not ticketed against any domain).
 - **A11 (`DONE`, 2026-08-10,
-  `modules/social/post-impl/docs/A11_BROADCAST_TIMEZONE_INVESTIGATION.md`) — re-investigated,
+  `modules/social/post-impl/docs/MVP/A11_BROADCAST_TIMEZONE_INVESTIGATION.md`) — re-investigated,
   closed not reproducible, no code change:** the original 2026-07-17 report claimed
   `broadcastEndTime`'s JVM-local write vs. Postgres `CURRENT_TIMESTAMP`-UTC read caused a
   near-future broadcast to read as instantly expired. Before implementing the proposed fix,
@@ -368,7 +368,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   and structurally cannot reproduce this class of bug (app-clock vs. a *separate* DB-server
   clock) — flagged as a testing-infrastructure limitation rather than worked around.
 - **A12 (`DONE`, 2026-08-10,
-  `modules/social/post-impl/docs/A12_REMOVE_POSTRESPONSE_SPORTNAME.md`) — removed
+  `modules/social/post-impl/docs/MVP/A12_REMOVE_POSTRESPONSE_SPORTNAME.md`) — removed
   `PostResponse.sportName`, both backend and client:** confirmed before any code change that the
   client's sport badges resolve entirely from `sportId` via `useSportCatalog()`/`sportKeyForId()`
   (SPORT-3) — `Post.sportName` was dead on the wire since SPORT-3 shipped, its only remaining trace
@@ -405,7 +405,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   internally — migrated all four to the new `canManagePosts(groupId, userId)` cross-domain call
   instead. Pure call-count reduction, no behavior change. `:modules:social:post-impl:test` and
   `:server:test` both green.
-- **A17 (2026-08-12, `DONE`, `modules/social/post-impl/docs/A17_SESSION_POST.md`):** this module's
+- **A17 (2026-08-12, `DONE`, `modules/social/post-impl/docs/MVP/A17_SESSION_POST.md`):** this module's
   half of `session-impl`'s **SESSION-10** — new `PostType.SESSION_POST` + internal-only
   `PostService.createSessionPost` (spoof-guarded like B9's `GROUP_SYSTEM`) + four `CommentService`
   bypass methods for `session-impl` to call. `PostGate.isAvailable` makes `SESSION_POST`
@@ -431,13 +431,13 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
 - **A7 (2026-07-02):** Fix N+1 queries in paginated list mappers — `getGroupMembers`, `getUserJoinRequests`/`getGroupJoinRequests`, `getGroupInvitations`/`getMemberSentInvitations`/`getUserPendingInvitations` now collect distinct ids from the page up front and do one batched lookup per dependency instead of a per-item query inside `Page.map()`; mappers changed to pure functions taking pre-resolved `Map`s; also fixed `getUserPendingInvitations`'s own per-item `groupRepository.findById()`, a 6th touch-point found during implementation and confirmed in scope; 3 Spock stubs updated to assert single batched calls
 - **A8 (2026-07-02):** Fix N+1 in `getUserGroups` — replaced the per-page-item chain (1+4 queries/item) with 4 flat batched queries total: new `GroupMemberRepository.findByUserIdAndGroupIsActiveTrue()` filters deleted groups out at the pagination source (a deliberate behavior change — previously deleted groups lingered in "my groups"); new same-domain JOIN `GroupRepository.findGroupsWithMemberCounts()` resolves groups + member counts in one query; creator names and role names batched via existing `userService.getUsersByIds()`/`groupRoleRepository.findAllById()`, the latter using role ids already present on the page's `GroupMember` rows (no second membership query); new mapper overload added alongside the untouched single-item one used by `getGroup`/`createGroup`
 - **A9 (2026-07-08):** Privacy/membership check on `getGroup` — a private group with a non-member (or anonymous) caller now throws `BadRequestException` (400, matching this module's existing permission-failure convention) before the response is built, instead of returning full details including pinned posts to anyone authenticated; public groups and member access to private groups unchanged; reuses existing `isGroupMember()`; 4 new Spock tests in `GroupServiceImplSpec`
-- **B8 (2026-07-20, `modules/social/group-impl/docs/B8_INVITATION_STATUS_FILTER.md`):** `GET /api/groups/{groupId}/invitations/sent` previously hardcoded its status filter to `pending_owner` only, so it could never return an invitation waiting on the invitee's response — filed for the client's upcoming GRP-3 (Members tab, "waiting for user accept"/"waiting for group approve" sections). Shipped as a single, unfiltered call: the endpoint now always returns both `pending_owner` and `pending_user` rows together in one page, distinguished by each row's `status` (revised same-day from an initial `status` query-param design, once the user compared it against GRP-3's total request count and wanted both statuses in one request rather than one call per status). `GroupService.getMemberSentInvitations` is now `(groupId, inviterId, pageable)`; new `GroupInvitationRepository.findByGroupIdAndInviterIdAndStatusIn`. `:server:test` green (26/26 `GroupControllerTest` cases unaffected). Live `bootRun` verification skipped both times — port 8080 already held by a pre-existing process not started this session, not restarted to avoid disrupting a possibly-in-use dev server.
-- **B7 (2026-07-20, `modules/social/group-impl/docs/B7_GROUP_TYPE_TIERS.md`):** started as an audit-and-confirm ticket for the client's GRP-1 Settings tab (privacy/permission-model checks against `UpdateGroupRequest`/`updateGroupSettings`/`deleteGroup`/`getGroupSettings` — all confirmed already correct, just under-tested; added the missing admin/member Spock cases). The one real finding — `group_settings.max_members` was stored but never validated or enforced anywhere, not on write, not at join time — turned into schema work once a floor-check on the raw value wouldn't have made the cap meaningful: new `group_types` table (migration `V026`) with 3 fixed tiers, DEFAULT/50 (every group's silent default, existing rows backfilled), STANDARD/100, PREMIUM/500; `group_settings.max_members` dropped in favor of `group_settings.group_type_id`; `UpdateGroupSettingsRequest.maxMembers` removed (no more manual cap setting — changing type is a separate flow, filed as **B10**). Cap enforcement — not in the original scope, raised as an explicit decision with the user and built now rather than deferred — added via `GroupServiceImpl.enforceMemberCapacity()`, called from `addMember`/`acceptJoinRequest`/`acceptInvitation`. `:modules:social:group-impl:test` green; full backend `compileJava`/`compileTestJava`/`compileTestGroovy` green (confirms no breakage in `GroupControllerTest`, which never referenced `maxMembers`). `:server:test`'s Testcontainers-backed `GroupControllerTest` not run — no Docker daemon in this environment, pre-existing limitation. No live `bootRun` walkthrough this session — flagged for B10 pickup.
+- **B8 (2026-07-20, `modules/social/group-impl/docs/MVP/B8_INVITATION_STATUS_FILTER.md`):** `GET /api/groups/{groupId}/invitations/sent` previously hardcoded its status filter to `pending_owner` only, so it could never return an invitation waiting on the invitee's response — filed for the client's upcoming GRP-3 (Members tab, "waiting for user accept"/"waiting for group approve" sections). Shipped as a single, unfiltered call: the endpoint now always returns both `pending_owner` and `pending_user` rows together in one page, distinguished by each row's `status` (revised same-day from an initial `status` query-param design, once the user compared it against GRP-3's total request count and wanted both statuses in one request rather than one call per status). `GroupService.getMemberSentInvitations` is now `(groupId, inviterId, pageable)`; new `GroupInvitationRepository.findByGroupIdAndInviterIdAndStatusIn`. `:server:test` green (26/26 `GroupControllerTest` cases unaffected). Live `bootRun` verification skipped both times — port 8080 already held by a pre-existing process not started this session, not restarted to avoid disrupting a possibly-in-use dev server.
+- **B7 (2026-07-20, `modules/social/group-impl/docs/MVP/B7_GROUP_TYPE_TIERS.md`):** started as an audit-and-confirm ticket for the client's GRP-1 Settings tab (privacy/permission-model checks against `UpdateGroupRequest`/`updateGroupSettings`/`deleteGroup`/`getGroupSettings` — all confirmed already correct, just under-tested; added the missing admin/member Spock cases). The one real finding — `group_settings.max_members` was stored but never validated or enforced anywhere, not on write, not at join time — turned into schema work once a floor-check on the raw value wouldn't have made the cap meaningful: new `group_types` table (migration `V026`) with 3 fixed tiers, DEFAULT/50 (every group's silent default, existing rows backfilled), STANDARD/100, PREMIUM/500; `group_settings.max_members` dropped in favor of `group_settings.group_type_id`; `UpdateGroupSettingsRequest.maxMembers` removed (no more manual cap setting — changing type is a separate flow, filed as **B10**). Cap enforcement — not in the original scope, raised as an explicit decision with the user and built now rather than deferred — added via `GroupServiceImpl.enforceMemberCapacity()`, called from `addMember`/`acceptJoinRequest`/`acceptInvitation`. `:modules:social:group-impl:test` green; full backend `compileJava`/`compileTestJava`/`compileTestGroovy` green (confirms no breakage in `GroupControllerTest`, which never referenced `maxMembers`). `:server:test`'s Testcontainers-backed `GroupControllerTest` not run — no Docker daemon in this environment, pre-existing limitation. No live `bootRun` walkthrough this session — flagged for B10 pickup.
 - **B10 (filed 2026-07-20, `modules/social/group-impl/docs/BACKLOG_MVP.md`):** `TODO` — group type change flow (upgrade/downgrade). Filed directly out of B7: groups are silently `DEFAULT` forever today with no way to move to `STANDARD`/`PREMIUM`. Design questions flagged for pickup: who can change type (owner-only vs. an approval/payment gate — tiers read like a monetization surface), the downgrade-below-current-member-count case, and endpoint shape (`PUT .../settings` field vs. dedicated `PUT .../type`).
-- **B9 (2026-07-21, `modules/social/group-impl/docs/B9_GROUP_WELCOME_SYSTEM_POST.md`):** new `GROUP_SYSTEM` post type (migration `V027`), auto-created welcome message ("{name} joined the group 👋" / "...— invited by {inviter} 👋") on `acceptJoinRequest`/`acceptInvitation`, authored by the group's *current* owner (resolved dynamically, no dedicated system-user account — that idea from the original ticket draft was dropped during scoping). `createPost` rejects caller-supplied `GROUP_SYSTEM` (closes the impersonation hole); new internal-only `PostService.createSystemPost`; `updatePost`/`deletePost` reject `GROUP_SYSTEM` unconditionally, even for the nominal author. Bigger-than-planned change: `addMember` no longer inserts a member directly — it now creates a self-approved (`pending_user`) `GroupInvitation` that still requires the friends-only gate and the target's acceptance, collapsing its trigger into the same `acceptInvitation` path (roleName param dropped; promote via `updateMemberRole` after accept). `:modules:social:post-impl:test`, `:modules:social:group-impl:test`, `:server:test` all green (30/30 on `:server:test`, Docker started mid-session).
-- **A10 (2026-07-21, `modules/social/group-impl/docs/A10_MULTI_SPORT_FILTER_PUBLIC_GROUPS.md`):** filed mid-scoping of the client's GRP-6 (Join Group modal multi-select sport filter) once a client-side per-sport fan-out was reversed in favor of a real backend filter. `GET /api/groups/public` gained an optional `sportIds` (`List<Long>`) param alongside the existing single `sportId` (kept for back-compat) — `sportIds`, when non-empty, takes priority over `sportId` rather than the two being combined. Resolved to one canonical list in `GroupServiceImpl` before the repository is touched; both `searchPublicGroupsWithCounts`/`searchPublicGroupsAnon` JPQL changed from `= :sportId` to `IN :sportIds` (a pattern already used elsewhere in this repository for nullable list params, so not a new risk). `:modules:social:group-impl:test` and `:server:test` both green; live-verified against a running `bootRun` instance with 3 real sport-scoped groups (multi-value filter, legacy single filter, no-filter, and priority-when-both-present all confirmed correct against real HTTP responses, not just mocked tests). Unblocks GRP-6 (`client/docs/BACKLOG_MVP.md`).
-- **B11 (2026-07-23, corrected 2026-07-24, `modules/social/group-impl/docs/B11_JOIN_INVITATION_RACE_CONDITIONS.md`):** reconciled the three race conditions between `group_join_requests` and `group_invitations` filed while scoping the client's GRP-7 (full rule diagrams: `documentation/md/adr/JOIN_GROUP_ADR.md` §5). Three rules in `GroupServiceImpl`: (1) `createInvitation` — an owner/admin's own invitation skips `pending_owner`, created directly at `pending_user` (or `accepted`, if rule 2 fires in the same call); (2) every place an invitation is about to enter `pending_user` checks for an existing `pending` join request from the same person first — if found, the invitation goes straight to `accepted` and the join request is marked `accepted` too, not left dangling; (3) `createJoinRequest` — if the requester already has a `pending_user` invitation, a `GroupJoinRequest` row is still created (no synthetic response, no contract change) but directly as `accepted`, crediting the invitation's approver as `reviewedBy`. New shared `finalizeMembership()` helper replaces the capacity+insert+welcome-post block that was about to be duplicated a 4th time. Deliberate consequence, confirmed with the user: rules 2/3 can leave two `accepted` rows (one invitation, one join request) for the same real join event — no merge/suppression added; noted on GRP-7's backlog entry for the client's future display decision. **Follow-up fix (2026-07-24):** the initial pass wired rule 2 into only the two call sites the ADR named, missing a third — `addMember` (B9's owner/admin direct-add) also creates a self-approved `pending_user` invitation and needed the same check; caught by the user re-reviewing the rules against the code, not by the original tests. Fixed by reusing the same `acceptJoinRequestAsSideEffect` helper. `:modules:social:group-impl:test` (117 tests) and `:server:test` both green; all races — including the `addMember` one — live-verified against a running `bootRun` instance with real registered users, friend requests, and group invitations/join requests. Unblocks GRP-7 (`client/docs/BACKLOG_MVP.md`).
-- **B16 (2026-08-10, `DONE`, `modules/social/group-impl/docs/B16_GROUPS_SPORT_ID_PARTIAL_INDEX.md`):**
+- **B9 (2026-07-21, `modules/social/group-impl/docs/MVP/B9_GROUP_WELCOME_SYSTEM_POST.md`):** new `GROUP_SYSTEM` post type (migration `V027`), auto-created welcome message ("{name} joined the group 👋" / "...— invited by {inviter} 👋") on `acceptJoinRequest`/`acceptInvitation`, authored by the group's *current* owner (resolved dynamically, no dedicated system-user account — that idea from the original ticket draft was dropped during scoping). `createPost` rejects caller-supplied `GROUP_SYSTEM` (closes the impersonation hole); new internal-only `PostService.createSystemPost`; `updatePost`/`deletePost` reject `GROUP_SYSTEM` unconditionally, even for the nominal author. Bigger-than-planned change: `addMember` no longer inserts a member directly — it now creates a self-approved (`pending_user`) `GroupInvitation` that still requires the friends-only gate and the target's acceptance, collapsing its trigger into the same `acceptInvitation` path (roleName param dropped; promote via `updateMemberRole` after accept). `:modules:social:post-impl:test`, `:modules:social:group-impl:test`, `:server:test` all green (30/30 on `:server:test`, Docker started mid-session).
+- **A10 (2026-07-21, `modules/social/group-impl/docs/MVP/A10_MULTI_SPORT_FILTER_PUBLIC_GROUPS.md`):** filed mid-scoping of the client's GRP-6 (Join Group modal multi-select sport filter) once a client-side per-sport fan-out was reversed in favor of a real backend filter. `GET /api/groups/public` gained an optional `sportIds` (`List<Long>`) param alongside the existing single `sportId` (kept for back-compat) — `sportIds`, when non-empty, takes priority over `sportId` rather than the two being combined. Resolved to one canonical list in `GroupServiceImpl` before the repository is touched; both `searchPublicGroupsWithCounts`/`searchPublicGroupsAnon` JPQL changed from `= :sportId` to `IN :sportIds` (a pattern already used elsewhere in this repository for nullable list params, so not a new risk). `:modules:social:group-impl:test` and `:server:test` both green; live-verified against a running `bootRun` instance with 3 real sport-scoped groups (multi-value filter, legacy single filter, no-filter, and priority-when-both-present all confirmed correct against real HTTP responses, not just mocked tests). Unblocks GRP-6 (`client/docs/BACKLOG_MVP.md`).
+- **B11 (2026-07-23, corrected 2026-07-24, `modules/social/group-impl/docs/MVP/B11_JOIN_INVITATION_RACE_CONDITIONS.md`):** reconciled the three race conditions between `group_join_requests` and `group_invitations` filed while scoping the client's GRP-7 (full rule diagrams: `documentation/md/adr/JOIN_GROUP_ADR.md` §5). Three rules in `GroupServiceImpl`: (1) `createInvitation` — an owner/admin's own invitation skips `pending_owner`, created directly at `pending_user` (or `accepted`, if rule 2 fires in the same call); (2) every place an invitation is about to enter `pending_user` checks for an existing `pending` join request from the same person first — if found, the invitation goes straight to `accepted` and the join request is marked `accepted` too, not left dangling; (3) `createJoinRequest` — if the requester already has a `pending_user` invitation, a `GroupJoinRequest` row is still created (no synthetic response, no contract change) but directly as `accepted`, crediting the invitation's approver as `reviewedBy`. New shared `finalizeMembership()` helper replaces the capacity+insert+welcome-post block that was about to be duplicated a 4th time. Deliberate consequence, confirmed with the user: rules 2/3 can leave two `accepted` rows (one invitation, one join request) for the same real join event — no merge/suppression added; noted on GRP-7's backlog entry for the client's future display decision. **Follow-up fix (2026-07-24):** the initial pass wired rule 2 into only the two call sites the ADR named, missing a third — `addMember` (B9's owner/admin direct-add) also creates a self-approved `pending_user` invitation and needed the same check; caught by the user re-reviewing the rules against the code, not by the original tests. Fixed by reusing the same `acceptJoinRequestAsSideEffect` helper. `:modules:social:group-impl:test` (117 tests) and `:server:test` both green; all races — including the `addMember` one — live-verified against a running `bootRun` instance with real registered users, friend requests, and group invitations/join requests. Unblocks GRP-7 (`client/docs/BACKLOG_MVP.md`).
+- **B16 (2026-08-10, `DONE`, `modules/social/group-impl/docs/MVP/B16_GROUPS_SPORT_ID_PARTIAL_INDEX.md`):**
   `groups.sport_id` (`V015`) had no index at all; the two real consumers
   (`searchPublicGroupsWithCounts`/`searchPublicGroupsAnon`) always filter
   `isActive=true AND isPrivate=false` alongside it — added a partial index
@@ -447,7 +447,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   queries, zero callers). On the live dev data (25 rows) the planner correctly picks a seq scan
   over the index — expected at this row count; forcing `enable_seqscan=off` confirmed the index
   itself is valid and picked (`Index Cond: (sport_id = 1)`).
-- **B17 (2026-08-11, `DONE`, `modules/social/group-impl/docs/B17_DROP_GROUP_TABLES_CROSS_DOMAIN_FKS.md`):**
+- **B17 (2026-08-11, `DONE`, `modules/social/group-impl/docs/MVP/B17_DROP_GROUP_TABLES_CROSS_DOMAIN_FKS.md`):**
   filed 2026-08-10 from a repo-wide sweep for cross-domain DB-level FKs (following `post-impl`'s
   A15/A13 precedent), found 5 in this module — `groups.created_by`,
   `groups.recurrence_location_id`, `group_members.user_id`, `group_join_requests.user_id`/
@@ -460,7 +460,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   container, migration applied cleanly via `:server:bootRun` (23ms), server booted and served a
   clean `401` on `/api/groups/public`. `:modules:social:group-impl:test` and `:server:test` both
   green.
-- **B18 (2026-08-11, `DONE`, `modules/social/group-impl/docs/B18_GROUP_ACTIVE_PERMISSION_GATE.md`):**
+- **B18 (2026-08-11, `DONE`, `modules/social/group-impl/docs/MVP/B18_GROUP_ACTIVE_PERMISSION_GATE.md`):**
   `isGroupMember`/`isGroupOwner`/`isGroupAdmin` never checked `group.isActive` — a former member of
   a since-soft-deleted group could still pass every one of these live gates (create posts in it,
   moderate it, list its posts, pass `session-impl`'s group-linked-session gate). Fixed via a new
@@ -481,7 +481,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   Postgres: created a group, confirmed `is-owner`/`is-member` both `true`, soft-deleted the group
   via the existing owner-only `DELETE` endpoint, re-checked all three permission endpoints — all
   now correctly `false`. `:modules:social:group-impl:test` (151) and `:server:test` both green.
-- **B19 (2026-08-11, `DONE`, `modules/social/group-impl/docs/B19_GROUP_GENERAL_DATA_ENDPOINT.md`):**
+- **B19 (2026-08-11, `DONE`, `modules/social/group-impl/docs/MVP/B19_GROUP_GENERAL_DATA_ENDPOINT.md`):**
   new `PUT /api/groups/{groupId}/generalData` (`UpdateGroupGeneralDataRequest`:
   `groupName`/`description`/`avatarUrl`/`coverUrl`/`rules`/`schedule`), alongside the existing `GET
   /{groupId}/info` — closes the asymmetry where that read endpoint had no scoped write counterpart
@@ -499,7 +499,7 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   field set now rather than just `rules`/`schedule`, so future UI doesn't need another backend
   ticket. Unblocks client **GRP-9**. `:modules:social:group-impl:test` and `:server:test`
   (`GroupControllerTest`) both green.
-- **B20 (2026-08-12, `DONE`, `modules/social/group-impl/docs/B20_CAN_MANAGE_SELF_CONTAINED_QUERY.md`):**
+- **B20 (2026-08-12, `DONE`, `modules/social/group-impl/docs/MVP/B20_CAN_MANAGE_SELF_CONTAINED_QUERY.md`):**
   `canManageMembers`/`canManagePosts` composed `isGroupOwner || isGroupAdmin`, each of which
   independently re-checked `isGroupActive`, re-fetched the caller's `GroupMember` row, and
   re-resolved a role by name — redundant work on every non-owner caller (the `||` only
@@ -517,10 +517,10 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `canManagePosts` too.
 
 #### `modules:notification:notification-api` + `modules:notification:notification-impl`
-- **NTF-1 (2026-08-17, `DONE`, `modules/notification/docs/NTF-1_MODULE_SCAFFOLDING.md`):** new module scaffolding — `Notification` entity (`V053` migration, replaces the dead `V005` table which had zero owning code and cross-domain FKs to `users(id)`) with ID-only `recipientUserId`/`entityId` (`entityId` is a `String`, deliberately untyped — spans domains with incompatible id types, `Long` for `Post`/`Group`/`Session`, `UUID` for `FriendRequest`/`Friendship`), aggregation upsert keyed on `(recipientUserId, type, entityType, entityId)` scoped to unread, bounded 3-entry `actorIds` via a small `UuidListConverter` (no array-column precedent in this codebase); `NotificationGate implements ResourceGate<Notification>` (trivial `isAvailable`, ownership-only `isVisibleTo`); `GET /api/notifications`, `GET /api/notifications/unread-count`, `PUT /api/notifications/{id}/read`. **Delta from the ticket's own text:** no explicit `isActive` re-check added (locked in with the user before design) — inherits the same app-wide JWT-only gating gap (U12) every other endpoint has today, rather than being the first module to close it. First real caller of `recordEvent` will be NTF-2's RabbitMQ consumer. Depends on C3 (`modules/common`'s transactional outbox).
-- **NTF-2 (2026-08-17, `DONE`, `modules/notification/docs/NTF-2_RABBITMQ_CONSUMER.md`):** `sportconnect.events` consumer — **scoped to session events only** (the ticket's original text covered all 4 domains, but only `session-impl`'s SESSION-15 has a real producer; `post-impl`/`group-impl`/`user-impl`'s outbox tickets are still `TODO`, so their consumption is deferred to follow-on tickets, matching the vision doc's session > post > group > friend rollout priority). `SessionEventsConsumer` (`@RabbitListener`, queue `notification.events.session`, pattern `session.*.*`) deserializes SESSION-15's 6 event DTOs and delegates to `SessionEventProcessor` (a separate `@Transactional` bean — `@Transactional` on a self-invoked method would've silently never gone through the Spring proxy). **Duplicate-delivery dedup built now, not deferred:** `common`'s `OutboxRelay` gained a deterministic AMQP `messageId` (`routingKey:rowId`); a new `processed_messages` marker table (`V055`) makes a RabbitMQ redelivery a safe no-op in the same transaction as the resulting `recordEvent` call(s). Fan-out events (comment created, participant joined) resolve recipients via a new `SessionService.getParticipantIdsByStatuses` (session-api), gated on the session's own status — no notifications at all for a `CANCELLED`/`COMPLETED` session, even for an event published before the status changed; single-recipient events skip self-notification. Malformed/unroutable messages are logged and dropped (permanent failures), while a genuine processing failure is left to propagate for RabbitMQ's normal retry. **Bean-name collision caught by `:server:test`, not module tests:** `session-impl`'s `SessionOutboxRabbitConfig` and this ticket's first draft both declared a `@Bean TopicExchange sportconnectEventsExchange()` — fine in isolation, `BeanDefinitionOverrideException` in the real merged `server` context. **Dedup mechanism itself was broken on the first pass — added `SessionEventsConsumerIntegrationTest` (new `RabbitMqTestContainerBase`, chained onto the existing `RedisTestContainerBase`) after the user asked whether IT coverage existed, and it immediately caught two compounding JPA bugs no Spock spec could see:** (1) `ProcessedMessage.messageId` has no `@GeneratedValue`, so Spring Data's default new-entity check silently routed `save()` through `merge()` (select-then-update) instead of `persist()` — a genuine duplicate never actually threw, it just quietly updated the same row, so redelivery doubled `actorCount` instead of being deduped; (2) forcing `persist()` via `Persistable.isNew()` surfaced that catching the resulting `DataIntegrityViolationException` in application code doesn't help — Spring/JPA marks the transaction rollback-only the instant the low-level exception occurs, so it still failed to commit with `UnexpectedRollbackException`. Fixed by replacing both with `ProcessedMessageRepository.insertIfAbsent`, a native `INSERT ... ON CONFLICT DO NOTHING` that never throws — a duplicate just returns 0 affected rows. Live-verified end-to-end against the real dev stack too: a real HTTP-triggered session invite produced a real `Notification` row; a real join produced the correctly-resolved fan-out (recipient = the other `JOINED` participant, actor correctly excluded from its own notification). Unblocks nothing further yet — NTF-3 (STOMP delivery) and the deferred post/group/friend consumption are next.
-- **NTF-3 (2026-08-17, `DONE`, `modules/notification/docs/NTF-3_STOMP_LIVE_DELIVERY.md`):** STOMP-over-RabbitMQ live delivery — Spring WebSocket STOMP in broker-relay mode (`/ws`, no SockJS), auth via `StompAuthChannelInterceptor` reading the JWT off the CONNECT frame's `Authorization` header (`auth-api`'s `JwtTokenService`, same interface `JwtAuthenticationFilter` uses internally — no query-param workaround needed, unlike `services/chat`'s WS route, since STOMP frames support custom headers). **Mid-ticket architecture pivot, confirmed with the user:** raised the question of whether STOMP makes sense given the future mobile phase — iOS forbids background WebSocket entirely, structurally the same gap FCM/APNs exist to solve. Decided **hybrid**: STOMP stays scoped to web/in-app/connected-session delivery only, FCM deferred to the (already-`PROGRESS.md`-earmarked) mobile phase as a separate future ticket — documented in the vision doc's Client delivery bullet, `PROGRESS.md` §2.7, and this ticket's own Delta note so a future reader doesn't assume STOMP extends to mobile. `SessionEventProcessor` publishes a `NotificationLiveUpdateEvent` per recipient after `recordEvent` (now returning `NotificationRecordResult(notificationId, unreadCount)` instead of `void`); `NotificationLiveUpdateListener` (`@TransactionalEventListener(AFTER_COMMIT)` — a different concern from the vision doc's earlier outbox-durability discussion of the same annotation, documented as such) pushes via `NotificationPushService`/`SimpMessagingTemplate.convertAndSendToUser`, fanning out to every tab/device the recipient has open. Payload is a lightweight ping (`notificationId`, `unreadCount`), not the full `NotificationResponse`. **`reactor-netty` had to be added** — `StompBrokerRelayMessageHandler` needs it and it doesn't come transitively from `spring-boot-starter-websocket`; missing it broke every `@SpringBootTest` in the server module, not just this ticket's own. Client: minimal `useNotificationLiveSocket`/`useUnreadNotificationCount` hooks (`@stomp/stompjs`, new dependency) wired into `AppShell`, a placeholder unread badge on `TopBar` (CLIENT-NOTIF-1 replaces it with the real dropdown), new `/ws` Vite proxy entry. New `NotificationStompIntegrationTest` (real `@SpringBootTest(RANDOM_PORT)`, real RabbitMQ+STOMP via a new `RabbitMqStompTestContainerBase`) proves a consumed session event produces a real STOMP frame end to end — hit and fixed three Windows/Testcontainers-specific gotchas along the way (file-mounting the STOMP plugin was unreliable on this host, fixed via a live `rabbitmq-plugins enable` call instead; the default host-port wait strategy was flaky, switched to a log-message wait; the broker-relay's own connection is async, needed an `isBrokerAvailable()` poll before the test's client connects). Also live-verified against the actual running dev stack (`docker compose` RabbitMQ recreated with the plugin, real `:server:bootRun`, real `@stomp/stompjs` script) both directly and through the real Vite dev proxy — full browser-visual confirmation wasn't possible in this environment (no Chrome extension connection), but everything upstream of the TopBar's own rendering (already Vitest/RTL-covered) is verified. Closes out the notification module's MVP backlog (NTF-1/2/3 all `DONE`).
-- **NTF-4 (2026-08-18, `DONE`, `modules/notification/docs/NTF-4_NOTIFICATION_RESPONSE_ENRICHMENT.md`):** filed mid-pickup of the client's `CLIENT-NOTIF-1` — NTF-1 deliberately shipped `NotificationResponse` with zero enrichment (raw `actorIds`/`entityId`), which would leave the client dropdown unrenderable. `NotificationResponse` gains `actors: List<NotificationActorSummary>` (`id`/`fullName`, batch-resolved via `user-api`'s existing `getUsersByIds`) and `entityTitle` (nullable; the session's `title` for today's SESSION-only scope, via a new `SessionService.getSessionTitlesByIds` batch method on `session-api`, `null` for any future entityType). `NotificationServiceImpl.getNotifications` collects every distinct actor/session id across the whole page before mapping, one batch call each (skipped entirely on an empty page) — same no-N+1 shape as `SessionServiceImpl`'s existing batch-resolution pattern. Same "server denormalizes a display name" precedent as `SessionResponse.createdByFullName`.
+- **NTF-1 (2026-08-17, `DONE`, `modules/notification/docs/MVP/NTF-1_MODULE_SCAFFOLDING.md`):** new module scaffolding — `Notification` entity (`V053` migration, replaces the dead `V005` table which had zero owning code and cross-domain FKs to `users(id)`) with ID-only `recipientUserId`/`entityId` (`entityId` is a `String`, deliberately untyped — spans domains with incompatible id types, `Long` for `Post`/`Group`/`Session`, `UUID` for `FriendRequest`/`Friendship`), aggregation upsert keyed on `(recipientUserId, type, entityType, entityId)` scoped to unread, bounded 3-entry `actorIds` via a small `UuidListConverter` (no array-column precedent in this codebase); `NotificationGate implements ResourceGate<Notification>` (trivial `isAvailable`, ownership-only `isVisibleTo`); `GET /api/notifications`, `GET /api/notifications/unread-count`, `PUT /api/notifications/{id}/read`. **Delta from the ticket's own text:** no explicit `isActive` re-check added (locked in with the user before design) — inherits the same app-wide JWT-only gating gap (U12) every other endpoint has today, rather than being the first module to close it. First real caller of `recordEvent` will be NTF-2's RabbitMQ consumer. Depends on C3 (`modules/common`'s transactional outbox).
+- **NTF-2 (2026-08-17, `DONE`, `modules/notification/docs/MVP/NTF-2_RABBITMQ_CONSUMER.md`):** `sportconnect.events` consumer — **scoped to session events only** (the ticket's original text covered all 4 domains, but only `session-impl`'s SESSION-15 has a real producer; `post-impl`/`group-impl`/`user-impl`'s outbox tickets are still `TODO`, so their consumption is deferred to follow-on tickets, matching the vision doc's session > post > group > friend rollout priority). `SessionEventsConsumer` (`@RabbitListener`, queue `notification.events.session`, pattern `session.*.*`) deserializes SESSION-15's 6 event DTOs and delegates to `SessionEventProcessor` (a separate `@Transactional` bean — `@Transactional` on a self-invoked method would've silently never gone through the Spring proxy). **Duplicate-delivery dedup built now, not deferred:** `common`'s `OutboxRelay` gained a deterministic AMQP `messageId` (`routingKey:rowId`); a new `processed_messages` marker table (`V055`) makes a RabbitMQ redelivery a safe no-op in the same transaction as the resulting `recordEvent` call(s). Fan-out events (comment created, participant joined) resolve recipients via a new `SessionService.getParticipantIdsByStatuses` (session-api), gated on the session's own status — no notifications at all for a `CANCELLED`/`COMPLETED` session, even for an event published before the status changed; single-recipient events skip self-notification. Malformed/unroutable messages are logged and dropped (permanent failures), while a genuine processing failure is left to propagate for RabbitMQ's normal retry. **Bean-name collision caught by `:server:test`, not module tests:** `session-impl`'s `SessionOutboxRabbitConfig` and this ticket's first draft both declared a `@Bean TopicExchange sportconnectEventsExchange()` — fine in isolation, `BeanDefinitionOverrideException` in the real merged `server` context. **Dedup mechanism itself was broken on the first pass — added `SessionEventsConsumerIntegrationTest` (new `RabbitMqTestContainerBase`, chained onto the existing `RedisTestContainerBase`) after the user asked whether IT coverage existed, and it immediately caught two compounding JPA bugs no Spock spec could see:** (1) `ProcessedMessage.messageId` has no `@GeneratedValue`, so Spring Data's default new-entity check silently routed `save()` through `merge()` (select-then-update) instead of `persist()` — a genuine duplicate never actually threw, it just quietly updated the same row, so redelivery doubled `actorCount` instead of being deduped; (2) forcing `persist()` via `Persistable.isNew()` surfaced that catching the resulting `DataIntegrityViolationException` in application code doesn't help — Spring/JPA marks the transaction rollback-only the instant the low-level exception occurs, so it still failed to commit with `UnexpectedRollbackException`. Fixed by replacing both with `ProcessedMessageRepository.insertIfAbsent`, a native `INSERT ... ON CONFLICT DO NOTHING` that never throws — a duplicate just returns 0 affected rows. Live-verified end-to-end against the real dev stack too: a real HTTP-triggered session invite produced a real `Notification` row; a real join produced the correctly-resolved fan-out (recipient = the other `JOINED` participant, actor correctly excluded from its own notification). Unblocks nothing further yet — NTF-3 (STOMP delivery) and the deferred post/group/friend consumption are next.
+- **NTF-3 (2026-08-17, `DONE`, `modules/notification/docs/MVP/NTF-3_STOMP_LIVE_DELIVERY.md`):** STOMP-over-RabbitMQ live delivery — Spring WebSocket STOMP in broker-relay mode (`/ws`, no SockJS), auth via `StompAuthChannelInterceptor` reading the JWT off the CONNECT frame's `Authorization` header (`auth-api`'s `JwtTokenService`, same interface `JwtAuthenticationFilter` uses internally — no query-param workaround needed, unlike `services/chat`'s WS route, since STOMP frames support custom headers). **Mid-ticket architecture pivot, confirmed with the user:** raised the question of whether STOMP makes sense given the future mobile phase — iOS forbids background WebSocket entirely, structurally the same gap FCM/APNs exist to solve. Decided **hybrid**: STOMP stays scoped to web/in-app/connected-session delivery only, FCM deferred to the (already-`PROGRESS.md`-earmarked) mobile phase as a separate future ticket — documented in the vision doc's Client delivery bullet, `PROGRESS.md` §2.7, and this ticket's own Delta note so a future reader doesn't assume STOMP extends to mobile. `SessionEventProcessor` publishes a `NotificationLiveUpdateEvent` per recipient after `recordEvent` (now returning `NotificationRecordResult(notificationId, unreadCount)` instead of `void`); `NotificationLiveUpdateListener` (`@TransactionalEventListener(AFTER_COMMIT)` — a different concern from the vision doc's earlier outbox-durability discussion of the same annotation, documented as such) pushes via `NotificationPushService`/`SimpMessagingTemplate.convertAndSendToUser`, fanning out to every tab/device the recipient has open. Payload is a lightweight ping (`notificationId`, `unreadCount`), not the full `NotificationResponse`. **`reactor-netty` had to be added** — `StompBrokerRelayMessageHandler` needs it and it doesn't come transitively from `spring-boot-starter-websocket`; missing it broke every `@SpringBootTest` in the server module, not just this ticket's own. Client: minimal `useNotificationLiveSocket`/`useUnreadNotificationCount` hooks (`@stomp/stompjs`, new dependency) wired into `AppShell`, a placeholder unread badge on `TopBar` (CLIENT-NOTIF-1 replaces it with the real dropdown), new `/ws` Vite proxy entry. New `NotificationStompIntegrationTest` (real `@SpringBootTest(RANDOM_PORT)`, real RabbitMQ+STOMP via a new `RabbitMqStompTestContainerBase`) proves a consumed session event produces a real STOMP frame end to end — hit and fixed three Windows/Testcontainers-specific gotchas along the way (file-mounting the STOMP plugin was unreliable on this host, fixed via a live `rabbitmq-plugins enable` call instead; the default host-port wait strategy was flaky, switched to a log-message wait; the broker-relay's own connection is async, needed an `isBrokerAvailable()` poll before the test's client connects). Also live-verified against the actual running dev stack (`docker compose` RabbitMQ recreated with the plugin, real `:server:bootRun`, real `@stomp/stompjs` script) both directly and through the real Vite dev proxy — full browser-visual confirmation wasn't possible in this environment (no Chrome extension connection), but everything upstream of the TopBar's own rendering (already Vitest/RTL-covered) is verified. Closes out the notification module's MVP backlog (NTF-1/2/3 all `DONE`).
+- **NTF-4 (2026-08-18, `DONE`, `modules/notification/docs/MVP/NTF-4_NOTIFICATION_RESPONSE_ENRICHMENT.md`):** filed mid-pickup of the client's `CLIENT-NOTIF-1` — NTF-1 deliberately shipped `NotificationResponse` with zero enrichment (raw `actorIds`/`entityId`), which would leave the client dropdown unrenderable. `NotificationResponse` gains `actors: List<NotificationActorSummary>` (`id`/`fullName`, batch-resolved via `user-api`'s existing `getUsersByIds`) and `entityTitle` (nullable; the session's `title` for today's SESSION-only scope, via a new `SessionService.getSessionTitlesByIds` batch method on `session-api`, `null` for any future entityType). `NotificationServiceImpl.getNotifications` collects every distinct actor/session id across the whole page before mapping, one batch call each (skipped entirely on an empty page) — same no-N+1 shape as `SessionServiceImpl`'s existing batch-resolution pattern. Same "server denormalizes a display name" precedent as `SessionResponse.createdByFullName`.
 
 #### `server`
 - `SportConnectApplication.java` — main entry point with full component scan
@@ -771,7 +771,7 @@ unrelated bug: `JwtTokenServiceImpl.generateToken()` had no random component, so
 same user within the same second collided on `refresh_tokens.token`'s `UNIQUE` constraint (500) —
 AUTH-3's automatic on-load refresh made this newly reachable (e.g. a second tab opened right after
 signup). Fixed with a `jti` (`UUID.randomUUID()`) claim, bundled into this branch per user decision
-— see **A4** (`modules/auth/docs/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md`). 95/95 client unit tests,
+— see **A4** (`modules/auth/docs/MVP/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md`). 95/95 client unit tests,
 auth-impl suite green, clean build.
 
 **AUTH-4 DONE** (2026-07-10, `client/docs/MVP/AUTH-4_PROTECTED_ROUTE_LOGOUT.md`): ProtectedRoute +
@@ -885,7 +885,7 @@ One flaky pagination test replaced with a pure-function unit test after confirmi
 `--no-file-parallelism` it was CPU contention, not a logic bug. 142/142 unit tests (3 consecutive
 clean runs), 29/29 e2e, clean build/lint.
 
-**A9 DONE** (2026-07-13, `modules/social/post-impl/docs/A9_POSTRESPONSE_MISSING_FIELDS.md`): fixed
+**A9 DONE** (2026-07-13, `modules/social/post-impl/docs/MVP/A9_POSTRESPONSE_MISSING_FIELDS.md`): fixed
 `PostServiceImpl.mapToResponse()` never populating `userFullName`/`userAvatarUrl`/`sportName`/
 `shareCount` (found during FEED-0's live-backend verification). Added
 `SportService.getSportsByIds()` (new cross-domain batch method, `sport-api`/`sport-impl`, first
@@ -905,7 +905,7 @@ test profile's hand-maintained H2 `schema.sql` never had a `sports` table, since
 queried it from a test-scoped path. Fixed by adding the table (mirroring the real Liquibase
 migration's shape, no seed data). Full `:server:test` re-run green afterward.
 
-**A10 DONE** (2026-07-14, `modules/social/post-impl/docs/A10_FIX_HASHTAG_ENDPOINT_500.md`): fixed
+**A10 DONE** (2026-07-14, `modules/social/post-impl/docs/MVP/A10_FIX_HASHTAG_ENDPOINT_500.md`): fixed
 `GET /api/posts/hashtag/{tag}` 500ing on every call — `PostController`'s `@PageableDefault(sort =
 "lastInteractionAt")` made Spring Data JPA append a second `ORDER BY` resolved against
 `findPostsByHashtag`'s query root (`PostHashtag`, which has no such field), throwing
@@ -1640,7 +1640,7 @@ the real running backend: search → 1 result → close → reopen with no pre-f
 input and no stale result, immediately and 500ms later. Full Vitest suite (512/512) and the
 InviteFriendModal-touching e2e spec (`group-members`) both green.
 
-**B13 DONE** (2026-07-24, `modules/social/group-impl/docs/B13_INVITATION_REJECT_REASON.md`): invitee
+**B13 DONE** (2026-07-24, `modules/social/group-impl/docs/MVP/B13_INVITATION_REJECT_REASON.md`): invitee
 rejecting a group invitation (`PUT /groups/invitations/{id}/reject`) can now optionally include a
 `reason` (new `RejectInvitationRequest` body, `@Size(max=500)`, nothing required at the API layer),
 persisted on `GroupInvitation.rejectReason` (new nullable `TEXT` column, V028). New owner/admin-only
@@ -1655,7 +1655,7 @@ group-not-found cases) plus new `GroupControllerTest` MockMvc cases for both cha
 friend them, create a group, self-approved owner invitation, reject with a reason, confirm the new
 endpoint returns it, confirm a non-owner/admin gets 400).
 
-**B14 DONE** (2026-07-25, `modules/social/group-impl/docs/B14_INVITATION_CO_INVITER_TRACKING.md`):
+**B14 DONE** (2026-07-25, `modules/social/group-impl/docs/MVP/B14_INVITATION_CO_INVITER_TRACKING.md`):
 when a second group member invites someone who already has a pending invitation to the group, that
 no longer silently no-ops — a new `group_invitation_inviters` join table (V029) records them as an
 additional co-inviter on the **same** canonical `GroupInvitation` row, surfaced via
@@ -1675,7 +1675,7 @@ starts a fresh row, per explicit user request to cover both statuses. 132 Spock 
 cascade-withdraw, fresh-row-after-decline, owner/admin auto-approve, co-inviter's own sent-invitations
 view).
 
-**B15 DONE** (2026-07-25, `modules/social/group-impl/docs/B15_INVITATION_SPORT_ID.md`):
+**B15 DONE** (2026-07-25, `modules/social/group-impl/docs/MVP/B15_INVITATION_SPORT_ID.md`):
 `GroupInvitationResponse` gains `sportId`, resolved from the already-loaded `Group` row with zero
 new queries (no `sportName` — sports are static reference data already fully exposed via the
 public `GET /api/sports`, so the client resolves the display name locally instead of the backend
@@ -1972,7 +1972,7 @@ CHAT-15's likely-Redis-not-Postgres design for ephemeral typing state) and needs
 BACKLOG_V1.md` is now empty (kept as a file for future deferred ideas, per convention).
 
 **CHAT-5 — Repository/cache integration tests + this service's first CI pipeline (2026-07-27,
-`services/chat/docs/CHAT-5_REPOSITORY_CACHE_INTEGRATION_TESTS.md`):** `internal/conversation`'s,
+`services/chat/docs/MVP/CHAT-5_REPOSITORY_CACHE_INTEGRATION_TESTS.md`):** `internal/conversation`'s,
 `internal/message`'s, and `internal/sync`'s hand-written SQL now has real DB-backed test coverage
 (previously only pure-validation unit tests existed) — idempotent `GetOrCreate*Conversation`,
 `IsActiveParticipant`, `AuthorizeByID`'s three outcomes, keyset pagination, batched sender-profile
@@ -1994,7 +1994,7 @@ GitHub-Actions-specific mechanics remain unverified until a real PR runs it (sam
 conditional as every other CI ticket in this repo).
 
 **CHAT-6 — WebSocket broadcast + sync resilience tests (2026-07-27,
-`services/chat/docs/CHAT-6_WEBSOCKET_SYNC_RESILIENCE_TESTS.md`):** real WebSocket broadcast-fan-out
+`services/chat/docs/MVP/CHAT-6_WEBSOCKET_SYNC_RESILIENCE_TESTS.md`):** real WebSocket broadcast-fan-out
 coverage (a real router + real `coder/websocket` clients over `httptest.NewServer`), plus
 `internal/sync.Consumer`/`Bootstrapper` resilience coverage. Found and fixed a real bug while writing
 the consumer test: `Consumer.Run` only ever read Redis Stream entries with `>`, which Redis never
@@ -2020,7 +2020,7 @@ environment, including confirming the monolith-dependent test SKIPs (not fails) 
 `chat-ci.yml` will hit it.
 
 **CHAT-7 — Chat API client + data hooks scaffold, client side (2026-07-27,
-`services/chat/docs/CHAT-7_CHAT_API_CLIENT_AND_DATA_HOOKS_SCAFFOLD.md`):** first client-side chat
+`services/chat/docs/MVP/CHAT-7_CHAT_API_CLIENT_AND_DATA_HOOKS_SCAFFOLD.md`):** first client-side chat
 code — `client/src/features/chat/` (`types.ts`, `chatApiClient.ts`, `queryKeys.ts`,
 `useChatConversation`/`useGroupChatData`/`useDirectChatData`). Refactored `apiClient.ts` into a
 shared `createAuthenticatedClient(baseURL)` factory (same auth-attach + 401-refresh-retry behavior
@@ -2051,7 +2051,7 @@ connection too, not just other participants). No component wiring in this ticket
 `FriendChatPanel` remain local-state mocks until CHAT-8/CHAT-9.
 
 **CHAT-8 — Wire `GroupChatTab` to the real chat service (2026-07-27,
-`services/chat/docs/CHAT-8_WIRE_GROUP_CHAT_TAB.md`):** `GroupChatTab`'s local-state-only mock swapped
+`services/chat/docs/MVP/CHAT-8_WIRE_GROUP_CHAT_TAB.md`):** `GroupChatTab`'s local-state-only mock swapped
 for CHAT-7's `useGroupChatData(groupId)` — group chat is now real, persisted, and delivers live over
 WebSocket. `GroupChatTab` calls the data hook directly rather than `GroupsPage` (a deliberate
 exception to this app's usual page-owns-the-hook convention), justified by `GroupsPage` already only
@@ -2088,7 +2088,7 @@ uses. Fixed with `rewrite: (path) => path.replace(/^\/api\/chat/, '')`; re-verif
 through the real dev proxy (`:5173`) or direct to the service (`:8081`) — they are not equivalent.
 
 **CHAT-9 — Wire `FriendChatPanel` to the real chat service, 1:1 DMs (2026-07-27,
-`services/chat/docs/CHAT-9_WIRE_FRIEND_CHAT_PANEL.md`):** `FriendChatPanel`'s local-state-only mock
+`services/chat/docs/MVP/CHAT-9_WIRE_FRIEND_CHAT_PANEL.md`):** `FriendChatPanel`'s local-state-only mock
 swapped for CHAT-7's `useDirectChatData(userId)`, applying CHAT-8's exact pattern (thin container +
 new presentational `FriendChatPanelView`, same reason: no Storybook infra for a real
 network+WebSocket hook, and the panel needs to own the hook call so `FriendsPage`'s existing
@@ -2104,7 +2104,7 @@ split across a 50/6 two-page fetch matching the client hook's pagination logic. 
 session (same limitation as CHAT-8): the actual rendered UI in a live browser — flagged, not hidden.
 
 **CHAT-13 — Editing and deleting messages (2026-07-28,
-`services/chat/docs/CHAT-13_EDIT_DELETE_MESSAGES.md`):** filed unscoped with 5 open questions;
+`services/chat/docs/MVP/CHAT-13_EDIT_DELETE_MESSAGES.md`):** filed unscoped with 5 open questions;
 resolved with the user before any code: edit replaces content in place (+ nullable `edited_at`, not
 a versioned history table), delete is soft (`deleted_at`, content also scrubbed to `''` server-side
 so deleted text is never re-served), sender-only authorization (group-admin moderation would need
@@ -2151,7 +2151,7 @@ any of its open questions were resolved — MVP now ships CHAT-13, CHAT-15, CHAT
 original set of four. No code changed, backlog housekeeping only.
 
 **CHAT-15 — Typing indicators (2026-07-28,
-`services/chat/docs/CHAT-15_TYPING_INDICATORS.md`):** filed unscoped with 3 open questions; resolved
+`services/chat/docs/MVP/CHAT-15_TYPING_INDICATORS.md`):** filed unscoped with 3 open questions; resolved
 with the user before any code: purely in-memory/ephemeral (no schema change, no Redis key — a live
 relay through the existing `internal/ws.Hub`), client-driven debounce (5s idle timeout after the last
 keystroke, plus immediate stop on send/blur), group display shows name(s) up to a cap of two then a
@@ -2206,7 +2206,7 @@ wiring needed there. A restored selection that no longer resolves to anyone once
 settle clears back to "no selection" rather than lingering. `pnpm test` 529 green, `tsc -b`/lint clean.
 
 **CHAT-10 — E2E + MSW handlers for chat (2026-07-28,
-`services/chat/docs/CHAT-10_E2E_MSW_HANDLERS.md`):** picked up ahead of its listed order — CHAT-16
+`services/chat/docs/MVP/CHAT-10_E2E_MSW_HANDLERS.md`):** picked up ahead of its listed order — CHAT-16
 (file/image attachments) was picked up first per the backlog table, but its Phase 1 research found the
 "reuse the existing media-upload path" premise false (no such pipeline exists anywhere in this app);
 the user chose to swap CHAT-10 and CHAT-16's order rather than block on that. Resolved this repo's
@@ -2228,7 +2228,7 @@ serious violations on either chat surface — `a11y.spec.ts` itself not extended
 chosen for real-time group chat transport, superseding the "Real-Time Chat" roadmap entry's original
 self-hosted WebSocket/Spring STOMP plan (see that section below) — self-hosting a stateful realtime
 layer would compete for RAM with the app itself on the single free-tier EC2 box
-(`infra/documentation/INFRA-3_HOSTING_DECISION.md`), whereas a pub/sub SaaS offloads that entirely.
+(`infra/documentation/MVP/INFRA-3_HOSTING_DECISION.md`), whereas a pub/sub SaaS offloads that entirely.
 Verified current free-tier terms live (not from training-data recollection, since vendor pricing
 shifts often): PubNub (200 MAU, permanent free, 7-day history) and Ably (similar, 1-day history) are
 both genuinely free indefinitely at this project's scale; Stream Chat's free tier is dev-only and
@@ -2274,7 +2274,7 @@ via `/workon infra mvp` (workon command extended for the infra module).
   just `docker compose up`, but a full `./gradlew :server:bootRun` against the stack — all 24
   Liquibase migrations succeeded, PostGIS dialect initialized, app served a real `200` on
   `/api/sports`.
-- **Hosting decision (2026-07-08, `infra/documentation/INFRA-3_HOSTING_DECISION.md`):** AWS,
+- **Hosting decision (2026-07-08, `infra/documentation/MVP/INFRA-3_HOSTING_DECISION.md`):** AWS,
   free-tier-first — single EC2 instance (Docker + Nginx/Caddy + self-hosted Redis) + RDS
   PostgreSQL/PostGIS + S3/CloudFront for the client, GHCR for images, GitHub OIDC for deploy
   credentials; no ALB/NAT Gateway/ElastiCache/Fargate (all cost money outside free tier). Only
@@ -2312,12 +2312,12 @@ same format as the server module backlogs (`/workon client mvp`).
 
 ### Auth A2 + A3 DONE (2026-07-08) — client Phase 5 (AUTH-3/AUTH-5/AUTH-4) unblocked
 
-**A2** (`modules/auth/docs/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md`): refresh token moved to an
+**A2** (`modules/auth/docs/MVP/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md`): refresh token moved to an
 httpOnly `Set-Cookie` (profile-conditional `Secure`, `SameSite=Strict`, `Path=/api/auth`);
 `AuthResponse.refreshToken` now `@JsonIgnore`d, never in the JSON body. Verified live against a
 running server (Docker Postgres/Redis), not just mocked tests.
 
-**A3** (`modules/auth/docs/A3_FIX_LOGOUT_AUTHORIZATION.md`): `/api/auth/logout` now derives the
+**A3** (`modules/auth/docs/MVP/A3_FIX_LOGOUT_AUTHORIZATION.md`): `/api/auth/logout` now derives the
 caller from the JWT principal (401 without one) instead of trusting a client-supplied `userId`.
 
 **Verifying A3 live surfaced and fixed several genuinely unrelated pre-existing bugs**, all with
@@ -2388,7 +2388,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   geo-proximity/nearby search, Vendor/Facility claiming, `Location` editing, in-app routing,
   `TOURNAMENT`/`TRAINING` session types (enum reserved only), capacity/waitlist, session edit UI
   (hook exists, no UI), wiring group recurrence config into the Groups page Settings tab.
-- **`LOC-2` (`DONE`, 2026-08-02, `modules/location/location-impl/docs/LOC-2_FAVORITE_LOCATIONS.md`)**
+- **`LOC-2` (`DONE`, 2026-08-02, `modules/location/docs/MVP/LOC-2_FAVORITE_LOCATIONS.md`)**
   — favorite/unfavorite a `Location` + list favorites by sport (`user_favorite_locations` join
   table, no `sportId` column — always resolved via a join to `Location.sportId`). Favoriting
   requires an active `UserSportProfile` for the location's sport (`hasProfileForSport`, the same
@@ -2398,7 +2398,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   mapping; added one, which also fixes the same latent bug on `GET /api/locations/search`. Client
   follow-up (favorites dropdown in `CreateSessionModal`, favorite-heart toggle in `LocationPicker`)
   not filed yet.
-- **`SESSION-4` (`DONE`, 2026-08-02, `modules/session/docs/SESSION-4_STANDALONE_DISCOVERY.md`)**
+- **`SESSION-4` (`DONE`, 2026-08-02, `modules/session/docs/MVP/SESSION-4_STANDALONE_DISCOVERY.md`)**
   — `GET /api/sessions/discover`: standalone, `SCHEDULED` sessions the caller can browse and join,
   gated to sports the caller holds an active `UserSportProfile` for (via `getUserProfiles`, not
   the non-active-filtered `hasProfileForSport`), excluding sessions the caller created or
@@ -2408,7 +2408,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   at the app layer since SESSION-1. Also adds `GET /api/sessions/joined` (required `status` param,
   spans both session types) for a not-yet-built matches page's other two sections. Client
   follow-up (discover UI, matches page) not filed yet.
-- **`SESSION-5` (`DONE`, 2026-08-02, `modules/session/docs/SESSION-5_CAPACITY_AND_FEE.md`)** —
+- **`SESSION-5` (`DONE`, 2026-08-02, `modules/session/docs/MVP/SESSION-5_CAPACITY_AND_FEE.md`)** —
   `Session` gains `capacity` (informational only — `joinSession` never enforces it, no waitlist)
   and fee fields (`feeType` enum `FREE`/`SPLIT`/`FIXED`, `feeAmountVnd` required only when
   `FIXED`, cross-field-validated in `SessionServiceImpl`). Both mandatory on
@@ -2416,7 +2416,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `GROUP_RECURRING` sessions (no capacity/fee input) backfill to `capacity=9999`
   (sentinel = uncapped) / `feeType=FREE` via `@Builder.Default`. Client follow-up (capacity/fee
   display + `CreateSessionModal` inputs) not filed yet.
-- **`SESSION-6` (`DONE`, 2026-08-02, `modules/session/docs/SESSION-6_JOIN_APPROVAL_AND_INVITES.md`)**
+- **`SESSION-6` (`DONE`, 2026-08-02, `modules/session/docs/MVP/SESSION-6_JOIN_APPROVAL_AND_INVITES.md`)**
   — `ParticipantStatus` gains `REQUESTED` (self-initiated join, awaiting creator/owner-admin
   decision via new `POST /api/sessions/{id}/participants/{userId}/approve`|`reject`) and
   `INVITED` (pre-seeded from `CreateSessionRequest.inviteeIds`, resolved only by the invitee's
@@ -2543,7 +2543,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   locally — Linux-rendered CI baselines still need the usual post-merge `update-baselines` dispatch
   (same HF-13..HF-19 precedent).
 - **SESSION-9 (`DONE`, 2026-08-08,
-  `modules/session/docs/SESSION-9_CALLER_PARTICIPATION_STATUS.md`)** — scope re-clarified at pickup:
+  `modules/session/docs/MVP/SESSION-9_CALLER_PARTICIPATION_STATUS.md`)** — scope re-clarified at pickup:
   beyond the original "expose caller's status via `getSessionParticipants`" text, the user confirmed
   the caller's status needs to drive real Accept/**Decline**/**Cancel** actions (not just a disabled
   "waiting" state), on both the session card and `SessionDetailModal`. Design pivoted accordingly:
@@ -2555,7 +2555,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   Postgres (not just Spock): null/JOINED/INVITED→decline/REQUESTED→cancel all confirmed via curl.
   Client follow-up filed as **CLIENT-SESSION-9** (`client/docs/BACKLOG_MVP.md`, `TODO`).
 - **SESSION-10 (`DONE`, 2026-08-12,
-  `modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md`)** — session comments, but not as
+  `modules/session/docs/MVP/SESSION-10_SESSION_POST_COMMENTS.md`)** — session comments, but not as
   originally specced: instead of a new domain-scoped `SessionComment`/`SessionCommentLike` entity
   pair, every `Session` now gets a companion `Post` (`PostType.SESSION_POST`, post-impl's **A17**),
   created synchronously in the same transaction as the session, used purely as a comment-thread
@@ -2601,7 +2601,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `SecurityUtils` instead of `@AuthenticationPrincipal` is a valid, deliberate choice, not a
   workaround.
 - **SESSION-11 (`DONE`, 2026-08-10,
-  `modules/session/docs/SESSION-11_DROP_CROSS_DOMAIN_FKS.md`):** dropped the 4 cross-domain
+  `modules/session/docs/MVP/SESSION-11_DROP_CROSS_DOMAIN_FKS.md`):** dropped the 4 cross-domain
   DB-level FKs found in the 2026-08-10 sweep — `sessions_created_by_fkey`,
   `sessions_cancelled_by_fkey`, `sessions_location_id_fkey`, `session_participants_user_id_fkey`
   — via `V046__drop_session_tables_cross_domain_fks.sql`. Unlike A13/A6/A8/A15/B17, this one isn't
@@ -2611,7 +2611,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `cancelled_by`/`location_id` were missed despite that. Schema-only; all four were already
   `NO ACTION` (no cascade to lose) and already plain `UUID`/`Long` fields at the JPA layer.
 - **SESSION-12 (`DONE`, 2026-08-12,
-  `modules/session/docs/SESSION-12_PARTIAL_SCHEDULED_STATUS_INDEX.md`):** added
+  `modules/session/docs/MVP/SESSION-12_PARTIAL_SCHEDULED_STATUS_INDEX.md`):** added
   `idx_sessions_scheduled_status_only` — a partial index on `sessions(scheduled_start) WHERE
   status = 'SCHEDULED'` (`V052`) — targeting `SessionGenerationJob.startOngoingSessions`'s
   15-minute `findSessionsToStart` query. Sessions are never purged, so the existing unscoped
@@ -2620,7 +2620,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   serves `findSessionsToComplete`'s `status IN (SCHEDULED, ONGOING)` query). Schema-only, no
   code changes; confirmed via `EXPLAIN` that the planner picks the new index.
 - **LOC-3 (`DONE`, 2026-08-10,
-  `modules/location/location-impl/docs/LOC-3_DROP_LOCATION_CROSS_DOMAIN_FKS.md`):** dropped the 2
+  `modules/location/docs/MVP/LOC-3_DROP_LOCATION_CROSS_DOMAIN_FKS.md`):** dropped the 2
   cross-domain DB-level FKs found in the 2026-08-10 sweep — `locations_created_by_fkey`,
   `user_favorite_locations_user_id_fkey` — via `V045__drop_location_tables_cross_domain_fks.sql`.
   Same "not predates the rule" finding as SESSION-11 — `locations.created_by` (`V030`,
@@ -2732,7 +2732,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   passing, 49/49 e2e passing, visual-regression showed only Windows-vs-Linux font-rendering noise
   (confirmed via direct diff-image inspection — no baseline regen needed).
 - **SESSION-14 (`DONE`, 2026-08-16,
-  `modules/session/docs/SESSION-14_REDUCE_MAPTORESPONSES_ROUND_TRIPS.md`):** shipped narrower than
+  `modules/session/docs/MVP/SESSION-14_REDUCE_MAPTORESPONSES_ROUND_TRIPS.md`):** shipped narrower than
   originally scoped — only merge #1 (post-like count + caller-liked flag →
   `PostLikeRepository.countAndCallerLikedGroupedByPostIdIn`, one conditional-aggregation query
   replacing two) landed; merge #2 (participant JOINED-count + caller's row) was deliberately
@@ -2744,7 +2744,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   only; a group-linked session's creator isn't auto-joined and can still leave normally if they
   joined like any other member.
 - **SESSION-15 (`DONE`, 2026-08-17,
-  `modules/session/docs/SESSION-15_NOTIFICATION_OUTBOX_WIRING.md`):** notification outbox wiring —
+  `modules/session/docs/MVP/SESSION-15_NOTIFICATION_OUTBOX_WIRING.md`):** notification outbox wiring —
   new `session_outbox_events` table (`V054`, C3's `OutboxEvent` shape) + 6 event types (`session.
   comment.created`, `session.join_request.created/approved/rejected`, `session.invitation.created`,
   and `session.participant.joined` — the last one a real gap the user caught mid-session, not in
@@ -2762,7 +2762,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   non-`autoApprove` session gets silently demoted to `REQUESTED`) — defensively guarded in the new
   outbox-firing code only, flagged for a separate ticket. Unblocks NTF-2.
 - **SESSION-17 (`DONE`, 2026-08-17,
-  `modules/session/docs/SESSION-17_OUTBOX_PENDING_PARTIAL_INDEX.md`):** found while walking through
+  `modules/session/docs/MVP/SESSION-17_OUTBOX_PENDING_PARTIAL_INDEX.md`):** found while walking through
   SESSION-15's sequence diagram — its own `idx_session_outbox_events_status_created` (`V054`) was a
   full composite index over every row regardless of status, but `SessionOutboxRelayJob.drain()`
   only ever queries `status = 'PENDING'`, and `SENT` rows are never archived. Replaced (`V056`) with
@@ -2803,6 +2803,32 @@ explicit go-ahead at each step (full story in A3's summary doc):
   updated. **Known gap, flagged not fixed:** `.claude/commands/workon.md`'s Phase 6 still writes new
   ticket summaries to the old flat path — needs updating before `/workon` is relied on to keep a
   retrofitted module's backlog clean going forward.
+- **Backlog file structure convention rolled out repo-wide (2026-08-18):** retrofitted the
+  remaining 10 flat `BACKLOG_MVP.md` files onto the thin-index + per-ticket-file shape
+  (`documentation/md/BACKLOG_STRUCTURE_CONVENTION.md`) — `services/chat`, `infra/documentation`,
+  `modules/common`, `modules/location`, `modules/notification`, `modules/auth`,
+  `modules/sport/sport-impl`, `modules/user/user-impl`, `modules/session`,
+  `modules/social/post-impl`, `modules/social/group-impl` — done at the user's explicit request
+  even for the three smallest backlogs (common/location/notification, 3-4 tickets each) that the
+  convention's own "when to bother" guidance would otherwise have left flat. Built and reused a
+  generic Node retrofit script rather than hand-editing: parses each flat file's Implementation
+  Order table + per-ticket `###`/`##` sections, splits into Open/Done tables (Done sorted by
+  completion date, best-effort-parsed per ticket) plus one file per ticket under a new `MVP/`
+  subfolder, merging with any pre-existing standalone ticket doc (moved + backlog text appended
+  under a `---`, not rewritten) or synthesizing a new file where none existed. Two content-loss
+  bugs caught and fixed mid-run via dry-run verification before they touched real files: cross-cutting
+  prose sitting between the table and the `## Tickets` heading (a "Dependencies" block, in
+  auth/sport/infra/services-chat) was initially discarded silently; a ticket heading present in the
+  file but deliberately absent from the Implementation Order table (`services/chat`'s CHAT-14, a
+  "moved back to BACKLOG_V1.md" tombstone) was initially dropped instead of preserved as an
+  untracked note. All 11 module/service backlogs now verify with zero missing/unlinked/duplicate
+  links between each index and its `MVP/` folder. Fixed all 92 moved-file cross-references
+  repo-wide (PROGRESS.md, session logs, other backlogs, source comments, a Java integration test,
+  `server/src/test/resources/schema.sql`) via literal path substitution, confirmed zero stale refs
+  remain by a full-repo grep. Left one pre-existing, unrelated stray file untouched:
+  `modules/social/post-impl/docs/B3_THREE_POST_TYPES.md` — its content matches `group-impl`'s B3
+  ticket, not `post-impl`'s own (coincidentally reused) B3 id, so it was never referenced by
+  `post-impl`'s Implementation Order table in the first place; not this task's to resolve.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

@@ -9,7 +9,7 @@ import org.springframework.data.domain.Pageable;
 /**
  * Per-recipient aggregated notifications — see
  * {@code documentation/md/vision/NOTIFICATION_MODULE_VISION.md} for the full design and
- * {@code modules/notification/docs/NTF-1_MODULE_SCAFFOLDING.md} for this module's scope. NTF-2's
+ * {@code modules/notification/docs/MVP/NTF-1_MODULE_SCAFFOLDING.md} for this module's scope. NTF-2's
  * RabbitMQ consumer is {@link #recordEvent}'s caller; NTF-3 uses its return value to trigger a live
  * STOMP push after the write commits.
  */

@@ -42,7 +42,7 @@ docker compose -f infra/docker-compose.dev.yml up -d
 # Stop them (data persists in named volumes)
 docker compose -f infra/docker-compose.dev.yml down
 ```
-Deps-only — the server and client still run natively (`./gradlew :server:bootRun`, `pnpm dev`) for a fast edit-reload loop. Details: `infra/documentation/INFRA-2_DEV_DOCKER_COMPOSE.md`.
+Deps-only — the server and client still run natively (`./gradlew :server:bootRun`, `pnpm dev`) for a fast edit-reload loop. Details: `infra/documentation/MVP/INFRA-2_DEV_DOCKER_COMPOSE.md`.
 
 ### Backend (Gradle)
 ```bash

@@ -151,7 +151,7 @@ positioned between Chat and Settings, for group member management.
        approved-and-waiting-on-my-friend subset. Scoped to invitations sent by the viewer; **the
        whole section is hidden when empty**, not shown with an empty-state message. Backed by
        **B8, shipped 2026-07-20** (`modules/social/group-impl/docs/BACKLOG_MVP.md`,
-       `modules/social/group-impl/docs/B8_INVITATION_STATUS_FILTER.md`): `GET
+       `modules/social/group-impl/docs/MVP/B8_INVITATION_STATUS_FILTER.md`): `GET
        /api/groups/{groupId}/invitations/sent` takes **no query param** and always returns both
        statuses in one page — **one request covers this whole section**, not two. Use each row's
        `status` to render a per-row label distinguishing the two in-flight states (e.g. "awaiting
