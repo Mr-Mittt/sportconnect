@@ -9,11 +9,12 @@ import { resetFeedSession, seedPostsState } from './handlers/feed.ts';
 import { resetFriendHandlersState } from './handlers/friends.ts';
 import { resetGroupHandlersState, seedJoinRequestsState } from './handlers/groups.ts';
 import { resetLocationHandlersState } from './handlers/locations.ts';
-import { resetNotificationHandlersState } from './handlers/notifications.ts';
+import { resetNotificationHandlersState, seedNotificationsState } from './handlers/notifications.ts';
 import { resetSessionHandlersState } from './handlers/sessions.ts';
 import { resetSportHandlersState, seedZeroSportProfilesState } from './handlers/sport.ts';
 import { mockJoinRequest } from './fixtures.ts';
 import { buildPaginatedFeed } from './paginatedFeedFixture.ts';
+import { buildPaginatedNotifications } from './paginatedNotificationsFixture.ts';
 import { resetOverrides, setOverride, type SessionOverrides } from './overrides.ts';
 import { MOCK_SERVER_PORT } from './mockServerConfig.ts';
 import { DEFAULT_SESSION_ID, sessionIdFromRequest } from './sessionStore.ts';
@@ -161,6 +162,7 @@ const OVERRIDE_NAMES: ReadonlySet<keyof SessionOverrides> = new Set([
   'refreshExpired',
   'sportProfilesEmpty',
   'createPostFailOnce',
+  'notificationsEmpty',
 ]);
 
 /**
@@ -206,6 +208,12 @@ async function handleAdminRoute(
 
   if (action === 'seed-join-requests' && req.method === 'POST') {
     seedJoinRequestsState(sessionId, [mockJoinRequest]);
+    sendJson(res, 200, { seeded: true });
+    return;
+  }
+
+  if (action === 'seed-paginated-notifications' && req.method === 'POST') {
+    seedNotificationsState(sessionId, buildPaginatedNotifications());
     sendJson(res, 200, { seeded: true });
     return;
   }

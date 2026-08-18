@@ -956,6 +956,24 @@ export async function seedJoinRequestOnNextLoad(sessionId: string): Promise<void
 }
 
 /**
+ * CLIENT-NOTIF-2's empty-bell-dropdown baseline — same `override/*Empty`
+ * shape as `seedEmptyFeedOnNextLoad`. Call before `seedAuthenticatedSession`;
+ * the next `GET /api/notifications`/`GET /api/notifications/unread-count`
+ * for this session both return empty/zero.
+ */
+export async function seedEmptyNotificationsOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/notificationsEmpty');
+}
+
+/**
+ * CLIENT-NOTIF-2's with-load-more baseline — 11 notifications (one more than
+ * the list's page size of 10), same shape as `seedPaginatedFeedOnNextLoad`.
+ */
+export async function seedPaginatedNotificationsOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'seed-paginated-notifications');
+}
+
+/**
  * FEED-8 error-simulation helpers — one per real-data surface FEED-8
  * hardened. Call before `page.goto()`; the next matching request for this
  * session returns a 500, so the real query's `isError` (or, for the feed's

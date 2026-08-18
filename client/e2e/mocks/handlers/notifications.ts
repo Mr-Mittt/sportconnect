@@ -2,6 +2,7 @@ import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import type { Notification } from '../../../src/features/notifications/types.ts';
 import { mockFriend, mockSession } from '../fixtures.ts';
+import { getOverrides } from '../overrides.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
@@ -99,14 +100,19 @@ export const notificationHandlers: HttpHandler[] = [
     if (unauthorized) return unauthorized;
     const url = new URL(request.url);
     const page = Number(url.searchParams.get('page') ?? '0');
-    const all = notificationSessions.get(sessionIdFromRequest(request));
+    const sessionId = sessionIdFromRequest(request);
+    const all = getOverrides(sessionId).notificationsEmpty ? [] : notificationSessions.get(sessionId);
     return HttpResponse.json(apiResponse(pagedResponse(all, page), 'Notifications retrieved successfully'));
   }),
 
   http.get('/api/notifications/unread-count', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
-    const all = notificationSessions.get(sessionIdFromRequest(request));
+    const sessionId = sessionIdFromRequest(request);
+    if (getOverrides(sessionId).notificationsEmpty) {
+      return HttpResponse.json(apiResponse(0, 'Unread count retrieved successfully'));
+    }
+    const all = notificationSessions.get(sessionId);
     const count = all.filter((n) => !n.isRead).length;
     return HttpResponse.json(apiResponse(count, 'Unread count retrieved successfully'));
   }),
@@ -125,6 +131,20 @@ export const notificationHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(null, 'Notification marked read'));
   }),
 ];
+
+/**
+ * Test-only seed — lets a spec replace one session's notification list
+ * wholesale (CLIENT-NOTIF-2's paginated fixture), same
+ * `seedPostsState`/`seedJoinRequestsState` shape. Mutates the array in place
+ * (rather than re-assigning) since `notificationSessions` stores
+ * `Notification[]` directly, not a wrapper object — the PUT /read handler
+ * above already relies on `.get()` returning a live reference the same way.
+ */
+export function seedNotificationsState(sessionId: string, notifications: Notification[]): void {
+  const state = notificationSessions.get(sessionId);
+  state.length = 0;
+  state.push(...notifications);
+}
 
 /** Test-only reset — used by the mock server's `/__mock/sessions/:id/reset`. */
 export function resetNotificationHandlersState(sessionId: string): void {

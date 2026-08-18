@@ -2923,6 +2923,25 @@ explicit go-ahead at each step (full story in A3's summary doc):
   **Remaining step (same as GRP-10):** both this ticket's 30 new baselines and GRP-10's 18
   regenerated ones are Windows-rendered locally; need the `client-ci` `update-baselines` dispatch
   swap before CI's Linux runs pass clean.
+- **CLIENT-NOTIF-2 (`DONE`, 2026-08-18,
+  `client/docs/MVP/CLIENT-NOTIF-2_NOTIFICATION_BELL_VISUAL_REGRESSION.md`):** dialog-scoped visual
+  regression for the `NotificationBell` popover (`empty`/`populated`/`with-load-more`, 9 baselines),
+  matching `app-post-modal.spec.ts`'s shape — confirmed Radix's `Popover.Content` also renders
+  `role="dialog"`, so the ticket's open "Popover vs Dialog" crop question resolved to "same harness,
+  unchanged." Curated down from `NotificationBell`'s 6 Storybook states (user decision): `loading`/
+  `error` stayed out, already covered by Storybook. New mock-server plumbing, all mirroring existing
+  exact patterns: `notificationsEmpty` override, `seedNotificationsState` + an 11-item
+  `paginatedNotificationsFixture.ts` for the load-more state. **One real Phase 5 finding:** the first
+  `with-load-more` baseline didn't actually show the "Load more" button — it sits below the fold in
+  the row list's own internal scroll container (`max-h-96 overflow-y-auto`), so `toBeVisible()`
+  passed without the button ever entering the crop; fixed with `scrollIntoViewIfNeeded()` before the
+  screenshot. Verification: `tsc -b`/`eslint .` clean, `vitest run` 878/878, new spec's own 9/9
+  passed (visually reviewed all three states), full `playwright test --project=e2e` 51/51 passed
+  (includes `notification-bell.spec.ts`'s own functional journey against the modified handlers — the
+  strongest signal the new override/seed plumbing didn't regress anything). `E2E_OVERVIEW.md`
+  updated. **Remaining step (same as every prior visual-regression ticket):** the 9 baselines are
+  Windows-rendered locally; need the `client-ci` `update-baselines` dispatch swap before CI's Linux
+  runs pass clean.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
