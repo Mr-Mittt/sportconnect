@@ -52,7 +52,9 @@ public interface SessionService {
     /**
      * Group-linked requires GroupService.isGroupMember; standalone is open to any caller.
      * Upserts SessionParticipant — an existing LEFT row flips back to JOINED rather than a
-     * duplicate insert.
+     * duplicate insert. A caller who is already JOINED is a no-op (SESSION-16) — no status
+     * change, no save, no outbox event — rather than falling through the autoApprove ternary,
+     * which would otherwise demote them back to REQUESTED on a non-autoApprove session.
      */
     void joinSession(Long sessionId, UUID userId);
 

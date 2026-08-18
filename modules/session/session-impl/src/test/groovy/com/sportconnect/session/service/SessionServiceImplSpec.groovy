@@ -598,13 +598,9 @@ class SessionServiceImplSpec extends Specification {
         0 * sessionOutboxEventRepository.save(_)
     }
 
-    def "joinSession never fires an outbox event when the caller is already JOINED"() {
+    def "joinSession is a no-op when the caller is already JOINED, autoApprove false"() {
         given:
         def userId = UUID.randomUUID()
-        // autoApprove is false here on purpose: this is the pre-existing gap noted in
-        // SessionServiceImpl.joinSession — the status ternary recomputes REQUESTED for an
-        // already-JOINED caller re-invoking join on a non-autoApprove session. The guard added
-        // for SESSION-15 must still not fire anything, regardless of that recompute.
         def session = Session.builder().id(1L).autoApprove(false).build()
         def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
 
@@ -614,7 +610,23 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
-        1 * sessionParticipantRepository.save(_) >> existing
+        0 * sessionParticipantRepository.save(_)
+        0 * sessionOutboxEventRepository.save(_)
+    }
+
+    def "joinSession is a no-op when the caller is already JOINED, autoApprove true"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).autoApprove(true).build()
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        0 * sessionParticipantRepository.save(_)
         0 * sessionOutboxEventRepository.save(_)
     }
 

@@ -2635,8 +2635,8 @@ explicit go-ahead at each step (full story in A3's summary doc):
   no module actually implements them, so there's no owning backlog to file a fix-the-schema ticket
   against; flagged here in case someone wants to scope either "build the feature" or "drop the dead
   table" later, same "leftover placeholder, leave it alone" status as `sport-impl`'s `FacilityType`.
-- **MVP backlog (session module):** 15 of 17 tickets `DONE` (SESSION-1 through SESSION-17 except
-  SESSION-8 and SESSION-16); both remain `TODO`.
+- **MVP backlog (session module):** as of 2026-08-18, 16 of 20 tickets `DONE`; `TODO` remain
+  SESSION-8, SESSION-18, SESSION-19, SESSION-20.
 - **CLIENT-SESSION-8 (`DONE`, 2026-08-12,
   `client/docs/MVP/CLIENT-SESSION-8_SESSION_COMMENTS.md`):** an inline "Discussion" section in
   `SessionDetailModal` (list + post + delete-own-comment, one-level reply nesting, per-comment
@@ -2829,6 +2829,18 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `modules/social/post-impl/docs/B3_THREE_POST_TYPES.md` — its content matches `group-impl`'s B3
   ticket, not `post-impl`'s own (coincidentally reused) B3 id, so it was never referenced by
   `post-impl`'s Implementation Order table in the first place; not this task's to resolve.
+- **SESSION-16 (`DONE`, 2026-08-18,
+  `modules/session/docs/MVP/SESSION-16_FIX_JOINSESSION_DEMOTING_AN_ALREADY_JOINED_CALLER_BACK.md`):**
+  fixed the pre-existing bug SESSION-15 had documented but deliberately not fixed — an already-
+  `JOINED` caller re-invoking `joinSession` on a non-`autoApprove` session was silently demoted back
+  to `REQUESTED`. `joinSession` now returns immediately as a true no-op (no save, no outbox event)
+  once `previousStatus == JOINED` is resolved, before the autoApprove ternary runs. Let the now-dead
+  outer `previousStatus != JOINED` guard around the outbox-firing block (added defensively by
+  SESSION-15 to suppress a spurious notification from this exact bug) be removed, since the early
+  return now guarantees that precondition. Two Spock tests (`autoApprove` true/false) assert
+  `0 * save` + `0 * outbox`, replacing the old single test that had only asserted the outbox side
+  and accepted the demote-then-save as expected. No migration/DTO/controller changes; no new IT test
+  (not an authorization-boundary change).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
