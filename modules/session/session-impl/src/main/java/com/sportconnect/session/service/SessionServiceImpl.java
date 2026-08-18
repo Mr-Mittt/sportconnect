@@ -304,6 +304,14 @@ public class SessionServiceImpl implements SessionService {
         // carries @Builder.Default = JOINED, so a brand-new (no prior row) participant built via
         // that fallback would otherwise misreport its own "previous" status as JOINED.
         ParticipantStatus previousStatus = existingParticipant.map(SessionParticipant::getStatus).orElse(null);
+
+        // SESSION-16: an already-JOINED caller re-invoking join is a no-op — without this, the
+        // ternary below never special-cased "already JOINED" and would demote them back to
+        // REQUESTED on a non-autoApprove session.
+        if (previousStatus == ParticipantStatus.JOINED) {
+            return;
+        }
+
         SessionParticipant participant = existingParticipant
                 .orElseGet(() -> SessionParticipant.builder()
                         .sessionId(sessionId)
@@ -322,25 +330,20 @@ public class SessionServiceImpl implements SessionService {
         participant.setStatus(targetStatus);
         sessionParticipantRepository.save(participant);
 
-        // SESSION-15: only fire on a genuine state transition — an already-JOINED caller
-        // re-invoking join never fires anything here, regardless of what targetStatus recomputes
-        // to (see this method's own pre-existing gap noted in SESSION-15's doc: a JOINED caller
-        // on a non-autoApprove session recomputes to REQUESTED above, since the ternary never
-        // special-cased "already JOINED" — out of scope to fix here, but this guard keeps that
-        // gap from also spamming the organizer with a spurious join-request notification).
-        if (previousStatus != ParticipantStatus.JOINED) {
-            if (targetStatus == ParticipantStatus.REQUESTED && previousStatus != ParticipantStatus.REQUESTED) {
-                recordOutboxEvent("session.join_request.created", SessionJoinRequestCreatedEvent.builder()
-                        .sessionId(sessionId)
-                        .actorId(userId)
-                        .recipientUserId(session.getCreatedBy())
-                        .build());
-            } else if (targetStatus == ParticipantStatus.JOINED) {
-                recordOutboxEvent("session.participant.joined", SessionParticipantJoinedEvent.builder()
-                        .sessionId(sessionId)
-                        .actorId(userId)
-                        .build());
-            }
+        // SESSION-15: only fire on a genuine state transition. previousStatus is guaranteed not
+        // JOINED here (SESSION-16's early return above catches that case), so no extra guard is
+        // needed to avoid double-firing on an already-JOINED caller.
+        if (targetStatus == ParticipantStatus.REQUESTED && previousStatus != ParticipantStatus.REQUESTED) {
+            recordOutboxEvent("session.join_request.created", SessionJoinRequestCreatedEvent.builder()
+                    .sessionId(sessionId)
+                    .actorId(userId)
+                    .recipientUserId(session.getCreatedBy())
+                    .build());
+        } else if (targetStatus == ParticipantStatus.JOINED) {
+            recordOutboxEvent("session.participant.joined", SessionParticipantJoinedEvent.builder()
+                    .sessionId(sessionId)
+                    .actorId(userId)
+                    .build());
         }
     }
 
