@@ -2,7 +2,7 @@
 
 **Status:** DONE (2026-08-13)
 **Dependency:** SESSION-9 (`modules/session/docs/BACKLOG_MVP.md`, `DONE` 2026-08-08) — see
-`modules/session/docs/SESSION-9_CALLER_PARTICIPATION_STATUS.md` for the backend side
+`modules/session/docs/MVP/SESSION-9_CALLER_PARTICIPATION_STATUS.md` for the backend side
 (`SessionResponse.callerParticipation`).
 
 ## What shipped
@@ -291,7 +291,7 @@ passing (121 files, up from 823/120 — the 4 new dialog tests).
 ### CLIENT-SESSION-9 · Wire Join/Accept/Decline/Cancel/Leave button on session card + Session Detail modal
 **Status:** `DONE` (2026-08-13) · **Type:** Feature · **Dependency:** SESSION-9
 (`modules/session/docs/BACKLOG_MVP.md`, backend, `DONE`) · **Filed:** 2026-08-08 · **Backend
-summary:** `modules/session/docs/SESSION-9_CALLER_PARTICIPATION_STATUS.md`
+summary:** `modules/session/docs/MVP/SESSION-9_CALLER_PARTICIPATION_STATUS.md`
 
 **What ships:** the session card (Discover, Upcoming rail, `/sessions/mine` results) and
 `SessionDetailModal` both resolve their action button from `SessionResponse.callerParticipation`

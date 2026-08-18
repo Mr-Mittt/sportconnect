@@ -56,7 +56,7 @@ that could become one call instead. It's a small, backward-compatible additive c
 - `SessionController`'s `@RequestParam SessionStatus status` became `required = false`.
 - Existing callers passing a status are completely unaffected — verified via the existing Spock
   test plus a new one for the null-status path (`:modules:session:session-impl:test`, `:server:test`
-  both green). See `modules/session/docs/SESSION-4_STANDALONE_DISCOVERY.md`'s "Out of scope /
+  both green). See `modules/session/docs/MVP/SESSION-4_STANDALONE_DISCOVERY.md`'s "Out of scope /
   follow-ups" section for the full delta note on the backend side.
 
 ## What was built
@@ -128,7 +128,7 @@ that could become one call instead. It's a small, backward-compatible additive c
 ### CLIENT-SESSION-6 · Standalone session discover — real "Join a match" browse UI
 **Status:** `DONE` (2026-08-05) · **Type:** Feature · **Dependency:** CLIENT-SESSION-1 (`DONE` — the
 `/matches` page this ticket rebuilds) · **Filed:** 2026-08-03 · **Spec:** backend contract:
-`modules/session/docs/SESSION-4_STANDALONE_DISCOVERY.md` · **Summary:**
+`modules/session/docs/MVP/SESSION-4_STANDALONE_DISCOVERY.md` · **Summary:**
 `client/docs/CLIENT-SESSION-6_STANDALONE_DISCOVERY.md`
 
 **What ships:** `/matches` rebuilt into two panels: a **Discover** grid (`GET /api/sessions/discover`,
@@ -149,4 +149,4 @@ either original option) rather than a fresh design pass — see the summary doc.
 SESSION-4 ship time, with an explicit "add an all-statuses mode if a real caller needs it" note — is
 now optional. The "My sessions" panel needed the caller's whole joined set in one date-grouped list;
 omitting `status` returns every `SessionStatus` in one page instead of a 4-call fan-out. Backward
-compatible, see `modules/session/docs/SESSION-4_STANDALONE_DISCOVERY.md`'s own delta note.
+compatible, see `modules/session/docs/MVP/SESSION-4_STANDALONE_DISCOVERY.md`'s own delta note.

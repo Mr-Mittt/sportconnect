@@ -2,9 +2,9 @@
 
 **Status:** DONE
 **Module:** `client`
-**Related:** `modules/notification/docs/NTF-1_MODULE_SCAFFOLDING.md`,
-`modules/notification/docs/NTF-3_STOMP_LIVE_DELIVERY.md` (built the badge placeholder + live-socket
-hook this ticket replaces), `modules/notification/docs/NTF-4_NOTIFICATION_RESPONSE_ENRICHMENT.md`
+**Related:** `modules/notification/docs/MVP/NTF-1_MODULE_SCAFFOLDING.md`,
+`modules/notification/docs/MVP/NTF-3_STOMP_LIVE_DELIVERY.md` (built the badge placeholder + live-socket
+hook this ticket replaces), `modules/notification/docs/MVP/NTF-4_NOTIFICATION_RESPONSE_ENRICHMENT.md`
 (new backend ticket filed and built as part of this pickup — see below)
 
 ## Design (approved plan, restated)

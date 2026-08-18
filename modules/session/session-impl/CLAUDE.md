@@ -99,7 +99,7 @@ ownership-only), so there's nothing this module needs to wrap.
    delegating — this module is the **only** place that check happens. The same shape extends to
    `likeSession`/`unlikeSession` (liking the `SESSION_POST` anchor itself, delegating to `PostService
    .likeSessionPost`/`unlikeSessionPost`) — both share the private `requireSessionAccess` helper
-   with the comment-proxy methods. See `modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md`.
+   with the comment-proxy methods. See `modules/session/docs/MVP/SESSION-10_SESSION_POST_COMMENTS.md`.
 7. **SESSION-9:** every `SessionResponse`-returning method resolves `callerParticipation` — the
    caller's own `SessionParticipant` row for that session (null if none), batch-resolved in
    `mapToResponses` via `findBySessionIdInAndUserId`. Drives the client's action button

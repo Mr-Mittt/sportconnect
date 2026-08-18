@@ -6,7 +6,7 @@ import jakarta.persistence.Table;
 
 /**
  * This module's own outbox table (SESSION-15), built on {@link OutboxEvent}'s shared shape (C3).
- * See {@code modules/session/docs/SESSION-15_NOTIFICATION_OUTBOX_WIRING.md} for the full event
+ * See {@code modules/session/docs/MVP/SESSION-15_NOTIFICATION_OUTBOX_WIRING.md} for the full event
  * list and design.
  */
 @Entity

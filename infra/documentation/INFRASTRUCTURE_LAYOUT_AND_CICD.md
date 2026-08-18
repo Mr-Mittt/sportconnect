@@ -63,5 +63,5 @@ Tracked in `infra/documentation/BACKLOG_MVP.md` (pick up via `/workon infra mvp`
 **INFRA-1** backend CI workflow · **INFRA-2** dev docker-compose · **INFRA-3** AWS foundation
 (EC2 + RDS + S3/CloudFront + OIDC role) · **INFRA-4** server Dockerfile + GHCR publish ·
 **INFRA-5** client static build + S3/CloudFront deploy · **INFRA-6** `deploy.yml` orchestration.
-Hosting decision recorded in `infra/documentation/INFRA-3_HOSTING_DECISION.md`. The client-ci
+Hosting decision recorded in `infra/documentation/MVP/INFRA-3_HOSTING_DECISION.md`. The client-ci
 bootstrap remains client backlog **HF-12**.

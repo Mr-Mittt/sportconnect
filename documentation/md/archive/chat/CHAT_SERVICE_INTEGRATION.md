@@ -39,7 +39,7 @@ read receipts, or typing indicators, so none of those are in scope here either.
 
 The original roadmap plan was a self-hosted WebSocket layer (`spring-boot-starter-websocket` is
 already a dependency, unused). The problem: this project's hosting is deliberately minimal —
-`infra/documentation/INFRA-3_HOSTING_DECISION.md` runs everything on a single free-tier EC2 instance
+`infra/documentation/MVP/INFRA-3_HOSTING_DECISION.md` runs everything on a single free-tier EC2 instance
 (1 vCPU / 1GB RAM), explicitly because "cost avoidance drives every choice" for this solo/learning
 project. A self-hosted realtime layer means:
 

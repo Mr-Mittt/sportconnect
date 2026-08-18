@@ -4,7 +4,7 @@
 
 ## Scope (approved plan)
 
-Backend contract: `modules/session/docs/SESSION-5_CAPACITY_AND_FEE.md` (`DONE`, 2026-08-02) — `Session`
+Backend contract: `modules/session/docs/MVP/SESSION-5_CAPACITY_AND_FEE.md` (`DONE`, 2026-08-02) — `Session`
 gained `capacity` (`Integer`, informational only, never enforced by `joinSession`), `feeType`
 (`FREE`/`SPLIT`/`FIXED`), `feeAmountVnd` (meaningful only when `feeType` is `FIXED`). Both `capacity`
 and `feeType` are mandatory on `CreateSessionRequest` — no default fallback.
@@ -169,7 +169,7 @@ and were left untouched.
 **Status:** `DONE` (2026-08-03) · **Type:** Feature · **Dependency:** CLIENT-SESSION-2 (extends its
 "Session basic information" section) · **Filed:** 2026-08-03 · **Spec:**
 `CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` § "Fields explicitly excluded" (original draft
-requirements), backend contract: `modules/session/docs/SESSION-5_CAPACITY_AND_FEE.md` · **Summary:**
+requirements), backend contract: `modules/session/docs/MVP/SESSION-5_CAPACITY_AND_FEE.md` · **Summary:**
 `client/docs/CLIENT-SESSION-3_CAPACITY_AND_FEE.md`
 
 **What ships:** "Taken slot"/"Open slot" numeric inputs (1–24 in the UI; backend accepts any `>= 0`

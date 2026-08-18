@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Real end-to-end coverage for NTF-1's {@code NotificationGate} (see
- * {@code modules/notification/docs/NTF-1_MODULE_SCAFFOLDING.md}) — goes through a real
+ * {@code modules/notification/docs/MVP/NTF-1_MODULE_SCAFFOLDING.md}) — goes through a real
  * {@code MockMvc} HTTP request, real {@code NotificationController}/{@code
  * NotificationServiceImpl}/{@code NotificationGate} beans, and a real H2-backed DB round trip.
  * {@code NotificationGateSpec}/{@code NotificationServiceImplSpec} (in {@code notification-impl})

@@ -2,7 +2,7 @@
 
 **Status:** DONE (2026-08-04) · **Dependency:** CLIENT-SESSION-2 (extends its "Session basic
 information" section), FRIEND-1 (`useFriends()`, already `DONE`) · **Backend contract:**
-`modules/session/docs/SESSION-6_JOIN_APPROVAL_AND_INVITES.md`
+`modules/session/docs/MVP/SESSION-6_JOIN_APPROVAL_AND_INVITES.md`
 
 ## Scope (approved plan)
 
@@ -122,7 +122,7 @@ No notifications at any stage. No re-inviting someone after creation, or editing
 "Session basic information" section), FRIEND-1 (`useFriends()`, already `DONE`) · **Filed:**
 2026-08-03 · **Spec:** `CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md` § "Fields explicitly
 excluded" (original draft requirements), backend contract:
-`modules/session/docs/SESSION-6_JOIN_APPROVAL_AND_INVITES.md` · **Summary:**
+`modules/session/docs/MVP/SESSION-6_JOIN_APPROVAL_AND_INVITES.md` · **Summary:**
 `client/docs/CLIENT-SESSION-4_INVITE_APPROVAL.md`
 
 **What ships:** an "Invite your friend" search-and-multi-select (client-side fullname filter, 3+

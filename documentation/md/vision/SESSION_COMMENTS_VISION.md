@@ -14,7 +14,7 @@
 > `session-scoped` reuse of `post-impl`'s own REST surface. The **access-gating decisions below are
 > unchanged** (participants-only, `JOINED`/`REQUESTED`/`INVITED`, widened for group-linked sessions
 > per the ADR §6 delta) — only the storage/entity decision and the API surface reversed. Full design
-> record: `modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md`.
+> record: `modules/session/docs/MVP/SESSION-10_SESSION_POST_COMMENTS.md`.
 
 ## Vision statement
 

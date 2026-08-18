@@ -1,7 +1,7 @@
 # CLIENT-SESSION-8 — Session comments: inline "Discussion" section in SessionDetailModal
 
 **Status:** `DONE` (2026-08-12) · **Backend:** SESSION-10
-(`modules/session/docs/SESSION-10_SESSION_POST_COMMENTS.md`, `DONE`) · **Vision doc:**
+(`modules/session/docs/MVP/SESSION-10_SESSION_POST_COMMENTS.md`, `DONE`) · **Vision doc:**
 `documentation/md/vision/SESSION_COMMENTS_VISION.md` (superseded on storage/API shape, unchanged
 on access-gating decisions — see that doc's own supersession note)
 

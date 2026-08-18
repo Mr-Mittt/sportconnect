@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS group_members (
 );
 
 -- Two rows per friendship pair, mirrors V019 — needed for a real @SpringBootTest to exercise
--- PostGate's friends-visibility branch (A14, modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md),
+-- PostGate's friends-visibility branch (A14, modules/social/post-impl/docs/MVP/A14_POST_RESOURCE_GATE.md),
 -- which calls UserFriendService.areFriends() for real.
 CREATE TABLE IF NOT EXISTS friendships (
     id UUID PRIMARY KEY,
@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS post_likes (
 );
 
 -- Create comment_likes table (needed once a real @SpringBootTest first exercised
--- likeComment/unlikeComment for real — A14, modules/social/post-impl/docs/A14_POST_RESOURCE_GATE.md)
+-- likeComment/unlikeComment for real — A14, modules/social/post-impl/docs/MVP/A14_POST_RESOURCE_GATE.md)
 CREATE TABLE IF NOT EXISTS comment_likes (
     id BIGSERIAL PRIMARY KEY,
     comment_id BIGINT NOT NULL,

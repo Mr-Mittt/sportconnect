@@ -17,7 +17,7 @@ import static org.awaitility.Awaitility.await;
 
 /**
  * Real end-to-end coverage for NTF-2's {@code SessionEventsConsumer} wiring (see
- * {@code modules/notification/docs/NTF-2_RABBITMQ_CONSUMER.md}) — publishes directly onto a real
+ * {@code modules/notification/docs/MVP/NTF-2_RABBITMQ_CONSUMER.md}) — publishes directly onto a real
  * RabbitMQ broker (extends {@link RabbitMqTestContainerBase}, not {@code BaseIT} directly — only
  * tests that actually need Rabbit should force that container to start) and asserts a real
  * {@code Notification} row appears, going through the actual exchange/queue/binding/
