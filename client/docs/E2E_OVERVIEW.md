@@ -207,6 +207,8 @@ e2e/
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
+    app-session-detail-modal.spec.ts  # CLIENT-SESSION-12
+    app-create-session-modal.spec.ts  # CLIENT-SESSION-12
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
   mocks/
     mockServer.ts            # the standalone Node HTTP server
@@ -339,12 +341,12 @@ helpers called.
 
 | Step | What it checks | Notes |
 |---|---|---|
-| 1. load | Shell/switcher/feed/all 3 rail blocks render; 3 articles, 3 match CTAs, 1 trending row, 1 broadcast row | |
-| 2. Pickleball pill | Feed filters to 1 (Priya Shah's post); Upcoming Matches filters to **2** (`mockSession` + `mockOwnedGroupSession`, both Pickleball); Trending/Broadcasts **unchanged** | **SPORT-3:** renamed from "Basketball pill" — with only 2 real sports, `mockSession`/`mockOwnedGroupSession` now share Pickleball, so the matches count is 2, not 1 (the old "one session per sport" 1:1:1 split isn't representable). Trending/broadcasts are deliberately global, not sport-scoped (HF-5/HF-6 resolved open question) |
-| 3. "All" | Filters clear back to 3 | |
+| 1. load | Shell/switcher/feed/all 3 rail blocks render; 3 articles, **4** match CTAs, 1 trending row, 1 broadcast row | **CLIENT-SESSION-12:** rose from 3 — `mockInvitedSession`/`mockRequestedSession` (new fixtures, Badminton, `mockGroup`-linked) also count as "upcoming" via `useUpcomingMatches`, capped at `UpcomingMatches`' own `maxVisible=4` (5 true upcoming sessions exist, one is pushed below the fold) |
+| 2. Pickleball pill | Feed filters to 1 (Priya Shah's post); Upcoming Matches filters to **2** (`mockSession` + `mockOwnedGroupSession`, both Pickleball); Trending/Broadcasts **unchanged** | **SPORT-3:** renamed from "Basketball pill" — with only 2 real sports, `mockSession`/`mockOwnedGroupSession` now share Pickleball, so the matches count is 2, not 1 (the old "one session per sport" 1:1:1 split isn't representable). Trending/broadcasts are deliberately global, not sport-scoped (HF-5/HF-6 resolved open question). Unaffected by CLIENT-SESSION-12 — both new sessions are Badminton |
+| 3. "All" | Filters clear back to 3 articles, **4** match CTAs | CLIENT-SESSION-12, same as step 1 |
 | 4. like toggle | `likeCount` 3→4→3, `aria-pressed` flips | Optimistic — no network wait asserted |
 | 5. hashtag click | Opens `HashtagPostsModal` with 2 matching posts (`mockPost`+`mockGroupPost`, both tagged `fridayrun`); reachable from both an inline post tag and the Trending row; Escape closes it; **no URL change** | Modal, not a route — user decision, see FEED-6's delta |
-| 6. match CTA | "View details" opens `SessionDetailModal` in place, no URL change → Close returns to the rail | CLIENT-SESSION-9 (same-day follow-up): previously navigated to `/matches?session={id}`, switching the user away from Home Feed — now reuses the page's own `discoverModalData.onViewDetails`, same as clicking a card inside the Discover modal. Matches come from `mocks/handlers/sessions.ts`'s default 3-session fixture set |
+| 6. match CTA | "View details" opens `SessionDetailModal` in place, no URL change → Close returns to the rail | CLIENT-SESSION-9 (same-day follow-up): previously navigated to `/matches?session={id}`, switching the user away from Home Feed — now reuses the page's own `discoverModalData.onViewDetails`, same as clicking a card inside the Discover modal. Matches come from `mocks/handlers/sessions.ts`'s default session fixture set (CLIENT-SESSION-12: grew from 3 to 5 upcoming sessions, rail still caps display at 4) |
 | 7. "Add sport" | `aria-disabled="true"` | **SPORT-3:** relies on the fixture user holding a profile for every sport the live catalog serves (2), not a numeric "3-sport cap" anymore |
 | 8. delete | "..." menu only on the caller's own post (not Priya Shah's); delete removes it, count 3→2 | |
 
@@ -687,6 +689,52 @@ resolve caused real `toHaveScreenshot` stability-check flakiness during developm
 Windows noise) → waits for `document.fonts.ready` → full-page screenshot compared against
 `e2e/visual/__screenshots__/groups-{state}-{width}.png`. Same known-Windows-noise caveat as
 `app-home-feed.spec.ts` above.
+
+### `e2e/visual/app-session-detail-modal.spec.ts` (CLIENT-SESSION-12, `visual-regression` project)
+
+Dialog-scoped (`page.getByRole('dialog')`, not full-page — same reasoning as `app-post-modal.spec.ts`,
+the dimmed backdrop is already covered by Matches/Home Feed/Groups' own full-page specs).
+Parameterized: 3 breakpoints × 7 states = **21 test instances**, `session detail modal — ${state} @ ${width}px`.
+
+| State | Setup | Expects |
+|---|---|---|
+| `not-joined` | `mockDiscoverableSession` ("Weekend 5-a-side"), View details | "Join" button visible |
+| `already-joined` | `mockGroupSession` ("Friday 5-a-side"), joined live via the card's own Join button, View details | "Leave" button visible |
+| `invited` | `mockInvitedSession` ("Tuesday drop-in", **new fixture** — mockUser's own pre-seeded `INVITED` row), View details | "Accept" and "Decline" buttons visible |
+| `requested` | `mockRequestedSession` ("Wednesday scrimmage", **new fixture** — mockUser's own pre-seeded `REQUESTED` row), View details | "Cancel" button visible |
+| `approval-queue` | `mockOwnedGroupSession` ("Ladder night" — 2 pre-seeded `REQUESTED` rows from other users, mockUser is group owner), View details | "Waiting for approval" region + "Alex Chen" visible |
+| `discussion` | `mockSession` ("Sunday pickup run" — has a pre-seeded comment), View details | "Discussion" region + the seeded comment text visible |
+| `cancelled` | `mockCancelledSession` ("Monday night run", **new fixture**, pre-set `status: 'CANCELLED'`), View details | Cancel reason text visible, no "Join" button (`canJoinOrLeave` gate) |
+
+**3 new MSW fixtures** (`mockInvitedSession`/`mockUserInvitedRow`, `mockRequestedSession`/
+`mockUserRequestedRow`, `mockCancelledSession`) added purely as seed data, same "pre-seed the
+other side, no second live identity to act as" precedent as `mockSessionJoinRequest` — this mock
+has no way for mockUser to organically become `INVITED`/`REQUESTED` (every session mockUser could
+join has `autoApprove: true`, and mockUser is never anyone else's invitee), and
+`SessionDetailModal`'s Cancel session button was removed entirely (CLIENT-SESSION-10), so there is
+no live UI path left to reach `CANCELLED` from a fresh `SCHEDULED` session either.
+
+Every instance: freezes the clock (same instant as every other visual spec) → blurs the active
+element before screenshotting (`(document.activeElement as HTMLElement | null)?.blur()` — found
+necessary live: a focused text input's blinking caret caused a real ~0.01-ratio pixel diff between
+otherwise-identical consecutive local runs, on top of the already-known Windows font-rendering
+noise) → waits for `document.fonts.ready` → dialog screenshot compared against
+`e2e/visual/__screenshots__/session-detail-{state}-{width}.png`. Same known-Windows-noise caveat as
+`app-home-feed.spec.ts` above.
+
+### `e2e/visual/app-create-session-modal.spec.ts` (CLIENT-SESSION-12, `visual-regression` project)
+
+Dialog-scoped, same shape as `app-session-detail-modal.spec.ts` above. Parameterized: 3 breakpoints
+× 3 states = **9 test instances**, `create session modal — ${state} @ ${width}px`.
+
+| State | Setup | Expects |
+|---|---|---|
+| `default` | Open "Create session" | Sport field visible, empty form |
+| `location-chosen` | Open, select Pickleball, LocationPicker search "Riverside" → pick `mockLocation`, fill title/duration/open-slot | Chosen location name visible |
+| `no-sport-profiles` | `seedZeroSportProfilesOnNextLoad(mockSessionId)` before `seedAuthenticatedSession`, close MatchesPage's own auto-prompted "Add a sport" dialog first (not the state under test), then open Create session | "add a sport first" gate text visible (`CreateSessionModal`'s own internal empty-profile prompt, distinct from the page-level auto-prompt) |
+
+Same clock-freeze / blur-before-screenshot / `document.fonts.ready` sequence and known-Windows-noise
+caveat as `app-session-detail-modal.spec.ts` above.
 
 ---
 

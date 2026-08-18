@@ -62,7 +62,11 @@ test('Friends page — rail sections, search, directory search + send request, a
 
   await test.step('6. accepting an incoming request moves it into Offline and clears the action bar', async () => {
     await requestsSection.getByText('Hana Kim').click();
-    await page.getByRole('button', { name: 'Accept' }).click();
+    // exact: true — CLIENT-SESSION-12's mockInvitedSession ("Tuesday drop-in") now also renders
+    // in this page's own Upcoming rail (shared useUpcomingMatches), with its own accessible name
+    // "Tuesday drop-in — Accept" — a non-exact match on "Accept" is ambiguous between that and
+    // the real friend-request Accept button, whose accessible name is exactly "Accept".
+    await page.getByRole('button', { name: 'Accept', exact: true }).click();
 
     await expect(requestsSection.getByText('Hana Kim')).not.toBeVisible();
     await expect(offlineSection.getByText('Hana Kim')).toBeVisible();

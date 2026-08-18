@@ -64,6 +64,14 @@ import { expect, test } from '../mocks/test.ts';
  * composer's "Broadcast" toggle never renders in this journey — creating/
  * updating a broadcast isn't covered here (would need an owner/admin
  * fixture, a future ticket's concern if that flow needs its own e2e spec).
+ *
+ * CLIENT-SESSION-12 update: two new Badminton, `mockGroup`-linked `SCHEDULED` sessions
+ * (`mockInvitedSession`/`mockRequestedSession`, seeded for that ticket's own visual-regression
+ * fixtures) now also count as "upcoming" for mockUser here — `useUpcomingMatches` reads every
+ * `SCHEDULED`/`ONGOING` session from a group mockUser belongs to, regardless of mockUser's own
+ * participation status. Step 1/3's unfiltered rail count rises from 3 to 4 (`UpcomingMatches`'
+ * own `maxVisible=4` cap, not the full 5 — one of the two new sessions is pushed below the fold).
+ * Step 2's Pickleball-filtered count is unaffected — both new sessions are Badminton.
  */
 
 test('Home Feed journey', async ({ page }) => {
@@ -78,7 +86,9 @@ test('Home Feed journey', async ({ page }) => {
     await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
     await expect(page.getByRole('group', { name: 'Sport filter' })).toBeVisible();
     await expect(page.getByRole('article')).toHaveCount(3);
-    await expect(matchCtas).toHaveCount(3);
+    // CLIENT-SESSION-12: 5 upcoming sessions now exist, capped to maxVisible=4 — see this file's
+    // own top comment.
+    await expect(matchCtas).toHaveCount(4);
     await expect(trending.getByRole('button')).toHaveCount(1);
     await expect(broadcasts.getByRole('button')).toHaveCount(1);
   });
@@ -96,7 +106,7 @@ test('Home Feed journey', async ({ page }) => {
   await test.step('3. "All" — filters clear', async () => {
     await page.getByRole('button', { name: 'All', exact: true }).click();
     await expect(page.getByRole('article')).toHaveCount(3);
-    await expect(matchCtas).toHaveCount(3);
+    await expect(matchCtas).toHaveCount(4); // CLIENT-SESSION-12 — see step 1's comment.
   });
 
   await test.step('4. like toggle — fills and increments, reverts on second click', async () => {
