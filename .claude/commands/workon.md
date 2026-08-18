@@ -31,10 +31,21 @@ Before touching any files — including the backlog status edit in the next phas
    - Otherwise, check both of these and use whichever exists:
      a. `modules/<module>/docs/BACKLOG_<VERSION>.md` — domain-level backlog (e.g. "auth MVP" → `modules/auth/docs/BACKLOG_MVP.md`)
      b. `modules/*/<module>-impl/docs/BACKLOG_<VERSION>.md` — glob across domains for a `<module>-impl` submodule (e.g. "group MVP" → `modules/social/group-impl/docs/BACKLOG_MVP.md`, "sport MVP" → `modules/sport/sport-impl/docs/BACKLOG_MVP.md`)
-3. Read the backlog file
+3. Read the backlog file. Two possible shapes — check which one this module uses before assuming:
+   - **Restructured** (per `documentation/md/BACKLOG_STRUCTURE_CONVENTION.md`): a `<VERSION>/`
+     subfolder sits next to the backlog file (e.g. `client/docs/MVP/`). The backlog file itself is
+     just a thin index — an **Open (TODO / IN PROGRESS)** table (curated order) and a **Done** table
+     (sorted by completion date). Each row links to that ticket's full detail in `<VERSION>/`.
+   - **Flat** (the older, not-yet-retrofitted shape — still the common case for smaller module
+     backlogs): one `## Tickets` section holding every ticket's full write-up inline, ordered
+     top-to-bottom as the pick-up queue.
 4. Find the ticket to work on:
-   - If any ticket is `IN PROGRESS` → resume that one
-   - Otherwise → pick the first `TODO` ticket in the implementation order
+   - If any ticket is `IN PROGRESS` → resume that one (restructured: top of the Open table; flat:
+     scan the Implementation Order table)
+   - Otherwise → pick the first `TODO` ticket in the implementation order (restructured: first row
+     of the Open table; flat: first `TODO` row in the Implementation Order table)
+   - Restructured shape only: open that row's linked file in `<VERSION>/` for the ticket's actual
+     spec/deltas — the index row itself is just a title + status, not the ticket.
 5. If `module` is `client`: the backlog entry is a summary + queue position, not the spec. Read the full spec section in the epic doc the entry points to (`client/docs/sporthub-home-feed-tickets.md` or `client/docs/sporthub-auth-feed-integration-tickets.md`), **plus** any "Delta"/correction noted on the backlog entry itself and the backlog's "Reality check" section — where the epic doc and the backlog disagree, the backlog wins (it was verified against the backend later). Check the ticket's dependencies row too: some client tickets are hard-blocked on backend tickets (e.g. AUTH-3/AUTH-5 on auth backlog A2) — if the blocker hasn't shipped, stop and tell the user instead of building against a contract that's about to change.
 6. Update that ticket's status from `TODO` to `IN PROGRESS` in the backlog file
 7. State clearly: **"Working on: \<ticket-id\> · \<ticket-title\>"**
@@ -249,10 +260,23 @@ Report what was tested and whether it passed. Fix failures before moving on.
 1. Document the code:
    - **Backend:** write/update the Javadoc for every new or changed public method, in both `-api` interfaces and `-impl` classes. Cover: purpose (what it does, one line), flow (the steps it takes, especially any cross-domain calls or batching), and highlight anything non-obvious (exception vs. fallback behavior, nullability, ordering guarantees, why it exists). Skip private helpers unless the logic is genuinely surprising.
    - **Client:** exported hooks and non-obvious component props get a short TSDoc comment (what it's for, anything surprising); don't Javadoc-style-document every prop the types already explain.
-2. Write an implementation summary covering the Phase 3 design (the approved plan, restated — not just a link back to chat), what was built, key decisions, and non-obvious constraints. If what was built diverged from the approved design (e.g. a test premise broke, an edge case forced a different approach), say so explicitly rather than silently updating the design to match the outcome:
-   - If `module` is `client` → `client/docs/<TICKET_ID>_<TICKET_TITLE>.md`
-   - If `module` is `infra` → `infra/documentation/<TICKET_ID>_<TICKET_TITLE>.md`
-   - If `module` is `chat` → `services/chat/docs/<TICKET_ID>_<TICKET_TITLE>.md`
-   - Otherwise → `modules/<domain>/docs/<TICKET_ID>_<TICKET_TITLE>.md`
+2. Write an implementation summary covering the Phase 3 design (the approved plan, restated — not just a link back to chat), what was built, key decisions, and non-obvious constraints. If what was built diverged from the approved design (e.g. a test premise broke, an edge case forced a different approach), say so explicitly rather than silently updating the design to match the outcome. Path depends on whether this module has been restructured per
+   `documentation/md/BACKLOG_STRUCTURE_CONVENTION.md` (a `<VERSION>/` subfolder exists next to its
+   backlog file — check before picking a path):
+   - **Restructured** → `<root>/docs/<VERSION>/<TICKET_ID>_<TICKET_TITLE>.md` (e.g.
+     `client/docs/MVP/<TICKET_ID>_<TICKET_TITLE>.md`) — same filename convention as every other file
+     already in that folder, no status in the name.
+   - **Flat** (not yet restructured) → same as before:
+     - If `module` is `client` → `client/docs/<TICKET_ID>_<TICKET_TITLE>.md`
+     - If `module` is `infra` → `infra/documentation/<TICKET_ID>_<TICKET_TITLE>.md`
+     - If `module` is `chat` → `services/chat/docs/<TICKET_ID>_<TICKET_TITLE>.md`
+     - Otherwise → `modules/<domain>/docs/<TICKET_ID>_<TICKET_TITLE>.md`
 3. Add a one-line summary to `PROGRESS.md` under the relevant section
-4. Update the ticket's status to `DONE` in the backlog file (`BACKLOG_<VERSION>.md`). For client tickets, if implementation revealed a correction to the epic spec (changed contract, resolved open question), note it on the backlog entry as a **Delta** so the next ticket doesn't trip on the stale spec.
+4. Update the ticket's status in the backlog file (`BACKLOG_<VERSION>.md`):
+   - **Restructured** → move the ticket's row from the **Open** table into the **Done** table,
+     inserted at the position that keeps Done sorted by completion date descending (newest first) —
+     don't just flip the status word in place and leave it under Open.
+   - **Flat** → flip the status to `DONE` in place, same as before.
+   For client tickets, if implementation revealed a correction to the epic spec (changed contract,
+   resolved open question), note it on the ticket's own entry (its file, if restructured; its inline
+   section, if flat) as a **Delta** so the next ticket doesn't trip on the stale spec.
