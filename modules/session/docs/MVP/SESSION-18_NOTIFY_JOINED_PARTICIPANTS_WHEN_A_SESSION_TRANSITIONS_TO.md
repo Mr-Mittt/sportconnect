@@ -1,6 +1,6 @@
 # SESSION-18 · Notify JOINED participants when a session transitions to ONGOING
 
-**Status:** `TODO`
+**Status:** `DONE`
 **Type:** New Feature
 
 **Filed:** 2026-08-17, user request during the NTF-2/SESSION-15/17 work: "add a new session
@@ -71,3 +71,75 @@ caller who performed the action. This one is different on both counts:
 
 **Out of scope (same as every other session event ticket):** the notification consumer's
 aggregation/display logic beyond what's needed to not crash on a null actor; any client/UI change.
+
+---
+
+## Implementation
+
+**Open questions, resolved:**
+1. **No-actor shape:** `SessionStatusStartedEvent` (`session-api`) carries only `sessionId` — no
+   `actorId` field at all, unlike every other session event DTO. `ParsedSessionEvent`'s `actorId`
+   was already a nullable `UUID`, so `SessionEventsConsumer`'s new `session.status.started` parse
+   case passes a literal `null` straight through `ParsedSessionEvent.fanOut(...)`.
+   `NotificationServiceImpl.recordEvent` got a small guard — the `actorIds` list mutation is
+   skipped when `actorId == null`, but `actorCount` still increments unconditionally.
+   `SessionEventProcessor`'s existing recipient filter (`!recipientId.equals(event.actorId())`)
+   needed **no change** — confirmed `recipientId.equals(null)` is always `false`, so a null actor
+   never wrongly filters out a real recipient.
+2. **Fix scope:** the `recordEvent` null-actor guard shipped as part of this ticket (small,
+   isolated, and this is the only caller that will ever pass a null `actorId`).
+3. **Shared vs. duplicated outbox writer:** extracted `SessionOutboxWriter` (new
+   `session.service` class, `@Component`) — `record()` (build-and-save) and `build()`
+   (build-only, for batch callers). Both `SessionServiceImpl` and `SessionGenerationService`
+   inject it. `SessionServiceImpl`'s previously-private `recordOutboxEvent`/`buildOutboxEvent`
+   pair (SESSION-15) was deleted in favor of delegating to this shared component — its
+   `ObjectMapper` field is gone (no longer used directly), `SessionOutboxEventRepository` stays
+   (still used directly for `createSession`'s invite-batch `saveAll`).
+4. **Branch:** handled by `/workon`'s own Phase 0 (started from `master`, new branch created) —
+   no separate confirmation needed since the "confirm before implementing" case only applies when
+   *not* starting from `master`.
+
+**What was built:**
+- `SessionGenerationService.startOngoingSessions`: after flipping each batch's sessions to
+  `ONGOING` and `saveAll`-ing them, builds one `SessionStatusStartedEvent` outbox row per session
+  via `sessionOutboxWriter.build(...)`, then `sessionOutboxEventRepository.saveAll(...)` — same
+  transaction, same batching shape as SESSION-15's invite loop in `createSession`.
+- `SessionEventsConsumer`: new `case "session.status.started"`, fan-out scoped to `JOINED` only
+  (reuses the existing `PARTICIPANT_JOINED_RECIPIENT_STATUSES` constant — same recipient set
+  `session.participant.joined` already uses).
+- No migration (reuses the existing `session_outbox_events` table and `session.*.*` queue
+  binding — 3-segment routing key already matches), no controller, no security config, no client
+  change.
+
+**Test coverage added:** `SessionGenerationServiceSpec` (outbox row written per started session,
+none written when nothing starts), `NotificationServiceImplSpec` (null-actorId `recordEvent` —
+fresh row and existing-row cases, actor list untouched, `actorCount` still increments, no NPE),
+`SessionEventsConsumerSpec` (routing-key dispatch), `SessionEventProcessorSpec` (fan-out with a
+null actor notifies every resolved recipient, none wrongly filtered out).
+
+**Test-suite blast radius (flagged and approved before implementing):** extracting
+`SessionOutboxWriter` out from under `SessionServiceImpl` touched ~11 existing
+`SessionServiceImplSpec` outbox-assertion tests — mechanically converted from asserting on
+`sessionOutboxEventRepository.save(...)` + `objectMapper.readValue(...)`-decoded payload strings,
+to asserting directly on the mocked `sessionOutboxWriter.record(eventType, payload)` interaction's
+typed payload object (no JSON round-trip needed at the test seam anymore — a net simplification,
+not just a mechanical rename).
+
+**Docs updated:** `NotificationService.recordEvent`'s Javadoc (`notification-api`) and
+`NotificationServiceImpl.recordEvent`'s Javadoc note the null-actor case;
+`modules/session/session-impl/CLAUDE.md`'s Key Classes table updated for `SessionOutboxWriter`
+and `SessionGenerationService`'s new outbox-writing behavior.
+
+**Follow-up IT test (user-prompted, "do we have enough IT?"):** the Spock coverage above all mocks
+`NotificationRepository`, so none of it actually exercises the real
+`UuidListConverter.convertToDatabaseColumn` path that was the source of the original NPE risk —
+only a real Hibernate/DB round trip proves that. Added
+`SessionEventsConsumerIntegrationTest.sessionStatusStartedEvent_consumedOverRealRabbitMq_notifiesJoinedParticipantWithNoActor`
+(`server/src/test/java/com/sportconnect/integration/`), same real-RabbitMQ-testcontainer pattern as
+that class's two existing tests: inserts a real `Session` + `JOINED` `SessionParticipant` via
+repositories, publishes a real `session.status.started` message onto the exchange, and asserts a
+real `Notification` row lands with empty `actorIds`, `actorCount == 1`, no exception. This also
+gives the new routing key itself real exchange/queue/binding coverage, which the class's own
+Javadoc notes is exactly the class of bug the mocked Spock specs can't catch. Verified locally with
+`DOCKER_HOST=npipe:////./pipe/docker_engine` set (this machine's Testcontainers/Rancher Desktop
+named-pipe detection gap — documented in `server/README.md`'s Troubleshooting section, not new).

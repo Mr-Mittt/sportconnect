@@ -145,6 +145,47 @@ class NotificationServiceImplSpec extends Specification {
         1 * notificationRepository.save({ Notification n -> n.id == null && n.actorCount == 1 }) >> { Notification n -> n }
     }
 
+    def "recordEvent with a null actorId (SESSION-18's system-triggered event) leaves actorIds untouched but still bumps actorCount"() {
+        given:
+        notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
+                recipientId, "session.status.started", "SESSION", "42") >> Optional.empty()
+        notificationRepository.countByRecipientUserIdAndIsReadFalse(recipientId) >> 1L
+
+        when:
+        notificationService.recordEvent(recipientId, "session.status.started", "SESSION", "42", null)
+
+        then:
+        1 * notificationRepository.save({ Notification n ->
+            n.actorIds == [] && n.actorCount == 1
+        }) >> { Notification n -> n.tap { id = 100L } }
+        noExceptionThrown()
+    }
+
+    def "recordEvent with a null actorId on an existing open group leaves its actor list untouched"() {
+        given:
+        def existing = Notification.builder()
+                .id(5L)
+                .recipientUserId(recipientId)
+                .type("session.status.started")
+                .entityType("SESSION")
+                .entityId("42")
+                .actorIds([])
+                .actorCount(1)
+                .isRead(false)
+                .build()
+        notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
+                recipientId, "session.status.started", "SESSION", "42") >> Optional.of(existing)
+        notificationRepository.countByRecipientUserIdAndIsReadFalse(recipientId) >> 1L
+
+        when:
+        notificationService.recordEvent(recipientId, "session.status.started", "SESSION", "42", null)
+
+        then:
+        1 * notificationRepository.save({ Notification n ->
+            n.actorIds == [] && n.actorCount == 2
+        }) >> existing
+    }
+
     def "markAsRead flips isRead when the caller owns the notification"() {
         given:
         def notification = Notification.builder().id(7L).recipientUserId(recipientId).isRead(false).build()

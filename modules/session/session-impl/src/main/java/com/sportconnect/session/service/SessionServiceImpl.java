@@ -1,7 +1,5 @@
 package com.sportconnect.session.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.group.api.dto.GroupResponse;
@@ -82,7 +80,7 @@ public class SessionServiceImpl implements SessionService {
     private final CommentService commentService;
     private final SessionGate sessionGate;
     private final SessionOutboxEventRepository sessionOutboxEventRepository;
-    private final ObjectMapper objectMapper;
+    private final SessionOutboxWriter sessionOutboxWriter;
 
     @Override
     @Transactional
@@ -168,7 +166,7 @@ public class SessionServiceImpl implements SessionService {
                                 .userId(inviteeId)
                                 .status(ParticipantStatus.INVITED)
                                 .build());
-                        inviteOutboxEvents.add(buildOutboxEvent("session.invitation.created",
+                        inviteOutboxEvents.add(sessionOutboxWriter.build("session.invitation.created",
                                 SessionInvitationCreatedEvent.builder()
                                         .sessionId(saved.getId())
                                         .actorId(userId)
@@ -334,13 +332,13 @@ public class SessionServiceImpl implements SessionService {
         // JOINED here (SESSION-16's early return above catches that case), so no extra guard is
         // needed to avoid double-firing on an already-JOINED caller.
         if (targetStatus == ParticipantStatus.REQUESTED && previousStatus != ParticipantStatus.REQUESTED) {
-            recordOutboxEvent("session.join_request.created", SessionJoinRequestCreatedEvent.builder()
+            sessionOutboxWriter.record("session.join_request.created", SessionJoinRequestCreatedEvent.builder()
                     .sessionId(sessionId)
                     .actorId(userId)
                     .recipientUserId(session.getCreatedBy())
                     .build());
         } else if (targetStatus == ParticipantStatus.JOINED) {
-            recordOutboxEvent("session.participant.joined", SessionParticipantJoinedEvent.builder()
+            sessionOutboxWriter.record("session.participant.joined", SessionParticipantJoinedEvent.builder()
                     .sessionId(sessionId)
                     .actorId(userId)
                     .build());
@@ -416,12 +414,12 @@ public class SessionServiceImpl implements SessionService {
         // Two distinct recipients: the requester (their request was approved) and every other
         // currently-JOINED participant (a new member joined) — requireRequestedParticipant
         // guarantees this is always a REQUESTED->JOINED transition, unlike joinSession.
-        recordOutboxEvent("session.join_request.approved", SessionJoinRequestApprovedEvent.builder()
+        sessionOutboxWriter.record("session.join_request.approved", SessionJoinRequestApprovedEvent.builder()
                 .sessionId(sessionId)
                 .actorId(callerId)
                 .recipientUserId(userId)
                 .build());
-        recordOutboxEvent("session.participant.joined", SessionParticipantJoinedEvent.builder()
+        sessionOutboxWriter.record("session.participant.joined", SessionParticipantJoinedEvent.builder()
                 .sessionId(sessionId)
                 .actorId(userId)
                 .build());
@@ -436,7 +434,7 @@ public class SessionServiceImpl implements SessionService {
         participant.setRejectReason(reason);
         sessionParticipantRepository.save(participant);
 
-        recordOutboxEvent("session.join_request.rejected", SessionJoinRequestRejectedEvent.builder()
+        sessionOutboxWriter.record("session.join_request.rejected", SessionJoinRequestRejectedEvent.builder()
                 .sessionId(sessionId)
                 .actorId(callerId)
                 .recipientUserId(userId)
@@ -495,7 +493,7 @@ public class SessionServiceImpl implements SessionService {
         Session session = requireSessionAccess(sessionId, userId);
         CommentResponse response = commentService.createSessionComment(session.getPostId(), userId, request);
 
-        recordOutboxEvent("session.comment.created", SessionCommentCreatedEvent.builder()
+        sessionOutboxWriter.record("session.comment.created", SessionCommentCreatedEvent.builder()
                 .sessionId(sessionId)
                 .actorId(userId)
                 .commentId(response.getId())
@@ -573,33 +571,6 @@ public class SessionServiceImpl implements SessionService {
     private Session findSessionOrThrow(Long sessionId) {
         return sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "id", sessionId));
-    }
-
-    /**
-     * Writes one {@code session_outbox_events} row in the same transaction as the triggering
-     * write (SESSION-15) — never a separate transaction, so a rollback of the caller's write also
-     * rolls this back. {@code SessionOutboxRelayJob} is the only thing that ever reads a row back
-     * out. A serialization failure here is a programmer error (the payload types are this class's
-     * own event DTOs), so it's rethrown unchecked rather than swallowed.
-     */
-    private void recordOutboxEvent(String eventType, Object payload) {
-        sessionOutboxEventRepository.save(buildOutboxEvent(eventType, payload));
-    }
-
-    /**
-     * Builds without saving — lets {@link #createSession} collect one row per invitee and persist
-     * them all via a single {@code saveAll}, same batching shape as this method's own
-     * {@code seedParticipants} list, instead of one {@code save()} per invitee in that loop.
-     */
-    private SessionOutboxEvent buildOutboxEvent(String eventType, Object payload) {
-        SessionOutboxEvent event = new SessionOutboxEvent();
-        event.setEventType(eventType);
-        try {
-            event.setPayload(objectMapper.writeValueAsString(payload));
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to serialize outbox payload for " + eventType, e);
-        }
-        return event;
     }
 
     private void requireCanModify(Session session, UUID userId) {

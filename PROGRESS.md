@@ -2635,8 +2635,8 @@ explicit go-ahead at each step (full story in A3's summary doc):
   no module actually implements them, so there's no owning backlog to file a fix-the-schema ticket
   against; flagged here in case someone wants to scope either "build the feature" or "drop the dead
   table" later, same "leftover placeholder, leave it alone" status as `sport-impl`'s `FacilityType`.
-- **MVP backlog (session module):** as of 2026-08-18, 16 of 20 tickets `DONE`; `TODO` remain
-  SESSION-8, SESSION-18, SESSION-19, SESSION-20.
+- **MVP backlog (session module):** as of 2026-08-18, 17 of 20 tickets `DONE`; `TODO` remain
+  SESSION-8, SESSION-19, SESSION-20.
 - **CLIENT-SESSION-8 (`DONE`, 2026-08-12,
   `client/docs/MVP/CLIENT-SESSION-8_SESSION_COMMENTS.md`):** an inline "Discussion" section in
   `SessionDetailModal` (list + post + delete-own-comment, one-level reply nesting, per-comment
@@ -2841,6 +2841,35 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `0 * save` + `0 * outbox`, replacing the old single test that had only asserted the outbox side
   and accepted the demote-then-save as expected. No migration/DTO/controller changes; no new IT test
   (not an authorization-boundary change).
+- **SESSION-18 (`DONE`, 2026-08-18,
+  `modules/session/docs/MVP/SESSION-18_NOTIFY_JOINED_PARTICIPANTS_WHEN_A_SESSION_TRANSITIONS_TO.md`):**
+  new `session.status.started` outbox event, fired by `SessionGenerationService.startOngoingSessions`
+  (the scheduled job, not a request) when it flips a session `SCHEDULED`→`ONGOING`; notifies every
+  `JOINED` participant, no client change. Resolved the ticket's 3 previously-open design questions:
+  (1) **no-actor shape** — `SessionStatusStartedEvent` carries no `actorId` field at all (the first
+  session event DTO without one), the consumer passes a literal `null` through the already-nullable
+  `ParsedSessionEvent.actorId`; `NotificationServiceImpl.recordEvent` got a small guard skipping the
+  `actorIds` list mutation on a null actor (still bumps `actorCount`) — confirmed and fixed the real
+  NPE this would otherwise hit in `UuidListConverter` (`.map(UUID::toString)` over a list containing
+  a null entry); `SessionEventProcessor`'s existing recipient filter needed no change, already
+  null-safe. (2) the `recordEvent` fix shipped **as part of this ticket**, not a separate one — small
+  and single-caller. (3) **extracted `SessionOutboxWriter`**, a new shared `session.service`
+  component both `SessionServiceImpl` and `SessionGenerationService` inject, replacing
+  `SessionServiceImpl`'s own private `recordOutboxEvent`/`buildOutboxEvent` pair (SESSION-15) —
+  flagged and user-approved up front given the blast radius: ~11 existing `SessionServiceImplSpec`
+  outbox tests converted from asserting on serialized-JSON payloads via a real `ObjectMapper` to
+  asserting directly on the mocked writer's typed payload argument (a net simplification, not just a
+  mechanical rename). No migration (reused the existing `session_outbox_events` table and
+  `session.*.*` queue binding), no controller/client change. **Follow-up (same day, user asked "do
+  we have enough IT?"):** identified that every Spock test for the null-actor fix mocks
+  `NotificationRepository`, so none of them actually exercise the real `UuidListConverter` path
+  that was the source of the NPE risk. Added a new real-RabbitMQ-testcontainer IT test to
+  `SessionEventsConsumerIntegrationTest` — publishes a real `session.status.started` message,
+  asserts a real `Notification` row persists with empty `actorIds`/`actorCount == 1` via a genuine
+  Hibernate/DB round trip, closing both that gap and the new routing key's lack of real
+  exchange/queue/binding coverage. Surfaced (not newly caused) that this sandbox's Testcontainers
+  needs `DOCKER_HOST=npipe:////./pipe/docker_engine` set to find Docker — a pre-existing, already-
+  documented `server/README.md` Troubleshooting entry, not a new gap.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

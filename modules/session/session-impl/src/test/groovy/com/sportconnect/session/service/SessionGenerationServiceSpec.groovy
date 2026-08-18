@@ -4,7 +4,10 @@ import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse
 import com.sportconnect.group.api.service.GroupService
 import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.dto.SessionType
+import com.sportconnect.session.api.event.SessionStatusStartedEvent
 import com.sportconnect.session.entity.Session
+import com.sportconnect.session.entity.SessionOutboxEvent
+import com.sportconnect.session.repository.SessionOutboxEventRepository
 import com.sportconnect.session.repository.SessionRepository
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.domain.PageImpl
@@ -21,9 +24,12 @@ class SessionGenerationServiceSpec extends Specification {
 
     SessionRepository sessionRepository = Mock()
     GroupService groupService = Mock()
+    SessionOutboxEventRepository sessionOutboxEventRepository = Mock()
+    SessionOutboxWriter sessionOutboxWriter = Mock()
 
     @Subject
-    SessionGenerationService service = new SessionGenerationService(sessionRepository, groupService)
+    SessionGenerationService service = new SessionGenerationService(
+            sessionRepository, groupService, sessionOutboxEventRepository, sessionOutboxWriter)
 
     def "generateUpcomingSessions skips a group with an incomplete recurrence rule"() {
         given:
@@ -184,6 +190,9 @@ class SessionGenerationServiceSpec extends Specification {
         2 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >>>
                 [firstBatch, secondBatch]
         1 * sessionRepository.saveAll({ List sessions -> sessions[0].status == SessionStatus.ONGOING })
+        1 * sessionOutboxWriter.build("session.status.started", { SessionStatusStartedEvent e -> e.sessionId == 1L }) >>
+                new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List<SessionOutboxEvent> events -> events.size() == 1 })
     }
 
     def "startOngoingSessions does nothing when nothing is ready to start"() {
@@ -196,5 +205,7 @@ class SessionGenerationServiceSpec extends Specification {
         then:
         1 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >> new PageImpl([])
         0 * sessionRepository.saveAll(_)
+        0 * sessionOutboxWriter.build(_, _)
+        0 * sessionOutboxEventRepository.saveAll(_)
     }
 }

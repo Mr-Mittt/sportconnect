@@ -91,6 +91,10 @@ public class NotificationServiceImpl implements NotificationService {
      * dedupes {@code actorId} (moving it to the front if already present) and is trimmed to the
      * {@value #MAX_ACTOR_IDS} most recent distinct actors; {@code actorCount} counts every matched
      * event, so it can exceed the actor list's length once the same actor triggers repeat events.
+     * {@code actorId} is null for a system-triggered event with no human actor (SESSION-18's
+     * {@code session.status.started}, the first such caller) — the actor list is left untouched in
+     * that case (no null entry ever reaches {@code UuidListConverter}, which would NPE on one),
+     * but {@code actorCount} still increments.
      */
     @Override
     @Transactional
@@ -105,13 +109,15 @@ public class NotificationServiceImpl implements NotificationService {
                         .entityId(entityId)
                         .build());
 
-        List<UUID> actorIds = new ArrayList<>(notification.getActorIds());
-        actorIds.remove(actorId);
-        actorIds.add(0, actorId);
-        if (actorIds.size() > MAX_ACTOR_IDS) {
-            actorIds = actorIds.subList(0, MAX_ACTOR_IDS);
+        if (actorId != null) {
+            List<UUID> actorIds = new ArrayList<>(notification.getActorIds());
+            actorIds.remove(actorId);
+            actorIds.add(0, actorId);
+            if (actorIds.size() > MAX_ACTOR_IDS) {
+                actorIds = actorIds.subList(0, MAX_ACTOR_IDS);
+            }
+            notification.setActorIds(actorIds);
         }
-        notification.setActorIds(actorIds);
         notification.setActorCount(notification.getActorCount() + 1);
 
         Notification saved = notificationRepository.save(notification);
