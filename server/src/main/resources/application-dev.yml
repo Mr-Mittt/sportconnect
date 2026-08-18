@@ -59,6 +59,15 @@ app:
     refresh-expiration: 86400000 # 1 day
   cookie:
     secure: false # Vite (:5173) -> API (:8080) over plain HTTP locally
+  # Dev-only: adds wildcard LAN patterns on top of the base app.cors.allowed-origins (application.yml)
+  # so a phone/tablet on the same Wi-Fi can reach the Vite dev server (pnpm dev --host) and its
+  # proxied /api calls without editing this file per-IP each time (DHCP addresses change). Covers the
+  # three private-network ranges (RFC 1918); the 172.x pattern is broader than the strict 172.16-31
+  # block but that's an acceptable dev-only tradeoff, same posture as cookie.secure: false above.
+  # Never do this in application-prod.yml — that file has no cors override and inherits
+  # application.yml's exact-origin default via CORS_ORIGINS.
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:5173,http://192.168.*.*:5173,http://10.*.*.*:5173,http://172.*.*.*:5173
   # Dev-only literal, same treatment as jwt.secret above — application-prod.yml still requires
   # the real INTERNAL_SERVICE_SECRET env var with no default. Must match services/chat/.env's
   # INTERNAL_SERVICE_SECRET (see services/chat/docs/SYNC_DESIGN.md) so the chat service's
