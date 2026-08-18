@@ -37,6 +37,18 @@ public class SecurityConfig {
     @Value("${app.internal-service-secret}")
     private String internalServiceSecret;
 
+    @Value("${app.cors.allowed-origins}")
+    private String corsAllowedOrigins;
+
+    @Value("${app.cors.allowed-methods}")
+    private String corsAllowedMethods;
+
+    @Value("${app.cors.allowed-headers}")
+    private String corsAllowedHeaders;
+
+    @Value("${app.cors.allow-credentials}")
+    private boolean corsAllowCredentials;
+
     /**
      * Service-to-service traffic only ({@code /internal/**} — services/chat's cold-start
      * bootstrap pull, see services/chat/docs/SYNC_DESIGN.md). Deliberately a separate chain from
@@ -116,17 +128,34 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * Reads every value from {@code app.cors.*} (application.yml, overridable per-profile or via
+     * the {@code CORS_ORIGINS} env var) — previously this hardcoded its own origin/method/header
+     * list in Java, silently ignoring those properties entirely (they were dead config: setting
+     * {@code CORS_ORIGINS} never actually changed anything). {@code setAllowedOriginPatterns},
+     * not {@code setAllowedOrigins}, so a dev-profile entry can use a {@code *} wildcard (e.g. for
+     * a phone reaching the Vite dev server over LAN) — {@code setAllowedOrigins} requires an exact
+     * string match and additionally forbids {@code *} outright once {@code allowCredentials} is
+     * true, which this app always needs for the refresh-token cookie.
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
-        configuration.setAllowCredentials(true);
+        configuration.setAllowedOriginPatterns(splitCsv(corsAllowedOrigins));
+        configuration.setAllowedMethods(splitCsv(corsAllowedMethods));
+        configuration.setAllowedHeaders(splitCsv(corsAllowedHeaders));
+        configuration.setAllowCredentials(corsAllowCredentials);
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    private static List<String> splitCsv(String csv) {
+        return Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .toList();
     }
 }
