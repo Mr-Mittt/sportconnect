@@ -1,14 +1,22 @@
 package com.sportconnect.notification.service;
 
 import com.sportconnect.notification.access.NotificationGate;
+import com.sportconnect.notification.api.dto.NotificationActorSummary;
 import com.sportconnect.notification.api.dto.NotificationRecordResult;
 import com.sportconnect.notification.api.dto.NotificationResponse;
 import com.sportconnect.notification.api.service.NotificationService;
 import com.sportconnect.notification.entity.Notification;
 import com.sportconnect.notification.repository.NotificationRepository;
+import com.sportconnect.session.api.service.SessionService;
+import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.service.UserService;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,13 +30,42 @@ public class NotificationServiceImpl implements NotificationService {
     /** Bounded actor-list size for the "X, Y and N others" aggregation display — see the vision doc's open questions. */
     private static final int MAX_ACTOR_IDS = 3;
 
+    private static final String ENTITY_TYPE_SESSION = "SESSION";
+
     private final NotificationRepository notificationRepository;
     private final NotificationGate notificationGate;
+    private final UserService userService;
+    private final SessionService sessionService;
 
+    /**
+     * NTF-4: batch-resolves {@code actors}/{@code entityTitle} for the whole page in two calls
+     * total (one to {@code user-api}, one to {@code session-api}), never one per row — collects
+     * every distinct actorId across the page and every distinct SESSION entityId, looks both up
+     * once, then maps each row from the two resulting {@code Map}s.
+     */
     @Override
     public Page<NotificationResponse> getNotifications(UUID recipientUserId, Pageable pageable) {
-        return notificationRepository.findByRecipientUserIdOrderByUpdatedAtDesc(recipientUserId, pageable)
-                .map(this::toResponse);
+        Page<Notification> notifications =
+                notificationRepository.findByRecipientUserIdOrderByUpdatedAtDesc(recipientUserId, pageable);
+
+        List<UUID> actorIds = notifications.getContent().stream()
+                .flatMap(n -> n.getActorIds().stream())
+                .distinct()
+                .collect(Collectors.toList());
+        Map<UUID, UserResponse> usersById = actorIds.isEmpty()
+                ? Collections.emptyMap()
+                : userService.getUsersByIds(actorIds);
+
+        List<Long> sessionIds = notifications.getContent().stream()
+                .filter(n -> ENTITY_TYPE_SESSION.equals(n.getEntityType()))
+                .map(n -> Long.valueOf(n.getEntityId()))
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, String> sessionTitlesById = sessionIds.isEmpty()
+                ? Collections.emptyMap()
+                : sessionService.getSessionTitlesByIds(sessionIds);
+
+        return notifications.map(n -> toResponse(n, usersById, sessionTitlesById));
     }
 
     @Override
@@ -82,7 +119,18 @@ public class NotificationServiceImpl implements NotificationService {
         return new NotificationRecordResult(saved.getId(), unreadCount);
     }
 
-    private NotificationResponse toResponse(Notification notification) {
+    private NotificationResponse toResponse(
+            Notification notification, Map<UUID, UserResponse> usersById, Map<Long, String> sessionTitlesById) {
+        List<NotificationActorSummary> actors = notification.getActorIds().stream()
+                .map(usersById::get)
+                .filter(Objects::nonNull)
+                .map(u -> NotificationActorSummary.builder().id(u.getId()).fullName(u.getFullName()).build())
+                .collect(Collectors.toList());
+
+        String entityTitle = ENTITY_TYPE_SESSION.equals(notification.getEntityType())
+                ? sessionTitlesById.get(Long.valueOf(notification.getEntityId()))
+                : null;
+
         return NotificationResponse.builder()
                 .id(notification.getId())
                 .type(notification.getType())
@@ -93,6 +141,8 @@ public class NotificationServiceImpl implements NotificationService {
                 .isRead(notification.getIsRead())
                 .createdAt(notification.getCreatedAt())
                 .updatedAt(notification.getUpdatedAt())
+                .actors(actors)
+                .entityTitle(entityTitle)
                 .build();
     }
 }

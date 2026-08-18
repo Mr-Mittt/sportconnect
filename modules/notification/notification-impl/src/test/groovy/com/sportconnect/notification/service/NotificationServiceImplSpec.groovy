@@ -5,6 +5,9 @@ import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.notification.access.NotificationGate
 import com.sportconnect.notification.entity.Notification
 import com.sportconnect.notification.repository.NotificationRepository
+import com.sportconnect.session.api.service.SessionService
+import com.sportconnect.user.api.dto.UserResponse
+import com.sportconnect.user.api.service.UserService
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import spock.lang.Specification
@@ -14,9 +17,12 @@ class NotificationServiceImplSpec extends Specification {
 
     NotificationRepository notificationRepository = Mock()
     NotificationGate notificationGate = Mock()
+    UserService userService = Mock()
+    SessionService sessionService = Mock()
 
     @Subject
-    NotificationServiceImpl notificationService = new NotificationServiceImpl(notificationRepository, notificationGate)
+    NotificationServiceImpl notificationService =
+            new NotificationServiceImpl(notificationRepository, notificationGate, userService, sessionService)
 
     UUID recipientId = UUID.randomUUID()
     UUID actorId = UUID.randomUUID()
@@ -190,7 +196,54 @@ class NotificationServiceImplSpec extends Specification {
         thrown(ForbiddenException)
     }
 
-    def "getNotifications delegates to the repository ordered query"() {
+    def "getNotifications delegates to the repository ordered query and skips both enrichment calls when the page is empty"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        notificationRepository.findByRecipientUserIdOrderByUpdatedAtDesc(recipientId, pageable) >>
+                new PageImpl<>([])
+
+        when:
+        def result = notificationService.getNotifications(recipientId, pageable)
+
+        then:
+        result.content.isEmpty()
+        0 * userService.getUsersByIds(_)
+        0 * sessionService.getSessionTitlesByIds(_)
+    }
+
+    def "getNotifications batch-resolves actors and entityTitle for a SESSION notification in one call each"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        def notification = Notification.builder()
+                .id(1L)
+                .recipientUserId(recipientId)
+                .type("session.comment.created")
+                .entityType("SESSION")
+                .entityId("42")
+                .actorIds([actorId])
+                .actorCount(1)
+                .isRead(false)
+                .build()
+        notificationRepository.findByRecipientUserIdOrderByUpdatedAtDesc(recipientId, pageable) >>
+                new PageImpl<>([notification])
+        def actorUser = new UserResponse(id: actorId, firstName: "Alice", lastName: "Nguyen")
+
+        when:
+        def result = notificationService.getNotifications(recipientId, pageable)
+
+        then:
+        1 * userService.getUsersByIds([actorId]) >> [(actorId): actorUser]
+        1 * sessionService.getSessionTitlesByIds([42L]) >> [(42L): "Friday Pickup Game"]
+        result.content.size() == 1
+        result.content[0].id == 1L
+        result.content[0].actorIds == [actorId]
+        result.content[0].actors.size() == 1
+        result.content[0].actors[0].id == actorId
+        result.content[0].actors[0].fullName == actorUser.fullName
+        result.content[0].entityTitle == "Friday Pickup Game"
+    }
+
+    def "getNotifications drops an actorId that user-api doesn't return, and leaves entityTitle null for a non-SESSION entityType"() {
         given:
         def pageable = PageRequest.of(0, 20)
         def notification = Notification.builder()
@@ -210,9 +263,10 @@ class NotificationServiceImplSpec extends Specification {
         def result = notificationService.getNotifications(recipientId, pageable)
 
         then:
-        result.content.size() == 1
-        result.content[0].id == 1L
-        result.content[0].actorIds == [actorId]
+        1 * userService.getUsersByIds([actorId]) >> [:]
+        0 * sessionService.getSessionTitlesByIds(_)
+        result.content[0].actors.isEmpty()
+        result.content[0].entityTitle == null
     }
 
     def "getUnreadCount delegates to the repository"() {

@@ -16,6 +16,11 @@ dependencies {
     // cross-domain-via-api-only interface JwtAuthenticationFilter uses internally in auth-impl.
     implementation project(':modules:auth:auth-api')
 
+    // NTF-4: UserService.getUsersByIds — batch-resolves actorIds to display names for
+    // NotificationResponse.actors, no-N+1-shaped (one call per getNotifications page, not one
+    // per row).
+    implementation project(':modules:user:user-api')
+
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'

@@ -203,6 +203,7 @@ e2e/
     group-chat.spec.ts        # CHAT-10
     direct-chat.spec.ts       # CHAT-10
     matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9
+    notification-bell.spec.ts # CLIENT-NOTIF-1
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
@@ -225,6 +226,7 @@ e2e/
       chat.ts                   # CHAT-10 — a separate backend (services/chat), bare paths, no ApiResponse<T> envelope
       locations.ts               # CLIENT-SESSION-1
       sessions.ts                # CLIENT-SESSION-1
+      notifications.ts           # CLIENT-NOTIF-1
 ```
 
 ---
@@ -604,6 +606,43 @@ steps 9-10 are what's actually new.
 | 8. favorite a location, then pick it from the favorites dropdown | Open a new create form → dropdown shows "No favorites yet." → open `LocationPicker`, search "Riverside" → click the heart on `mockLocation`'s row (aria-label flips to "Unfavorite …") → select it → reopen the dropdown → the just-favorited location now lists instead of the empty state → selecting it sets the location again | Confirms `LocationFavoritesDropdown`'s real Radix `DropdownMenu` (`modal={false}`) actually works nested inside the Dialog — CLIENT-SESSION-2 had reverted an earlier attempt after it appeared broken live; CLIENT-SESSION-5 found and fixed the real cause (see its summary doc) |
 | 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverSessions`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED` row for, same exclusion rule as the real backend |
 | 10. search filters Discover; the panel toggle hides/shows My sessions | Typing a non-matching string into the search box shows "No sessions match your search." in Discover; the "Hide my sessions"/"Show my sessions" button toggles the whole `region` "My sessions" | Search is client-side only (`useMatchesPageData`'s `discoverSessions` memo), not a new backend query |
+
+### `e2e/flows/notification-bell.spec.ts` (CLIENT-NOTIF-1, two `test()`s — a 4-step journey + one regression case)
+
+The `TopBar` bell + dropdown — unread badge, list-on-open, mark-read-on-click + shell-level
+in-place modal, and "Mark all read". Fixtures: `mocks/handlers/notifications.ts`'s
+`defaultNotificationsState` — 2 unread (id 1 aggregated to 2 distinct actors, `mockFriend`/Priya
+Shah + a second inline actor "Hana Kim", exercising `getNotificationText`'s "and 1 other" branch;
+id 2 a single-actor `session.join_request.created`) and 1 already-read (id 3,
+`session.join_request.approved`, no actor — exercises the "Someone"-less approval-outcome copy).
+All three reference `mockSession`'s id (1) as `entityId`. No coverage of the STOMP live-push path
+here (NTF-3's own `NotificationStompIntegrationTest`/`useNotificationLiveSocket.test.tsx` already
+cover it end to end) — this spec is scoped to the REST-backed list/read/badge behavior
+CLIENT-NOTIF-1 actually built.
+
+**Design note (2026-08-18, at pickup of a follow-up correction):** clicking a notification does
+**not** navigate to `/matches?session={id}`. A first draft did that; the user flagged it live
+(reported both the unwanted page switch and a concrete symptom of a real bug: navigating to
+`/matches` with a different `?session=` while already on `/matches` silently did nothing, since
+`MatchesPage`'s `initialSessionId` is only ever read from the URL once, at mount). Fixed by giving
+`AppShell` its own shell-level `SessionDetailModal` instance (fed by the same
+`useSessionDetailModalData` every page's own in-place "View details" modal already uses) — the bell
+now opens that overlay directly, with **no URL change at all**, regardless of which page the caller
+was on. Test 2 below is the regression case for the exact bug that motivated this.
+
+| Step (`Notification bell journey`) | What it checks | Notes |
+|---|---|---|
+| 1. initial badge | Bell shows "2 unread notifications" before the dropdown is ever opened | Proves `useUnreadNotificationCount` alone drives the badge — no `GET /notifications` list call happens yet |
+| 2. open — list fetched, aggregated text renders | Clicking the bell renders all 3 rows' derived text, including the 2-actor "and 1 other" phrasing and the no-actor approval-outcome sentence | First point the list query (`enabled: isOpen`) actually fires |
+| 3. click a row | Clicking the aggregated unread row marks it read, opens `SessionDetailModal` in place (still on `/`, URL unchanged before and after), badge drops to "1 unread notifications" | Home Feed is the seeded starting page — proves the modal overlays it directly, no page switch |
+| 4. Mark all read | Closing the modal, reopening the bell, clicking "Mark all read" clears the one remaining unread row and hides both the button and the badge | Fires one `PUT /{id}/read` per currently-loaded unread id (no bulk endpoint exists) — only id 2 needed marking, id 3 was already read |
+
+`Notification bell journey — clicking a notification while already on /matches` — seeds straight
+onto `/matches` (which already renders `mockSession` as a "Sunday pickup run" card in its own "My
+sessions" panel), opens the bell, clicks the aggregated row, and asserts the shell-level dialog
+opens and the URL stays exactly `/matches` (no `?session=` appended, no reload). This is the
+scenario that would have silently failed under the old navigate-to-`/matches?session={id}`
+approach.
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 

@@ -138,7 +138,7 @@ its "Backend reality check" section and re-verify BE-1/BE-2 status before starti
 | 66 | CLIENT-SESSION-11 | Extract a shared `SessionCard` (compact/full size variant) — de-dupes `UpcomingMatches`' rail row and `SessionListCard` — **new ticket, not in either epic, filed while discussing SPORT-4's `SportIcon` reuse** (2026-08-15) | `DONE` |
 | 67 | SPORT-2 | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 | 68 | GRP-9 | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
-| 69 | CLIENT-NOTIF-1 | Notification bell/dropdown — live badge + list + mark-as-read | `TODO` |
+| 69 | CLIENT-NOTIF-1 | Notification bell/dropdown — live badge + list + mark-as-read | `DONE` |
 
 **Dependencies:**
 ```
@@ -3221,10 +3221,10 @@ the same ratio). **No baseline regeneration needed.** Full writeup:
 ---
 
 ### CLIENT-NOTIF-1 · Notification bell/dropdown — live badge + list + mark-as-read
-**Status:** `TODO`
+**Status:** `DONE` (2026-08-18) · **Summary:** `client/docs/CLIENT-NOTIF-1_NOTIFICATION_BELL_DROPDOWN.md`
 **Type:** New Feature
-**Depends on:** backend `modules/notification`'s NTF-1 (read endpoints) and NTF-3 (STOMP live
-delivery)
+**Depends on:** backend `modules/notification`'s NTF-1 (read endpoints), NTF-3 (STOMP live
+delivery), and **NTF-4** (added below)
 
 **Filed:** 2026-08-16, from the notification-module vision session —
 `documentation/md/vision/NOTIFICATION_MODULE_VISION.md`.
@@ -3239,3 +3239,26 @@ Opening/clicking a notification calls `PUT /api/notifications/{id}/read`.
 **Out of scope:** per-type notification preferences/mute UI (no backend support yet — single-table
 v1, per the vision doc); push notifications (tracked separately under the Phase 4–5 mobile roadmap
 in `PROGRESS.md`).
+
+**Delta (2026-08-18, at pickup, before any code):** NTF-1 had deliberately shipped zero
+actor-name/entity-title enrichment on `NotificationResponse` — raw `actorIds`, a bare `entityId`,
+nothing readable. User decision: the notification API should build enough data for the client
+(server-side denormalization, same precedent as `SessionResponse.createdByFullName`), not the
+client resolving names/titles itself (no batch users-by-id endpoint exists client-side anyway).
+Filed and built as its own backend ticket, **NTF-4** (`modules/notification/docs/BACKLOG_MVP.md`),
+in this same session before any client code — `CLIENT-NOTIF-1` was built against NTF-4's real
+shipped contract from the start. Also, "Mark all read" (not in the original ticket text, confirmed
+with the user at pickup) was added, scoped to currently-loaded unread notifications only — no bulk
+mark-read endpoint exists.
+
+**Delta (2026-08-18, same day, post-ship follow-up before merge):** two corrections after the user
+tried the built feature. (1) Notification text bolds only the actor full name(s) and `entityTitle`
+(`getNotificationText` now returns segments, not a plain string); unread rows get a light-blue
+bullet + black text, read rows a gray bullet + gray text (previously the read bullet went fully
+transparent). (2) Clicking a notification no longer navigates to `/matches?session={id}` — it opens
+a new shell-level `SessionDetailModal` (`AppShell`, fed by `useSessionDetailModalData`) directly on
+whatever page the caller is on, with zero URL change. The navigation approach had a real bug the
+user caught live: `MatchesPage`'s `?session=` param is read once at mount, so navigating to
+`/matches?session={id}` while already on `/matches` silently did nothing. See
+`client/docs/CLIENT-NOTIF-1_NOTIFICATION_BELL_DROPDOWN.md`'s "Post-ship follow-up" section for
+full detail.

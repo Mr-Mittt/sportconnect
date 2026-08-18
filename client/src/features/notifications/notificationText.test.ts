@@ -1,0 +1,85 @@
+import { describe, expect, it } from 'vitest';
+import { getNotificationText, notificationTextToString } from './notificationText';
+import type { Notification } from './types';
+
+function baseNotification(overrides: Partial<Notification> = {}): Notification {
+  return {
+    id: 1,
+    type: 'session.comment.created',
+    entityType: 'SESSION',
+    entityId: '42',
+    actorIds: ['actor-1'],
+    actorCount: 1,
+    isRead: false,
+    createdAt: '2026-08-18T10:00:00',
+    updatedAt: '2026-08-18T10:00:00',
+    actors: [{ id: 'actor-1', fullName: 'Alice Nguyen' }],
+    entityTitle: 'Friday Pickup Game',
+    ...overrides,
+  };
+}
+
+describe('getNotificationText', () => {
+  it('renders a single actor by name for session.comment.created, with only the actor and title bold', () => {
+    const segments = getNotificationText(baseNotification());
+    expect(notificationTextToString(segments)).toBe('Alice Nguyen commented on "Friday Pickup Game"');
+    expect(segments).toEqual([
+      { text: 'Alice Nguyen', bold: true },
+      { text: ' commented on ', bold: false },
+      { text: '"Friday Pickup Game"', bold: true },
+    ]);
+  });
+
+  it('renders "and N others" from distinct actors.length, not actorCount, as one bold segment', () => {
+    const notification = baseNotification({
+      actorCount: 5,
+      actors: [
+        { id: 'a1', fullName: 'Alice Nguyen' },
+        { id: 'a2', fullName: 'Bao Tran' },
+        { id: 'a3', fullName: 'Chi Le' },
+      ],
+    });
+    const segments = getNotificationText(notification);
+    expect(notificationTextToString(segments)).toBe('Alice Nguyen and 2 others commented on "Friday Pickup Game"');
+    expect(segments[0]).toEqual({ text: 'Alice Nguyen and 2 others', bold: true });
+  });
+
+  it('does not say "and others" when actorCount exceeds actors.length due to one repeat actor', () => {
+    const notification = baseNotification({ actorCount: 4, actors: [{ id: 'a1', fullName: 'Alice Nguyen' }] });
+    expect(notificationTextToString(getNotificationText(notification))).toBe(
+      'Alice Nguyen commented on "Friday Pickup Game"',
+    );
+  });
+
+  it('falls back to "Someone" (not bold) when actors is empty (every actorId was missing from user-api)', () => {
+    const segments = getNotificationText(baseNotification({ actors: [] }));
+    expect(segments[0]).toEqual({ text: 'Someone', bold: false });
+    expect(notificationTextToString(segments)).toBe('Someone commented on "Friday Pickup Game"');
+  });
+
+  it('falls back to "your session" (not bold) when entityTitle is null', () => {
+    const segments = getNotificationText(baseNotification({ entityTitle: null }));
+    expect(segments.at(-1)).toEqual({ text: 'your session', bold: false });
+    expect(notificationTextToString(segments)).toBe('Alice Nguyen commented on your session');
+  });
+
+  it.each([
+    ['session.participant.joined', 'Alice Nguyen joined "Friday Pickup Game"'],
+    ['session.join_request.created', 'Alice Nguyen requested to join "Friday Pickup Game"'],
+    ['session.join_request.approved', 'Your request to join "Friday Pickup Game" was approved'],
+    ['session.join_request.rejected', 'Your request to join "Friday Pickup Game" was declined'],
+    ['session.invitation.created', 'Alice Nguyen invited you to join "Friday Pickup Game"'],
+  ])('renders %s correctly', (type, expected) => {
+    expect(notificationTextToString(getNotificationText(baseNotification({ type })))).toBe(expected);
+  });
+
+  it('the approval/rejection outcome types never bold an actor (the text never names one)', () => {
+    const segments = getNotificationText(baseNotification({ type: 'session.join_request.approved' }));
+    expect(segments.filter((s) => s.bold)).toEqual([{ text: '"Friday Pickup Game"', bold: true }]);
+  });
+
+  it('falls back to a generic sentence for an unrecognized type (forward-compat with future producers)', () => {
+    const segments = getNotificationText(baseNotification({ type: 'post.comment.created' }));
+    expect(segments).toEqual([{ text: 'You have a new notification', bold: false }]);
+  });
+});

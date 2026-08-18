@@ -25,4 +25,15 @@ public class NotificationResponse {
     private Boolean isRead;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /** NTF-4: {@code actorIds} resolved to display names, batch-fetched, same order. */
+    private List<NotificationActorSummary> actors;
+
+    /**
+     * NTF-4: human-readable title of the entity this notification points at — for today's
+     * SESSION-only scope, the session's {@code title}. {@code null} for any {@code entityType}
+     * this module doesn't yet resolve (forward-compatible with post/group/friend types once
+     * their own outbox wiring ships).
+     */
+    private String entityTitle;
 }
