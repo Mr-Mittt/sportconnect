@@ -2791,6 +2791,18 @@ explicit go-ahead at each step (full story in A3's summary doc):
   opened via a plain callback with zero URL change, on whatever page the caller is on. Full suite
   green: `:server:test` (backend), 878 Vitest, `tsc`/lint clean, Storybook builds, 51/51 e2e
   (including a dedicated already-on-`/matches` regression case).
+- **Backlog file structure convention (2026-08-18, `documentation/md/BACKLOG_STRUCTURE_CONVENTION.md`):**
+  `client/docs/BACKLOG_MVP.md` had grown to ~3,260 lines (every ticket's full write-up inline),
+  costing ~100K tokens — past the read-truncation cap — just to locate one ticket during a
+  `/workon` pickup. Restructured (and documented as a repo-wide convention for any module's
+  backlog) into a thin index — Open tickets in curated order, Done sorted by completion date
+  descending — with full per-ticket detail moved into one file per ticket under
+  `client/docs/MVP/<TICKET-ID>_<slug>.md` (no status in the filename — that would mean a rename on
+  every status change and a third source of truth alongside the index row and the file's own
+  `**Status:**` line). 74 tickets migrated, zero content loss, all cross-references repo-wide
+  updated. **Known gap, flagged not fixed:** `.claude/commands/workon.md`'s Phase 6 still writes new
+  ticket summaries to the old flat path — needs updating before `/workon` is relied on to keep a
+  retrofitted module's backlog clean going forward.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
