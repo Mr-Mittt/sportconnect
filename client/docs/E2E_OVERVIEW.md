@@ -206,6 +206,7 @@ e2e/
     notification-bell.spec.ts # CLIENT-NOTIF-1
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
+    app-groups.spec.ts        # GRP-10
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
   mocks/
     mockServer.ts            # the standalone Node HTTP server
@@ -664,6 +665,28 @@ against `e2e/visual/__screenshots__/home-feed-{state}-{width}.png`.
 it's been the documented behavior since HF-12. CI is the authoritative visual environment. Confirm a
 real regression by inspecting the diff image directly (structural content/layout shift, not a uniform
 text-shift pattern) before assuming something broke.
+
+### `e2e/visual/app-groups.spec.ts` (GRP-10, `visual-regression` project)
+
+Parameterized: 3 breakpoints × 6 states = **18 test instances**, `groups — ${state} @ ${width}px`.
+
+| State | Setup | Expects |
+|---|---|---|
+| `discovery` | `seedAuthenticatedSession(page, '/groups')`, no group selected (default landing) | "Group name or invite code" input visible |
+| `owner-posts` | Select `mockOwnedGroup` ("Weekend Tennis Ladder", sportId 3/Pickleball — the display name is an unrelated legacy string, see `fixtures.ts`), Posts tab, click the Broadcast toggle on | Posts tab selected, Broadcast toggle `aria-pressed="true"`. No fixture ties a post to this group, so the feed area legitimately shows its empty state |
+| `member-posts` | Select `mockGroup` ("Friday Night Football", sportId 1/Badminton), Posts tab | Posts tab selected, no Broadcast toggle (plain member), first article visible (`mockGroupPost`) |
+| `members-tab` | `mockOwnedGroup`, Members tab | "Group administrator" and "Waiting for group approve" regions visible |
+| `settings-tab` | `mockOwnedGroup`, Settings tab | "Privacy" row visible |
+| `chat-tab` | `mockGroup`, Chat tab, one message sent live through the real composer (MSW-persisted — `GroupChatTab` is wired to the real chat service, CHAT-8, not a local-state mock as GRP-1 originally shipped it) | Sent message text visible |
+
+Every instance: freezes the clock (same instant as `app-home-feed.spec.ts`, for consistency — this
+page renders no clock-sensitive content in any of these 6 states) → waits out every `Skeleton`
+(`.animate-pulse`) and "Loading…" placeholder still on screen (`waitForContentSettled` — several of
+this page's independent queries settle at different times, and screenshotting before all of them
+resolve caused real `toHaveScreenshot` stability-check flakiness during development, not just local
+Windows noise) → waits for `document.fonts.ready` → full-page screenshot compared against
+`e2e/visual/__screenshots__/groups-{state}-{width}.png`. Same known-Windows-noise caveat as
+`app-home-feed.spec.ts` above.
 
 ---
 

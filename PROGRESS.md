@@ -2870,6 +2870,26 @@ explicit go-ahead at each step (full story in A3's summary doc):
   exchange/queue/binding coverage. Surfaced (not newly caused) that this sandbox's Testcontainers
   needs `DOCKER_HOST=npipe:////./pipe/docker_engine` set to find Docker — a pre-existing, already-
   documented `server/README.md` Troubleshooting entry, not a new gap.
+- **GRP-10 (`DONE`, 2026-08-18, `client/docs/MVP/GRP-10_GROUP_PAGE_VISUAL_REGRESSION.md`):** new
+  `client/e2e/visual/app-groups.spec.ts` — closes the visual-regression gap GRP-1 flagged and never
+  followed up on. 6 states × 3 breakpoints = 18 baselines (discovery, owner-posts with the Broadcast
+  toggle on, member-posts, members-tab, settings-tab, chat-tab), full-page, same shape as
+  `app-home-feed.spec.ts`. **Delta found at pickup:** the ticket's own "out of scope" note claiming
+  `GroupChatTab` is still a local-state mock was stale — it's wired to the real chat service
+  (CHAT-8) — so the `chat-tab` baseline seeds a message sent live through the real composer instead
+  of a static mock render. **Real flakiness found and fixed, not local-Windows noise** (reproduced
+  3x before the fix, 0x in 3 runs after): screenshotting before this page's several independent
+  queries (settings, group info, members, approval queue, hashtags, broadcasts) all resolved raced
+  `toHaveScreenshot`'s stability check — fixed with a `waitForContentSettled` helper that waits out
+  every shared `Skeleton`/"Loading…" placeholder first. `client/docs/E2E_OVERVIEW.md` updated (§3 +
+  new §6 entry). Full `pnpm exec vitest run` (878/878, 129 files) and `eslint .` both green — this
+  ticket adds no unit-tested code, so that just confirms nothing else broke. **Remaining step for
+  whoever merges this PR:** the 18 committed baselines are Windows-rendered (verified stable
+  locally, 3/3 runs) — same "chicken and egg" HF-10b/SPORT-4 both hit, since triggering a GitHub
+  Actions `workflow_dispatch` isn't possible from this environment. Needs the `client-ci` workflow's
+  `update-baselines` dispatch → download `visual-baselines` artifact → replace
+  `client/e2e/visual/__screenshots__/groups-*.png` → commit, before CI's real Linux runs of this
+  spec will pass clean.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
