@@ -37,6 +37,16 @@ export default defineConfig({
       // Playwright always targets the real backend, unaffected.
       '/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
 
+      // NTF-3: STOMP live-delivery WebSocket endpoint, same backend as '/api'
+      // (unlike '/api/chat' above, this one IS proxied through Spring — it's
+      // the monolith's own WebSocket endpoint, not a separate service).
+      // ws: true is required the same way it is for '/api/chat' — the
+      // string-shorthand proxy form doesn't forward WebSocket upgrades.
+      '/ws': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        ws: true,
+      },
+
       // SPORT-4: Sport.iconUrl is a real backend-served static asset
       // (sport-impl's WebConfig, '/images/**' -> classpath:/images/), returned
       // by GET /api/sports as a server-relative path — without this, an

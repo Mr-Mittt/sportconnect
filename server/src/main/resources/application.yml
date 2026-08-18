@@ -114,7 +114,15 @@ app:
     allowed-methods: GET,POST,PUT,DELETE,PATCH,OPTIONS
     allowed-headers: "*"
     allow-credentials: true
-  
+
+  # NTF-3: STOMP broker-relay target — RabbitMQ's STOMP plugin (rabbitmq_stomp), a separate port
+  # from the AMQP one above. Login/passcode reuse spring.rabbitmq's own username/password: the
+  # plugin shares AMQP's user accounts by default, so no new credential is needed.
+  stomp-relay:
+    host: ${STOMP_RELAY_HOST:${spring.rabbitmq.host}}
+    port: ${STOMP_RELAY_PORT:61613}
+
+
   email:
     verification-url: ${EMAIL_VERIFICATION_URL:http://localhost:3000/verify-email}
     reset-password-url: ${RESET_PASSWORD_URL:http://localhost:3000/reset-password}

@@ -1,6 +1,7 @@
 package com.sportconnect.notification.service;
 
 import com.sportconnect.notification.access.NotificationGate;
+import com.sportconnect.notification.api.dto.NotificationRecordResult;
 import com.sportconnect.notification.api.dto.NotificationResponse;
 import com.sportconnect.notification.api.service.NotificationService;
 import com.sportconnect.notification.entity.Notification;
@@ -56,7 +57,7 @@ public class NotificationServiceImpl implements NotificationService {
      */
     @Override
     @Transactional
-    public void recordEvent(UUID recipientUserId, String type, String entityType, String entityId, UUID actorId) {
+    public NotificationRecordResult recordEvent(UUID recipientUserId, String type, String entityType, String entityId, UUID actorId) {
         Notification notification = notificationRepository
                 .findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
                         recipientUserId, type, entityType, entityId)
@@ -76,7 +77,9 @@ public class NotificationServiceImpl implements NotificationService {
         notification.setActorIds(actorIds);
         notification.setActorCount(notification.getActorCount() + 1);
 
-        notificationRepository.save(notification);
+        Notification saved = notificationRepository.save(notification);
+        long unreadCount = notificationRepository.countByRecipientUserIdAndIsReadFalse(recipientUserId);
+        return new NotificationRecordResult(saved.getId(), unreadCount);
     }
 
     private NotificationResponse toResponse(Notification notification) {

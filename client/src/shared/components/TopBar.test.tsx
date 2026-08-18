@@ -68,4 +68,19 @@ describe('TopBar', () => {
     expect(screen.queryByRole('menuitem', { name: 'Log out' })).not.toBeInTheDocument();
     expect(onLogout).not.toHaveBeenCalled();
   });
+
+  it('renders no unread badge when unreadCount is 0 or omitted', () => {
+    render(<TopBar user={user} onLogout={vi.fn()} />);
+    expect(screen.queryByLabelText(/unread notifications/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the unread count on the bell icon', () => {
+    render(<TopBar user={user} onLogout={vi.fn()} unreadCount={3} />);
+    expect(screen.getByLabelText('3 unread notifications')).toHaveTextContent('3');
+  });
+
+  it('caps the displayed badge at 99+', () => {
+    render(<TopBar user={user} onLogout={vi.fn()} unreadCount={150} />);
+    expect(screen.getByLabelText('150 unread notifications')).toHaveTextContent('99+');
+  });
 });

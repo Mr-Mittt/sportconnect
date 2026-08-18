@@ -22,3 +22,13 @@ export const AccountMenuOpen: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Your account' }));
   },
 };
+
+// NTF-3's minimal unread-count badge placeholder (CLIENT-NOTIF-1 replaces
+// this with the real bell dropdown).
+export const UnreadNotifications: Story = {
+  args: { unreadCount: 3 },
+};
+
+export const UnreadNotificationsOverflow: Story = {
+  args: { unreadCount: 128 },
+};

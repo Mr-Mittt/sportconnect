@@ -36,6 +36,13 @@
      — AUTH-6. */
   --color-accent-solid: #185fa5;
 
+  /* Solid-fill for the unread-notification badge dot (NTF-3's minimal TopBar
+     placeholder — CLIENT-NOTIF-1 replaces this with the real bell dropdown).
+     Same hex as text-danger; white text on it is ~9.5:1, well above the
+     4.5:1 AA bar this file's other solid-fill token (accent-solid) was
+     tuned to. */
+  --color-danger-solid: #a32d2d;
+
   /* Borders */
   --color-border: rgba(44, 44, 42, 0.12);
   --color-border-strong: rgba(44, 44, 42, 0.24);

@@ -139,6 +139,13 @@ describe('App routing', () => {
       if (url === '/sports/profiles/user/1') {
         return { data: { success: true, message: '', data: [], timestamp: '' } };
       }
+      // NTF-3: AppShell now always fetches GET /notifications/unread-count
+      // (useUnreadNotificationCount) — without this branch, the catch-all
+      // fallback below (Page-shaped, for a different endpoint) gets rendered
+      // straight into TopBar's badge instead of a number.
+      if (url === '/notifications/unread-count') {
+        return { data: { success: true, message: '', data: 0, timestamp: '' } };
+      }
       // FEED-6: real GET /hashtags/trending — an empty page here since this
       // test only asserts the shell/feed render, not the trending card.
       if (url === '/hashtags/trending') {
@@ -255,6 +262,13 @@ describe('App routing', () => {
             timestamp: '',
           },
         };
+      }
+      // NTF-3: AppShell now always fetches GET /notifications/unread-count
+      // (useUnreadNotificationCount) — without this branch, the catch-all
+      // fallback below (Page-shaped, for a different endpoint) gets rendered
+      // straight into TopBar's badge instead of a number.
+      if (url === '/notifications/unread-count') {
+        return { data: { success: true, message: '', data: 0, timestamp: '' } };
       }
       if (url === '/groups/user/1') {
         return {
@@ -374,6 +388,13 @@ describe('App routing', () => {
             timestamp: '',
           },
         };
+      }
+      // NTF-3: AppShell now always fetches GET /notifications/unread-count
+      // (useUnreadNotificationCount) — without this branch, the catch-all
+      // fallback below (Page-shaped, for a different endpoint) gets rendered
+      // straight into TopBar's badge instead of a number.
+      if (url === '/notifications/unread-count') {
+        return { data: { success: true, message: '', data: 0, timestamp: '' } };
       }
       if (url === '/groups/user/1') {
         return {
