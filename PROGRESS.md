@@ -2901,15 +2901,23 @@ explicit go-ahead at each step (full story in A3's summary doc):
   new MSW fixtures (`mockInvitedSession`, `mockRequestedSession`, `mockCancelledSession`) as pure
   seed data to close both gaps — same "pre-seed the other side" precedent as
   `mockSessionJoinRequest` — confirmed with the user first since it was a real scope expansion
-  beyond state selection. Found and fixed a different flakiness mechanism than GRP-10's: a focused
-  text input's blinking caret caused ~0.01-ratio pixel diffs between consecutive local runs; fixed
-  by blurring `document.activeElement` before every screenshot, which eliminated it entirely for
-  the detail-modal spec and reduced the create-modal spec's to a level matching this suite's own
-  already-documented Windows-noise threshold. Full `pnpm exec vitest run` and `eslint .` both
-  green — no unit-tested code added, new fixtures are additive-only. `E2E_OVERVIEW.md` updated.
-  **Same remaining step as GRP-10:** baselines are Windows-rendered locally (stable, 3/3 runs for
-  the detail modal); need the `client-ci` `update-baselines` dispatch swap before CI's Linux runs
-  pass clean.
+  beyond state selection. Fixed two real bugs found via `tsc -b`/live blinking-caret flakiness:
+  `page.evaluate(() => document...)` doesn't typecheck under `e2e/**`'s DOM-less `lib`, fixed by
+  matching the existing `document.fonts.ready` string-argument convention; a focused text input's
+  blinking caret was a genuine pre-screenshot flakiness source, fixed by blurring
+  `document.activeElement` first. **Cross-ticket ripple found by actually running the full `e2e`
+  project, not just the new specs:** the 2 new group-linked fixtures also count as "upcoming"
+  wherever `useUpcomingMatches` renders (Home Feed/Groups/Friends rails) — correct real behavior,
+  but broke `home-feed-journey.spec.ts`'s hardcoded rail counts and made GRP-10's already-merged
+  `groups-*.png` baselines stale. Fixed both (test counts + comment, regenerated all 18 GRP-10
+  baselines) — user-approved before proceeding, given it touched an already-shipped ticket's
+  output. Full verification: `tsc -b`/`eslint .` clean, `vitest run` 878/878, and — new for this
+  ticket — a full `playwright test --project=e2e` run (51 specs): 50 passed, 1 pre-existing failure
+  (`friends-journey.spec.ts`, confirmed unrelated — fails consistently regardless of this ticket's
+  changes, touches nothing this ticket modified). `E2E_OVERVIEW.md` updated throughout.
+  **Remaining step (same as GRP-10):** both this ticket's 30 new baselines and GRP-10's 18
+  regenerated ones are Windows-rendered locally; need the `client-ci` `update-baselines` dispatch
+  swap before CI's Linux runs pass clean.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

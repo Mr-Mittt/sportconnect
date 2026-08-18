@@ -77,23 +77,55 @@ unlike `/sessions/mine` (creator-only) or the joined-sessions query (`JOINED`-on
 which would have shown an `INVITED`/`REQUESTED`-only session. User confirmed this approach
 up front, flagged as a real scope expansion beyond pure state selection before implementing.
 
-**Real flakiness found and fixed** (same general class as GRP-10's, but a different mechanism):
-consecutive local runs occasionally showed a tiny (~0.01 pixel ratio) diff, traced to a focused
-text input's blinking caret rendering differently between the baseline capture and a later
-comparison run. Fixed by blurring `document.activeElement` right before every screenshot in both
-spec files. This eliminated the flakiness entirely for `SessionDetailModal` (stable across 3
-consecutive re-runs) and reduced `CreateSessionModal`'s from "every run" to "~1 in 3, at 768px
-only" — the residual level matches this suite's own already-documented, already-accepted
-Windows-font-rendering noise threshold (0.01–0.04 ratio, per `app-home-feed.spec.ts`'s own comment
-and `E2E_OVERVIEW.md` §6), not a new problem introduced here.
+**Two real bugs found and fixed, one residual class correctly left alone:**
+1. `page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())` — a genuine
+   `tsc -b` failure (`Cannot find name 'document'`), since `e2e/**/*.ts` is covered by
+   `tsconfig.node.json`'s `lib: ["ES2023"]`, no DOM — exactly why the pre-existing
+   `document.fonts.ready` call elsewhere in this suite is always a **string** argument, not an
+   arrow function. Fixed by matching that same string-argument convention
+   (`page.evaluate('document.activeElement && document.activeElement.blur()')`) — a real gap in
+   my own Phase 5 verification, since Playwright's own test runner (esbuild-transpiled, no strict
+   typecheck) never caught it; only a direct `tsc -b` run did, and I hadn't re-run one after
+   adding the blur call until asked to check the broader e2e suite.
+2. A focused text input's blinking caret was a real, fixable flakiness source (traced live,
+   confirmed fixed) — blurring the active element before every screenshot removed it.
+3. **What's left (~1 in 6 local runs, always a ~0.01 pixel ratio, 2–4 pixels) is not a bug** —
+   reproduces even under `--workers=1` (rules out parallel-worker contention), matches this
+   suite's own already-documented, already-accepted Windows-font-rendering noise threshold
+   (0.01–0.04 ratio, per `app-home-feed.spec.ts`'s own comment and `E2E_OVERVIEW.md` §6) exactly.
+   CI's Linux render is authoritative; further local iteration on this specific class isn't
+   productive, per this suite's own established stance.
 
 **Baselines — Windows-rendered locally, need the `client-ci` `update-baselines` dispatch swap**
 (same bootstrap step GRP-10/HF-10b/SPORT-4 all needed, same reason: triggering a GitHub Actions
 `workflow_dispatch` isn't possible from this environment) before CI's real Linux runs of these two
 specs will pass clean.
 
-**Verification:** `pnpm exec tsc -b` clean, `pnpm exec eslint .` clean (0 errors — 2 pre-existing
-warnings in an unrelated file), full `pnpm exec vitest run` green (this ticket adds no unit-tested
-code, so this just confirms nothing else broke — the 3 new fixtures are additive-only and don't
-touch any existing fixture object other specs depend on). `client/docs/E2E_OVERVIEW.md` updated
-(§3 directory listing + two new §6 catalog entries).
+**Cross-ticket ripple, found by actually running the `e2e` project (not just the new specs) —
+confirmed and fixed, user-approved before proceeding:** `mockInvitedSession`/`mockRequestedSession`
+are group-linked to `mockGroup` with `status: SCHEDULED` (the only way to make them reachable via
+"View details" on the Matches page at all — `useMySessions`/`useJoinedSessions` both explicitly
+exclude an `INVITED`/`REQUESTED`-only session). But `useUpcomingMatches` — the hook behind the
+"Upcoming" rail on **Home Feed, Groups, and Friends pages** — reads from that identical
+`useGroupSessionsForGroups` query, filtered only to `SCHEDULED`/`ONGOING`. So both new fixtures now
+legitimately count as "upcoming" everywhere that rail renders (capped at `UpcomingMatches`' own
+`maxVisible=4`) — correct real app behavior (a user invited to a group session should see it in
+their rail), but it broke `home-feed-journey.spec.ts`'s hardcoded rail-count assertions (3→4) and
+made GRP-10's already-merged baselines (`groups-*.png`) stale, since that page renders the same
+rail. Fixed both: updated `home-feed-journey.spec.ts`'s two affected counts (with an explanatory
+comment matching that file's own established history-of-changes convention) and
+`E2E_OVERVIEW.md`'s §6 catalog entry for it; regenerated all 18 of GRP-10's baselines locally
+(verified via visual diff — the new "Tuesday drop-in" session with its Accept button now correctly
+appears in the rail) — **these also need the same `update-baselines` dispatch swap** before
+merging, on top of this ticket's own 30 new ones. `matches-journey.spec.ts` was unaffected (asserts
+specific named sessions, not rail totals).
+
+**Verification:** `pnpm exec tsc -b` clean (caught the real `document.evaluate` DOM-lib bug above),
+`pnpm exec eslint .` clean (0 errors — 2 pre-existing warnings in an unrelated file), full
+`pnpm exec vitest run` green (878/878 — this ticket adds no unit-tested code, so this just confirms
+nothing else broke), **full `pnpm exec playwright test --project=e2e` run (51 specs) — 50 passed,
+1 pre-existing failure** (`friends-journey.spec.ts`'s "accepting an incoming request" step — fails
+consistently in this environment both before and after every change in this ticket; the failing
+locator/fixture (`Hana Kim`, Friend Requests) shares nothing with anything this ticket touched,
+confirmed by grep; not fixed, out of scope). `client/docs/E2E_OVERVIEW.md` updated (§3 directory
+listing + two new §6 catalog entries + the `home-feed-journey.spec.ts` count-fix entry above).

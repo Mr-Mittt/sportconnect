@@ -40,7 +40,7 @@ for (const width of breakpoints) {
     await page.getByRole('button', { name: /Weekend 5-a-side — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Weekend 5-a-side' });
     await expect(dialog.getByRole('button', { name: 'Join' })).toBeVisible();
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`session-detail-not-joined-${width}.png`);
@@ -56,7 +56,7 @@ for (const width of breakpoints) {
     await page.getByRole('button', { name: /Friday 5-a-side — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Friday 5-a-side' });
     await expect(dialog.getByRole('button', { name: 'Leave' })).toBeVisible();
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`session-detail-already-joined-${width}.png`);
@@ -71,7 +71,7 @@ for (const width of breakpoints) {
     const dialog = page.getByRole('dialog', { name: 'Tuesday drop-in' });
     await expect(dialog.getByRole('button', { name: 'Accept' })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Decline' })).toBeVisible();
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`session-detail-invited-${width}.png`);
@@ -85,7 +85,7 @@ for (const width of breakpoints) {
     await page.getByRole('button', { name: /Wednesday scrimmage — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Wednesday scrimmage' });
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeVisible();
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`session-detail-requested-${width}.png`);
@@ -100,7 +100,7 @@ for (const width of breakpoints) {
     const dialog = page.getByRole('dialog', { name: 'Ladder night' });
     await expect(dialog.getByRole('region', { name: 'Waiting for approval' })).toBeVisible();
     await expect(dialog.getByText('Alex Chen')).toBeVisible();
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`session-detail-approval-queue-${width}.png`);
@@ -115,7 +115,7 @@ for (const width of breakpoints) {
     const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
     await expect(dialog.getByRole('region', { name: 'Discussion' })).toBeVisible();
     await expect(dialog.getByText('What time are we meeting at the courts?')).toBeVisible();
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`session-detail-discussion-${width}.png`);
@@ -132,7 +132,7 @@ for (const width of breakpoints) {
     // canJoinOrLeave gates the whole action area off for CANCELLED — callerParticipation is null
     // here, so the only button that could otherwise render is "Join"; its absence proves the gate.
     await expect(dialog.getByRole('button', { name: 'Join' })).toHaveCount(0);
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`session-detail-cancelled-${width}.png`);

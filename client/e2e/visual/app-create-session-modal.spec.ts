@@ -31,7 +31,7 @@ for (const width of breakpoints) {
     await page.getByRole('button', { name: 'Create session' }).click();
     const dialog = page.getByRole('dialog', { name: 'Create your session' });
     await expect(dialog.getByLabel(/^Sport/)).toBeVisible();
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`create-session-default-${width}.png`);
@@ -57,7 +57,7 @@ for (const width of breakpoints) {
     await dialog.getByLabel(/^Session title/).fill('New pickup game');
     await dialog.getByLabel(/^Duration in minutes/).fill('90');
     await dialog.getByLabel(/^Open slot/).fill('10');
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`create-session-location-chosen-${width}.png`);
@@ -76,7 +76,7 @@ for (const width of breakpoints) {
     await page.getByRole('button', { name: 'Create session' }).click();
     const dialog = page.getByRole('dialog', { name: 'Create your session' });
     await expect(dialog.getByText(/add a sport first/)).toBeVisible();
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`create-session-no-sport-profiles-${width}.png`);
