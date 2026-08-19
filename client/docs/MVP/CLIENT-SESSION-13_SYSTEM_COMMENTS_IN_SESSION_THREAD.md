@@ -1,6 +1,6 @@
 # CLIENT-SESSION-13 · Render system comments in the session discussion thread
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-08-19) — code complete and verified; 3 visual baselines pending the `client-ci` `update-baselines` dispatch.
 **Type:** New Feature
 **Depends on:** none blocking — backend `SESSION-21` (`DONE`, 2026-08-19) already ships the contract
 **Filed:** 2026-08-19, immediately after SESSION-21 merged. The backend writes system entries into
@@ -88,3 +88,86 @@ section.
 - Visual regression: the existing `discussion` state re-baselined. **The baselines cannot be
   produced on a Windows host** — the whole suite fails there on the documented font-rendering
   mismatch — so this needs the `client-ci` `update-baselines` dispatch, same as CLIENT-NOTIF-3.
+
+---
+
+## Implementation (2026-08-19)
+
+### The approved design
+
+Restated rather than linked: add `commentType` to the shared client `Comment` type; branch inside
+shared `CommentItem` with an early return for `SESSION_SYSTEM`, rendering a centered, avatar-less,
+muted row with no like/reply/delete; seed the MSW session thread with a system entry so the existing
+`discussion` visual state covers it; cover it with unit tests and Storybook stories. No data-layer
+change (the field already arrives on the existing fetch), no state change, no new design tokens.
+
+### One estimate corrected before building
+
+The ticket said adding a required `commentType` would ripple into **~27 files**. That was a
+grep-based estimate made at filing, and it was wrong. Measured properly — by adding the field and
+letting `tsc -b` report — the real blast radius is **17 errors across 16 files, every one a test,
+story, or MSW fixture. Zero app source files.** Production code only ever spreads or passes a
+`Comment` through; it never constructs one from scratch. That made "required" clearly the right
+call rather than a costly one, so the recommendation stood, but on evidence instead of a guess.
+
+### What was built
+
+1. **`CommentType = 'USER' | 'SESSION_SYSTEM'`**, required on `Comment` (`features/feed/types.ts`),
+   with a TSDoc note on why a `SESSION_SYSTEM` row must not render as its nominal author speaking.
+2. **Early return in `CommentItem`** for `SESSION_SYSTEM`, placed above every user-comment
+   affordance. Chosen over conditionally hiding each control because a system entry has *none* of
+   them — an early return can't partially forget one. `content` is rendered verbatim (server-
+   templated, name baked in at write time).
+3. **16 fixture/test/story files** given `commentType: 'USER'`. Applied with a script keyed on the
+   `postId:` → `userId:` adjacency rather than by hand; one file (`e2e/mocks/handlers/feed.ts`) used
+   shorthand `postId,` and was patched separately.
+4. **MSW session thread** gained a `SESSION_SYSTEM` entry authored by `mockUser` (who owns
+   `mockSession`) — deliberately the *creator*, since that is the real shape and the case most
+   likely to render wrongly.
+5. **`app-session-detail-modal.spec.ts`** now asserts the system row is visible before screenshotting
+   the `discussion` state, so a fixture regression can't silently yield a baseline missing the row.
+6. **Tests + stories:** 5 new `CommentItem` tests, 2 new `SessionCommentSection` tests, 4 new stories.
+
+### Key decisions
+
+- **A dedicated test for the nominal-author case.** SESSION-21 authors system entries as
+  `session.getCreatedBy()`, so the session creator viewing their own session would otherwise pass
+  `CommentItem`'s `isOwnComment` check and be offered a Delete that `deleteComment` rejects. The
+  early return makes this impossible, but the test pins it down: it is the single most likely way a
+  future refactor reintroduces the bug.
+- **The empty-state edge case needed no code.** `SessionCommentSection` gates on
+  `comments.length === 0`, and system entries *are* comments, so a system-only thread already
+  avoids the empty copy. Covered by a test anyway, because it's an implicit consequence — an
+  implementation that filtered system entries before the length check would regress it silently.
+- **No em-dash wrapping** on the centered line. The server templates are already complete sentences
+  ("Priya Shah joined the session", "The session has started"), so `— … —` would add noise.
+
+### Verification
+
+- `tsc -b` clean; `pnpm lint` 0 errors (2 pre-existing warnings in an untouched file).
+- `pnpm test` — **891/891 passed**, 129 files (was 884; +7 new).
+- `playwright --project=e2e` — **51/51 passed**.
+- **A false alarm worth recording:** an earlier e2e run showed 9 failures, all in `a11y.spec.ts`,
+  all `page.goto` timeouts. They were CPU contention from a concurrent full `vitest` run, not a
+  regression — `retries: 0` locally (2 on CI) means one slow run fails outright. Re-running with
+  nothing competing gave 51/51 in 1.4m vs 2.5m. Verified rather than assumed, since "it's probably
+  flaky" is exactly how a real regression gets waved through.
+- **Visual output confirmed without touching baselines:** ran the `discussion` visual case, let it
+  fail on the expected baseline mismatch, and inspected Playwright's `-actual.png`. The system row
+  renders centered, muted, avatar-less, with no like/reply controls, clearly distinct from the user
+  comment above it. `test-results/` is gitignored and was removed afterward.
+
+### Remaining step — baseline regeneration
+
+`session-detail-discussion-{375,768,1280}.png` need regenerating (the thread gained a row). As with
+CLIENT-NOTIF-3, this **cannot be done on a Windows host** — the whole visual suite fails there on the
+documented font-rendering mismatch. Needs the `client-ci` `update-baselines` dispatch: expect
+**exactly those 3 files** to change, everything else byte-identical, worth the same SHA-256 check.
+
+## Delta for later tickets
+
+- **`Comment.commentType` is now required.** Any new code constructing a `Comment` literal — a test,
+  a story, an MSW handler — must set it. `'USER'` is right for everything except a deliberate
+  session system entry.
+- **The ~27-file estimate in this ticket's own "What ships" section above is superseded** by the
+  measured 16. Left in place rather than edited so the correction is visible.

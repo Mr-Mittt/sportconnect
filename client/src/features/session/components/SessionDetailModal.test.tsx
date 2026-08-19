@@ -402,6 +402,7 @@ describe('SessionDetailModal', () => {
     const comment: Comment = {
       id: 1,
       postId: 1,
+      commentType: 'USER',
       userId: 'user-1',
       userFullName: 'Priya Shah',
       userAvatarUrl: null,

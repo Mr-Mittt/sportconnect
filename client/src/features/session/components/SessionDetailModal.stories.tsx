@@ -241,6 +241,7 @@ export const ApprovalQueue: Story = {
 const discussionComment: Comment = {
   id: 1,
   postId: 1,
+  commentType: 'USER',
   userId: 'user-1',
   userFullName: 'Priya Shah',
   userAvatarUrl: null,

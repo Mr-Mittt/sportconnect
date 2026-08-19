@@ -40,6 +40,12 @@ function initialsFor(fullName: string): string {
 
 /**
  * A single comment or reply row, recursive for one level of nesting
+ *
+ * A `SESSION_SYSTEM` comment (SESSION-21, rendered by CLIENT-SESSION-13) takes an
+ * early return at the top and renders as a centered, avatar-less thread event —
+ * see the comment on that branch for why it returns rather than hiding affordances
+ * one by one. Everything documented below applies only to a `USER` comment.
+ *
  * (`comment.replies` — the backend guarantees a reply is never itself
  * replied to, per A4, so this never recurses past depth 2). "Reply" only
  * renders for root comments (`comment.parentCommentId === null`) — matching
@@ -72,6 +78,25 @@ export function CommentItem({
 
   const isOwnComment = currentUserId !== undefined && comment.userId === currentUserId;
   const canReply = comment.parentCommentId === null;
+
+  // CLIENT-SESSION-13. Returns before every user-comment affordance below rather
+  // than conditionally hiding each one: a system entry has no avatar, no bubble,
+  // no options menu, no like, no reply box, and no replies, so an early return is
+  // both simpler and impossible to partially forget. `content` is server-templated
+  // ("Priya Shah joined the session", "The session has started") and rendered
+  // verbatim — never re-resolve the name client-side, it was baked in at write time.
+  //
+  // Suppressing the actions is correctness, not styling: SESSION-21 rejects a like,
+  // reply, or delete on a system entry server-side, so rendering those buttons would
+  // offer the caller something the API refuses.
+  if (comment.commentType === 'SESSION_SYSTEM') {
+    return (
+      <div className="flex flex-col items-center gap-0.5 py-0.5 text-center">
+        <p className="text-2xs text-text-muted">{comment.content}</p>
+        <span className="text-2xs text-text-muted">{formatRelativeTime(comment.createdAt)}</span>
+      </div>
+    );
+  }
 
   const submitReply = () => {
     const trimmed = replyContent.trim();

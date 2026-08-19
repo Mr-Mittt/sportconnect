@@ -8,6 +8,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
   return {
     id: 1,
     postId: 1,
+    commentType: 'USER',
     userId: 'user-marcus',
     userFullName: 'Marcus Lee',
     userAvatarUrl: null,
@@ -133,5 +134,35 @@ describe('SessionCommentSection', () => {
     render(<SessionCommentSection {...baseProps} />);
     expect(screen.queryByText('Discussion')).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Discussion' })).toBeInTheDocument();
+  });
+
+  // CLIENT-SESSION-13. A session that has started but has no human comments is a real and
+  // probably common state — the thread must show its system entries, not the empty copy.
+  // This works because system entries *are* comments (so `comments.length === 0` is false),
+  // but that's an implicit consequence worth pinning down: an implementation that filtered
+  // system entries out before the length check would silently regress it.
+  it('renders a system-only thread rather than the empty state', () => {
+    const systemComment = makeComment({
+      id: 9,
+      commentType: 'SESSION_SYSTEM',
+      content: 'The session has started',
+    });
+    render(<SessionCommentSection {...baseProps} comments={[systemComment]} />);
+    expect(screen.getByText('The session has started')).toBeInTheDocument();
+    expect(screen.queryByText('No comments yet. Be the first to comment!')).not.toBeInTheDocument();
+  });
+
+  it('renders a mixed thread with both kinds in order', () => {
+    const userComment = makeComment({ id: 1, content: 'What time are we meeting?' });
+    const systemComment = makeComment({
+      id: 2,
+      commentType: 'SESSION_SYSTEM',
+      content: 'Priya Shah joined the session',
+    });
+    render(<SessionCommentSection {...baseProps} comments={[userComment, systemComment]} />);
+    expect(screen.getByText('What time are we meeting?')).toBeInTheDocument();
+    expect(screen.getByText('Priya Shah joined the session')).toBeInTheDocument();
+    // Only the user comment carries affordances.
+    expect(screen.getAllByRole('button', { name: /like comment/i })).toHaveLength(1);
   });
 });

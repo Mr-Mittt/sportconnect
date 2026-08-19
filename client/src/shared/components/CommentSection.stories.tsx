@@ -9,6 +9,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
   return {
     id: 1,
     postId: 1,
+    commentType: 'USER',
     userId: 'user-marcus',
     userFullName: 'Marcus Lee',
     userAvatarUrl: null,

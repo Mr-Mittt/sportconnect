@@ -8,6 +8,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
   return {
     id: 1,
     postId: 1,
+    commentType: 'USER',
     userId: 'user-marcus',
     userFullName: 'Marcus Lee',
     userAvatarUrl: null,
@@ -222,5 +223,95 @@ describe('CommentItem', () => {
     );
     await user.click(screen.getByRole('button', { name: '#fridayrun' }));
     expect(onHashtagClick).toHaveBeenCalledWith('#fridayrun');
+  });
+
+  // CLIENT-SESSION-13 — SESSION_SYSTEM entries.
+  describe('a SESSION_SYSTEM comment', () => {
+    const systemComment = () =>
+      makeComment({
+        commentType: 'SESSION_SYSTEM',
+        content: 'Priya Shah joined the session',
+        userFullName: 'Priya Shah',
+      });
+
+    it('renders the server-templated content verbatim', () => {
+      render(
+        <CommentItem
+          comment={systemComment()}
+          currentUserId="someone-else"
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={noop}
+          isSubmittingReply={false}
+        />,
+      );
+      expect(screen.getByText('Priya Shah joined the session')).toBeInTheDocument();
+    });
+
+    it('offers no like, reply, or options control — the server rejects all three on a system entry', () => {
+      render(
+        <CommentItem
+          comment={systemComment()}
+          currentUserId="someone-else"
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={noop}
+          isSubmittingReply={false}
+        />,
+      );
+      expect(screen.queryByRole('button', { name: /like comment/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reply' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Comment options' })).not.toBeInTheDocument();
+    });
+
+    it('shows no options menu even when the caller is the nominal author (the session creator)', () => {
+      // SESSION-21 authors system entries as `session.getCreatedBy()`, so the creator viewing
+      // their own session would otherwise pass CommentItem's `isOwnComment` check and be
+      // offered Delete — which `deleteComment` rejects before the ownership check.
+      const comment = systemComment();
+      render(
+        <CommentItem
+          comment={comment}
+          currentUserId={comment.userId}
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={noop}
+          isSubmittingReply={false}
+        />,
+      );
+      expect(screen.queryByRole('button', { name: 'Comment options' })).not.toBeInTheDocument();
+    });
+
+    it('does not render an author name or avatar initials — it must not read as that person speaking', () => {
+      render(
+        <CommentItem
+          comment={systemComment()}
+          currentUserId="someone-else"
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={noop}
+          isSubmittingReply={false}
+        />,
+      );
+      // The name appears only inside the server-templated sentence, never as a separate byline.
+      expect(screen.queryByText('Priya Shah')).not.toBeInTheDocument();
+      expect(screen.queryByText('PS')).not.toBeInTheDocument();
+    });
+
+    it('leaves a USER comment completely unaffected', () => {
+      render(
+        <CommentItem
+          comment={makeComment()}
+          currentUserId="someone-else"
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={noop}
+          isSubmittingReply={false}
+        />,
+      );
+      expect(screen.getByText('Marcus Lee')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /like comment/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Reply' })).toBeInTheDocument();
+    });
   });
 });

@@ -419,6 +419,7 @@ export const mockReceivedInvitation: GroupInvitation = {
 export const mockComment: Comment = {
   id: 1,
   postId: mockPost.id,
+  commentType: 'USER',
   userId: 'priya-shah',
   userFullName: 'Priya Shah',
   userAvatarUrl: null,

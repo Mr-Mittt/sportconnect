@@ -8,6 +8,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
   return {
     id: 1,
     postId: 1,
+    commentType: 'USER',
     userId: 'user-marcus',
     userFullName: 'Marcus Lee',
     userAvatarUrl: null,
@@ -83,4 +84,29 @@ export const WithMoreToLoad: Story = {
 /** CLIENT-SESSION-8's visibility gate — a 403 on the comments fetch renders nothing at all. */
 export const Forbidden: Story = {
   args: { comments: [], isForbidden: true },
+};
+
+/**
+ * CLIENT-SESSION-13 — a thread mixing user comments with SESSION-21's system entries, which is
+ * what a live session's discussion actually looks like once people join and it starts.
+ */
+export const WithSystemComments: Story = {
+  args: {
+    comments: [
+      makeComment({ id: 1, content: 'What time are we meeting at the courts?' }),
+      makeComment({ id: 2, commentType: 'SESSION_SYSTEM', content: 'Priya Shah joined the session' }),
+      makeComment({ id: 3, content: 'Running 5 minutes late!' }),
+      makeComment({ id: 4, commentType: 'SESSION_SYSTEM', content: 'The session has started' }),
+    ],
+  },
+};
+
+/** A session that started before anyone commented — must show the events, not the empty state. */
+export const SystemCommentsOnly: Story = {
+  args: {
+    comments: [
+      makeComment({ id: 1, commentType: 'SESSION_SYSTEM', content: 'Priya Shah joined the session' }),
+      makeComment({ id: 2, commentType: 'SESSION_SYSTEM', content: 'The session has started' }),
+    ],
+  },
 };
