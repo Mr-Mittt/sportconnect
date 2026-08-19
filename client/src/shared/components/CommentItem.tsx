@@ -91,9 +91,11 @@ export function CommentItem({
   // offer the caller something the API refuses.
   if (comment.commentType === 'SESSION_SYSTEM') {
     return (
-      <div className="flex flex-col items-center gap-0.5 py-0.5 text-center">
-        <p className="text-2xs text-text-muted">{comment.content}</p>
-        <span className="text-2xs text-text-muted">{formatRelativeTime(comment.createdAt)}</span>
+      // `flex-wrap` so the timestamp drops to a second centered line rather than overflowing the
+      // dialog at 375px — a long participant name can push this past the available width.
+      <div className="flex flex-wrap items-center justify-center gap-x-1.5 py-0.5 text-center">
+        <p className="text-2xs italic text-text-muted">{comment.content}</p>
+        <span className="text-2xs italic text-text-muted">{formatRelativeTime(comment.createdAt)}</span>
       </div>
     );
   }
