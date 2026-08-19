@@ -3060,6 +3060,39 @@ explicit go-ahead at each step (full story in A3's summary doc):
   updated. **Remaining step (same as every prior visual-regression ticket):** the 9 baselines are
   Windows-rendered locally; need the `client-ci` `update-baselines` dispatch swap before CI's Linux
   runs pass clean.
+- **CLIENT-NOTIF-3 (`DONE`, 2026-08-19,
+  `client/docs/MVP/CLIENT-NOTIF-3_NOTIFICATION_TEXT_FOR_MISSING_SESSION_TYPES.md`):**
+  `getNotificationText` handled 6 of the 8 session routing keys the backend actually emits, so
+  `session.status.started` (shipped by SESSION-18) and `session.participant.left` (SESSION-19) both
+  rendered the generic "You have a new notification" fallback — a degraded-display bug, live since
+  each event launched. Two new cases: `[actor, ' left ', entity]` mirroring
+  `session.participant.joined`, and `[entity, ' has started']` which deliberately does **not** use
+  `actorSegment` (SESSION-18 passes `actorId = null`, so `actorSegment` would render the
+  bold-suppressed `'Someone'` and read as if a person started the session). **Gap enumerated rather
+  than assumed at pickup:** every emitted routing key was grepped against every client case —
+  exactly 2 missing, and the `group.*`/`user.profile_updated` keys that also turn up are chat-service
+  sync events on a separate Redis Stream pipeline, not notification gaps. **Scope widened by the user
+  at pickup** beyond the ticket's own out-of-scope list: the MSW default fixture gained both types
+  (seeded `isRead: true` deliberately, so the unread count stays 2 and `notification-bell.spec.ts`'s
+  badge/mark-all-read assertions kept testing what they were written to test), the fallback branch
+  gained a dev-only `console.warn` naming the unmapped type (silent degradation is exactly how this
+  hid twice), and `NotificationRow` gained `SessionStarted` + `UnknownType` stories. **One
+  forward-looking test fix:** the fallback test asserted on `'post.comment.created'`, which
+  `post-impl` B7 is queued to make a *real* routing key — swapped for `'not.a.real.routing.key'` so
+  the test keeps meaning "genuinely unknown" rather than silently becoming
+  "known-but-unimplemented." Verification: `vitest run` 884/884, `tsc -b`/`eslint .` clean,
+  `playwright --project=e2e` 51/51 with `notification-bell.spec.ts` **unmodified**. **Baselines
+  regenerated and committed the same day:** the bell list grows 3 rows → 5, so
+  `notification-bell-populated-{375,768,1280}.png` were refreshed via the `client-ci`
+  `update-baselines` dispatch (they were confirmed *not* regenerable locally — all 75 visual specs
+  fail on this Windows host, verified by stashing every change and reproducing byte-identical diffs
+  on a pristine tree, i.e. the documented Windows-vs-Linux font-rendering noise floor). SHA-256
+  comparison of the artifact against the committed set showed **exactly the 3 predicted files
+  changed and the other 72 byte-identical** — which incidentally confirms the committed baselines
+  already matched CI, so the "still Windows-rendered, pending a dispatch" caveats on CLIENT-NOTIF-2,
+  GRP-10 and CLIENT-SESSION-12 were stale rather than outstanding. Follow-up **CLIENT-NOTIF-4** filed
+  for the recurrence risk: B7/B21/U13 will add 11 more notification types between them, each able to
+  repeat this gap.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
