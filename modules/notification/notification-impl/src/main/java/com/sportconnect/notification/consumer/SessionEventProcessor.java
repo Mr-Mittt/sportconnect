@@ -53,7 +53,10 @@ public class SessionEventProcessor {
 
         String entityId = event.sessionId().toString();
         if (event.fanOutStatuses() != null) {
-            sessionService.getParticipantIdsByStatuses(event.sessionId(), event.fanOutStatuses()).stream()
+            sessionService
+                    .getParticipantIdsByStatuses(
+                            event.sessionId(), event.fanOutStatuses(), event.fanOutSessionStatuses())
+                    .stream()
                     .filter(recipientId -> !recipientId.equals(event.actorId()))
                     .forEach(recipientId -> recordAndPublish(recipientId, event, entityId));
         } else {

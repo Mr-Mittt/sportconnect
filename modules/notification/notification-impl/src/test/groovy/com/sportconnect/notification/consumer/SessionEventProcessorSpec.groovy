@@ -5,6 +5,7 @@ import com.sportconnect.notification.api.service.NotificationService
 import com.sportconnect.notification.push.NotificationLiveUpdateEvent
 import com.sportconnect.notification.repository.ProcessedMessageRepository
 import com.sportconnect.session.api.dto.ParticipantStatus
+import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.service.SessionService
 import org.springframework.context.ApplicationEventPublisher
 import spock.lang.Specification
@@ -59,14 +60,15 @@ class SessionEventProcessorSpec extends Specification {
         def other1 = UUID.randomUUID()
         def other2 = UUID.randomUUID()
         def statuses = [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED]
-        def event = ParsedSessionEvent.fanOut("session.comment.created", 1L, actorId, statuses)
+        def sessionStatuses = SessionStatus.values() as List
+        def event = ParsedSessionEvent.fanOut("session.comment.created", 1L, actorId, statuses, sessionStatuses)
 
         when:
         processor.process("mid-1", event)
 
         then:
         1 * processedMessageRepository.insertIfAbsent("mid-1") >> 1
-        1 * sessionService.getParticipantIdsByStatuses(1L, statuses) >> [actorId, other1, other2]
+        1 * sessionService.getParticipantIdsByStatuses(1L, statuses, sessionStatuses) >> [actorId, other1, other2]
         1 * notificationService.recordEvent(other1, "session.comment.created", "SESSION", "1", actorId) >>
                 new NotificationRecordResult(11L, 1L)
         1 * notificationService.recordEvent(other2, "session.comment.created", "SESSION", "1", actorId) >>
@@ -85,14 +87,15 @@ class SessionEventProcessorSpec extends Specification {
         def recipient1 = UUID.randomUUID()
         def recipient2 = UUID.randomUUID()
         def statuses = [ParticipantStatus.JOINED]
-        def event = ParsedSessionEvent.fanOut("session.status.started", 1L, null, statuses)
+        def sessionStatuses = [SessionStatus.SCHEDULED, SessionStatus.ONGOING]
+        def event = ParsedSessionEvent.fanOut("session.status.started", 1L, null, statuses, sessionStatuses)
 
         when:
         processor.process("mid-1", event)
 
         then:
         1 * processedMessageRepository.insertIfAbsent("mid-1") >> 1
-        1 * sessionService.getParticipantIdsByStatuses(1L, statuses) >> [recipient1, recipient2]
+        1 * sessionService.getParticipantIdsByStatuses(1L, statuses, sessionStatuses) >> [recipient1, recipient2]
         1 * notificationService.recordEvent(recipient1, "session.status.started", "SESSION", "1", null) >>
                 new NotificationRecordResult(21L, 1L)
         1 * notificationService.recordEvent(recipient2, "session.status.started", "SESSION", "1", null) >>

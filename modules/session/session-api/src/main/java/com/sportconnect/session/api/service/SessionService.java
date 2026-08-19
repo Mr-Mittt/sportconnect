@@ -145,15 +145,32 @@ public interface SessionService {
     void unlikeSession(Long sessionId, UUID userId);
 
     /**
-     * Distinct participant ids for one session matching any of {@code statuses} — batch,
-     * no-N+1-shaped lookup for {@code notification-impl}'s fan-out recipient resolution
-     * (NTF-2: {@code session.comment.created}/{@code session.participant.joined}), same shape as
-     * {@code post-api}'s {@code getDistinctCommenterIds}. Returns an empty list without querying
-     * participants at all if the session doesn't exist or its own status isn't {@code SCHEDULED}
-     * or {@code ONGOING} — a {@code CANCELLED}/{@code COMPLETED} session never triggers a
-     * participant fan-out, even for an event published before it changed status.
+     * Distinct participant ids for one session matching any of {@code participantStatuses} —
+     * batch, no-N+1-shaped lookup for {@code notification-impl}'s fan-out recipient resolution
+     * (NTF-2), same shape as {@code post-api}'s {@code getDistinctCommenterIds}.
+     *
+     * <p>Two independent filters, both required from the caller — there is deliberately no
+     * default for either:
+     * <ul>
+     *   <li>{@code participantStatuses} — which participants of the session are recipients
+     *       (e.g. {@code JOINED} only, vs. {@code JOINED}/{@code REQUESTED}/{@code INVITED}).</li>
+     *   <li>{@code allowedSessionStatuses} — which session lifecycle states fan out at all.
+     *       If the session's own status isn't in this list, an empty list is returned
+     *       <em>without querying participants</em>.</li>
+     * </ul>
+     *
+     * <p>SESSION-20 made the second filter an explicit parameter. It was previously hardcoded to
+     * {@code (SCHEDULED, ONGOING)} inside this method, which silently swallowed every
+     * {@code session.comment.created} fan-out on a {@code COMPLETED} session even though
+     * {@code SessionGate} permits commenting there (post-game recap) — the caller had no way to
+     * see, let alone override, the rule it was subject to. Each caller now declares its own set;
+     * see {@code notification-impl}'s {@code SessionEventsConsumer} constants.
+     *
+     * <p>Also returns an empty list if the session doesn't exist, for any status list.
      */
-    List<UUID> getParticipantIdsByStatuses(Long sessionId, List<ParticipantStatus> statuses);
+    List<UUID> getParticipantIdsByStatuses(Long sessionId,
+                                           List<ParticipantStatus> participantStatuses,
+                                           List<SessionStatus> allowedSessionStatuses);
 
     /**
      * Batch title lookup, no-N+1-shaped like {@code getParticipantIdsByStatuses} — for

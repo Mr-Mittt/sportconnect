@@ -1,6 +1,6 @@
 # SESSION-20 · Comment notifications wrongly restricted to SCHEDULED/ONGOING sessions
 
-**Status:** `TODO`
+**Status:** `DONE`
 **Type:** Bug Fix
 **Depends on:** none (`SESSION-15`/`NTF-2` both `DONE`)
 **Filed:** 2026-08-18, user request while reviewing session notification coverage. Corrects the
@@ -43,3 +43,118 @@ picking this up determines the shared-method change is safe for both; any client
 `SCHEDULED`/`ONGOING` session would (participants other than the commenter, `JOINED`/`REQUESTED`/
 `INVITED`); a comment on a `CANCELLED` session — confirm intended behavior at pickup, since
 `SessionGate` doesn't block commenting there either but no one raised this specific case.
+
+---
+
+## Implementation
+
+Built as approved, with one addition beyond the plan (noted below). The ticket deliberately left
+the approach open; both open questions were settled with the user at pickup:
+
+**Approach chosen — an explicit session-status parameter on the shared method**, not a second
+comment-only method and not removing the gate outright. `getParticipantIdsByStatuses` now takes
+`(sessionId, participantStatuses, allowedSessionStatuses)`; each of the four callers declares its
+own session-status set at parse time in `SessionEventsConsumer`. The other two candidates were
+rejected for concrete reasons: a separate `getCommentRecipientIds` would put two near-identical
+methods on the cross-domain `-api` contract and push a branch into `SessionEventProcessor`, and
+removing the gate outright was explicitly out of scope — it would change `participant.joined`,
+`participant.left` and `status.started` behavior too.
+
+**`CANCELLED` resolved — it notifies.** The ticket flagged this as unconfirmed. Settled as: if
+`SessionGate` lets you comment there, your comment notifies. "Why was this cancelled?" is exactly
+when a participant wants to hear about it, and `SessionGate` applies no status restriction at all.
+So the comment event's set is *every* status, not `(SCHEDULED, ONGOING, COMPLETED)`.
+
+**1. `session-api` — `SessionService.getParticipantIdsByStatuses`**: third parameter
+`List<SessionStatus> allowedSessionStatuses`. **No 2-arg convenience overload was kept** — an
+implicit default session-status set is precisely the trap this ticket exists to remove, and a
+retained overload would let a future caller fall into it again silently. Javadoc rewritten to
+present the two filters as independent and both caller-supplied, and to record why.
+
+**2. `session-impl` — `SessionServiceImpl`**: the hardcoded
+`status != SCHEDULED && status != ONGOING` check becomes
+`!allowedSessionStatuses.contains(session.getStatus())`. Still short-circuits *without* querying
+participants, and a nonexistent session still returns empty for any status list. One query, no
+N+1 shape introduced.
+
+**3. `notification-impl` — `SessionEventsConsumer`**: two new constants alongside the existing
+participant-status ones. `ANY_SESSION_STATUS` is built from `List.of(SessionStatus.values())`
+rather than a hand-listed quad **on purpose** — a future fifth `SessionStatus` is then included by
+default, because silently excluding a lifecycle state nobody remembered to add is the exact bug
+shape this ticket fixed. `ACTIVE_SESSION_STATUSES` = `(SCHEDULED, ONGOING)` preserves today's
+behavior for the other three events, byte for byte.
+
+**4. `notification-impl` — `ParsedSessionEvent`**: gains `fanOutSessionStatuses`, set exactly when
+`fanOutStatuses` is. The record's existing "one of single/fan-out, never both" invariant is
+extended to cover it — session status is meaningless for a single-recipient event, whose recipient
+is known at write time and isn't conditioned on it.
+
+**5. `notification-impl` — `SessionEventProcessor`**: passes the new field straight through. No
+branching added — which recipient rule applies stays declared once, at parse time.
+
+**Tests.** `SessionServiceImplSpec`'s block was restructured around the two sets the consumer
+actually passes (`ACTIVE`/`ANY`) rather than ad-hoc lists, so it breaks if either changes shape.
+The old `CANCELLED`/`COMPLETED`-return-empty pair became one `where:`-driven case (the gate still
+works *when a caller asks for it*), joined by a new 4-status case proving the full comment-recipient
+set comes back in every lifecycle state. `SessionEventsConsumerSpec` is where the comment-vs-rest
+split is actually pinned — all four fan-out cases now assert their session-status set, and one
+single-recipient case asserts both fan-out fields are `null` together.
+
+**Integration test — the only thing that actually proves the fix.** Every Spock spec on this path
+mocks the broken collaborator: `SessionEventProcessorSpec` mocks `SessionService`,
+`SessionEventsConsumerSpec` mocks the processor. So none of them ever ran real recipient resolution
+against a real session row, which is why the bug survived three tickets' worth of test-writing.
+`sessionCommentCreatedEvent_onASessionTheOldStatusGateExcluded_stillNotifiesParticipants` is
+`@ParameterizedTest`-driven over `COMPLETED`/`CANCELLED`, publishing a real event over real
+RabbitMQ and asserting a real `Notification` row — plus that the commenter still gets nothing,
+since loosening the session-status gate must not loosen the actor filter. The
+`createSessionWithJoinedParticipant` helper gained a status parameter; existing callers keep
+`ONGOING` via a delegating overload.
+
+**The regression test was verified to actually regress.** The old hardcoded gate was temporarily
+reinstated and the class re-run: exactly the two new cases failed and the other four passed. A test
+that would have passed against the bug would have been worthless here.
+
+**Verification.** `:modules:session:session-impl:test` (`SessionServiceImplSpec` 89, was 85) and
+`:modules:notification:notification-impl:test` (`SessionEventsConsumerSpec` 10,
+`SessionEventProcessorSpec` 5) green; `:server:test` green with
+`SessionEventsConsumerIntegrationTest` at 6 (was 4). Repo-wide `testClasses` compiles, confirming
+no stale 2-arg caller anywhere.
+
+**Transient infrastructure flakiness, root-caused after the fact** — same class of problem
+SESSION-19 hit. Several `:server:test` runs failed with all 6 `SessionEventsConsumerIntegrationTest`
+tests erroring at `publish()`, **including the 4 pre-existing tests this ticket never touched**, and
+one run failed far more broadly (54 tests across `PostAccessGateIntegrationTest`,
+`SessionPostAccessGateIntegrationTest`, `InternalServiceFilterScopeIT` — none session- or
+notification-related). None of it was caused by this change; the class passes in isolation every
+time, and the fix itself was independently proven by reinstating the old gate.
+
+The "container contention" explanation recorded on SESSION-19 was **wrong**, and this ticket chased
+it before finding the real cause. Testcontainers was intermittently failing Docker *discovery*
+(`Could not find a valid Docker environment`) before any container was created, and because each
+container starts from a `static` initializer, a throwing `<clinit>` poisons the class for the rest
+of the JVM — so every dependent test then failed with `NoClassDefFoundError: Could not initialize
+class SharedRedisContainer`, burying the one real error. Retrying is provably useless
+(`FAIL_FAST_ALWAYS` latches the failure), and neither unpinning `docker.client.strategy` nor raising
+`client.ping.timeout` helped. **Restarting Rancher Desktop fixed it** — the daemon had 12+ days
+uptime; failure rate went from ~1 run in 3 to 6 consecutive clean runs.
+
+A code change making the containers start lazily was built and then **deliberately dropped**: it
+made the failure legible but could not prevent it, and the root cause was environmental. The full
+diagnosis — including the symptoms, the three dead ends, and why a green `server-ci` doesn't rule
+this out locally — is written up in `server/README.md`'s Troubleshooting section, which is where a
+developer hitting it will actually look. No infra ticket filed; it's a dev-environment issue, not a
+repo one.
+
+**Deltas for other tickets:**
+- **SESSION-19 / SESSION-18 / SESSION-15** — unaffected in behavior, but all three now pass
+  `ACTIVE_SESSION_STATUSES` explicitly instead of inheriting a hidden default. The note in
+  SESSION-19's doc that `leaveSession` has no session-status guard of its own still stands: leaving
+  a `COMPLETED`/`CANCELLED` session is reachable and still resolves zero recipients. That remains
+  the intended behavior confirmed at SESSION-19's pickup — this ticket did not change it.
+- **`NOTIFICATION_USE_CASES.md`** — an adjacent unresolved question surfaced and was logged there
+  rather than left in this doc: fan-out currently notifies participants whose account is
+  deactivated (`isActive = false`), since nothing filters recipients by account state. Out of scope
+  here; it applies to every fan-out event, not just comments.
+- **Client** — no change. `NOTIF-1`'s `session.comment.created` rendering already exists; this
+  ticket only changes *whether* the notification is produced.
