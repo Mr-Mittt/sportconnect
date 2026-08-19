@@ -8,6 +8,7 @@ import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
+import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
 import com.sportconnect.session.api.event.SessionStatusStartedEvent;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionParticipant;
@@ -171,5 +172,54 @@ class SessionEventsConsumerIntegrationTest extends RabbitMqTestContainerBase {
             assertThat(notification.getActorIds()).isEmpty();
             assertThat(notification.getActorCount()).isEqualTo(1);
         });
+    }
+
+    /**
+     * SESSION-19 — the only place {@code session.participant.left}'s full path is exercised for
+     * real: the new exchange/queue binding for this routing key, recipient resolution through the
+     * real {@code getParticipantIdsByStatuses} (including its {@code SCHEDULED}/{@code ONGOING}
+     * session-status gate) against a real DB, and a real {@code Notification} row. Both Spock specs
+     * for this event mock their collaborators — the producer spec mocks {@code SessionOutboxWriter},
+     * the consumer spec mocks {@code SessionEventProcessor} — so neither proves any of that.
+     * <p>
+     * The leaver is seeded as a {@code LEFT} row, which is the real post-{@code leaveSession} state:
+     * they are excluded from the recipient set by their participant status, before
+     * {@code SessionEventProcessor}'s actor filter is ever reached. Asserting they receive nothing
+     * pins that down either way.
+     */
+    @Test
+    void sessionParticipantLeftEvent_consumedOverRealRabbitMq_notifiesRemainingJoinedParticipantsButNotTheLeaver()
+            throws Exception {
+        UUID creatorId = UUID.randomUUID();
+        UUID remainingParticipantId = UUID.randomUUID();
+        UUID leaverId = UUID.randomUUID();
+        Long sessionId = createSessionWithJoinedParticipant(creatorId, remainingParticipantId);
+        sessionParticipantRepository.save(SessionParticipant.builder()
+                .sessionId(sessionId)
+                .userId(leaverId)
+                .status(ParticipantStatus.LEFT)
+                .build());
+        SessionParticipantLeftEvent payload = SessionParticipantLeftEvent.builder()
+                .sessionId(sessionId)
+                .actorId(leaverId)
+                .build();
+
+        publish("session.participant.left", "it-test:" + UUID.randomUUID(), payload);
+
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            List<Notification> notifications = notificationRepository
+                    .findByRecipientUserIdOrderByUpdatedAtDesc(remainingParticipantId, PageRequest.of(0, 10))
+                    .getContent();
+            assertThat(notifications).hasSize(1);
+            Notification notification = notifications.get(0);
+            assertThat(notification.getType()).isEqualTo("session.participant.left");
+            assertThat(notification.getEntityType()).isEqualTo("SESSION");
+            assertThat(notification.getEntityId()).isEqualTo(String.valueOf(sessionId));
+            assertThat(notification.getActorIds()).containsExactly(leaverId);
+        });
+
+        assertThat(notificationRepository
+                .findByRecipientUserIdOrderByUpdatedAtDesc(leaverId, PageRequest.of(0, 10))
+                .getContent()).isEmpty();
     }
 }

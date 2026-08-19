@@ -23,6 +23,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent;
+import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
 import com.sportconnect.session.api.service.SessionService;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionOutboxEvent;
@@ -367,8 +368,23 @@ public class SessionServiceImpl implements SessionService {
                         || p.getStatus() == ParticipantStatus.INVITED
                         || p.getStatus() == ParticipantStatus.REQUESTED)
                 .orElseThrow(() -> new BadRequestException("Not currently a participant in this session"));
+        // SESSION-19: read BEFORE the flip below — the row is mutated in place, so after
+        // setStatus(LEFT) there is no way left to tell which of the three allowed source states
+        // this leave actually came from.
+        ParticipantStatus previousStatus = participant.getStatus();
         participant.setStatus(ParticipantStatus.LEFT);
         sessionParticipantRepository.save(participant);
+
+        // SESSION-19: only a genuine JOINED -> LEFT notifies. The INVITED -> LEFT (declining an
+        // invite) and REQUESTED -> LEFT (cancelling a join request) transitions this same method
+        // also serves deliberately notify nobody — no one was ever counting on a person who had
+        // not actually joined.
+        if (previousStatus == ParticipantStatus.JOINED) {
+            sessionOutboxWriter.record("session.participant.left", SessionParticipantLeftEvent.builder()
+                    .sessionId(sessionId)
+                    .actorId(userId)
+                    .build());
+        }
     }
 
     @Override

@@ -8,6 +8,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent
+import com.sportconnect.session.api.event.SessionParticipantLeftEvent
 import com.sportconnect.session.api.event.SessionStatusStartedEvent
 import org.springframework.amqp.core.Message
 import org.springframework.amqp.core.MessageProperties
@@ -58,6 +59,25 @@ class SessionEventsConsumerSpec extends Specification {
         then:
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
             e.type() == "session.participant.joined" && e.fanOutStatuses() == [ParticipantStatus.JOINED]
+        })
+    }
+
+    def "dispatches session.participant.left as a fan-out event scoped to JOINED only"() {
+        given:
+        def actorId = UUID.randomUUID()
+        def body = objectMapper.writeValueAsString(
+                SessionParticipantLeftEvent.builder().sessionId(1L).actorId(actorId).build())
+
+        when:
+        consumer.onSessionEvent(messageWith("session.participant.left", body))
+
+        then:
+        // SESSION-19: proves the new case exists — without it this key falls through to the
+        // drop-and-log default and the processor is never called at all.
+        1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
+            e.type() == "session.participant.left" && e.sessionId() == 1L && e.actorId() == actorId &&
+                    e.singleRecipient() == null &&
+                    e.fanOutStatuses() == [ParticipantStatus.JOINED]
         })
     }
 
