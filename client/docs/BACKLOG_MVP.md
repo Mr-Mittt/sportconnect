@@ -68,8 +68,9 @@ New tickets get inserted at the appropriate position when filed, same as before 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [CLIENT-NOTIF-4](MVP/CLIENT-NOTIF-4_NOTIFICATION_TYPE_COVERAGE_GUARD.md) | Guard against a backend routing key shipping without its client text case — **new ticket, filed 2026-08-19 at CLIENT-NOTIF-3's pickup (user decision)**; `post-impl` B7, `group-impl` B21 and `user-impl` U13 will add 11 more types between them, each able to recur the same silent gap. Placed ahead of SPORT-2 on the same reasoning CLIENT-NOTIF-3 was — reorder if that's wrong | `TODO` |
-| 2 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 1 | [CLIENT-SESSION-13](MVP/CLIENT-SESSION-13_SYSTEM_COMMENTS_IN_SESSION_THREAD.md) | Render system comments in the session discussion thread — **new ticket, not in either epic, filed 2026-08-19 immediately after backend SESSION-21 merged**; system entries currently render as ordinary user comments authored by the session creator, so a "joined"/"left"/"started" record reads as that person speaking. Placed ahead of CLIENT-NOTIF-4 as a live user-visible defect vs. a process guard (user decision) | `TODO` |
+| 2 | [CLIENT-NOTIF-4](MVP/CLIENT-NOTIF-4_NOTIFICATION_TYPE_COVERAGE_GUARD.md) | Guard against a backend routing key shipping without its client text case — **new ticket, filed 2026-08-19 at CLIENT-NOTIF-3's pickup (user decision)**; `post-impl` B7, `group-impl` B21 and `user-impl` U13 will add 11 more types between them, each able to recur the same silent gap. Placed ahead of SPORT-2 on the same reasoning CLIENT-NOTIF-3 was — reorder if that's wrong | `TODO` |
+| 3 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 
 ### Done
 
