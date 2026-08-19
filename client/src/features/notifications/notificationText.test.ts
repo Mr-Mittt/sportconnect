@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { getNotificationText, notificationTextToString } from './notificationText';
 import type { Notification } from './types';
 
@@ -69,6 +69,8 @@ describe('getNotificationText', () => {
     ['session.join_request.approved', 'Your request to join "Friday Pickup Game" was approved'],
     ['session.join_request.rejected', 'Your request to join "Friday Pickup Game" was declined'],
     ['session.invitation.created', 'Alice Nguyen invited you to join "Friday Pickup Game"'],
+    ['session.participant.left', 'Alice Nguyen left "Friday Pickup Game"'],
+    ['session.status.started', '"Friday Pickup Game" has started'],
   ])('renders %s correctly', (type, expected) => {
     expect(notificationTextToString(getNotificationText(baseNotification({ type })))).toBe(expected);
   });
@@ -78,8 +80,43 @@ describe('getNotificationText', () => {
     expect(segments.filter((s) => s.bold)).toEqual([{ text: '"Friday Pickup Game"', bold: true }]);
   });
 
+  it('session.status.started names no actor even if one is somehow present (the job, not a person, started it)', () => {
+    const segments = getNotificationText(
+      baseNotification({ type: 'session.status.started', actors: [{ id: 'a1', fullName: 'Alice Nguyen' }] }),
+    );
+    expect(notificationTextToString(segments)).toBe('"Friday Pickup Game" has started');
+    expect(segments.filter((s) => s.bold)).toEqual([{ text: '"Friday Pickup Game"', bold: true }]);
+  });
+
+  it('session.status.started falls back to "your session" (not bold) when entityTitle is null', () => {
+    const segments = getNotificationText(baseNotification({ type: 'session.status.started', entityTitle: null }));
+    expect(segments[0]).toEqual({ text: 'your session', bold: false });
+    expect(notificationTextToString(segments)).toBe('your session has started');
+  });
+
+  // NOTE: the type here must stay one the backend can never emit. It used to be
+  // 'post.comment.created', which post-impl B7 is queued to make a real routing
+  // key — at which point this test would still pass while silently asserting
+  // "known-but-unimplemented" rather than "genuinely unknown".
   it('falls back to a generic sentence for an unrecognized type (forward-compat with future producers)', () => {
-    const segments = getNotificationText(baseNotification({ type: 'post.comment.created' }));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const segments = getNotificationText(baseNotification({ type: 'not.a.real.routing.key' }));
     expect(segments).toEqual([{ text: 'You have a new notification', bold: false }]);
+    warn.mockRestore();
+  });
+
+  it('warns in dev when a type hits the fallback, so a new producer is not silently degraded', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    getNotificationText(baseNotification({ type: 'not.a.real.routing.key' }));
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]![0]).toContain('not.a.real.routing.key');
+    warn.mockRestore();
+  });
+
+  it('does not warn for a type it knows how to render', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    getNotificationText(baseNotification({ type: 'session.status.started' }));
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

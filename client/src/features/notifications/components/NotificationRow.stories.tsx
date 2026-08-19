@@ -54,3 +54,23 @@ export const NoEntityTitle: Story = {
 export const ApprovalOutcome: Story = {
   args: { notification: { ...baseNotification, type: 'session.join_request.approved' } },
 };
+
+/**
+ * The only type that names no person at all — a scheduled job makes the
+ * transition, so the backend sends `actorId = null` and the row leads with the
+ * bold entity title instead of an actor (CLIENT-NOTIF-3).
+ */
+export const SessionStarted: Story = {
+  args: {
+    notification: { ...baseNotification, type: 'session.status.started', actorIds: [], actors: [] },
+  },
+};
+
+/**
+ * The degraded state for a routing key the client has no case for. Rendering
+ * this deliberately stays generic, but it should be reviewable rather than only
+ * unit-tested — this is what every unmapped backend event looks like to a user.
+ */
+export const UnknownType: Story = {
+  args: { notification: { ...baseNotification, type: 'not.a.real.routing.key' } },
+};

@@ -617,9 +617,14 @@ The `TopBar` bell + dropdown — unread badge, list-on-open, mark-read-on-click 
 in-place modal, and "Mark all read". Fixtures: `mocks/handlers/notifications.ts`'s
 `defaultNotificationsState` — 2 unread (id 1 aggregated to 2 distinct actors, `mockFriend`/Priya
 Shah + a second inline actor "Hana Kim", exercising `getNotificationText`'s "and 1 other" branch;
-id 2 a single-actor `session.join_request.created`) and 1 already-read (id 3,
-`session.join_request.approved`, no actor — exercises the "Someone"-less approval-outcome copy).
-All three reference `mockSession`'s id (1) as `entityId`. No coverage of the STOMP live-push path
+id 2 a single-actor `session.join_request.created`) and 3 already-read (id 3,
+`session.join_request.approved`, no actor — exercises the "Someone"-less approval-outcome copy;
+ids 4 and 5, added by CLIENT-NOTIF-3, a `session.participant.left` and an actor-less
+`session.status.started`, so the fixture covers every type the backend actually emits — a type
+missing from it is how CLIENT-NOTIF-3's bug stayed invisible). **Ids 4 and 5 are seeded read on
+purpose:** the unread count stays 2, so this spec's badge and mark-all-read assertions were not
+rewritten to accommodate new fixture rows. All five reference `mockSession`'s id (1) as `entityId`.
+No coverage of the STOMP live-push path
 here (NTF-3's own `NotificationStompIntegrationTest`/`useNotificationLiveSocket.test.tsx` already
 cover it end to end) — this spec is scoped to the REST-backed list/read/badge behavior
 CLIENT-NOTIF-1 actually built.
@@ -748,7 +753,7 @@ primitive) also renders `role="dialog"` in the DOM, so the same crop approach ca
 | State | Setup | Expects |
 |---|---|---|
 | `empty` | `seedEmptyNotificationsOnNextLoad(mockSessionId)` (new MSW override, `notificationsEmpty`) before `seedAuthenticatedSession`, then click the bell | "You're all caught up." visible |
-| `populated` | Default fixture (`defaultNotificationsState`, 2 unread + 1 read), click the bell | Aggregated-actor notification text visible |
+| `populated` | Default fixture (`defaultNotificationsState`, 2 unread + 3 read — was 2 + 1 before CLIENT-NOTIF-3 added the two missing session types), click the bell | Aggregated-actor notification text visible |
 | `with-load-more` | `seedPaginatedNotificationsOnNextLoad(mockSessionId)` (new fixture, 11 items — one more than the page size of 10) before seeding auth, click the bell, scroll the row list's internal scroll container so "Load more" clears the fold | "Load more" button visible |
 
 Curated down from `NotificationBell`'s full 6 Storybook stories (user decision at pickup): `loading`/

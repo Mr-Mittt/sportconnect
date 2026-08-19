@@ -44,6 +44,14 @@ function pagedResponse(all: Notification[], page: number) {
 // mark-as-read flow, and a row that starts out dimmed. entityId matches
 // mockSession.id (1) so clicking a row's `/matches?session=1` deep link
 // resolves against the same session fixture MatchesPage.test.tsx already uses.
+//
+// CLIENT-NOTIF-3 added ids 4 and 5 so every notification type the backend
+// actually emits appears here — the fixture is meant to mirror the real
+// contract, and a type missing from it is how this ticket's bug stayed
+// invisible. Both are seeded `isRead: true` deliberately: the unread count
+// stays 2, so notification-bell.spec.ts's badge and mark-all-read assertions
+// keep testing what they were written to test rather than being rewritten to
+// accommodate new fixture rows.
 function defaultNotificationsState(): Notification[] {
   return [
     {
@@ -85,6 +93,35 @@ function defaultNotificationsState(): Notification[] {
       isRead: true,
       createdAt: '2026-08-16T08:00:00',
       updatedAt: '2026-08-16T08:00:00',
+      actors: [],
+      entityTitle: mockSession.title,
+    },
+    {
+      id: 4,
+      type: 'session.participant.left',
+      entityType: 'SESSION',
+      entityId: String(mockSession.id),
+      actorIds: [mockFriend.id],
+      actorCount: 1,
+      isRead: true,
+      createdAt: '2026-08-15T08:00:00',
+      updatedAt: '2026-08-15T08:00:00',
+      actors: [{ id: mockFriend.id, fullName: mockFriend.fullName }],
+      entityTitle: mockSession.title,
+    },
+    {
+      id: 5,
+      type: 'session.status.started',
+      entityType: 'SESSION',
+      entityId: String(mockSession.id),
+      // No actor — SESSION-18's scheduled job made the transition, so the
+      // backend records the event with actorId = null and NTF-4 resolves an
+      // empty actor list. Mirrors that exactly rather than inventing an actor.
+      actorIds: [],
+      actorCount: 1,
+      isRead: true,
+      createdAt: '2026-08-14T08:00:00',
+      updatedAt: '2026-08-14T08:00:00',
       actors: [],
       entityTitle: mockSession.title,
     },
