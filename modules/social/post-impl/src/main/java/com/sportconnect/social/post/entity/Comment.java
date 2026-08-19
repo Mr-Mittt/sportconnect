@@ -1,7 +1,10 @@
 package com.sportconnect.social.post.entity;
 
+import com.sportconnect.social.post.api.dto.CommentType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -41,6 +44,15 @@ public class Comment {
 
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
+
+    /**
+     * SESSION-21 — {@code USER} for a real user's comment, {@code SESSION_SYSTEM} for a
+     * server-written session-thread entry. Same role {@code PostType.GROUP_SYSTEM} plays for posts.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "comment_type", nullable = false)
+    @Builder.Default
+    private CommentType commentType = CommentType.USER;
 
     @Column(name = "is_active")
     @Builder.Default

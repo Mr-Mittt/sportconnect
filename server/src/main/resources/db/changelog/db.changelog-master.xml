@@ -146,4 +146,7 @@
     <!-- SESSION-17: partial index on session_outbox_events, scoped to status = 'PENDING' -->
     <include file="db/changelog/changes/V056__replace_session_outbox_events_status_index_with_partial.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-21: comments.comment_type — discriminator for server-written system comments in a session thread -->
+    <include file="db/changelog/changes/V057__add_comment_type.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

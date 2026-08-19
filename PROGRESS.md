@@ -2950,6 +2950,44 @@ explicit go-ahead at each step (full story in A3's summary doc):
   and **NOTIF-4** filed as a new `CANDIDATE` — fan-out currently notifies participants whose account
   is deactivated, since nothing filters recipients by `isActive`; cross-cutting across every
   trigger, and related to user-impl's U12.
+- **SESSION-21 (`DONE`, 2026-08-19,
+  `modules/session/docs/MVP/SESSION-21_SYSTEM_COMMENTS_IN_SESSION_THREAD.md`):** system comments in
+  a session's discussion thread — server-written entries at the three moments that already emit
+  outbox events (participant joined, participant left, session started), surfacing through
+  SESSION-10's existing `SESSION_POST` comment-read path with no new API. **The ticket's one
+  deliberately-unresolved question — a system comment has no author, but `Comment.user_id` is NOT
+  NULL — was answered by precedent, not re-derived:** B9 had already solved the identical problem
+  for `GROUP_SYSTEM` posts, and its shipped design settled almost everything (real user in the NOT
+  NULL column + a type discriminator, *not* a nullable column, a sentinel UUID, or a separate
+  table; additive CHECK migration; server-templated content with the name baked in; edit/delete
+  blocked unconditionally "not even for the nominal author"; a CLAUDE.md rule so future trigger
+  points don't miss it). Applied here as: author = `session.getCreatedBy()` (simpler than B9's
+  `resolveGroupOwnerId` — `Session` already carries it), new `CommentType.USER`/`SESSION_SYSTEM` on
+  `CommentResponse.commentType` (`V057`, `DEFAULT 'USER'` backfill, no truncation). B9's spoofing
+  guard has **no analogue** — `CreateCommentRequest` has no type field, so there's nothing to spoof.
+  Two things B9 didn't decide went to the user: one `SESSION_SYSTEM` value rather than one per event
+  (faithful to `GROUP_SYSTEM`, content carries the specifics), and likes/replies **blocked** — the
+  one place the ticket's expectation and B9 disagreed (a `GROUP_SYSTEM` post stays likeable),
+  resolved in the ticket's favour. No dedupe on repeat join/leave; one entry per genuine transition,
+  matching the outbox events' existing guards exactly (SESSION-16's already-`JOINED` early return,
+  SESSION-19's `JOINED`-only leave). **Must-not-double-notify verified, not assumed:** the three
+  paths never touch `session.comment.created`, asserted by `0 * ...record("session.comment.created")`
+  in every new spec plus a positive test that a *real* user comment still emits it.
+  `startOngoingSessions` writes its 200-per-pass batch through one `createSystemSessionComments`
+  call (one validation query, one `saveAll`) rather than a call per session. The Redis
+  comment-count increment is kept deliberately — that key's DB fallback counts system rows, so
+  skipping it would make the cached count disagree with the uncached one. Two points the plan didn't
+  cover, settled while implementing: `requireRequestedParticipant` now takes the resolved `Session`
+  rather than an id (the first cut double-fetched, relying on Hibernate L1 cache — the mocked test
+  flagged the extra `findById`), and two pre-existing specs were updated because the reply guard
+  genuinely replaced `existsById` with `findById`. **Test-harness landmine found and documented:** `BaseIT.authenticateAs` only takes
+  effect before a test method's *first* MockMvc request — a mid-test identity switch silently keeps
+  the previous principal, which made an early version of the ordering IT pass for the wrong reason;
+  now noted on `BaseIT.authenticateAs` itself. Verification: `:modules:social:post-impl:test` (152),
+  `:modules:session:session-impl:test` (128), `:server:test` (100, incl. the new
+  `SessionSystemCommentIntegrationTest`) all green, plus `V057` confirmed applied against the real
+  dev Postgres. Client rendering stays out of scope, unfiled — `commentType` is the field it will
+  branch on.
 - **GRP-10 (`DONE`, 2026-08-18, `client/docs/MVP/GRP-10_GROUP_PAGE_VISUAL_REGRESSION.md`):** new
   `client/e2e/visual/app-groups.spec.ts` — closes the visual-regression gap GRP-1 flagged and never
   followed up on. 6 states × 3 breakpoints = 18 baselines (discovery, owner-posts with the Broadcast

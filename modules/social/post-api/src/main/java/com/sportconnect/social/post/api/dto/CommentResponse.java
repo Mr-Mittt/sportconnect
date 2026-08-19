@@ -21,6 +21,7 @@ public class CommentResponse {
     private String userFullName;
     private String userAvatarUrl;
     private String content;
+    private CommentType commentType;
     private Long parentCommentId;
     private Long likeCount;
     private Long replyCount;

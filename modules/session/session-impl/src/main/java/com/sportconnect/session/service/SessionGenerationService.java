@@ -9,6 +9,8 @@ import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionOutboxEvent;
 import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionRepository;
+import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest;
+import com.sportconnect.social.post.api.service.CommentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -44,6 +46,7 @@ public class SessionGenerationService {
     private final GroupService groupService;
     private final SessionOutboxEventRepository sessionOutboxEventRepository;
     private final SessionOutboxWriter sessionOutboxWriter;
+    private final CommentService commentService;
 
     @Transactional
     public void generateUpcomingSessions() {
@@ -113,6 +116,21 @@ public class SessionGenerationService {
                             SessionStatusStartedEvent.builder().sessionId(s.getId()).build()))
                     .collect(Collectors.toList());
             sessionOutboxEventRepository.saveAll(outboxEvents);
+
+            // SESSION-21: one system entry per started session, written as a single batch —
+            // one query to validate every SESSION_POST and one saveAll, rather than a call per
+            // session across a batch of up to START_BATCH_SIZE. Authored by each session's own
+            // createdBy (this is the one trigger point with no actor at all), and deliberately
+            // separate from the outbox row above: the started notification is that event's job,
+            // and this must not also fire session.comment.created.
+            List<SystemSessionCommentRequest> systemComments = sessions.stream()
+                    .map(s -> SystemSessionCommentRequest.builder()
+                            .postId(s.getPostId())
+                            .authorUserId(s.getCreatedBy())
+                            .content("The session has started")
+                            .build())
+                    .collect(Collectors.toList());
+            commentService.createSystemSessionComments(systemComments);
 
             log.info("Started {} session(s)", sessions.size());
         } while (batch.hasNext());

@@ -37,6 +37,7 @@ import com.sportconnect.social.post.api.service.PostService
 import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.api.service.UserSportProfileService
+import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserService
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
@@ -74,6 +75,10 @@ class SessionServiceImplSpec extends Specification {
         // lenient default so tests that aren't specifically about this behavior don't each need
         // to stub it themselves, same convention as stubBatchEnrichment().
         postService.createSessionPost(_, _) >> 999L
+        // SESSION-21: joinSession/leaveSession/approveParticipant now resolve the participant's
+        // display name for the system comment's content. Same lenient-default rationale — the
+        // tests that actually care about the name stub it themselves in their then-block.
+        userService.getUsersByIds(_) >> [:]
     }
 
     private void stubBatchEnrichment() {
@@ -1543,5 +1548,179 @@ class SessionServiceImplSpec extends Specification {
         interaction { stubBatchEnrichment() }
         result.likeCount == 0L
         result.isLikedByCurrentUser == false
+    }
+
+    // ── SESSION-21 system comments in the discussion thread ───────────────────
+
+    def "joinSession writes a system comment authored by the session creator when the caller lands on JOINED"() {
+        given: "a session created by someone other than the joiner"
+        def creatorId = UUID.randomUUID()
+        def joinerId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).createdBy(creatorId).autoApprove(true).build()
+        def joiner = UserResponse.builder().id(joinerId).firstName("Alice").lastName("Nguyen").build()
+
+        when:
+        sessionService.joinSession(1L, joinerId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, joinerId) >> Optional.empty()
+        1 * sessionParticipantRepository.save(_) >> { SessionParticipant p -> p }
+        1 * userService.getUsersByIds([joinerId]) >> [(joinerId): joiner]
+
+        and: "the entry is authored by the creator, not the joiner it is about"
+        1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen joined the session")
+
+        and: "no comment notification — participant.joined already covers this moment"
+        0 * sessionOutboxWriter.record("session.comment.created", _)
+    }
+
+    def "joinSession writes no system comment when the caller only lands on REQUESTED"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).createdBy(UUID.randomUUID()).autoApprove(false).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
+        1 * sessionParticipantRepository.save(_) >> { SessionParticipant p -> p }
+        0 * commentService.createSystemSessionComment(_, _, _)
+    }
+
+    def "joinSession writes no system comment when the caller is already JOINED"() {
+        given: "SESSION-16's early return — no genuine transition, so nothing to record"
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).createdBy(UUID.randomUUID()).autoApprove(true).build()
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId)
+                .status(ParticipantStatus.JOINED).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        0 * commentService.createSystemSessionComment(_, _, _)
+    }
+
+    def "leaveSession writes a system comment on a genuine JOINED to LEFT transition"() {
+        given:
+        def creatorId = UUID.randomUUID()
+        def leaverId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).createdBy(creatorId).groupId(5L).build()
+        def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(leaverId)
+                .status(ParticipantStatus.JOINED).build()
+        def leaver = UserResponse.builder().id(leaverId).firstName("Alice").lastName("Nguyen").build()
+
+        when:
+        sessionService.leaveSession(1L, leaverId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, leaverId) >> Optional.of(participant)
+        1 * sessionParticipantRepository.save(_) >> participant
+        1 * userService.getUsersByIds([leaverId]) >> [(leaverId): leaver]
+        1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen left the session")
+        0 * sessionOutboxWriter.record("session.comment.created", _)
+    }
+
+    def "leaveSession writes no system comment when the row was only #status"() {
+        given: "SESSION-19: declining an invite / cancelling a request is not a departure"
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).createdBy(UUID.randomUUID()).groupId(5L).build()
+        def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(status).build()
+
+        when:
+        sessionService.leaveSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(participant)
+        1 * sessionParticipantRepository.save(_) >> participant
+        0 * commentService.createSystemSessionComment(_, _, _)
+
+        where:
+        status << [ParticipantStatus.INVITED, ParticipantStatus.REQUESTED]
+    }
+
+    def "approveParticipant writes a system comment for the approved requester"() {
+        given:
+        def creatorId = UUID.randomUUID()
+        def requesterId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).createdBy(creatorId)
+                .status(SessionStatus.SCHEDULED).build()
+        def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(requesterId)
+                .status(ParticipantStatus.REQUESTED).build()
+        def requester = UserResponse.builder().id(requesterId).firstName("Alice").lastName("Nguyen").build()
+
+        when:
+        sessionService.approveParticipant(1L, creatorId, requesterId)
+
+        then: "the session is fetched exactly once, then reused for the system comment"
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, requesterId) >> Optional.of(participant)
+        1 * sessionParticipantRepository.save(_) >> participant
+        1 * userService.getUsersByIds([requesterId]) >> [(requesterId): requester]
+        1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen joined the session")
+        0 * sessionOutboxWriter.record("session.comment.created", _)
+    }
+
+    def "rejectParticipant writes no system comment"() {
+        given: "a rejection is not one of the three moments the thread records"
+        def creatorId = UUID.randomUUID()
+        def requesterId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).createdBy(creatorId)
+                .status(SessionStatus.SCHEDULED).build()
+        def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(requesterId)
+                .status(ParticipantStatus.REQUESTED).build()
+
+        when:
+        sessionService.rejectParticipant(1L, creatorId, requesterId, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, requesterId) >> Optional.of(participant)
+        1 * sessionParticipantRepository.save(_) >> participant
+        0 * commentService.createSystemSessionComment(_, _, _)
+    }
+
+    def "a system comment falls back to a neutral label when the participant cannot be resolved"() {
+        given:
+        def creatorId = UUID.randomUUID()
+        def joinerId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).createdBy(creatorId).autoApprove(true).build()
+
+        when:
+        sessionService.joinSession(1L, joinerId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, joinerId) >> Optional.empty()
+        1 * sessionParticipantRepository.save(_) >> { SessionParticipant p -> p }
+        1 * userService.getUsersByIds([joinerId]) >> [:]
+
+        and: "an unresolvable name never fails an otherwise valid join"
+        1 * commentService.createSystemSessionComment(999L, creatorId, "A participant joined the session")
+    }
+
+    def "createSessionComment still emits session.comment.created for a real user comment"() {
+        given: "the notification suppression is scoped to system entries only, not the whole thread"
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).postId(999L).createdBy(UUID.randomUUID()).build()
+        def request = CreateCommentRequest.builder().content("see you there").build()
+        def response = CommentResponse.builder().id(77L).build()
+
+        when:
+        sessionService.createSessionComment(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * commentService.createSessionComment(999L, userId, request) >> response
+        1 * sessionOutboxWriter.record("session.comment.created", _)
+        0 * commentService.createSystemSessionComment(_, _, _)
     }
 }

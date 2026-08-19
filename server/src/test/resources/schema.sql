@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS comments (
     user_id UUID NOT NULL,
     parent_comment_id BIGINT,
     content TEXT NOT NULL,
+    comment_type VARCHAR(32) DEFAULT 'USER',
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP,

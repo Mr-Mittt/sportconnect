@@ -25,6 +25,7 @@ fields. See `modules/location/location-impl/CLAUDE.md` for that side of the boun
 | `SessionServiceImpl` | All business rules below; batch-resolves creator/sport/location/participant-count/cancelledBy in `mapToResponses` — never per-row |
 | `SessionGenerationService` | Internal only (not on `session-api`) — drives `SCHEDULED`→`ONGOING`→`COMPLETED` automatically, generates the next recurring occurrence. See SESSION-2 in `docs/BACKLOG_MVP.md`. SESSION-18: `startOngoingSessions` also writes one `session.status.started` outbox row per session it starts, via `SessionOutboxWriter` — the first outbox event with no real actor (a scheduled job, not a user, made the transition), so its payload DTO carries no `actorId`. |
 | `SessionGenerationJob` | `@Scheduled`: hourly `generateUpcomingSessions`; every-15-min `startOngoingSessions` and `closePastSessions` |
+| System comments (SESSION-21) | No new class — `SessionServiceImpl`'s private `writeSystemComment`/`resolveParticipantName` and one batched call in `SessionGenerationService.startOngoingSessions`, both delegating to `post-api`'s `CommentService.createSystemSessionComment(s)`. See business rule 9 |
 | `SessionOutboxWriter` | SESSION-18 — shared `session_outbox_events` row builder/writer, extracted from `SessionServiceImpl`'s own private methods (SESSION-15) once `SessionGenerationService` became a second writer. Both services inject it. |
 | `SessionGate` (`access/`) | `ResourceGate<Session>` (SESSION-10) — the sole gate on a session's comment thread *and* its own like; `post-impl` never checks (its own `PostGate` makes `SESSION_POST` unconditionally unavailable). Same shape as `post-impl`'s `PostGate`, no shared logic |
 
@@ -115,6 +116,20 @@ ownership-only), so there's nothing this module needs to wrap.
    auto-joined, and `joinSession` never blocks them from joining like a normal member, so they can
    leave like one too if they choose to join.
 
+9. **SESSION-21:** every path that produces a genuine **`JOINED`** transition (`joinSession`'s
+   auto-approve/INVITED branch, `approveParticipant`), a genuine **`JOINED`→`LEFT`** one
+   (`leaveSession`), or a **`SCHEDULED`→`ONGOING`** one (`SessionGenerationService
+   .startOngoingSessions`) must also write a system comment into the session's thread, via
+   `CommentService.createSystemSessionComment`/`createSystemSessionComments`. Flagged here the same
+   way `group-impl/CLAUDE.md`'s rule 7 flags B9's welcome post, so a future new join/leave
+   mechanism doesn't silently skip it. Three things are load-bearing: the entry is authored by
+   `session.getCreatedBy()` (never the participant it's about — a system comment has no real
+   author, and `comments.user_id` is NOT NULL); it must **not** emit `session.comment.created`
+   (each of the three moments already notifies via its own event, so a comment notification would
+   double-ping); and it fires only on a *genuine* transition, matching the outbox events'
+   existing guards exactly (SESSION-16's already-`JOINED` early return, SESSION-19's
+   `JOINED`-only leave). Batch call sites use `createSystemSessionComments` — one query and one
+   `saveAll` for the whole batch, never a call per session.
 ## Gotchas
 
 - `SessionType.TOURNAMENT`/`TRAINING` are reserved enum values with **no** supporting logic —
