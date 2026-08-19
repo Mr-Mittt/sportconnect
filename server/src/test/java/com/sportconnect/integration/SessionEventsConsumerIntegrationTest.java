@@ -7,6 +7,7 @@ import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
+import com.sportconnect.session.api.event.SessionCommentCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
 import com.sportconnect.session.api.event.SessionStatusStartedEvent;
@@ -19,6 +20,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -43,6 +46,10 @@ import static org.awaitility.Awaitility.await;
  * Publishes directly to the exchange (bypassing {@code SessionOutboxRelayJob}'s outbox-table/
  * {@code @Scheduled} drain) — this class is testing the consumer side of the wire, not the
  * producer side, which SESSION-15's own tests already cover.
+ * <p>
+ * SESSION-20 added {@code sessionCommentCreatedEvent_...}, the only end-to-end proof that a comment
+ * on a COMPLETED/CANCELLED session still fans out — every Spock spec on that path mocks the exact
+ * collaborator that was broken.
  * <p>
  * SESSION-18's {@code sessionStatusStartedEvent_...} test exists for the same reason as the rest
  * of this class, plus one more: it's the only place the null-{@code actorId} path (SESSION-18's
@@ -84,6 +91,10 @@ class SessionEventsConsumerIntegrationTest extends RabbitMqTestContainerBase {
      * as {@code SessionPostAccessGateIntegrationTest}.
      */
     private Long createSessionWithJoinedParticipant(UUID creatorId, UUID participantId) {
+        return createSessionWithJoinedParticipant(creatorId, participantId, SessionStatus.ONGOING);
+    }
+
+    private Long createSessionWithJoinedParticipant(UUID creatorId, UUID participantId, SessionStatus status) {
         Session session = Session.builder()
                 .postId(System.nanoTime())
                 .sessionType(SessionType.STANDALONE)
@@ -91,7 +102,7 @@ class SessionEventsConsumerIntegrationTest extends RabbitMqTestContainerBase {
                 .sportId(1L)
                 .locationId(1L)
                 .scheduledStart(LocalDateTime.now().plusDays(1))
-                .status(SessionStatus.ONGOING)
+                .status(status)
                 .capacity(9999)
                 .feeType(FeeType.FREE)
                 .initialSlot(0)
@@ -220,6 +231,54 @@ class SessionEventsConsumerIntegrationTest extends RabbitMqTestContainerBase {
 
         assertThat(notificationRepository
                 .findByRecipientUserIdOrderByUpdatedAtDesc(leaverId, PageRequest.of(0, 10))
+                .getContent()).isEmpty();
+    }
+
+    /**
+     * SESSION-20's regression test — the only place the fix is proven end to end. Every Spock spec
+     * involved mocks the thing that was broken: {@code SessionEventProcessorSpec} mocks
+     * {@code SessionService}, and {@code SessionEventsConsumerSpec} mocks the processor, so neither
+     * ever runs the real recipient resolution against a real session row. Before the fix, the
+     * hardcoded {@code (SCHEDULED, ONGOING)} gate inside {@code getParticipantIdsByStatuses} made
+     * this exact scenario — a comment on a session that already finished, which {@code SessionGate}
+     * explicitly permits (post-game recap) — resolve zero recipients and notify nobody, while the
+     * outbox row itself was written perfectly correctly.
+     * <p>
+     * Parameterized over both statuses the old gate excluded: {@code CANCELLED} was confirmed at
+     * pickup to notify as well, on the same reasoning ("why was this cancelled?" is exactly when a
+     * participant wants to hear about it) — commenting is permitted there too.
+     */
+    @ParameterizedTest
+    @EnumSource(value = SessionStatus.class, names = {"COMPLETED", "CANCELLED"})
+    void sessionCommentCreatedEvent_onASessionTheOldStatusGateExcluded_stillNotifiesParticipants(
+            SessionStatus sessionStatus) throws Exception {
+        UUID commenterId = UUID.randomUUID();
+        UUID participantId = UUID.randomUUID();
+        Long sessionId = createSessionWithJoinedParticipant(commenterId, participantId, sessionStatus);
+        SessionCommentCreatedEvent payload = SessionCommentCreatedEvent.builder()
+                .sessionId(sessionId)
+                .actorId(commenterId)
+                .commentId(42L)
+                .build();
+
+        publish("session.comment.created", "it-test:" + UUID.randomUUID(), payload);
+
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            List<Notification> notifications = notificationRepository
+                    .findByRecipientUserIdOrderByUpdatedAtDesc(participantId, PageRequest.of(0, 10))
+                    .getContent();
+            assertThat(notifications).hasSize(1);
+            Notification notification = notifications.get(0);
+            assertThat(notification.getType()).isEqualTo("session.comment.created");
+            assertThat(notification.getEntityType()).isEqualTo("SESSION");
+            assertThat(notification.getEntityId()).isEqualTo(String.valueOf(sessionId));
+            assertThat(notification.getActorIds()).containsExactly(commenterId);
+        });
+
+        // The commenter is still filtered out by SessionEventProcessor's actor check — loosening
+        // the session-status gate must not have loosened that too.
+        assertThat(notificationRepository
+                .findByRecipientUserIdOrderByUpdatedAtDesc(commenterId, PageRequest.of(0, 10))
                 .getContent()).isEmpty();
     }
 }

@@ -2,6 +2,7 @@ package com.sportconnect.notification.consumer
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.session.api.dto.ParticipantStatus
+import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent
@@ -30,7 +31,7 @@ class SessionEventsConsumerSpec extends Specification {
         return new Message(body.bytes, props)
     }
 
-    def "dispatches session.comment.created as a fan-out event with the comment-recipient statuses"() {
+    def "dispatches session.comment.created as a fan-out event with the comment-recipient statuses, unrestricted by session status"() {
         given:
         def actorId = UUID.randomUUID()
         def body = objectMapper.writeValueAsString(
@@ -43,7 +44,11 @@ class SessionEventsConsumerSpec extends Specification {
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
             e.type() == "session.comment.created" && e.sessionId() == 1L && e.actorId() == actorId &&
                     e.singleRecipient() == null &&
-                    e.fanOutStatuses() == [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED]
+                    e.fanOutStatuses() == [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED] &&
+                    // SESSION-20: every lifecycle state, not just SCHEDULED/ONGOING — a comment on a
+                    // COMPLETED or CANCELLED session must still fan out. Compared against values()
+                    // so adding a SessionStatus without revisiting this stays passing by design.
+                    e.fanOutSessionStatuses() == (SessionStatus.values() as List)
         })
     }
 
@@ -58,7 +63,8 @@ class SessionEventsConsumerSpec extends Specification {
 
         then:
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
-            e.type() == "session.participant.joined" && e.fanOutStatuses() == [ParticipantStatus.JOINED]
+            e.type() == "session.participant.joined" && e.fanOutStatuses() == [ParticipantStatus.JOINED] &&
+                    e.fanOutSessionStatuses() == [SessionStatus.SCHEDULED, SessionStatus.ONGOING]
         })
     }
 
@@ -77,7 +83,8 @@ class SessionEventsConsumerSpec extends Specification {
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
             e.type() == "session.participant.left" && e.sessionId() == 1L && e.actorId() == actorId &&
                     e.singleRecipient() == null &&
-                    e.fanOutStatuses() == [ParticipantStatus.JOINED]
+                    e.fanOutStatuses() == [ParticipantStatus.JOINED] &&
+                    e.fanOutSessionStatuses() == [SessionStatus.SCHEDULED, SessionStatus.ONGOING]
         })
     }
 
@@ -91,7 +98,8 @@ class SessionEventsConsumerSpec extends Specification {
         then:
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
             e.type() == "session.status.started" && e.sessionId() == 1L && e.actorId() == null &&
-                    e.fanOutStatuses() == [ParticipantStatus.JOINED]
+                    e.fanOutStatuses() == [ParticipantStatus.JOINED] &&
+                    e.fanOutSessionStatuses() == [SessionStatus.SCHEDULED, SessionStatus.ONGOING]
         })
     }
 
@@ -107,7 +115,9 @@ class SessionEventsConsumerSpec extends Specification {
 
         then:
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
-            e.type() == "session.join_request.created" && e.singleRecipient() == recipientId && e.fanOutStatuses() == null
+            e.type() == "session.join_request.created" && e.singleRecipient() == recipientId &&
+                    // Both fan-out filters absent together — the record's documented invariant.
+                    e.fanOutStatuses() == null && e.fanOutSessionStatuses() == null
         })
     }
 

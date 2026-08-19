@@ -2635,8 +2635,8 @@ explicit go-ahead at each step (full story in A3's summary doc):
   no module actually implements them, so there's no owning backlog to file a fix-the-schema ticket
   against; flagged here in case someone wants to scope either "build the feature" or "drop the dead
   table" later, same "leftover placeholder, leave it alone" status as `sport-impl`'s `FacilityType`.
-- **MVP backlog (session module):** as of 2026-08-18, 17 of 20 tickets `DONE`; `TODO` remain
-  SESSION-8, SESSION-19, SESSION-20.
+- **MVP backlog (session module):** as of 2026-08-19, 19 of 21 tickets `DONE`; `TODO` remain
+  SESSION-8 and SESSION-21.
 - **CLIENT-SESSION-8 (`DONE`, 2026-08-12,
   `client/docs/MVP/CLIENT-SESSION-8_SESSION_COMMENTS.md`):** an inline "Discussion" section in
   `SessionDetailModal` (list + post + delete-own-comment, one-level reply nesting, per-comment
@@ -2909,6 +2909,38 @@ explicit go-ahead at each step (full story in A3's summary doc):
   ITs untouched by this change — traced to a Testcontainers static-init failure with Docker itself
   healthy, and an identical no-change re-run passed clean, so: container contention from three
   back-to-back container-heavy suites, not a code regression.
+- **SESSION-20 (`DONE`, 2026-08-19,
+  `modules/session/docs/MVP/SESSION-20_COMMENT_NOTIFICATION_STATUS_GATE_BUG.md`):** bug fix —
+  `SessionServiceImpl.getParticipantIdsByStatuses` hardcoded a `(SCHEDULED, ONGOING)` session-status
+  gate internally, so a comment on a `COMPLETED` session (post-game recap, which `SessionGate`
+  explicitly permits) wrote its outbox row correctly and then fanned out to **zero** recipients.
+  Fixed by making the session-status filter an explicit third parameter, with each of the four
+  fan-out callers declaring its own set in `SessionEventsConsumer`: `session.comment.created` gets
+  `ANY_SESSION_STATUS`, while `participant.joined`/`participant.left`/`status.started` keep
+  `(SCHEDULED, ONGOING)` byte-for-byte. **Two alternatives rejected:** a separate
+  `getCommentRecipientIds` (two near-identical methods on the cross-domain `-api` contract plus a
+  branch in the processor) and removing the gate outright (explicitly out of scope — changes the
+  other three events). **No 2-arg overload was kept** — an implicit default is precisely the trap
+  the bug came from. `ANY_SESSION_STATUS` is built from `SessionStatus.values()` so a future fifth
+  status is included by default, rather than being silently excluded the way `COMPLETED` was.
+  **`CANCELLED` resolved at pickup:** it notifies too — the confirmed rule is now "if you can
+  comment on it, your comment notifies". **The regression test was verified to actually regress:**
+  the old gate was temporarily reinstated and the class re-run, failing exactly the two new
+  parameterized cases and passing the other four — necessary because every Spock spec on this path
+  mocks the collaborator that was broken (`SessionEventProcessorSpec` mocks `SessionService`,
+  `SessionEventsConsumerSpec` mocks the processor), which is how the bug survived three tickets'
+  worth of test-writing. Verification: both module suites plus the mandatory `:server:test`, all
+  green (`SessionServiceImplSpec` 89, `SessionEventsConsumerSpec` 10,
+  `SessionEventsConsumerIntegrationTest` 6). Same transient Testcontainers contention SESSION-19
+  hit, investigated the same way: two runs failed with all 6 tests of the Rabbit IT class erroring
+  at `publish()` — **including the 4 pre-existing ones this ticket never touched** — and a run
+  combining module suites with `:server:test` in one Gradle invocation failed 54 tests across
+  unrelated ITs; run separately as Phase 5 prescribes, all suites passed four consecutive times.
+  **`NOTIFICATION_USE_CASES.md` updated:** NOTIF-1 marked `BUILT` with the correction recorded,
+  NOTIF-3 logged retroactively (SESSION-19's write-up referenced that number but no entry existed),
+  and **NOTIF-4** filed as a new `CANDIDATE` — fan-out currently notifies participants whose account
+  is deactivated, since nothing filters recipients by `isActive`; cross-cutting across every
+  trigger, and related to user-impl's U12.
 - **GRP-10 (`DONE`, 2026-08-18, `client/docs/MVP/GRP-10_GROUP_PAGE_VISUAL_REGRESSION.md`):** new
   `client/e2e/visual/app-groups.spec.ts` — closes the visual-regression gap GRP-1 flagged and never
   followed up on. 6 states × 3 breakpoints = 18 baselines (discovery, owner-posts with the Broadcast

@@ -555,13 +555,14 @@ public class SessionServiceImpl implements SessionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<UUID> getParticipantIdsByStatuses(Long sessionId, List<ParticipantStatus> statuses) {
+    public List<UUID> getParticipantIdsByStatuses(Long sessionId,
+                                                  List<ParticipantStatus> participantStatuses,
+                                                  List<SessionStatus> allowedSessionStatuses) {
         Session session = sessionRepository.findById(sessionId).orElse(null);
-        if (session == null
-                || (session.getStatus() != SessionStatus.SCHEDULED && session.getStatus() != SessionStatus.ONGOING)) {
+        if (session == null || !allowedSessionStatuses.contains(session.getStatus())) {
             return Collections.emptyList();
         }
-        return sessionParticipantRepository.findBySessionIdAndStatusIn(sessionId, statuses).stream()
+        return sessionParticipantRepository.findBySessionIdAndStatusIn(sessionId, participantStatuses).stream()
                 .map(SessionParticipant::getUserId)
                 .distinct()
                 .collect(Collectors.toList());

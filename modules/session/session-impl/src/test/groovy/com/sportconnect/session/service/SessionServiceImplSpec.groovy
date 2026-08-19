@@ -1404,6 +1404,13 @@ class SessionServiceImplSpec extends Specification {
     }
 
     // ── getParticipantIdsByStatuses (NTF-2 fan-out recipient resolution) ────────────
+    //
+    // SESSION-20 made the session-status filter an explicit parameter. ACTIVE and ANY below are
+    // the two sets notification-impl's SessionEventsConsumer actually passes — the cases are
+    // written against those rather than ad-hoc lists so this spec breaks if either changes shape.
+
+    private static final List<SessionStatus> ACTIVE = [SessionStatus.SCHEDULED, SessionStatus.ONGOING]
+    private static final List<SessionStatus> ANY = SessionStatus.values() as List
 
     def "getParticipantIdsByStatuses returns distinct participant ids for a SCHEDULED session"() {
         given:
@@ -1417,7 +1424,7 @@ class SessionServiceImplSpec extends Specification {
 
         when:
         def result = sessionService.getParticipantIdsByStatuses(1L,
-                [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED])
+                [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], ACTIVE)
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
@@ -1431,7 +1438,7 @@ class SessionServiceImplSpec extends Specification {
         def session = Session.builder().id(1L).status(SessionStatus.ONGOING).build()
 
         when:
-        def result = sessionService.getParticipantIdsByStatuses(1L, [ParticipantStatus.JOINED])
+        def result = sessionService.getParticipantIdsByStatuses(1L, [ParticipantStatus.JOINED], ACTIVE)
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
@@ -1439,35 +1446,55 @@ class SessionServiceImplSpec extends Specification {
         result == []
     }
 
-    def "getParticipantIdsByStatuses returns empty without querying participants for a CANCELLED session"() {
+    def "getParticipantIdsByStatuses returns empty without querying participants for a session status the caller didn't allow"() {
         given:
-        def session = Session.builder().id(1L).status(SessionStatus.CANCELLED).build()
+        def session = Session.builder().id(1L).status(excludedStatus).build()
 
         when:
-        def result = sessionService.getParticipantIdsByStatuses(1L, [ParticipantStatus.JOINED])
+        def result = sessionService.getParticipantIdsByStatuses(1L, [ParticipantStatus.JOINED], ACTIVE)
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         0 * sessionParticipantRepository.findBySessionIdAndStatusIn(_, _)
         result == []
+
+        where:
+        excludedStatus << [SessionStatus.CANCELLED, SessionStatus.COMPLETED]
     }
 
-    def "getParticipantIdsByStatuses returns empty for a COMPLETED session"() {
+    /**
+     * SESSION-20's actual fix. Before it, this method hardcoded (SCHEDULED, ONGOING) internally, so
+     * a comment on a COMPLETED/CANCELLED session — which SessionGate permits — resolved zero
+     * recipients and notified nobody. With the comment event's ANY_SESSION_STATUS set, the same
+     * recipients come back in every lifecycle state.
+     */
+    def "getParticipantIdsByStatuses resolves the full comment-recipient set for a #sessionStatus session when the caller allows any status"() {
         given:
-        def session = Session.builder().id(1L).status(SessionStatus.COMPLETED).build()
+        def session = Session.builder().id(1L).status(sessionStatus).build()
+        def commenterPeer = UUID.randomUUID()
+        def invitee = UUID.randomUUID()
+        def commentStatuses = [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED]
+        def rows = [
+                SessionParticipant.builder().sessionId(1L).userId(commenterPeer).status(ParticipantStatus.JOINED).build(),
+                SessionParticipant.builder().sessionId(1L).userId(invitee).status(ParticipantStatus.INVITED).build(),
+        ]
 
         when:
-        def result = sessionService.getParticipantIdsByStatuses(1L, [ParticipantStatus.JOINED])
+        def result = sessionService.getParticipantIdsByStatuses(1L, commentStatuses, ANY)
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        0 * sessionParticipantRepository.findBySessionIdAndStatusIn(_, _)
-        result == []
+        1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, commentStatuses) >> rows
+        result.toSet() == [commenterPeer, invitee].toSet()
+
+        where:
+        sessionStatus << [SessionStatus.COMPLETED, SessionStatus.CANCELLED,
+                          SessionStatus.SCHEDULED, SessionStatus.ONGOING]
     }
 
-    def "getParticipantIdsByStatuses returns empty for a nonexistent session"() {
+    def "getParticipantIdsByStatuses returns empty for a nonexistent session even when every status is allowed"() {
         when:
-        def result = sessionService.getParticipantIdsByStatuses(999L, [ParticipantStatus.JOINED])
+        def result = sessionService.getParticipantIdsByStatuses(999L, [ParticipantStatus.JOINED], ANY)
 
         then:
         1 * sessionRepository.findById(999L) >> Optional.empty()
