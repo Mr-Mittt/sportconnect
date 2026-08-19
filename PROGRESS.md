@@ -3202,3 +3202,4 @@ explicit go-ahead at each step (full story in A3's summary doc):
 | CORS | Allowed origins: `http://localhost:3000`, `http://localhost:5173` |
 | Duplicate migration filenames | Several V007–V010 filenames exist with different suffixes — only files listed in `db.changelog-master.xml` are applied |
 | Swagger | Available at `http://localhost:8080/swagger-ui.html` (dev) |
+| STOMP relay port 61613 (Windows only) | `bootRun` can fail with `Connection refused: 127.0.0.1:61613` while RabbitMQ is healthy and `docker ps` shows the port published — Windows/Hyper-V has *reserved* the port, so Docker never bound the host side (`docker ps` prints the requested mapping either way, which is the misleading part). Ranges are dynamic and shift on reboot; 61613 sits inside the default `49152–65535` range. Fix + end-to-end verification: `server/README.md`'s Troubleshooting section. Container recreates, the STOMP plugin, and the `:::61613` IPv6 bind are all red herrings |
