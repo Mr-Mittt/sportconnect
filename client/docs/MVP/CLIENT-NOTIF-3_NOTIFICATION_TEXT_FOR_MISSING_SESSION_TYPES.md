@@ -1,8 +1,6 @@
 # CLIENT-NOTIF-3 · Notification text for `session.status.started` and `session.participant.left`
 
-**Status:** `DONE` (2026-08-19) — code complete and verified; 3 visual baselines pending the
-`client-ci` `update-baselines` dispatch, same as every prior visual-regression ticket. See
-"Remaining step" below.
+**Status:** `DONE` (2026-08-19) — code complete and verified, baselines regenerated and committed.
 **Type:** Bug Fix (display gap)
 **Depends on:** none — both backend events already ship (`SESSION-18` `DONE`, `SESSION-19` `DONE`)
 **Filed:** 2026-08-19, found while implementing `SESSION-19` — checking whether the client could
@@ -147,6 +145,28 @@ dispatch, download the `visual-baselines` artifact, replace `client/e2e/visual/_
 commit. Expected: **exactly 3 files change** (`notification-bell-populated-*`), everything else
 byte-identical — worth the same SHA-256 check HF-20 used, plus a human look that the two new rows
 read "Priya Shah left …" and "\"Sunday pickup run\" has started".
+
+### Executed (2026-08-19)
+
+`update-baselines` dispatch run, `visual-baselines.zip` downloaded and extracted. SHA-256 compared
+against the committed set before overwriting: **exactly the 3 predicted files changed**
+(`notification-bell-populated-{375,768,1280}.png`); the other **72 came back byte-identical**.
+
+That byte-identity is itself a useful result — it confirms the committed baseline set already
+matched what CI generates today, so the "baselines still Windows-rendered, pending a dispatch"
+caveats carried by CLIENT-NOTIF-2, GRP-10 and CLIENT-SESSION-12 were already stale rather than
+outstanding work. It also confirms the dispatch ran on **this branch, not `master`**: had it run on
+`master` (which lacks this ticket's MSW fixture rows), `notification-bell-populated-*` would have
+regenerated to the old 3-row list and come back byte-identical too, leaving *zero* files changed.
+
+Human visual check of the 1280px and 375px crops: the dropdown now lists 5 rows (2 unread, 3 read),
+and the two new ones read **"Priya Shah left \"Sunday pickup run\""** and **"\"Sunday pickup run\"
+has started"** — the latter correctly naming no actor. No truncation or overflow at 375px (the
+dropdown is fixed-width, so the narrow crop renders identically). Nothing else drifted.
+
+Note the local `pnpm test:visual` still cannot pass on a Windows host — that is the pre-existing
+font-rendering mismatch documented above, unrelated to these baselines, so this step was verified by
+SHA-256 + visual inspection rather than a local suite run.
 
 ## Delta for later tickets
 

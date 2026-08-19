@@ -3081,13 +3081,18 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `post-impl` B7 is queued to make a *real* routing key — swapped for `'not.a.real.routing.key'` so
   the test keeps meaning "genuinely unknown" rather than silently becoming
   "known-but-unimplemented." Verification: `vitest run` 884/884, `tsc -b`/`eslint .` clean,
-  `playwright --project=e2e` 51/51 with `notification-bell.spec.ts` **unmodified**. **Remaining step
-  (same as every prior visual-regression ticket):** the bell list grows 3 rows → 5, so
-  `notification-bell-populated-{375,768,1280}.png` need the `client-ci` `update-baselines` dispatch.
-  Confirmed *not* regenerable locally — all 75 visual specs fail on this Windows host, verified by
-  stashing every change and reproducing byte-identical diffs on a pristine tree (the documented
-  Windows-vs-Linux font-rendering noise floor). Follow-up **CLIENT-NOTIF-4** filed for the recurrence
-  risk: B7/B21/U13 will add 11 more notification types between them, each able to repeat this gap.
+  `playwright --project=e2e` 51/51 with `notification-bell.spec.ts` **unmodified**. **Baselines
+  regenerated and committed the same day:** the bell list grows 3 rows → 5, so
+  `notification-bell-populated-{375,768,1280}.png` were refreshed via the `client-ci`
+  `update-baselines` dispatch (they were confirmed *not* regenerable locally — all 75 visual specs
+  fail on this Windows host, verified by stashing every change and reproducing byte-identical diffs
+  on a pristine tree, i.e. the documented Windows-vs-Linux font-rendering noise floor). SHA-256
+  comparison of the artifact against the committed set showed **exactly the 3 predicted files
+  changed and the other 72 byte-identical** — which incidentally confirms the committed baselines
+  already matched CI, so the "still Windows-rendered, pending a dispatch" caveats on CLIENT-NOTIF-2,
+  GRP-10 and CLIENT-SESSION-12 were stale rather than outstanding. Follow-up **CLIENT-NOTIF-4** filed
+  for the recurrence risk: B7/B21/U13 will add 11 more notification types between them, each able to
+  repeat this gap.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
