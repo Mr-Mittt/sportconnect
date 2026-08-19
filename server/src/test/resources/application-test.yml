@@ -46,5 +46,3 @@ logging:
     org.hibernate.tool.schema: DEBUG
     org.hibernate.engine.jdbc.env.internal: DEBUG
     org.springframework.orm.jpa: DEBUG
-    org.testcontainers: DEBUG
-    org.testcontainers.dockerclient: TRACE
