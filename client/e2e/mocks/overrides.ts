@@ -24,6 +24,7 @@ export interface SessionOverrides {
   refreshExpired: boolean;
   sportProfilesEmpty: boolean;
   createPostFailOnce: boolean;
+  notificationsEmpty: boolean;
 }
 
 function defaultOverrides(): SessionOverrides {
@@ -36,6 +37,7 @@ function defaultOverrides(): SessionOverrides {
     refreshExpired: false,
     sportProfilesEmpty: false,
     createPostFailOnce: false,
+    notificationsEmpty: false,
   };
 }
 

@@ -209,6 +209,7 @@ e2e/
     app-groups.spec.ts        # GRP-10
     app-session-detail-modal.spec.ts  # CLIENT-SESSION-12
     app-create-session-modal.spec.ts  # CLIENT-SESSION-12
+    app-notification-bell.spec.ts  # CLIENT-NOTIF-2
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
   mocks/
     mockServer.ts            # the standalone Node HTTP server
@@ -735,6 +736,30 @@ Dialog-scoped, same shape as `app-session-detail-modal.spec.ts` above. Parameter
 
 Same clock-freeze / blur-before-screenshot / `document.fonts.ready` sequence and known-Windows-noise
 caveat as `app-session-detail-modal.spec.ts` above.
+
+### `e2e/visual/app-notification-bell.spec.ts` (CLIENT-NOTIF-2, `visual-regression` project)
+
+Dialog-scoped (`page.getByRole('dialog')`), same shape as `app-post-modal.spec.ts`/
+`app-session-detail-modal.spec.ts` above — Radix's `Popover.Content` (the bell dropdown's underlying
+primitive) also renders `role="dialog"` in the DOM, so the same crop approach carries over from a
+`Dialog` unchanged. Parameterized: 3 breakpoints × 3 states = **9 test instances**,
+`notification bell — ${state} @ ${width}px`.
+
+| State | Setup | Expects |
+|---|---|---|
+| `empty` | `seedEmptyNotificationsOnNextLoad(mockSessionId)` (new MSW override, `notificationsEmpty`) before `seedAuthenticatedSession`, then click the bell | "You're all caught up." visible |
+| `populated` | Default fixture (`defaultNotificationsState`, 2 unread + 1 read), click the bell | Aggregated-actor notification text visible |
+| `with-load-more` | `seedPaginatedNotificationsOnNextLoad(mockSessionId)` (new fixture, 11 items — one more than the page size of 10) before seeding auth, click the bell, scroll the row list's internal scroll container so "Load more" clears the fold | "Load more" button visible |
+
+Curated down from `NotificationBell`'s full 6 Storybook stories (user decision at pickup): `loading`/
+`error` are transient states already covered by Storybook, and no other visual-regression spec in
+this suite baselines a loading/error state either.
+
+Same clock-freeze (all three fixtures' notification timestamps are in 2026-08, after the frozen
+instant — `formatRelativeTime`'s negative-diff handling renders "just now" deterministically, same
+accepted behavior `app-post-modal.spec.ts` documents for its own timestamps) / blur-before-screenshot
+/ `document.fonts.ready` sequence and known-Windows-noise caveat as the specs above. Screenshots
+compared against `e2e/visual/__screenshots__/notification-bell-{state}-{width}.png`.
 
 ---
 
