@@ -2906,9 +2906,11 @@ explicit go-ahead at each step (full story in A3's summary doc):
   plus the mandatory `:server:test`, all green (`SessionServiceImplSpec` 85,
   `SessionEventsConsumerSpec` 10, `SessionEventsConsumerIntegrationTest` 4). One `:server:test` run
   failed broadly on `NoClassDefFoundError: Could not initialize class SharedRedisContainer` across
-  ITs untouched by this change — traced to a Testcontainers static-init failure with Docker itself
-  healthy, and an identical no-change re-run passed clean, so: container contention from three
-  back-to-back container-heavy suites, not a code regression.
+  ITs untouched by this change — attributed at the time to "container contention from three
+  back-to-back container-heavy suites". **That explanation was wrong** — SESSION-20 root-caused it
+  as intermittent Testcontainers *Docker discovery* failure, amplified by the containers' `static`
+  initializers, and fixed it by restarting Rancher Desktop. See `server/README.md`'s Troubleshooting
+  section. Not a code regression either way.
 - **SESSION-20 (`DONE`, 2026-08-19,
   `modules/session/docs/MVP/SESSION-20_COMMENT_NOTIFICATION_STATUS_GATE_BUG.md`):** bug fix —
   `SessionServiceImpl.getParticipantIdsByStatuses` hardcoded a `(SCHEDULED, ONGOING)` session-status
@@ -2931,11 +2933,18 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `SessionEventsConsumerSpec` mocks the processor), which is how the bug survived three tickets'
   worth of test-writing. Verification: both module suites plus the mandatory `:server:test`, all
   green (`SessionServiceImplSpec` 89, `SessionEventsConsumerSpec` 10,
-  `SessionEventsConsumerIntegrationTest` 6). Same transient Testcontainers contention SESSION-19
-  hit, investigated the same way: two runs failed with all 6 tests of the Rabbit IT class erroring
-  at `publish()` — **including the 4 pre-existing ones this ticket never touched** — and a run
-  combining module suites with `:server:test` in one Gradle invocation failed 54 tests across
-  unrelated ITs; run separately as Phase 5 prescribes, all suites passed four consecutive times.
+  `SessionEventsConsumerIntegrationTest` 6). Hit the same intermittent Testcontainers failure
+  SESSION-19 did, and **root-caused it this time — SESSION-19's "container contention" explanation
+  was wrong.** Testcontainers was intermittently failing Docker *discovery* before any container
+  existed; because each container starts from a `static` initializer, the throwing `<clinit>`
+  poisons the class for the rest of the JVM, so dozens of unrelated ITs then fail with
+  `NoClassDefFoundError` and the single real error is buried. Retrying is provably useless
+  (`FAIL_FAST_ALWAYS` latches it), and neither unpinning `docker.client.strategy` nor raising
+  `client.ping.timeout` helped. **Restarting Rancher Desktop fixed it** (daemon had 12+ days
+  uptime): ~1-in-3 failure rate → 6 consecutive clean runs. A lazy-container-startup code change
+  was built and deliberately dropped — it made the failure legible but couldn't prevent it, and the
+  cause was environmental. Full write-up in `server/README.md`'s Troubleshooting section; no infra
+  ticket filed, since it's a dev-environment issue rather than a repo one.
   **`NOTIFICATION_USE_CASES.md` updated:** NOTIF-1 marked `BUILT` with the correction recorded,
   NOTIF-3 logged retroactively (SESSION-19's write-up referenced that number but no entry existed),
   and **NOTIF-4** filed as a new `CANDIDATE` — fan-out currently notifies participants whose account

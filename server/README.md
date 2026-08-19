@@ -91,6 +91,43 @@ export DOCKER_HOST="npipe:////./pipe/docker_engine"
 Not needed with Docker Desktop, and not needed in CI (`server-ci.yml` runs on Linux runners, which
 don't have this quirk).
 
+**The same error, but *intermittent* — most runs pass, then one run fails ~54 tests at once.**
+Different problem from the one above, despite the identical message. Symptoms: a full
+`:server:test` run fails across `PostAccessGateIntegrationTest`,
+`SessionPostAccessGateIntegrationTest`, `InternalServiceFilterScopeIT` and others that have nothing
+to do with whatever you changed, and nearly all of them report
+`NoClassDefFoundError: Could not initialize class SharedRedisContainer` (or a RabbitMQ equivalent)
+rather than anything about Docker. `Could not find a valid Docker environment` appears exactly
+once, in whichever test loaded the container class first.
+
+That cascade is a red herring worth understanding before you debug it: the container holders start
+their container from a `static` initializer, and when that throws, the JVM marks the class
+permanently erroneous — every later reference fails with `NoClassDefFoundError` and the real cause
+is nowhere near the failures you're reading. **Always scroll to the *first* failure in the run.**
+
+Things that look like fixes and are not:
+
+- **Retrying the container start.** Testcontainers latches the failure in a static
+  `FAIL_FAST_ALWAYS` flag; every later attempt returns instantly with `Previous attempts to find a
+  Docker environment failed. Will not retry.` Verified — a retrying wrapper burned its full backoff
+  and failed anyway.
+- **Unpinning `docker.client.strategy`** or **raising `client.ping.timeout`** in
+  `~/.testcontainers.properties`. Both were tried; the suite still failed with both in place.
+- **Checking whether Docker is healthy.** It looks fine *while broken* — `docker version` answered
+  15/15 times at a steady ~190ms during the period the suite was failing. "But `docker ps` works"
+  proves nothing here.
+
+**What actually fixed it: restarting Rancher Desktop.** The daemon had been up 12+ days. Before the
+restart the suite failed roughly 1 run in 3; after it, 6 consecutive clean runs. The working theory
+is the daemon degrading under uptime, showing up only under full-suite load (three Testcontainers
+plus several Spring contexts booting at once) — every Docker API call crosses a Windows named pipe
+into a WSL VM, ~190ms even when idle.
+
+So: if the failure is intermittent and hits container-backed ITs *en masse*, restart Rancher first
+rather than investigating the tests. Note that a single green run proves nothing at a ~1-in-3 rate —
+loop the suite several times before concluding anything. CI is unaffected (Linux runners, no named
+pipe involved), so a green `server-ci` does not rule this out locally.
+
 **`Web server failed to start. Port 8080 was already in use.`** Something's already listening —
 often a previous `bootRun` that didn't shut down cleanly. Find and stop it:
 ```powershell

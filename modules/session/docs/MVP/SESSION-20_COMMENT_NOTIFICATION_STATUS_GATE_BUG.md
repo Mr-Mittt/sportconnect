@@ -121,17 +121,30 @@ that would have passed against the bug would have been worthless here.
 `SessionEventsConsumerIntegrationTest` at 6 (was 4). Repo-wide `testClasses` compiles, confirming
 no stale 2-arg caller anywhere.
 
-**Transient infrastructure flakiness, investigated not ignored** — same class of problem
-SESSION-19 hit. Two `:server:test` runs failed with all 6 `SessionEventsConsumerIntegrationTest`
-tests erroring at `publish()` with `AmqpIOException: java.io.IOException`, **including the 4
-pre-existing tests this ticket never touched** — the signature of a broker not yet reachable, not a
-logic failure. A third run mixing the module suites and `:server:test` into one Gradle invocation
-failed far more broadly (54 tests across `PostAccessGateIntegrationTest`,
+**Transient infrastructure flakiness, root-caused after the fact** — same class of problem
+SESSION-19 hit. Several `:server:test` runs failed with all 6 `SessionEventsConsumerIntegrationTest`
+tests erroring at `publish()`, **including the 4 pre-existing tests this ticket never touched**, and
+one run failed far more broadly (54 tests across `PostAccessGateIntegrationTest`,
 `SessionPostAccessGateIntegrationTest`, `InternalServiceFilterScopeIT` — none session- or
-notification-related). Run separately as Phase 5 prescribes, all three suites passed on four
-consecutive attempts, and the class passes in isolation every time. Conclusion: container
-contention from running container-heavy suites back to back, not this change. Worth a standalone
-infra ticket if it keeps recurring — it has now cost two consecutive session tickets real time.
+notification-related). None of it was caused by this change; the class passes in isolation every
+time, and the fix itself was independently proven by reinstating the old gate.
+
+The "container contention" explanation recorded on SESSION-19 was **wrong**, and this ticket chased
+it before finding the real cause. Testcontainers was intermittently failing Docker *discovery*
+(`Could not find a valid Docker environment`) before any container was created, and because each
+container starts from a `static` initializer, a throwing `<clinit>` poisons the class for the rest
+of the JVM — so every dependent test then failed with `NoClassDefFoundError: Could not initialize
+class SharedRedisContainer`, burying the one real error. Retrying is provably useless
+(`FAIL_FAST_ALWAYS` latches the failure), and neither unpinning `docker.client.strategy` nor raising
+`client.ping.timeout` helped. **Restarting Rancher Desktop fixed it** — the daemon had 12+ days
+uptime; failure rate went from ~1 run in 3 to 6 consecutive clean runs.
+
+A code change making the containers start lazily was built and then **deliberately dropped**: it
+made the failure legible but could not prevent it, and the root cause was environmental. The full
+diagnosis — including the symptoms, the three dead ends, and why a green `server-ci` doesn't rule
+this out locally — is written up in `server/README.md`'s Troubleshooting section, which is where a
+developer hitting it will actually look. No infra ticket filed; it's a dev-environment issue, not a
+repo one.
 
 **Deltas for other tickets:**
 - **SESSION-19 / SESSION-18 / SESSION-15** — unaffected in behavior, but all three now pass
