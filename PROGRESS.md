@@ -2870,6 +2870,45 @@ explicit go-ahead at each step (full story in A3's summary doc):
   exchange/queue/binding coverage. Surfaced (not newly caused) that this sandbox's Testcontainers
   needs `DOCKER_HOST=npipe:////./pipe/docker_engine` set to find Docker — a pre-existing, already-
   documented `server/README.md` Troubleshooting entry, not a new gap.
+- **SESSION-19 (`DONE`, 2026-08-19,
+  `modules/session/docs/MVP/SESSION-19_NOTIFY_JOINED_PARTICIPANTS_ON_LEAVE.md`):** new
+  `session.participant.left` outbox event, fired from `SessionServiceImpl.leaveSession` only on a
+  genuine `JOINED`→`LEFT` transition — `previousStatus` is read before the in-place status flip,
+  since afterward there's no way to tell which of the three allowed source states the leave came
+  from. The `INVITED`→`LEFT` (declining an invite) and `REQUESTED`→`LEFT` (cancelling a request)
+  outcomes the same method serves deliberately notify nobody. Recipients: other currently-`JOINED`
+  participants, via the existing shared `getParticipantIdsByStatuses`; actor-exclusion was already
+  free in `SessionEventProcessor`. Consumer half (`SessionEventsConsumer`) mandatory, not optional —
+  its switch drop-and-logs unknown routing keys, so a producer-only change would have written outbox
+  rows that silently never became notifications. **Status gate settled at pickup:** the ticket left
+  it implicit; explored as possibly `SCHEDULED`-only, then confirmed by the user as
+  `(SCHEDULED, ONGOING)` — exactly the shared method's existing behavior, so the event reuses it
+  unchanged with **no new gate, no migration, no index change**. Two related questions were raised
+  and answered along the way: (1) widening `idx_sessions_scheduled_status_only` to
+  `IN (SCHEDULED, ONGOING)` was considered and **rejected** — the notification gate is an in-memory
+  check after a `findById` PK lookup and never touches that index; the index's sole query
+  (`findSessionsToStart`) is hardcoded to `SCHEDULED` and could never match `ONGOING` rows; and the
+  `(SCHEDULED, ONGOING)` case is already served by the unscoped `idx_sessions_status_scheduled_start`
+  that V052 deliberately kept alongside. (2) `SESSION-20` is genuinely independent under its
+  confirmed scope (remove the gate for the **comment event only**), though its ticket was updated —
+  the shared method now has **four** fan-out callers, not the three its text names. **Client gap
+  found, filed not fixed:** `getNotificationText` has no case for this type, so it renders the
+  generic fallback — and checking that switch revealed `session.status.started` (SESSION-18) has had
+  the same gap since it shipped. Both filed together as **CLIENT-NOTIF-3**, honoring this ticket's
+  own "no client/UI change" scope. **IT added after the fact (user asked "was IT included?" — it
+  wasn't):** the approved plan said none was needed since this ticket changes no authorization
+  check, but that read CLAUDE.md too literally — both Spock specs mock their collaborators, so
+  nothing proved the real RabbitMQ→gate→DB path for the new routing key. Added
+  `sessionParticipantLeftEvent_...notifiesRemainingJoinedParticipantsButNotTheLeaver` to
+  `SessionEventsConsumerIntegrationTest` (leaver seeded as a `LEFT` row, the real post-leave state;
+  asserts the remaining `JOINED` participant is notified and the leaver isn't). SESSION-18 needed
+  nothing — its own `status.started` IT already covers its path. Verification: both module suites
+  plus the mandatory `:server:test`, all green (`SessionServiceImplSpec` 85,
+  `SessionEventsConsumerSpec` 10, `SessionEventsConsumerIntegrationTest` 4). One `:server:test` run
+  failed broadly on `NoClassDefFoundError: Could not initialize class SharedRedisContainer` across
+  ITs untouched by this change — traced to a Testcontainers static-init failure with Docker itself
+  healthy, and an identical no-change re-run passed clean, so: container contention from three
+  back-to-back container-heavy suites, not a code regression.
 - **GRP-10 (`DONE`, 2026-08-18, `client/docs/MVP/GRP-10_GROUP_PAGE_VISUAL_REGRESSION.md`):** new
   `client/e2e/visual/app-groups.spec.ts` — closes the visual-regression gap GRP-1 flagged and never
   followed up on. 6 states × 3 breakpoints = 18 baselines (discovery, owner-posts with the Broadcast

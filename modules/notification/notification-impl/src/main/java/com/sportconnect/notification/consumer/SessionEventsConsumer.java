@@ -9,6 +9,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent;
+import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
 import com.sportconnect.session.api.event.SessionStatusStartedEvent;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -38,6 +39,9 @@ public class SessionEventsConsumer {
 
     private static final List<ParticipantStatus> COMMENT_RECIPIENT_STATUSES =
             List.of(ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED);
+    // The "currently-JOINED participants" recipient set — named for the participant status it
+    // selects, not for any one event. Shared by session.participant.joined (SESSION-15),
+    // session.status.started (SESSION-18) and session.participant.left (SESSION-19).
     private static final List<ParticipantStatus> PARTICIPANT_JOINED_RECIPIENT_STATUSES =
             List.of(ParticipantStatus.JOINED);
 
@@ -70,6 +74,10 @@ public class SessionEventsConsumer {
             }
             case "session.participant.joined" -> {
                 SessionParticipantJoinedEvent e = objectMapper.readValue(body, SessionParticipantJoinedEvent.class);
+                yield ParsedSessionEvent.fanOut(routingKey, e.getSessionId(), e.getActorId(), PARTICIPANT_JOINED_RECIPIENT_STATUSES);
+            }
+            case "session.participant.left" -> {
+                SessionParticipantLeftEvent e = objectMapper.readValue(body, SessionParticipantLeftEvent.class);
                 yield ParsedSessionEvent.fanOut(routingKey, e.getSessionId(), e.getActorId(), PARTICIPANT_JOINED_RECIPIENT_STATUSES);
             }
             case "session.status.started" -> {

@@ -14,6 +14,17 @@ on a `COMPLETED` session freely (post-game recap is a real, common case) — so 
 a session that has already completed silently generates zero notifications, even though the outbox
 row itself is written correctly by `SESSION-15`'s existing wiring.
 
+**Update (2026-08-19, at SESSION-19 pickup):** the shared method now has **four** fan-out callers,
+not three — `SESSION-19` added `session.participant.left`, which reuses it unchanged and *depends*
+on the `(SCHEDULED, ONGOING)` gate being its behavior (confirmed as the intended semantics at that
+ticket's pickup). Scope for this ticket was also confirmed at that time: remove the status gate for
+the **comment event only**, via a comment-specific recipient path — not by loosening the shared
+method for everyone. Under that scope `participant.joined`, `status.started` and `participant.left`
+are all unaffected. Note `leaveSession` has no session-status guard of its own (verified), so
+leaving a `COMPLETED`/`CANCELLED` session is reachable and currently resolves zero recipients — if
+this ticket's scope ever widens to the shared method, that becomes a live behavior change to
+`SESSION-19`'s feature, not just this one.
+
 **Real complication, not a trivial gate removal:** `getParticipantIdsByStatuses` is **shared** by
 three things — `session.comment.created` (this ticket's concern), the already-shipped
 `session.participant.joined`, and `SESSION-18`'s not-yet-built `session.status.started` (whose own

@@ -43,6 +43,11 @@ priority of the four domains scoped: session > post > group > friend). Filed as 
 
 When a participant who was `JOINED` leaves a session (`DELETE /api/sessions/{sessionId}/leave`),
 the other currently-`JOINED` participants get notified — confirmed, filed as **SESSION-19** in
-`modules/session/docs/BACKLOG_MVP.md`, `TODO`. Deliberately scoped to the real leave case only, not
-`leaveSession`'s other two outcomes (declining an invite, cancelling a join request) — see the
-ticket for why.
+`modules/session/docs/BACKLOG_MVP.md`, **`DONE` (2026-08-19)**. Deliberately scoped to the real
+leave case only, not `leaveSession`'s other two outcomes (declining an invite, cancelling a join
+request) — see the ticket for why.
+
+Recipients are gated to sessions in `SCHEDULED`/`ONGOING` (the shared
+`getParticipantIdsByStatuses` behavior, confirmed as intended at pickup). The client cannot yet
+render this type — `getNotificationText` has no case for it, so it shows the generic fallback;
+tracked as **CLIENT-NOTIF-3** alongside the same gap for `session.status.started` (NOTIF-3).

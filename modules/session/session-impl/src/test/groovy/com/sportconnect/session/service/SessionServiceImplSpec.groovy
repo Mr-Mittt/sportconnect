@@ -23,6 +23,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent
+import com.sportconnect.session.api.event.SessionParticipantLeftEvent
 import com.sportconnect.session.entity.Session
 import com.sportconnect.session.entity.SessionOutboxEvent
 import com.sportconnect.session.entity.SessionParticipant
@@ -655,7 +656,7 @@ class SessionServiceImplSpec extends Specification {
         0 * sessionParticipantRepository.save(_)
     }
 
-    def "leaveSession flips a JOINED row to LEFT"() {
+    def "leaveSession flips a JOINED row to LEFT and writes a session.participant.left outbox row"() {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).build()
@@ -668,6 +669,10 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
+        // SESSION-19: the only one of leaveSession's three source states that notifies anyone.
+        1 * sessionOutboxWriter.record("session.participant.left", { SessionParticipantLeftEvent e ->
+            e.sessionId == 1L && e.actorId == userId
+        })
     }
 
     def "leaveSession doubles as decline, flipping an INVITED row to LEFT"() {
@@ -683,6 +688,8 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
+        // SESSION-19: declining an invite notifies nobody — no one was counting on this person.
+        0 * sessionOutboxWriter.record(_, _)
     }
 
     def "leaveSession doubles as cancelling my own request, flipping a REQUESTED row to LEFT"() {
@@ -698,6 +705,8 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
+        // SESSION-19: cancelling one's own pending request notifies nobody, same reasoning.
+        0 * sessionOutboxWriter.record(_, _)
     }
 
     def "leaveSession rejects the creator of a standalone session, even though they're auto-JOINED"() {

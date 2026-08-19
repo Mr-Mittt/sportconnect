@@ -68,7 +68,8 @@ New tickets get inserted at the appropriate position when filed, same as before 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 1 | [CLIENT-NOTIF-3](MVP/CLIENT-NOTIF-3_NOTIFICATION_TEXT_FOR_MISSING_SESSION_TYPES.md) | Notification text for `session.status.started` and `session.participant.left` — **new ticket, not in either epic, filed 2026-08-19 while implementing backend SESSION-19**; both types render the generic fallback today. Inserted ahead of SPORT-2 as a user-visible display bug vs. a component no page hosts yet — reorder if that's wrong | `TODO` |
+| 2 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
 
 ### Done
 
