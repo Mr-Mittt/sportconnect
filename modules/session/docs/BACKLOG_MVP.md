@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | [SESSION-20](MVP/SESSION-20_COMMENT_NOTIFICATION_STATUS_GATE_BUG.md) | Comment notifications wrongly restricted to SCHEDULED/ONGOING sessions | `TODO` |
 | 2 | [SESSION-8](MVP/SESSION-8_SESSION_DISCOVER_RANKING_ALGORITHM.md) | Session discover ranking algorithm | `TODO` |
+| 3 | [SESSION-21](MVP/SESSION-21_SYSTEM_COMMENTS_IN_SESSION_THREAD.md) | System comments in the session discussion thread | `TODO` |
 
 ---
 
