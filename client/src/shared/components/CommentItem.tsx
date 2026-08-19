@@ -93,9 +93,11 @@ export function CommentItem({
     return (
       // `flex-wrap` so the timestamp drops to a second centered line rather than overflowing the
       // dialog at 375px — a long participant name can push this past the available width.
-      <div className="flex flex-wrap items-center justify-center gap-x-1.5 py-0.5 text-center">
+      <div className="flex flex-wrap items-center justify-center gap-x-1 py-0.5 text-center">
         <p className="text-2xs italic text-text-muted">{comment.content}</p>
-        <span className="text-2xs italic text-text-muted">{formatRelativeTime(comment.createdAt)}</span>
+        {/* The dash lives inside the timestamp rather than as its own element, so a wrap can never
+            strand it alone at the end of the first line. */}
+        <span className="text-2xs italic text-text-muted">- {formatRelativeTime(comment.createdAt)}</span>
       </div>
     );
   }

@@ -139,7 +139,7 @@ call rather than a costly one, so the recommendation stood, but on evidence inst
   `comments.length === 0`, and system entries *are* comments, so a system-only thread already
   avoids the empty copy. Covered by a test anyway, because it's an implicit consequence — an
   implementation that filtered system entries before the length check would regress it silently.
-- **Content and timestamp share one line, both italic** (user refinement after seeing it running —
+- **Content and timestamp share one line as `content - timestamp`, both italic** (user refinement after seeing it running —
   the first cut stacked the timestamp underneath). `flex-wrap` keeps it safe: a long participant
   name pushes the timestamp onto a second centered line rather than overflowing the dialog. Checked
   at 375px, where the current fixture still fits on one line, so the wrap is insurance rather than
