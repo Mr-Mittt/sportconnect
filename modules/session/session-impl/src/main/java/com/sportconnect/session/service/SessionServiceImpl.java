@@ -343,6 +343,7 @@ public class SessionServiceImpl implements SessionService {
                     .sessionId(sessionId)
                     .actorId(userId)
                     .build());
+            writeSystemComment(session, resolveParticipantName(userId) + " joined the session");
         }
     }
 
@@ -384,6 +385,7 @@ public class SessionServiceImpl implements SessionService {
                     .sessionId(sessionId)
                     .actorId(userId)
                     .build());
+            writeSystemComment(session, resolveParticipantName(userId) + " left the session");
         }
     }
 
@@ -423,7 +425,8 @@ public class SessionServiceImpl implements SessionService {
     @Override
     @Transactional
     public void approveParticipant(Long sessionId, UUID callerId, UUID userId) {
-        SessionParticipant participant = requireRequestedParticipant(sessionId, callerId, userId);
+        Session session = findSessionOrThrow(sessionId);
+        SessionParticipant participant = requireRequestedParticipant(session, callerId, userId);
         participant.setStatus(ParticipantStatus.JOINED);
         sessionParticipantRepository.save(participant);
 
@@ -439,12 +442,13 @@ public class SessionServiceImpl implements SessionService {
                 .sessionId(sessionId)
                 .actorId(userId)
                 .build());
+        writeSystemComment(session, resolveParticipantName(userId) + " joined the session");
     }
 
     @Override
     @Transactional
     public void rejectParticipant(Long sessionId, UUID callerId, UUID userId, RejectParticipantRequest request) {
-        SessionParticipant participant = requireRequestedParticipant(sessionId, callerId, userId);
+        SessionParticipant participant = requireRequestedParticipant(findSessionOrThrow(sessionId), callerId, userId);
         String reason = request != null ? request.getReason() : null;
         participant.setStatus(ParticipantStatus.LEFT);
         participant.setRejectReason(reason);
@@ -461,9 +465,11 @@ public class SessionServiceImpl implements SessionService {
     /** Shared gating + lookup for approveParticipant/rejectParticipant: same creator/owner-admin
      * gate as cancelSession/updateSession, rejects a CANCELLED session, and requires an existing
      * REQUESTED row (an INVITED row isn't approvable here — only the invitee's own joinSession
-     * call resolves it). */
-    private SessionParticipant requireRequestedParticipant(Long sessionId, UUID callerId, UUID userId) {
-        Session session = findSessionOrThrow(sessionId);
+     * call resolves it). Takes the already-resolved {@code Session} rather than an id (SESSION-21)
+     * so {@code approveParticipant}, which needs it for the system comment, doesn't fetch it
+     * twice. */
+    private SessionParticipant requireRequestedParticipant(Session session, UUID callerId, UUID userId) {
+        Long sessionId = session.getId();
         requireCanModify(session, callerId);
         if (session.getStatus() == SessionStatus.CANCELLED) {
             throw new BadRequestException("Cannot approve or reject participants for a cancelled session");
@@ -588,6 +594,39 @@ public class SessionServiceImpl implements SessionService {
     private Session findSessionOrThrow(Long sessionId) {
         return sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session", "id", sessionId));
+    }
+
+    /**
+     * SESSION-21 — writes one system entry into this session's discussion thread (the companion
+     * {@code SESSION_POST}'s comment list), for the three moments that already emit an outbox
+     * event: a participant joined, a participant left, and the session started.
+     *
+     * <p>Authored by the session's own {@code createdBy}, never the participant the entry is
+     * <em>about</em>. A system comment has no real author, and this codebase resolves that by
+     * putting a real user in the NOT NULL column and letting a type discriminator carry the
+     * "this is a system entry" signal — B9's {@code GROUP_SYSTEM} precedent, where the group's
+     * owner authors a welcome post about someone else — rather than making the column nullable.
+     *
+     * <p><b>Deliberately does not emit {@code session.comment.created}.</b> All three trigger
+     * points already notify through their own event ({@code participant.joined}/{@code .left},
+     * {@code status.started}); firing a comment notification too would ping every participant
+     * twice for one occurrence. This is a confirmed product decision, not an oversight — see
+     * {@code modules/session/docs/MVP/SESSION-21_SYSTEM_COMMENTS_IN_SESSION_THREAD.md}.
+     */
+    private void writeSystemComment(Session session, String content) {
+        commentService.createSystemSessionComment(session.getPostId(), session.getCreatedBy(), content);
+    }
+
+    /**
+     * Resolves a participant's display name for a system comment's server-templated content, via
+     * the same batch cross-domain call the response mappers use. Falls back to a neutral label
+     * rather than throwing, so an unresolvable user can never fail an otherwise valid join/leave.
+     * The name is baked in at write time (same as {@code GroupServiceImpl.postWelcomeMessage}), so
+     * a later rename won't rewrite history in the thread.
+     */
+    private String resolveParticipantName(UUID userId) {
+        UserResponse user = userService.getUsersByIds(List.of(userId)).get(userId);
+        return user != null ? user.getFullName() : "A participant";
     }
 
     private void requireCanModify(Session session, UUID userId) {

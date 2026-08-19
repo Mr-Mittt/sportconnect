@@ -9,6 +9,8 @@ import com.sportconnect.session.entity.Session
 import com.sportconnect.session.entity.SessionOutboxEvent
 import com.sportconnect.session.repository.SessionOutboxEventRepository
 import com.sportconnect.session.repository.SessionRepository
+import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest
+import com.sportconnect.social.post.api.service.CommentService
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
@@ -26,10 +28,11 @@ class SessionGenerationServiceSpec extends Specification {
     GroupService groupService = Mock()
     SessionOutboxEventRepository sessionOutboxEventRepository = Mock()
     SessionOutboxWriter sessionOutboxWriter = Mock()
+    CommentService commentService = Mock()
 
     @Subject
     SessionGenerationService service = new SessionGenerationService(
-            sessionRepository, groupService, sessionOutboxEventRepository, sessionOutboxWriter)
+            sessionRepository, groupService, sessionOutboxEventRepository, sessionOutboxWriter, commentService)
 
     def "generateUpcomingSessions skips a group with an incomplete recurrence rule"() {
         given:
@@ -207,5 +210,50 @@ class SessionGenerationServiceSpec extends Specification {
         0 * sessionRepository.saveAll(_)
         0 * sessionOutboxWriter.build(_, _)
         0 * sessionOutboxEventRepository.saveAll(_)
+    }
+
+    // ── SESSION-21 ────────────────────────────────────────────────────────────
+
+    def "startOngoingSessions writes one system comment per started session, in a single batched call"() {
+        given: "three sessions starting in the same pass, each with its own anchor post and creator"
+        def pageable = PageRequest.of(0, 200)
+        def creators = [UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()]
+        def sessions = [0, 1, 2].collect {
+            Session.builder().id(it + 1L).postId(100L + it).createdBy(creators[it])
+                    .status(SessionStatus.SCHEDULED).build()
+        }
+        List<SystemSessionCommentRequest> written = null
+
+        when:
+        service.startOngoingSessions()
+
+        then:
+        2 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >>>
+                [new PageImpl(sessions, pageable, 201), new PageImpl([], pageable, 0)]
+        1 * sessionRepository.saveAll(_)
+        3 * sessionOutboxWriter.build("session.status.started", _) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll(_)
+
+        and: "exactly one call for the whole batch — not one per session"
+        1 * commentService.createSystemSessionComments(_ as List) >> { List args -> written = args[0] }
+        written.size() == 3
+        written*.postId == [100L, 101L, 102L]
+        written*.authorUserId == creators
+        written.every { it.content == "The session has started" }
+
+        and: "the started notification stays the outbox event's job"
+        0 * commentService.createSystemSessionComment(_, _, _)
+    }
+
+    def "startOngoingSessions writes no system comments when nothing is ready to start"() {
+        given:
+        def pageable = PageRequest.of(0, 200)
+
+        when:
+        service.startOngoingSessions()
+
+        then:
+        1 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >> new PageImpl([])
+        0 * commentService._
     }
 }

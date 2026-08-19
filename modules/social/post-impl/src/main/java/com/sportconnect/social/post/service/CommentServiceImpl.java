@@ -7,8 +7,10 @@ import com.sportconnect.common.exception.NotFoundException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.social.post.access.PostGate;
 import com.sportconnect.social.post.api.dto.CommentResponse;
+import com.sportconnect.social.post.api.dto.CommentType;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import com.sportconnect.social.post.api.dto.PostType;
+import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest;
 import com.sportconnect.social.post.api.service.CommentService;
 import com.sportconnect.social.post.entity.Comment;
 import com.sportconnect.social.post.entity.CommentLike;
@@ -74,8 +76,14 @@ public class CommentServiceImpl implements CommentService {
     }
 
     private CommentResponse doCreateComment(Long postId, UUID userId, CreateCommentRequest request) {
-        if (request.getParentCommentId() != null && !commentRepository.existsById(request.getParentCommentId())) {
-            throw new NotFoundException("Parent comment not found");
+        if (request.getParentCommentId() != null) {
+            // SESSION-21: fetches the parent rather than the cheaper existsById it replaced,
+            // because the reply guard below needs its commentType. Still one query either way.
+            Comment parent = commentRepository.findById(request.getParentCommentId())
+                    .orElseThrow(() -> new NotFoundException("Parent comment not found"));
+            if (parent.getCommentType() != CommentType.USER) {
+                throw new BadRequestException("System comments cannot be replied to");
+            }
         }
 
         Comment comment = Comment.builder()
@@ -109,6 +117,92 @@ public class CommentServiceImpl implements CommentService {
         if (post == null || post.getPostType() != PostType.SESSION_POST) {
             throw new NotFoundException("Post not found");
         }
+    }
+
+    /**
+     * Batch form of {@link #requireSessionPost} — one query for every id, all-or-nothing. Compares
+     * the {@code SESSION_POST} match count against the *distinct* id count, so a missing id, a
+     * soft-deleted one, and a wrong-{@code postType} one all fail identically.
+     */
+    private void requireSessionPosts(List<Long> distinctPostIds) {
+        long sessionPosts = postRepository.findByIdInAndIsActiveTrue(distinctPostIds).stream()
+                .filter(post -> post.getPostType() == PostType.SESSION_POST)
+                .count();
+        if (sessionPosts != distinctPostIds.size()) {
+            throw new NotFoundException("Post not found");
+        }
+    }
+
+    /**
+     * SESSION-21 — a system entry is a record of something that happened, not content, so it is
+     * never likeable, repliable, or deletable. Unconditional, exactly like {@code PostServiceImpl}'s
+     * {@code GROUP_SYSTEM} guards (B9): not even the session creator who nominally authored it.
+     */
+    private void requireUserComment(Comment comment, String action) {
+        if (comment.getCommentType() != CommentType.USER) {
+            throw new BadRequestException("System comments cannot be " + action);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void createSystemSessionComment(Long postId, UUID authorUserId, String content) {
+        createSystemSessionComments(List.of(SystemSessionCommentRequest.builder()
+                .postId(postId)
+                .authorUserId(authorUserId)
+                .content(content)
+                .build()));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Deliberately leaner than {@link #doCreateComment} — the same way {@code createSystemPost}
+     * is leaner than {@code createPost} (B9). Two omissions, both intentional:
+     * <ul>
+     *   <li><b>No preview-cache write.</b> {@code addToPreviewCache} resolves the author through a
+     *       per-call {@code userService.getUserById} — a cross-domain call per row, which in a
+     *       200-session batch is exactly the N+1 this batch method exists to avoid — and the cache
+     *       is only ever read by feed surfaces that a {@code SESSION_POST} can't reach anyway
+     *       ({@code PostGate} makes it unconditionally unavailable).</li>
+     *   <li><b>No {@code updateLastInteractionAt}.</b> Nothing orders a {@code SESSION_POST} by it,
+     *       for the same reason, and it would be one UPDATE per session in the batch.</li>
+     * </ul>
+     * The Redis comment-count increment, by contrast, is <b>not</b> optional: that key's DB
+     * fallback ({@code countByPostIdAndIsActiveTrue}, {@code PostServiceImpl}) counts system rows
+     * too, so skipping it would make the cached count differ from the uncached one depending only
+     * on whether the key happened to be warm.
+     */
+    @Override
+    @Transactional
+    public void createSystemSessionComments(List<SystemSessionCommentRequest> requests) {
+        if (requests.isEmpty()) {
+            return;
+        }
+
+        List<Long> distinctPostIds = requests.stream()
+                .map(SystemSessionCommentRequest::getPostId)
+                .distinct()
+                .collect(Collectors.toList());
+        requireSessionPosts(distinctPostIds);
+
+        List<Comment> comments = requests.stream()
+                .map(request -> Comment.builder()
+                        .postId(request.getPostId())
+                        .userId(request.getAuthorUserId())
+                        .content(request.getContent())
+                        .commentType(CommentType.SESSION_SYSTEM)
+                        .build())
+                .collect(Collectors.toList());
+        commentRepository.saveAll(comments);
+
+        // One increment per row written, not per distinct post — two entries on the same session
+        // (a join and a leave in the same batch) must move the count by two.
+        for (Comment comment : comments) {
+            stringRedisTemplate.execute(INCR_IF_EXISTS, List.of("post:" + comment.getPostId() + ":comments"));
+        }
+        log.info("Created {} SESSION_SYSTEM comment(s) across {} session post(s)",
+                comments.size(), distinctPostIds.size());
     }
 
     /**
@@ -171,6 +265,11 @@ public class CommentServiceImpl implements CommentService {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new NotFoundException("Comment not found"));
 
+        // SESSION-21: before the ownership check, not after — the nominal author of a system entry
+        // is the session's creator, who would otherwise pass the check below and be able to delete
+        // "X left the session" from their own thread.
+        requireUserComment(comment, "deleted");
+
         if (!comment.getUserId().equals(userId)) {
             throw new BadRequestException("You can only delete your own comments");
         }
@@ -194,7 +293,7 @@ public class CommentServiceImpl implements CommentService {
                 .orElseThrow(() -> new NotFoundException("Comment not found"));
         postGate.require(postRepository.findById(comment.getPostId()).orElse(null), userId,
                 "Post not found", "You don't have access to this post");
-        doLikeComment(commentId, userId);
+        doLikeComment(comment, userId);
     }
 
     @Override
@@ -206,10 +305,17 @@ public class CommentServiceImpl implements CommentService {
             throw new NotFoundException("Comment not found");
         }
         requireSessionPost(postId);
-        doLikeComment(commentId, userId);
+        doLikeComment(comment, userId);
     }
 
-    private void doLikeComment(Long commentId, UUID userId) {
+    /**
+     * SESSION-21 changed this to take the already-loaded {@code Comment} rather than its id, so the
+     * system-entry guard lives in one place across all four entry points (public/session ×
+     * like/unlike) without re-fetching a row every caller already has.
+     */
+    private void doLikeComment(Comment comment, UUID userId) {
+        requireUserComment(comment, "liked");
+        Long commentId = comment.getId();
         if (commentLikeRepository.existsByCommentIdAndUserId(commentId, userId)) {
             throw new BadRequestException("You have already liked this comment");
         }
@@ -231,7 +337,7 @@ public class CommentServiceImpl implements CommentService {
                 .orElseThrow(() -> new NotFoundException("Comment not found"));
         postGate.require(postRepository.findById(comment.getPostId()).orElse(null), userId,
                 "Post not found", "You don't have access to this post");
-        doUnlikeComment(commentId, userId);
+        doUnlikeComment(comment, userId);
     }
 
     @Override
@@ -243,10 +349,13 @@ public class CommentServiceImpl implements CommentService {
             throw new NotFoundException("Comment not found");
         }
         requireSessionPost(postId);
-        doUnlikeComment(commentId, userId);
+        doUnlikeComment(comment, userId);
     }
 
-    private void doUnlikeComment(Long commentId, UUID userId) {
+    /** Same entity-not-id rationale as {@link #doLikeComment}. */
+    private void doUnlikeComment(Comment comment, UUID userId) {
+        requireUserComment(comment, "liked");
+        Long commentId = comment.getId();
         if (!commentLikeRepository.existsByCommentIdAndUserId(commentId, userId)) {
             throw new BadRequestException("You have not liked this comment");
         }
@@ -296,6 +405,7 @@ public class CommentServiceImpl implements CommentService {
                 .userId(comment.getUserId())
                 .userFullName(userFullName)
                 .content(comment.getContent())
+                .commentType(comment.getCommentType())
                 .parentCommentId(null)
                 .likeCount(likeCount)
                 .replyCount(0L)
@@ -338,6 +448,7 @@ public class CommentServiceImpl implements CommentService {
                 .userId(comment.getUserId())
                 .userFullName(userFullName)
                 .content(comment.getContent())
+                .commentType(comment.getCommentType())
                 .parentCommentId(comment.getParentCommentId())
                 .likeCount(likeCount)
                 .replyCount(replyCount)

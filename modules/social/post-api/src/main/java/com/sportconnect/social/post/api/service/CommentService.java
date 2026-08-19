@@ -2,9 +2,11 @@ package com.sportconnect.social.post.api.service;
 
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
+import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface CommentService {
@@ -63,4 +65,28 @@ public interface CommentService {
 
     /** Same bypass contract as {@link #likeSessionComment}. */
     void unlikeSessionComment(Long postId, Long commentId, UUID userId);
+
+    /**
+     * SESSION-21 — writes one server-generated system comment into a session's discussion thread,
+     * bypassing {@code PostGate} on the same terms as {@link #createSessionComment} (same active +
+     * {@code SESSION_POST} precheck, {@code NotFoundException} otherwise). Convenience wrapper over
+     * {@link #createSystemSessionComments} for the single-session call sites ({@code joinSession},
+     * {@code approveParticipant}, {@code leaveSession}).
+     *
+     * <p>{@code authorUserId} is the session's {@code createdBy}, not the participant the entry is
+     * about — see {@link SystemSessionCommentRequest}. {@code content} is server-templated; it must
+     * never carry caller-supplied text.
+     */
+    void createSystemSessionComment(Long postId, UUID authorUserId, String content);
+
+    /**
+     * Batch form of {@link #createSystemSessionComment} — validates every {@code postId} in one
+     * query and inserts every row in one {@code saveAll}, so a caller writing an entry per session
+     * across a whole batch ({@code SessionGenerationService.startOngoingSessions}, up to 200 per
+     * pass) doesn't issue a query per session.
+     *
+     * <p>All-or-nothing: if any {@code postId} doesn't resolve to an active {@code SESSION_POST},
+     * the call throws {@code NotFoundException} and nothing is written. An empty list is a no-op.
+     */
+    void createSystemSessionComments(List<SystemSessionCommentRequest> requests);
 }

@@ -56,6 +56,14 @@ public abstract class BaseIT {
      * this instead of {@code @WithMockUser} for any endpoint using either mechanism (i.e. all of
      * them — this is the app's one identity convention, not a per-endpoint choice).
      */
+    /**
+     * <b>Takes effect only before the first {@code MockMvc} request of a test method.</b> Once a
+     * request has run, every later request in that same method keeps running as that principal —
+     * calling this again does not switch identity (verified while writing
+     * {@code SessionSystemCommentIntegrationTest}, where a mid-test switch silently kept the
+     * previous identity and made a test pass for the wrong reason). A case needing two identities
+     * needs two test methods.
+     */
     protected void authenticateAs(UUID userId, String... roles) {
         List<GrantedAuthority> authorities = (roles.length == 0 ? List.of("USER") : List.of(roles))
                 .stream().map(role -> (GrantedAuthority) new SimpleGrantedAuthority("ROLE_" + role)).toList();

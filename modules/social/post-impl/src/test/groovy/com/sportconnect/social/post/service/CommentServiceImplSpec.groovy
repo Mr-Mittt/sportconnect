@@ -6,8 +6,10 @@ import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.social.post.access.PostGate
 import com.sportconnect.social.post.api.dto.CommentResponse
+import com.sportconnect.social.post.api.dto.CommentType
 import com.sportconnect.social.post.api.dto.CreateCommentRequest
 import com.sportconnect.social.post.api.dto.PostType
+import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest
 import com.sportconnect.social.post.entity.Comment
 import com.sportconnect.social.post.entity.CommentLike
 import com.sportconnect.social.post.entity.Post
@@ -186,7 +188,9 @@ class CommentServiceImplSpec extends Specification {
         then: "post and parent comment exist"
         1 * postRepository.findById(postId) >> Optional.of(post)
         1 * postGate.require(post, userId, _, _) >> post
-        1 * commentRepository.existsById(parentCommentId) >> true
+        // SESSION-21 replaced existsById with findById here — the reply guard needs the parent's commentType
+        1 * commentRepository.findById(parentCommentId) >> Optional.of(
+                Comment.builder().id(parentCommentId).postId(postId).isActive(true).build())
         1 * commentRepository.save(_ as Comment) >> savedComment
         1 * stringRedisTemplate.execute(_ as RedisScript, ["comment:" + parentCommentId + ":replies"])
         1 * commentLikeRepository.countByCommentId(commentId) >> 0L
@@ -215,7 +219,8 @@ class CommentServiceImplSpec extends Specification {
         then: "post exists but parent comment not found"
         1 * postRepository.findById(postId) >> Optional.of(post)
         1 * postGate.require(post, userId, _, _) >> post
-        1 * commentRepository.existsById(parentCommentId) >> false
+        // SESSION-21 replaced existsById with findById here — same not-found outcome
+        1 * commentRepository.findById(parentCommentId) >> Optional.empty()
 
         and: "exception is thrown"
         thrown(NotFoundException)
@@ -742,5 +747,194 @@ class CommentServiceImplSpec extends Specification {
         0 * postGate._
         0 * commentLikeRepository._
         thrown(NotFoundException)
+    }
+
+    // ── SESSION-21 system comments ────────────────────────────────────────────
+
+    def "createSystemSessionComment writes a SESSION_SYSTEM row authored by the given user"() {
+        given: "a session anchor post, and an author who is the session's creator (not the participant the entry is about)"
+        def sessionCreatorId = UUID.randomUUID()
+        def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
+        Comment saved = null
+
+        when:
+        commentService.createSystemSessionComment(postId, sessionCreatorId, "Alice Nguyen joined the session")
+
+        then: "the SESSION_POST precheck runs batched, PostGate is never consulted"
+        1 * postRepository.findByIdInAndIsActiveTrue([postId]) >> [post]
+        0 * postGate._
+
+        and: "one row, typed SESSION_SYSTEM"
+        1 * commentRepository.saveAll(_ as List) >> { List args -> saved = args[0][0]; args[0] }
+        saved.postId == postId
+        saved.userId == sessionCreatorId
+        saved.commentType == CommentType.SESSION_SYSTEM
+        saved.content == "Alice Nguyen joined the session"
+
+        and: "no preview-cache write and no last-interaction bump — both deliberate, see the method's Javadoc"
+        0 * zSetOps._
+        0 * postRepository.updateLastInteractionAt(_, _)
+        0 * userService._
+    }
+
+    def "createSystemSessionComments writes the whole batch with one validation query and one saveAll"() {
+        given: "three sessions starting in the same pass"
+        def postIds = [10L, 11L, 12L]
+        def creators = [UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()]
+        def posts = postIds.collect { Post.builder().id(it).postType(PostType.SESSION_POST).isActive(true).build() }
+        def requests = [0, 1, 2].collect {
+            SystemSessionCommentRequest.builder()
+                    .postId(postIds[it]).authorUserId(creators[it]).content("The session has started").build()
+        }
+        List<Comment> saved = null
+
+        when:
+        commentService.createSystemSessionComments(requests)
+
+        then: "exactly one validation query for all three — not one per session"
+        1 * postRepository.findByIdInAndIsActiveTrue(postIds) >> posts
+        1 * commentRepository.saveAll(_ as List) >> { List args -> saved = args[0]; args[0] }
+        saved.size() == 3
+        saved.every { it.commentType == CommentType.SESSION_SYSTEM }
+        saved*.postId == postIds
+        saved*.userId == creators
+    }
+
+    def "createSystemSessionComments is a no-op on an empty batch"() {
+        when:
+        commentService.createSystemSessionComments([])
+
+        then:
+        0 * postRepository._
+        0 * commentRepository._
+        0 * stringRedisTemplate._
+    }
+
+    def "createSystemSessionComments increments the count once per row, not once per distinct post"() {
+        given: "a join and a leave landing on the same session in one batch"
+        def creatorId = UUID.randomUUID()
+        def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
+        def requests = ["Alice Nguyen joined the session", "Alice Nguyen left the session"].collect {
+            SystemSessionCommentRequest.builder().postId(postId).authorUserId(creatorId).content(it).build()
+        }
+
+        when:
+        commentService.createSystemSessionComments(requests)
+
+        then: "the post is validated once (distinct), but the count moves twice"
+        1 * postRepository.findByIdInAndIsActiveTrue([postId]) >> [post]
+        1 * commentRepository.saveAll(_ as List) >> { List args -> args[0] }
+        2 * stringRedisTemplate.execute(_ as RedisScript, _ as List)
+    }
+
+    def "createSystemSessionComments rejects the whole batch when any post is not an active SESSION_POST"() {
+        given: "one valid session anchor and one post of the wrong type"
+        def requests = [1L, 2L].collect {
+            SystemSessionCommentRequest.builder().postId(it).authorUserId(userId).content("x").build()
+        }
+        def posts = [Post.builder().id(1L).postType(PostType.SESSION_POST).isActive(true).build(),
+                     Post.builder().id(2L).postType(PostType.USER_FEED).isActive(true).build()]
+
+        when:
+        commentService.createSystemSessionComments(requests)
+
+        then: "all-or-nothing — nothing is written"
+        1 * postRepository.findByIdInAndIsActiveTrue([1L, 2L]) >> posts
+        0 * commentRepository.saveAll(_)
+        thrown(NotFoundException)
+    }
+
+    def "deleteComment refuses a system comment even for its nominal author"() {
+        given: "the session creator, who is the row's user_id, tries to delete it"
+        def sessionCreatorId = UUID.randomUUID()
+        def systemComment = Comment.builder().id(commentId).postId(postId).userId(sessionCreatorId)
+                .commentType(CommentType.SESSION_SYSTEM).content("Alice Nguyen left the session").isActive(true).build()
+
+        when:
+        commentService.deleteComment(commentId, sessionCreatorId)
+
+        then:
+        1 * commentRepository.findById(commentId) >> Optional.of(systemComment)
+        0 * commentRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "createSessionComment refuses to reply to a system comment"() {
+        given:
+        def systemComment = Comment.builder().id(99L).postId(postId)
+                .commentType(CommentType.SESSION_SYSTEM).isActive(true).build()
+        def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
+        def request = CreateCommentRequest.builder().content("why?").parentCommentId(99L).build()
+
+        when:
+        commentService.createSessionComment(postId, userId, request)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * commentRepository.findById(99L) >> Optional.of(systemComment)
+        0 * commentRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "session-proxy #method refuses a system comment"() {
+        given:
+        def systemComment = Comment.builder().id(commentId).postId(postId)
+                .commentType(CommentType.SESSION_SYSTEM).isActive(true).build()
+        def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
+
+        when:
+        commentService."$method"(postId, commentId, userId)
+
+        then:
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(systemComment)
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        0 * commentLikeRepository.save(_)
+        0 * commentLikeRepository.deleteByCommentIdAndUserId(_, _)
+        thrown(BadRequestException)
+
+        where:
+        method << ["likeSessionComment", "unlikeSessionComment"]
+    }
+
+    def "public #method also refuses a system comment"() {
+        given: "reached via /api/posts/comments/{id}/like rather than the session proxy"
+        def systemComment = Comment.builder().id(commentId).postId(postId)
+                .commentType(CommentType.SESSION_SYSTEM).isActive(true).build()
+        def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
+
+        when:
+        commentService."$method"(commentId, userId)
+
+        then:
+        1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(systemComment)
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _) >> post
+        0 * commentLikeRepository.save(_)
+        0 * commentLikeRepository.deleteByCommentIdAndUserId(_, _)
+        thrown(BadRequestException)
+
+        where:
+        method << ["likeComment", "unlikeComment"]
+    }
+
+    def "a normal user comment carries commentType USER in the response"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
+        def comment = Comment.builder().id(commentId).postId(postId).userId(userId)
+                .content("hi").isActive(true).createdAt(LocalDateTime.now()).build()
+        def user = UserResponse.builder().id(userId).firstName("Test").lastName("User").build()
+
+        when:
+        def result = commentService.getSessionPostComments(postId, userId, pageable)
+
+        then:
+        1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
+        1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([comment])
+        1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([commentId]) >> []
+        1 * commentLikeRepository.countByCommentId(commentId) >> 0L
+        1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
+        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        result.content[0].commentType == CommentType.USER
     }
 }

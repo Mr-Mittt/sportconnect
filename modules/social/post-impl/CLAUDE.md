@@ -72,4 +72,19 @@ DELETE /api/posts/comments/{commentId}/like
 - `visibility='friends'` is enforced (A14, via `PostGate` + `UserFriendService.areFriends`) on the 5 single-item paths listed above — but only there. List endpoints (`getPersonalizedFeed`, etc.) don't select on `friends`-visibility at all today, so a `friends`-visibility post never appears in anyone's feed regardless of friendship — it's only reachable by direct link/id.
 - **`PostType.SESSION_POST`** (SESSION-10/A17) is a throwaway comment-thread anchor for a `Session` — `PostServiceImpl.createSessionPost` (internal only, spoof-guarded in `createPost`, unconditionally rejected in `updatePost`/`deletePost` same as `GROUP_SYSTEM`) always builds it with `groupId = null`, even for a group-linked session. That's deliberate, not an oversight — it's what keeps it out of every feed/group-post query with zero query changes (`findPublicPosts`/`findPersonalizedFeed` filter on `postType`; `findByGroupIdAndIsActiveTrue` never matches a null `groupId`). Never give it a real `groupId`.
 - **`CommentService` has four bypass methods** (`createSessionComment`, `getSessionPostComments`, `likeSessionComment`, `unlikeSessionComment`) that skip `PostGate` entirely — same shape as `createSystemPost` bypassing `createPost`'s validation. They're callable by anything in the Spring context (no framework-level restriction), but are meant only for `session-impl` to call after doing its own authorization. Don't wire a controller to them directly — that would defeat the whole point of `SESSION_POST` being unreachable via `/api/posts/**`. The precheck isn't just "post exists": it requires `postType == SESSION_POST`, and `likeSessionComment`/`unlikeSessionComment` additionally take an explicit `postId` and reject a `commentId` whose real parent post doesn't match it — without that second check, a caller authorized for one session could like/unlike a comment on a *different* session's thread by id alone (a real IDOR caught post-ship, not a hypothetical).
+- **`Comment.commentType`** (SESSION-21, `CommentType.USER`/`SESSION_SYSTEM`, `V057`) is the
+  comment-level twin of `PostType.GROUP_SYSTEM` — a discriminator so a server-written entry in a
+  session's thread is distinguishable from a user's own comment. `CommentService
+  .createSystemSessionComment`/`createSystemSessionComments` are the only writers (a fifth and
+  sixth bypass method, same `SESSION_POST` precheck; the batch one validates every `postId` in one
+  query and inserts in one `saveAll`, for `SessionGenerationService`'s 200-per-pass batches).
+  `CreateCommentRequest` deliberately has **no** type field, so unlike `GROUP_SYSTEM` there's
+  nothing for a caller to spoof and no `createComment` guard is needed. Three guards do exist, all
+  unconditional like their `GROUP_SYSTEM` counterparts: a system entry can't be deleted (checked
+  *before* `deleteComment`'s ownership check — its nominal author is the session creator, who would
+  otherwise pass), replied to, or liked. The system write path skips `addToPreviewCache` and
+  `updateLastInteractionAt` on purpose (both only matter for feed surfaces a `SESSION_POST` can't
+  reach, and the former does a cross-domain call per row) but **does** increment the Redis
+  comment-count key — that key's DB fallback counts system rows, so skipping it would make the
+  cached count disagree with the uncached one.
 - **`PostService` has the same bypass shape for the post itself** — `likeSessionPost`/`unlikeSessionPost`, same `requireSessionPost` postType check, same "don't wire a controller to them" rule. No secondary-id cross-check needed there (unlike the comment methods) — there's no second id involved, just `postId`.
