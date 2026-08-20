@@ -68,7 +68,9 @@ New tickets get inserted at the appropriate position when filed, same as before 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Static per-sport attribute config + `SportAttributesFields` component | `TODO` |
+| 1 | [ADMIN-1](MVP/ADMIN-1_ADMIN_AREA_ROUTE_AND_GUARD.md) | `/admin` area — route, ADMIN role guard, and shell — **no admin surface exists today**; reuses `ProtectedRoute`’s already-built-but-unused `requiredRole` prop | `TODO` |
+| 2 | [ADMIN-2](MVP/ADMIN-2_SPORT_ATTRIBUTE_SCHEMA_EDITOR.md) | Sport attribute schema editor — **hard-blocked on backend A9** (`modules/sport/sport-impl`) and on ADMIN-1; admin half of A9 (SPORT-2 below is the user-facing half) | `TODO` |
+| 3 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Render a user’s per-sport attribute fields on their sport profile — **rescoped 2026-08-20** from a static client config to consuming A9’s server-driven schema; user-facing half of A9 (ADMIN-2 is the admin half) | `TODO` |
 
 ### Done
 
@@ -207,6 +209,20 @@ SPORT-3 (new, filed 2026-08-07) — soft dependency on **A6** (`modules/sport/sp
   SPORT-3's design needs to render correctly (neither sport exists in today's hardcoded `SportKey`
   set). No code dependency; A6 shipping first just means SPORT-3 is tested against the real target
   catalog instead of a hypothetical one.
+A9 (`modules/sport/sport-impl/docs/BACKLOG_MVP.md`, backend, `TODO`) — **hard** dependency for
+  ADMIN-2: the schema editor has nothing to read or write until A9’s
+  `GET`/`PUT /api/sports/{sportId}/attribute-schema` exist. ADMIN-1 (the `/admin` route +
+  guard) has no backend dependency and can be built at any time. Both filed together with A9
+  from the same design session — see `documentation/md/SPORT_ATTRIBUTE_SCHEMA_DESIGN.md`.
+A9 → **SPORT-2** (hard): SPORT-2 was briefly closed as superseded by A9 on 2026-08-20 and then
+  **reinstated the same day (user decision)** at #3, because it covers the *user-facing* half —
+  rendering a user’s per-sport attribute fields on their sport profile — which A9 and ADMIN-2 do not.
+  It was **rescoped in place**: instead of the static `sportAttributeConfig.ts` it originally
+  proposed, it now renders A9’s fetched schema. That rescope was mandatory, not cosmetic — its
+  original spec was keyed on football/basketball/tennis (deactivated by A6) and assumed the closed
+  `SportKey` union SPORT-3 replaced with a live-derived `string`, so it could not have been built
+  as written. ADMIN-2 and SPORT-2 are siblings over the same A9 schema: admin edits it, SPORT-2
+  renders it.
 **Reordered ahead of SPORT-2/CLIENT-SESSION-8 (user decision, 2026-08-07):** now A6 is `DONE`, the
   live catalog only has 2 sports and neither is selectable in the client yet — user wants this closed
   before picking up anything else client-side, rather than leaving the mismatch open while SPORT-2/

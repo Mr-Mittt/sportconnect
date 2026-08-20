@@ -2829,6 +2829,43 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `modules/social/post-impl/docs/B3_THREE_POST_TYPES.md` — its content matches `group-impl`'s B3
   ticket, not `post-impl`'s own (coincidentally reused) B3 id, so it was never referenced by
   `post-impl`'s Implementation Order table in the first place; not this task's to resolve.
+- **Sport attribute schema design (2026-08-20,
+  `documentation/md/SPORT_ATTRIBUTE_SCHEMA_DESIGN.md`; tickets A9 backend + ADMIN-1/ADMIN-2
+  client):** A3 (`DONE`) shipped `UserSportProfile.attributes` as a schema-less JSONB map with no
+  per-key validation, explicitly rejecting a `sport_attribute_definitions` table and assigning the
+  key list to a static frontend config. Three gaps followed: typo'd keys persist forever, there is
+  no delete-a-key path (merge semantics can overwrite a value but not drop it, because the server
+  doesn't know the legitimate key set), and adding a sport needs a client deploy before it has any
+  attributes. Design moves the key set server-side as a per-sport, admin-managed **tree** of
+  attribute definitions (level-1 group → level-2 attributes, e.g. Badminton's `Gear` holding
+  `racket`/`shuttlecock`/`shoes`). **A3's "no schema storage" call is deliberately reversed and
+  recorded as such** — what changed is the requirements (runtime admin management, per-attribute
+  soft delete, display grouping), not the cost estimate. Key property preserved: the schema is a
+  tree but **stored profile data stays flat** — leaf keys are unique per sport, so A3's entity,
+  its V025 migration, and its merge semantics are untouched. Storage is a single
+  `sports.attributes_schema` JSONB document rather than a definitions table: a table needs an
+  adjacency list plus assembly for the tree, row-level CRUD screens for an admin surface the user
+  explicitly wants built fastest-first, and a Liquibase migration for every new config property —
+  where JSONB makes "we can add more later" free, and rides the existing `SportLookupCache`
+  (already caches whole `Sport` entities, already evicts on admin write) so schema lookups during
+  profile-write validation cost nothing. Not literal JSON Schema — a constrained descriptor tree
+  with a closed `type` set (`STRING`/`ENUM`/`LIST`), since JSON Schema carries no label/order/widget
+  and would need an `x-ui` layer plus validator dependencies on both sides; the closed set is also a
+  trust boundary, because admin-authored data drives client rendering. Evolution policy decided up
+  front so existing rows never need migrating: deactivate rather than delete, options are additive,
+  keys are immutable (rename = add new + retire old), and stale keys pass through on read while only
+  writes are validated. Schema is deliberately kept out of `SportResponse` so `GET /api/sports`
+  doesn't carry every sport's tree. **Rescopes client SPORT-2** rather than replacing it: SPORT-2
+  was briefly closed as superseded and reinstated the same day (user decision) at #3, because A9 and
+  ADMIN-2 store and admin-edit the schema but neither renders it to a normal user on their own sport
+  profile — that is SPORT-2's job. It now renders A9's fetched schema instead of the static config it
+  originally proposed; that rescope was mandatory, since its original spec was keyed on
+  football/basketball/tennis (deactivated by A6) and assumed the closed `SportKey` union SPORT-3
+  replaced with a live-derived `string`, so it could not have been built as written. ADMIN-2 and
+  SPORT-2 are siblings over the same schema: admin edits it, SPORT-2 renders it. Also filed
+  ADMIN-1, the app's **first admin surface** (`/admin` route + role guard + shell): the guard is
+  nearly free because `ProtectedRoute` already has a built-but-unused `requiredRole` prop, and roles
+  are stored unprefixed (`ADMIN`) with `JwtAuthenticationFilter` adding `ROLE_` server-side.
 - **Current app version + slash-command version fallback (2026-08-20, `CLAUDE.md` § Current App
   Version, rules in `documentation/md/BACKLOG_STRUCTURE_CONVENTION.md` § Version resolution):**
   `/workon`, `/ticket` and `/list` were the only three commands taking a `<version>` argument, and
