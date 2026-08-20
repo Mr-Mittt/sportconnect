@@ -3,6 +3,7 @@ package com.sportconnect.sport.controller;
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.sport.api.dto.CreateSportRequest;
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest;
+import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UpdateSportRequest;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
@@ -126,6 +127,47 @@ public class SportController {
     public ResponseEntity<ApiResponse<Void>> deleteSport(@PathVariable Long sportId) {
         sportService.deleteSport(sportId);
         return ResponseEntity.ok(ApiResponse.success("Sport deleted successfully", null));
+    }
+
+    // Per-sport attribute schema (A9)
+    @Operation(summary = "Get a sport's attribute schema",
+            description = "The attribute definition tree used to render per-sport profile fields. "
+                    + "Returns null data when the sport offers no attributes.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema returned"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Sport not found or not active")
+    })
+    @GetMapping("/{sportId}/attribute-schema")
+    // Deliberately the one non-public GET in this controller. /api/sports/** is blanket-permitAll in
+    // SecurityConfig (an untickered default dating to the initial commit, whose only recorded
+    // rationale is letting unregistered users load the sport list at signup), so without this
+    // annotation the endpoint would answer anonymous callers. isAuthenticated() rather than
+    // hasRole('USER') because the admin editor (client ADMIN-2) reads this too, and nothing in the
+    // codebase grants ADMIN, so an admin-only account may not also hold USER.
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<SportAttributeSchema>> getAttributeSchema(@PathVariable Long sportId) {
+        SportAttributeSchema schema = sportService.getAttributeSchema(sportId);
+        return ResponseEntity.ok(ApiResponse.success("Attribute schema retrieved successfully", schema));
+    }
+
+    @Operation(summary = "Replace a sport's attribute schema",
+            description = "Admin-only. Replaces the whole document; there is no partial update. "
+                    + "An invalid document is rejected in full and never half-applies.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema replaced"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Schema document is invalid"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not an admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Sport not found")
+    })
+    @PutMapping("/{sportId}/attribute-schema")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<SportAttributeSchema>> replaceAttributeSchema(
+            @PathVariable Long sportId,
+            @RequestBody(required = false) SportAttributeSchema schema) {
+        SportAttributeSchema saved = sportService.replaceAttributeSchema(sportId, schema);
+        return ResponseEntity.ok(ApiResponse.success("Attribute schema updated successfully", saved));
     }
 
     // User Sport Profile endpoints

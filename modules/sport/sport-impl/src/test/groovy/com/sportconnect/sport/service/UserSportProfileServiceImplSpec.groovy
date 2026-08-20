@@ -5,6 +5,10 @@ import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest
+import com.sportconnect.sport.api.dto.SportAttributeDefinition
+import com.sportconnect.sport.api.dto.SportAttributeGroup
+import com.sportconnect.sport.api.dto.SportAttributeSchema
+import com.sportconnect.sport.api.dto.SportAttributeType
 import com.sportconnect.sport.api.dto.SportResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.entity.Sport
@@ -21,10 +25,45 @@ class UserSportProfileServiceImplSpec extends Specification {
     // lookup needing a boolean rather than a throw reads SportLookupCache directly.
     SportLookupCache sportLookupCache = Mock()
     ObjectMapper objectMapper = new ObjectMapper()
+    // A9: deliberately the real collaborator, not a Mock(). It is a pure function with no
+    // dependencies, and mocking it would make every attribute assertion below prove only that the
+    // mock was told what to return - exactly the class of test that let A7's bug survive.
+    ProfileAttributeFilter attributeFilter = new ProfileAttributeFilter()
 
     @Subject
     UserSportProfileServiceImpl profileService =
-            new UserSportProfileServiceImpl(profileRepository, sportService, sportLookupCache, objectMapper)
+            new UserSportProfileServiceImpl(profileRepository, sportService, sportLookupCache, objectMapper,
+                    attributeFilter)
+
+    /**
+     * A9: a schema declaring the free-text keys these specs use. Needed because attributes are now
+     * filtered against the sport's live schema on write - a key with no definition is dropped, so a
+     * spec that wants an attribute to survive has to say the sport actually offers it.
+     */
+    private static SportAttributeSchema schemaWith(String... keys) {
+        SportAttributeSchema.builder()
+                .version(1)
+                .groups([SportAttributeGroup.builder()
+                                 .key("general").label("General").isAvailable(true).order(1)
+                                 .attributes(keys.toList().withIndex().collect { key, i ->
+                                     SportAttributeDefinition.builder()
+                                             .key(key).label(key)
+                                             .type(SportAttributeType.STRING)
+                                             .isAvailable(true).order(i + 1).build()
+                                 })
+                                 .build()])
+                .build()
+    }
+
+    def setup() {
+        // A9 changed the premise of every attribute assertion in this spec. These cases predate A9
+        // and use free-text keys (dominantHand, strokeStyle, blob) that no schema declared, so
+        // without this the filter would drop all of them and the assertions would silently be
+        // testing the drop path instead of what they were written to test. Giving the sport a schema
+        // that offers those keys preserves each case's original intent. Individual tests can still
+        // override this interaction to exercise the drop path deliberately.
+        sportService.getAttributeSchema(_) >> schemaWith("dominantHand", "strokeStyle", "blob")
+    }
 
     def "createProfile should create new profile successfully"() {
         given:

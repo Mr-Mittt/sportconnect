@@ -1,0 +1,207 @@
+package com.sportconnect.integration;
+
+import com.sportconnect.sport.api.dto.SportAttributeDefinition;
+import com.sportconnect.sport.api.dto.SportAttributeGroup;
+import com.sportconnect.sport.api.dto.SportAttributeOption;
+import com.sportconnect.sport.api.dto.SportAttributeSchema;
+import com.sportconnect.sport.api.dto.SportAttributeType;
+import com.sportconnect.sport.entity.Sport;
+import com.sportconnect.sport.repository.SportRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
+import org.springframework.http.MediaType;
+
+import java.util.List;
+import java.util.UUID;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * A9 end-to-end coverage for the attribute-schema endpoints, which are an authorization boundary
+ * and so need a real request through real Spring wiring rather than a mocked unit check
+ * (root {@code CLAUDE.md}, testing rules).
+ *
+ * <p>Two things here cannot be proved by {@code SportServiceImplSpec}, which mocks its
+ * collaborators:
+ *
+ * <ul>
+ *   <li><b>That the {@code @PreAuthorize} annotations actually fire.</b> Method security is
+ *       AOP-proxy-based, so a spec calling the service directly never evaluates them. This matters
+ *       more than usual for the {@code GET}: {@code SecurityConfig} declares
+ *       {@code /api/sports/**} blanket-{@code permitAll}, so the endpoint is public unless
+ *       {@code isAuthenticated()} is genuinely being applied. Only a real request can tell the
+ *       difference between "annotated" and "enforced".</li>
+ *   <li><b>That the document survives a real JSON column round trip.</b> The schema is stored as an
+ *       untyped map and re-read as typed DTOs; a spec asserting on an in-memory object never
+ *       exercises the serialise/deserialise step where a shape mismatch would actually surface.</li>
+ * </ul>
+ *
+ * <p>{@link #cacheManager} is cleared per test because {@code SportLookupCache} holds the sport map
+ * with no TTL, so a schema written by one test would otherwise stay visible to the next.
+ */
+class SportAttributeSchemaIntegrationTest extends BaseIT {
+
+    @Autowired
+    private SportRepository sportRepository;
+
+    @Autowired
+    private CacheManager cacheManager;
+
+    private Long sportId;
+
+    @BeforeEach
+    void setUpFixtures() {
+        clearAll();
+        sportId = sportRepository.save(Sport.builder()
+                .name("A9 Badminton")
+                .description("A9 attribute schema fixture")
+                .isActive(true)
+                .build()).getId();
+        evictSportCache();
+    }
+
+    @AfterEach
+    void tearDownFixtures() {
+        clearAll();
+        evictSportCache();
+    }
+
+    private void clearAll() {
+        sportRepository.deleteAll();
+    }
+
+    private void evictSportCache() {
+        if (cacheManager.getCache("sports") != null) {
+            cacheManager.getCache("sports").clear();
+        }
+    }
+
+    private SportAttributeSchema validSchema() {
+        return SportAttributeSchema.builder()
+                .version(1)
+                .groups(List.of(SportAttributeGroup.builder()
+                        .key("gear")
+                        .label("Gear")
+                        .isAvailable(true)
+                        .order(1)
+                        .attributes(List.of(
+                                SportAttributeDefinition.builder()
+                                        .key("racket").label("Racket")
+                                        .type(SportAttributeType.STRING)
+                                        .isAvailable(true).order(1).build(),
+                                SportAttributeDefinition.builder()
+                                        .key("shuttlecock").label("Shuttlecock")
+                                        .type(SportAttributeType.ENUM)
+                                        .options(List.of(
+                                                SportAttributeOption.builder().value("feather").label("Feather").build(),
+                                                SportAttributeOption.builder().value("nylon").label("Nylon").build()))
+                                        .isAvailable(true).order(2).defaultValue("nylon").build()))
+                        .build()))
+                .build();
+    }
+
+    @Test
+    void put_rejectsNonAdmin_withForbidden() throws Exception {
+        authenticateAs(UUID.randomUUID());
+
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(validSchema())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void put_rejectsAnonymous_withForbidden() throws Exception {
+        // No authenticateAs call: /api/sports/** is permitAll, so the request reaches method
+        // security, which is what must reject it.
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(validSchema())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void get_rejectsAnonymous_withForbidden() throws Exception {
+        // The case the blanket permitAll makes easy to get wrong: without @PreAuthorize this would
+        // be a 200, since the path itself is public.
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminPut_thenAuthenticatedGet_roundTripsTheDocument() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(validSchema())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.version").value(1))
+                .andExpect(jsonPath("$.data.groups[0].key").value("gear"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].key").value("racket"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[1].type").value("ENUM"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[1].options[1].value").value("nylon"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[1].defaultValue").value("nylon"));
+
+        evictSportCache();
+
+        // Same identity: BaseIT.authenticateAs cannot switch principal mid-test, and an admin also
+        // satisfies isAuthenticated(), which is exactly why the GET is gated that way rather than
+        // on hasRole('USER') — client ADMIN-2 reads this endpoint too.
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].key").value("racket"));
+    }
+
+    @Test
+    void adminPut_rejectsDuplicateLeafKeysAcrossGroups_withBadRequest() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        SportAttributeGroup gear = SportAttributeGroup.builder()
+                .key("gear").label("Gear").isAvailable(true).order(1)
+                .attributes(List.of(SportAttributeDefinition.builder()
+                        .key("racket").label("Racket").type(SportAttributeType.STRING)
+                        .isAvailable(true).order(1).build()))
+                .build();
+        SportAttributeGroup other = SportAttributeGroup.builder()
+                .key("other").label("Other").isAvailable(true).order(2)
+                .attributes(List.of(SportAttributeDefinition.builder()
+                        .key("racket").label("Racket again").type(SportAttributeType.STRING)
+                        .isAvailable(true).order(1).build()))
+                .build();
+
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(SportAttributeSchema.builder()
+                                .version(1).groups(List.of(gear, other)).build())))
+                .andExpect(status().isBadRequest());
+
+        evictSportCache();
+
+        // Rejected atomically: nothing was written, so the sport still offers no attributes.
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
+    void get_treatsDeactivatedSportAsNotFound() throws Exception {
+        authenticateAs(UUID.randomUUID());
+
+        Sport sport = sportRepository.findById(sportId).orElseThrow();
+        sport.setIsActive(false);
+        sportRepository.save(sport);
+        evictSportCache();
+
+        // A7 collapses inactive into not-found rather than exposing a 400 about a sport the
+        // catalogue never offered.
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isNotFound());
+    }
+}

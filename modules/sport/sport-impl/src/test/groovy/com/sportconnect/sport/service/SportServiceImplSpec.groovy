@@ -1,8 +1,13 @@
 package com.sportconnect.sport.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.sport.api.dto.CreateSportRequest
+import com.sportconnect.sport.api.dto.SportAttributeDefinition
+import com.sportconnect.sport.api.dto.SportAttributeGroup
+import com.sportconnect.sport.api.dto.SportAttributeSchema
+import com.sportconnect.sport.api.dto.SportAttributeType
 import com.sportconnect.sport.api.dto.UpdateSportRequest
 import com.sportconnect.sport.entity.Sport
 import com.sportconnect.sport.repository.SportRepository
@@ -13,9 +18,15 @@ class SportServiceImplSpec extends Specification {
 
     SportRepository sportRepository = Mock()
     SportLookupCache sportLookupCache = Mock()
+    // A9: both real rather than Mock(). The validator is a pure function whose whole value is the
+    // rules it enforces, and a mocked ObjectMapper would make the stored-document round trip prove
+    // nothing about whether the schema actually serialises.
+    ObjectMapper objectMapper = new ObjectMapper()
+    SportAttributeSchemaValidator schemaValidator = new SportAttributeSchemaValidator(objectMapper)
 
     @Subject
-    SportServiceImpl sportService = new SportServiceImpl(sportRepository, sportLookupCache)
+    SportServiceImpl sportService =
+            new SportServiceImpl(sportRepository, sportLookupCache, schemaValidator, objectMapper)
 
     def "createSport should create new sport successfully"() {
         given:
@@ -282,5 +293,136 @@ class SportServiceImplSpec extends Specification {
         then:
         1 * sportRepository.existsByName(name) >> false
         result == false
+    }
+
+    // --- A9: per-sport attribute schema ---
+
+    def "getAttributeSchema returns the sport's stored document"() {
+        given:
+        def sportId = 1L
+        def stored = [
+                version: 1,
+                groups : [[key       : "gear", label: "Gear", isAvailable: true, order: 1,
+                           attributes: [[key: "racket", label: "Racket", type: "STRING",
+                                         isAvailable: true, order: 1]]]]
+        ]
+        def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
+                .attributesSchema(stored).build()
+
+        when:
+        def result = sportService.getAttributeSchema(sportId)
+
+        then:
+        1 * sportLookupCache.getActiveSportsById() >> [(sportId): sport]
+        result.version == 1
+        result.groups[0].key == "gear"
+        result.groups[0].attributes[0].key == "racket"
+        result.groups[0].attributes[0].type == SportAttributeType.STRING
+    }
+
+    def "getAttributeSchema returns null when the sport offers no attributes"() {
+        given:
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Badminton").isActive(true).build()
+
+        when:
+        def result = sportService.getAttributeSchema(sportId)
+
+        then:
+        1 * sportLookupCache.getActiveSportsById() >> [(sportId): sport]
+        result == null
+    }
+
+    def "getAttributeSchema treats a deactivated sport as not found"() {
+        given: "A7 collapses inactive into 404 - the active-only cache is what enforces it here"
+        def sportId = 1L
+
+        when:
+        sportService.getAttributeSchema(sportId)
+
+        then:
+        1 * sportLookupCache.getActiveSportsById() >> [:]
+        thrown(ResourceNotFoundException)
+    }
+
+    def "replaceAttributeSchema stores a valid document and evicts the cache"() {
+        given:
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Badminton").isActive(true).build()
+        def schema = SportAttributeSchema.builder().version(1).groups([
+                SportAttributeGroup.builder().key("gear").label("Gear").isAvailable(true).order(1)
+                        .attributes([SportAttributeDefinition.builder()
+                                             .key("racket").label("Racket")
+                                             .type(SportAttributeType.STRING)
+                                             .isAvailable(true).order(1).build()])
+                        .build()
+        ]).build()
+
+        when:
+        def result = sportService.replaceAttributeSchema(sportId, schema)
+
+        then: "resolved from the repository, not the active-only cache, so an inactive sport stays editable"
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * sportRepository.save(_) >> { Sport saved ->
+            assert saved.attributesSchema.version == 1
+            assert saved.attributesSchema.groups[0].key == "gear"
+            return saved
+        }
+        1 * sportLookupCache.evictAll()
+        result.groups[0].attributes[0].key == "racket"
+    }
+
+    def "replaceAttributeSchema rejects an invalid document without writing anything"() {
+        given: "duplicate leaf keys across groups - the invariant that keeps stored profiles flat"
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Badminton").isActive(true).build()
+        def duplicate = { String groupKey ->
+            SportAttributeGroup.builder().key(groupKey).label(groupKey).isAvailable(true).order(1)
+                    .attributes([SportAttributeDefinition.builder()
+                                         .key("racket").label("Racket")
+                                         .type(SportAttributeType.STRING)
+                                         .isAvailable(true).order(1).build()])
+                    .build()
+        }
+        def schema = SportAttributeSchema.builder().version(1)
+                .groups([duplicate("gear"), duplicate("other")]).build()
+
+        when:
+        sportService.replaceAttributeSchema(sportId, schema)
+
+        then: "validation runs before save, so a bad paste never half-applies"
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        0 * sportRepository.save(_)
+        0 * sportLookupCache.evictAll()
+        thrown(BadRequestException)
+    }
+
+    def "replaceAttributeSchema clears the schema when given null"() {
+        given:
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
+                .attributesSchema([version: 1, groups: []]).build()
+
+        when:
+        def result = sportService.replaceAttributeSchema(sportId, null)
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * sportRepository.save(_) >> { Sport saved ->
+            assert saved.attributesSchema == null
+            return saved
+        }
+        1 * sportLookupCache.evictAll()
+        result == null
+    }
+
+    def "replaceAttributeSchema 404s for a sport that does not exist"() {
+        when:
+        sportService.replaceAttributeSchema(99L, null)
+
+        then:
+        1 * sportRepository.findById(99L) >> Optional.empty()
+        0 * sportRepository.save(_)
+        thrown(ResourceNotFoundException)
     }
 }

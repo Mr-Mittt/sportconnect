@@ -2882,6 +2882,44 @@ explicit go-ahead at each step (full story in A3's summary doc):
   deactivated sport had every field mutated and saved before the throw, with only `@Transactional`
   rollback preventing a persist — correct by accident, and one refactor away from a real
   write-then-fail. Hoisted above every mutation, with a test pinning the ordering.
+- **A9 (`DONE`, 2026-08-20,
+  `modules/sport/sport-impl/docs/MVP/A9_PER_SPORT_ATTRIBUTE_SCHEMA.md`):** per-sport attribute schema
+  moved server-side — `sports.attributes_schema JSONB` (V059, nullable, deliberately unseeded), five
+  typed DTOs in `sport-api` (`SportAttributeSchema`/`Group`/`Definition`/`Option`/`Type`),
+  `SportService.getAttributeSchema` + `replaceAttributeSchema`, and two endpoints
+  (`GET .../attribute-schema` authenticated, `PUT` admin-only). Reverses A3's "no schema table" call
+  because the requirements changed, not the cost estimate. **Validation is deliberately asymmetric:**
+  the admin `PUT` is strict and atomic (`SportAttributeSchemaValidator` — known types, leaf keys
+  unique across the *whole* sport, non-empty unique options, `defaultValue` valid for its own node,
+  key pattern, 16KB cap), while profile writes are lenient (`ProfileAttributeFilter` — unknown keys,
+  wrong-shaped values and switched-off attributes are **silently dropped**, never rejected). That
+  overrides the ticket's and design doc's stated "unknown key → reject", on explicit product
+  decision; merge semantics are retained too, so an absent key keeps its stored value and a stale key
+  survives. Both halves share one `SportAttributeValues.isValid`, so a schema can never declare a
+  `defaultValue` the profile path would then silently drop. `Sport.attributesSchema` is an **untyped
+  `Map`** on purpose: the entity rides the hot `SportLookupCache` path, so a typed field would make a
+  no-longer-deserialisable document take down the whole cached catalogue rather than one endpoint.
+  Admin writes bypass the active-only cache (`findById`, like `updateSport`/`deleteSport`) so an
+  inactive sport stays editable, while the `GET` reads the cache and 404s for one (A7's collapse);
+  zero new cache wiring. The `GET` is the **one non-public GET in `SportController`** — `/api/sports/**`
+  is blanket-`permitAll` (an untickered initial-commit default), so it needed
+  `@PreAuthorize("isAuthenticated()")`, chosen over `hasRole('USER')` because nothing in the codebase
+  grants `ADMIN` and an admin-only account may not hold `USER`. **Scope expansion, fixed on the
+  user's call:** writing the IT found that `GlobalExceptionHandler`'s `Exception.class` catch-all
+  swallowed Spring Security's `AccessDeniedException`, so **every `@PreAuthorize` denial in the whole
+  app returned 500 instead of 403** — including four already-shipped `SportController` admin
+  endpoints. It hid because no IT had ever exercised a method-security denial: existing `isForbidden`
+  assertions all come from domain `ForbiddenException`, and the three unauthenticated tests assert
+  401 via filter-chain rejection on non-`permitAll` paths. Added an `AccessDeniedException` handler in
+  `modules/common`. **Deliberately not done:** Badminton/Pickleball schemas left `NULL` (feature is
+  inert until client ADMIN-2 ships), no delete-a-key path (**A10** filed — merge means a stored key
+  can never be removed, and stale keys still consume the 4KB profile cap), no caller `isActive`
+  checks (matches A7, closes with U12), no `NUMBER`/`BOOLEAN` types, schema kept out of
+  `SportResponse` so the catalogue fetch stays lean. Verification: `sport-impl` 104/104 (up from 59)
+  plus a 6-case `SportAttributeSchemaIntegrationTest` covering non-admin/anonymous 403s, the admin
+  round trip through the real JSON column, atomic rejection, and the inactive-sport 404. Existing
+  `UserSportProfileServiceImplSpec` cases needed a stubbed schema: their free-text keys would
+  otherwise have been dropped, silently turning them into tests of the filter's drop path.
 - **A8 (`DONE`, 2026-08-20,
   `modules/sport/sport-impl/docs/MVP/A8_DROP_DB_LEVEL_FK_ON_USER_SPORT_PROFILES.md`):** dropped the
   cross-domain DB-level FK `user_sport_profiles_user_id_fkey` → `users` (V058) — `users` is owned by

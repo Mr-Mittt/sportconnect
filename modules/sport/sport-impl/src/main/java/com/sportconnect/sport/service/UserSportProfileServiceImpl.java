@@ -34,6 +34,7 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
     private final SportService sportService;
     private final SportLookupCache sportLookupCache;
     private final ObjectMapper objectMapper;
+    private final ProfileAttributeFilter attributeFilter;
 
     /**
      * Creates a new sport profile for the caller.
@@ -69,9 +70,13 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
         // the same reason getUserProfiles was routed that way.
         SportResponse sport = sportService.requireActiveSportById(request.getSportId());
 
-        Map<String, Object> attributes = request.getAttributes() != null
-                ? new HashMap<>(request.getAttributes())
-                : new HashMap<>();
+        // A9: keep only what the sport currently offers. Unknown keys, values of the wrong shape,
+        // and writes aimed at a switched-off attribute are dropped silently rather than rejected -
+        // see ProfileAttributeFilter for why this half is lenient while the admin schema write is
+        // strict. Size is still enforced below and still fails loudly, because an oversized payload
+        // has no sensible partial answer: deciding which keys to discard would be arbitrary.
+        Map<String, Object> attributes = new HashMap<>(attributeFilter.filter(
+                request.getAttributes(), sportService.getAttributeSchema(request.getSportId())));
         validateAttributesSize(attributes);
 
         // A7: a soft-deleted profile still occupies the (user_id, sport_id) pair, which carries a
@@ -218,8 +223,18 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
             profile.setBio(request.getBio());
         }
         if (request.getAttributes() != null) {
+            // A9: merge semantics are unchanged - a key the caller omits keeps its stored value, and
+            // a stale key with no current definition survives untouched (reads stay permissive; only
+            // writes are validated). What is new is that the incoming map is filtered against the
+            // sport's live schema first, so unknown keys, wrong-shaped values, and switched-off
+            // attributes never reach the stored map. All three are dropped silently, by explicit
+            // product decision - this endpoint does not fail over them.
+            //
+            // Because merge is retained, there is still no way to REMOVE a stored attribute: an
+            // absent key means "leave it alone", not "delete it". Known and accepted; tracked as A10.
             Map<String, Object> mergedAttributes = new HashMap<>(profile.getAttributes());
-            mergedAttributes.putAll(request.getAttributes());
+            mergedAttributes.putAll(attributeFilter.filter(
+                    request.getAttributes(), sportService.getAttributeSchema(profile.getSportId())));
             validateAttributesSize(mergedAttributes);
             profile.setAttributes(mergedAttributes);
         }
