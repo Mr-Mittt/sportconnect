@@ -1,6 +1,7 @@
 package com.sportconnect.sport.api.service;
 
 import com.sportconnect.sport.api.dto.CreateSportRequest;
+import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UpdateSportRequest;
 
@@ -78,4 +79,35 @@ public interface SportService {
      * Check if sport exists by name
      */
     boolean existsByName(String name);
+
+    /**
+     * A9: the sport's attribute definition tree, for rendering per-sport profile fields.
+     *
+     * <p>Resolves the sport through the same active-only path as every other user-facing read, so a
+     * deactivated sport is reported as not-found rather than returning a schema (A7 collapses
+     * inactive into 404). Served from the sport cache, so this is an in-memory hit — which matters
+     * because the profile write path calls it on every write.
+     *
+     * @param sportId the sport to read
+     * @return the parsed schema, or {@code null} when the sport offers no attributes at all
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no active sport has this id
+     */
+    SportAttributeSchema getAttributeSchema(Long sportId);
+
+    /**
+     * A9: replace a sport's whole attribute schema. Admin-only; there is no partial update.
+     *
+     * <p>The document is validated in full before anything is written and rejected atomically — a
+     * bad paste never half-applies. Unlike {@link #getAttributeSchema} this resolves the sport
+     * straight from the repository rather than the active-only cache, matching how
+     * {@link #updateSport} and {@link #deleteSport} already handle admin writes, so an inactive
+     * sport's schema can still be edited. Evicts the sport cache on success.
+     *
+     * @param sportId the sport to write
+     * @param schema  the replacement document; {@code null} clears the schema entirely
+     * @return the stored schema, as read back
+     * @throws com.sportconnect.common.exception.BadRequestException if the document is invalid
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no sport has this id
+     */
+    SportAttributeSchema replaceAttributeSchema(Long sportId, SportAttributeSchema schema);
 }

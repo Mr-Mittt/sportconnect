@@ -88,6 +88,11 @@ dependencies {
     // NotificationStompIntegrationTest (NTF-3).
     testImplementation project(':modules:auth:auth-api')
 
+    // Same situation, via sport-impl — needed here at compile time for the SportAttributeSchema DTO
+    // tree built in SportAttributeSchemaIntegrationTest (A9). Unlike the other domains, sport-api is
+    // not declared for the main source set above, so it is test-only.
+    testImplementation project(':modules:sport:sport-api')
+
     // Polling assertions for async @RabbitListener processing (NTF-2's real-RabbitMQ IT test) —
     // a message is consumed on a background listener thread, not the test's calling thread.
     testImplementation 'org.awaitility:awaitility:4.2.2'

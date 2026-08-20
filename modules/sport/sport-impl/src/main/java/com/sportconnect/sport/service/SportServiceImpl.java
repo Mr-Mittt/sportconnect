@@ -1,8 +1,11 @@
 package com.sportconnect.sport.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.sport.api.dto.CreateSportRequest;
+import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UpdateSportRequest;
 import com.sportconnect.sport.api.service.SportService;
@@ -25,6 +28,8 @@ public class SportServiceImpl implements SportService {
 
     private final SportRepository sportRepository;
     private final SportLookupCache sportLookupCache;
+    private final SportAttributeSchemaValidator schemaValidator;
+    private final ObjectMapper objectMapper;
 
     /**
      * {@inheritDoc}
@@ -210,5 +215,69 @@ public class SportServiceImpl implements SportService {
                 .createdAt(sport.getCreatedAt())
                 .updatedAt(sport.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Reads through {@link SportLookupCache} like every other user-facing read, so a deactivated
+     * sport is not found rather than returning a schema, and so the profile write path — which
+     * calls this on every write — pays an in-memory lookup instead of a query.
+     *
+     * <p>The stored column is an untyped map (see {@code Sport.attributesSchema} for why); this is
+     * the one place it becomes a typed {@code SportAttributeSchema}, so a document that no longer
+     * deserialises fails here alone and cannot take the whole cached catalogue down with it.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public SportAttributeSchema getAttributeSchema(Long sportId) {
+        Sport sport = sportLookupCache.getActiveSportsById().get(sportId);
+        if (sport == null) {
+            throw new ResourceNotFoundException("Sport", "id", sportId);
+        }
+        return toAttributeSchema(sport.getAttributesSchema());
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Validates first, writes second: {@link SportAttributeSchemaValidator} throws on the first
+     * violation, so an invalid document never reaches {@code save()} and never half-applies.
+     *
+     * <p>Resolves the sport with {@code findById} rather than the active-only cache, matching
+     * {@code updateSport}/{@code deleteSport} — admin writes deliberately bypass the cache, which
+     * holds active sports only, so an inactive sport's schema stays editable. Evicts afterwards for
+     * the same reason every other admin write here does.
+     */
+    @Override
+    @Transactional
+    public SportAttributeSchema replaceAttributeSchema(Long sportId, SportAttributeSchema schema) {
+        Sport sport = sportRepository.findById(sportId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
+
+        schemaValidator.validate(schema);
+
+        sport.setAttributesSchema(schema == null
+                ? null
+                : objectMapper.convertValue(schema, new TypeReference<Map<String, Object>>() {
+                }));
+        Sport saved = sportRepository.save(sport);
+        sportLookupCache.evictAll();
+
+        log.info("Replaced attribute schema for sport {}", sportId);
+        return toAttributeSchema(saved.getAttributesSchema());
+    }
+
+    /**
+     * Converts the stored untyped document into the typed DTO tree.
+     *
+     * <p>Returns {@code null} for a sport with no schema, which callers treat as "offers no
+     * attributes" rather than as an error.
+     */
+    private SportAttributeSchema toAttributeSchema(Map<String, Object> stored) {
+        if (stored == null || stored.isEmpty()) {
+            return null;
+        }
+        return objectMapper.convertValue(stored, SportAttributeSchema.class);
     }
 }

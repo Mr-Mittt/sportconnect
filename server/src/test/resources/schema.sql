@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS sports (
     min_players INTEGER,
     max_players INTEGER,
     is_active BOOLEAN DEFAULT TRUE,
+    -- A9 (sport-impl): per-sport attribute definition tree. H2 JSON rather than Postgres JSONB
+    -- (V059), the same substitution this file already makes for user_sport_profiles.attributes.
+    attributes_schema JSON,
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 );

@@ -152,4 +152,7 @@
     <!-- A8: drop the cross-domain DB-level FK on user_sport_profiles.user_id -->
     <include file="db/changelog/changes/V058__drop_user_sport_profile_cross_domain_fk.sql" relativeToChangelogFile="false"/>
 
+    <!-- A9: sports.attributes_schema — admin-managed per-sport attribute definition -->
+    <include file="db/changelog/changes/V059__add_attributes_schema_to_sports.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
