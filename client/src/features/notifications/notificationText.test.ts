@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getNotificationText, notificationTextToString } from './notificationText';
-import type { Notification } from './types';
+import type { Notification, NotificationType } from './types';
 
 function baseNotification(overrides: Partial<Notification> = {}): Notification {
   return {
@@ -71,7 +71,7 @@ describe('getNotificationText', () => {
     ['session.invitation.created', 'Alice Nguyen invited you to join "Friday Pickup Game"'],
     ['session.participant.left', 'Alice Nguyen left "Friday Pickup Game"'],
     ['session.status.started', '"Friday Pickup Game" has started'],
-  ])('renders %s correctly', (type, expected) => {
+  ] as [NotificationType, string][])('renders %s correctly', (type, expected) => {
     expect(notificationTextToString(getNotificationText(baseNotification({ type })))).toBe(expected);
   });
 
@@ -98,16 +98,21 @@ describe('getNotificationText', () => {
   // 'post.comment.created', which post-impl B7 is queued to make a real routing
   // key — at which point this test would still pass while silently asserting
   // "known-but-unimplemented" rather than "genuinely unknown".
+  // CLIENT-NOTIF-4 typed `Notification.type` as a union, so simulating a type this build has never
+  // heard of now needs an explicit cast. The cast is the point of these two tests, not a workaround:
+  // a client deployed older than the backend really does receive out-of-union values, which is
+  // exactly what the runtime fallback exists for and what no amount of typing can prevent. If these
+  // ever stop needing a cast, the union has grown a member that should have its own case instead.
   it('falls back to a generic sentence for an unrecognized type (forward-compat with future producers)', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const segments = getNotificationText(baseNotification({ type: 'not.a.real.routing.key' }));
+    const segments = getNotificationText(baseNotification({ type: 'not.a.real.routing.key' as NotificationType }));
     expect(segments).toEqual([{ text: 'You have a new notification', bold: false }]);
     warn.mockRestore();
   });
 
   it('warns in dev when a type hits the fallback, so a new producer is not silently degraded', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    getNotificationText(baseNotification({ type: 'not.a.real.routing.key' }));
+    getNotificationText(baseNotification({ type: 'not.a.real.routing.key' as NotificationType }));
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0]![0]).toContain('not.a.real.routing.key');
     warn.mockRestore();

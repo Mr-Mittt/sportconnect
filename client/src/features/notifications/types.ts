@@ -17,9 +17,19 @@ export interface NotificationActorSummary {
 // untyped strings, same as the backend entity — this module has no
 // cross-domain concept of what a "SESSION" or "POST" id looks like beyond
 // the string it's given.
+export type NotificationType =
+  | 'session.comment.created'
+  | 'session.participant.joined'
+  | 'session.participant.left'
+  | 'session.status.started'
+  | 'session.join_request.created'
+  | 'session.join_request.approved'
+  | 'session.join_request.rejected'
+  | 'session.invitation.created';
+
 export interface Notification {
   id: number;
-  type: string;
+  type: NotificationType;
   entityType: string;
   entityId: string;
   actorIds: string[];

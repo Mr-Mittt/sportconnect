@@ -58,7 +58,19 @@ export function getNotificationText(notification: Notification): NotificationTex
       return [plain('Your request to join '), entity, plain(' was declined')];
     case 'session.invitation.created':
       return [actor, plain(' invited you to join '), entity];
-    default:
+    default: {
+      // CLIENT-NOTIF-4 — compile-time exhaustiveness. Every `NotificationType`
+      // handled above narrows `notification.type` to `never` here; add a member
+      // to the union without a case and this assignment stops compiling, naming
+      // the missing type in the error. This is the half of the guard that fails
+      // the build rather than merely logging.
+      const unhandled: never = notification.type;
+      void unhandled;
+      // ...and this is the half that can't be typed away. The union mirrors what
+      // the backend emits *at this build*; a client deployed older than the
+      // backend will still receive types it has never heard of, so the runtime
+      // fallback below is correct behavior, not a safety net for the check above.
+      //
       // The rendered text stays deliberately generic (see above), but a type
       // reaching this branch almost always means a backend routing key shipped
       // without its client case — the exact way `session.status.started` and
@@ -72,6 +84,7 @@ export function getNotificationText(notification: Notification): NotificationTex
         );
       }
       return [plain('You have a new notification')];
+    }
   }
 }
 

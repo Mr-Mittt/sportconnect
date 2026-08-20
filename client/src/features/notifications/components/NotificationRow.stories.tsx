@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { Notification } from '../types';
+import type { Notification, NotificationType } from '../types';
 import { NotificationRow } from './NotificationRow';
 
 const baseNotification: Notification = {
@@ -72,5 +72,7 @@ export const SessionStarted: Story = {
  * unit-tested — this is what every unmapped backend event looks like to a user.
  */
 export const UnknownType: Story = {
-  args: { notification: { ...baseNotification, type: 'not.a.real.routing.key' } },
+  // Cast for the same reason the fallback tests need one (CLIENT-NOTIF-4): `type` is a union of
+  // what the backend emits at this build, and the whole point of this story is a value outside it.
+  args: { notification: { ...baseNotification, type: 'not.a.real.routing.key' as NotificationType } },
 };

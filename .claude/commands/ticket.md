@@ -100,6 +100,15 @@ into the ticket text rather than leaving them implicit:
   notify someone?" question that isn't resolved on the spot, it must be logged in
   `documentation/md/NOTIFICATION_USE_CASES.md` in addition to whatever this ticket does with it —
   don't leave it as a throwaway remark in conversation.
+- **Client-visible enum or event type** (CLIENT-NOTIF-4) — does this ticket add or extend something
+  the client has to branch on? A new notification routing key, a new value in an enum the client
+  mirrors (`commentType`, `postType`, a status), a new event type. If so, the client's case belongs
+  in the same change or in its own ticket filed alongside this one — say which, explicitly, rather
+  than leaving it unstated. The client hand-mirrors ~15 backend enums by hand and nothing
+  structurally links them, so a backend-only change ships a silent display gap: this exact miss
+  produced CLIENT-NOTIF-3 (two notification types rendering "You have a new notification" from the
+  day they launched) and CLIENT-SESSION-13 (system comments rendering as if a user wrote them),
+  neither noticed until someone happened to look.
 
 **Gate:** confirm the scope is correct before moving on.
 
