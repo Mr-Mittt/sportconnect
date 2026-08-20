@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | [A7](MVP/A7_ENFORCE_ISACTIVE_ON_SPORT_TAGGED_CREATE_PATHS_IN.md) | Enforce `isActive` on sport-tagged create paths in group/location/session domains | `TODO` |
 | 2 | [A8](MVP/A8_DROP_DB_LEVEL_FK_ON_USER_SPORT_PROFILES.md) | Drop DB-level FK on `user_sport_profiles.user_id` (cross-domain, violates domain-scoped-tables rule) | `TODO` |
+| 3 | [A9](MVP/A9_PER_SPORT_ATTRIBUTE_SCHEMA.md) | Per-sport attribute schema (admin-managed, server-side) — blocks client ADMIN-2 + SPORT-2; design in `documentation/md/SPORT_ATTRIBUTE_SCHEMA_DESIGN.md` | `TODO` |
 
 ---
 
