@@ -1,4 +1,4 @@
-You are picking up and completing the next ticket from a module's versioned backlog. Arguments: $ARGUMENTS (format: "<module> <version>", e.g. "group MVP").
+You are picking up and completing the next ticket from a module's versioned backlog. Arguments: $ARGUMENTS (format: "<module> [version]", e.g. "group MVP" — `version` is optional and falls back to the current app version, see Phase 0b step 1).
 
 Work through the phases below in order. Gate on user input between phases — do not skip ahead.
 
@@ -23,7 +23,17 @@ Before touching any files — including the backlog status edit in the next phas
 
 ## Phase 0b — Load the ticket
 
-1. Parse $ARGUMENTS to extract `module` and `version`
+1. Parse $ARGUMENTS to extract `module` and `version`. `version` is optional — if it is missing,
+   resolve it with the ladder in `documentation/md/BACKLOG_STRUCTURE_CONVENTION.md` §
+   **Version resolution**: an explicit argument wins; otherwise the current app version declared in
+   `CLAUDE.md` § Current App Version **if that backlog file exists for this module**; otherwise the
+   module's only `BACKLOG_<VERSION>.md` if it has exactly one; otherwise ask. Resolving the
+   version needs the module's docs folder, so apply step 2's path rules to find that folder first,
+   then check which `BACKLOG_<VERSION>.md` files actually exist in it. Never assume the
+   declared version exists for a module without checking — that check is the whole point of the
+   ladder. When the version was resolved rather than typed, say so in one line before acting on it
+   (`No version given — using current app version MVP (<resolved path>)`); this command flips ticket
+   status and writes code, so working against the wrong backlog is expensive to unwind.
 2. Derive the backlog file path:
    - If `module` is `client` → `client/docs/BACKLOG_<VERSION>.md`
    - If `module` is `infra` → `infra/documentation/BACKLOG_<VERSION>.md`

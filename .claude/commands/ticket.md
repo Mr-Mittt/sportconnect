@@ -1,7 +1,7 @@
 You are filing a new TODO ticket into a module's versioned backlog. Arguments: $ARGUMENTS (format:
-"<module> <version> <short overview>", e.g. "session mvp add a reminder push notification 1 hour
-before a session starts" — module and version can also be asked for interactively if omitted or
-ambiguous).
+"<module> [version] <short overview>", e.g. "session mvp add a reminder push notification 1 hour
+before a session starts" — `version` is optional and falls back to the current app version; module
+and version can also be asked for interactively if still ambiguous, see Step 1).
 
 This is heavier than `/draftidea` (which just captures an idea fast, no scoping) and lighter than
 `/feature`/`/workon`'s Phase 1-4 (no codebase exploration, no implementation design — that happens
@@ -17,8 +17,19 @@ skip ahead or write anything to disk before its gate is cleared.
 
 Parse $ARGUMENTS into `module`, `version`, and `overview`. Ask for whatever is missing:
 - No `module` → ask which module/service.
-- No `version` → ask which version; if the module has exactly one `BACKLOG_<VERSION>.md`, suggest it
-  as a default rather than making the user repeat something derivable.
+- No `version` → resolve it with the ladder in
+  `documentation/md/BACKLOG_STRUCTURE_CONVENTION.md` § **Version resolution**: the current app
+  version declared in `CLAUDE.md` § Current App Version **if that backlog file exists for this
+  module**; otherwise the module's only `BACKLOG_<VERSION>.md` if it has exactly one; otherwise ask.
+  Only the last rung asks — do not ask for a version the ladder already resolved. Resolving it needs
+  the module's docs folder, so apply Step 2's path rules first, then check which
+  `BACKLOG_<VERSION>.md` files actually exist there. Say which version you resolved to and where
+  (`No version given — using current app version MVP (<resolved path>)`) before writing anything;
+  this command creates a file and edits an index, so a wrong backlog means cleanup in two places.
+  Beware the parse ambiguity here: `version` is optional but `overview` is not, so a second token
+  that is not a recognized version (`mvp`, `v1`, …) is the start of the overview, not a typo'd
+  version — `/ticket session add a reminder push` is module `session` with no version, not module
+  `session` version `add`.
 - No `overview`, or an overview too thin to scope from (e.g. a two-word fragment) → ask for at least
   a sentence before continuing. Don't proceed on a vague overview the way `/draftidea` allows — this
   command produces a real ticket, not a placeholder.

@@ -12,6 +12,19 @@ SportConnect is a social sports community platform — think Instagram + Meetup 
 
 **Tech stack:** Java 21 / Spring Boot 3.2.0 backend · React 18 frontend · Go chat service · PostgreSQL + PostGIS · Redis · Liquibase · Spock (Groovy) tests
 
+## Current App Version
+
+**Current app version:** `MVP`
+
+This is the fallback version for any slash command that takes a `<version>` argument (`/workon`,
+`/ticket`, `/list`) — `/workon client` resolves to `client/docs/BACKLOG_MVP.md` without the version
+being typed. It is a declared value, not a derived one: when the app moves on, change it here and
+every command follows.
+
+Commands must not treat it as an unconditional default — the full resolution ladder (and why an
+explicit argument, a per-scope single backlog, and asking all still matter) is in
+`documentation/md/BACKLOG_STRUCTURE_CONVENTION.md` § **Version resolution**.
+
 ## Documentation Convention
 
 Every new architecture discussion, design decision, implementation summary, or plan must be:

@@ -83,6 +83,66 @@ ticket's entire life. Two reasons:
 
 ---
 
+## Version resolution
+
+Backlog files are versioned (`BACKLOG_MVP.md`, `BACKLOG_V1.md`), so every command that touches one
+takes a `<version>` argument. Typing it on every invocation is noise when the whole app is working
+out of one version, so the version may be omitted and resolved instead.
+
+**The declared current app version lives in `CLAUDE.md` § Current App Version** — one line, one
+value, git-versioned, and already in context at the start of every session (so resolving it costs no
+extra file read). That file is the single source of truth; this section owns the *rules*, not the
+value. Do not duplicate the value here, in a command file, or in `.claude/settings.json` — a copy in
+`settings.local.json` in particular would be per-machine, and "which version is this project on" is
+a project-wide fact, not a per-developer one.
+
+### The ladder
+
+A command that takes a `<version>` resolves it in this order, stopping at the first step that
+produces a real `BACKLOG_<VERSION>.md` for the already-resolved scope:
+
+1. **An explicit `<version>` argument wins.** Always — the declared current version never overrides
+   something the user typed.
+2. **The declared current app version**, *if that backlog file exists for this scope.* The existence
+   check is not optional (see below).
+3. **The scope's only backlog**, if it has exactly one `BACKLOG_<VERSION>.md`.
+4. **Ask.** Do not guess a neighbouring version, and do not invent a backlog file.
+
+### Why step 2 is conditional
+
+A flat "fall back to the current version" rule is correct only while every scope carries that
+version. Today it does — all 12 backlogs have an `MVP` — but versions diverge as soon as modules
+start finishing a version at different times. Flip the declared version to `V1` while
+`modules/sport/sport-impl` still only has `BACKLOG_MVP.md`, and an unconditional fallback sends
+`/workon sport` at a file that does not exist. Steps 3 and 4 are what make the divergence period
+survivable, and they are the reason this is a ladder rather than a default.
+
+### Announce the resolution
+
+When a version was resolved rather than typed, say so in one line before acting on it:
+
+```
+No version given — using current app version MVP (modules/sport/sport-impl/docs/BACKLOG_MVP.md)
+```
+
+`/workon` writes code and flips ticket status and `/ticket` writes a new file; silently working
+against the wrong backlog is expensive to unwind, and the resolved path is the cheapest possible
+thing to show.
+
+### Where the ladder applies
+
+| Command | Version omitted |
+|---|---|
+| `/workon` | Ladder — it acts on exactly one backlog |
+| `/ticket` | Ladder — it writes into exactly one backlog |
+| `/list` | **Not the ladder** — keeps its own "report every version found, each as its own group" default |
+
+`/list` is the deliberate exception. It is a read-only survey, listing more versions costs nothing,
+and applying the ladder would *narrow* `/list client` from MVP + V1 down to MVP — losing information
+in the one command whose entire job is to show you what is there.
+
+---
+
 ## When to apply this
 
 - **New module, new backlog file:** just start this way from ticket #1. There's no migration to do,
