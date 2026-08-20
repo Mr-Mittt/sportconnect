@@ -2829,6 +2829,67 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `modules/social/post-impl/docs/B3_THREE_POST_TYPES.md` — its content matches `group-impl`'s B3
   ticket, not `post-impl`'s own (coincidentally reused) B3 id, so it was never referenced by
   `post-impl`'s Implementation Order table in the first place; not this task's to resolve.
+- **A7 (`DONE`, 2026-08-20,
+  `modules/sport/sport-impl/docs/MVP/A7_ENFORCE_ISACTIVE_ON_SPORT_TAGGED_CREATE_PATHS_IN.md`):** filed
+  as a three-line business-rule fix (reject a deactivated `sportId` on the group/location/session
+  create paths); grew, on the user's direction, into the sport module's read/write policy being
+  rewritten. **The bug the ticket itself got wrong:** it described
+  `UserSportProfileService.hasProfileForSport` as "existence-only... by design", but the `sport-api`
+  Javadoc, `LocationServiceImpl.favoriteLocation`'s error string, and `LocationService`'s Javadoc all
+  described it as an *active-profile* check — three docs contradicting a one-line
+  `existsByUserIdAndSportId` that checked neither the profile's nor the sport's `isActive`. Live
+  consequence: `deleteProfile` only soft-deletes, so a user who deleted their Badminton profile kept
+  every permission it granted (creating groups, favouriting locations) indefinitely. Renamed
+  `hasActiveProfileForActiveSport` — the name stating both conditions is the fix for *why* it went
+  unnoticed. Beyond that: a deactivated sport is now indistinguishable from a missing one
+  (`getSportById` → **`requireActiveSportById`**, active-only, `ResourceNotFoundException`/404 rather
+  than a 400 about a sport `GET /api/sports` never offered); `SportLookupCache` loads only active
+  sports so hiding is the default rather than each caller's job, with the admin "includes inactive"
+  listing bypassing the cache entirely (asserted by test) and `updateSport`/`deleteSport` already
+  going straight to the repository, so reactivation still works; profiles under a deactivated sport
+  are omitted from `getUserProfiles` and 404 individually instead of rendering a `"Unknown"` sport
+  name; the max-3-profiles cap was removed (which invalidates A4's recorded "never a real N+1 risk
+  because bounded to ≤3" reasoning — corrected in place, the batching is now load-bearing); and
+  re-adding a deleted profile **reactivates the existing row** rather than being rejected —
+  `(user_id, sport_id)` is `UNIQUE`, so the soft-deleted row both blocked a fresh insert and
+  satisfied the old duplicate check, making `deleteProfile` a one-way door in both directions. Also
+  moved every sport lookup in `UserSportProfileServiceImpl` off `sportRepository` onto the
+  cache-backed `SportService` (A4/A5 had done this for `getUserProfiles` only), dropping the
+  `SportRepository` dependency from that class. Corrected the ticket's session-gating instruction:
+  it said to check "the request-supplied-`sportId` branch", but the group branch also honours
+  `request.getSportId()` when present, so gating on `sessionType` would have let a caller-supplied
+  inactive sport through — gated on `request.getSportId() != null` instead. **Deliberately not
+  done:** caller `isActive` (all three endpoints still accept a deactivated caller — inherited U12
+  gap, user's explicit call), and hiding groups/sessions/locations tagged with a deactivated sport
+  from their own list endpoints (a bigger cross-domain product decision; raised, left unfiled).
+  Verification: full `./gradlew test` green, plus a new 5-case
+  `SportActiveGateIntegrationTest` through real MockMvc/beans/H2 — it exists because mocks cannot
+  prove the two things that actually broke (that the active-scoped query really excludes a
+  soft-deleted row, and that reactivation avoids the `UNIQUE` violation), and it required adding
+  `user_sport_profiles`/`group_types`/`group_settings` to the hand-maintained H2 mirror. A late
+  user review caught one more instance of the same root cause: `getProfileById`,
+  `getUserProfileForSport` and `updateProfile` used unfiltered finders, so a soft-deleted profile
+  `getUserProfiles` omits was still individually fetchable and editable — all three are now
+  active-scoped, while `deleteProfile` and the reactivation lookup deliberately keep the
+  unfiltered finders because they need to see the deleted row. That review also flagged that the
+  sport check in those getters *read* as a name lookup despite being a real gate; both call sites
+  now say so, with a test asserting the gate fires. The same misreading recurring twice was itself
+  the signal that drove the final renames — `getSportById` → `requireActiveSportById` (a `get` that
+  throws hides its enforcement at the call site) and `getSportsByIds` → `getActiveSportsByIds` (whose
+  Javadoc managed to be wrong in *both* directions inside this one ticket, which is exactly why the
+  contract now lives in the name). A second review pass found the sharper version of
+  the same thing in `updateProfile`: its sport gate sat *after* `save()`, so a profile under a
+  deactivated sport had every field mutated and saved before the throw, with only `@Transactional`
+  rollback preventing a persist — correct by accident, and one refactor away from a real
+  write-then-fail. Hoisted above every mutation, with a test pinning the ordering.
+- **SESSION-22 (`TODO`, 2026-08-20,
+  `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
+  verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
+  `AmqpIOException` connecting to its RabbitMQ Testcontainer, all 6 tests as a block, ~50% of runs
+  (6 of 12), passing in isolation and on immediate retry with identical code. Initially
+  **mis-attributed to A7** on the strength of one clean-tree run that passed; disproved when it
+  failed again after a change that was nothing but a method rename, and passed again on re-run. The
+  ticket records that cautionary detail explicitly, since the same wrong inference is easy to repeat.
 - **Sport attribute schema design (2026-08-20,
   `documentation/md/SPORT_ATTRIBUTE_SCHEMA_DESIGN.md`; tickets A9 backend + ADMIN-1/ADMIN-2
   client):** A3 (`DONE`) shipped `UserSportProfile.attributes` as a schema-less JSONB map with no

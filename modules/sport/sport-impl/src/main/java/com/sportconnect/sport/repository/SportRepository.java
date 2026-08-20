@@ -19,4 +19,5 @@ public interface SportRepository extends JpaRepository<Sport, Long> {
     List<Sport> findByCategoryAndIsActiveTrue(String category);
 
     boolean existsByName(String name);
+
 }

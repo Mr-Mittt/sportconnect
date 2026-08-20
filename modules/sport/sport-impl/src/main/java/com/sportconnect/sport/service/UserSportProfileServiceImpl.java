@@ -10,9 +10,7 @@ import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.sport.api.service.UserSportProfileService;
-import com.sportconnect.sport.entity.Sport;
 import com.sportconnect.sport.entity.UserSportProfile;
-import com.sportconnect.sport.repository.SportRepository;
 import com.sportconnect.sport.repository.UserSportProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +31,8 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
     private static final int MAX_ATTRIBUTES_BYTES = 4096;
 
     private final UserSportProfileRepository profileRepository;
-    private final SportRepository sportRepository;
     private final SportService sportService;
+    private final SportLookupCache sportLookupCache;
     private final ObjectMapper objectMapper;
 
     /**
@@ -42,36 +40,66 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
      *
      * <p>Verifies the sport exists and is currently active (A6 — a deactivated sport, e.g. one
      * turned off for this MVP's launch scope, can no longer be selected for a <em>new</em> profile;
-     * an existing profile referencing a sport that's deactivated later is left untouched, see
-     * {@link SportServiceImpl#getSportById} and {@link SportServiceImpl#getSportsByIds}), enforces
-     * the max-3-active-profiles-per-user rule, and rejects a duplicate (userId, sportId) pair.
+     * an existing profile referencing a sport that's deactivated later is left in the table but
+     * stops being returned, see {@link #getUserProfiles}), and rejects a duplicate
+     * (userId, sportId) pair.
+     *
+     * <p>A7 removed the former max-3-active-profiles-per-user cap (user decision) — a product
+     * limit with no technical driver.
+     *
+     * <p>A7 also made re-adding a previously deleted sport work. {@code deleteProfile} soft-deletes,
+     * and {@code (user_id, sport_id)} is UNIQUE, so the old row both blocked a fresh insert and
+     * satisfied the old unfiltered duplicate check — deleting a profile used to lock the user out of
+     * that sport permanently. The row is now <strong>reactivated</strong> and repopulated entirely
+     * from the request, so re-adding behaves like a first-time create that happens to keep its id.
+     * Only a profile that is currently <em>active</em> is rejected as a duplicate.
+     *
+     * <p>A7 changed how the first of those is reported: a deactivated sport now throws
+     * {@code ResourceNotFoundException} rather than {@code BadRequestException}, collapsing
+     * "no such sport" and "sport switched off" into one outcome across every write path in the app
+     * (see {@code SportService.requireActiveSportById}). The lookup is a single
+     * {@code findByIdAndIsActiveTrue} query instead of a fetch followed by a flag check.
      */
     @Override
     @Transactional
     public UserSportProfileResponse createProfile(UUID userId, CreateUserSportProfileRequest request) {
-        // Verify sport exists
-        Sport sport = sportRepository.findById(request.getSportId())
-                .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", request.getSportId()));
-
-        // Verify sport is active — a deactivated sport can't be picked for a new profile
-        if (!sport.getIsActive()) {
-            throw new BadRequestException("Sport '" + sport.getName() + "' is not currently active");
-        }
-
-        // Enforce max-3 active sport profiles per user
-        if (profileRepository.findByUserIdAndIsActiveTrue(userId).size() >= 3) {
-            throw new BadRequestException("User cannot have more than 3 sport profiles");
-        }
-
-        // Check if profile already exists
-        if (profileRepository.existsByUserIdAndSportId(userId, request.getSportId())) {
-            throw new BadRequestException("User already has a profile for sport: " + sport.getName());
-        }
+        // Verify the sport exists AND is active (A7): a deactivated sport throws the same
+        // ResourceNotFoundException a missing one does - one check, not a fetch plus a flag test.
+        // Routed through SportService so it reads SportLookupCache (A5) rather than the database,
+        // the same reason getUserProfiles was routed that way.
+        SportResponse sport = sportService.requireActiveSportById(request.getSportId());
 
         Map<String, Object> attributes = request.getAttributes() != null
                 ? new HashMap<>(request.getAttributes())
                 : new HashMap<>();
         validateAttributesSize(attributes);
+
+        // A7: a soft-deleted profile still occupies the (user_id, sport_id) pair, which carries a
+        // UNIQUE constraint (V003) - so re-adding a sport has to revive that row, not insert a new
+        // one, or it fails at the database. Before this, the duplicate check used the unfiltered
+        // existsByUserIdAndSportId and rejected re-adds outright, which made deleteProfile a
+        // one-way door: the user lost the profile and could never create it again.
+        UserSportProfile existing = profileRepository.findByUserIdAndSportId(userId, request.getSportId())
+                .orElse(null);
+        if (existing != null) {
+            if (Boolean.TRUE.equals(existing.getIsActive())) {
+                throw new BadRequestException("User already has a profile for sport: " + sport.getName());
+            }
+            // Reactivation behaves like a fresh create that happens to reuse the row: every field
+            // comes from the request, so a re-added profile never silently inherits values the user
+            // last saved before deleting it. The id (and anything referencing it) is preserved.
+            existing.setSkillLevel(request.getSkillLevel());
+            existing.setYearsOfExperience(request.getYearsOfExperience());
+            existing.setPreferredPosition(request.getPreferredPosition());
+            existing.setBio(request.getBio());
+            existing.setAttributes(attributes);
+            existing.setIsActive(true);
+
+            UserSportProfile reactivated = profileRepository.save(existing);
+            log.info("Reactivated sport profile {} for user {} and sport {}",
+                    reactivated.getId(), userId, sport.getName());
+            return toUserSportProfileResponse(reactivated, sport.getName());
+        }
 
         UserSportProfile profile = UserSportProfile.builder()
                 .userId(userId)
@@ -92,11 +120,16 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
     @Override
     @Transactional(readOnly = true)
     public UserSportProfileResponse getProfileById(Long profileId) {
-        UserSportProfile profile = profileRepository.findById(profileId)
+        // A7: active-scoped. The unfiltered findById returned soft-deleted profiles, so a profile
+        // getUserProfiles omits was still reachable by id.
+        UserSportProfile profile = profileRepository.findByIdAndIsActiveTrue(profileId)
                 .orElseThrow(() -> new ResourceNotFoundException("UserSportProfile", "id", profileId));
         
-        Sport sport = sportRepository.findById(profile.getSportId())
-                .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", profile.getSportId()));
+        // A7: this is a GATE, not just a name lookup - requireActiveSportById throws when the sport is
+        // deactivated, which is what keeps a profile under a dead sport unreachable individually
+        // (getUserProfiles omits it). Do not "optimise" this into a batch/name-only lookup without
+        // replacing the check. Cache-backed (A5) via SportService.
+        SportResponse sport = sportService.requireActiveSportById(profile.getSportId());
         
         return toUserSportProfileResponse(profile, sport.getName());
     }
@@ -104,12 +137,19 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
     /**
      * {@inheritDoc}
      *
-     * <p>Resolves sport names via {@link SportService#getSportsByIds}, one batched call instead of
-     * one per profile (A4 cleanliness fix — this list is bounded to ≤3 profiles by the
-     * max-3-profiles rule in {@code createProfile}, so this was never a real N+1 scaling risk, see
-     * {@code BACKLOG_MVP.md}). Routed through {@code SportService} rather than
-     * {@code sportRepository} directly (A5) so this read path benefits from {@code SportLookupCache}
-     * too, instead of hitting the database on every call.
+     * <p>Resolves sport names via {@link SportService#getActiveSportsByIds}, one batched call instead of
+     * one per profile (A4 cleanliness fix). Routed through {@code SportService} rather than
+     * {@code sportRepository} directly (A5) so this read path benefits from
+     * {@code SportLookupCache} too, instead of hitting the database on every call. A4's original
+     * note that this list "is bounded to ≤3 profiles by the max-3-profiles rule" no longer holds —
+     * A7 removed that cap — so the batched lookup is now load-bearing rather than merely tidy.
+     *
+     * <p><strong>Profiles for a deactivated sport are omitted entirely</strong> (A7). Because
+     * {@code getActiveSportsByIds} is backed by the active-only cache, an inactive sport simply is not in
+     * the returned map, and a missing entry now means "drop this profile" rather than the old
+     * {@code "Unknown"} placeholder name. A deactivated sport disappears from the app, and so does
+     * anything hanging off it; the row is left in the table untouched, so reactivating the sport
+     * brings the profile back exactly as it was.
      */
     @Override
     @Transactional(readOnly = true)
@@ -122,24 +162,24 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
                 .collect(Collectors.toList());
         Map<Long, SportResponse> sportsById = sportIds.isEmpty()
                 ? Map.of()
-                : sportService.getSportsByIds(sportIds);
+                : sportService.getActiveSportsByIds(sportIds);
 
         return profiles.stream()
+                .filter(profile -> sportsById.containsKey(profile.getSportId()))
                 .map(profile -> toUserSportProfileResponse(profile,
-                        sportsById.containsKey(profile.getSportId())
-                                ? sportsById.get(profile.getSportId()).getName()
-                                : "Unknown"))
+                        sportsById.get(profile.getSportId()).getName()))
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
     public UserSportProfileResponse getUserProfileForSport(UUID userId, Long sportId) {
-        UserSportProfile profile = profileRepository.findByUserIdAndSportId(userId, sportId)
+        // A7: active-scoped, same reason as getProfileById.
+        UserSportProfile profile = profileRepository.findByUserIdAndSportIdAndIsActiveTrue(userId, sportId)
                 .orElseThrow(() -> new ResourceNotFoundException("UserSportProfile", "userId and sportId", userId + ", " + sportId));
         
-        Sport sport = sportRepository.findById(sportId)
-                .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
+        // A7: a GATE as well as the name source, exactly as in getProfileById above.
+        SportResponse sport = sportService.requireActiveSportById(sportId);
         
         return toUserSportProfileResponse(profile, sport.getName());
     }
@@ -147,12 +187,23 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
     @Override
     @Transactional
     public UserSportProfileResponse updateProfile(Long profileId, UUID callerId, CreateUserSportProfileRequest request) {
-        UserSportProfile profile = profileRepository.findById(profileId)
+        // A7 gate 1 of 2 - the PROFILE must not be soft-deleted. Re-adding a deleted profile goes
+        // through createProfile's reactivation path instead, which repopulates it from the request.
+        UserSportProfile profile = profileRepository.findByIdAndIsActiveTrue(profileId)
                 .orElseThrow(() -> new ResourceNotFoundException("UserSportProfile", "id", profileId));
 
         if (!profile.getUserId().equals(callerId)) {
             throw new ForbiddenException("You can only update your own sport profile");
         }
+
+        // A7 gate 2 of 2 - the profile's SPORT must still be active. findByIdAndIsActiveTrue above
+        // says nothing about the sport; these are independent conditions. Resolved HERE, before any
+        // field is touched, rather than at the tail where the response name used to be built: doing
+        // it last meant every mutation ran and save() was called before the throw, with only
+        // @Transactional rollback preventing a persist. Correct by accident is not correct - splitting
+        // the transaction or reordering would have turned it into a real write-then-fail. The response
+        // name comes from this same call, so the gate cannot later be dropped as an unused lookup.
+        SportResponse sport = sportService.requireActiveSportById(profile.getSportId());
 
         if (request.getSkillLevel() != null) {
             profile.setSkillLevel(request.getSkillLevel());
@@ -174,17 +225,38 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
         }
 
         UserSportProfile updatedProfile = profileRepository.save(profile);
-        
-        Sport sport = sportRepository.findById(updatedProfile.getSportId())
-                .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", updatedProfile.getSportId()));
-        
+
         log.info("Updated sport profile {} for user {}", profileId, profile.getUserId());
         return toUserSportProfileResponse(updatedProfile, sport.getName());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Two independent conditions, checked cheapest-first: the profile lookup is indexed on
+     * {@code (userId, sportId)} and short-circuits before the sport is fetched at all.
+     *
+     * <p>Uses {@code existsByUserIdAndSportIdAndIsActiveTrue}, <em>not</em> the unfiltered
+     * {@code existsByUserIdAndSportId} — the latter matches soft-deleted rows, which is what let a
+     * deleted profile keep granting access before A7.
+     *
+     * <p>Sport status is a {@code containsKey} against {@link SportLookupCache}'s active-only map
+     * rather than a query: this is the one sport lookup in this class that needs a boolean instead
+     * of a throw, so it reads the cache directly instead of going through
+     * {@code SportService.requireActiveSportById} and catching. Net cost is one indexed profile query and an
+     * in-memory map hit, and {@code &&} short-circuits, so a user without an active profile never
+     * touches sport data at all.
+     *
+     * <p>A missing sport yields {@code false} rather than a {@code ResourceNotFoundException}:
+     * callers use this as a predicate to decide their own error, and a dangling {@code sportId} is
+     * indistinguishable from a switched-off one from an access-control standpoint — the same
+     * collapse {@code SportService.requireActiveSportById} makes on the write paths.
+     */
     @Override
-    public boolean hasProfileForSport(UUID userId, Long sportId) {
-        return profileRepository.existsByUserIdAndSportId(userId, sportId);
+    @Transactional(readOnly = true)
+    public boolean hasActiveProfileForActiveSport(UUID userId, Long sportId) {
+        return profileRepository.existsByUserIdAndSportIdAndIsActiveTrue(userId, sportId)
+                && sportLookupCache.getActiveSportsById().containsKey(sportId);
     }
 
     @Override

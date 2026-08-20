@@ -105,6 +105,19 @@ public class SessionServiceImpl implements SessionService {
             sessionType = SessionType.STANDALONE;
         }
 
+        // A7: reject a caller-supplied sportId naming a deactivated sport. Gated on the request
+        // field being non-null rather than on the standalone/group branch, because the group
+        // branch also honours request.getSportId() when present and only falls back to the
+        // group's own sportId when it is absent - branching on sessionType would let a
+        // caller-supplied inactive sport through on a group session. The inherited
+        // group.getSportId() case needs no check here: GroupServiceImpl.createGroup now rejects
+        // inactive sports, so no new group can carry one. A group created before A7 against a
+        // since-deactivated sport is pre-existing data and keeps working, same read-path policy
+        // as A6.
+        if (request.getSportId() != null) {
+            sportService.requireActiveSportById(sportId);
+        }
+
         LocationResponse location = locationService.getLocation(request.getLocationId());
         if (!Objects.equals(location.getSportId(), sportId)) {
             throw new BadRequestException("locationId does not match this session's sport");
@@ -671,7 +684,7 @@ public class SessionServiceImpl implements SessionService {
         List<Long> postIds = sessions.stream().map(Session::getPostId).distinct().collect(Collectors.toList());
 
         Map<UUID, UserResponse> users = userService.getUsersByIds(userIds);
-        Map<Long, SportResponse> sports = sportIds.isEmpty() ? Collections.emptyMap() : sportService.getSportsByIds(sportIds);
+        Map<Long, SportResponse> sports = sportIds.isEmpty() ? Collections.emptyMap() : sportService.getActiveSportsByIds(sportIds);
         Map<Long, LocationResponse> locations = locationService.getLocationsByIds(locationIds);
         Map<Long, Long> participantCounts = sessionParticipantRepository
                 .countBySessionIdsAndStatus(sessionIds, ParticipantStatus.JOINED).stream()

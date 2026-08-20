@@ -9,7 +9,6 @@ import com.sportconnect.sport.api.dto.SportResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.entity.Sport
 import com.sportconnect.sport.entity.UserSportProfile
-import com.sportconnect.sport.repository.SportRepository
 import com.sportconnect.sport.repository.UserSportProfileRepository
 import spock.lang.Specification
 import spock.lang.Subject
@@ -17,13 +16,15 @@ import spock.lang.Subject
 class UserSportProfileServiceImplSpec extends Specification {
 
     UserSportProfileRepository profileRepository = Mock()
-    SportRepository sportRepository = Mock()
     SportService sportService = Mock()
+    // A7: sport lookups moved off sportRepository onto the cache-backed SportService (A5). The one
+    // lookup needing a boolean rather than a throw reads SportLookupCache directly.
+    SportLookupCache sportLookupCache = Mock()
     ObjectMapper objectMapper = new ObjectMapper()
 
     @Subject
     UserSportProfileServiceImpl profileService =
-            new UserSportProfileServiceImpl(profileRepository, sportRepository, sportService, objectMapper)
+            new UserSportProfileServiceImpl(profileRepository, sportService, sportLookupCache, objectMapper)
 
     def "createProfile should create new profile successfully"() {
         given:
@@ -59,9 +60,8 @@ class UserSportProfileServiceImplSpec extends Specification {
         def result = profileService.createProfile(userId, request)
 
         then:
-        1 * sportRepository.findById(sportId) >> Optional.of(sport)
-        1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> []
-        1 * profileRepository.existsByUserIdAndSportId(userId, sportId) >> false
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name(sport.name).isActive(true).build()
+        1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.empty()
         1 * profileRepository.save(_) >> { UserSportProfile savedProfile ->
             assert savedProfile.attributes == ["dominantHand": "left"]
             return profile
@@ -90,10 +90,9 @@ class UserSportProfileServiceImplSpec extends Specification {
         when:
         profileService.createProfile(userId, request)
 
-        then:
-        1 * sportRepository.findById(sportId) >> Optional.of(sport)
-        1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> []
-        1 * profileRepository.existsByUserIdAndSportId(userId, sportId) >> false
+        then: "the size check runs before the profile lookup, so an oversized payload costs no query"
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name(sport.name).isActive(true).build()
+        0 * profileRepository.findByUserIdAndSportId(_, _)
         0 * profileRepository.save(_)
         thrown(BadRequestException)
     }
@@ -110,11 +109,30 @@ class UserSportProfileServiceImplSpec extends Specification {
         profileService.createProfile(userId, request)
 
         then:
-        1 * sportRepository.findById(sportId) >> Optional.empty()
+        1 * sportService.requireActiveSportById(sportId) >> { throw new ResourceNotFoundException("Sport", "id", sportId) }
         thrown(ResourceNotFoundException)
     }
 
-    def "createProfile should throw exception when sport is inactive"() {
+    def "createProfile should throw ResourceNotFoundException when sport is inactive"() {
+        given: "A7 collapsed inactive into not-found — findByIdAndIsActiveTrue returns empty for"
+        and: "a deactivated sport exactly as it does for one that never existed"
+        def userId = UUID.randomUUID()
+        def sportId = 1L
+        def request = CreateUserSportProfileRequest.builder()
+                .sportId(sportId)
+                .build()
+
+        when:
+        profileService.createProfile(userId, request)
+
+        then:
+        1 * sportService.requireActiveSportById(sportId) >> { throw new ResourceNotFoundException("Sport", "id", sportId) }
+        0 * profileRepository.findByUserIdAndIsActiveTrue(_)
+        0 * profileRepository.save(_)
+        thrown(ResourceNotFoundException)
+    }
+
+    def "createProfile should throw exception when an ACTIVE profile already exists"() {
         given:
         def userId = UUID.randomUUID()
         def sportId = 1L
@@ -122,9 +140,67 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .sportId(sportId)
                 .build()
 
-        def sport = Sport.builder()
-                .id(sportId)
-                .name("Soccer")
+        def existing = UserSportProfile.builder()
+                .id(7L).userId(userId).sportId(sportId).isActive(true).build()
+
+        when:
+        profileService.createProfile(userId, request)
+
+        then:
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Basketball").isActive(true).build()
+        1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.of(existing)
+        0 * profileRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "createProfile reactivates a soft-deleted profile instead of rejecting or inserting"() {
+        given: "the user deleted this profile before; the row still holds the UNIQUE (user, sport) pair"
+        def userId = UUID.randomUUID()
+        def sportId = 1L
+        def request = CreateUserSportProfileRequest.builder()
+                .sportId(sportId)
+                .skillLevel("Advanced")
+                .bio("back again")
+                .attributes(["dominantHand": "right"])
+                .build()
+
+        def existing = UserSportProfile.builder()
+                .id(7L).userId(userId).sportId(sportId)
+                .skillLevel("Beginner").bio("stale").attributes(["dominantHand": "left"])
+                .isActive(false)
+                .build()
+
+        when:
+        def result = profileService.createProfile(userId, request)
+
+        then:
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Basketball").isActive(true).build()
+        1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.of(existing)
+
+        and: "the same row is saved back, reactivated, with every field taken from the request"
+        1 * profileRepository.save({ UserSportProfile p ->
+            p.id == 7L &&
+            p.isActive &&
+            p.skillLevel == "Advanced" &&
+            p.bio == "back again" &&
+            p.attributes == ["dominantHand": "right"]
+        }) >> { UserSportProfile p -> p }
+
+        and: "no second row is created for the same pair"
+        result.id == 7L
+        noExceptionThrown()
+    }
+
+    def "createProfile does not inherit stale values from the deleted profile"() {
+        given: "a request that omits the optional fields the old profile had set"
+        def userId = UUID.randomUUID()
+        def sportId = 1L
+        def request = CreateUserSportProfileRequest.builder().sportId(sportId).build()
+
+        def existing = UserSportProfile.builder()
+                .id(7L).userId(userId).sportId(sportId)
+                .skillLevel("Beginner").bio("stale").preferredPosition("Forward")
+                .attributes(["dominantHand": "left"])
                 .isActive(false)
                 .build()
 
@@ -132,33 +208,11 @@ class UserSportProfileServiceImplSpec extends Specification {
         profileService.createProfile(userId, request)
 
         then:
-        1 * sportRepository.findById(sportId) >> Optional.of(sport)
-        0 * profileRepository.findByUserIdAndIsActiveTrue(_)
-        0 * profileRepository.save(_)
-        thrown(BadRequestException)
-    }
-
-    def "createProfile should throw exception when profile already exists"() {
-        given:
-        def userId = UUID.randomUUID()
-        def sportId = 1L
-        def request = CreateUserSportProfileRequest.builder()
-                .sportId(sportId)
-                .build()
-
-        def sport = Sport.builder()
-                .id(sportId)
-                .name("Basketball")
-                .build()
-
-        when:
-        profileService.createProfile(userId, request)
-
-        then:
-        1 * sportRepository.findById(sportId) >> Optional.of(sport)
-        1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> []
-        1 * profileRepository.existsByUserIdAndSportId(userId, sportId) >> true
-        thrown(BadRequestException)
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Basketball").isActive(true).build()
+        1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.of(existing)
+        1 * profileRepository.save({ UserSportProfile p ->
+            p.skillLevel == null && p.bio == null && p.preferredPosition == null && p.attributes == [:]
+        }) >> { UserSportProfile p -> p }
     }
 
     def "getProfileById should return profile when found"() {
@@ -184,8 +238,8 @@ class UserSportProfileServiceImplSpec extends Specification {
         def result = profileService.getProfileById(profileId)
 
         then:
-        1 * profileRepository.findById(profileId) >> Optional.of(profile)
-        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name(sport.name).isActive(true).build()
         result.id == profileId
         result.sportName == "Tennis"
     }
@@ -198,7 +252,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         profileService.getProfileById(profileId)
 
         then:
-        1 * profileRepository.findById(profileId) >> Optional.empty()
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.empty()
         thrown(ResourceNotFoundException)
     }
 
@@ -223,7 +277,7 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         then:
         1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> profiles
-        1 * sportService.getSportsByIds([sportId1, sportId2]) >> sportsById
+        1 * sportService.getActiveSportsByIds([sportId1, sportId2]) >> sportsById
         result.size() == 2
         result*.sportName as Set == ["Football", "Cricket"] as Set
     }
@@ -237,11 +291,11 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         then:
         1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> []
-        0 * sportService.getSportsByIds(_)
+        0 * sportService.getActiveSportsByIds(_)
         result.isEmpty()
     }
 
-    def "getUserProfiles should fall back to Unknown for a sport id sportService doesn't resolve"() {
+    def "getUserProfiles omits a profile whose sport is no longer active"() {
         given:
         def userId = UUID.randomUUID()
         def sportId = 1L
@@ -253,11 +307,12 @@ class UserSportProfileServiceImplSpec extends Specification {
         when:
         def result = profileService.getUserProfiles(userId)
 
-        then:
+        then: "getActiveSportsByIds is active-only backed, so a deactivated sport is absent from the map"
         1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> profiles
-        1 * sportService.getSportsByIds([sportId]) >> [:]
-        result.size() == 1
-        result[0].sportName == "Unknown"
+        1 * sportService.getActiveSportsByIds([sportId]) >> [:]
+
+        and: "the profile is dropped entirely, not surfaced with an Unknown placeholder name (A7)"
+        result.isEmpty()
     }
 
     def "getUserProfileForSport should return specific profile"() {
@@ -281,8 +336,8 @@ class UserSportProfileServiceImplSpec extends Specification {
         def result = profileService.getUserProfileForSport(userId, sportId)
 
         then:
-        1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.of(profile)
-        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * profileRepository.findByUserIdAndSportIdAndIsActiveTrue(userId, sportId) >> Optional.of(profile)
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name(sport.name).isActive(true).build()
         result.userId == userId
         result.sportId == sportId
         result.sportName == "Badminton"
@@ -297,7 +352,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         profileService.getUserProfileForSport(userId, sportId)
 
         then:
-        1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.empty()
+        1 * profileRepository.findByUserIdAndSportIdAndIsActiveTrue(userId, sportId) >> Optional.empty()
         thrown(ResourceNotFoundException)
     }
 
@@ -332,7 +387,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         def result = profileService.updateProfile(profileId, ownerId, request)
 
         then:
-        1 * profileRepository.findById(profileId) >> Optional.of(profile)
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
         1 * profileRepository.save(_) >> { UserSportProfile savedProfile ->
             assert savedProfile.skillLevel == "Intermediate"
             assert savedProfile.yearsOfExperience == 3
@@ -340,7 +395,7 @@ class UserSportProfileServiceImplSpec extends Specification {
             assert savedProfile.bio == "Improved a lot"
             return savedProfile
         }
-        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name(sport.name).isActive(true).build()
         result.skillLevel == "Intermediate"
     }
 
@@ -371,12 +426,12 @@ class UserSportProfileServiceImplSpec extends Specification {
         def result = profileService.updateProfile(profileId, ownerId, request)
 
         then:
-        1 * profileRepository.findById(profileId) >> Optional.of(profile)
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
         1 * profileRepository.save(_) >> { UserSportProfile savedProfile ->
             assert savedProfile.attributes == ["dominantHand": "left", "strokeStyle": "freestyle"]
             return savedProfile
         }
-        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name(sport.name).isActive(true).build()
         result.attributes == ["dominantHand": "left", "strokeStyle": "freestyle"]
     }
 
@@ -400,7 +455,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         profileService.updateProfile(profileId, ownerId, request)
 
         then:
-        1 * profileRepository.findById(profileId) >> Optional.of(profile)
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
         0 * profileRepository.save(_)
         thrown(BadRequestException)
     }
@@ -414,7 +469,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         profileService.updateProfile(profileId, UUID.randomUUID(), request)
 
         then:
-        1 * profileRepository.findById(profileId) >> Optional.empty()
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.empty()
         thrown(ResourceNotFoundException)
     }
 
@@ -434,7 +489,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         profileService.updateProfile(profileId, otherUserId, request)
 
         then:
-        1 * profileRepository.findById(profileId) >> Optional.of(profile)
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
         0 * profileRepository.save(_)
         thrown(ForbiddenException)
     }
@@ -492,5 +547,146 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * profileRepository.findById(profileId) >> Optional.of(profile)
         0 * profileRepository.save(_)
         thrown(ForbiddenException)
+    }
+    // ---- A7: hasActiveProfileForActiveSport ----
+    // Renamed from hasProfileForSport, which was a bare existsByUserIdAndSportId and checked
+    // neither condition its own Javadoc promised. Both false-cases below were live bugs.
+
+    def "hasActiveProfileForActiveSport returns true when both the profile and the sport are active"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        def result = profileService.hasActiveProfileForActiveSport(userId, 1L)
+
+        then:
+        1 * profileRepository.existsByUserIdAndSportIdAndIsActiveTrue(userId, 1L) >> true
+        1 * sportLookupCache.getActiveSportsById() >> [(1L): Sport.builder().id(1L).build()]
+        result
+    }
+
+    def "hasActiveProfileForActiveSport returns false for a soft-deleted profile, without looking up the sport"() {
+        given: "the user deleted this profile — deleteProfile only flips isActive to false"
+        def userId = UUID.randomUUID()
+
+        when:
+        def result = profileService.hasActiveProfileForActiveSport(userId, 1L)
+
+        then: "&& short-circuits, so the sports table is never touched"
+        1 * profileRepository.existsByUserIdAndSportIdAndIsActiveTrue(userId, 1L) >> false
+        0 * sportLookupCache.getActiveSportsById()
+        !result
+    }
+
+    def "hasActiveProfileForActiveSport returns false when the sport has been deactivated"() {
+        given: "a profile created while the sport was still active"
+        def userId = UUID.randomUUID()
+
+        when:
+        def result = profileService.hasActiveProfileForActiveSport(userId, 1L)
+
+        then:
+        1 * profileRepository.existsByUserIdAndSportIdAndIsActiveTrue(userId, 1L) >> true
+        1 * sportLookupCache.getActiveSportsById() >> [:]
+        !result
+    }
+
+    def "hasActiveProfileForActiveSport returns false rather than throwing for an unknown sport"() {
+        given: "an unknown sportId is indistinguishable from a deactivated one here, by design"
+        def userId = UUID.randomUUID()
+
+        when:
+        def result = profileService.hasActiveProfileForActiveSport(userId, 404L)
+
+        then: "callers use this as a predicate, so a dangling sportId must not blow up"
+        1 * profileRepository.existsByUserIdAndSportIdAndIsActiveTrue(userId, 404L) >> true
+        1 * sportLookupCache.getActiveSportsById() >> [:]
+        noExceptionThrown()
+        !result
+    }
+
+    def "hasActiveProfileForActiveSport never uses the unfiltered exists query"() {
+        given: "a regression guard — reverting to existsByUserIdAndSportId reopens the A7 bug"
+        def userId = UUID.randomUUID()
+
+        when:
+        profileService.hasActiveProfileForActiveSport(userId, 1L)
+
+        then:
+        1 * profileRepository.existsByUserIdAndSportIdAndIsActiveTrue(userId, 1L) >> false
+        0 * profileRepository.existsByUserIdAndSportId(_, _)
+    }
+    // ---- A7: a soft-deleted profile must not be reachable individually either ----
+
+    def "getProfileById does not return a soft-deleted profile"() {
+        given: "the active-scoped finder simply does not match the row"
+        when:
+        profileService.getProfileById(1L)
+
+        then:
+        1 * profileRepository.findByIdAndIsActiveTrue(1L) >> Optional.empty()
+        0 * sportService.requireActiveSportById(_)
+        thrown(ResourceNotFoundException)
+    }
+
+    def "getUserProfileForSport does not return a soft-deleted profile"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        profileService.getUserProfileForSport(userId, 1L)
+
+        then:
+        1 * profileRepository.findByUserIdAndSportIdAndIsActiveTrue(userId, 1L) >> Optional.empty()
+        0 * sportService.requireActiveSportById(_)
+        thrown(ResourceNotFoundException)
+    }
+
+    def "getUserProfileForSport gates on sport status, not just the sport name"() {
+        given: "an active profile whose sport was later deactivated"
+        def userId = UUID.randomUUID()
+        def profile = UserSportProfile.builder().id(1L).userId(userId).sportId(1L).isActive(true).build()
+
+        when:
+        profileService.getUserProfileForSport(userId, 1L)
+
+        then: "requireActiveSportById throws — proving the call is a gate, not a name lookup"
+        1 * profileRepository.findByUserIdAndSportIdAndIsActiveTrue(userId, 1L) >> Optional.of(profile)
+        1 * sportService.requireActiveSportById(1L) >> { throw new ResourceNotFoundException("Sport", "id", 1L) }
+        thrown(ResourceNotFoundException)
+    }
+
+    def "updateProfile does not edit a soft-deleted profile"() {
+        when:
+        profileService.updateProfile(1L, UUID.randomUUID(), CreateUserSportProfileRequest.builder().build())
+
+        then:
+        1 * profileRepository.findByIdAndIsActiveTrue(1L) >> Optional.empty()
+        0 * profileRepository.save(_)
+        thrown(ResourceNotFoundException)
+    }
+    def "updateProfile rejects a profile whose sport was deactivated, without writing anything"() {
+        given: "the gate must fire BEFORE any mutation - not at the tail, where only transaction"
+        and: "rollback would have saved us"
+        def callerId = UUID.randomUUID()
+        def profile = UserSportProfile.builder()
+                .id(1L).userId(callerId).sportId(1L).skillLevel("Beginner").isActive(true).build()
+        def request = CreateUserSportProfileRequest.builder().skillLevel("Advanced").build()
+
+        when:
+        profileService.updateProfile(1L, callerId, request)
+
+        then:
+        1 * profileRepository.findByIdAndIsActiveTrue(1L) >> Optional.of(profile)
+        1 * sportService.requireActiveSportById(1L) >> { throw new ResourceNotFoundException("Sport", "id", 1L) }
+
+        and: "save is never reached at all"
+        0 * profileRepository.save(_)
+
+        and: "and the entity was not mutated on the way to the throw"
+        profile.skillLevel == "Beginner"
+
+        and:
+        thrown(ResourceNotFoundException)
     }
 }

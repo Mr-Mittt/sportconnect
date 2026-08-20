@@ -63,7 +63,7 @@ class SportServiceImplSpec extends Specification {
         thrown(BadRequestException)
     }
 
-    def "getSportById should return sport when found"() {
+    def "requireActiveSportById should return sport when found"() {
         given:
         def sportId = 1L
         def sport = Sport.builder()
@@ -74,27 +74,27 @@ class SportServiceImplSpec extends Specification {
                 .build()
 
         when:
-        def result = sportService.getSportById(sportId)
+        def result = sportService.requireActiveSportById(sportId)
 
         then:
-        1 * sportLookupCache.getAllSportsById() >> [(sportId): sport]
+        1 * sportLookupCache.getActiveSportsById() >> [(sportId): sport]
         result.id == sportId
         result.name == "Tennis"
     }
 
-    def "getSportById should throw exception when sport not found"() {
+    def "requireActiveSportById should throw exception when sport not found"() {
         given:
         def sportId = 1L
 
         when:
-        sportService.getSportById(sportId)
+        sportService.requireActiveSportById(sportId)
 
         then:
-        1 * sportLookupCache.getAllSportsById() >> [:]
+        1 * sportLookupCache.getActiveSportsById() >> [:]
         thrown(ResourceNotFoundException)
     }
 
-    def "getSportsByIds should return a map keyed by id for found sports"() {
+    def "getActiveSportsByIds should return a map keyed by id for found sports"() {
         given:
         def allSports = [
             (1L): Sport.builder().id(1L).name("Football").category("Team Sports").isActive(true).build(),
@@ -102,59 +102,64 @@ class SportServiceImplSpec extends Specification {
         ]
 
         when:
-        def result = sportService.getSportsByIds([1L, 2L])
+        def result = sportService.getActiveSportsByIds([1L, 2L])
 
         then:
-        1 * sportLookupCache.getAllSportsById() >> allSports
+        1 * sportLookupCache.getActiveSportsById() >> allSports
         result.size() == 2
         result[1L].name == "Football"
         result[2L].name == "Tennis"
     }
 
-    def "getSportsByIds should silently omit ids that don't resolve to a sport"() {
+    def "getActiveSportsByIds should silently omit ids that don't resolve to a sport"() {
         given:
         def allSports = [(1L): Sport.builder().id(1L).name("Football").isActive(true).build()]
 
         when:
-        def result = sportService.getSportsByIds([1L, 999L])
+        def result = sportService.getActiveSportsByIds([1L, 999L])
 
         then:
-        1 * sportLookupCache.getAllSportsById() >> allSports
+        1 * sportLookupCache.getActiveSportsById() >> allSports
         result.size() == 1
         result[1L].name == "Football"
         !result.containsKey(999L)
     }
 
-    def "getAllActiveSports should return only active sports"() {
-        given:
-        def allSports = [
+    def "getAllActiveSports should return the cache contents, which are active-only"() {
+        given: "A7 moved the isActive filter into the cache itself, so nothing inactive arrives here"
+        def activeSports = [
             (1L): Sport.builder().id(1L).name("Football").isActive(true).build(),
-            (2L): Sport.builder().id(2L).name("Cricket").isActive(true).build(),
-            (3L): Sport.builder().id(3L).name("Retired Sport").isActive(false).build()
+            (2L): Sport.builder().id(2L).name("Cricket").isActive(true).build()
         ]
 
         when:
         def result = sportService.getAllActiveSports()
 
         then:
-        1 * sportLookupCache.getAllSportsById() >> allSports
+        1 * sportLookupCache.getActiveSportsById() >> activeSports
         result.size() == 2
         result*.name as Set == ["Football", "Cricket"] as Set
     }
 
-    def "getAllSports should return all sports including inactive"() {
-        given:
+    def "getAllSports should return all sports including inactive, bypassing the cache"() {
+        given: "the admin-only listing — A7 made the cache active-only, so this reads the table"
         def allSports = [
-            (1L): Sport.builder().id(1L).name("Football").isActive(true).build(),
-            (2L): Sport.builder().id(2L).name("Cricket").isActive(false).build()
+            Sport.builder().id(1L).name("Football").isActive(true).build(),
+            Sport.builder().id(2L).name("Cricket").isActive(false).build()
         ]
 
         when:
         def result = sportService.getAllSports()
 
         then:
-        1 * sportLookupCache.getAllSportsById() >> allSports
+        1 * sportRepository.findAll() >> allSports
+
+        and: "the cache is neither read nor populated — an admin listing must not evict or warm it"
+        0 * sportLookupCache._
+
+        and:
         result.size() == 2
+        result*.name as Set == ["Football", "Cricket"] as Set
     }
 
     def "getSportsByCategory should return sports in category"() {

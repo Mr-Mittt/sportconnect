@@ -57,6 +57,50 @@ CREATE TABLE IF NOT EXISTS sports (
     updated_at TIMESTAMP
 );
 
+-- user_sport_profiles (added by A7, for SportActiveGateIntegrationTest). Mirrors V003 minus the
+-- cross-domain FK into users (A8 is removing that in the real schema anyway) and with attributes
+-- as H2 JSON rather than Postgres JSONB (V025). The UNIQUE(user_id, sport_id) constraint IS
+-- mirrored: it is load-bearing for the soft-delete case, since a soft-deleted row still occupies
+-- the pair.
+CREATE TABLE IF NOT EXISTS user_sport_profiles (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL,
+    sport_id BIGINT NOT NULL,
+    skill_level VARCHAR(50),
+    years_of_experience INTEGER,
+    preferred_position VARCHAR(100),
+    bio TEXT,
+    attributes JSON,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, sport_id)
+);
+
+-- group_types / group_settings (added by A7): createGroup writes a settings row against the
+-- DEFAULT tier, so the success case cannot complete without both. Seed rows mirror V026.
+CREATE TABLE IF NOT EXISTS group_types (
+    id BIGSERIAL PRIMARY KEY,
+    type_name VARCHAR(50) UNIQUE NOT NULL,
+    max_members INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS group_settings (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT UNIQUE NOT NULL,
+    group_type_id BIGINT,
+    allow_member_posts BOOLEAN DEFAULT TRUE,
+    require_post_approval BOOLEAN DEFAULT FALSE,
+    allow_member_invites BOOLEAN DEFAULT FALSE,
+    auto_generate_sessions BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+MERGE INTO group_types (id, type_name, max_members) KEY(id) VALUES (1, 'DEFAULT', 50);
+MERGE INTO group_types (id, type_name, max_members) KEY(id) VALUES (2, 'STANDARD', 100);
+MERGE INTO group_types (id, type_name, max_members) KEY(id) VALUES (3, 'PREMIUM', 500);
+
 -- Create group_roles / groups / group_members tables (needed once a real
 -- @SpringBootTest first exercised an authenticated GroupService call for real
 -- instead of mocking it — A10, modules/social/post-impl/docs/BACKLOG_MVP.md;

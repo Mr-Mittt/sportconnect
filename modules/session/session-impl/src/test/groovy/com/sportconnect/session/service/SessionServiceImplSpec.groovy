@@ -34,6 +34,7 @@ import com.sportconnect.social.post.api.dto.CommentResponse
 import com.sportconnect.social.post.api.dto.CreateCommentRequest
 import com.sportconnect.social.post.api.service.CommentService
 import com.sportconnect.social.post.api.service.PostService
+import com.sportconnect.sport.api.dto.SportResponse
 import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.api.service.UserSportProfileService
@@ -79,11 +80,15 @@ class SessionServiceImplSpec extends Specification {
         // display name for the system comment's content. Same lenient-default rationale — the
         // tests that actually care about the name stub it themselves in their then-block.
         userService.getUsersByIds(_) >> [:]
+        // A7: createSession now resolves a caller-supplied sportId to check it is still active.
+        // Lenient default for the same reason as above — 40+ createSession tests pass a sportId
+        // without caring about sport status; the one test that does care overrides this.
+        sportService.requireActiveSportById(_) >> SportResponse.builder().id(1L).name("Basketball").isActive(true).build()
     }
 
     private void stubBatchEnrichment() {
         userService.getUsersByIds(_) >> [:]
-        sportService.getSportsByIds(_) >> [:]
+        sportService.getActiveSportsByIds(_) >> [:]
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
         sessionParticipantRepository.countBySessionIdsAndStatus(_, _) >> []
         sessionParticipantRepository.findBySessionIdInAndUserId(_, _) >> []
@@ -262,6 +267,50 @@ class SessionServiceImplSpec extends Specification {
             [inviteeA, inviteeB].contains(e.recipientUserId)
         }) >> new SessionOutboxEvent()
         1 * sessionOutboxEventRepository.saveAll({ List<SessionOutboxEvent> events -> events.size() == 2 })
+    }
+
+    def "createSession rejects a caller-supplied sportId naming a deactivated sport"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then: "a deactivated sport is indistinguishable from a missing one (A7)"
+        1 * sportService.requireActiveSportById(1L) >> { throw new ResourceNotFoundException("Sport", "id", 1L) }
+        0 * locationService.getLocation(_)
+
+        and: "nothing is persisted"
+        0 * sessionRepository.save(_)
+
+        and:
+        thrown(ResourceNotFoundException)
+    }
+
+    def "createSession accepts a group-inherited sportId without re-checking sport status"() {
+        given: "a group session with no sportId on the request, so it inherits the group's"
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .groupId(5L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+        def group = GroupResponse.builder().id(5L).sportId(1L).build()
+        def saved = Session.builder().id(3L).groupId(5L).sessionType(SessionType.GROUP_RECURRING)
+                .createdBy(userId).sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
+                .status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then: "no sport-status lookup happens — createGroup already guarantees it (A7)"
+        0 * sportService.requireActiveSportById(_)
+
+        and:
+        1 * groupService.canManageMembers(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> group
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save(_ as Session) >> saved
+        interaction { stubBatchEnrichment() }
     }
 
     def "createSession rejects a locationId whose sport doesn't match"() {
@@ -1130,7 +1179,7 @@ class SessionServiceImplSpec extends Specification {
         1 * locationService.getLocation(1L) >> basketballLocation
         1 * sessionRepository.save(_) >> saved
         userService.getUsersByIds(_) >> [:]
-        sportService.getSportsByIds(_) >> [:]
+        sportService.getActiveSportsByIds(_) >> [:]
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
         sessionParticipantRepository.findBySessionIdInAndUserId(_, _) >> []
         postService.getSessionPostLikeInfo(_, _) >> [:]
@@ -1522,7 +1571,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         userService.getUsersByIds(_) >> [:]
-        sportService.getSportsByIds(_) >> [:]
+        sportService.getActiveSportsByIds(_) >> [:]
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
         sessionParticipantRepository.countBySessionIdsAndStatus(_, _) >> []
         sessionParticipantRepository.findBySessionIdInAndUserId(_, _) >> []

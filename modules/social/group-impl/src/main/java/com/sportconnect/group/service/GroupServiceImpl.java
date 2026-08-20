@@ -46,6 +46,7 @@ import com.sportconnect.social.post.api.dto.PostResponse;
 import com.sportconnect.social.post.api.dto.PostType;
 import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
+import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.sport.api.service.UserSportProfileService;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.service.UserFriendService;
@@ -86,6 +87,7 @@ public class GroupServiceImpl implements GroupService {
     private final GroupTypeRepository groupTypeRepository;
     private final UserService userService;
     private final UserFriendService userFriendService;
+    private final SportService sportService;
     private final UserSportProfileService userSportProfileService;
     private final PostService postService;
     private final GroupPinnedPostRepository pinnedPostRepository;
@@ -120,6 +122,7 @@ public class GroupServiceImpl implements GroupService {
             GroupTypeRepository groupTypeRepository,
             UserService userService,
             UserFriendService userFriendService,
+            SportService sportService,
             UserSportProfileService userSportProfileService,
             @Lazy PostService postService,
             GroupPinnedPostRepository pinnedPostRepository,
@@ -136,6 +139,7 @@ public class GroupServiceImpl implements GroupService {
         this.groupTypeRepository = groupTypeRepository;
         this.userService = userService;
         this.userFriendService = userFriendService;
+        this.sportService = sportService;
         this.userSportProfileService = userSportProfileService;
         this.postService = postService;
         this.pinnedPostRepository = pinnedPostRepository;
@@ -180,8 +184,14 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("Group name already exists");
         }
 
-        // Validate creator has a sport profile for the requested sport
-        if (!userSportProfileService.hasProfileForSport(userId, request.getSportId())) {
+        // Validate the sport (A7). A deactivated sport surfaces as a 404 exactly like an unknown
+        // one - checked before the profile gate so a switched-off sport is never reported as the
+        // user lacking a profile.
+        sportService.requireActiveSportById(request.getSportId());
+
+        // Validate creator has an active sport profile for the requested sport. This re-checks
+        // sport status internally (A7) - deliberate defence in depth, not a redundant call.
+        if (!userSportProfileService.hasActiveProfileForActiveSport(userId, request.getSportId())) {
             throw new BadRequestException("You must have a sport profile for this sport to create a group");
         }
 

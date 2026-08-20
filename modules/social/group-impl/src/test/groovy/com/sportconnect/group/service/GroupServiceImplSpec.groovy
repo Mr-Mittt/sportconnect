@@ -2,6 +2,7 @@ package com.sportconnect.group.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.group.api.dto.*
 import com.sportconnect.group.entity.*
@@ -11,6 +12,8 @@ import com.sportconnect.location.api.service.LocationService
 import com.sportconnect.social.post.api.dto.PostResponse
 import com.sportconnect.social.post.api.dto.PostType
 import com.sportconnect.social.post.api.service.PostService
+import com.sportconnect.sport.api.dto.SportResponse
+import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.api.service.UserSportProfileService
 import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserFriendService
@@ -35,6 +38,7 @@ class GroupServiceImplSpec extends Specification {
     GroupTypeRepository groupTypeRepository = Mock()
     UserService userService = Mock()
     UserFriendService userFriendService = Mock()
+    SportService sportService = Mock()
     UserSportProfileService userSportProfileService = Mock()
     PostService postService = Mock()
     GroupPinnedPostRepository pinnedPostRepository = Mock()
@@ -56,6 +60,7 @@ class GroupServiceImplSpec extends Specification {
             groupTypeRepository,
             userService,
             userFriendService,
+            sportService,
             userSportProfileService,
             postService,
             pinnedPostRepository,
@@ -65,6 +70,10 @@ class GroupServiceImplSpec extends Specification {
             objectMapper,
             locationService
     )
+
+    // A7: createGroup now resolves the sport before the profile gate, so every createGroup
+    // test has to stub SportService. Two fixtures cover the only distinction that matters.
+    SportResponse activeSport = SportResponse.builder().id(1L).name("Badminton").isActive(true).build()
 
     UUID userId = UUID.randomUUID()
     UUID otherUserId = UUID.randomUUID()
@@ -139,7 +148,8 @@ class GroupServiceImplSpec extends Specification {
 
         then: "group is created"
         1 * groupRepository.existsByGroupName(request.groupName) >> false
-        1 * userSportProfileService.hasProfileForSport(userId, 1L) >> true
+        1 * sportService.requireActiveSportById(1L) >> activeSport
+        1 * userSportProfileService.hasActiveProfileForActiveSport(userId, 1L) >> true
         1 * groupRepository.save(_ as Group) >> testGroup
         1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.save(_ as GroupMember) >> new GroupMember()
@@ -157,6 +167,30 @@ class GroupServiceImplSpec extends Specification {
         response.groupName == testGroup.groupName
     }
 
+    def "createGroup should throw BadRequestException when the sport is deactivated"() {
+        given: "a create group request naming a sport an admin has deactivated"
+        def request = CreateGroupRequest.builder()
+                .sportId(1L)
+                .groupName("New Group")
+                .isPrivate(false)
+                .build()
+
+        when: "creating a group"
+        groupService.createGroup(userId, request)
+
+        then: "a deactivated sport is indistinguishable from a missing one (A7)"
+        1 * groupRepository.existsByGroupName(request.groupName) >> false
+        1 * sportService.requireActiveSportById(1L) >> { throw new ResourceNotFoundException("Sport", "id", 1L) }
+        0 * userSportProfileService.hasActiveProfileForActiveSport(_, _)
+
+        and: "nothing is persisted"
+        0 * groupRepository.save(_)
+        0 * groupMemberRepository.save(_)
+
+        and: "it surfaces as not-found, not as the user lacking a profile"
+        thrown(ResourceNotFoundException)
+    }
+
     def "createGroup should throw BadRequestException when user has no sport profile"() {
         given: "a request for a sport the user has no profile for"
         def request = CreateGroupRequest.builder()
@@ -169,7 +203,8 @@ class GroupServiceImplSpec extends Specification {
 
         then: "name check passes but sport profile check fails"
         1 * groupRepository.existsByGroupName(request.groupName) >> false
-        1 * userSportProfileService.hasProfileForSport(userId, 99L) >> false
+        1 * sportService.requireActiveSportById(99L) >> SportResponse.builder().id(99L).name("Squash").isActive(true).build()
+        1 * userSportProfileService.hasActiveProfileForActiveSport(userId, 99L) >> false
         0 * groupRepository.save(_ as Group)
 
         and: "exception is thrown"
@@ -3212,7 +3247,8 @@ class GroupServiceImplSpec extends Specification {
 
         then: "the usual createGroup collaborators"
         1 * groupRepository.existsByGroupName(request.groupName) >> false
-        1 * userSportProfileService.hasProfileForSport(userId, 1L) >> true
+        1 * sportService.requireActiveSportById(1L) >> activeSport
+        1 * userSportProfileService.hasActiveProfileForActiveSport(userId, 1L) >> true
         1 * groupRepository.save(_ as Group) >> testGroup
         1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.save(_ as GroupMember) >> new GroupMember()
