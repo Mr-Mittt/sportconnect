@@ -35,6 +35,7 @@ const fixturePost: Post = {
 const rootComment: Comment = {
   id: 1,
   postId: 7,
+  commentType: 'USER',
   userId: 'user-1',
   userFullName: 'Jordan Lee',
   userAvatarUrl: null,
@@ -47,6 +48,7 @@ const rootComment: Comment = {
     {
       id: 2,
       postId: 7,
+      commentType: 'USER',
       userId: 'user-1',
       userFullName: 'Jordan Lee',
       userAvatarUrl: null,

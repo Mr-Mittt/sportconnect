@@ -32,9 +32,19 @@ export interface PostMedia {
 // Recursive to match CommentResponse.replies — one level of nesting in
 // practice (a reply to a reply is not rejected server-side, per post-impl's
 // A4), but the type itself doesn't enforce a depth limit.
+/**
+ * `USER` is an ordinary comment someone typed. `SESSION_SYSTEM` is a
+ * server-generated entry written into a session's thread by SESSION-21 (a
+ * participant joined/left, the session started) — authored by the session
+ * creator server-side, but never written by them, so it must not render as
+ * that person speaking. It cannot be liked, replied to, or deleted.
+ */
+export type CommentType = 'USER' | 'SESSION_SYSTEM';
+
 export interface Comment {
   id: number;
   postId: number;
+  commentType: CommentType;
   userId: string;
   userFullName: string;
   userAvatarUrl: string | null;

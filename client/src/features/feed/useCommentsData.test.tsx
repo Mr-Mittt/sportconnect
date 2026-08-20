@@ -9,6 +9,7 @@ import { useCommentsData } from './useCommentsData';
 const fixtureComment: Comment = {
   id: 1,
   postId: 7,
+  commentType: 'USER',
   userId: 'user-1',
   userFullName: 'Jordan Lee',
   userAvatarUrl: null,

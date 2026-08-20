@@ -3093,6 +3093,33 @@ explicit go-ahead at each step (full story in A3's summary doc):
   GRP-10 and CLIENT-SESSION-12 were stale rather than outstanding. Follow-up **CLIENT-NOTIF-4** filed
   for the recurrence risk: B7/B21/U13 will add 11 more notification types between them, each able to
   repeat this gap.
+- **CLIENT-SESSION-13 (`DONE`, 2026-08-19,
+  `client/docs/MVP/CLIENT-SESSION-13_SYSTEM_COMMENTS_IN_SESSION_THREAD.md`):** backend SESSION-21
+  writes system entries into a session's discussion thread (participant joined/left, session
+  started), authored by `session.getCreatedBy()` and marked `commentType = SESSION_SYSTEM` — but the
+  client dropped the field, so those entries rendered as ordinary comments and a "Priya Shah joined
+  the session" record was indistinguishable from Priya Shah having typed it. Fixed with an early
+  return in the **shared** `CommentItem` (user decision at filing, over a session-local component)
+  rendering a centered, avatar-less, muted row with no like/reply/delete — suppressing those is
+  correctness, not styling, since SESSION-21 rejects all three server-side, so rendering them would
+  offer the caller something the API refuses. **An estimate in the ticket was corrected before
+  building:** it predicted adding a required `commentType` would ripple into ~27 files; measured via
+  `tsc`, the real cost was 17 errors across 16 files, **all tests/stories/MSW fixtures and zero app
+  source** (production code only spreads a `Comment`, never builds one), which made "required" cheap
+  rather than costly. Also added a test for the nominal-author case specifically — the creator
+  viewing their own session would otherwise pass `isOwnComment` and be offered a Delete the API
+  rejects. Verification: `vitest` 891/891, `tsc -b`/`eslint` clean, `playwright --project=e2e`
+  51/51; the rendered system row was confirmed by inspecting Playwright's `-actual.png` from a
+  deliberately-failing visual run rather than by touching baselines. **A 9-failure e2e run was
+  investigated rather than waved through** — all `a11y.spec.ts` `page.goto` timeouts caused by CPU
+  contention with a concurrent `vitest` run (`retries: 0` locally), clean 51/51 on re-run.
+  **Baselines regenerated and committed 2026-08-20** via the `client-ci` `update-baselines`
+  dispatch (the thread gained a row; not producible on a Windows host) — SHA-256 comparison showed
+  exactly the 3 predicted `session-detail-discussion-*` files changed, other 72 byte-identical.
+  Two post-merge styling refinements landed on the same branch first (user feedback after seeing it
+  running): content and timestamp on one italic line, then a `content - timestamp` dash separator —
+  so the committed crops read *"Priya Shah joined the session - just now"*, which is also how the
+  visual check confirmed the dispatch ran on the branch head rather than the original feature commit.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

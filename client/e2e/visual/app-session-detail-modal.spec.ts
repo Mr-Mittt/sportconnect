@@ -18,7 +18,8 @@ import { expect, test } from '../mocks/test.ts';
  *    reasoning).
  *  - approval-queue: mockOwnedGroupSession ("Ladder night") — already has 2 pre-seeded REQUESTED
  *    rows from other users; mockUser is the group owner (canManage).
- *  - discussion: mockSession — already has one pre-seeded comment (CLIENT-SESSION-8).
+ *  - discussion: mockSession — pre-seeded with one user comment (CLIENT-SESSION-8) and one
+ *    SESSION_SYSTEM entry (CLIENT-SESSION-13), so the crop covers both row kinds.
  *  - cancelled: mockCancelledSession (new fixture, pre-set status CANCELLED) — SessionDetailModal's
  *    Cancel session button was removed entirely (CLIENT-SESSION-10), so there is no live UI path
  *    left to reach a CANCELLED session from a fresh SCHEDULED one.
@@ -115,6 +116,10 @@ for (const width of breakpoints) {
     const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
     await expect(dialog.getByRole('region', { name: 'Discussion' })).toBeVisible();
     await expect(dialog.getByText('What time are we meeting at the courts?')).toBeVisible();
+    // CLIENT-SESSION-13: assert the system entry is actually in the crop rather than trusting the
+    // screenshot to have caught it — a fixture regression would otherwise silently produce a
+    // baseline missing the row it exists to cover.
+    await expect(dialog.getByText('Priya Shah joined the session')).toBeVisible();
     await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 

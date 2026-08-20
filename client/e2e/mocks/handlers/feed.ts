@@ -334,6 +334,7 @@ export const feedHandlers: HttpHandler[] = [
     const created: Comment = {
       id: Date.now(),
       postId,
+      commentType: 'USER',
       userId: mockUser.id,
       userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
       userAvatarUrl: mockUser.avatarUrl,

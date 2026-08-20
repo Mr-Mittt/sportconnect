@@ -120,6 +120,7 @@ function defaultSessionsSession(): SessionsSession {
         {
           id: 1,
           postId: mockSession.id,
+          commentType: 'USER',
           userId: mockFriend.id,
           userFullName: mockFriend.fullName,
           userAvatarUrl: null,
@@ -131,6 +132,27 @@ function defaultSessionsSession(): SessionsSession {
           replies: [],
           createdAt: '2026-08-01T09:00:00',
           updatedAt: '2026-08-01T09:00:00',
+        },
+        // CLIENT-SESSION-13: a SESSION_SYSTEM entry alongside the user comment, so the
+        // thread fixture covers both kinds the backend actually writes. Mirrors SESSION-21's
+        // real shape exactly — server-templated content, no likes/replies, and authored by
+        // the session creator (mockUser owns mockSession), which is precisely why it must
+        // not render as that person speaking.
+        {
+          id: 2,
+          postId: mockSession.id,
+          commentType: 'SESSION_SYSTEM',
+          userId: mockUser.id,
+          userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+          userAvatarUrl: null,
+          content: `${mockFriend.fullName} joined the session`,
+          parentCommentId: null,
+          likeCount: 0,
+          replyCount: 0,
+          isLikedByCurrentUser: false,
+          replies: [],
+          createdAt: '2026-08-01T09:30:00',
+          updatedAt: '2026-08-01T09:30:00',
         },
       ],
     },
@@ -531,6 +553,7 @@ export const sessionHandlers: HttpHandler[] = [
     const created: Comment = {
       id: session.nextCommentId++,
       postId: sessionId,
+      commentType: 'USER',
       userId: mockUser.id,
       userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
       userAvatarUrl: mockUser.avatarUrl,
