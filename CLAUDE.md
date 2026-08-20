@@ -45,6 +45,41 @@ this event notify someone?" question that comes up anywhere — a ticket, a `/vi
 doc. This keeps every candidate trigger in one place so the notification feature, once it's
 eventually scoped, starts from a real list instead of a blank page.
 
+## Git Workflow
+
+Work happens on a branch and lands via a pull request. **Direct push to `master` is denied by
+policy** — never attempt it. The user opens and merges PRs themselves (`gh` CLI is not installed);
+your job ends at pushing the branch and handing over the PR link.
+
+1. **Branch first.** On `master`, create `feature/<ticket-id>-<slug>` (code) or `docs/<slug>`
+   (doc-only). If already on some other branch, **stop and ask** which branch to use — do not
+   assume the current one is right and do not silently branch off it. (`/workon` Phase 0 states
+   this same rule for its own flow; keep the two in sync.)
+2. **Commit and push only when asked.** Finishing the work is not permission to commit it.
+3. **Stage deliberately.** Add the files this task touched by name — never `git add -A`. This repo
+   normally carries unrelated untracked files (session logs, scratch notes) that must not ride
+   along.
+
+### When the user says a ticket/PR is merged
+
+Treat "merged" as the trigger for this cleanup, and run it without being asked again:
+
+1. **`git fetch origin --prune`** — updates `origin/master` and drops the remote-tracking ref for
+   the branch GitHub deleted on merge.
+2. **Verify the merge actually landed before deleting anything**:
+   `git branch -r --contains <commit-sha>` must list `origin/master`. Do not skip this because the
+   user said it was merged — they may have merged a different PR, or the merge may have failed.
+   If it is not there, say so and stop; do not delete the branch.
+3. **`git checkout master` + `git merge --ff-only origin/master`.** Fast-forward only — if it
+   refuses, local `master` has commits of its own and that is a real situation to report, not to
+   force past.
+4. **`git branch -d <branch>`** — lowercase `-d`, never `-D`. `-d` refuses to delete a branch that
+   is not fully merged, which is exactly the safety check wanted here; `-D` throws that check away.
+5. **Leave unrelated branches alone.** Delete only the branch that was just merged. Other local
+   branches are not yours to clean up unless the user asks.
+6. **Report** the new `master` SHA, that the branch was deleted, and confirm the working tree is
+   otherwise untouched.
+
 ## Commands
 
 ### Dev environment (Postgres+PostGIS, Redis)
