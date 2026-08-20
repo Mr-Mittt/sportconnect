@@ -3121,6 +3121,31 @@ explicit go-ahead at each step (full story in A3's summary doc):
   so the committed crops read *"Priya Shah joined the session - just now"*, which is also how the
   visual check confirmed the dispatch ran on the branch head rather than the original feature commit.
 
+- **CLIENT-NOTIF-4 (`DONE`, 2026-08-20,
+  `client/docs/MVP/CLIENT-NOTIF-4_NOTIFICATION_TYPE_COVERAGE_GUARD.md`):** closes the gap that
+  produced CLIENT-NOTIF-3 — a backend routing key shipping with no client text case, silently
+  absorbed by `getNotificationText`'s fallback. The ticket deliberately left three approaches open;
+  **chosen at pickup: the type guard + the process checklist, rejecting the contract guard.** Two
+  codebase findings drove it. First, `Notification.type` was a bare `string` while the client
+  hand-mirrors ~15 other backend enums as union types (a convention `client/CLAUDE.md` endorses) —
+  so a backend-exposed contract would have been a novel mechanism for one concern while fifteen
+  siblings stayed hand-mirrored; typing this one properly was both consistent and cheaper. Second,
+  **neither guard alone catches the real failure**: the type guard makes it a compile error to add a
+  union member without a case, but in both incidents nobody touched the client at all, so only the
+  process checklist covers "backend shipped, client untouched." Built: an 8-member `NotificationType`
+  union sourced from `SessionEventsConsumer`'s switch, a `const unhandled: never` exhaustiveness
+  assertion in the `default:` branch (which now names the missing type in the build error), the
+  runtime fallback deliberately retained for version skew, and a client-visible-enum check added to
+  `.claude/commands/ticket.md` and `workon.md`. **Checklist scope widened at pickup (user decision)**
+  from notification routing keys to any client-visible backend enum — CLIENT-SESSION-13 was the same
+  bug arriving via `commentType`, so the narrower wording would have caught 2 of 3 recent incidents
+  instead of 3. **The guard was proven to fire rather than assumed**: temporarily adding
+  `post.like.created` to the union failed the build with `Type '"post.like.created"' is not
+  assignable to type 'never'`, then reverted. Ripple measured, not estimated — 4 errors across 2
+  files, all deliberate out-of-union literals. Verification: `tsc -b`/`eslint` clean, `vitest`
+  891/891, e2e `notification-bell` 2/2 (an earlier 2-failure run was CPU contention with a concurrent
+  `vitest` run, confirmed by re-running clean). No baselines move — nothing rendered changed.
+
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
 - `partner_matches` table: match score (0–100), accept/decline workflow

@@ -78,6 +78,21 @@ the caller is a deactivated (`isActive = false`) user. Don't assume the JWT filt
 security-sensitive, plan an explicit `isActive` check via `UserService` rather than inheriting the
 existing gap.
 
+**Client-visible enum or event type check** (CLIENT-NOTIF-4), for tickets in any module: if this
+ticket adds or extends something the client branches on — a new notification routing key, a new
+value in an enum the client mirrors (`commentType`, `postType`, a status), a new event type — then
+the client's case belongs in this change or in a ticket filed alongside it. Decide which and say so;
+don't leave it unstated. The client hand-mirrors ~15 backend enums and nothing structurally links
+them, so a backend-only change ships a silent display gap. Two shipped this way before anyone
+noticed: CLIENT-NOTIF-3 (`session.status.started` / `session.participant.left` rendering the generic
+"You have a new notification" from launch) and CLIENT-SESSION-13 (system comments rendering as if
+the session creator had typed them). `post-impl` B7, `group-impl` B21 and `user-impl` U13 will each
+introduce more.
+
+Note the client's own compile-time guard covers only half of this: `NotificationType` is an
+exhaustive union, so adding a member without a `getNotificationText` case fails the build — but
+nothing forces anyone to add the member in the first place. That gap is what this check exists for.
+
 Do not proceed to Phase 2 until the user confirms the scope.
 
 ---
