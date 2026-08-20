@@ -53,7 +53,8 @@ class LocationServiceImplSpec extends Specification {
         1 * locationRepository.save({ Location loc ->
             loc.sportId == 1L && loc.name == "Riverside Court" && loc.location != null
         }) >> saved
-        1 * sportService.getSportsByIds([1L]) >> [1L: SportResponse.builder().id(1L).name("Basketball").build()]
+        1 * sportService.requireActiveSportById(1L) >> SportResponse.builder().id(1L).name("Basketball").isActive(true).build()
+        1 * sportService.getActiveSportsByIds([1L]) >> [1L: SportResponse.builder().id(1L).name("Basketball").build()]
         result.id == 10L
         result.sportName == "Basketball"
     }
@@ -73,7 +74,29 @@ class LocationServiceImplSpec extends Specification {
 
         then:
         1 * locationRepository.save({ Location loc -> loc.location == null }) >> saved
-        1 * sportService.getSportsByIds([1L]) >> [:]
+        1 * sportService.requireActiveSportById(1L) >> SportResponse.builder().id(1L).name("Basketball").isActive(true).build()
+        1 * sportService.getActiveSportsByIds([1L]) >> [:]
+    }
+
+    def "createLocation rejects a deactivated sport and persists nothing"() {
+        given: "a request naming a sport an admin has deactivated"
+        def userId = UUID.randomUUID()
+        def request = CreateLocationRequest.builder()
+                .sportId(1L)
+                .name("Riverside Court")
+                .build()
+
+        when:
+        locationService.createLocation(userId, request)
+
+        then: "a deactivated sport is indistinguishable from a missing one (A7)"
+        1 * sportService.requireActiveSportById(1L) >> { throw new ResourceNotFoundException("Sport", "id", 1L) }
+
+        and: "nothing is written"
+        0 * locationRepository.save(_)
+
+        and:
+        thrown(ResourceNotFoundException)
     }
 
     def "getLocation returns the location when found"() {
@@ -85,7 +108,7 @@ class LocationServiceImplSpec extends Specification {
 
         then:
         1 * locationRepository.findById(5L) >> Optional.of(location)
-        1 * sportService.getSportsByIds([2L]) >> [2L: SportResponse.builder().id(2L).name("Tennis").build()]
+        1 * sportService.getActiveSportsByIds([2L]) >> [2L: SportResponse.builder().id(2L).name("Tennis").build()]
         result.id == 5L
         result.sportName == "Tennis"
     }
@@ -120,7 +143,7 @@ class LocationServiceImplSpec extends Specification {
 
         then:
         1 * locationRepository.findByIdIn([1L, 2L]) >> locations
-        1 * sportService.getSportsByIds([1L]) >> [1L: SportResponse.builder().id(1L).name("Basketball").build()]
+        1 * sportService.getActiveSportsByIds([1L]) >> [1L: SportResponse.builder().id(1L).name("Basketball").build()]
         result.size() == 2
         result[1L].sportName == "Basketball"
     }
@@ -144,7 +167,7 @@ class LocationServiceImplSpec extends Specification {
 
         then:
         1 * locationRepository.findBySportIdAndNameContainingIgnoreCase(1L, "river", pageable) >> new PageImpl([location])
-        1 * sportService.getSportsByIds([1L]) >> [1L: SportResponse.builder().id(1L).name("Basketball").build()]
+        1 * sportService.getActiveSportsByIds([1L]) >> [1L: SportResponse.builder().id(1L).name("Basketball").build()]
         result.content[0].name == "Riverside Court"
     }
 
@@ -180,7 +203,7 @@ class LocationServiceImplSpec extends Specification {
 
         then:
         1 * locationRepository.findById(1L) >> Optional.of(location)
-        1 * userSportProfileService.hasProfileForSport(userId, 2L) >> true
+        1 * userSportProfileService.hasActiveProfileForActiveSport(userId, 2L) >> true
         1 * userFavoriteLocationRepository.existsByUserIdAndLocationId(userId, 1L) >> false
         1 * userFavoriteLocationRepository.save({ UserFavoriteLocation f -> f.userId == userId && f.locationId == 1L })
     }
@@ -209,7 +232,7 @@ class LocationServiceImplSpec extends Specification {
 
         then:
         1 * locationRepository.findById(1L) >> Optional.of(location)
-        1 * userSportProfileService.hasProfileForSport(userId, 2L) >> false
+        1 * userSportProfileService.hasActiveProfileForActiveSport(userId, 2L) >> false
         0 * userFavoriteLocationRepository._
         thrown(BadRequestException)
     }
@@ -224,7 +247,7 @@ class LocationServiceImplSpec extends Specification {
 
         then:
         1 * locationRepository.findById(1L) >> Optional.of(location)
-        1 * userSportProfileService.hasProfileForSport(userId, 2L) >> true
+        1 * userSportProfileService.hasActiveProfileForActiveSport(userId, 2L) >> true
         1 * userFavoriteLocationRepository.existsByUserIdAndLocationId(userId, 1L) >> true
         0 * userFavoriteLocationRepository.save(_)
         thrown(BadRequestException)
@@ -275,7 +298,7 @@ class LocationServiceImplSpec extends Specification {
 
         then:
         1 * userFavoriteLocationRepository.findFavoritesByUserIdAndSportId(userId, 2L, pageable) >> new PageImpl([location])
-        1 * sportService.getSportsByIds([2L]) >> [2L: SportResponse.builder().id(2L).name("Tennis").build()]
+        1 * sportService.getActiveSportsByIds([2L]) >> [2L: SportResponse.builder().id(2L).name("Tennis").build()]
         result.content[0].name == "Favorite Court"
         result.content[0].sportName == "Tennis"
     }

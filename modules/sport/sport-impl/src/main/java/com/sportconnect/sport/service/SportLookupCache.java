@@ -12,12 +12,23 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Backs every read {@link SportServiceImpl} method with one cached master map of all sports
- * (including inactive — {@code getSportById} can return a soft-deleted sport, so the cache can't
- * be active-only) instead of independently caching each read method. A single cache entry avoids
- * {@code getSportsByIds}' {@code List<Long>} argument becoming part of a cache key (which would
+ * Backs every user-facing read in {@link SportServiceImpl} with one cached map of the
+ * <strong>active</strong> sports, instead of independently caching each read method.
+ *
+ * <p>Active-only is the point, not an optimisation: a deactivated sport disappears from the app
+ * entirely — it cannot be fetched, cannot be tagged onto anything new, and anything already tagged
+ * with it stops surfacing (A7). Caching only active rows makes that the default everywhere rather
+ * than a filter each caller has to remember. This reverses the original A5 comment here, which said
+ * the cache "can't be active-only" because {@code requireActiveSportById} had to return soft-deleted sports.
+ * It no longer does; the one place that genuinely needs inactive rows is admin, and admin reads go
+ * straight to {@code sportRepository} instead (see {@code SportServiceImpl.getAllSports},
+ * {@code updateSport}, {@code deleteSport}) — deliberately bypassing this cache and never
+ * populating it, since reactivating a sport is rare and not worth shaping the hot path around.
+ *
+ * <p>A single cache entry avoids
+ * {@code getActiveSportsByIds}' {@code List<Long>} argument becoming part of a cache key (which would
  * otherwise create one cache entry per distinct id combination, and never be consistent with
- * {@code getSportById}'s own cache region) and guarantees all 4 read paths in
+ * {@code requireActiveSportById}'s own cache region) and guarantees all 4 read paths in
  * {@link SportServiceImpl} see identical data between writes.
  *
  * <p>Deliberately a separate bean from {@link SportServiceImpl} rather than a
@@ -32,10 +43,14 @@ class SportLookupCache {
 
     private final SportRepository sportRepository;
 
-    /** No-arg method — Spring's default key generator produces a single, stable cache entry. */
+    /**
+     * No-arg method — Spring's default key generator produces a single, stable cache entry.
+     * Named for what it holds: <em>active</em> sports only, so a caller can't mistake it for the
+     * full table the way {@code getAllSportsById} invited.
+     */
     @Cacheable("sports")
-    public Map<Long, Sport> getAllSportsById() {
-        return sportRepository.findAll().stream()
+    public Map<Long, Sport> getActiveSportsById() {
+        return sportRepository.findByIsActiveTrue().stream()
                 .collect(Collectors.toMap(Sport::getId, Function.identity()));
     }
 

@@ -31,18 +31,18 @@ class SportLookupCacheSpec extends Specification {
         return context.getBean(SportLookupCache)
     }
 
-    def "getAllSportsById caches its result across repeated calls"() {
+    def "getActiveSportsById caches its result across repeated calls"() {
         given:
         SportRepository sportRepository = Mock()
         def sportLookupCache = buildContext(sportRepository)
         def sports = [Sport.builder().id(1L).name("Football").isActive(true).build()]
 
         when:
-        def first = sportLookupCache.getAllSportsById()
-        def second = sportLookupCache.getAllSportsById()
+        def first = sportLookupCache.getActiveSportsById()
+        def second = sportLookupCache.getActiveSportsById()
 
         then:
-        1 * sportRepository.findAll() >> sports
+        1 * sportRepository.findByIsActiveTrue() >> sports
         first == second
         first[1L].name == "Football"
     }
@@ -54,11 +54,11 @@ class SportLookupCacheSpec extends Specification {
         def sports = [Sport.builder().id(1L).name("Football").isActive(true).build()]
 
         when:
-        sportLookupCache.getAllSportsById()
+        sportLookupCache.getActiveSportsById()
         sportLookupCache.evictAll()
-        sportLookupCache.getAllSportsById()
+        sportLookupCache.getActiveSportsById()
 
         then:
-        2 * sportRepository.findAll() >> sports
+        2 * sportRepository.findByIsActiveTrue() >> sports
     }
 }

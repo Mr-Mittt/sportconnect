@@ -31,7 +31,7 @@ public class SportServiceImpl implements SportService {
      *
      * <p>Evicts {@link SportLookupCache}'s cached master map (A5) after the write so the next read
      * repopulates it — otherwise a newly created sport would stay invisible to
-     * {@code getSportById}/{@code getSportsByIds}/{@code getAllActiveSports}/{@code getAllSports}
+     * {@code requireActiveSportById}/{@code getActiveSportsByIds}/{@code getAllActiveSports}/{@code getAllSports}
      * until the cache separately expired (it has no TTL, so it never would).
      */
     @Override
@@ -66,8 +66,8 @@ public class SportServiceImpl implements SportService {
      */
     @Override
     @Transactional(readOnly = true)
-    public SportResponse getSportById(Long sportId) {
-        Sport sport = sportLookupCache.getAllSportsById().get(sportId);
+    public SportResponse requireActiveSportById(Long sportId) {
+        Sport sport = sportLookupCache.getActiveSportsById().get(sportId);
         if (sport == null) {
             throw new ResourceNotFoundException("Sport", "id", sportId);
         }
@@ -80,12 +80,12 @@ public class SportServiceImpl implements SportService {
      * <p>Reads from {@link SportLookupCache}'s cached master map (A5) instead of
      * {@code sportRepository.findAllById(sportIds)} — avoids {@code sportIds} becoming part of a
      * per-method cache key, which would otherwise create one cache entry per distinct id
-     * combination instead of sharing {@code getSportById}'s single cached map.
+     * combination instead of sharing {@code requireActiveSportById}'s single cached map.
      */
     @Override
     @Transactional(readOnly = true)
-    public Map<Long, SportResponse> getSportsByIds(List<Long> sportIds) {
-        Map<Long, Sport> allSportsById = sportLookupCache.getAllSportsById();
+    public Map<Long, SportResponse> getActiveSportsByIds(List<Long> sportIds) {
+        Map<Long, Sport> allSportsById = sportLookupCache.getActiveSportsById();
         return sportIds.stream()
                 .distinct()
                 .filter(allSportsById::containsKey)
@@ -95,14 +95,15 @@ public class SportServiceImpl implements SportService {
     /**
      * {@inheritDoc}
      *
-     * <p>Reads from {@link SportLookupCache}'s cached master map (A5), filtered to active sports,
-     * instead of {@code sportRepository.findByIsActiveTrue()}.
+     * <p>Reads from {@link SportLookupCache} (A5) instead of
+     * {@code sportRepository.findByIsActiveTrue()}. A7 made the cache itself active-only, so the
+     * explicit {@code filter(Sport::getIsActive)} this used to carry is gone rather than merely
+     * redundant — the cache never holds an inactive sport to filter out.
      */
     @Override
     @Transactional(readOnly = true)
     public List<SportResponse> getAllActiveSports() {
-        return sportLookupCache.getAllSportsById().values().stream()
-                .filter(Sport::getIsActive)
+        return sportLookupCache.getActiveSportsById().values().stream()
                 .map(this::toSportResponse)
                 .collect(Collectors.toList());
     }
@@ -110,13 +111,17 @@ public class SportServiceImpl implements SportService {
     /**
      * {@inheritDoc}
      *
-     * <p>Reads from {@link SportLookupCache}'s cached master map (A5) instead of
-     * {@code sportRepository.findAll()}.
+     * <p><strong>Deliberately bypasses {@link SportLookupCache}</strong> and hits
+     * {@code sportRepository.findAll()} directly. This is the admin-only "everything, including
+     * deactivated" listing, and the cache is active-only since A7 — so it cannot serve this, and
+     * populating it from here would defeat the point. Admin listing and reactivation are rare
+     * operations; paying a query for them is the right trade against shaping the cache (which every
+     * user-facing read depends on) around them.
      */
     @Override
     @Transactional(readOnly = true)
     public List<SportResponse> getAllSports() {
-        return sportLookupCache.getAllSportsById().values().stream()
+        return sportRepository.findAll().stream()
                 .map(this::toSportResponse)
                 .collect(Collectors.toList());
     }

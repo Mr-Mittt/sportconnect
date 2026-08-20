@@ -24,7 +24,7 @@ public interface LocationService {
 
     /**
      * Batch lookup by ID. Missing ids are simply absent from the returned map — no exception is
-     * thrown, mirroring {@code UserService.getUsersByIds}'/{@code SportService.getSportsByIds}'
+     * thrown, mirroring {@code UserService.getUsersByIds}'/{@code SportService.getActiveSportsByIds}'
      * semantics. For cross-domain callers (session-impl resolving a session's location) that need
      * to batch-resolve locations for a page of items without one query per item.
      */
@@ -42,7 +42,7 @@ public interface LocationService {
     /**
      * Favorite a location (LOC-2). Requires the caller to hold an active {@code UserSportProfile}
      * for the location's sport (checked via {@code sport-api}'s
-     * {@code UserSportProfileService.hasProfileForSport}, the same gate {@code createGroup} uses
+     * {@code UserSportProfileService.hasActiveProfileForActiveSport}, the same gate {@code createGroup} uses
      * for group creation) — throws {@code BadRequestException} otherwise, or if already favorited.
      * Throws {@code ResourceNotFoundException} if the location doesn't exist.
      */

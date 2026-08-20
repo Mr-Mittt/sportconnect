@@ -59,8 +59,8 @@ public class SportController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Sport not found")
     })
     @GetMapping("/{sportId}")
-    public ResponseEntity<ApiResponse<SportResponse>> getSportById(@PathVariable Long sportId) {
-        SportResponse response = sportService.getSportById(sportId);
+    public ResponseEntity<ApiResponse<SportResponse>> requireActiveSportById(@PathVariable Long sportId) {
+        SportResponse response = sportService.requireActiveSportById(sportId);
         return ResponseEntity.ok(ApiResponse.success("Sport retrieved successfully", response));
     }
 

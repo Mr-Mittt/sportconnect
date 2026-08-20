@@ -45,6 +45,12 @@ public class LocationServiceImpl implements LocationService {
     @Override
     @Transactional
     public LocationResponse createLocation(UUID userId, CreateLocationRequest request) {
+        // A7: a location is permanently tagged with a sport, so it cannot be created against a
+        // sport an admin has switched off. Previously this path validated the sportId not at all
+        // - not even that the sport existed - so a dangling id could be persisted.
+        // A7: unknown and deactivated alike throw ResourceNotFoundException.
+        sportService.requireActiveSportById(request.getSportId());
+
         Location location = Location.builder()
                 .sportId(request.getSportId())
                 .name(request.getName())
@@ -114,7 +120,7 @@ public class LocationServiceImpl implements LocationService {
         Location location = locationRepository.findById(locationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Location", "id", locationId));
 
-        if (!userSportProfileService.hasProfileForSport(userId, location.getSportId())) {
+        if (!userSportProfileService.hasActiveProfileForActiveSport(userId, location.getSportId())) {
             throw new BadRequestException("You need an active profile for this location's sport to favorite it");
         }
         if (userFavoriteLocationRepository.existsByUserIdAndLocationId(userId, locationId)) {
@@ -155,7 +161,7 @@ public class LocationServiceImpl implements LocationService {
         if (sportId == null) {
             return null;
         }
-        return sportService.getSportsByIds(List.of(sportId)).values().stream()
+        return sportService.getActiveSportsByIds(List.of(sportId)).values().stream()
                 .findFirst()
                 .map(SportResponse::getName)
                 .orElse(null);
@@ -169,7 +175,7 @@ public class LocationServiceImpl implements LocationService {
         if (sportIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        return sportService.getSportsByIds(sportIds).entrySet().stream()
+        return sportService.getActiveSportsByIds(sportIds).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getName()));
     }
 
