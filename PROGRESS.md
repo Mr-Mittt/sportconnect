@@ -2882,6 +2882,26 @@ explicit go-ahead at each step (full story in A3's summary doc):
   deactivated sport had every field mutated and saved before the throw, with only `@Transactional`
   rollback preventing a persist — correct by accident, and one refactor away from a real
   write-then-fail. Hoisted above every mutation, with a test pinning the ordering.
+- **A8 (`DONE`, 2026-08-20,
+  `modules/sport/sport-impl/docs/MVP/A8_DROP_DB_LEVEL_FK_ON_USER_SPORT_PROFILES.md`):** dropped the
+  cross-domain DB-level FK `user_sport_profiles_user_id_fkey` → `users` (V058) — `users` is owned by
+  `user-impl`, so the constraint was a hard schema coupling against "domain-scoped tables /
+  cross-domain references use IDs only", and a blocking pre-step for ever extracting `sport` into its
+  own service. Schema-only: `UserSportProfile.userId` was already a plain `UUID` (no `@ManyToOne`), so
+  no entity/service/DTO/test change. Fifth migration of this kind, following V045 (location), V046
+  (session), V048 (post — the A13 this ticket was filed alongside) and V049 (group).
+  `user_sport_profiles.sport_id` deliberately kept: `sports` is this module's own table, so that FK is
+  intra-domain and correct. **The cascade question, confirmed not assumed:** dropping the FK removes
+  its `ON DELETE CASCADE`, but `UserServiceImpl.deleteUser()` is a soft delete (`isActive = false`) and
+  a repo-wide grep finds zero `userRepository.delete`/`deleteById` callers — there is no
+  hard-delete-user path, so the cascade has never fired; app-level orphan cleanup was deliberately not
+  added, since it would mean a new `user-impl` → `sport-api` cross-domain call deserving its own
+  ticket. The `:server:test` H2 mirror needed no change — A7 had already written
+  `user_sport_profiles` there without this FK, anticipating A8. Live-verified against real Postgres:
+  constraint name confirmed via `pg_constraint` before writing the migration, changeset applied
+  through `:server:bootRun` (`Rows affected: 1`, app started), and post-state checked — only the
+  `sport_id` FK remains, V058 recorded `EXECUTED`, all 5 indexes (incl. the load-bearing
+  `UNIQUE(user_id, sport_id)`) and all 40 existing profile rows intact.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
