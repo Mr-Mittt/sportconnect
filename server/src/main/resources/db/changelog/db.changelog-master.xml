@@ -149,4 +149,7 @@
     <!-- SESSION-21: comments.comment_type — discriminator for server-written system comments in a session thread -->
     <include file="db/changelog/changes/V057__add_comment_type.sql" relativeToChangelogFile="false"/>
 
+    <!-- A8: drop the cross-domain DB-level FK on user_sport_profiles.user_id -->
+    <include file="db/changelog/changes/V058__drop_user_sport_profile_cross_domain_fk.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
