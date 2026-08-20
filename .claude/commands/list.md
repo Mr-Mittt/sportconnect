@@ -15,8 +15,16 @@ Parse $ARGUMENTS into `scope` and `version`. Neither is required — both have a
 do **not** stop and ask for a missing argument:
 
 - No `scope`, or `scope` is `all` → every backlog in the repo (Step 2's full discovery list).
-- No `version` → every version found for the selected scope (typically `MVP` and `V1`), each
-  reported as its own group.
+- No `version` → **every version found for the selected scope**, each reported as its own group.
+  `/list` shows the open TODOs from all versions; `/list client` reports client MVP *and* client V1,
+  and a bare `/list` reports every version of every backlog in the repo.
+
+`/list` is the one exception to the version-resolution ladder that `/workon` and `/ticket` follow
+(`documentation/md/BACKLOG_STRUCTURE_CONVENTION.md` § **Version resolution**, which records this).
+Those two act on exactly one backlog, so falling back to the current app version saves typing
+without hiding anything. This command is a read-only survey, so an omitted version means *more*, not
+less — falling back to the current app version here would drop real rows from the one command whose
+whole job is showing you what is open.
 
 Match `version` case-insensitively against the filename suffix (`mvp` → `BACKLOG_MVP.md`, `v1` →
 `BACKLOG_V1.md`).
@@ -97,6 +105,9 @@ table order from Step 3.
 
 Rules for the report:
 
+- **The title line's `<version>` must say `all versions` when none was given** — that is the default
+  case, and leaving it blank or guessing a single version misreports a listing that actually spans
+  MVP and V1. Same for `<scope>`: `all backlogs` when no scope was named.
 - **`IN PROGRESS` rows are not TODO rows.** They share the Open table but they aren't pickup
   candidates. List them under the group in a short separate line (`In progress: <ID> · <title>`)
   rather than folding them into the TODO table or dropping them silently — a half-built ticket is
@@ -107,8 +118,8 @@ Rules for the report:
   position. Reproduce the title verbatim — don't paraphrase or truncate it; that rationale is often
   the reason a row sits where it does.
 - **Close with a one-line total** (`<N> TODO tickets across <M> backlogs`), and the pointer that
-  `/workon <module> <version>` picks up the first row of a module's queue and `/ticket <module>
-  <version> <overview>` files a new one.
+  `/workon <module>` picks up the first row of a module's queue and `/ticket <module> <overview>`
+  files a new one (both take an optional `<version>`; without one they use the current app version).
 
 If a resolved backlog file has no recognizable index table at all (neither shape from Step 3), say so
 for that file explicitly instead of reporting it as empty — an unparsed file and an empty queue look

@@ -2829,6 +2829,24 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `modules/social/post-impl/docs/B3_THREE_POST_TYPES.md` — its content matches `group-impl`'s B3
   ticket, not `post-impl`'s own (coincidentally reused) B3 id, so it was never referenced by
   `post-impl`'s Implementation Order table in the first place; not this task's to resolve.
+- **Current app version + slash-command version fallback (2026-08-20, `CLAUDE.md` § Current App
+  Version, rules in `documentation/md/BACKLOG_STRUCTURE_CONVENTION.md` § Version resolution):**
+  `/workon`, `/ticket` and `/list` were the only three commands taking a `<version>` argument, and
+  every invocation had to repeat it even though all 12 backlogs are on `MVP` (only client, auth,
+  group, post and chat have a second, `V1` file). Declared a single current app version in
+  `CLAUDE.md` — chosen over a `.claude/settings.json` env var because CLAUDE.md is already in
+  context every session (so the fallback resolves with zero extra file reads), is git-versioned and
+  human-visible, and cannot drift per-machine the way a `settings.local.json` copy would. Made the
+  rule a **ladder**, not a flat default: explicit argument wins → else the declared version *if that
+  backlog file exists for the resolved scope* → else the scope's only `BACKLOG_<VERSION>.md` → else
+  ask. The existence check on rung 2 is the point of the design: an unconditional fallback is
+  correct only while every scope carries the declared version, and breaks the moment modules start
+  finishing a version at different times (flip the declaration to `V1` and `/workon sport`, which
+  has only an MVP backlog, aims at a file that does not exist). A resolved-not-typed version must be
+  announced with its path before the command acts on it. `/list` is a documented exception and keeps
+  its "report every version found" default — it is a read-only survey, and applying the ladder would
+  narrow `/list client` from MVP + V1 down to MVP, dropping real rows from the one command whose job
+  is showing what is open.
 - **SESSION-16 (`DONE`, 2026-08-18,
   `modules/session/docs/MVP/SESSION-16_FIX_JOINSESSION_DEMOTING_AN_ALREADY_JOINED_CALLER_BACK.md`):**
   fixed the pre-existing bug SESSION-15 had documented but deliberately not fixed — an already-
