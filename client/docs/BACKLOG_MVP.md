@@ -79,7 +79,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [CLIENT-SESSION-13](MVP/CLIENT-SESSION-13_SYSTEM_COMMENTS_IN_SESSION_THREAD.md) | Render system comments in the session discussion thread | `DONE` (baselines pending `client-ci` dispatch) |
+| 1 | [CLIENT-SESSION-13](MVP/CLIENT-SESSION-13_SYSTEM_COMMENTS_IN_SESSION_THREAD.md) | Render system comments in the session discussion thread | `DONE` |
 | 2 | [CLIENT-NOTIF-3](MVP/CLIENT-NOTIF-3_NOTIFICATION_TEXT_FOR_MISSING_SESSION_TYPES.md) | Notification text for `session.status.started` and `session.participant.left` | `DONE` |
 | 3 | [CLIENT-NOTIF-2](MVP/CLIENT-NOTIF-2_NOTIFICATION_BELL_VISUAL_REGRESSION.md) | Visual regression harness for the notification bell dropdown | `DONE` |
 | 4 | [CLIENT-SESSION-12](MVP/CLIENT-SESSION-12_SESSION_MODALS_VISUAL_REGRESSION.md) | Visual regression harness for `SessionDetailModal` and `CreateSessionModal` | `DONE` |

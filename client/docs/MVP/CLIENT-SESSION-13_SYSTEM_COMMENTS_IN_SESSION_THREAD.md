@@ -1,6 +1,6 @@
 # CLIENT-SESSION-13 · Render system comments in the session discussion thread
 
-**Status:** `DONE` (2026-08-19) — code complete and verified; 3 visual baselines pending the `client-ci` `update-baselines` dispatch.
+**Status:** `DONE` (2026-08-19) — code complete and verified, baselines regenerated and committed.
 **Type:** New Feature
 **Depends on:** none blocking — backend `SESSION-21` (`DONE`, 2026-08-19) already ships the contract
 **Filed:** 2026-08-19, immediately after SESSION-21 merged. The backend writes system entries into
@@ -168,6 +168,22 @@ call rather than a costly one, so the recommendation stood, but on evidence inst
 CLIENT-NOTIF-3, this **cannot be done on a Windows host** — the whole visual suite fails there on the
 documented font-rendering mismatch. Needs the `client-ci` `update-baselines` dispatch: expect
 **exactly those 3 files** to change, everything else byte-identical, worth the same SHA-256 check.
+
+**Executed (2026-08-20).** `update-baselines` dispatch run, artifact downloaded, SHA-256 compared
+before overwriting: **exactly the 3 predicted files changed, the other 72 byte-identical** — as
+predicted.
+
+Two things that check confirms beyond "the files changed":
+
+- **The dispatch ran on this branch, not `master`.** `master` has neither the `SESSION_SYSTEM`
+  branch nor the MSW fixture row, so the discussion crops would have regenerated unchanged and
+  *zero* files would have differed.
+- **It ran on the branch's current head, not an earlier commit.** The styling changed twice after
+  the feature commit (one-line italic in `edaa967`, then the dash separator in `b3106b6`). The
+  regenerated crop reads *"Priya Shah joined the session - just now"* — italic, single line, dash
+  present — so it reflects `b3106b6`, not `ddcea52`'s stacked non-italic version. A baseline
+  generated from the wrong commit would have looked plausible and passed review; the visual check
+  is what distinguishes them.
 
 ## Delta for later tickets
 

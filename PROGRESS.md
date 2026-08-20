@@ -3113,8 +3113,13 @@ explicit go-ahead at each step (full story in A3's summary doc):
   deliberately-failing visual run rather than by touching baselines. **A 9-failure e2e run was
   investigated rather than waved through** — all `a11y.spec.ts` `page.goto` timeouts caused by CPU
   contention with a concurrent `vitest` run (`retries: 0` locally), clean 51/51 on re-run.
-  **Remaining step:** `session-detail-discussion-{375,768,1280}.png` need the `client-ci`
-  `update-baselines` dispatch (the thread gained a row); not producible on a Windows host.
+  **Baselines regenerated and committed 2026-08-20** via the `client-ci` `update-baselines`
+  dispatch (the thread gained a row; not producible on a Windows host) — SHA-256 comparison showed
+  exactly the 3 predicted `session-detail-discussion-*` files changed, other 72 byte-identical.
+  Two post-merge styling refinements landed on the same branch first (user feedback after seeing it
+  running): content and timestamp on one italic line, then a `content - timestamp` dash separator —
+  so the committed crops read *"Priya Shah joined the session - just now"*, which is also how the
+  visual check confirmed the dispatch ran on the branch head rather than the original feature commit.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
