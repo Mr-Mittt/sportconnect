@@ -1,4 +1,6 @@
 import { createBrowserRouter, createRoutesFromElements, Route } from 'react-router-dom';
+import { AdminIndex } from './features/admin/AdminIndex';
+import { AdminLayout } from './features/admin/AdminLayout';
 import { LoginPage } from './features/auth/LoginPage';
 import { RegisterPage } from './features/auth/RegisterPage';
 import { FriendsPage } from './features/friends/FriendsPage';
@@ -59,6 +61,23 @@ export const routes = createRoutesFromElements(
       <Route path="/groups" element={<GroupsPage />} />
       <Route path="/matches" element={<MatchesPage />} />
       <Route path="/profile" element={<ComingSoonPage title="Profile" />} />
+    </Route>
+    {/* ADMIN-1: /admin sits outside the AppShell group on purpose — admin is not
+        part of the member-facing chrome, so no TopBar/NavTabs. Still inside
+        RootLayout, so useSessionBootstrap runs and an admin hard-refreshing on
+        /admin isn't bounced to /login while the refresh check is in flight.
+        Reuses ProtectedRoute's already-built requiredRole prop (this is its first
+        use); roles are stored unprefixed, hence "ADMIN" not "ROLE_ADMIN".
+        Not linked from anywhere — an admin types the URL. */}
+    <Route
+      path="/admin"
+      element={
+        <ProtectedRoute requiredRole="ADMIN">
+          <AdminLayout />
+        </ProtectedRoute>
+      }
+    >
+      <Route index element={<AdminIndex />} />
     </Route>
   </Route>,
 );
