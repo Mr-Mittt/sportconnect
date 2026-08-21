@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
@@ -18,6 +18,12 @@ export interface SportFieldsFormProps {
   errorMessage: string | null;
   /** Cleared by the page when a different sport is selected, so a stale "Saved" never lingers. */
   isSaved: boolean;
+  /**
+   * ADMIN-4: reports this form's dirty state upward so `/admin`'s logout can warn before
+   * discarding it. Optional — the form is fully usable without it, and existing callers
+   * that don't care about the guard need no change.
+   */
+  onDirtyChange?: (isDirty: boolean) => void;
 }
 
 /**
@@ -30,6 +36,7 @@ export function SportFieldsForm({
   isSaving,
   errorMessage,
   isSaved,
+  onDirtyChange,
 }: SportFieldsFormProps) {
   const [draft, setDraft] = useState<SportFieldsDraft>(() => toSportFieldsDraft(sport));
 
@@ -45,6 +52,13 @@ export function SportFieldsForm({
 
   const payload = buildUpdatePayload(sport, draft);
   const isDirty = Object.keys(payload).length > 0;
+
+  // ADMIN-4: report upward on change, and report clean on unmount — a `true` left
+  // behind by an unmounted form would keep warning on every later logout attempt.
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+    return () => onDirtyChange?.(false);
+  }, [isDirty, onDirtyChange]);
 
   const set = <K extends keyof SportFieldsDraft>(key: K, value: SportFieldsDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));

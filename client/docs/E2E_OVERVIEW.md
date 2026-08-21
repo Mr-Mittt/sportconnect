@@ -204,8 +204,8 @@ e2e/
     direct-chat.spec.ts       # CHAT-10
     matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9
     notification-bell.spec.ts # CLIENT-NOTIF-1
-    admin-route-guard.spec.ts # ADMIN-1
-    admin-sports.spec.ts      # ADMIN-2
+    admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
+    admin-sports.spec.ts      # ADMIN-2, ADMIN-4
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -656,7 +656,7 @@ opens and the URL stays exactly `/matches` (no `?session=` appended, no reload).
 scenario that would have silently failed under the old navigate-to-`/matches?session={id}`
 approach.
 
-### `e2e/flows/admin-route-guard.spec.ts` (ADMIN-1, 2 `test()`s)
+### `e2e/flows/admin-route-guard.spec.ts` (ADMIN-1, ADMIN-4, 4 `test()`s)
 
 The `/admin` route's **role** guard — the suite's first and only authorization coverage. Every other
 spec logs in as `mockUser` (`roles: ['USER']`) and no route used `requiredRole` before ADMIN-1, so
@@ -668,6 +668,8 @@ redirected; nothing proved a logged-**in** user lacking a role is.
 |---|---|
 | a user without ADMIN is redirected away from /admin | Logs in as `mockUser`, navigates to `/admin`, lands on `/` with no "Admin" heading. The redirect is deliberately silent — `/admin` is unlinked, so not confirming it exists beats a 403 page (confirmed at pickup; a dedicated unauthorized page would be a `ProtectedRoute`-level change serving every future role-gated route). |
 | a user holding ADMIN reaches /admin | Logs in as `mockAdminUser`, navigates to `/admin`, sees the shell heading, the section index ("Sections") with its "Sports" link, and **no** member-facing chrome — `/admin` sits outside `AppShell` on purpose. *(ADMIN-2 replaced the original "No admin sections are available yet." empty state this asserted, with the first real section link.)* |
+| an admin logs out from the admin shell (ADMIN-4) | Clicks "Log out" in the `AdminLayout` header, lands on `/login`, then re-navigates to `/admin` and is bounced back — proving the session is genuinely cleared, not merely navigated away from. This is the exit that exists *because* the test above asserts TopBar (the app's only other logout control) is absent from `/admin`. |
+| the control is present on a nested admin route (ADMIN-4) | Deep-links to `/admin/sports/1` and asserts the header's "Log out" is visible there too — the control lives in the layout, so it must survive on child routes, not just the index. |
 
 Fixtures: `mockAdminUser` (see §5) plus a second refresh-token string,
 `mockAdminRefreshToken`. **Why the extra token matters:** `/api/auth/refresh` previously returned a
@@ -681,7 +683,7 @@ What this catches that `src/features/admin/AdminLayout.test.tsx` cannot: a route
 test renders the same `routes` export, but only a real navigation exercises a full mount including
 the bootstrap refresh.
 
-### `e2e/flows/admin-sports.spec.ts` (ADMIN-2, 4 `test()`s)
+### `e2e/flows/admin-sports.spec.ts` (ADMIN-2, ADMIN-4, 6 `test()`s)
 
 The sport master-detail admin screen at `/admin/sports` — the first admin section with real
 behavior behind it. Both saves go through the real route tree, which is what distinguishes this from
@@ -695,6 +697,8 @@ from the `/admin` index.
 | an admin edits and saves the attribute schema | Deep-links to `/admin/sports/1`, confirms the fetched document is in the textarea, replaces it, saves. Covers the second of the two independent Save buttons. |
 | invalid JSON is rejected locally before any request | Types unparseable JSON, clicks Save, asserts the local parse error **and** — via a `page.on('request')` listener — that **no** `PUT` was issued at all. The "fires no request" half is the point: a server round trip for text that cannot parse is the failure this guards. |
 | a deactivated sport is editable like any other (A11) | Deep-links to `/admin/sports/4` (inactive Tennis) and completes a full schema edit → save. This case **inverted mid-ticket**: A9's `GET`/`PUT` asymmetry (verified live — the member read really did 404 for an inactive sport while the matching `PUT` returned 200) was fixed by backend `A11` in the same branch, so the screen no longer has an inactive-sport special case to assert. |
+| unsaved sport-field edits are confirmed before discarding (ADMIN-4) | Dirties Category, clicks "Log out", asserts the confirm dialog appears and the admin is still on `/admin/sports/1` and still signed in. Cancels, asserts the edit survives verbatim, then re-opens and confirms via "Discard & log out" to reach `/login`. Lives in this file rather than `admin-route-guard.spec.ts` because it needs a genuinely dirty form, which only this section has. |
+| a clean form logs out with no confirmation (ADMIN-4) | Opens the same panel, touches nothing, clicks "Log out" and goes straight to `/login`. Guards the inverse failure — a guard that always prompts is as broken as one that never does. |
 
 Fixtures: reuses `mockAdminUser`/`mockAdminRefreshToken` from `admin-route-guard.spec.ts` (see §5).
 The sport handler (`e2e/mocks/handlers/sport.ts`) gained four ADMIN-2/A11 endpoints —

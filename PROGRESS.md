@@ -3013,6 +3013,22 @@ explicit go-ahead at each step (full story in A3's summary doc):
   ADMIN-1, the app's **first admin surface** (`/admin` route + role guard + shell): the guard is
   nearly free because `ProtectedRoute` already has a built-but-unused `requiredRole` prop, and roles
   are stored unprefixed (`ADMIN`) with `JwtAuthenticationFilter` adding `ROLE_` server-side.
+- **Client ADMIN-4 — logout from the admin area (2026-08-21,
+  `client/docs/MVP/ADMIN-4_LOG_OUT_FROM_THE_ADMIN_AREA.md`):** `ADMIN-1` put `/admin` outside
+  `AppShell` on purpose (no TopBar, no NavTabs), and TopBar's dropdown was the app's only logout
+  control — so the admin area shipped with **no session exit at all**, an admin had to edit the URL
+  bar to get out. Adds a Log out button to `AdminLayout`'s header, reusing `AUTH-4`'s existing
+  `useLogout()` untouched (no new endpoint, no contract change). **Widened at filing** to include the
+  unsaved-changes guard the admin forms never had: both `SportFieldsForm` and `AttributeSchemaEditor`
+  already tracked `isDirty` internally but reported it nowhere, so any navigation silently discarded
+  edits. Dirty state now travels child-route → parent via `<Outlet context>` (props cannot flow
+  upward across an `<Outlet />`), and the confirm dialog is **Discard-only** — unlike GRP-2's, two
+  independent forms with separate endpoints can be dirty at once here, so a single "Save" would have
+  to fire both mutations and resolve partial failure. Key correction the ticket records: GRP-2's
+  `useBlocker` is the *wrong* half of that precedent to copy, because logout POSTs first and only
+  navigates in `onSettled` — a blocker would fire after the session was already cleared. Guards
+  logout only; general `/admin` navigation still discards silently (pre-existing, still unfiled,
+  along with a "back to app" link).
 - **Current app version + slash-command version fallback (2026-08-20, `CLAUDE.md` § Current App
   Version, rules in `documentation/md/BACKLOG_STRUCTURE_CONVENTION.md` § Version resolution):**
   `/workon`, `/ticket` and `/list` were the only three commands taking a `<version>` argument, and

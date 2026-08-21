@@ -1,6 +1,6 @@
 # ADMIN-4 · Log out from the admin area
 
-**Status:** `TODO` · **Type:** Enhancement · **Depends on:** none (`AUTH-4` and `ADMIN-1` both `DONE`) ·
+**Status:** `DONE` (2026-08-21) · **Type:** Enhancement · **Depends on:** none (`AUTH-4` and `ADMIN-1` both `DONE`) ·
 **Filed:** 2026-08-21 — noticed that `ADMIN-1` deliberately placed `/admin` outside `AppShell`, and
 that decision left the admin area with no session exit at all. **Widened at filing** (user decision)
 from a bare logout button to also cover the unsaved-changes guard, since logging out is the first
@@ -73,3 +73,115 @@ confirm dialog appears and **no** request fired, then asserts Discard proceeds w
 Storybook story for `AdminLayout` with the header control. Extend `e2e/flows/admin-route-guard.spec.ts`
 or `admin-sports.spec.ts` with a logout-from-admin case — that suite already owns the app's only
 authorization coverage.
+
+---
+
+## What was built
+
+### The approved design
+
+Two pickup decisions were taken before any code (both user calls, both recorded here because the
+ticket left them open):
+
+1. **Dirty state travels by outlet context**, not a Zustand store. The forms live under
+   `AdminSportsPage`; the Log out button lives in `AdminLayout`, its parent route across an
+   `<Outlet />`, and props cannot flow upward. Outlet context is targeted to the admin tree and adds
+   no global state for something this local. The Zustand alternative matched `client/CLAUDE.md`'s
+   "Zustand owns client/UI state" and the `homeFeedStore`/`groupsPageStore` precedent, but made
+   page-local state global to win an argument nobody was having.
+2. **The dialog is Discard-only.** GRP-2's offers Discard *and* Save; here two independent forms can
+   be dirty at once, each with its own Save button and its own endpoint, so a single "Save" would
+   have to fire both mutations and then decide what to do when one of them fails — a partial-failure
+   case GRP-2 never had to solve. Cancel + "Discard & log out" sidesteps it: the admin can cancel and
+   save whichever form they actually meant.
+
+### Files
+
+| File | Change |
+|---|---|
+| `src/features/admin/useAdminOutletContext.ts` | **New.** `AdminOutletContext` type + typed accessor. |
+| `src/features/admin/components/AdminUnsavedChangesDialog.tsx` | **New.** Discard-only confirm dialog. |
+| `src/features/admin/components/AdminUnsavedChangesDialog.test.tsx` | **New.** 5 tests. |
+| `src/features/admin/AdminLayout.tsx` | Header Log out button, dialog, outlet context, `useLogout` wiring. |
+| `src/features/admin/AdminSportsPage.tsx` | Combines both forms' dirty flags, reports upward. |
+| `src/features/admin/components/SportFieldsForm.tsx` | New optional `onDirtyChange` prop. |
+| `src/features/admin/components/AttributeSchemaEditor.tsx` | New optional `onDirtyChange` prop. |
+| `src/features/admin/AdminLayout.test.tsx` | New `describe` block, 6 tests. |
+| `src/features/admin/AdminLayout.stories.tsx` | `QueryClientProvider` wrapper + `UnsavedChangesOnLogout` story. |
+| `e2e/flows/admin-route-guard.spec.ts` | 2 new tests (plain logout, nested route). |
+| `e2e/flows/admin-sports.spec.ts` | 2 new tests (guard warns/cancels/discards, clean form doesn't prompt). |
+| `docs/E2E_OVERVIEW.md` | §3 listing + §6 tables updated for both spec files. |
+
+`useLogout`, `POST /auth/logout` and the auth store are **untouched** — the mechanism already existed
+and nothing about it was TopBar-specific.
+
+### Key decisions
+
+**`guard(action)`, never `useBlocker`.** GRP-2's `useSettingsUnsavedGuard` has two mechanisms and
+only one of them is right here. `useBlocker` intercepts *navigation*; logout is an *action* that
+POSTs first and only navigates inside `useLogout`'s `onSettled`. A blocker would therefore fire after
+the session had already been cleared server-side, stranding a logged-out admin on the page. The
+button checks `hasUnsavedChanges` itself and opens the dialog instead of calling `logout()`.
+
+**`onDirtyChange` is optional on both forms.** Existing callers — ADMIN-2's stories and its
+`AdminSportsPage.test.tsx` — need no change, which is what kept ADMIN-2's 16 tests passing verbatim.
+
+**Both the forms and the page report clean on unmount.** Each `useEffect` returns a cleanup that
+reports `false`. `AdminLayout` outlives its child routes, so a `true` left behind by an unmounted
+section would keep prompting on every later logout attempt — including from a section with no forms
+at all.
+
+**`useAdminOutletContext` falls back to a no-op when there is no context.** ADMIN-2's
+`AdminSportsPage.test.tsx` mounts the page standalone, where `useOutletContext()` returns `null` and
+destructuring it would throw — that alone would have broken 10 existing tests. The obvious risk is
+that a mis-nested route then silently disables the guard rather than failing loudly; that is covered
+by `AdminLayout.test.tsx` exercising the guard through the **real** `routes` tree, where the nesting
+is genuine.
+
+### Divergences from the approved design
+
+One, in the tests rather than the product. The plan called for asserting "no request fired" with
+`expect(postSpy).not.toHaveBeenCalled()`. That is wrong twice over: `RootLayout`'s
+`useSessionBootstrap` POSTs `/auth/refresh` on every mount, so the spy is never empty; and
+`vi.spyOn` on an already-spied method returns the *existing* spy rather than re-wrapping, so call
+history survives into later tests in the file. The first run failed on both counts and the failure
+initially looked like a product bug — a standalone reproduction confirmed the dialog opens and no
+logout fires, so the defect was in the assertion. Fixed by filtering to `/auth/logout` calls and
+clearing the spy immediately before the click under test.
+
+### Non-obvious constraints
+
+- **Storybook now needs a query client for `AdminLayout`.** `useLogout` is a `useMutation`, so the
+  layout does not render at all without a `QueryClientProvider` in the tree. Its stories build their
+  own router already; they now build their own query client too.
+- **The `AttributeSchemaEditor` effect sits above the loading-state early return.** `isDirty` moved
+  up with it — hooks cannot be declared after a conditional `return`.
+- **This guards logout only.** In-app navigation away from a dirty admin form still discards
+  silently. That gap is pre-existing (`/admin` never had any unsaved-changes protection), broader
+  than logout, and deliberately out of scope — see below.
+
+## Verification
+
+| Check | Result |
+|---|---|
+| `pnpm exec tsc -b` | Pass |
+| `pnpm lint` | Pass — 0 errors. The 2 warnings are pre-existing in `SessionStartTimePicker`, untouched here. |
+| `pnpm test` | **918 passed / 132 files.** Includes ADMIN-1 + ADMIN-2's 16 tests passing **unchanged**. |
+| `pnpm e2e` | **61 passed**, including the 4 new admin cases. |
+
+**Not done, deliberately:** no run against a live backend. This ticket adds no endpoint and changes
+no contract — it reuses `POST /auth/logout`, already shipped and verified by AUTH-4/A3 — so there is
+nothing new for a real backend to disagree about. **Not done, and worth noting as a gap:** the new
+Storybook story was type-checked but not visually reviewed, the same gap session 077 recorded for
+ADMIN-2's stories.
+
+## Deltas for later tickets
+
+- **`SportFieldsForm` and `AttributeSchemaEditor` now expose `onDirtyChange`.** Any future consumer
+  wanting dirty state has a supported way to get it and should not re-derive it by comparing props.
+- **`AdminLayout` provides outlet context.** A new admin section that owns unsaved edits should call
+  `useAdminOutletContext().setHasUnsavedChanges(...)` and report `false` on unmount — it gets the
+  logout guard for free, no change to `AdminLayout`.
+- **Still unfiled, both surfaced by this ticket:** a "back to app" link returning an admin to `/`
+  with their session intact, and a general unsaved-changes guard for `/admin` navigation (the
+  pre-existing gap this ticket only half-closes, on the logout path).
