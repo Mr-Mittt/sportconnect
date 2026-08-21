@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/shared/ui/button';
 import { Label } from '@/shared/ui/label';
 import { Textarea } from '@/shared/ui/textarea';
@@ -13,6 +13,12 @@ export interface AttributeSchemaEditorProps {
   /** Server-side validation text from A9, rendered verbatim. */
   errorMessage: string | null;
   isSaved: boolean;
+  /**
+   * ADMIN-4: reports this editor's dirty state upward so `/admin`'s logout can warn before
+   * discarding it. Optional — the editor is fully usable without it, and existing callers
+   * that don't care about the guard need no change.
+   */
+  onDirtyChange?: (isDirty: boolean) => void;
 }
 
 /** The starting document for a sport that has none. Not `{}` — A9's validator rejects a
@@ -40,6 +46,7 @@ export function AttributeSchemaEditor({
   isSaving,
   errorMessage,
   isSaved,
+  onDirtyChange,
 }: AttributeSchemaEditorProps) {
   const [text, setText] = useState<string>(() => toText(schema));
   const [parseError, setParseError] = useState<string | null>(null);
@@ -55,6 +62,16 @@ export function AttributeSchemaEditor({
     setParseError(null);
   }
 
+  const isDirty = text !== toText(schema);
+
+  // ADMIN-4: report upward on change, and report clean on unmount — a `true` left
+  // behind by an unmounted editor would keep warning on every later logout attempt.
+  // Declared above the loading-state return below: hooks cannot sit after it.
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+    return () => onDirtyChange?.(false);
+  }, [isDirty, onDirtyChange]);
+
   if (isLoading) {
     return (
       <section>
@@ -63,8 +80,6 @@ export function AttributeSchemaEditor({
       </section>
     );
   }
-
-  const isDirty = text !== toText(schema);
 
   const handleSubmit = () => {
     let parsed: SportAttributeSchema;

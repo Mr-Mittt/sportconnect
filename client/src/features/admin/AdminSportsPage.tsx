@@ -1,7 +1,9 @@
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AttributeSchemaEditor } from './components/AttributeSchemaEditor';
 import { SportCatalogTable } from './components/SportCatalogTable';
 import { SportFieldsForm } from './components/SportFieldsForm';
+import { useAdminOutletContext } from './useAdminOutletContext';
 import { useAdminSportCatalog } from './useAdminSportCatalog';
 import { useReplaceSportAttributeSchema } from './useReplaceSportAttributeSchema';
 import { useSportAttributeSchema } from './useSportAttributeSchema';
@@ -37,6 +39,24 @@ export function AdminSportsPage() {
     replaceSchema.reset();
     navigate(`/admin/sports/${id}`);
   };
+
+  // ADMIN-4: the two forms are independently dirty and each owns its own draft, so
+  // this page is the lowest point that knows about both. Tracked as two flags rather
+  // than one so either form clearing itself can't mask the other still being dirty.
+  const { setHasUnsavedChanges } = useAdminOutletContext();
+  const [areFieldsDirty, setAreFieldsDirty] = useState(false);
+  const [isSchemaDirty, setIsSchemaDirty] = useState(false);
+
+  // Stable identities — these are effect dependencies inside the children.
+  const reportFieldsDirty = useCallback((dirty: boolean) => setAreFieldsDirty(dirty), []);
+  const reportSchemaDirty = useCallback((dirty: boolean) => setIsSchemaDirty(dirty), []);
+
+  useEffect(() => {
+    setHasUnsavedChanges(areFieldsDirty || isSchemaDirty);
+    // Leaving this section clears the flag: AdminLayout outlives this page, so a
+    // lingering `true` would keep warning on logout from a section with no forms.
+    return () => setHasUnsavedChanges(false);
+  }, [areFieldsDirty, isSchemaDirty, setHasUnsavedChanges]);
 
   return (
     <section>
@@ -77,6 +97,7 @@ export function AdminSportsPage() {
                 isSaving={updateSport.isPending}
                 errorMessage={updateSport.errorMessage}
                 isSaved={updateSport.isSuccess}
+                onDirtyChange={reportFieldsDirty}
               />
 
               <hr className="my-5 border-border" />
@@ -93,6 +114,7 @@ export function AdminSportsPage() {
                     : replaceSchema.errorMessage
                 }
                 isSaved={replaceSchema.isSuccess}
+                onDirtyChange={reportSchemaDirty}
               />
             </div>
           ) : (

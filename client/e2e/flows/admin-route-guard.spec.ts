@@ -53,3 +53,31 @@ test('Admin route guard — a user holding ADMIN reaches /admin', async ({ page 
   // Admin sits outside AppShell — no member-facing chrome.
   await expect(page.getByRole('button', { name: 'Home' })).toBeHidden();
 });
+
+/*
+ * ADMIN-4: `/admin` sits outside AppShell, so TopBar — the app's only other logout
+ * control — is deliberately absent here (asserted in the test above). This covers the
+ * session exit that replaces it.
+ */
+test('Admin logout — an admin logs out from the admin shell', async ({ page }) => {
+  await logIn(page, mockAdminUser.email);
+  await page.goto('/admin');
+
+  await page.getByRole('button', { name: 'Log out' }).click();
+
+  await page.waitForURL('/login');
+  await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible();
+
+  // The session is genuinely gone, not just navigated away from: /admin bounces back
+  // to /login rather than rendering for a still-authenticated admin.
+  await page.goto('/admin');
+  await page.waitForURL(/\/login/);
+});
+
+test('Admin logout — the control is present on a nested admin route', async ({ page }) => {
+  await logIn(page, mockAdminUser.email);
+
+  await page.goto('/admin/sports/1');
+
+  await expect(page.getByRole('button', { name: 'Log out' })).toBeVisible();
+});

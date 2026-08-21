@@ -89,3 +89,43 @@ test('Admin sports — a deactivated sport is editable like any other (A11)', as
   await page.getByRole('button', { name: 'Save attributes' }).click();
   await expect(page.getByRole('status')).toHaveText('Saved');
 });
+
+/*
+ * ADMIN-4: the unsaved-changes guard in front of logout. Lives in this file rather than
+ * admin-route-guard.spec.ts because it needs a genuinely dirty admin form, which is what
+ * this section provides — the guard's whole point is that the two forms here own drafts
+ * that no navigation previously protected.
+ */
+test('Admin logout — unsaved sport-field edits are confirmed before discarding', async ({
+  page,
+}) => {
+  await logInAsAdmin(page);
+  await page.goto('/admin/sports/1');
+
+  await page.getByLabel('Category').fill('Unsaved value');
+
+  await page.getByRole('button', { name: 'Log out' }).click();
+
+  // Warned, still on /admin, still signed in.
+  await expect(page.getByText('Unsaved changes')).toBeVisible();
+  await expect(page).toHaveURL('/admin/sports/1');
+
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByText('Unsaved changes')).toBeHidden();
+  await expect(page.getByLabel('Category')).toHaveValue('Unsaved value');
+
+  // Confirming does log out.
+  await page.getByRole('button', { name: 'Log out' }).click();
+  await page.getByRole('button', { name: 'Discard & log out' }).click();
+  await page.waitForURL('/login');
+});
+
+test('Admin logout — a clean form logs out with no confirmation', async ({ page }) => {
+  await logInAsAdmin(page);
+  await page.goto('/admin/sports/1');
+  await expect(page.getByLabel('Category')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Log out' }).click();
+
+  await page.waitForURL('/login');
+});
