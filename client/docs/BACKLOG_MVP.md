@@ -68,9 +68,14 @@ New tickets get inserted at the appropriate position when filed, same as before 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [ADMIN-3](MVP/ADMIN-3_REAL_JSON_EDITOR_FOR_THE_ATTRIBUTE_SCHEMA.md) | Replace ADMIN-2's attribute-schema textarea with a real JSON editor (CodeMirror 6 recommended) — the client has **no** JSON/code editor today, so this is a dependency + first-code-splitting decision, not a component swap | `TODO` |
-| 2 | [CLIENT-MODAL-1](MVP/CLIENT-MODAL-1_STALE_MUTATION_ERROR_ON_MODAL_REOPEN.md) | Stale mutation error survives modal close/reopen — observed on `AddSportModal`; the `key`-remount reset clears the child's fields but not the parent-owned mutation error. **Widened at filing** to audit the same bug class across every dialog surfacing a parent-owned mutation error | `TODO` |
-| 3 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Render a user’s per-sport attribute fields on their sport profile — **rescoped 2026-08-20** from a static client config to consuming A9’s server-driven schema; user-facing half of A9 (ADMIN-2 is the admin half) | `TODO` |
+| 1 | [CLIENT-MODAL-1](MVP/CLIENT-MODAL-1_STALE_MUTATION_ERROR_ON_MODAL_REOPEN.md) | Stale mutation error survives modal close/reopen — observed on `AddSportModal`; the `key`-remount reset clears the child's fields but not the parent-owned mutation error. **Widened at filing** to audit the same bug class across every dialog surfacing a parent-owned mutation error | `TODO` |
+| 2 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Render a user’s per-sport attribute fields on their sport profile — **rescoped 2026-08-20** from a static client config to consuming A9’s server-driven schema; user-facing half of A9 (ADMIN-2 is the admin half) | `TODO` |
+| 3 | [ADMIN-4](MVP/ADMIN-4_LOG_OUT_FROM_THE_ADMIN_AREA.md) | Log out from the admin area — `ADMIN-1` put `/admin` outside `AppShell`, so it has no session exit; **widened at filing** to include the unsaved-changes guard the admin forms never got | `TODO` |
+
+**ADMIN-3 deferred to V1 on 2026-08-21** (user decision, during its own `/workon` pickup) — the
+attribute-schema JSON-editor upgrade. Moved to `client/docs/BACKLOG_V1.md`, which carries the full
+entry plus the dependency research done at pickup. The textarea ADMIN-2 shipped keeps serving the
+schema editor in the meantime, unchanged.
 
 ### Done
 
