@@ -1,7 +1,14 @@
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { AuthResult, LoginPayload, RegisterPayload } from '../../../src/features/auth/types.ts';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
-import { mockAccessToken, mockPassword, mockRefreshToken, mockUser } from '../fixtures.ts';
+import {
+  mockAccessToken,
+  mockAdminRefreshToken,
+  mockAdminUser,
+  mockPassword,
+  mockRefreshToken,
+  mockUser,
+} from '../fixtures.ts';
 import { getOverrides } from '../overrides.ts';
 import { sessionIdFromRequest } from '../sessionStore.ts';
 
@@ -27,6 +34,24 @@ const authResult: AuthResult = {
   user: mockUser,
 };
 
+// ADMIN-1: the same shape for the ADMIN-holding account. Kept as a separate
+// constant rather than mutating `authResult` so every existing test keeps the
+// exact response it had before.
+const adminAuthResult: AuthResult = { ...authResult, user: mockAdminUser };
+
+/**
+ * ADMIN-1: which account a session belongs to, resolved from the refresh cookie.
+ * Each account has its own token string, so a bootstrap refresh returns the user
+ * who actually logged in instead of always returning mockUser — without this an
+ * admin navigating to /admin would be re-identified as a plain USER on mount.
+ * Returns null for a missing/unknown cookie, which the caller turns into a 401.
+ */
+function sessionFor(refreshToken: string | undefined): AuthResult | null {
+  if (refreshToken === mockRefreshToken) return authResult;
+  if (refreshToken === mockAdminRefreshToken) return adminAuthResult;
+  return null;
+}
+
 export const authHandlers: HttpHandler[] = [
   http.post('/api/auth/register', async ({ request }) => {
     const body = (await request.json()) as RegisterPayload;
@@ -41,7 +66,18 @@ export const authHandlers: HttpHandler[] = [
 
   http.post('/api/auth/login', async ({ request }) => {
     const body = (await request.json()) as LoginPayload;
-    if (body.email !== mockUser.email || body.password !== mockPassword) {
+    if (body.password !== mockPassword) {
+      return HttpResponse.json(apiError('Invalid email or password'), { status: 401 });
+    }
+    // ADMIN-1: two accounts now exist. Each gets its own refresh-token string so
+    // a later bootstrap refresh can tell them apart (see sessionFor).
+    if (body.email === mockAdminUser.email) {
+      return HttpResponse.json(apiResponse(adminAuthResult, 'Login successful'), {
+        status: 200,
+        headers: { 'Set-Cookie': refreshCookie(mockAdminRefreshToken, 604800) },
+      });
+    }
+    if (body.email !== mockUser.email) {
       return HttpResponse.json(apiError('Invalid email or password'), { status: 401 });
     }
     return HttpResponse.json(apiResponse(authResult, 'Login successful'), {
@@ -63,12 +99,16 @@ export const authHandlers: HttpHandler[] = [
     if (getOverrides(sessionIdFromRequest(request)).refreshExpired) {
       return HttpResponse.json(apiError('Refresh token expired'), { status: 401 });
     }
-    if (cookies.refreshToken !== mockRefreshToken) {
+    // ADMIN-1: resolves which account the cookie belongs to instead of assuming
+    // mockUser, so an admin's session survives a navigation with its roles intact.
+    const session = sessionFor(cookies.refreshToken);
+    if (!session) {
       return HttpResponse.json(apiError('Refresh token missing'), { status: 401 });
     }
-    return HttpResponse.json(apiResponse(authResult, 'Token refreshed successfully'), {
+    const token = session === adminAuthResult ? mockAdminRefreshToken : mockRefreshToken;
+    return HttpResponse.json(apiResponse(session, 'Token refreshed successfully'), {
       status: 200,
-      headers: { 'Set-Cookie': refreshCookie(mockRefreshToken, 604800) },
+      headers: { 'Set-Cookie': refreshCookie(token, 604800) },
     });
   }),
 

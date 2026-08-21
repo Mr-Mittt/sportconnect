@@ -33,6 +33,21 @@ export const mockUser: User = {
   roles: ['USER'],
 };
 
+// ADMIN-1: a second account holding ADMIN, for the /admin route guard's role
+// branch. Deliberately holds USER as well — that is how a real admin is
+// provisioned (registration grants USER, ADMIN is added on top), and an
+// ADMIN-only account would fail every hasRole('USER') endpoint in the app.
+export const mockAdminUser: User = {
+  id: '22222222-2222-4222-8222-222222222222',
+  email: 'admin@example.com',
+  firstName: 'Alex',
+  lastName: 'Admin',
+  username: 'alexadmin',
+  phoneNumber: null,
+  avatarUrl: null,
+  roles: ['USER', 'ADMIN'],
+};
+
 export const mockPassword = 'password123';
 export const mockAccessToken = 'mock-access-token';
 
@@ -40,6 +55,13 @@ export const mockAccessToken = 'mock-access-token';
 // round-trip (set on login/register/refresh, checked on refresh/logout).
 // Real tests never read this directly — the browser handles the cookie.
 export const mockRefreshToken = 'mock-refresh-token';
+
+// ADMIN-1: a per-account refresh token, so /auth/refresh can tell which user the
+// session belongs to and return that user. Without this the handler's single
+// fixed response would hand back mockUser on every bootstrap, and an admin who
+// navigated to /admin would be re-identified as a plain USER and redirected —
+// the test would fail for a reason that has nothing to do with the guard.
+export const mockAdminRefreshToken = 'mock-admin-refresh-token';
 
 // SPORT-3: mockUser holds a profile for every sport the real MVP catalog now
 // serves (A6 — Badminton=1, Pickleball=3; see sportIdMap.ts's note) — the

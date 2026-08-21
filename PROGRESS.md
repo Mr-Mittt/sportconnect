@@ -3295,6 +3295,43 @@ explicit go-ahead at each step (full story in A3's summary doc):
   so the committed crops read *"Priya Shah joined the session - just now"*, which is also how the
   visual check confirmed the dispatch ran on the branch head rather than the original feature commit.
 
+- **ADMIN-1 (`DONE`, 2026-08-21,
+  `client/docs/MVP/ADMIN-1_ADMIN_AREA_ROUTE_AND_GUARD.md`):** the app's first admin surface — a
+  `/admin` route guarded by `ProtectedRoute requiredRole="ADMIN"`, rendering a plain `AdminLayout`
+  shell (heading, empty nav slot, `<Outlet />`) with an `AdminIndex` empty state until ADMIN-2 lands.
+  **No new guard component:** `ProtectedRoute` already implemented `requiredRole` exactly as needed
+  and its own comment noted "no route uses requiredRole yet" — this is that first use, and not a line
+  of it changed. `requiredRole="ADMIN"` not `"ROLE_ADMIN"`: the backend stores roles unprefixed and
+  `JwtAuthenticationFilter` adds the prefix server-side only. `/admin` sits **outside** `AppShell`
+  (admin is not member-facing chrome, so no TopBar/NavTabs) but **inside** `RootLayout`, because that
+  is where `useSessionBootstrap` runs — outside it, an admin hard-refreshing on `/admin` would be
+  bounced to `/login` before the refresh-cookie check resolved. Two pickup decisions, both as filed:
+  a non-admin keeps the **silent redirect to `/`** (a 403 page would be a `ProtectedRoute`-level
+  change serving every future role-gated route, not something `/admin` invents), and the index renders
+  an explicit empty state rather than a bare outlet. Deliberately **not linked** from anywhere.
+  **Test scope expanded beyond the ticket, on the user's call:** the ticket listed only RTL +
+  Storybook, but the e2e suite had **zero authorization coverage** — every spec logs in as `mockUser`
+  with `roles: ['USER']` and no route had ever used `requiredRole`, so that branch had never executed
+  in a browser. The same blind spot as the backend's 500-instead-of-403 bug found the day before.
+  Added `e2e/flows/admin-route-guard.spec.ts` (2 cases, both roles), which required a second MSW
+  account **and a second refresh-token string**: `/api/auth/refresh` returned a fixed `mockUser`, and
+  since `page.goto('/admin')` is a full app mount the bootstrap refresh runs on arrival — with one
+  shared token the admin would have been re-identified as a plain USER and redirected, failing for a
+  reason unrelated to the guard. The handler now resolves the account from the cookie. Existing specs
+  are byte-for-byte unaffected. **Divergence during implementation:** the RTL tests initially failed
+  all 6 cases with `No QueryClient set` — rendering the real `routes` includes `RootLayout`, which
+  calls `useSessionBootstrap()` on mount; fixed by matching `App.test.tsx`'s existing `renderApp`
+  pattern. That is the cost of testing through the real `routes` export rather than a hand-built tree,
+  and it is the right trade: a local tree proves `ProtectedRoute` works in isolation while saying
+  nothing about whether `/admin` is actually nested under it. Verification: `tsc -b` clean, lint 0
+  errors, Vitest **897/897**, Playwright e2e **53/53** (including the 4 `msw-setup` cases that
+  exercise the changed login/refresh handler). Backend contract confirmed by reading the source:
+  `UserResponse.roles` is a `Set<String>` mapped from `role.getName()`, so the wire shape is
+  `["USER","ADMIN"]` — the one link MSW cannot prove. **Outstanding:** the manual browser walk was not
+  done (Chrome extension not connected, port 8080 held by an unrelated server) — one manual pass is
+  worth doing before merge. Also updated `client/docs/E2E_OVERVIEW.md` �3/�5/�6 for the new spec and
+  fixture. **ADMIN-2 and SPORT-2 are now fully unblocked** (A9 merged 2026-08-20; ADMIN-1 shipped the
+  shell).
 - **CLIENT-NOTIF-4 (`DONE`, 2026-08-20,
   `client/docs/MVP/CLIENT-NOTIF-4_NOTIFICATION_TYPE_COVERAGE_GUARD.md`):** closes the gap that
   produced CLIENT-NOTIF-3 — a backend routing key shipping with no client text case, silently

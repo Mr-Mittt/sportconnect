@@ -204,6 +204,7 @@ e2e/
     direct-chat.spec.ts       # CHAT-10
     matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9
     notification-bell.spec.ts # CLIENT-NOTIF-1
+    admin-route-guard.spec.ts # ADMIN-1
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -255,7 +256,8 @@ The single logged-in test user, unless a spec explicitly overrides via an admin-
 | Fixture | Value | Notes |
 |---|---|---|
 | `mockUser` | Jordan Lee, `jordan@example.com` | `id: '11111111-...'` |
-| `mockPassword` | `password123` | |
+| `mockAdminUser` | Alex Admin, `admin@example.com` | **ADMIN-1:** `id: '22222222-...'`, `roles: ['USER', 'ADMIN']` — the only fixture holding ADMIN. Deliberately holds USER too, matching how a real admin is provisioned (registration grants USER, ADMIN is added on top) |
+| `mockPassword` | `password123` | Shared by both accounts — they differ only by email and roles |
 | `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. Any spec asserting `SportSwitcher`'s "Add sport" is `aria-disabled` relies on this (now "every available sport already held", not a numeric cap) |
 
 Posts (all owned by `mockUser` unless noted) — `sportId` 1 = Badminton, 3 = Pickleball
@@ -652,6 +654,31 @@ sessions" panel), opens the bell, clicks the aggregated row, and asserts the she
 opens and the URL stays exactly `/matches` (no `?session=` appended, no reload). This is the
 scenario that would have silently failed under the old navigate-to-`/matches?session={id}`
 approach.
+
+### `e2e/flows/admin-route-guard.spec.ts` (ADMIN-1, 2 `test()`s)
+
+The `/admin` route's **role** guard — the suite's first and only authorization coverage. Every other
+spec logs in as `mockUser` (`roles: ['USER']`) and no route used `requiredRole` before ADMIN-1, so
+`ProtectedRoute`'s role branch had never executed in a browser. Note the distinction this spec turns
+on: existing *authentication* coverage (`auth-journey.spec.ts` step 7) proves a logged-out visitor is
+redirected; nothing proved a logged-**in** user lacking a role is.
+
+| Test | Asserts |
+|---|---|
+| a user without ADMIN is redirected away from /admin | Logs in as `mockUser`, navigates to `/admin`, lands on `/` with no "Admin" heading. The redirect is deliberately silent — `/admin` is unlinked, so not confirming it exists beats a 403 page (confirmed at pickup; a dedicated unauthorized page would be a `ProtectedRoute`-level change serving every future role-gated route). |
+| a user holding ADMIN reaches /admin | Logs in as `mockAdminUser`, navigates to `/admin`, sees the shell heading, the index empty state ("Sections"), and **no** member-facing chrome — `/admin` sits outside `AppShell` on purpose. |
+
+Fixtures: `mockAdminUser` (see §5) plus a second refresh-token string,
+`mockAdminRefreshToken`. **Why the extra token matters:** `/api/auth/refresh` previously returned a
+single fixed `authResult` (always `mockUser`). Since `page.goto('/admin')` is a full app mount, the
+bootstrap refresh runs on arrival — with one shared token the admin would have been re-identified as
+a plain `USER` and redirected, failing the test for a reason unrelated to the guard. The handler now
+resolves the account from the cookie, mirroring how a real session identifies itself.
+
+What this catches that `src/features/admin/AdminLayout.test.tsx` cannot: a router-level mistake —
+`/admin` nested in the wrong place, or reachable around the guard through route ordering. The RTL
+test renders the same `routes` export, but only a real navigation exercises a full mount including
+the bootstrap refresh.
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 
