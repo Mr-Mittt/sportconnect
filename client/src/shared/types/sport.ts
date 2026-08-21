@@ -63,3 +63,65 @@ export interface UserSportProfileResponse {
   createdAt: string;
   updatedAt: string;
 }
+
+/* ── A9 per-sport attribute schema (admin-managed) ───────────────────────────
+ * 1:1 with the DTO tree in `modules/sport/sport-api` — served by
+ * `GET /api/sports/{sportId}/attribute-schema`, replaced wholesale by the
+ * matching `PUT`.
+ *
+ * Declared here rather than in `features/admin/` on purpose: ADMIN-2 (the
+ * admin editor) and SPORT-2 (the user-facing renderer) are siblings over the
+ * same document, and the second one to land must not redeclare these.
+ */
+
+/** 1:1 with `SportAttributeType`. Backend calls this out as client-visible —
+ * a renderer branching on it (SPORT-2) needs a case per member. ADMIN-2 does
+ * not branch: it edits the document as opaque JSON and lets the server
+ * validate, so a new member needs no change here beyond this union. */
+export type SportAttributeType = 'STRING' | 'ENUM' | 'LIST';
+
+/** One selectable choice on an `ENUM`/`LIST` attribute. `value` is what gets
+ * stored on the profile and is unique within its attribute; `label` is display
+ * text only. Options are additive by policy — removing one that profiles may
+ * already hold is unsafe; retire the whole attribute via `isAvailable`. */
+export interface SportAttributeOption {
+  value: string;
+  label: string;
+}
+
+export interface SportAttributeDefinition {
+  /** Unique across the entire sport, not just its group. Matches `^[a-z][a-zA-Z0-9_]*$`. */
+  key: string;
+  label: string;
+  type: SportAttributeType;
+  /** Required and non-empty for `ENUM`/`LIST`; absent or empty otherwise. */
+  options?: SportAttributeOption[] | null;
+  /** Soft delete. When `false` the attribute is not offered on profile writes,
+   * but values already stored under this key stay readable — switching a field
+   * off destroys nothing a user saved. */
+  isAvailable?: boolean | null;
+  /** Display order within the parent group. Not validated for uniqueness or contiguity. */
+  order?: number | null;
+  /** When present, must be valid for this node's own `type` and `options`. */
+  defaultValue?: unknown;
+}
+
+export interface SportAttributeGroup {
+  /** Unique among groups. Matches `^[a-z][a-zA-Z0-9_]*$`. */
+  key: string;
+  label: string;
+  /** Soft delete that hides the *whole subtree* — children are not offered on
+   * profile writes even where their own `isAvailable` is true. Parent state wins. */
+  isAvailable?: boolean | null;
+  order?: number | null;
+  attributes: SportAttributeDefinition[];
+}
+
+/** The whole document. `GET` returns `data: null` for a sport that offers no
+ * attributes — that is a valid state, not an error. */
+export interface SportAttributeSchema {
+  /** Document format version. The validator rejects a document without one,
+   * so an empty starting document is `{ version: 1, groups: [] }`, never `{}`. */
+  version: number;
+  groups: SportAttributeGroup[];
+}

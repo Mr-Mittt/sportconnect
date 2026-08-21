@@ -152,6 +152,17 @@ public class SportServiceImpl implements SportService {
                 .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
 
         if (request.getName() != null) {
+            // A11: sports.name is UNIQUE NOT NULL (V003). Without this guard the collision surfaced
+            // as a DataIntegrityViolationException at flush, which GlobalExceptionHandler has no
+            // case for — so it fell through to the catch-all Exception handler and reached the
+            // caller as 500 "An unexpected error occurred". A rename onto an existing name is the
+            // single most likely mistake in an admin sport form (client ADMIN-2), so it gets the
+            // same readable 400 createSport already produces. Compared case-sensitively, matching
+            // existsByName/createSport — this closes the 500, it does not add new normalisation.
+            if (!request.getName().equals(sport.getName())
+                    && sportRepository.existsByName(request.getName())) {
+                throw new BadRequestException("Sport with name '" + request.getName() + "' already exists");
+            }
             sport.setName(request.getName());
         }
         if (request.getDescription() != null) {
@@ -235,6 +246,24 @@ public class SportServiceImpl implements SportService {
         if (sport == null) {
             throw new ResourceNotFoundException("Sport", "id", sportId);
         }
+        return toAttributeSchema(sport.getAttributesSchema());
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Resolves with {@code findById} rather than the active-only cache, matching
+     * {@link #replaceAttributeSchema} — the point of this method is that an admin can read back
+     * exactly what that one is allowed to write, including for a deactivated sport.
+     *
+     * <p>Shares {@link #toAttributeSchema} with {@link #getAttributeSchema}, so a document that no
+     * longer deserialises fails here the same way and still cannot take the cached catalogue down.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public SportAttributeSchema getAttributeSchemaForAdmin(Long sportId) {
+        Sport sport = sportRepository.findById(sportId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
         return toAttributeSchema(sport.getAttributesSchema());
     }
 

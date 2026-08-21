@@ -1,6 +1,7 @@
 import { createBrowserRouter, createRoutesFromElements, Route } from 'react-router-dom';
 import { AdminIndex } from './features/admin/AdminIndex';
 import { AdminLayout } from './features/admin/AdminLayout';
+import { AdminSportsPage } from './features/admin/AdminSportsPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { RegisterPage } from './features/auth/RegisterPage';
 import { FriendsPage } from './features/friends/FriendsPage';
@@ -78,6 +79,12 @@ export const routes = createRoutesFromElements(
       }
     >
       <Route index element={<AdminIndex />} />
+      {/* ADMIN-2: two paths, one component — AdminSportsPage reads :sportId via
+          useParams and opens the detail panel for it, same shape /posts/:postId
+          → HomeFeedPage already uses (FEED-12). Keeps the table mounted while
+          giving the panel deep-linking and browser back/forward. */}
+      <Route path="sports" element={<AdminSportsPage />} />
+      <Route path="sports/:sportId" element={<AdminSportsPage />} />
     </Route>
   </Route>,
 );

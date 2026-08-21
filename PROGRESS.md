@@ -2882,6 +2882,34 @@ explicit go-ahead at each step (full story in A3's summary doc):
   deactivated sport had every field mutated and saved before the throw, with only `@Transactional`
   rollback preventing a persist — correct by accident, and one refactor away from a real
   write-then-fail. Hoisted above every mutation, with a test pinning the ordering.
+- **A11 (`DONE`, 2026-08-21,
+  `modules/sport/sport-impl/docs/MVP/A11_ADMIN_SCHEMA_READ_AND_RENAME_COLLISION_GUARD.md`):** two
+  gaps found while building client ADMIN-2 and fixed in that same branch rather than deferred.
+  **(1) A9's schema read and write disagreed about inactive sports.** `replaceAttributeSchema`
+  resolves via `findById` and edits a deactivated sport happily; `getAttributeSchema` reads the
+  active-only cache and 404s for one — A9 recorded that asymmetry deliberately but not its
+  consequence: **the admin editor could write a schema it could never read back**, breaking the
+  configure-a-sport-before-activating-it flow. Fixed *additively* — new
+  `getAttributeSchemaForAdmin` + `GET /api/sports/all/{sportId}/attribute-schema` (admin-only),
+  leaving `getAttributeSchema` untouched for two independent reasons: it is called on **every**
+  profile write and must keep its in-memory cache hit, and its active-only behaviour is what keeps a
+  deactivated sport invisible to member-facing reads (A6/A7), which client SPORT-2 depends on. Path
+  follows this controller's own `GET /api/sports` (active-only) vs `/all` (admin twin) convention.
+  Worth recording because it looked like a risk and wasn't: that active-only resolution is **not**
+  what enforces `isActive` on profile writes — `createProfile` calls `requireActiveSportById` first
+  and throws there. **(2) A duplicate-name rename returned 500.** `sports.name` is `UNIQUE NOT NULL`
+  but `updateSport` had no `existsByName` guard and `GlobalExceptionHandler` has no
+  `DataIntegrityViolationException` case, so the most likely mistake in an admin rename form fell
+  through to the catch-all and surfaced as "An unexpected error occurred". Added the guard (same
+  message `createSport` produces), skipped when the name is unchanged so a form posting every field
+  isn't a false collision. Tests: 6 new Spock, **5 new integration** — mandatory here, since this
+  adds an authorization boundary and `/api/sports/**` is blanket `permitAll`, so only a real request
+  proves anonymous callers are rejected; one asserts the member-404 and admin-200 **as a pair**, so a
+  future "fix" that weakens the member read fails. `:server:test` and `./gradlew build` green, and
+  every before/after case reproduced against a running server. **Not addressed:** a deactivated admin
+  can still call these until their token expires (unchanged from A9; closes with U12), and
+  `GlobalExceptionHandler` still has no `DataIntegrityViolationException` case, so any *other* unique
+  constraint in the app still surfaces as a 500 — worth its own ticket.
 - **A9 (`DONE`, 2026-08-20,
   `modules/sport/sport-impl/docs/MVP/A9_PER_SPORT_ATTRIBUTE_SCHEMA.md`):** per-sport attribute schema
   moved server-side — `sports.attributes_schema JSONB` (V059, nullable, deliberately unseeded), five
@@ -3295,6 +3323,45 @@ explicit go-ahead at each step (full story in A3's summary doc):
   so the committed crops read *"Priya Shah joined the session - just now"*, which is also how the
   visual check confirmed the dispatch ran on the branch head rather than the original feature commit.
 
+- **ADMIN-2 (`DONE`, 2026-08-21,
+  `client/docs/MVP/ADMIN-2_SPORT_ADMIN_MASTER_DETAIL_PAGE.md`):** the first admin section with real
+  behavior — a master-detail screen at `/admin/sports` for **updating existing sports**: a table of
+  every sport (via the admin-only `GET /api/sports/all`, inactive ones included) beside a side panel
+  editing both the sport's own fields (`PUT /api/sports/{id}`) and its A9 attribute schema as raw
+  JSON (`PUT .../attribute-schema`). **Rescoped at pickup, by user decision**, from the filed
+  "attribute schema editor only" — which explicitly excluded sport fields — because that scope had a
+  dead end: the picker was specced to list inactive sports so an admin could configure one *before*
+  activating it, but with no UI over `PUT /api/sports/{id}` nothing could then activate it, and the
+  sport-catalog CRUD half was unfiled anywhere. `isActive` is a plain field on that same endpoint, so
+  one form fixes both. **Two Save buttons, not one:** fields and schema are separate endpoints, and a
+  combined save would fire two requests that cannot succeed or fail together — a schema rejection
+  after a committed field write would leave a partial save with no rollback available. **Three
+  backend constraints found by reading `SportServiceImpl` and then confirmed against a live
+  server**, not inferred: (1) `getAttributeSchema` resolves through the active-only cache and **404s
+  for an inactive sport** while `replaceAttributeSchema` uses `findById` and **accepts one** — so the
+  panel gates on the catalogue's own `isActive` and never fires the doomed `GET`, because treating
+  the 404 as "no schema yet" would prefill an empty document over a real stored schema and the next
+  Save would destroy it; (2) `updateSport` is null-means-skip, so `description`/`category`/`iconUrl`
+  cannot be cleared to `null` (the form sends only changed fields); (3) a duplicate-name rename
+  returns **500, not 400** — no `existsByName` guard and no `DataIntegrityViolationException` handler.
+  All three reproduced live, along with A9's verbatim validator messages and `data: null` for a
+  schema-less sport (which is why the empty prefill is `{version:1,groups:[]}`, never `{}`).
+  **Gaps (1) and (3) were then fixed in this same branch** as backend ticket **A11** (user decision
+  mid-ticket, rather than deferring them) — so the screen's inactive-sport special case was deleted
+  again before shipping, and an inactive sport now edits like any other. Gap (2) stands: expressing
+  "unset a field" is a design decision, not a missing guard.
+  Verification: `tsc -b` clean, lint 0 errors, Vitest **907/907**, Playwright e2e **57/57**.
+  **Pre-existing e2e breakage found and cleared:** the entire suite was failing at login — confirmed
+  by stashing this ticket's changes and reproducing — caused by a stale Vite process on port 5174
+  that `reuseExistingServer` adopted without `VITE_API_PROXY_TARGET`, proxying `/api` to a dead
+  :8080. **Outstanding:** no manual browser walk (Chrome extension not connected) and Storybook not
+  visually reviewed, so the side-panel layout at 375px is unseen; creating/deleting sports still has
+  no UI (out of scope by user decision). **SPORT-2 must not redeclare** the schema types — they now
+  live in `src/shared/types/sport.ts` — and, since this editor treats the document as opaque JSON,
+  the client-visible-enum obligation on `SportAttributeType` is in practice SPORT-2's alone. Note
+  SPORT-2 reads the **member-facing** schema endpoint, which A11 deliberately left active-only, so it
+  must decide what a member holding a profile for a since-deactivated sport should see — today that
+  read 404s.
 - **ADMIN-1 (`DONE`, 2026-08-21,
   `client/docs/MVP/ADMIN-1_ADMIN_AREA_ROUTE_AND_GUARD.md`):** the app's first admin surface — a
   `/admin` route guarded by `ProtectedRoute requiredRole="ADMIN"`, rendering a plain `AdminLayout`
@@ -3329,7 +3396,7 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserResponse.roles` is a `Set<String>` mapped from `role.getName()`, so the wire shape is
   `["USER","ADMIN"]` — the one link MSW cannot prove. **Outstanding:** the manual browser walk was not
   done (Chrome extension not connected, port 8080 held by an unrelated server) — one manual pass is
-  worth doing before merge. Also updated `client/docs/E2E_OVERVIEW.md` �3/�5/�6 for the new spec and
+  worth doing before merge. Also updated `client/docs/E2E_OVERVIEW.md` �3/�5/�6 for the new spec and
   fixture. **ADMIN-2 and SPORT-2 are now fully unblocked** (A9 merged 2026-08-20; ADMIN-1 shipped the
   shell).
 - **CLIENT-NOTIF-4 (`DONE`, 2026-08-20,

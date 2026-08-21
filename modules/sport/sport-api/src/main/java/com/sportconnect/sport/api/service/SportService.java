@@ -95,6 +95,29 @@ public interface SportService {
     SportAttributeSchema getAttributeSchema(Long sportId);
 
     /**
+     * A11: the same attribute definition tree as {@link #getAttributeSchema}, but resolved for an
+     * <strong>admin</strong> caller — so a deactivated sport returns its schema instead of 404.
+     *
+     * <p>Exists because A9 left the read and write halves disagreeing: {@link #replaceAttributeSchema}
+     * resolves via {@code findById} and happily edits an inactive sport's schema, while
+     * {@link #getAttributeSchema} reads the active-only cache and reports one as not-found. That made
+     * the admin editor's central flow — configure a sport's attributes *before* activating it —
+     * impossible: the schema could be written but never read back.
+     *
+     * <p>Deliberately a second method rather than a change to {@link #getAttributeSchema}. That one
+     * is called on every profile write and must keep its in-memory cache hit, and its active-only
+     * behaviour is what keeps a deactivated sport invisible to member-facing reads (A6/A7). This
+     * one pays a query, which is the right trade for a rare admin read — the same reasoning
+     * {@link #getAllSports} already applies against {@link #getAllActiveSports}.
+     *
+     * @param sportId the sport to read
+     * @return the parsed schema, or {@code null} when the sport offers no attributes at all
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no sport has this id,
+     *         active or not
+     */
+    SportAttributeSchema getAttributeSchemaForAdmin(Long sportId);
+
+    /**
      * A9: replace a sport's whole attribute schema. Admin-only; there is no partial update.
      *
      * <p>The document is validated in full before anything is written and rejected atomically — a

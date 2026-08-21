@@ -205,6 +205,7 @@ e2e/
     matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9
     notification-bell.spec.ts # CLIENT-NOTIF-1
     admin-route-guard.spec.ts # ADMIN-1
+    admin-sports.spec.ts      # ADMIN-2
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -666,7 +667,7 @@ redirected; nothing proved a logged-**in** user lacking a role is.
 | Test | Asserts |
 |---|---|
 | a user without ADMIN is redirected away from /admin | Logs in as `mockUser`, navigates to `/admin`, lands on `/` with no "Admin" heading. The redirect is deliberately silent — `/admin` is unlinked, so not confirming it exists beats a 403 page (confirmed at pickup; a dedicated unauthorized page would be a `ProtectedRoute`-level change serving every future role-gated route). |
-| a user holding ADMIN reaches /admin | Logs in as `mockAdminUser`, navigates to `/admin`, sees the shell heading, the index empty state ("Sections"), and **no** member-facing chrome — `/admin` sits outside `AppShell` on purpose. |
+| a user holding ADMIN reaches /admin | Logs in as `mockAdminUser`, navigates to `/admin`, sees the shell heading, the section index ("Sections") with its "Sports" link, and **no** member-facing chrome — `/admin` sits outside `AppShell` on purpose. *(ADMIN-2 replaced the original "No admin sections are available yet." empty state this asserted, with the first real section link.)* |
 
 Fixtures: `mockAdminUser` (see §5) plus a second refresh-token string,
 `mockAdminRefreshToken`. **Why the extra token matters:** `/api/auth/refresh` previously returned a
@@ -679,6 +680,37 @@ What this catches that `src/features/admin/AdminLayout.test.tsx` cannot: a route
 `/admin` nested in the wrong place, or reachable around the guard through route ordering. The RTL
 test renders the same `routes` export, but only a real navigation exercises a full mount including
 the bootstrap refresh.
+
+### `e2e/flows/admin-sports.spec.ts` (ADMIN-2, 4 `test()`s)
+
+The sport master-detail admin screen at `/admin/sports` — the first admin section with real
+behavior behind it. Both saves go through the real route tree, which is what distinguishes this from
+`src/features/admin/AdminSportsPage.test.tsx`: only a real navigation proves `/admin/sports` and
+`/admin/sports/:sportId` both resolve to the one page component, and that the section is reachable
+from the `/admin` index.
+
+| Test | Asserts |
+|---|---|
+| an admin edits a sport field and saves it | Logs in as `mockAdminUser`, enters the section from `/admin`, opens Badminton via "Show detail", edits Category, saves. Asserts the "Saved" status **and** that the new value appears in the master table — proving the mutation's `adminKeys.sportsAll()` invalidation actually refetches, rather than the panel alone updating. |
+| an admin edits and saves the attribute schema | Deep-links to `/admin/sports/1`, confirms the fetched document is in the textarea, replaces it, saves. Covers the second of the two independent Save buttons. |
+| invalid JSON is rejected locally before any request | Types unparseable JSON, clicks Save, asserts the local parse error **and** — via a `page.on('request')` listener — that **no** `PUT` was issued at all. The "fires no request" half is the point: a server round trip for text that cannot parse is the failure this guards. |
+| a deactivated sport is editable like any other (A11) | Deep-links to `/admin/sports/4` (inactive Tennis) and completes a full schema edit → save. This case **inverted mid-ticket**: A9's `GET`/`PUT` asymmetry (verified live — the member read really did 404 for an inactive sport while the matching `PUT` returned 200) was fixed by backend `A11` in the same branch, so the screen no longer has an inactive-sport special case to assert. |
+
+Fixtures: reuses `mockAdminUser`/`mockAdminRefreshToken` from `admin-route-guard.spec.ts` (see §5).
+The sport handler (`e2e/mocks/handlers/sport.ts`) gained four ADMIN-2/A11 endpoints —
+`GET /api/sports/all`, `GET /api/sports/all/:sportId/attribute-schema` (A11's admin read),
+`PUT /api/sports/:sportId/attribute-schema`, and `PUT /api/sports/:sportId` — all session-keyed and
+stateful, so a save shows up on the next read. Its catalogue deliberately carries an **inactive**
+sport (Tennis, id 4) that the public `GET /api/sports` fixture does not.
+
+Two deliberate fidelity choices in that handler, both there to make a regression fail loudly rather
+than pass quietly. The **member-facing** `GET /api/sports/:sportId/attribute-schema` is still
+registered and still 404s for an inactive sport, so anything that points the admin editor back at
+the active-only path breaks a test. And `PUT /api/sports/:sportId` mirrors the real duplicate-name
+response — which A11 changed from a **500** to a readable **400**, so the handler was updated with
+it rather than being left describing the old behaviour.
+
+Related docs: `client/docs/MVP/ADMIN-2_SPORT_ADMIN_MASTER_DETAIL_PAGE.md`.
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 

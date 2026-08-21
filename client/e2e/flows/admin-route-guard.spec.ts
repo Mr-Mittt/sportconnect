@@ -47,8 +47,9 @@ test('Admin route guard — a user holding ADMIN reaches /admin', async ({ page 
 
   await expect(page).toHaveURL('/admin');
   await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible();
-  // The index empty state, until ADMIN-2 adds the first real section.
+  // ADMIN-2 replaced the index's "no sections yet" empty state with its real link.
   await expect(page.getByRole('heading', { name: 'Sections' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Sports' }).first()).toBeVisible();
   // Admin sits outside AppShell — no member-facing chrome.
   await expect(page.getByRole('button', { name: 'Home' })).toBeHidden();
 });
