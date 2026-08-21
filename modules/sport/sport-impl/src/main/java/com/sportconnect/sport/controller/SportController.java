@@ -151,6 +151,29 @@ public class SportController {
         return ResponseEntity.ok(ApiResponse.success("Attribute schema retrieved successfully", schema));
     }
 
+    @Operation(summary = "Get a sport's attribute schema, including for an inactive sport",
+            description = "Admin-only. The admin counterpart of "
+                    + "GET /api/sports/{sportId}/attribute-schema, which is active-only. "
+                    + "Returns null data when the sport offers no attributes.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema returned"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not an admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Sport not found")
+    })
+    // A11. Path mirrors this controller's existing convention for "the admin view that includes
+    // deactivated rows": GET /api/sports is active-only, GET /api/sports/all is the admin twin. So
+    // this reads as "within the full catalogue, that sport's schema". A second endpoint rather than
+    // widening the existing GET, because that one must stay active-only — it is what keeps a
+    // deactivated sport invisible to member-facing reads (A6/A7), and the member renderer
+    // (client SPORT-2) reads it.
+    @GetMapping("/all/{sportId}/attribute-schema")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<SportAttributeSchema>> getAttributeSchemaForAdmin(@PathVariable Long sportId) {
+        SportAttributeSchema schema = sportService.getAttributeSchemaForAdmin(sportId);
+        return ResponseEntity.ok(ApiResponse.success("Attribute schema retrieved successfully", schema));
+    }
+
     @Operation(summary = "Replace a sport's attribute schema",
             description = "Admin-only. Replaces the whole document; there is no partial update. "
                     + "An invalid document is rejected in full and never half-applies.")

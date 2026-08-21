@@ -204,4 +204,77 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
         mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
                 .andExpect(status().isNotFound());
     }
+
+    // --- A11: the admin read of an inactive sport's schema ---
+
+    @Test
+    void adminGetAll_rejectsNonAdmin_withForbidden() throws Exception {
+        authenticateAs(UUID.randomUUID());
+
+        mockMvc.perform(get("/api/sports/all/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminGetAll_rejectsAnonymous_withForbidden() throws Exception {
+        // Same trap as get_rejectsAnonymous_withForbidden above: /api/sports/** is blanket
+        // permitAll, so without @PreAuthorize this path would answer anonymous callers.
+        mockMvc.perform(get("/api/sports/all/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminGetAll_returnsSchemaForDeactivatedSport_whereMemberGetIs404() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(validSchema())))
+                .andExpect(status().isOk());
+
+        Sport sport = sportRepository.findById(sportId).orElseThrow();
+        sport.setIsActive(false);
+        sportRepository.save(sport);
+        evictSportCache();
+
+        // The whole point of A11, asserted as a pair: the member-facing read still collapses an
+        // inactive sport into 404 (A6/A7 invisibility, unchanged), while the admin twin returns the
+        // document the admin PUT was always allowed to write.
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/api/sports/all/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.version").value(1))
+                .andExpect(jsonPath("$.data.groups[0].key").value("gear"));
+    }
+
+    @Test
+    void adminGetAll_returnsNotFoundForUnknownSport() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        mockMvc.perform(get("/api/sports/all/{sportId}/attribute-schema", 999999L))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void adminUpdateSport_rejectsRenameOntoAnExistingName_withBadRequest() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        Long otherId = sportRepository.save(Sport.builder()
+                .name("A11 Pickleball")
+                .isActive(true)
+                .build()).getId();
+        evictSportCache();
+
+        // Before A11 this reached the caller as 500: no existsByName guard, and
+        // GlobalExceptionHandler has no DataIntegrityViolationException case, so the UNIQUE
+        // violation on sports.name fell through to the catch-all Exception handler.
+        mockMvc.perform(put("/api/sports/{sportId}", otherId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"A9 Badminton\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Sport with name 'A9 Badminton' already exists"));
+    }
+
 }

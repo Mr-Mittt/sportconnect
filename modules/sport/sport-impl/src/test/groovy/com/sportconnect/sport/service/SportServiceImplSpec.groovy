@@ -425,4 +425,102 @@ class SportServiceImplSpec extends Specification {
         0 * sportRepository.save(_)
         thrown(ResourceNotFoundException)
     }
+
+    // --- A11: admin read of an inactive sport's schema, and the rename collision guard ---
+
+    def "getAttributeSchemaForAdmin returns the document for a deactivated sport"() {
+        given: "the exact case A9 left broken - the admin editor could write this schema but never read it back"
+        def sportId = 1L
+        def stored = [
+                version: 1,
+                groups : [[key       : "gear", label: "Gear", isAvailable: true, order: 1,
+                           attributes: [[key: "racket", label: "Racket", type: "STRING",
+                                         isAvailable: true, order: 1]]]]
+        ]
+        def sport = Sport.builder().id(sportId).name("Tennis").isActive(false)
+                .attributesSchema(stored).build()
+
+        when:
+        def result = sportService.getAttributeSchemaForAdmin(sportId)
+
+        then: "resolved straight from the repository - the active-only cache is never consulted"
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        0 * sportLookupCache.getActiveSportsById()
+        result.version == 1
+        result.groups[0].attributes[0].key == "racket"
+    }
+
+    def "getAttributeSchemaForAdmin returns null when the sport offers no attributes"() {
+        given:
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Tennis").isActive(false).build()
+
+        when:
+        def result = sportService.getAttributeSchemaForAdmin(sportId)
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        result == null
+    }
+
+    def "getAttributeSchemaForAdmin throws when no sport has this id at all"() {
+        given:
+        def sportId = 99L
+
+        when:
+        sportService.getAttributeSchemaForAdmin(sportId)
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.empty()
+        thrown(ResourceNotFoundException)
+    }
+
+    def "updateSport rejects a rename onto a name another sport already holds"() {
+        given: "without this guard the UNIQUE constraint on sports.name blew up at flush and reached the caller as a 500"
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Tennis").isActive(true).build()
+        def request = UpdateSportRequest.builder().name("Badminton").build()
+
+        when:
+        sportService.updateSport(sportId, request)
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * sportRepository.existsByName("Badminton") >> true
+        0 * sportRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "updateSport allows a rename to a name nothing else holds"() {
+        given:
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Tennis").isActive(true).build()
+        def request = UpdateSportRequest.builder().name("Padel").build()
+
+        when:
+        sportService.updateSport(sportId, request)
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * sportRepository.existsByName("Padel") >> false
+        1 * sportRepository.save({ it.name == "Padel" }) >> sport
+        1 * sportLookupCache.evictAll()
+    }
+
+    def "updateSport does not treat a sport keeping its own name as a collision"() {
+        given: "re-sending the unchanged name is what a form that posts every field does"
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Tennis").isActive(true).build()
+        def request = UpdateSportRequest.builder().name("Tennis").category("Racquet").build()
+
+        when:
+        sportService.updateSport(sportId, request)
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        0 * sportRepository.existsByName(_)
+        1 * sportRepository.save(_) >> sport
+        1 * sportLookupCache.evictAll()
+    }
+
 }

@@ -80,7 +80,7 @@ describe('/admin route guard (ADMIN-1)', () => {
     );
   });
 
-  it('renders the index empty state at /admin with no child route selected', async () => {
+  it('renders the section index at /admin with no child route selected', async () => {
     useAuthStore.setState({ user: adminUser, accessToken: 'token', isBootstrapping: false });
 
     renderAt('/admin');
@@ -88,7 +88,9 @@ describe('/admin route guard (ADMIN-1)', () => {
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Sections' })).toBeInTheDocument(),
     );
-    expect(screen.getByText('No admin sections are available yet.')).toBeInTheDocument();
+    // ADMIN-2 replaced ADMIN-1's "No admin sections are available yet." empty state
+    // with the first real section link.
+    expect(screen.getAllByRole('link', { name: 'Sports' }).length).toBeGreaterThan(0);
   });
 
   it('does not render the member-facing app chrome — admin sits outside AppShell', async () => {
