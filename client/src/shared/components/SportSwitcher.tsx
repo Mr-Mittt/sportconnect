@@ -9,8 +9,15 @@ interface SportSwitcherProps {
   sports: SportProfile[];
   active: SportKey | 'all';
   onChange: (key: SportKey | 'all') => void;
-  /** Only fired while the user is below the sport cap — at the cap the pill is aria-disabled. */
+  /**
+   * SPORT-5: now fired on **every** click, including when the user already holds every
+   * catalogue sport. The caller re-reads the catalogue and then opens either the picker or
+   * `NoSportsToAddDialog`. Previously the pill was `aria-disabled` at the cap and the click
+   * was swallowed — silent, and invisible to anyone not hovering for the `title` tooltip.
+   */
   onAddSport: () => void;
+  /** SPORT-5: the catalogue re-read is in flight; the pill is disabled and says so. */
+  isCheckingCatalog?: boolean;
   /** SPORT-3: callers should pass the live catalog's size here (falling back to this default only
    * before the catalog's first fetch resolves) — hardcoding 3 stopped reflecting reality once the
    * real active catalog shrank to 2 sports (A6). */
@@ -50,8 +57,13 @@ function Pill({ label, icon, isActive, onClick }: PillProps) {
 /**
  * Controlled pill row for switching between sport profiles — the primary
  * filter for the Home Feed (drives Feed and UpcomingMatches via the parent).
- * Always renders the dashed "Add sport" pill (mockup parity — decided in HF-2);
- * at the cap it becomes a no-op with aria-disabled instead of disappearing.
+ * Always renders the dashed "Add sport" pill (mockup parity — decided in HF-2).
+ *
+ * **SPORT-5 reverses HF-2's "no-op with aria-disabled at the cap".** The pill is now
+ * always clickable; the caller re-reads the catalogue and opens either the picker or
+ * `NoSportsToAddDialog`. HF-2's disabled pill was correct about *state* and wrong about
+ * *communication* — it left the one interaction a capped user attempts with no response
+ * at all beyond a hover tooltip. `aria-disabled` now marks the in-flight re-read only.
  */
 export function SportSwitcher({
   sports,
@@ -59,7 +71,12 @@ export function SportSwitcher({
   onChange,
   onAddSport,
   maxSports = 3,
+  isCheckingCatalog = false,
 }: SportSwitcherProps) {
+  // SPORT-5: retained only for the tooltip. It no longer gates the click — being at the cap is
+  // now something the dialog explains, not something the pill refuses to discuss. Note this is
+  // equivalent to `availableSports.length === 0` at every call site, because they all pass the
+  // catalogue length as `maxSports`.
   const atCap = sports.length >= maxSports;
 
   return (
@@ -81,17 +98,17 @@ export function SportSwitcher({
       ))}
       <button
         type="button"
-        aria-disabled={atCap}
-        title={atCap ? 'You have reached the maximum number of sports' : undefined}
+        aria-disabled={isCheckingCatalog}
+        title={atCap ? 'You have added every sport available' : undefined}
         onClick={() => {
-          if (!atCap) {
+          if (!isCheckingCatalog) {
             onAddSport();
           }
         }}
         className="border-hairline flex cursor-pointer items-center gap-1.5 rounded-full border-dashed border-border-strong px-3 py-1.75 text-2sm text-text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
       >
         <IconPlus className="size-4" aria-hidden="true" />
-        Add sport
+        {isCheckingCatalog ? 'Checking…' : 'Add sport'}
       </button>
     </div>
   );

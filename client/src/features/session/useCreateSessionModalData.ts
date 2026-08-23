@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useFriends } from '@/features/friends/hooks/useFriends';
 import { useFavoriteLocation } from '@/features/location/hooks/useFavoriteLocation';
 import { useFavoriteLocations } from '@/features/location/hooks/useFavoriteLocations';
@@ -18,12 +19,22 @@ import type { CreateSessionPayload } from './types';
  * piece of state here is local to one open/close cycle of the modal.
  */
 export function useCreateSessionModalData() {
+  const sportCatalog = useSportCatalog();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreateLocationPickerOpen, setIsCreateLocationPickerOpen] = useState(false);
   const [createFormSportId, setCreateFormSportId] = useState<number | null>(null);
   const [selectedLocationForCreate, setSelectedLocationForCreate] = useState<Location | null>(null);
 
-  const openCreateModal = () => setIsCreateModalOpen(true);
+  const openCreateModal = () => {
+  // SPORT-5: this modal embeds the zero-sport-profile gate, which lists the catalogue the
+  // same way the "Add sport" pill does — so it needs the same freshness. No pill to hang a
+  // re-read on here, so opening the modal is the trigger. Fire-and-forget: the gate renders
+  // from cached data immediately and updates if the re-read brings something new, which is
+  // safe because nothing is *hidden* by being slightly late, unlike the pill's open/dialog
+  // decision.
+  void sportCatalog.refetch();
+    setIsCreateModalOpen(true);
+  };
   const closeCreateModal = () => {
     setIsCreateModalOpen(false);
     setSelectedLocationForCreate(null);

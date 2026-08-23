@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { filterDiscoverSessions } from './discoverSearch';
 import { useDiscoverSessions } from './hooks/useDiscoverSessions';
 import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
@@ -23,8 +24,18 @@ import type { SessionListItem, SessionSearchMode } from './types';
  * Cancel session / the approval queue now work here too, same as the Matches page's own modal.
  */
 export function useDiscoverModalData(sportId: number | undefined) {
+  const sportCatalog = useSportCatalog();
   const [isDiscoverModalOpen, setIsDiscoverModalOpen] = useState(false);
-  const openDiscoverModal = () => setIsDiscoverModalOpen(true);
+  const openDiscoverModal = () => {
+  // SPORT-5: this modal embeds the zero-sport-profile gate, which lists the catalogue the
+  // same way the "Add sport" pill does — so it needs the same freshness. No pill to hang a
+  // re-read on here, so opening the modal is the trigger. Fire-and-forget: the gate renders
+  // from cached data immediately and updates if the re-read brings something new, which is
+  // safe because nothing is *hidden* by being slightly late, unlike the pill's open/dialog
+  // decision.
+  void sportCatalog.refetch();
+    setIsDiscoverModalOpen(true);
+  };
   const closeDiscoverModal = () => setIsDiscoverModalOpen(false);
 
   const [searchText, setSearchText] = useState('');

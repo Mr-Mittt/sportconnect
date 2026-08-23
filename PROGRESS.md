@@ -3013,6 +3013,25 @@ explicit go-ahead at each step (full story in A3's summary doc):
   ADMIN-1, the app's **first admin surface** (`/admin` route + role guard + shell): the guard is
   nearly free because `ProtectedRoute` already has a built-but-unused `requiredRole` prop, and roles
   are stored unprefixed (`ADMIN`) with `JwtAuthenticationFilter` adding `ROLE_` server-side.
+- **Client SPORT-5 — re-read the sport catalogue on "Add sport", and say so when there is nothing
+  to add (2026-08-23,
+  `client/docs/MVP/SPORT-5_REFRESH_THE_SPORT_CATALOG_ON_ADD_SPORT_AND_SPEAK_UP_WHEN_THERE_IS_NOTHING_TO_ADD.md`):**
+  a sport activated mid-session was invisible until something happened to refetch — the catalogue
+  query is `staleTime: 0` and so refetches on mount and on window focus, but nothing refetched at
+  *click* time, so a mounted, focused session kept serving whatever it last saw. The pill now
+  re-reads `GET /sports` and only then decides what to open. **Reverses HF-2's `aria-disabled` pill:**
+  holding every catalogue sport used to swallow the click entirely, explaining itself only through a
+  hover `title` — invisible on touch and to keyboard users. It now opens `NoSportsToAddDialog`.
+  Three corrections found at pickup and recorded rather than designed around: (1) `maxSports` is the
+  **catalogue size**, not 3, so "at the cap" and "every sport held" were always the *same* state —
+  which dissolved two of the ticket's own open questions; (2) `AddSportFields`' pre-existing "you
+  already have every sport" message was unreachable in the normal path and *wrong* where it was
+  reachable (only when the catalogue failed to load), which is why the new dialog splits on
+  **availability**, not cap-vs-exhausted — a failed re-read falls back to the cached list and never
+  claims completeness; (3) the backend's real 3-profile cap (`UserSportProfileServiceImpl`) is still
+  unsurfaced client-side and would only bind if the catalogue grew past 3 — noted, unfiled. The
+  nested zero-profile gates in `CreateSessionModal`/`SessionDiscoverModal` have no pill to intercept,
+  so they re-read on modal open instead.
 - **Client CLIENT-MODAL-1 — stale mutation error survives modal close/reopen (2026-08-23,
   `client/docs/MVP/CLIENT-MODAL-1_STALE_MUTATION_ERROR_ON_MODAL_REOPEN.md`):** a failed submit's
   error stayed on screen the next time a dialog opened. `AddSportModal`'s doc comment said it

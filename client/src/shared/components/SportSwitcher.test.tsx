@@ -63,7 +63,12 @@ describe('SportSwitcher', () => {
     expect(onAddSport).toHaveBeenCalledTimes(1);
   });
 
-  it('at the cap, Add sport stays visible but is aria-disabled and does not fire', async () => {
+  // SPORT-5 **reverses** HF-2 here: the pill used to render aria-disabled at the cap and
+  // swallow the click. That was correct about state and wrong about communication — the one
+  // interaction a capped user attempts got no response beyond a hover title, invisible on
+  // touch and to keyboard users. It now always fires; the caller re-reads the catalogue and
+  // opens NoSportsToAddDialog when there is genuinely nothing to add.
+  it('at the cap, Add sport still fires — the dialog explains, the pill no longer refuses', async () => {
     const user = userEvent.setup();
     const onAddSport = vi.fn();
     render(
@@ -76,8 +81,27 @@ describe('SportSwitcher', () => {
     );
     const addButton = screen.getByRole('button', { name: /Add sport/ });
     expect(addButton).toBeInTheDocument();
+    expect(addButton).not.toHaveAttribute('aria-disabled', 'true');
+    await user.click(addButton);
+    expect(onAddSport).toHaveBeenCalledTimes(1);
+  });
+
+  it('is disabled and says so while the catalogue re-read is in flight', async () => {
+    const user = userEvent.setup();
+    const onAddSport = vi.fn();
+    render(
+      <SportSwitcher
+        sports={threeSports}
+        active="all"
+        onChange={() => {}}
+        onAddSport={onAddSport}
+        isCheckingCatalog
+      />,
+    );
+    const addButton = screen.getByRole('button', { name: /Checking/ });
     expect(addButton).toHaveAttribute('aria-disabled', 'true');
     await user.click(addButton);
+    // A second click must not fire a second re-read.
     expect(onAddSport).not.toHaveBeenCalled();
   });
 });

@@ -49,9 +49,17 @@ afterEach(() => {
 describe('useCreateSessionModalData — create error does not survive close (CLIENT-MODAL-1)', () => {
   it('clears isCreateError when the modal closes', async () => {
     vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('create failed'));
-    vi.spyOn(apiClient, 'get').mockResolvedValue({
-      data: { success: true, message: '', data: { content: [] }, timestamp: '' },
-    });
+    // SPORT-5 made these hooks read the sport catalogue (they refetch it when their modal
+    // opens), and GET /sports returns an array — a blanket page-shaped mock makes the catalogue
+    // hook map over a non-array and throw.
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => ({
+      data: {
+        success: true,
+        message: '',
+        data: url === '/sports' ? [] : { content: [] },
+        timestamp: '',
+      },
+    }));
 
     const { result } = renderHook(() => useCreateSessionModalData(), { wrapper });
 
@@ -82,9 +90,17 @@ describe('useCreateSessionModalData — create error does not survive close (CLI
 
 describe('useDiscoverModalData — session action errors do not cross sessions (CLIENT-MODAL-1)', () => {
   it('clears join/leave/cancel errors when the detail dialog closes', async () => {
-    vi.spyOn(apiClient, 'get').mockResolvedValue({
-      data: { success: true, message: '', data: { content: [] }, timestamp: '' },
-    });
+    // SPORT-5 made these hooks read the sport catalogue (they refetch it when their modal
+    // opens), and GET /sports returns an array — a blanket page-shaped mock makes the catalogue
+    // hook map over a non-array and throw.
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => ({
+      data: {
+        success: true,
+        message: '',
+        data: url === '/sports' ? [] : { content: [] },
+        timestamp: '',
+      },
+    }));
     vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('join failed'));
 
     const { result } = renderHook(() => useDiscoverModalData(undefined), { wrapper });

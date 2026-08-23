@@ -14,6 +14,7 @@ import { useSessionParticipationAction } from '@/features/session/hooks/useSessi
 import { useCreateSessionModalData } from '@/features/session/useCreateSessionModalData';
 import { useDiscoverModalData } from '@/features/session/useDiscoverModalData';
 import { AddSportModal } from '@/shared/components/AddSportModal';
+import { NoSportsToAddDialog } from '@/shared/components/NoSportsToAddDialog';
 import { CommentSection } from '@/shared/components/CommentSection';
 import { CreatePostForm } from '@/shared/components/CreatePostForm';
 import { Feed } from '@/shared/components/Feed';
@@ -23,6 +24,7 @@ import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
+import { useAddSportLauncher } from '@/shared/hooks/useAddSportLauncher';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -151,6 +153,16 @@ export function HomeFeedPage() {
     [sportCatalog.data, data.sportProfiles],
   );
 
+  // SPORT-5: the pill re-reads the catalogue before opening anything, so a sport activated
+  // mid-session is not missed and "nothing to add" is stated rather than implied by silence.
+  const addSportLauncher = useAddSportLauncher({
+    heldSportKeys: data.sportProfiles.map((sport) => sport.key),
+    onOpenPicker: () => {
+      setAddSportOpenCount((count) => count + 1);
+      setIsAddSportOpen(true);
+    },
+  });
+
   const sportsByKey = useMemo(
     () =>
       Object.fromEntries(data.sportProfiles.map((sport) => [sport.key, sport])) as Record<
@@ -213,10 +225,8 @@ export function HomeFeedPage() {
             active={activeSport}
             onChange={setActiveSport}
             maxSports={sportCatalog.data.length || undefined}
-            onAddSport={() => {
-              setAddSportOpenCount((count) => count + 1);
-              setIsAddSportOpen(true);
-            }}
+            isCheckingCatalog={addSportLauncher.isCheckingCatalog}
+            onAddSport={addSportLauncher.launch}
           />
         </div>
         <CreatePostForm
@@ -327,6 +337,13 @@ export function HomeFeedPage() {
             setActiveHashtag(tag);
             setIsHashtagModalOpen(true);
           }}
+        />
+        <NoSportsToAddDialog
+          isOpen={addSportLauncher.isDialogOpen}
+          onClose={addSportLauncher.closeDialog}
+          isCatalogUnavailable={addSportLauncher.isCatalogUnavailable}
+          onRetry={addSportLauncher.retry}
+          isRetrying={addSportLauncher.isCheckingCatalog}
         />
         <AddSportModal
           key={addSportOpenCount}

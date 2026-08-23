@@ -255,6 +255,25 @@ function staticGetResponse(url: string): { data: unknown } | undefined {
   if (url === '/sports/profiles/user/user-1') {
     return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
   }
+  // SPORT-5: the "Add sport" pill re-reads the catalogue before opening anything, so every
+  // test that touches it needs GET /sports served. Matches the three profiles above, i.e. the
+  // fixture user holds every catalogue sport — the state SPORT-5's dialog explains. Names must
+  // match the catalog store seeded in src/test/setup.ts, since profile keys resolve through it:
+  // id 5 is 'Football' there, so 'Soccer' here would look like a fourth, addable sport.
+  if (url === '/sports') {
+    return {
+      data: {
+        success: true,
+        message: '',
+        data: [
+          { id: 5, name: 'Football', iconUrl: null },
+          { id: 6, name: 'Basketball', iconUrl: null },
+          { id: 2, name: 'Tennis', iconUrl: null },
+        ],
+        timestamp: '',
+      },
+    };
+  }
   if (url === '/hashtags/trending') {
     return { data: { success: true, message: '', data: trendingHashtagsPage(), timestamp: '' } };
   }
@@ -419,13 +438,21 @@ describe('HomeFeedPage', () => {
     expect(composer).toHaveValue('');
   });
 
-  it('"Add sport" is at the 3-profile cap with real sport profiles (aria-disabled, per HF-2)', async () => {
+  // SPORT-5 **reverses** HF-2's aria-disabled-at-the-cap behaviour asserted here before.
+  // Holding every catalogue sport now opens a dialog that says so, instead of a dead pill.
+  it('"Add sport" with every catalogue sport held opens the explanatory dialog (SPORT-5)', async () => {
+    const user = userEvent.setup();
     render(<HomeFeedPage />, { wrapper });
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
-    expect(screen.getByRole('button', { name: 'Add sport' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+
+    const addSport = screen.getByRole('button', { name: 'Add sport' });
+    expect(addSport).not.toHaveAttribute('aria-disabled', 'true');
+    await user.click(addSport);
+
+    expect(await screen.findByText('Nothing left to add')).toBeInTheDocument();
+    // The completeness claim is only correct because the re-read succeeded — see the
+    // refetch-failure test for the case where it must not be made.
+    expect(screen.queryByLabelText('Skill level')).not.toBeInTheDocument();
   });
 
   it('clicking a hashtag opens a modal with the real filtered results (FEED-6)', async () => {

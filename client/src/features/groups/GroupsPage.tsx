@@ -30,6 +30,8 @@ import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
 import { UpdateBroadcastConfirmDialog } from '@/shared/components/UpdateBroadcastConfirmDialog';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
+import { NoSportsToAddDialog } from '@/shared/components/NoSportsToAddDialog';
+import { useAddSportLauncher } from '@/shared/hooks/useAddSportLauncher';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
@@ -453,6 +455,16 @@ export function GroupsPage() {
   const pillRowAnchorBottom = useAnchorBottom(pillRowAnchorRef);
 
   // CLIENT-SESSION-7: UpcomingMatches' empty-state CTAs — same pattern as HomeFeedPage.
+  // SPORT-5: re-read the catalogue before opening anything — see useAddSportLauncher.
+  const addSportLauncher = useAddSportLauncher({
+    heldSportKeys: data.sportProfiles.map((sport) => sport.key),
+    onOpenPicker: () => {
+      setAddSportPromptMessage(undefined);
+      setAddSportOpenCount((count) => count + 1);
+      setIsAddSportOpen(true);
+    },
+  });
+
   const createSessionModalData = useCreateSessionModalData();
   const activeSessionSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
   const discoverModalData = useDiscoverModalData(activeSessionSportId);
@@ -510,11 +522,8 @@ export function GroupsPage() {
             active={activeSport}
             onChange={guardedSetActiveSport}
             maxSports={sportCatalog.data.length || undefined}
-            onAddSport={() => {
-              setAddSportPromptMessage(undefined);
-              setAddSportOpenCount((count) => count + 1);
-              setIsAddSportOpen(true);
-            }}
+            isCheckingCatalog={addSportLauncher.isCheckingCatalog}
+            onAddSport={addSportLauncher.launch}
           />
         </div>
         {/* Every modal on this page positions below the group pill row specifically (user
@@ -793,6 +802,13 @@ export function GroupsPage() {
           isSearching={inviteFriendModalData.isSearching}
           isSearchError={inviteFriendModalData.isSearchError}
           onInvite={inviteFriendModalData.sendInvite}
+        />
+        <NoSportsToAddDialog
+          isOpen={addSportLauncher.isDialogOpen}
+          onClose={addSportLauncher.closeDialog}
+          isCatalogUnavailable={addSportLauncher.isCatalogUnavailable}
+          onRetry={addSportLauncher.retry}
+          isRetrying={addSportLauncher.isCheckingCatalog}
         />
         <AddSportModal
           key={`add-sport-${addSportOpenCount}`}

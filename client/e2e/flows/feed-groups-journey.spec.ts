@@ -351,3 +351,52 @@ test('a failed delete-group does not reappear when the dialog is reopened', asyn
   await expect(reopened).toBeVisible();
   await expect(reopened.getByRole('alert')).toBeHidden();
 });
+
+/*
+ * SPORT-5: a sport activated mid-session is picked up on the next "Add sport" click.
+ *
+ * The catalogue query is staleTime: 0 and so refetches on mount and on window focus — but
+ * nothing refetched at click time, so a session that stayed mounted and never lost focus
+ * kept serving whatever it last saw. This drives the exact sequence that used to fail:
+ * hold everything, see the dialog, have a sport activated, click again.
+ *
+ * The mid-test activation is a page.route() override of GET /api/sports rather than a
+ * fixture mutation, because the MSW handler serves a module-level constant.
+ */
+test('a sport activated mid-session appears on the next "Add sport" click', async ({ page }) => {
+  await seedAuthenticatedSession(page);
+
+  // The fixture user holds every catalogue sport (Badminton, Pickleball), so this states
+  // that rather than sitting there disabled.
+  await page.getByRole('button', { name: 'Add sport' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('Nothing left to add')).toBeVisible();
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await expect(dialog).toBeHidden();
+
+  // An admin activates Squash while the page stays mounted and focused.
+  await page.route('**/api/sports', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        message: '',
+        data: [
+          { id: 1, name: 'Badminton', category: null, iconUrl: null, isActive: true },
+          { id: 3, name: 'Pickleball', category: null, iconUrl: null, isActive: true },
+          { id: 9, name: 'Squash', category: null, iconUrl: null, isActive: true },
+        ],
+        timestamp: '',
+      }),
+    });
+  });
+
+  await page.getByRole('button', { name: 'Add sport' }).click();
+
+  // The picker now, not the dialog — and Squash is the sport it offers.
+  const picker = page.getByRole('dialog', { name: 'Add a sport' });
+  await expect(picker).toBeVisible();
+  await expect(picker.getByLabel('Sport')).toHaveValue('squash');
+});

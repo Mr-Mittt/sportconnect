@@ -2,6 +2,8 @@ import { IconChevronsLeft, IconChevronsRight, IconPlus } from '@tabler/icons-rea
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
+import { NoSportsToAddDialog } from '@/shared/components/NoSportsToAddDialog';
+import { useAddSportLauncher } from '@/shared/hooks/useAddSportLauncher';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
@@ -36,6 +38,14 @@ export function MatchesPage() {
 
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
   const addSportMutation = useAddSportProfile(data.currentUserId);
+  // SPORT-5: re-read the catalogue before opening anything — see useAddSportLauncher.
+  const addSportLauncher = useAddSportLauncher({
+    heldSportKeys: Object.values(data.sportsByKey).map((sport) => sport.key),
+    onOpenPicker: () => {
+      setAddSportPromptMessage(undefined);
+      setIsAddSportOpen(true);
+    },
+  });
 
   // CLIENT-MODAL-1: both modals embed the zero-sport-profile gate, which renders
   // `addSportMutation.isError` — so their close has to clear it too, not just
@@ -100,10 +110,8 @@ export function MatchesPage() {
           active={data.activeSport}
           onChange={data.setActiveSport}
           maxSports={sportCatalog.data.length || undefined}
-          onAddSport={() => {
-            setAddSportPromptMessage(undefined);
-            setIsAddSportOpen(true);
-          }}
+          isCheckingCatalog={addSportLauncher.isCheckingCatalog}
+          onAddSport={addSportLauncher.launch}
         />
         <button
           type="button"
@@ -254,6 +262,13 @@ export function MatchesPage() {
         onToggleCommentLike={data.onToggleCommentLike}
       />
 
+      <NoSportsToAddDialog
+        isOpen={addSportLauncher.isDialogOpen}
+        onClose={addSportLauncher.closeDialog}
+        isCatalogUnavailable={addSportLauncher.isCatalogUnavailable}
+        onRetry={addSportLauncher.retry}
+        isRetrying={addSportLauncher.isCheckingCatalog}
+      />
       <AddSportModal
         isOpen={isAddSportOpen}
         onClose={() => {

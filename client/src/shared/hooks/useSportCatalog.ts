@@ -23,6 +23,19 @@ export function useSportCatalog(): {
   data: SportCatalogEntry[];
   isLoading: boolean;
   isError: boolean;
+  /**
+   * SPORT-5: re-read the catalogue on demand, so a sport an admin activated mid-session
+   * is picked up at the moment the user reaches for "Add sport".
+   *
+   * The query is already `staleTime: 0` (no `QueryClient` defaults are set — see
+   * `main.tsx`), so it refetches on mount and on window focus. What it does *not* do is
+   * refetch at click time, which is the whole gap this closes: a session that stays
+   * mounted and never loses focus keeps serving whatever it last saw.
+   *
+   * Resolves to the fresh list, or the cached one if the request fails — callers must not
+   * treat a failed refetch as "there are no more sports" (see `NoSportsToAddDialog`).
+   */
+  refetch: () => Promise<SportCatalogEntry[]>;
 } {
   const query = useQuery({
     queryKey: sportCatalogQueryKey,
@@ -43,5 +56,23 @@ export function useSportCatalog(): {
     [query.data],
   );
 
-  return { data, isLoading: query.isLoading, isError: query.isError };
+  return {
+    data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    refetch: async () => {
+      const result = await query.refetch();
+      // `refetch()` rejects nothing and sets `isError` instead, so a failure surfaces here
+      // as `data: undefined` — fall back to the last good list rather than an empty one,
+      // which a caller would otherwise read as "every sport is already held".
+      const fresh = result.data;
+      if (fresh === undefined) return data;
+      return fresh.map((sport) => ({
+        id: sport.id,
+        key: sport.name.toLowerCase(),
+        name: sport.name,
+        iconUrl: sport.iconUrl,
+      }));
+    },
+  };
 }
