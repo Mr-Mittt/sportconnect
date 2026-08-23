@@ -36,6 +36,14 @@ export function MatchesPage() {
 
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
   const addSportMutation = useAddSportProfile(data.currentUserId);
+
+  // CLIENT-MODAL-1: both modals embed the zero-sport-profile gate, which renders
+  // `addSportMutation.isError` — so their close has to clear it too, not just
+  // AddSportModal's. Each hook's own close already resets the mutation it owns.
+  const closeCreateSessionModal = () => {
+    addSportMutation.reset();
+    data.closeCreateModal();
+  };
   const sportCatalog = useSportCatalog();
   const availableSports = useMemo(
     () =>
@@ -180,7 +188,7 @@ export function MatchesPage() {
       <CreateSessionModal
         key={data.isCreateModalOpen ? 'open' : 'closed'}
         isOpen={data.isCreateModalOpen}
-        onClose={data.closeCreateModal}
+        onClose={closeCreateSessionModal}
         sportsByKey={data.sportsByKey}
         activeSport={data.activeSport}
         selectedLocation={data.selectedLocationForCreate}
@@ -248,7 +256,10 @@ export function MatchesPage() {
 
       <AddSportModal
         isOpen={isAddSportOpen}
-        onClose={() => setIsAddSportOpen(false)}
+        onClose={() => {
+          addSportMutation.reset();
+          setIsAddSportOpen(false);
+        }}
         availableSports={availableSports}
         isSubmitting={addSportMutation.isPending}
         isError={addSportMutation.isError}

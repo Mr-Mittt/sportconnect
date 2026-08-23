@@ -629,4 +629,67 @@ describe('HomeFeedPage', () => {
     await user.click(screen.getByRole('button', { name: 'Join a match' }));
     expect(await screen.findByRole('dialog', { name: 'Discover sessions' })).toBeInTheDocument();
   });
+// CLIENT-MODAL-1: the ticket's confirmed instance, driven through the real UI rather than
+  // the hook, because the whole point is that the modal's own `key` remount looked like it
+  // already handled this. It clears the child's fields; `isError` is a prop off the page's
+  // mutation and survived the remount untouched.
+  it('a failed add-sport does not reappear when the modal is reopened', async () => {
+    const user = userEvent.setup();
+    // The default fixture user is at the 3-profile cap, which disables "Add sport" — one
+    // profile instead, so the modal can actually be opened.
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/sports/profiles/user/user-1') {
+        return {
+          data: { success: true, message: '', data: [sportProfileFixtures[0]], timestamp: '' },
+        };
+      }
+      // availableSports = catalogue minus held profiles, and the catalogue is its own
+      // query (useSportCatalog -> GET /sports). Unserved, it is empty and the dialog
+      // renders its "you already have every sport" branch instead of the form.
+      if (url === '/sports') {
+        return {
+          data: {
+            success: true,
+            message: '',
+            data: [
+              { id: 5, name: 'Football', iconUrl: null },
+              { id: 6, name: 'Basketball', iconUrl: null },
+            ],
+            timestamp: '',
+          },
+        };
+      }
+      const staticResponse = staticGetResponse(url);
+      if (staticResponse) return staticResponse;
+      if (url === '/posts/feed') {
+        return { data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' } };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+    // The real duplicate-sport 400 this bug was found with.
+    vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('Already has a profile for this sport'));
+
+    render(<HomeFeedPage />, { wrapper });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
+
+    await user.click(screen.getByRole('button', { name: 'Add sport' }));
+    const dialog = await screen.findByRole('dialog');
+    // Submit is disabled until a skill level is picked, and it carries the same
+    // "Add sport" label as the pill that opened the dialog — hence the within().
+    await user.selectOptions(within(dialog).getByLabelText('Skill level'), 'beginner');
+    await user.click(within(dialog).getByRole('button', { name: 'Add sport' }));
+
+    await waitFor(() =>
+      expect(within(screen.getByRole('dialog')).getByRole('alert')).toBeInTheDocument(),
+    );
+
+    // Close, then reopen. Before the fix the alert was already on screen here.
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Add sport' }));
+    const reopened = await screen.findByRole('dialog');
+    expect(within(reopened).queryByRole('alert')).not.toBeInTheDocument();
+  });
+
 });

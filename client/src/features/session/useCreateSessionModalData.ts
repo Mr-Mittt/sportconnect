@@ -28,6 +28,11 @@ export function useCreateSessionModalData() {
     setIsCreateModalOpen(false);
     setSelectedLocationForCreate(null);
     setCreateFormSportId(null);
+    // CLIENT-MODAL-1: the modal's own fields reset via its `key` remount, but `isCreateError`
+    // is a prop off this mutation — without this the previous failure renders again the next
+    // time the modal opens. Declared below; only ever called from an event handler, so the
+    // binding is initialised by then.
+    createSessionMutation.reset();
   };
 
   // CLIENT-SESSION-5: the favorites dropdown needs to be scoped to whatever sport is *currently

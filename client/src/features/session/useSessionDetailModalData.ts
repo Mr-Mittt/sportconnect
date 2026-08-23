@@ -67,6 +67,22 @@ export function useSessionDetailModalData(sessionId: number | null) {
   const sessionCommentsData = useSessionCommentsData(sessionId ?? undefined, isDetailOpen);
 
   return {
+    /**
+     * CLIENT-MODAL-1: clears the join/leave/cancel failures before the dialog closes.
+     *
+     * Worse here than the plain stale-error case elsewhere: this dialog reopens for a
+     * *different* session, so without this a failed join on session A renders its error
+     * against session B — an error attributed to the wrong entity, not just a stale one.
+     *
+     * Only the three mutation-backed flags need it. `isSessionError`,
+     * `isParticipantsError`, `isRequestedParticipantsError` and `isCommentsError` are all
+     * query-derived and re-evaluate on the next fetch, so they cannot go stale this way.
+     */
+    resetActionErrors: () => {
+      joinMutation.reset();
+      leaveMutation.reset();
+      cancelMutation.reset();
+    },
     selectedSession: sessionQuery.data,
     isSessionLoading: sessionQuery.isLoading,
     isSessionError: sessionQuery.isError,

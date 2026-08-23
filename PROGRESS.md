@@ -3013,6 +3013,24 @@ explicit go-ahead at each step (full story in A3's summary doc):
   ADMIN-1, the app's **first admin surface** (`/admin` route + role guard + shell): the guard is
   nearly free because `ProtectedRoute` already has a built-but-unused `requiredRole` prop, and roles
   are stored unprefixed (`ADMIN`) with `JwtAuthenticationFilter` adding `ROLE_` server-side.
+- **Client CLIENT-MODAL-1 — stale mutation error survives modal close/reopen (2026-08-23,
+  `client/docs/MVP/CLIENT-MODAL-1_STALE_MUTATION_ERROR_ON_MODAL_REOPEN.md`):** a failed submit's
+  error stayed on screen the next time a dialog opened. `AddSportModal`'s doc comment said it
+  "resets on every open via a changing `key` prop" — and it did, but a remount only clears state the
+  *child* owns; `isError` is a **prop** off the parent's mutation and survived untouched. **Widened
+  at filing** to audit the class, and the audit found a clean discriminator worth reusing:
+  **mutation-derived errors leak, query-derived ones do not** (a query refetches on reopen, so its
+  error reflects live state). Of ten candidate dialogs, **8 leaked and 2 were cleared**
+  (`HashtagPostsModal`, `CommentSection` — both purely query-backed). Fixed per-owner with
+  `mutation.reset()` on close, preserving SPORT-1's presentational-modal + parent-owned-mutation
+  split; three hooks that own both mutation and close handler took the reset internally, fixing
+  every consuming page at once. Two findings beyond the ticket's framing: the add-sport error also
+  feeds **nested** zero-profile gates inside `CreateSessionModal`/`SessionDiscoverModal` (`FriendsPage`
+  renders no standalone `AddSportModal` at all), and `SessionDetailModal` reopens for a *different*
+  session, so a failed join on session A was rendering its error against session B — wrong-entity
+  attribution, not just staleness. All 8 fixes carry a regression test, each verified to fail with
+  its fix reverted; `GroupsPage`'s two inline-JSX resets are covered by Playwright because no RTL
+  test in this repo has ever rendered that page.
 - **Client ADMIN-4 — logout from the admin area (2026-08-21,
   `client/docs/MVP/ADMIN-4_LOG_OUT_FROM_THE_ADMIN_AREA.md`):** `ADMIN-1` put `/admin` outside
   `AppShell` on purpose (no TopBar, no NavTabs), and TopBar's dropdown was the app's only logout

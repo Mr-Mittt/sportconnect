@@ -109,7 +109,12 @@ export function AppShell() {
 
       <SessionDetailModal
         isOpen={selectedSessionId !== null}
-        onClose={() => setSelectedSessionId(null)}
+        onClose={() => {
+          // CLIENT-MODAL-1: this dialog reopens for a different session, so a failed
+          // join/leave/cancel would otherwise surface against the next one opened.
+          sessionDetailData.resetActionErrors();
+          setSelectedSessionId(null);
+        }}
         session={sessionDetailData.selectedSession}
         sportsByKey={sportsByKey}
         isLoading={sessionDetailData.isSessionLoading}

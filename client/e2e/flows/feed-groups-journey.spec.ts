@@ -217,3 +217,137 @@ test('zero sport profiles renders without error', async ({ page, mockSessionId }
   // No sport pills besides "All" and "Add sport" — zero profiles, not a crash.
   await expect(page.getByRole('group', { name: 'Sport filter' }).getByRole('button')).toHaveCount(2);
 });
+
+/*
+ * CLIENT-MODAL-1: a failed add-sport must not still be on screen the next time the
+ * dialog opens. The confirmed instance of the bug, through the real flow.
+ *
+ * The failure is forced with page.route() rather than by submitting a genuine duplicate:
+ * the Sport select only offers sports the user does *not* already hold, so the handler's
+ * real "Already has a profile for this sport" 400 is unreachable through this UI. Same
+ * forced-failure pattern auth-journey.spec.ts already uses for its logout 401.
+ *
+ * Zero-profile fixture so "Add sport" is enabled at all — the primary fixture user holds
+ * every catalog sport and renders it aria-disabled (home-feed-journey step 7).
+ */
+test('a failed add-sport does not reappear when the dialog is reopened', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedZeroSportProfilesOnNextLoad(mockSessionId);
+  await seedAuthenticatedSession(page);
+
+  await page.route('**/api/sports/profiles', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    await route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: false,
+        message: 'Already has a profile for this sport',
+        data: null,
+        timestamp: '',
+      }),
+    });
+  });
+
+  await page.getByRole('button', { name: 'Add sport' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add a sport' });
+  await dialog.getByLabel('Skill level').selectOption('beginner');
+  await dialog.getByRole('button', { name: 'Add sport' }).click();
+
+  await expect(dialog.getByRole('alert')).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole('button', { name: 'Add sport' }).click();
+  const reopened = page.getByRole('dialog', { name: 'Add a sport' });
+  await expect(reopened).toBeVisible();
+  // Before the fix the previous failure was already rendered here: the modal's `key`
+  // remount cleared its fields but not the page-owned mutation's isError.
+  await expect(reopened.getByRole('alert')).toBeHidden();
+});
+
+/*
+ * CLIENT-MODAL-1: CreateGroupModal's reset is inline in GroupsPage's JSX rather than in a
+ * hook, and no RTL test in this repo renders GroupsPage — so this is the regression test
+ * for it. Same forced-failure pattern as the add-sport case above.
+ */
+test('a failed create-group does not reappear when the modal is reopened', async ({ page }) => {
+  await seedAuthenticatedSession(page, '/groups');
+
+  await page.route('**/api/groups', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    await route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: false,
+        message: 'Could not create that group',
+        data: null,
+        timestamp: '',
+      }),
+    });
+  });
+
+  await page.getByRole('button', { name: 'Create Group' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Create a group' });
+  await dialog.locator('#create-group-name').fill('Sunday Runners');
+  // No group is selected here, so lockedSport is null and the Sport select IS rendered
+  // (the main journey above reaches this modal with a locked sport and no select at all).
+  await dialog.locator('#create-group-sport').selectOption({ index: 1 });
+  await dialog.getByRole('button', { name: 'Create group' }).click();
+
+  await expect(dialog.getByRole('alert')).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole('button', { name: 'Create Group' }).click();
+  const reopened = page.getByRole('dialog', { name: 'Create a group' });
+  await expect(reopened).toBeVisible();
+  await expect(reopened.getByRole('alert')).toBeHidden();
+});
+
+/*
+ * CLIENT-MODAL-1: the same for DeleteGroupConfirmDialog, the other GroupsPage dialog whose
+ * reset is inline JSX. Reached through the owner-only Danger zone in the Settings tab.
+ */
+test('a failed delete-group does not reappear when the dialog is reopened', async ({ page }) => {
+  await seedAuthenticatedSession(page, '/groups');
+
+  await page.route('**/api/groups/*', async (route) => {
+    if (route.request().method() !== 'DELETE') return route.fallback();
+    await route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: false,
+        message: 'Could not delete that group',
+        data: null,
+        timestamp: '',
+      }),
+    });
+  });
+
+  // Settings only exists once a group is selected — same entry group-settings.spec.ts uses.
+  await page
+    .getByRole('group', { name: 'Group filter' })
+    .getByRole('button', { name: /Weekend Tennis Ladder/ })
+    .click();
+  await page.getByRole('tab', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Delete Group' }).click();
+
+  const dialog = page.getByRole('dialog').filter({ hasText: 'Delete' });
+  await dialog.getByRole('button', { name: 'Delete group' }).click();
+  await expect(dialog.getByRole('alert')).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole('button', { name: 'Delete Group' }).click();
+  const reopened = page.getByRole('dialog').filter({ hasText: 'Delete' });
+  await expect(reopened).toBeVisible();
+  await expect(reopened.getByRole('alert')).toBeHidden();
+});

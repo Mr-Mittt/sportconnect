@@ -193,7 +193,7 @@ e2e/
     home-feed-journey.spec.ts
     a11y.spec.ts
     auth-journey.spec.ts
-    feed-groups-journey.spec.ts
+    feed-groups-journey.spec.ts # FEED-10, CLIENT-MODAL-1
     group-settings.spec.ts
     group-members.spec.ts
     group-invitations.spec.ts
@@ -392,7 +392,7 @@ helpers called.
 | 6. simulated expired session | Login, then force one 401 on `POST /api/auth/logout` via `page.route()` → AUTH-5's retry interceptor attempts a silent refresh (fails, no valid cookie) → session cleared regardless → redirected to `/login`; re-visiting `/` redirects again (not a stale render) | **Deliberately not reload-based** — an earlier reload-triggered version was unreliable even under normal, non-repeated runs (a genuine stuck state, not the MSW-1 race) |
 | 7. deep link while logged out | `/friends` → redirected to `/login` → log in → redirected **back to `/friends`** | Tests the redirect-back mechanism specifically |
 
-### `e2e/flows/feed-groups-journey.spec.ts` (FEED-10, one `test()` with 9 steps + 1 separate `test()`)
+### `e2e/flows/feed-groups-journey.spec.ts` (FEED-10 + CLIENT-MODAL-1, one `test()` with 9 steps + 4 separate `test()`s)
 
 Uses `seedPaginatedFeedOnNextLoad(mockSessionId)` — replaces the feed with **21 posts** before the
 first fetch (index 19 = a `GROUP_POST` for `mockGroup`, index 20 = Pickleball, everything else
@@ -418,6 +418,19 @@ This spec destructures `mockSessionId` directly (needed by the seed/override adm
 | Test | What it checks | Notes |
 |---|---|---|
 | zero sport profiles | `seedZeroSportProfilesOnNextLoad(mockSessionId)` → only "All" + "Add sport" render, 2 buttons total, no crash | SPORT-1's zero-profile edge case — can't coexist with the main journey's step 9 (fixture user holds a profile for every real sport), hence a separate test |
+
+**Separate tests — CLIENT-MODAL-1 stale-mutation-error regressions:**
+
+All three force the failure with `page.route()` rather than a genuine rejection — the same pattern
+`auth-journey.spec.ts` uses for its logout 401. For add-sport the real "Already has a profile for
+this sport" 400 is *unreachable through the UI*, because the Sport select only offers sports the
+user does not already hold. Each was confirmed to fail with the fix reverted.
+
+| Test | What it checks | Notes |
+|---|---|---|
+| a failed add-sport does not reappear when the dialog is reopened | Fail the add → alert shown → Escape → reopen → no alert | The ticket's confirmed instance. Needs `seedZeroSportProfilesOnNextLoad` so "Add sport" is enabled at all — the primary fixture user holds every catalog sport and renders it `aria-disabled` |
+| a failed create-group does not reappear when the modal is reopened | Same cycle on `CreateGroupModal` | `GroupsPage` resets this one inline in JSX with no hook to unit-test, and **no RTL test in this repo renders `GroupsPage`** — so this e2e case is its only regression coverage. No group selected here, so `lockedSport` is null and the Sport select *is* rendered (unlike the main journey's step 6) |
+| a failed delete-group does not reappear when the dialog is reopened | Same cycle on `DeleteGroupConfirmDialog`, reached through the owner-only Danger zone | Same inline-JSX reason as create-group. Selects "Weekend Tennis Ladder" first — the Settings tab only exists once a group is selected, same entry `group-settings.spec.ts` uses |
 
 ### `e2e/flows/group-settings.spec.ts` (GRP-2, one `test()` with 4 steps)
 

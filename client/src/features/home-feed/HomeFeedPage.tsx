@@ -186,6 +186,18 @@ export function HomeFeedPage() {
   const createSessionModalData = useCreateSessionModalData();
   const activeSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
   const discoverModalData = useDiscoverModalData(activeSportId);
+
+  // CLIENT-MODAL-1: both modals embed the zero-sport-profile gate, which renders
+  // `addSportMutation.isError` — so their close has to clear it too, not just
+  // AddSportModal's. Each hook's own close already resets the mutation it owns.
+  const closeCreateSessionModal = () => {
+    addSportMutation.reset();
+    createSessionModalData.closeCreateModal();
+  };
+  const closeDiscoverModal = () => {
+    addSportMutation.reset();
+    discoverModalData.closeDiscoverModal();
+  };
   // CLIENT-SESSION-9: separate instance from discoverModalData's own — this one backs the rail
   // card's action button, that one backs the Discover modal's result-grid cards.
   const railParticipationAction = useSessionParticipationAction();
@@ -319,7 +331,10 @@ export function HomeFeedPage() {
         <AddSportModal
           key={addSportOpenCount}
           isOpen={isAddSportOpen}
-          onClose={() => setIsAddSportOpen(false)}
+          onClose={() => {
+            addSportMutation.reset();
+            setIsAddSportOpen(false);
+          }}
           availableSports={availableSports}
           isSubmitting={addSportMutation.isPending}
           isError={addSportMutation.isError}
@@ -358,7 +373,7 @@ export function HomeFeedPage() {
         <CreateSessionModal
           key={createSessionModalData.isCreateModalOpen ? 'open' : 'closed'}
           isOpen={createSessionModalData.isCreateModalOpen}
-          onClose={createSessionModalData.closeCreateModal}
+          onClose={closeCreateSessionModal}
           sportsByKey={sportsByKey}
           activeSport={activeSport}
           selectedLocation={createSessionModalData.selectedLocationForCreate}
@@ -380,7 +395,7 @@ export function HomeFeedPage() {
         />
         <SessionDiscoverModal
           isOpen={discoverModalData.isDiscoverModalOpen}
-          onClose={discoverModalData.closeDiscoverModal}
+          onClose={closeDiscoverModal}
           searchMode={discoverModalData.searchMode}
           onSearchModeChange={discoverModalData.setSearchMode}
           searchText={discoverModalData.searchText}
