@@ -18,7 +18,7 @@ import { expect, test } from '../mocks/test.ts';
  * Premise corrections vs the epic's literal steps (user-approved; see the
  * backlog entry's deltas): the fixture user holds a profile for every sport
  * the catalog serves, so step 7 asserts HF-2's at-cap behavior
- * (aria-disabled).
+ * (SPORT-5: now opens an explanatory dialog rather than rendering aria-disabled).
  *
  * CLIENT-SESSION-1 update: matches are real now (modules/session via
  * e2e/mocks/handlers/sessions.ts's stateful fixtures — mockSession/Pickleball,
@@ -159,10 +159,23 @@ test('Home Feed journey', async ({ page }) => {
     await expect(page.getByRole('dialog')).not.toBeVisible();
   });
 
-  await test.step('7. "Add sport" — every catalog sport already held (real SPORT-1/SPORT-3 data) renders aria-disabled (HF-2 behavior)', async () => {
+  // SPORT-5 reverses HF-2 here: this step used to assert the pill was aria-disabled once
+  // every catalog sport was held. A disabled control cannot explain itself, so the pill now
+  // always fires, re-reads the catalogue, and opens a dialog that states the situation.
+  await test.step('7. "Add sport" — every catalog sport already held opens the explanatory dialog (SPORT-5, reverses HF-2)', async () => {
     const addSport = page.getByRole('button', { name: 'Add sport' });
     await expect(addSport).toBeVisible();
-    await expect(addSport).toHaveAttribute('aria-disabled', 'true');
+    await expect(addSport).not.toHaveAttribute('aria-disabled', 'true');
+
+    await addSport.click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Nothing left to add')).toBeVisible();
+    // The completeness claim is only made because the re-read succeeded — a failed one
+    // shows "Could not load sports" with a retry instead.
+    await expect(dialog.getByText(/added every sport available/)).toBeVisible();
+    await dialog.getByRole('button', { name: 'OK' }).click();
+    await expect(dialog).toBeHidden();
   });
 
   await test.step('8. delete — the "..." menu only appears on the caller\'s own posts, and removes them', async () => {

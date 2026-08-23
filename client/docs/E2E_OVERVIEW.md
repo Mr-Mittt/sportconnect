@@ -259,7 +259,7 @@ The single logged-in test user, unless a spec explicitly overrides via an admin-
 | `mockUser` | Jordan Lee, `jordan@example.com` | `id: '11111111-...'` |
 | `mockAdminUser` | Alex Admin, `admin@example.com` | **ADMIN-1:** `id: '22222222-...'`, `roles: ['USER', 'ADMIN']` — the only fixture holding ADMIN. Deliberately holds USER too, matching how a real admin is provisioned (registration grants USER, ADMIN is added on top) |
 | `mockPassword` | `password123` | Shared by both accounts — they differ only by email and roles |
-| `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. Any spec asserting `SportSwitcher`'s "Add sport" is `aria-disabled` relies on this (now "every available sport already held", not a numeric cap) |
+| `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. **SPORT-5:** specs no longer assert `aria-disabled` for this state; they assert the dialog it now opens. The fixture still supplies the "every available sport already held" condition both depend on |
 
 Posts (all owned by `mockUser` unless noted) — `sportId` 1 = Badminton, 3 = Pickleball
 (SPORT-3 — was 5 = Soccer/6 = Basketball before the real catalog shrank to 2 sports, A6):
@@ -351,7 +351,7 @@ helpers called.
 | 4. like toggle | `likeCount` 3→4→3, `aria-pressed` flips | Optimistic — no network wait asserted |
 | 5. hashtag click | Opens `HashtagPostsModal` with 2 matching posts (`mockPost`+`mockGroupPost`, both tagged `fridayrun`); reachable from both an inline post tag and the Trending row; Escape closes it; **no URL change** | Modal, not a route — user decision, see FEED-6's delta |
 | 6. match CTA | "View details" opens `SessionDetailModal` in place, no URL change → Close returns to the rail | CLIENT-SESSION-9 (same-day follow-up): previously navigated to `/matches?session={id}`, switching the user away from Home Feed — now reuses the page's own `discoverModalData.onViewDetails`, same as clicking a card inside the Discover modal. Matches come from `mocks/handlers/sessions.ts`'s default session fixture set (CLIENT-SESSION-12: grew from 3 to 5 upcoming sessions, rail still caps display at 4) |
-| 7. "Add sport" | `aria-disabled="true"` | **SPORT-3:** relies on the fixture user holding a profile for every sport the live catalog serves (2), not a numeric "3-sport cap" anymore |
+| 7. "Add sport" | Pill is **not** `aria-disabled`; clicking it opens `NoSportsToAddDialog` ("Nothing left to add"), dismissed with OK | **SPORT-5 reverses HF-2 here** — this step previously asserted `aria-disabled="true"`. A disabled control cannot explain itself, so the pill now always fires, re-reads the catalogue, and states the outcome. **SPORT-3:** still relies on the fixture user holding a profile for every sport the live catalog serves (2), not a numeric "3-sport cap" |
 | 8. delete | "..." menu only on the caller's own post (not Priya Shah's); delete removes it, count 3→2 | |
 
 ### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + GRP-3 + FRIEND-1, several independent `test()`s)
@@ -419,6 +419,12 @@ This spec destructures `mockSessionId` directly (needed by the seed/override adm
 |---|---|---|
 | zero sport profiles | `seedZeroSportProfilesOnNextLoad(mockSessionId)` → only "All" + "Add sport" render, 2 buttons total, no crash | SPORT-1's zero-profile edge case — can't coexist with the main journey's step 9 (fixture user holds a profile for every real sport), hence a separate test |
 
+**Separate test — SPORT-5 catalogue freshness:**
+
+| Test | What it checks | Notes |
+|---|---|---|
+| a sport activated mid-session appears on the next "Add sport" click | Hold everything → dialog → a `page.route()` override activates Squash → click again → the **picker** opens offering Squash | Drives the exact sequence that used to fail: the catalogue query is `staleTime: 0` so it refetches on mount and focus, but nothing refetched at *click* time, so a mounted, focused session never saw the new sport. Overrides `GET /api/sports` rather than mutating a fixture, because the MSW handler serves a module-level constant. Confirmed to fail with the re-read reverted |
+
 **Separate tests — CLIENT-MODAL-1 stale-mutation-error regressions:**
 
 All three force the failure with `page.route()` rather than a genuine rejection — the same pattern
@@ -428,7 +434,7 @@ user does not already hold. Each was confirmed to fail with the fix reverted.
 
 | Test | What it checks | Notes |
 |---|---|---|
-| a failed add-sport does not reappear when the dialog is reopened | Fail the add → alert shown → Escape → reopen → no alert | The ticket's confirmed instance. Needs `seedZeroSportProfilesOnNextLoad` so "Add sport" is enabled at all — the primary fixture user holds every catalog sport and renders it `aria-disabled` |
+| a failed add-sport does not reappear when the dialog is reopened | Fail the add → alert shown → Escape → reopen → no alert | The ticket's confirmed instance. Needs `seedZeroSportProfilesOnNextLoad` so the picker actually opens — the primary fixture user holds every catalog sport, which since **SPORT-5** opens `NoSportsToAddDialog` instead |
 | a failed create-group does not reappear when the modal is reopened | Same cycle on `CreateGroupModal` | `GroupsPage` resets this one inline in JSX with no hook to unit-test, and **no RTL test in this repo renders `GroupsPage`** — so this e2e case is its only regression coverage. No group selected here, so `lockedSport` is null and the Sport select *is* rendered (unlike the main journey's step 6) |
 | a failed delete-group does not reappear when the dialog is reopened | Same cycle on `DeleteGroupConfirmDialog`, reached through the owner-only Danger zone | Same inline-JSX reason as create-group. Selects "Weekend Tennis Ladder" first — the Settings tab only exists once a group is selected, same entry `group-settings.spec.ts` uses |
 
