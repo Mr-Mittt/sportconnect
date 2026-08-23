@@ -98,6 +98,8 @@ export function useGroupsPageData(): {
   updateBroadcast: (content: string, options?: { onSuccess?: () => void }) => void;
   isUpdatingBroadcast: boolean;
   isBroadcastUpdateError: boolean;
+  /** CLIENT-MODAL-1: clears a failed broadcast update so the confirm dialog reopens clean. */
+  resetBroadcastUpdate: () => void;
   currentUserId: string | undefined;
   hasMorePosts: boolean;
   isFetchingMorePosts: boolean;
@@ -290,6 +292,7 @@ export function useGroupsPageData(): {
     updateBroadcast,
     isUpdatingBroadcast: updateMutation.isPending,
     isBroadcastUpdateError: updateMutation.isError,
+    resetBroadcastUpdate: () => updateMutation.reset(),
     currentUserId,
     hasMorePosts: activeFeedQuery.hasNextPage ?? false,
     isFetchingMorePosts: activeFeedQuery.isFetchingNextPage,

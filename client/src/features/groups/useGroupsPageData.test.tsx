@@ -431,4 +431,32 @@ describe('useGroupsPageData', () => {
     await waitFor(() => expect(result.current.isLoadMorePostsError).toBe(true));
     expect(result.current.data.posts).toHaveLength(1);
   });
+  // CLIENT-MODAL-1: UpdateBroadcastConfirmDialog renders isBroadcastUpdateError, and its
+  // close lives on GroupsPage — so the reset is exposed here rather than fired internally.
+  it('resetBroadcastUpdate clears a failed broadcast update', async () => {
+    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: 7 });
+    const activeBroadcast = post({
+      id: 30,
+      postType: 'GROUP_BROADCAST',
+      groupId: 7,
+      content: 'Old message',
+      sportId: 5,
+    });
+    mockGet({
+      '/groups/user/user-1': page([group({ id: 7 })]),
+      '/posts/group/7': page([]),
+      '/posts/broadcast': page([activeBroadcast]),
+    });
+    vi.spyOn(apiClient, 'put').mockRejectedValue(new Error('update failed'));
+
+    const { result } = renderHook(() => useGroupsPageData(), { wrapper });
+    await waitFor(() => expect(result.current.activeBroadcastForSelectedGroup?.id).toBe(30));
+
+    act(() => result.current.updateBroadcast('New message'));
+    await waitFor(() => expect(result.current.isBroadcastUpdateError).toBe(true));
+
+    act(() => result.current.resetBroadcastUpdate());
+
+    await waitFor(() => expect(result.current.isBroadcastUpdateError).toBe(false));
+  });
 });

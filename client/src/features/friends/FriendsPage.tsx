@@ -80,6 +80,20 @@ export function FriendsPage() {
   // inside CreateSessionModal/SessionDiscoverModal, same computation every other page already
   // does for its own SportSwitcher "+" pill.
   const addSportMutation = useAddSportProfile(user.id);
+
+  // CLIENT-MODAL-1: both modals embed the zero-sport-profile gate, which renders
+  // `addSportMutation.isError` — so their close has to clear it too, not just
+  // AddSportModal's. Each hook's own close already resets the mutation it owns.
+  // FriendsPage renders no standalone AddSportModal at all — these two nested gates
+  // are the only surfaces here that can show an add-sport error.
+  const closeCreateSessionModal = () => {
+    addSportMutation.reset();
+    createSessionModalData.closeCreateModal();
+  };
+  const closeDiscoverModal = () => {
+    addSportMutation.reset();
+    discoverModalData.closeDiscoverModal();
+  };
   const sportCatalog = useSportCatalog();
   const availableSports = useMemo(
     () =>
@@ -185,7 +199,7 @@ export function FriendsPage() {
         <CreateSessionModal
           key={createSessionModalData.isCreateModalOpen ? 'open' : 'closed'}
           isOpen={createSessionModalData.isCreateModalOpen}
-          onClose={createSessionModalData.closeCreateModal}
+          onClose={closeCreateSessionModal}
           sportsByKey={sportsByKey}
           selectedLocation={createSessionModalData.selectedLocationForCreate}
           onOpenLocationPicker={createSessionModalData.onOpenLocationPickerForCreate}
@@ -206,7 +220,7 @@ export function FriendsPage() {
         />
         <SessionDiscoverModal
           isOpen={discoverModalData.isDiscoverModalOpen}
-          onClose={discoverModalData.closeDiscoverModal}
+          onClose={closeDiscoverModal}
           searchMode={discoverModalData.searchMode}
           onSearchModeChange={discoverModalData.setSearchMode}
           searchText={discoverModalData.searchText}

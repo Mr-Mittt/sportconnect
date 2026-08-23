@@ -62,6 +62,12 @@ export function useGroupInvitationsData(
       rejectMutation.mutate({ invitationId, reason }),
     isRejecting: rejectMutation.isPending,
     isRejectError: rejectMutation.isError,
+    /**
+     * CLIENT-MODAL-1: clears a failed reject so `RejectInvitationConfirmDialog` doesn't open
+     * showing the previous attempt's error. Exposed rather than reset internally because the
+     * close event belongs to the page that owns the dialog, not to this hook.
+     */
+    resetReject: () => rejectMutation.reset(),
   };
 }
 

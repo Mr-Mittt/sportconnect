@@ -178,6 +178,7 @@ export function GroupsPage() {
     updateBroadcast,
     isUpdatingBroadcast,
     isBroadcastUpdateError,
+    resetBroadcastUpdate,
     currentUserId,
     hasMorePosts,
     isFetchingMorePosts,
@@ -455,6 +456,18 @@ export function GroupsPage() {
   const createSessionModalData = useCreateSessionModalData();
   const activeSessionSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
   const discoverModalData = useDiscoverModalData(activeSessionSportId);
+
+  // CLIENT-MODAL-1: both modals embed the zero-sport-profile gate, which renders
+  // `addSportMutation.isError` — so their close has to clear it too, not just
+  // AddSportModal's. Each hook's own close already resets the mutation it owns.
+  const closeCreateSessionModal = () => {
+    addSportMutation.reset();
+    createSessionModalData.closeCreateModal();
+  };
+  const closeDiscoverModal = () => {
+    addSportMutation.reset();
+    discoverModalData.closeDiscoverModal();
+  };
   // CLIENT-SESSION-9: separate instance from discoverModalData's own — this one backs the rail
   // card's action button, that one backs the Discover modal's result-grid cards.
   const railParticipationAction = useSessionParticipationAction();
@@ -736,7 +749,10 @@ export function GroupsPage() {
         <CreateGroupModal
           key={`create-group-${createGroupOpenCount}`}
           isOpen={isCreateGroupOpen}
-          onClose={() => setIsCreateGroupOpen(false)}
+          onClose={() => {
+            createGroupMutation.reset();
+            setIsCreateGroupOpen(false);
+          }}
           sportsByKey={sportsByKey}
           lockedSport={lockedSport}
           initialGroupName={pendingCreateGroupName}
@@ -781,7 +797,10 @@ export function GroupsPage() {
         <AddSportModal
           key={`add-sport-${addSportOpenCount}`}
           isOpen={isAddSportOpen}
-          onClose={() => setIsAddSportOpen(false)}
+          onClose={() => {
+            addSportMutation.reset();
+            setIsAddSportOpen(false);
+          }}
           availableSports={availableSports}
           isSubmitting={addSportMutation.isPending}
           isError={addSportMutation.isError}
@@ -793,7 +812,10 @@ export function GroupsPage() {
         <RejectInvitationConfirmDialog
           key={rejectingInvitationId ?? 'none'}
           isOpen={rejectingInvitationId !== null}
-          onClose={() => setRejectingInvitationId(null)}
+          onClose={() => {
+            groupInvitationsData.resetReject();
+            setRejectingInvitationId(null);
+          }}
           onConfirm={(reason) => {
             if (rejectingInvitationId === null) return;
             groupInvitationsData.rejectInvitation(rejectingInvitationId, reason);
@@ -821,7 +843,10 @@ export function GroupsPage() {
         <AddSportModal
           key={`sport-gate-${sportGate?.invitationId ?? 'none'}`}
           isOpen={sportGate?.step === 'form'}
-          onClose={() => setSportGate(null)}
+          onClose={() => {
+            addSportMutation.reset();
+            setSportGate(null);
+          }}
           availableSports={sportGate !== null ? [sportGate.sportKey] : []}
           isSubmitting={addSportMutation.isPending}
           isError={addSportMutation.isError}
@@ -865,7 +890,10 @@ export function GroupsPage() {
         />
         <UpdateBroadcastConfirmDialog
           isOpen={pendingBroadcastContent !== null}
-          onClose={() => setPendingBroadcastContent(null)}
+          onClose={() => {
+            resetBroadcastUpdate();
+            setPendingBroadcastContent(null);
+          }}
           onConfirm={confirmUpdateBroadcast}
           isSubmitting={isUpdatingBroadcast}
           isError={isBroadcastUpdateError}
@@ -874,7 +902,10 @@ export function GroupsPage() {
         {selectedGroup !== null && (
           <DeleteGroupConfirmDialog
             isOpen={isDeleteConfirmOpen}
-            onClose={() => setIsDeleteConfirmOpen(false)}
+            onClose={() => {
+              deleteGroupMutation.reset();
+              setIsDeleteConfirmOpen(false);
+            }}
             onConfirm={handleConfirmDeleteGroup}
             isSubmitting={deleteGroupMutation.isPending}
             isError={deleteGroupMutation.isError}
@@ -892,7 +923,7 @@ export function GroupsPage() {
         <CreateSessionModal
           key={createSessionModalData.isCreateModalOpen ? 'open' : 'closed'}
           isOpen={createSessionModalData.isCreateModalOpen}
-          onClose={createSessionModalData.closeCreateModal}
+          onClose={closeCreateSessionModal}
           sportsByKey={sportsByKey}
           activeSport={activeSport}
           selectedLocation={createSessionModalData.selectedLocationForCreate}
@@ -914,7 +945,7 @@ export function GroupsPage() {
         />
         <SessionDiscoverModal
           isOpen={discoverModalData.isDiscoverModalOpen}
-          onClose={discoverModalData.closeDiscoverModal}
+          onClose={closeDiscoverModal}
           searchMode={discoverModalData.searchMode}
           onSearchModeChange={discoverModalData.setSearchMode}
           searchText={discoverModalData.searchText}
