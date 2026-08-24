@@ -3,12 +3,14 @@ package com.sportconnect.sport.controller;
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.sport.api.dto.CreateSportRequest;
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest;
+import com.sportconnect.sport.api.dto.ResolvedSportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UpdateSportRequest;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.sport.api.service.UserSportProfileService;
+import com.sportconnect.sport.service.SportAttributeSchemaLabelResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @RestController
@@ -38,6 +41,7 @@ public class SportController {
 
     private final SportService sportService;
     private final UserSportProfileService profileService;
+    private final SportAttributeSchemaLabelResolver labelResolver;
 
     @Operation(summary = "Create a sport", description = "Admin-only.")
     @ApiResponses({
@@ -132,7 +136,9 @@ public class SportController {
     // Per-sport attribute schema (A9)
     @Operation(summary = "Get a sport's attribute schema",
             description = "The attribute definition tree used to render per-sport profile fields. "
-                    + "Returns null data when the sport offers no attributes.")
+                    + "Labels are resolved to a single string per node for the caller's Accept-Language "
+                    + "(A13) — see GET /api/sports/all/{sportId}/attribute-schema for the raw, "
+                    + "every-locale document. Returns null data when the sport offers no attributes.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema returned"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
@@ -146,14 +152,23 @@ public class SportController {
     // hasRole('USER') because the admin editor (client ADMIN-2) reads this too, and nothing in the
     // codebase grants ADMIN, so an admin-only account may not also hold USER.
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<SportAttributeSchema>> getAttributeSchema(@PathVariable Long sportId) {
+    public ResponseEntity<ApiResponse<ResolvedSportAttributeSchema>> getAttributeSchema(
+            @PathVariable Long sportId, Locale locale) {
+        // A13: resolution happens here, on the way out of this GET only — never inside
+        // SportService.getAttributeSchema, which UserSportProfileServiceImpl also calls on every
+        // profile write to filter submitted attributes, a path that never touches labels. `locale`
+        // is resolved by Spring's default LocaleResolver (AcceptHeaderLocaleResolver) from the
+        // request's Accept-Language header — no manual header parsing needed.
         SportAttributeSchema schema = sportService.getAttributeSchema(sportId);
-        return ResponseEntity.ok(ApiResponse.success("Attribute schema retrieved successfully", schema));
+        ResolvedSportAttributeSchema resolved = labelResolver.resolve(schema, locale);
+        return ResponseEntity.ok(ApiResponse.success("Attribute schema retrieved successfully", resolved));
     }
 
     @Operation(summary = "Get a sport's attribute schema, including for an inactive sport",
             description = "Admin-only. The admin counterpart of "
                     + "GET /api/sports/{sportId}/attribute-schema, which is active-only. "
+                    + "Labels are raw here — every locale's Map<locale, text>, unresolved — so the "
+                    + "editor (client ADMIN-2) can show and edit them all (A13). "
                     + "Returns null data when the sport offers no attributes.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema returned"),

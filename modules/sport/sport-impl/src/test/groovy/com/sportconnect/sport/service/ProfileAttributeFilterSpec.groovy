@@ -28,23 +28,23 @@ class ProfileAttributeFilterSpec extends Specification {
         SportAttributeSchema.builder()
                 .groups([
                         SportAttributeGroup.builder()
-                                .key("gear").label("Gear").isAvailable(groupAvailable).order(1)
+                                .key("gear").label(["en": "Gear"]).isAvailable(groupAvailable).order(1)
                                 .attributes([
                                         SportAttributeDefinition.builder()
-                                                .key("racket").label("Racket")
+                                                .key("racket").label(["en": "Racket"])
                                                 .type(SportAttributeType.STRING)
                                                 .isAvailable(racketAvailable).order(1).build(),
                                         SportAttributeDefinition.builder()
-                                                .key("shuttlecock").label("Shuttlecock")
+                                                .key("shuttlecock").label(["en": "Shuttlecock"])
                                                 .type(SportAttributeType.ENUM)
-                                                .options([new SportAttributeOption("feather", "Feather"),
-                                                          new SportAttributeOption("nylon", "Nylon")])
+                                                .options([new SportAttributeOption("feather", ["en": "Feather"]),
+                                                          new SportAttributeOption("nylon", ["en": "Nylon"])])
                                                 .isAvailable(true).order(2).build(),
                                         SportAttributeDefinition.builder()
-                                                .key("shots").label("Shots")
+                                                .key("shots").label(["en": "Shots"])
                                                 .type(SportAttributeType.LIST)
-                                                .options([new SportAttributeOption("smash", "Smash"),
-                                                          new SportAttributeOption("drop", "Drop")])
+                                                .options([new SportAttributeOption("smash", ["en": "Smash"]),
+                                                          new SportAttributeOption("drop", ["en": "Drop"])])
                                                 .isAvailable(true).order(3).build()
                                 ]).build()
                 ]).build()
@@ -143,9 +143,9 @@ class ProfileAttributeFilterSpec extends Specification {
     def "an attribute omitting isAvailable is treated as available"() {
         given: "a document that simply does not mention the flag reads as available to an admin"
         def s = SportAttributeSchema.builder().groups([
-                SportAttributeGroup.builder().key("gear").label("Gear").order(1)
+                SportAttributeGroup.builder().key("gear").label(["en": "Gear"]).order(1)
                         .attributes([SportAttributeDefinition.builder()
-                                             .key("racket").label("Racket")
+                                             .key("racket").label(["en": "Racket"])
                                              .type(SportAttributeType.STRING).order(1).build()])
                         .build()
         ]).build()
@@ -167,23 +167,23 @@ class ProfileAttributeFilterSpec extends Specification {
      */
     private static SportAttributeSchema schemaWithDefinitions() {
         def reference = SportAttributeDefinitionType.builder().name("Reference").fields([
-                SportAttributeField.builder().key("id").label("id")
+                SportAttributeField.builder().key("id").label(["en": "id"])
                         .type(SportAttributeType.STRING).isRequired(false).order(1).build(),
-                SportAttributeField.builder().key("value").label("value")
+                SportAttributeField.builder().key("value").label(["en": "value"])
                         .type(SportAttributeType.STRING).isRequired(true).order(2).build()
         ]).build()
         def shoeSize = SportAttributeDefinitionType.builder().name("ShoeSize").fields([
-                SportAttributeField.builder().key("system").label("system")
+                SportAttributeField.builder().key("system").label(["en": "system"])
                         .type(SportAttributeType.ENUM)
-                        .options([new SportAttributeOption("US", "US"), new SportAttributeOption("UK", "UK")])
+                        .options([new SportAttributeOption("US", ["en": "US"]), new SportAttributeOption("UK", ["en": "UK"])])
                         .isRequired(true).order(1).build(),
-                SportAttributeField.builder().key("value").label("value")
+                SportAttributeField.builder().key("value").label(["en": "value"])
                         .type(SportAttributeType.STRING).isRequired(true).order(2).build()
         ]).build()
         def shoe = SportAttributeDefinitionType.builder().name("Shoe").fields([
-                SportAttributeField.builder().key("shoe").label("shoe")
+                SportAttributeField.builder().key("shoe").label(["en": "shoe"])
                         .type(SportAttributeType.DEFINITION).definitionRef("Reference").isRequired(true).order(1).build(),
-                SportAttributeField.builder().key("size").label("size")
+                SportAttributeField.builder().key("size").label(["en": "size"])
                         .type(SportAttributeType.DEFINITION).definitionRef("ShoeSize").isRequired(false).order(2).build()
         ]).build()
 
@@ -191,15 +191,15 @@ class ProfileAttributeFilterSpec extends Specification {
                 .definitions([reference, shoeSize, shoe])
                 .groups([
                         SportAttributeGroup.builder()
-                                .key("gear").label("Gear").isAvailable(true).order(1)
+                                .key("gear").label(["en": "Gear"]).isAvailable(true).order(1)
                                 .attributes([
                                         SportAttributeDefinition.builder()
-                                                .key("rackets").label("Rackets")
+                                                .key("rackets").label(["en": "Rackets"])
                                                 .type(SportAttributeType.DEFINITION_LIST)
                                                 .definitionRef("Reference")
                                                 .isAvailable(true).order(1).build(),
                                         SportAttributeDefinition.builder()
-                                                .key("footwear").label("Footwear")
+                                                .key("footwear").label(["en": "Footwear"])
                                                 .type(SportAttributeType.DEFINITION)
                                                 .definitionRef("Shoe")
                                                 .isAvailable(true).order(2).build()

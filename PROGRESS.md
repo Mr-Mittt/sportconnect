@@ -3079,6 +3079,49 @@ explicit go-ahead at each step (full story in A3's summary doc):
   through `:server:bootRun` (`Rows affected: 1`, app started), and post-state checked — only the
   `sport_id` FK remains, V058 recorded `EXECUTED`, all 5 indexes (incl. the load-bearing
   `UNIQUE(user_id, sport_id)`) and all 40 existing profile rows intact.
+- **A13 (`DONE`, 2026-08-24,
+  `modules/sport/sport-impl/docs/MVP/A13_LOCALIZED_ATTRIBUTE_SCHEMA_LABELS.md`):** localized
+  attribute-schema labels — `label` became `Map<String, String>` on every labeled node
+  (`SportAttributeGroup`/`Definition`/`Option`/`Field`), `SportAttributeSchema` gained
+  `defaultLocale`, and `SportAttributeSchemaValidator` now rejects a missing/malformed
+  `defaultLocale` and any labeled node whose map lacks that locale's entry or carries a malformed
+  locale key. Resolution (exact locale tag → language-only → `defaultLocale`) lives in a new
+  standalone `SportAttributeSchemaLabelResolver`, called only from `SportController.getAttributeSchema`
+  — never from `SportService.getAttributeSchema`, which `UserSportProfileServiceImpl` also calls on
+  every profile write and which must stay locale-independent for `SportLookupCache`. The caller's
+  locale comes from a plain `Locale` controller-method parameter, resolved by Spring's default
+  `AcceptHeaderLocaleResolver` from `Accept-Language` — no manual header parsing. Since the two
+  `GET` endpoints (A11) now genuinely return different shapes, added six `Resolved*` DTOs
+  (`ResolvedSportAttributeSchema`/`DefinitionType`/`Group`/`Definition`/`Option`/`Field`, mirroring
+  `location-api`'s `ResolvedMapsUrlResponse` naming) rather than widening `label` to `Object` —
+  confirmed with the user before implementing rather than decided unilaterally. The member-facing
+  `GET /api/sports/{sportId}/attribute-schema` now returns `ResolvedSportAttributeSchema`
+  (`label: String`); the admin `GET /api/sports/all/{sportId}/attribute-schema` is unchanged, still
+  the raw `SportAttributeSchema` (`label: Map<String, String>`). This was a breaking DTO change with
+  a closing window (v2 design §11): free today only because A9 shipped unseeded and A15 (seeding)
+  hasn't landed yet. No entity/migration change — `objectMapper.convertValue` already round-trips
+  the new shape through `Sport.attributesSchema`'s untyped `Map`. Tests: `SportAttributeSchemaValidatorSpec`
+  +13 (65 total), new `SportAttributeSchemaLabelResolverSpec` (11 cases: exact/language/default
+  precedence, default-only resolves for any locale, full-tree resolution, every non-label field
+  carried through unchanged), `SportAttributeSchemaIntegrationTest` +3 (16 total — the resolved-vs-raw
+  pair asserted together per the ticket's own instruction, since a future change resolving the admin
+  endpoint would silently break ADMIN-2). `ProfileAttributeFilterSpec`/`SportServiceImplSpec`/
+  `UserSportProfileServiceImplSpec` fixed for the DTO shape change only, no behavioral changes needed.
+  `:modules:sport:sport-impl:test` **179/179**, `:server:test` **121/121**, 11/11 real IT classes (no
+  new authorization boundary — `@PreAuthorize` unchanged on both endpoints, only response
+  shape/content changed). Unblocks **A15** (seeding) and client **SPORT-2**.
+- **i18n readiness tracker filed (2026-08-24, `documentation/md/I18N_READINESS.md`):** app-wide i18n
+  (static UI copy, locale switcher, `User.preferredLocale`) is **not built or designed anywhere in
+  this codebase** — no library in `client/package.json`, only one unanswered question in
+  `ARCHITECTURE_PROPOSAL.md`. Filed a `NOTIFICATION_USE_CASES.md`-style running list (numbered
+  `I18N-<n>` entries) so the interactions surfaced while building A13 aren't lost before app-wide
+  i18n is ever scoped: the UI's chosen locale must drive the `Accept-Language` header sent on
+  attribute-schema requests (client `SPORT-2`) or the two go out of sync; a future
+  `User.preferredLocale` field should feed A13's resolver, not exist in isolation; A13's BCP 47
+  locale codes should be the one code system the app uses, not reinvented; backend error/validation
+  messages are English-only today and unaddressed; the client's ~15 hand-mirrored backend enums are
+  translatable surface too; the client stack (Vite, not Next.js) rules out Next-specific i18n
+  libraries.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with

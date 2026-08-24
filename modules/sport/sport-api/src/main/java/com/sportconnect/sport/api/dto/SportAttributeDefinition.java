@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * One attribute a sport offers — a leaf in the schema tree (A9).
@@ -26,8 +27,11 @@ public class SportAttributeDefinition {
     /** Unique across the entire sport. Must match {@code ^[a-z][a-zA-Z0-9_]*$}. */
     private String key;
 
-    /** Display text. Unconstrained. */
-    private String label;
+    /**
+     * Locale (BCP 47) → display text (A13). Must carry an entry for the enclosing schema's
+     * {@code defaultLocale}; text itself is otherwise unconstrained.
+     */
+    private Map<String, String> label;
 
     private SportAttributeType type;
 
