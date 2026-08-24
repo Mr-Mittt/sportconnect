@@ -30,12 +30,18 @@ name: chat-ci
 on:
   push:
     branches: [master]
+    # '!services/chat/**/docs/**' skips this workflow for docs-only changes (ticket/backlog
+    # markdown). Path filters evaluate in order and the *last* matching pattern wins per changed
+    # file, so a PR touching both a doc and real chat-service code still runs — the code file
+    # only matches the 'services/chat/**' positive pattern, never the docs negation.
     paths:
       - 'services/chat/**'
+      - '!services/chat/**/docs/**'
       - '.github/workflows/chat-ci.yml'
   pull_request:
     paths:
       - 'services/chat/**'
+      - '!services/chat/**/docs/**'
       - '.github/workflows/chat-ci.yml'
   workflow_dispatch:
 
