@@ -301,10 +301,9 @@ class SportServiceImplSpec extends Specification {
         given:
         def sportId = 1L
         def stored = [
-                version: 1,
-                groups : [[key       : "gear", label: "Gear", isAvailable: true, order: 1,
-                           attributes: [[key: "racket", label: "Racket", type: "STRING",
-                                         isAvailable: true, order: 1]]]]
+                groups: [[key       : "gear", label: "Gear", isAvailable: true, order: 1,
+                          attributes: [[key: "racket", label: "Racket", type: "STRING",
+                                        isAvailable: true, order: 1]]]]
         ]
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
                 .attributesSchema(stored).build()
@@ -314,7 +313,6 @@ class SportServiceImplSpec extends Specification {
 
         then:
         1 * sportLookupCache.getActiveSportsById() >> [(sportId): sport]
-        result.version == 1
         result.groups[0].key == "gear"
         result.groups[0].attributes[0].key == "racket"
         result.groups[0].attributes[0].type == SportAttributeType.STRING
@@ -349,7 +347,7 @@ class SportServiceImplSpec extends Specification {
         given:
         def sportId = 1L
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true).build()
-        def schema = SportAttributeSchema.builder().version(1).groups([
+        def schema = SportAttributeSchema.builder().groups([
                 SportAttributeGroup.builder().key("gear").label("Gear").isAvailable(true).order(1)
                         .attributes([SportAttributeDefinition.builder()
                                              .key("racket").label("Racket")
@@ -364,7 +362,6 @@ class SportServiceImplSpec extends Specification {
         then: "resolved from the repository, not the active-only cache, so an inactive sport stays editable"
         1 * sportRepository.findById(sportId) >> Optional.of(sport)
         1 * sportRepository.save(_) >> { Sport saved ->
-            assert saved.attributesSchema.version == 1
             assert saved.attributesSchema.groups[0].key == "gear"
             return saved
         }
@@ -384,7 +381,7 @@ class SportServiceImplSpec extends Specification {
                                          .isAvailable(true).order(1).build()])
                     .build()
         }
-        def schema = SportAttributeSchema.builder().version(1)
+        def schema = SportAttributeSchema.builder()
                 .groups([duplicate("gear"), duplicate("other")]).build()
 
         when:
@@ -401,7 +398,7 @@ class SportServiceImplSpec extends Specification {
         given:
         def sportId = 1L
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
-                .attributesSchema([version: 1, groups: []]).build()
+                .attributesSchema([groups: []]).build()
 
         when:
         def result = sportService.replaceAttributeSchema(sportId, null)
@@ -432,10 +429,9 @@ class SportServiceImplSpec extends Specification {
         given: "the exact case A9 left broken - the admin editor could write this schema but never read it back"
         def sportId = 1L
         def stored = [
-                version: 1,
-                groups : [[key       : "gear", label: "Gear", isAvailable: true, order: 1,
-                           attributes: [[key: "racket", label: "Racket", type: "STRING",
-                                         isAvailable: true, order: 1]]]]
+                groups: [[key       : "gear", label: "Gear", isAvailable: true, order: 1,
+                          attributes: [[key: "racket", label: "Racket", type: "STRING",
+                                        isAvailable: true, order: 1]]]]
         ]
         def sport = Sport.builder().id(sportId).name("Tennis").isActive(false)
                 .attributesSchema(stored).build()
@@ -446,7 +442,6 @@ class SportServiceImplSpec extends Specification {
         then: "resolved straight from the repository - the active-only cache is never consulted"
         1 * sportRepository.findById(sportId) >> Optional.of(sport)
         0 * sportLookupCache.getActiveSportsById()
-        result.version == 1
         result.groups[0].attributes[0].key == "racket"
     }
 

@@ -1,12 +1,15 @@
 package com.sportconnect.sport.service;
 
 import com.sportconnect.sport.api.dto.SportAttributeDefinition;
+import com.sportconnect.sport.api.dto.SportAttributeDefinitionType;
 import com.sportconnect.sport.api.dto.SportAttributeGroup;
 import com.sportconnect.sport.api.dto.SportAttributeOption;
 import com.sportconnect.sport.api.dto.SportAttributeSchema;
+import com.sportconnect.sport.api.dto.SportAttributeType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -32,7 +35,10 @@ import java.util.Set;
  * <p>What this class does <em>not</em> do is remove anything already stored. Callers merge its
  * output onto the existing map, so a key absent from the request keeps its stored value and a
  * stale key with no current definition survives untouched. There is consequently no way to delete
- * a stored attribute — a known, accepted gap tracked as A10.
+ * a stored attribute — a known, accepted gap tracked as A10. One exception, added by v2/A12: a
+ * {@code DEFINITION_LIST} write replaces the whole submitted list (there is no per-element identity
+ * to merge against), so an explicit empty list genuinely clears that one attribute — the only type
+ * A10 does not apply to.
  */
 @Slf4j
 @Component
@@ -59,6 +65,7 @@ class ProfileAttributeFilter {
         }
 
         Map<String, SportAttributeDefinition> available = availableAttributesByKey(schema);
+        Map<String, SportAttributeDefinitionType> definitions = definitionsByName(schema);
         Map<String, Object> accepted = new LinkedHashMap<>();
 
         for (Map.Entry<String, Object> entry : requested.entrySet()) {
@@ -68,14 +75,77 @@ class ProfileAttributeFilter {
                 log.debug("Ignoring attribute {} — not an available attribute for this sport", entry.getKey());
                 continue;
             }
-            if (!SportAttributeValues.isValid(entry.getValue(), definition.getType(), allowedValues(definition))) {
+            Object value = filterValue(entry.getValue(), definition, definitions);
+            if (value == null) {
                 log.debug("Ignoring attribute {} — value invalid for type {}",
                         entry.getKey(), definition.getType());
                 continue;
             }
-            accepted.put(entry.getKey(), entry.getValue());
+            accepted.put(entry.getKey(), value);
         }
         return accepted;
+    }
+
+    /**
+     * Filters one attribute's submitted value against its own type (A9/A12).
+     *
+     * <p>{@code DEFINITION_LIST} is the one type this class handles itself rather than delegating
+     * whole to {@link SportAttributeValues#filterScalarOrRecord} — "keep the good elements, drop the
+     * bad ones" is a list-level policy this filter owns (v2 design §9.1), not a per-value question,
+     * so each element is validated individually via a {@code DEFINITION} call and a malformed
+     * element is dropped without invalidating the rest. An empty result list is valid and is stored
+     * — the one way a {@code DEFINITION_LIST} attribute can be cleared (see the class Javadoc).
+     *
+     * <p>The {@link SportAttributeValues#MAX_LIST_ITEMS} cap is checked here against the
+     * <strong>submitted</strong> list length, before any element filtering — a too-long submission
+     * invalidates the whole value, it is not truncated to the cap. Gating on the submitted count
+     * rather than the surviving count is deliberate: checking after filtering would let a submission
+     * of hundreds of junk elements past the cap as long as few enough of them happened to be valid,
+     * which defeats the point of having a cap at all.
+     *
+     * <p>Every other type — including {@code DEFINITION} itself — is a single call to the shared
+     * dispatcher, which already returns {@code null} on failure the same way this method's callers
+     * expect; {@link SportAttributeValues#isValid} applies the same cap to {@code LIST} there.
+     *
+     * @return the value to store, or {@code null} if nothing about the submitted value survives
+     */
+    private Object filterValue(Object rawValue, SportAttributeDefinition definition,
+                                Map<String, SportAttributeDefinitionType> definitions) {
+        if (definition.getType() != SportAttributeType.DEFINITION_LIST) {
+            return SportAttributeValues.filterScalarOrRecord(
+                    rawValue, definition.getType(), allowedValues(definition), definition.getDefinitionRef(), definitions);
+        }
+
+        if (!(rawValue instanceof List<?> list) || list.size() > SportAttributeValues.MAX_LIST_ITEMS) {
+            return null;
+        }
+        List<Object> kept = new ArrayList<>();
+        for (Object element : list) {
+            Object valid = SportAttributeValues.filterScalarOrRecord(
+                    element, SportAttributeType.DEFINITION, allowedValues(definition), definition.getDefinitionRef(), definitions);
+            if (valid != null) {
+                kept.add(valid);
+            }
+        }
+        return kept;
+    }
+
+    /**
+     * Builds the sport's {@code definitions} registry keyed by name, trusting it was already
+     * validated at write time — same posture as {@link #availableAttributesByKey}, which likewise
+     * does not re-check the schema it is handed.
+     */
+    private Map<String, SportAttributeDefinitionType> definitionsByName(SportAttributeSchema schema) {
+        Map<String, SportAttributeDefinitionType> byName = new HashMap<>();
+        if (schema.getDefinitions() == null) {
+            return byName;
+        }
+        for (SportAttributeDefinitionType definition : schema.getDefinitions()) {
+            if (definition.getName() != null) {
+                byName.put(definition.getName(), definition);
+            }
+        }
+        return byName;
     }
 
     /**

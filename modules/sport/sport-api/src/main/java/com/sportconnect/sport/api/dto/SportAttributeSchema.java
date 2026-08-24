@@ -26,10 +26,11 @@ import java.util.List;
 public class SportAttributeSchema {
 
     /**
-     * Document format version, for future readers that may need to interpret an older shape.
-     * Not currently branched on — nothing writes a version other than 1 yet.
+     * The sport-local registry of record shapes an attribute or another definition's field may
+     * reference by name via {@code definitionRef} (A12). Absent or empty on a document that uses no
+     * {@code DEFINITION}/{@code DEFINITION_LIST} attributes.
      */
-    private Integer version;
+    private List<SportAttributeDefinitionType> definitions;
 
     private List<SportAttributeGroup> groups;
 }

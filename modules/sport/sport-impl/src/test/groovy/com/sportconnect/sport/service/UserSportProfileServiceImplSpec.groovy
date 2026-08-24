@@ -42,7 +42,6 @@ class UserSportProfileServiceImplSpec extends Specification {
      */
     private static SportAttributeSchema schemaWith(String... keys) {
         SportAttributeSchema.builder()
-                .version(1)
                 .groups([SportAttributeGroup.builder()
                                  .key("general").label("General").isAvailable(true).order(1)
                                  .attributes(keys.toList().withIndex().collect { key, i ->

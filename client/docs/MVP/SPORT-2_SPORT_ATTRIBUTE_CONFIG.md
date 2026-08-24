@@ -25,9 +25,16 @@ server-side at all)
 > 4. **`isRequired` on definition fields.** This client is the **strict** half of a deliberate
 >    asymmetry: block the save and show an error, while the server silently drops. Two corollaries —
 >    a `200` does not mean everything sent was stored, and the server never relies on this check.
+> 5. **10-item cap on `LIST` (multi-select).** `SportAttributeValues.MAX_LIST_ITEMS` (design §9.2) —
+>    a hardcoded default, not readable off the schema response, so hardcode `10` here too. The
+>    multi-select control must refuse an 11th selection rather than let the user pick it and find out
+>    on save: the server does not error on an over-cap `LIST`, it **silently drops the whole value**
+>    and the field reverts to whatever was previously stored. (`DEFINITION_LIST`'s add/remove-row
+>    version of this same cap is **SPORT-6**'s, since that ticket owns the row UI — same constant,
+>    same failure mode if skipped.)
 >
-> **Still in scope, unchanged:** `STRING`, `ENUM`, `LIST`, `isAvailable` (parent-wins), `order`,
-> `defaultValue`.
+> **Still in scope, unchanged:** `STRING`, `ENUM`, `LIST` (now capped, see 5 above), `isAvailable`
+> (parent-wins), `order`, `defaultValue`.
 >
 > **Split out:** the search/link combobox for `Reference`-shaped attributes is **SPORT-6**, which
 > depends on this ticket plus backend A14. Build the generic renderer here; SPORT-6 plugs one field

@@ -44,6 +44,26 @@ public class SportAttributeDefinition {
     /** Display order within the parent group. Not validated for uniqueness or contiguity. */
     private Integer order;
 
-    /** Optional. When present, must be valid for this node's own {@code type} and options. */
+    /**
+     * Optional. When present, must be valid for this node's own {@code type} and options. Forbidden
+     * for {@code DEFINITION}/{@code DEFINITION_LIST} — see {@code SportAttributeType} (v2 design
+     * §5.5): a prefilled record would read as the user's own data, not a placeholder.
+     */
     private Object defaultValue;
+
+    /**
+     * The name of the {@link SportAttributeDefinitionType} this attribute's value is shaped by.
+     * Required when {@code type} is {@code DEFINITION}/{@code DEFINITION_LIST}; must be absent for
+     * every other type (schema v2, A12).
+     */
+    private String definitionRef;
+
+    /**
+     * Optional pool name for entity-linking typeahead (v2 design §8.3), e.g.
+     * {@code "equipment.racket.badminton"}. Only meaningful — and only ever set — on
+     * {@code DEFINITION}/{@code DEFINITION_LIST} attributes; carried and validated here but not yet
+     * consumed by any search endpoint (that lands with A14). Absent means plain free text, no
+     * typeahead.
+     */
+    private String searchScope;
 }
