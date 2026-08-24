@@ -1,6 +1,8 @@
 package com.sportconnect.integration;
 
 import com.sportconnect.sport.api.dto.SportAttributeDefinition;
+import com.sportconnect.sport.api.dto.SportAttributeDefinitionType;
+import com.sportconnect.sport.api.dto.SportAttributeField;
 import com.sportconnect.sport.api.dto.SportAttributeGroup;
 import com.sportconnect.sport.api.dto.SportAttributeOption;
 import com.sportconnect.sport.api.dto.SportAttributeSchema;
@@ -84,7 +86,6 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
 
     private SportAttributeSchema validSchema() {
         return SportAttributeSchema.builder()
-                .version(1)
                 .groups(List.of(SportAttributeGroup.builder()
                         .key("gear")
                         .label("Gear")
@@ -142,7 +143,6 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(toJson(validSchema())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.version").value(1))
                 .andExpect(jsonPath("$.data.groups[0].key").value("gear"))
                 .andExpect(jsonPath("$.data.groups[0].attributes[0].key").value("racket"))
                 .andExpect(jsonPath("$.data.groups[0].attributes[1].type").value("ENUM"))
@@ -179,7 +179,7 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
         mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(toJson(SportAttributeSchema.builder()
-                                .version(1).groups(List.of(gear, other)).build())))
+                                .groups(List.of(gear, other)).build())))
                 .andExpect(status().isBadRequest());
 
         evictSportCache();
@@ -245,7 +245,6 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
 
         mockMvc.perform(get("/api/sports/all/{sportId}/attribute-schema", sportId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.version").value(1))
                 .andExpect(jsonPath("$.data.groups[0].key").value("gear"));
     }
 
@@ -255,6 +254,102 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
 
         mockMvc.perform(get("/api/sports/all/{sportId}/attribute-schema", 999999L))
                 .andExpect(status().isNotFound());
+    }
+
+    // --- v2 / A12: definitions registry, DEFINITION / DEFINITION_LIST ---
+
+    /**
+     * {@code Shoe{shoe: Reference(required), size: ShoeSize(optional)}} plus a bare
+     * {@code Reference}-typed {@code rackets: DEFINITION_LIST} — the same shape used throughout the
+     * v2 design doc and the unit-level specs, here round-tripped through the real JSON column.
+     */
+    private SportAttributeSchema v2SchemaWithDefinitions() {
+        SportAttributeDefinitionType reference = SportAttributeDefinitionType.builder().name("Reference").fields(List.of(
+                        SportAttributeField.builder().key("id").label("Id")
+                                .type(SportAttributeType.STRING).isRequired(false).order(1).build(),
+                        SportAttributeField.builder().key("value").label("Value")
+                                .type(SportAttributeType.STRING).isRequired(true).order(2).build()))
+                .build();
+        SportAttributeDefinitionType shoeSize = SportAttributeDefinitionType.builder().name("ShoeSize").fields(List.of(
+                        SportAttributeField.builder().key("system").label("System")
+                                .type(SportAttributeType.ENUM)
+                                .options(List.of(SportAttributeOption.builder().value("US").label("US").build()))
+                                .isRequired(true).order(1).build(),
+                        SportAttributeField.builder().key("value").label("Value")
+                                .type(SportAttributeType.STRING).isRequired(true).order(2).build()))
+                .build();
+        SportAttributeDefinitionType shoe = SportAttributeDefinitionType.builder().name("Shoe").fields(List.of(
+                        SportAttributeField.builder().key("shoe").label("Shoe")
+                                .type(SportAttributeType.DEFINITION).definitionRef("Reference")
+                                .isRequired(true).order(1).build(),
+                        SportAttributeField.builder().key("size").label("Size")
+                                .type(SportAttributeType.DEFINITION).definitionRef("ShoeSize")
+                                .isRequired(false).order(2).build()))
+                .build();
+
+        return SportAttributeSchema.builder()
+                .definitions(List.of(reference, shoeSize, shoe))
+                .groups(List.of(SportAttributeGroup.builder()
+                        .key("gear").label("Gear").isAvailable(true).order(1)
+                        .attributes(List.of(
+                                SportAttributeDefinition.builder()
+                                        .key("rackets").label("Rackets")
+                                        .type(SportAttributeType.DEFINITION_LIST).definitionRef("Reference")
+                                        .isAvailable(true).order(1).build(),
+                                SportAttributeDefinition.builder()
+                                        .key("footwear").label("Footwear")
+                                        .type(SportAttributeType.DEFINITION).definitionRef("Shoe")
+                                        .isAvailable(true).order(2).build()))
+                        .build()))
+                .build();
+    }
+
+    @Test
+    void adminPut_thenGet_roundTripsAV2DocumentWithDefinitionsAndDefinitionList() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(v2SchemaWithDefinitions())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.definitions[2].name").value("Shoe"))
+                .andExpect(jsonPath("$.data.definitions[2].fields[0].definitionRef").value("Reference"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].key").value("rackets"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].type").value("DEFINITION_LIST"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[1].definitionRef").value("Shoe"));
+
+        evictSportCache();
+
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.definitions[2].name").value("Shoe"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].type").value("DEFINITION_LIST"));
+    }
+
+    @Test
+    void adminPut_rejectsUnresolvedDefinitionRef_atomically() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        SportAttributeGroup gear = SportAttributeGroup.builder()
+                .key("gear").label("Gear").isAvailable(true).order(1)
+                .attributes(List.of(SportAttributeDefinition.builder()
+                        .key("footwear").label("Footwear")
+                        .type(SportAttributeType.DEFINITION).definitionRef("NoSuchDefinition")
+                        .isAvailable(true).order(1).build()))
+                .build();
+
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(SportAttributeSchema.builder()
+                                .groups(List.of(gear)).build())))
+                .andExpect(status().isBadRequest());
+
+        evictSportCache();
+
+        // Rejected atomically: nothing was written, so the sport still offers no attributes.
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test

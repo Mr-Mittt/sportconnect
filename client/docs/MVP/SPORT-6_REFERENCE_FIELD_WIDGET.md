@@ -52,6 +52,22 @@ Two corollaries to honour:
 For `Reference` specifically, `value` is required and `id` is not, so a row with no text is invalid
 and must not be submittable.
 
+## 10-item cap on `DEFINITION_LIST`
+
+The server caps every `LIST`/`DEFINITION_LIST` value at **10 items**
+(`SportAttributeValues.MAX_LIST_ITEMS`, design §9.2) — a hardcoded default, not something the schema
+declares, so it cannot be read off the response and must be hardcoded here too.
+
+**The "add row" control must disable itself at 10 rows.** Same strict-client/lenient-server split as
+`isRequired` above, and the failure mode if this is skipped is worse than usual: the server does not
+reject an 11-item submission with an error — it **silently drops the whole value** and the profile
+keeps whatever was stored before this save (A3's merge semantics: a key absent from the filtered
+output keeps its stored value). A user who adds an 11th racket, edits a couple of the other 10, and
+clicks Save sees a `200` — but none of it took effect, not even the edits to the 10 that were
+individually fine, since the whole submitted list was rejected as one unit. They believe it saved;
+the profile silently reverts to its pre-save state. Blocking at the UI layer is the only thing that
+prevents this — there is no server-side error to fall back on.
+
 ## Non-obvious behaviour
 
 - **`DEFINITION_LIST` writes replace the whole list.** Removing a row and saving really removes it;

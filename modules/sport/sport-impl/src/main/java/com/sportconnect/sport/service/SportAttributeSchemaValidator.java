@@ -4,20 +4,26 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.sport.api.dto.SportAttributeDefinition;
+import com.sportconnect.sport.api.dto.SportAttributeDefinitionType;
+import com.sportconnect.sport.api.dto.SportAttributeField;
 import com.sportconnect.sport.api.dto.SportAttributeGroup;
 import com.sportconnect.sport.api.dto.SportAttributeOption;
 import com.sportconnect.sport.api.dto.SportAttributeSchema;
+import com.sportconnect.sport.api.dto.SportAttributeType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Validates an admin-supplied attribute schema document before it is stored (A9).
+ * Validates an admin-supplied attribute schema document before it is stored (A9; extended by v2/A12
+ * for the {@code definitions} registry and {@code DEFINITION}/{@code DEFINITION_LIST} type kinds).
  *
  * <p><strong>All-or-nothing.</strong> The document is checked in full and the first violation
  * throws, so a bad paste never half-applies and leaves a sport with a partly-rewritten schema.
@@ -43,6 +49,13 @@ class SportAttributeSchemaValidator {
     private static final Pattern KEY_PATTERN = Pattern.compile("^[a-z][a-zA-Z0-9_]*$");
 
     /**
+     * PascalCase, deliberately distinct from {@link #KEY_PATTERN}: a definition name is a type
+     * namespace, never itself written into a stored profile, so it reads differently at a glance
+     * from every {@code key} field (v2 design §5.4).
+     */
+    private static final Pattern DEFINITION_NAME_PATTERN = Pattern.compile("^[A-Z][a-zA-Z0-9]*$");
+
+    /**
      * 16KB — larger than the 4KB profile-attributes cap because a schema carries labels and option
      * lists, not just values. Admin-only write, so this guards against a bad paste rather than
      * abuse.
@@ -54,9 +67,10 @@ class SportAttributeSchemaValidator {
     /**
      * Validates the document in full, throwing on the first violation found.
      *
-     * <p>Check order affects error quality only, not correctness: structural rules run before the
-     * size rule so an oversized malformed document reports what is actually wrong with it rather
-     * than merely that it is too big.
+     * <p>Check order affects error quality only, not correctness: the {@code definitions} registry
+     * is validated before the group/attribute tree, so a {@code definitionRef} can be resolved
+     * against a fully-built map, and the size rule runs last so an oversized malformed document
+     * reports what is actually wrong with it rather than merely that it is too big.
      *
      * @param schema the document to validate; {@code null} is valid and means "offers no attributes"
      * @throws BadRequestException on any violation, naming the offending node
@@ -65,9 +79,8 @@ class SportAttributeSchemaValidator {
         if (schema == null) {
             return;
         }
-        if (schema.getVersion() == null) {
-            throw new BadRequestException("Attribute schema must declare a version");
-        }
+
+        Map<String, SportAttributeDefinitionType> definitionsByName = validateDefinitions(schema.getDefinitions());
 
         Set<String> groupKeys = new HashSet<>();
         // Accumulated across every group rather than reset per group: leaf keys are unique across
@@ -81,14 +94,15 @@ class SportAttributeSchemaValidator {
                 throw new BadRequestException("Duplicate group key: " + group.getKey());
             }
             for (SportAttributeDefinition attribute : nullSafe(group.getAttributes())) {
-                validateAttribute(attribute, attributeKeys);
+                validateAttribute(attribute, attributeKeys, definitionsByName);
             }
         }
 
         validateSize(schema);
     }
 
-    private void validateAttribute(SportAttributeDefinition attribute, Set<String> seenKeys) {
+    private void validateAttribute(SportAttributeDefinition attribute, Set<String> seenKeys,
+                                    Map<String, SportAttributeDefinitionType> definitionsByName) {
         validateKey(attribute.getKey(), "Attribute key");
         if (!seenKeys.add(attribute.getKey())) {
             throw new BadRequestException(
@@ -101,7 +115,8 @@ class SportAttributeSchemaValidator {
 
         List<SportAttributeOption> options = nullSafe(attribute.getOptions());
         switch (attribute.getType()) {
-            case ENUM, LIST -> validateOptions(attribute, options);
+            case ENUM, LIST -> validateOptionsList(
+                    "Attribute " + attribute.getKey(), options, attribute.getType());
             // A STRING carrying options usually means the author meant ENUM. Rejecting is cheaper
             // than silently ignoring a list they expected to constrain input with.
             case STRING -> {
@@ -110,25 +125,51 @@ class SportAttributeSchemaValidator {
                             "Attribute " + attribute.getKey() + " is STRING and must not declare options");
                 }
             }
+            case DEFINITION, DEFINITION_LIST -> {
+                if (!options.isEmpty()) {
+                    throw new BadRequestException("Attribute " + attribute.getKey() + " is "
+                            + attribute.getType() + " and must not declare options");
+                }
+                if (attribute.getDefaultValue() != null) {
+                    throw new BadRequestException("Attribute " + attribute.getKey() + " is "
+                            + attribute.getType() + " and must not declare a defaultValue");
+                }
+                if (attribute.getDefinitionRef() == null) {
+                    throw new BadRequestException("Attribute " + attribute.getKey() + " is "
+                            + attribute.getType() + " and must declare definitionRef");
+                }
+                if (!definitionsByName.containsKey(attribute.getDefinitionRef())) {
+                    throw new BadRequestException("Attribute " + attribute.getKey()
+                            + " references unknown definition: " + attribute.getDefinitionRef());
+                }
+            }
         }
 
-        validateDefaultValue(attribute, options);
+        if (attribute.getType() != SportAttributeType.DEFINITION
+                && attribute.getType() != SportAttributeType.DEFINITION_LIST) {
+            if (attribute.getDefinitionRef() != null) {
+                throw new BadRequestException("Attribute " + attribute.getKey()
+                        + " must not declare definitionRef unless its type is DEFINITION or DEFINITION_LIST");
+            }
+            if (attribute.getSearchScope() != null) {
+                throw new BadRequestException("Attribute " + attribute.getKey()
+                        + " must not declare searchScope unless its type is DEFINITION or DEFINITION_LIST");
+            }
+            validateDefaultValue(attribute, options);
+        }
     }
 
-    private void validateOptions(SportAttributeDefinition attribute, List<SportAttributeOption> options) {
+    private void validateOptionsList(String context, List<SportAttributeOption> options, SportAttributeType type) {
         if (options.isEmpty()) {
-            throw new BadRequestException("Attribute " + attribute.getKey() + " is "
-                    + attribute.getType() + " and must declare at least one option");
+            throw new BadRequestException(context + " is " + type + " and must declare at least one option");
         }
         Set<String> values = new HashSet<>();
         for (SportAttributeOption option : options) {
             if (option.getValue() == null || option.getValue().isBlank()) {
-                throw new BadRequestException(
-                        "Attribute " + attribute.getKey() + " has an option with no value");
+                throw new BadRequestException(context + " has an option with no value");
             }
             if (!values.add(option.getValue())) {
-                throw new BadRequestException("Attribute " + attribute.getKey()
-                        + " has duplicate option value: " + option.getValue());
+                throw new BadRequestException(context + " has duplicate option value: " + option.getValue());
             }
         }
     }
@@ -137,6 +178,11 @@ class SportAttributeSchemaValidator {
      * A default is checked against its own node exactly as a user-supplied value would be, via the
      * shared {@link SportAttributeValues}. A schema therefore cannot ship a default that the
      * profile write path would then silently refuse to store.
+     *
+     * <p>Never called for {@code DEFINITION}/{@code DEFINITION_LIST} attributes — those forbid
+     * {@code defaultValue} outright in {@link #validateAttribute}, before this method would be
+     * reached — so {@link SportAttributeValues#isValid} only ever sees the three primitive types
+     * here.
      */
     private void validateDefaultValue(SportAttributeDefinition attribute, List<SportAttributeOption> options) {
         Object defaultValue = attribute.getDefaultValue();
@@ -150,6 +196,118 @@ class SportAttributeSchemaValidator {
         if (!SportAttributeValues.isValid(defaultValue, attribute.getType(), allowed)) {
             throw new BadRequestException("Attribute " + attribute.getKey()
                     + " has a defaultValue invalid for type " + attribute.getType());
+        }
+    }
+
+    /**
+     * Validates the sport-local {@code definitions} registry (v2 design §5.4) and returns it keyed
+     * by name, resolved and ready for the group/attribute pass to reference.
+     *
+     * <p>Three passes, each depending on the last: (1) collect names, rejecting bad patterns and
+     * duplicates; (2) validate every definition's own fields, including that any
+     * {@code definitionRef} they carry resolves against the now-complete name set; (3) compute which
+     * definitions are referenced <em>by another definition's field</em> ("inner position") and
+     * enforce that those hold only primitive fields.
+     *
+     * <p>That third pass is the whole of the depth/cycle rule (v2 design §5.3) — deliberately no
+     * traversal or visited-set is written. A cycle {@code A → B → A} requires {@code B} (inner,
+     * referenced by {@code A}) to hold a field pointing back to {@code A}, but inner-position
+     * definitions may only hold primitives, so {@code B} fails this pass directly. A self-reference
+     * {@code A → A} puts {@code A} in both positions, the same contradiction.
+     */
+    private Map<String, SportAttributeDefinitionType> validateDefinitions(List<SportAttributeDefinitionType> definitions) {
+        Map<String, SportAttributeDefinitionType> byName = new LinkedHashMap<>();
+        for (SportAttributeDefinitionType definition : nullSafe(definitions)) {
+            if (definition.getName() == null || !DEFINITION_NAME_PATTERN.matcher(definition.getName()).matches()) {
+                throw new BadRequestException("Definition name must match "
+                        + DEFINITION_NAME_PATTERN.pattern() + " but was: " + definition.getName());
+            }
+            if (byName.putIfAbsent(definition.getName(), definition) != null) {
+                throw new BadRequestException("Duplicate definition name: " + definition.getName());
+            }
+        }
+
+        for (SportAttributeDefinitionType definition : byName.values()) {
+            Set<String> fieldKeys = new HashSet<>();
+            for (SportAttributeField field : nullSafe(definition.getFields())) {
+                validateKey(field.getKey(), "Definition field key");
+                if (!fieldKeys.add(field.getKey())) {
+                    throw new BadRequestException("Duplicate field key in definition "
+                            + definition.getName() + ": " + field.getKey());
+                }
+                validateField(definition, field, byName);
+            }
+        }
+
+        validateInnerPositionDefinitionsArePrimitiveOnly(byName);
+        return byName;
+    }
+
+    private void validateField(SportAttributeDefinitionType definition, SportAttributeField field,
+                                Map<String, SportAttributeDefinitionType> definitionsByName) {
+        if (field.getType() == null) {
+            throw new BadRequestException("Definition " + definition.getName()
+                    + " field " + field.getKey() + " must declare a type");
+        }
+
+        List<SportAttributeOption> options = nullSafe(field.getOptions());
+        switch (field.getType()) {
+            case ENUM, LIST -> validateOptionsList(
+                    "Definition " + definition.getName() + " field " + field.getKey(), options, field.getType());
+            case STRING -> {
+                if (!options.isEmpty()) {
+                    throw new BadRequestException("Definition " + definition.getName()
+                            + " field " + field.getKey() + " is STRING and must not declare options");
+                }
+            }
+            case DEFINITION -> {
+                if (!options.isEmpty()) {
+                    throw new BadRequestException("Definition " + definition.getName()
+                            + " field " + field.getKey() + " must not declare options");
+                }
+                if (field.getDefinitionRef() == null) {
+                    throw new BadRequestException("Definition " + definition.getName()
+                            + " field " + field.getKey() + " must declare definitionRef");
+                }
+                if (!definitionsByName.containsKey(field.getDefinitionRef())) {
+                    throw new BadRequestException("Definition " + definition.getName() + " field "
+                            + field.getKey() + " references unknown definition: " + field.getDefinitionRef());
+                }
+            }
+            case DEFINITION_LIST -> throw new BadRequestException("Definition " + definition.getName()
+                    + " field " + field.getKey()
+                    + " must not be DEFINITION_LIST — a definition field may only be a primitive or a single DEFINITION");
+        }
+
+        if (field.getType() != SportAttributeType.DEFINITION && field.getDefinitionRef() != null) {
+            throw new BadRequestException("Definition " + definition.getName() + " field " + field.getKey()
+                    + " must not declare definitionRef unless its type is DEFINITION");
+        }
+    }
+
+    private void validateInnerPositionDefinitionsArePrimitiveOnly(Map<String, SportAttributeDefinitionType> byName) {
+        Set<String> innerPosition = new HashSet<>();
+        for (SportAttributeDefinitionType definition : byName.values()) {
+            for (SportAttributeField field : nullSafe(definition.getFields())) {
+                if (field.getType() == SportAttributeType.DEFINITION) {
+                    innerPosition.add(field.getDefinitionRef());
+                }
+            }
+        }
+
+        for (String name : innerPosition) {
+            // Guaranteed resolved already: validateField rejected an unresolved definitionRef above.
+            SportAttributeDefinitionType inner = byName.get(name);
+            for (SportAttributeField field : nullSafe(inner.getFields())) {
+                if (field.getType() != SportAttributeType.STRING
+                        && field.getType() != SportAttributeType.ENUM
+                        && field.getType() != SportAttributeType.LIST) {
+                    throw new BadRequestException("Definition " + name
+                            + " is referenced by another definition and so may only contain primitive "
+                            + "fields (STRING/ENUM/LIST), but field " + field.getKey()
+                            + " is " + field.getType());
+                }
+            }
         }
     }
 

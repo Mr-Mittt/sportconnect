@@ -56,9 +56,8 @@ them untouched. That is the property to protect when reviewing any change here.
 ## 4. Document shape
 
 ```jsonc
-// sports.attributes_schema, version 2
+// sports.attributes_schema
 {
-  "version": 2,
   "defaultLocale": "en",
 
   // §5.4 — sport-local type registry
@@ -267,7 +266,7 @@ reconstruct them later, for content authored by a person who may no longer be ar
 ### 7.2 Shape
 
 ```jsonc
-{ "version": 2, "defaultLocale": "en", ... }
+{ "defaultLocale": "en", ... }
 { "key": "handedness", "label": { "en": "Hand", "vi": "Tay thuận" } }
 ```
 
@@ -484,10 +483,13 @@ rejection.
 5. Validate by `type`:
    - `STRING` — is a `String`
    - `ENUM` — is a `String` ∈ `options[].value`
-   - `LIST` — is a `List`, every element a `String` ∈ options; **empty list valid and stored**
+   - `LIST` — is a `List` of at most `MAX_LIST_ITEMS` (10) elements, every element a `String` ∈
+     options; **empty list valid and stored**; over the cap → the **whole value** is invalid, not
+     truncated (§9.2)
    - `DEFINITION` — is a `Map`; run *validateRecord*; invalid → drop the key
-   - `DEFINITION_LIST` — is a `List`; run *validateRecord* per element; **drop failing elements, keep
-     the rest**; empty list valid and stored
+   - `DEFINITION_LIST` — is a `List` of at most `MAX_LIST_ITEMS` (10) **submitted** elements (checked
+     before per-element filtering, §9.2); within that cap, run *validateRecord* per element; **drop
+     failing elements, keep the rest**; empty list valid and stored
 6. Survivors **merge** over the stored map — top-level keys only, unchanged from A3
 7. The 4KB `MAX_ATTRIBUTES_BYTES` check runs **last**, on the merged map
 
@@ -512,13 +514,47 @@ rejection.
   but it is sharper here than for a scalar, and §6.2's strict client is what actually protects the
   user.
 
+### 9.2 The `MAX_LIST_ITEMS` cap
+
+`LIST` and `DEFINITION_LIST` values are capped at **10 items**, added as a default rather than
+against any real profile hitting the size limit — §13.2 measured a realistic maximal Badminton
+profile at 17.5% of the 4KB cap today, so nothing is close to binding. The cap exists to bound
+unbounded growth in principle, not to solve a size problem that exists in practice.
+
+**A hardcoded default, not yet admin-configurable per attribute.** `SportAttributeValues.MAX_LIST_ITEMS`
+is one constant applied uniformly to every `LIST`/`DEFINITION_LIST` value in every sport. A
+per-attribute `maxItems` schema field would be the more general answer, but there is no concrete need
+for one today — same "don't design for hypothetical future requirements" call this document makes
+repeatedly elsewhere (§3, §5.5, §15).
+
+**Over the cap invalidates the whole value — it is not truncated to the first 10.** Consistent with
+every other invalid-value case in `ProfileAttributeFilter`: a `LIST` sent as a `String` is dropped
+whole, not coerced; a `DEFINITION_LIST` element that isn't a record is dropped, not partially kept.
+Silently keeping the first 10 of an 11-item submission would also be a worse failure mode than
+dropping outright — the user would have no signal that anything was lost.
+
+**Gated on the *submitted* count, not the *surviving* count.** For `DEFINITION_LIST`, the cap check
+runs on the raw list length before any per-element filtering. Gating on survivors instead would let a
+submission of hundreds of malformed elements slip past the cap as long as few enough of them
+happened to be valid — the cap would then bound nothing.
+
+**Also bounds an admin's `defaultValue` on a `LIST` attribute, for free**, via the shared
+`SportAttributeValues.isValid` (§10) — the same "a schema can never declare a default the profile
+path would then reject" invariant A9 established. `DEFINITION_LIST` has no `defaultValue` to bound
+(forbidden outright, §5.5).
+
+**Client-mirrored — this is load-bearing, not a nice-to-have.** Client `SPORT-2` (the general
+renderer, for plain `LIST` multi-selects) and `SPORT-6` (the `DEFINITION_LIST` widget) must block
+adding an 11th item in the UI, the same strict-client/lenient-server split as `isRequired` (§6.2): the
+server drops the whole value silently on the 11th item, so a client that lets a user reach 11 items
+and then save produces a save that visibly did nothing — confusing without a client-side stop.
+
 ## 10. Write-side validation
 
 Everything v1 §4 already enforces, unchanged, plus:
 
 **Document**
-- `version` is 1 or 2. A document using any v2-only feature **must** declare `2`
-- `defaultLocale` present and BCP 47 when the document is v2
+- `defaultLocale` present and BCP 47 (§7.3)
 
 **Labels**
 - every labeled node carries an entry for `defaultLocale` (§7.3)
@@ -543,23 +579,43 @@ Everything v1 §4 already enforces, unchanged, plus:
 
 Rejection stays **atomic** — a bad paste never half-applies.
 
-## 11. Versioning, and the window that is currently open
+## 11. No document-format version field
 
-A v1 document is a strict subset of v2 — no `definitions`, no new type kinds — so v1 documents keep
-parsing and the version gate in §10 is the only branch needed.
+A9 shipped `SportAttributeSchema.version` as "document format version, for future readers that may
+need to interpret an older shape." A12 initially extended it with a write-side rule — a document
+using any A12-only feature must declare `version: 2` — matching what this section originally said.
 
-**Except for `label`.** Changing it from `String` to `Map<String, String>` is a genuine breaking
-change to the DTOs in `sport-api`.
+**Removed during A12's own implementation, on explicit product decision: there is no concrete plan
+to version the schema syntax, so the field is speculative machinery for a need that does not exist
+yet.** Nothing anywhere reads `version` to decide anything — A9's own DTO comment already said as
+much — so the rule was pure friction: a document could be otherwise perfectly valid and still get a
+400 for a labeling mismatch that changed no behavior. Removed rather than merely relaxed, per this
+codebase's standing "don't design for hypothetical future requirements" rule. If schema-syntax
+versioning becomes a real need later, it gets designed then, against whatever the actual requirement
+turns out to be — not against a guess made here.
 
-**A9 shipped unseeded. All 12 sports carry `NULL`. There are currently zero schema documents in
-existence**, so that break costs nothing — no migration, no backfill, no dual-shape parsing.
+**One consequence worth recording, discovered while removing it — and checked both ways, not just
+assumed.** The stored-document `Map → SportAttributeSchema` conversion (`objectMapper.convertValue`,
+used by `getAttributeSchema`/`getAttributeSchemaForAdmin` on **read**) has `FAIL_ON_UNKNOWN_PROPERTIES`
+enabled: a stray `version` key left in a Spock fixture threw `UnrecognizedPropertyException` rather
+than being silently ignored. **The HTTP `@RequestBody` JSON → `SportAttributeSchema` binding on
+**write** is not the same code path and behaves differently** — verified live against a running
+server: `PUT` with a body of `{"version":1,"groups":[]}` (the client's already-shipped `ADMIN-2`
+empty-prefill literal) returns `200`, and the field is silently dropped, never stored. So a client
+that still sends a stray `version` is completely unaffected — the read-side strictness above can only
+ever matter for a document nobody could have produced through the app's own write path (a manual DB
+edit, say). Still worth knowing before ever removing or renaming a schema-level field again — this
+format is not forward-compatible with unknown keys on **read** the way JSON documents often are —
+but it is not a live risk today: no client is broken, and zero real documents exist regardless (§14
+revisits this).
 
-**That window closes the moment the first sport is seeded.** Which means an earlier plan to seed
-Badminton in v1 format is withdrawn: seeding v1 would manufacture a migration for no reason. Seed
-once, in v2, after `A12` and `A13` land — that is what `A15` is for.
-
-If a v1 document ever does get written before then, `label` needs a Jackson deserializer accepting
-both a string and a map, coercing the string to `{ defaultLocale: value }`. Avoidable, so avoid it.
+**The `label` breaking-change window still applies, independent of any of the above.** A13 changes
+`label` from `String` to `Map<String, String>` in `sport-api` — a genuine breaking DTO change. A9
+shipped unseeded; all 12 sports carry `NULL`; there are currently zero schema documents in existence,
+so that break costs nothing today — no migration, no backfill, no dual-shape parsing. **That window
+closes the moment the first sport is seeded.** An earlier plan to seed Badminton before A13 landed was
+withdrawn for exactly this reason: seed once, after `A12` and `A13` both land — that is what `A15` is
+for.
 
 ## 12. Caching
 
@@ -585,8 +641,8 @@ Both caps were **measured against the real Badminton document** (`A15_BADMINTON_
 
 | | Bytes | % of cap |
 |---|---|---|
-| Badminton v2, minified | **2,501** | **15.3%** |
-| (pretty-printed, for reference) | 4,152 | — |
+| Badminton v2, minified | **2,489** | **15.2%** |
+| (pretty-printed, for reference) | 4,284 | — |
 
 Labels dominate a schema document and two locales roughly double that term, so the useful reading is:
 a sport of this shape has room for roughly a dozen locales, or several times the attribute count,
@@ -639,6 +695,17 @@ Worth listing, because the review question for any patch here is "did this stay 
   retire-old.
 - The schema stays out of `SportResponse`.
 - **No new migration.** `sports.attributes_schema` is already JSONB and holds any of this.
+- **"Reads stay permissive" (above) is about stored *profile attribute keys*, not the schema
+  *document* itself.** `ProfileAttributeFilter` reads `UserSportProfile.attributes` as a raw
+  `Map<String, Object>` and never converts it through a typed DTO, so an unknown key there really is
+  ignored. `SportAttributeSchema` is different: `SportServiceImpl` converts the stored document
+  through `objectMapper.convertValue(..., SportAttributeSchema.class)` on **read**, and that
+  conversion has `FAIL_ON_UNKNOWN_PROPERTIES` enabled (§11) — an unrecognized key in the *stored*
+  schema document would throw. The **write** path (`@RequestBody` JSON binding) is not the same code
+  path and is lenient — verified live, a client sending a stray field gets it silently dropped rather
+  than a 400 — so nothing the app's own write path produces can ever trigger the read-side throw. Not
+  a live risk today either way, but a real asymmetry to know before removing or renaming a
+  schema-level field again.
 
 ## 15. Deliberately not in v2
 

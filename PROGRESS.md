@@ -2882,6 +2882,66 @@ explicit go-ahead at each step (full story in A3's summary doc):
   deactivated sport had every field mutated and saved before the throw, with only `@Transactional`
   rollback preventing a persist — correct by accident, and one refactor away from a real
   write-then-fail. Hoisted above every mutation, with a test pinning the ordering.
+- **A12 (`DONE`, 2026-08-24,
+  `modules/sport/sport-impl/docs/MVP/A12_SCHEMA_V2_DEFINITION_TYPES.md`):** schema v2 core — a
+  sport-local `definitions` registry plus `DEFINITION`/`DEFINITION_LIST` type kinds, so an attribute
+  value can be a record (or a list of records) instead of only a string/enum/list. Five DTO changes
+  in `sport-api`, a three-pass registry validator addition to `SportAttributeSchemaValidator`, a
+  record-cascade addition to the shared `SportAttributeValues`
+  (`isValidRecord`/`filterScalarOrRecord`), and `DEFINITION_LIST`-aware dispatch in
+  `ProfileAttributeFilter`. **No migration, no entity change** — `objectMapper.convertValue` already
+  round-trips the whole DTO tree through `Sport.attributesSchema`'s untyped `Map`. **No cycle
+  detection was written**, per the design doc's own instruction: the depth-2 rule (a definition
+  referenced by another definition's field may hold only primitive fields) makes a cycle a direct
+  contradiction caught by one pass, no traversal needed — proven by dedicated self-reference and
+  two-node-cycle specs. **A design bug caught before any code shipped:** routing a nested
+  `DEFINITION` field through a boolean-only validity check (mirroring the primitive types) would have
+  stored the *raw* nested record on success rather than its *filtered* survivors, silently keeping
+  junk fields the record-level "drop undeclared keys" rule was supposed to remove — fixed by having
+  the shared dispatcher return the filtered value, not a boolean. **`version` was added, then removed
+  entirely, same session.** A12's own ticket text initially omitted a rule item 10 already stated (a
+  document using any v2 feature must declare `version: 2`) — caught mid-implementation and added. Then
+  removed outright on review: nothing anywhere reads `version` to decide anything, so the gate rejected
+  otherwise-valid documents over a labeling mismatch with zero behavioral effect, and there is no
+  concrete plan to version the schema syntax — speculative machinery for a need that doesn't exist,
+  against this codebase's own "don't design for hypothetical future requirements" rule. Deleted the
+  DTO field, the gate, its three specs, and every `.version(...)`/raw `version:` fixture across five
+  spec files — including two **pre-existing A9-era specs**
+  (`UserSportProfileServiceImplSpec`, `SportServiceImplSpec`) found only by a repo-wide grep after the
+  obviously-related files were already fixed. **A real asymmetry surfaced while doing this, checked
+  live rather than assumed:** the stored-document read path (`objectMapper.convertValue`) has
+  `FAIL_ON_UNKNOWN_PROPERTIES` on and threw for a stray `version` key in a fixture, but the `PUT`
+  endpoint's `@RequestBody` binding is a different, lenient code path — verified against a running
+  server, a `PUT` of the client's already-shipped `ADMIN-2` empty-prefill literal
+  (`{"version":1,"groups":[]}`) still returns 200 with the field silently dropped, so that shipped
+  client is unaffected. Verification: `SportAttributeSchemaValidatorSpec` **50 cases** (peaked at 53
+  with the version-gate trio, net −3), `ProfileAttributeFilterSpec` +13, two new
+  `SportAttributeSchemaIntegrationTest` cases (v2 round trip + atomic rejection of an unresolved
+  `definitionRef`) — no new authorization boundary, so no new IT class. `:server:test` **118/118, 0
+  failures**, re-run after the removal. Live-verified against a running server and real Postgres
+  **twice** — once for the v2 core (registered a real admin, `PUT` a real v2 document, confirmed it in
+  `jsonb_pretty(attributes_schema)`, proved atomic rejection, created a real profile exercising every
+  branch of the cascade at once, output matched the specs exactly) and again after the `version`
+  removal to prove the client-compatibility claim above. All test data removed afterward both times.
+  **A third addition, same session: a default 10-item cap** (`SportAttributeValues.MAX_LIST_ITEMS`)
+  on every `LIST`/`DEFINITION_LIST` value — a hardcoded default, not a new admin-configurable schema
+  field, same YAGNI call as everything else deferred in this ticket; there is no real profile anywhere
+  near the 4KB cap this protects (§13.2 measured 17.5% at a realistic maximum), so it bounds unbounded
+  growth in principle, not a live size problem. Over the cap invalidates the **whole value**, gated on
+  the **submitted** count rather than the surviving count — checking after per-element filtering would
+  let a flood of malformed elements slip past the cap as long as few enough happened to be valid, which
+  a dedicated 100-junk-elements Spock case proves does not happen. Also bounds an admin's `defaultValue`
+  on a `LIST` attribute for free, via the shared `isValid`. Third live verification, on the same
+  restarted server: a 500 on a schema `PUT` turned out to be a stale-classloader artifact from repeated
+  recompiles against a JVM running since before several rebuilds, not a defect — resolved by a clean
+  restart; then live-proved the exact boundary against a real profile (10 rackets kept in full; 11
+  submitted as an update dropped the whole write, with the **original** 10 surviving completely
+  unchanged, confirming A3's merge-keeps-prior-value semantics under this new cap). `sport-impl`
+  **155/155**, `:server:test` unchanged at 118/118 (no new authorization boundary). **Client tickets
+  updated in place** (still pre-merge) rather than filed separately: `SPORT-2` and `SPORT-6` both now
+  require mirroring `10` as a hardcoded constant and blocking further additions client-side — same
+  strict-client/lenient-server split as `isRequired`, higher-stakes here since an over-cap write drops
+  the *entire* value, including edits to items that were individually fine.
 - **Sport attribute schema v2 design (2026-08-24,
   `documentation/md/SPORT_ATTRIBUTE_SCHEMA_V2_DESIGN.md`; tickets A12–A16 backend, SPORT-2 rescoped
   + SPORT-6 client):** A9's format could not express a hand-written Badminton schema the user

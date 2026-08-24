@@ -24,10 +24,10 @@ beside this ticket. Valid JSON, pasteable straight into ADMIN-2's textarea or `c
 Design §4 carries the same document as an annotated `jsonc` example. **The `.json` file is the
 authority** — §4 is illustrative and may drift.
 
-Checked mechanically at filing (2026-08-24): parses; attribute keys unique across the sport; every
-`definitionRef` resolves; no depth-2 violation (`Reference` and `ShoeSize` sit in inner position and
-hold only primitives); every labeled node carries the `defaultLocale` entry; no keyed node missing a
-label.
+Checked mechanically, most recently 2026-08-24 (after the `version` field was removed — see design
+§11): parses; attribute keys unique across the sport; every `definitionRef` resolves; no depth-2
+violation (`Reference` and `ShoeSize` sit in inner position and hold only primitives); every labeled
+node carries the `defaultLocale` entry; no keyed node missing a label.
 
 **Pickleball's document** — content is a product call, not specified here. If there is no real answer
 at pickup, seed Badminton alone and say so; a wrong schema is worse than no schema, because keys are
@@ -59,7 +59,7 @@ reintroduced, because **keys are immutable by policy** — a rename orphans ever
 `MAX_SCHEMA_BYTES` is 16KB, labels are most of a schema document, and two locales roughly double the
 dominant term (design §13).
 
-**Badminton measures 2,501 bytes minified** (4,152 pretty-printed) — about **15% of the cap** with two
+**Badminton measures 2,489 bytes minified** (4,284 pretty-printed) — about **15% of the cap** with two
 locales. Comfortable, and it gives a real yardstick: a sport of this size supports roughly a dozen
 locales, or several times the attribute count, before the cap binds. Re-measure if the document grows
 materially; raise the cap only against a measurement, never after a rejected `PUT` in production.
