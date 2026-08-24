@@ -1,8 +1,41 @@
 # SPORT-2 · Render a user's per-sport attribute fields on their sport profile
 
-**Status:** `TODO` · **Type:** Component · **Depends on:** backend **A9**
-(`modules/sport/sport-impl`) — hard · **Filed:** 2026-08-01 ·
-**Rescoped:** 2026-08-20 (see below) · **Design:** `documentation/md/SPORT_ATTRIBUTE_SCHEMA_DESIGN.md`
+**Status:** `TODO` · **Type:** Component · **Depends on:** backend **A12** + **A13**
+(`modules/sport/sport-impl`) — both hard · **Filed:** 2026-08-01 ·
+**Rescoped:** 2026-08-20, again 2026-08-24 (see below) ·
+**Design:** `documentation/md/SPORT_ATTRIBUTE_SCHEMA_V2_DESIGN.md` (v2, current);
+`documentation/md/SPORT_ATTRIBUTE_SCHEMA_DESIGN.md` (v1, still the record of why the schema is
+server-side at all)
+
+> **Rescoped 2026-08-24 — schema v2. Read this before the 2026-08-20 note below.**
+>
+> The schema format is being extended before this ticket is built, so the renderer targets **v2**,
+> not the v1 format A9 shipped. The job is unchanged — render a schema fetched from the server — but
+> the schema is richer, and the dependency moves from A9 (`DONE`) to **A12 + A13**.
+>
+> **What v2 adds that this ticket must render:**
+>
+> 1. **`DEFINITION`** — an attribute whose value is a *record* (e.g. a shoe with a name and a size).
+>    Renders as a nested field group.
+> 2. **`DEFINITION_LIST`** — a *repeating* record (e.g. several rackets). Renders as rows with
+>    add/remove. **Writes replace the whole list** — no element identity, no partial merge.
+> 3. **Localized labels.** `label` arrives already resolved to one string on the user-facing
+>    endpoint (A13 resolves server-side from `Accept-Language`), so this ticket renders a string as
+>    before — but must not assume the *admin* endpoint behaves the same way.
+> 4. **`isRequired` on definition fields.** This client is the **strict** half of a deliberate
+>    asymmetry: block the save and show an error, while the server silently drops. Two corollaries —
+>    a `200` does not mean everything sent was stored, and the server never relies on this check.
+>
+> **Still in scope, unchanged:** `STRING`, `ENUM`, `LIST`, `isAvailable` (parent-wins), `order`,
+> `defaultValue`.
+>
+> **Split out:** the search/link combobox for `Reference`-shaped attributes is **SPORT-6**, which
+> depends on this ticket plus backend A14. Build the generic renderer here; SPORT-6 plugs one field
+> type into it.
+>
+> **Open layout question, not decided:** does a nested record render inline or in a sub-modal? A
+> `DEFINITION_LIST` of shoes, each holding two nested records, is a real layout problem — v2 design
+> §16 flags it and leaves the answer to this ticket.
 
 > **Rescoped 2026-08-20 — read this before the body below.**
 >

@@ -68,7 +68,13 @@ New tickets get inserted at the appropriate position when filed, same as before 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Render a user’s per-sport attribute fields on their sport profile — **rescoped 2026-08-20** from a static client config to consuming A9’s server-driven schema; user-facing half of A9 (ADMIN-2 is the admin half) | `TODO` |
+| 1 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Render a user’s per-sport attribute fields on their sport profile — **rescoped 2026-08-20** from a static client config to consuming A9’s server-driven schema; **rescoped again 2026-08-24** onto schema **v2** (nested records, repeating lists, localized labels) and re-blocked on backend A12 + A13; user-facing half of A9 (ADMIN-2 is the admin half) | `TODO` |
+| 2 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control | `TODO` |
+
+**ADMIN-2 needs no new ticket for v2.** It shipped as a JSON textarea over the raw document by
+explicit choice, so it keeps working unchanged — the admin simply pastes a richer document. The
+`searchScope` picker discussed in the v2 design is an ADMIN-3-class enhancement, and ADMIN-3 is
+already deferred to V1.
 
 **ADMIN-3 deferred to V1 on 2026-08-21** (user decision, during its own `/workon` pickup) — the
 attribute-schema JSON-editor upgrade. Moved to `client/docs/BACKLOG_V1.md`, which carries the full

@@ -2882,6 +2882,57 @@ explicit go-ahead at each step (full story in A3's summary doc):
   deactivated sport had every field mutated and saved before the throw, with only `@Transactional`
   rollback preventing a persist — correct by accident, and one refactor away from a real
   write-then-fail. Hoisted above every mutation, with a test pinning the ordering.
+- **Sport attribute schema v2 design (2026-08-24,
+  `documentation/md/SPORT_ATTRIBUTE_SCHEMA_V2_DESIGN.md`; tickets A12–A16 backend, SPORT-2 rescoped
+  + SPORT-6 client):** A9's format could not express a hand-written Badminton schema the user
+  drafted — a shoe with a name *and* a size, several rackets each structured, bilingual labels, and
+  "link this racket to a known item if we have one". v2 adds exactly one new **kind**: a
+  **definition** (a named record shape declared once in a sport-local `definitions` registry and
+  referenced by name), in two flavours — `DEFINITION` and `DEFINITION_LIST`. **The central invariant
+  survives**: attribute keys stay unique per sport and `UserSportProfile.attributes` stays a *flat*
+  `Map<String, Object>` — only the *value* under a key gains structure, and values were always
+  untyped, so A3's entity, V025, the 4KB cap and merge-by-top-level-key are untouched, and **no
+  migration is needed at all**. Four decisions carry the design: (1) the type reference is a
+  **field** (`type: "DEFINITION"` + `definitionRef`), never a sigil syntax like `"#Shoe"`, so `type`
+  stays a Jackson-deserializable closed enum and both the validator's and the renderer's `switch`
+  stay exhaustive — v1 §2.3's trust boundary intact; (2) **`LIST` is not overloaded** — it means
+  multi-select over `options` and keeps its shipped validation path literally unchanged, so repeating
+  records get their own member rather than a conditionally-relaxed rule; (3) **depth 2** — a
+  definition referenced *by* a definition holds only primitives, which makes cycles *structurally
+  unrepresentable* rather than merely detectable, so no visited-set, no depth counter, no traversal
+  is written; (4) **`isRequired` per definition field with a drop-the-record cascade** (a missing
+  required field invalidates the whole record; an invalid optional field is dropped alone), scoped to
+  records only so A9's contract that a profile write never fails on `attributes` content survives.
+  That flag is deliberately **asymmetric** — the client blocks the save and shows an error, the
+  server silently drops — so the server never assumes the client validated and the client never reads
+  a 200 as "all of it stored". **Labels become locale maps** with a `defaultLocale`, resolved
+  server-side from `Accept-Language`: attribute labels are admin-authored *dynamic* content and
+  cannot live in a client translation bundle, which makes placement independent of the app having no
+  i18n yet — and the authoring window is now, while the bilingual draft exists. Resolution maps onto
+  the **two endpoints A11 already built** (user-facing resolves, admin twin returns raw maps) and must
+  sit in the controller, *not* in `getAttributeSchema`, which `UserSportProfileServiceImpl` calls on
+  every profile write and which must stay locale-independent for `SportLookupCache`. **`Reference`
+  (`{ id?, value }`) is an entity link with a free-text fallback** — `id` is declared now though
+  nothing populates it, making "unlinked" first-class from day one so a future Equipment domain needs
+  **no backfill**; `url` was considered and **dropped**, since a linked item's URL belongs to the
+  catalogue and an unlinked one is a user-pasted-link surface (scheme allowlisting, spam/phishing)
+  bought for nothing. Before any catalogue exists, typeahead is bootstrapped from **what users
+  already typed**, pooled by an admin-authored `searchScope` on the *attribute* (rackets don't pool
+  across sports, court shoes do — product knowledge the server cannot infer), gated by a
+  **frequency floor of N distinct users** that simultaneously filters typos and guarantees nothing a
+  single user typed is shown to anyone else. Suggestions are **spelling convergence, not linking** —
+  picking one still stores `id: null` — and the search response carries an optional `id` from day one
+  so the client is unchanged when real items arrive. The payoff is concrete: equipment is a planned
+  **partner-matching filter**, filtering works on `id` and not on free text, so the link rate decides
+  whether that roadmap feature is buildable. **The window that forces sequencing:** A9 shipped
+  unseeded and all 12 sports still carry `NULL`, so changing `label` from `String` to a map is free
+  *today* and stops being free the moment anything is seeded — hence an earlier plan to seed
+  Badminton in v1 format was **withdrawn**, and A15 seeds once, in v2, after A12 and A13.
+  Deliberately out: `isAvailable` on definitions/fields, a cross-sport registry, per-attribute
+  requiredness, `defaultValue` on record types, optimistic locking, and the delete-a-key path (still
+  **A10**, which v2 *sharpens* rather than closes — `DEFINITION_LIST` can be cleared with an empty
+  list while `STRING`/`ENUM` still cannot). **ADMIN-2 needs no ticket**: it shipped as a JSON textarea
+  over the raw document, so it keeps working against v2 unchanged.
 - **A11 (`DONE`, 2026-08-21,
   `modules/sport/sport-impl/docs/MVP/A11_ADMIN_SCHEMA_READ_AND_RENAME_COLLISION_GUARD.md`):** two
   gaps found while building client ADMIN-2 and fixed in that same branch rather than deferred.

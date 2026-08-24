@@ -1,0 +1,149 @@
+{
+  "version": 2,
+  "defaultLocale": "en",
+  "definitions": [
+    {
+      "name": "Reference",
+      "fields": [
+        {
+          "key": "id",
+          "label": { "en": "Item", "vi": "Sản phẩm" },
+          "type": "STRING",
+          "isRequired": false,
+          "order": 1
+        },
+        {
+          "key": "value",
+          "label": { "en": "Name", "vi": "Tên" },
+          "type": "STRING",
+          "isRequired": true,
+          "order": 2
+        }
+      ]
+    },
+    {
+      "name": "ShoeSize",
+      "fields": [
+        {
+          "key": "system",
+          "label": { "en": "System", "vi": "Hệ" },
+          "type": "ENUM",
+          "isRequired": true,
+          "order": 1,
+          "options": [
+            { "value": "US", "label": { "en": "US", "vi": "US" } },
+            { "value": "UK", "label": { "en": "UK", "vi": "UK" } },
+            { "value": "EU", "label": { "en": "EU", "vi": "EU" } },
+            { "value": "JP", "label": { "en": "JP", "vi": "JP" } }
+          ]
+        },
+        {
+          "key": "value",
+          "label": { "en": "Size", "vi": "Cỡ" },
+          "type": "STRING",
+          "isRequired": true,
+          "order": 2
+        }
+      ]
+    },
+    {
+      "name": "Shoe",
+      "fields": [
+        {
+          "key": "shoe",
+          "label": { "en": "Shoe", "vi": "Giày" },
+          "type": "DEFINITION",
+          "definitionRef": "Reference",
+          "isRequired": true,
+          "order": 1
+        },
+        {
+          "key": "size",
+          "label": { "en": "Size", "vi": "Cỡ" },
+          "type": "DEFINITION",
+          "definitionRef": "ShoeSize",
+          "isRequired": false,
+          "order": 2
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "key": "general",
+      "label": { "en": "General", "vi": "Thông tin chung" },
+      "isAvailable": true,
+      "order": 1,
+      "attributes": [
+        {
+          "key": "handedness",
+          "label": { "en": "Hand", "vi": "Tay thuận" },
+          "type": "ENUM",
+          "isAvailable": true,
+          "order": 1,
+          "options": [
+            { "value": "LEFT", "label": { "en": "Left hand", "vi": "Tay trái" } },
+            { "value": "RIGHT", "label": { "en": "Right hand", "vi": "Tay phải" } }
+          ]
+        },
+        {
+          "key": "playstyle",
+          "label": { "en": "Playstyle", "vi": "Lối chơi" },
+          "type": "ENUM",
+          "isAvailable": true,
+          "order": 2,
+          "defaultValue": "BALANCE",
+          "options": [
+            { "value": "ATTACK", "label": { "en": "Attack", "vi": "Tấn công" } },
+            { "value": "BALANCE", "label": { "en": "Balance", "vi": "Cân bằng" } },
+            { "value": "DEFENSE", "label": { "en": "Defense", "vi": "Phòng thủ" } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "gear",
+      "label": { "en": "Gear", "vi": "Trang bị" },
+      "isAvailable": true,
+      "order": 2,
+      "attributes": [
+        {
+          "key": "rackets",
+          "label": { "en": "Rackets", "vi": "Vợt" },
+          "type": "DEFINITION_LIST",
+          "definitionRef": "Reference",
+          "searchScope": "equipment.racket.badminton",
+          "isAvailable": true,
+          "order": 1
+        },
+        {
+          "key": "racketString",
+          "label": { "en": "String", "vi": "Dây vợt" },
+          "type": "DEFINITION_LIST",
+          "definitionRef": "Reference",
+          "searchScope": "equipment.string.badminton",
+          "isAvailable": true,
+          "order": 2
+        },
+        {
+          "key": "shuttlecocks",
+          "label": { "en": "Shuttlecocks", "vi": "Quả cầu" },
+          "type": "DEFINITION_LIST",
+          "definitionRef": "Reference",
+          "searchScope": "equipment.shuttlecock",
+          "isAvailable": true,
+          "order": 3
+        },
+        {
+          "key": "footwear",
+          "label": { "en": "Footwear", "vi": "Giày" },
+          "type": "DEFINITION_LIST",
+          "definitionRef": "Shoe",
+          "searchScope": "equipment.shoe.court",
+          "isAvailable": true,
+          "order": 4
+        }
+      ]
+    }
+  ]
+}

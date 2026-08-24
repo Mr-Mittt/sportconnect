@@ -19,7 +19,12 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [A10](MVP/A10_NO_DELETE_PATH_FOR_A_STORED_PROFILE_ATTRIBUTE.md) | No delete path for a stored profile attribute — merge-only semantics retained by A9, so a stored key can never be removed; stale keys also consume the 4KB cap | `TODO` |
+| 1 | [A12](MVP/A12_SCHEMA_V2_DEFINITION_TYPES.md) | Schema **v2** core — a sport-local `definitions` registry plus `DEFINITION`/`DEFINITION_LIST` type kinds and the required-field cascade, so an attribute value can be a record (a shoe with a name and a size) instead of only a string | `TODO` |
+| 2 | [A13](MVP/A13_LOCALIZED_ATTRIBUTE_SCHEMA_LABELS.md) | Localized attribute-schema labels — `label` becomes a locale map + `defaultLocale`, resolved from `Accept-Language` for users and served raw to the admin editor; **breaking DTO change with a closing window** (nothing is seeded yet, so it is free today) | `TODO` |
+| 3 | [A14](MVP/A14_ATTRIBUTE_VALUE_SUGGESTIONS_AND_SEARCH_SCOPE.md) | Attribute-value suggestions + `searchScope` — typeahead pooled from what users already typed, so free text converges *before* an Equipment catalogue exists; results carry an optional `id` from day one so the client never changes when it does | `TODO` |
+| 4 | [A15](MVP/A15_SEED_BADMINTON_AND_PICKLEBALL_SCHEMAS.md) | Seed the Badminton (and Pickleball) schemas — A9 shipped unseeded, so the whole attribute feature currently does nothing for anyone | `TODO` |
+| 5 | [A16](MVP/A16_NUMBER_AND_BOOLEAN_ATTRIBUTE_TYPES.md) | `NUMBER` and `BOOLEAN` attribute types — named by v1 §3 as the next additions; writing a real Badminton schema is the first thing that needs them | `TODO` |
+| 6 | [A10](MVP/A10_NO_DELETE_PATH_FOR_A_STORED_PROFILE_ATTRIBUTE.md) | No delete path for a stored profile attribute — merge-only semantics retained by A9, so a stored key can never be removed; stale keys also consume the 4KB cap. **Sharpened by v2:** `DEFINITION_LIST` gets a working clear path for free (an empty list), which makes its absence for `STRING`/`ENUM` user-visible | `TODO` |
 
 ---
 
@@ -45,4 +50,20 @@
 No hard dependency between A1 and A2, but both touch SportController.java —
 consider doing them in the same session to avoid re-reading the same file twice.
 A3: no hard dependency, can run independently.
+
+Schema v2 (design: documentation/md/SPORT_ATTRIBUTE_SCHEMA_V2_DESIGN.md):
+
+  A12 ─┬─> A14 ──> client SPORT-6
+       └─> A15 <── A13
+  A12, A13 ──> client SPORT-2 (rescoped onto v2)
+  A16: independent of all of the above.
+
+A12 and A13 are independent of each other, and both block A15. Land them close
+together: both change the document format, and while nothing is seeded there is
+nothing to migrate between them.
+
+DO NOT seed any sport before A13 lands. A13 changes `label` from String to a
+locale map — a breaking DTO change that is free only because A9 shipped unseeded
+and all 12 sports still carry NULL. Seeding first manufactures a migration for
+no reason (v2 design §11).
 ```
