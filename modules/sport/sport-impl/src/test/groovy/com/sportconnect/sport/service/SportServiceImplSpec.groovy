@@ -301,9 +301,10 @@ class SportServiceImplSpec extends Specification {
         given:
         def sportId = 1L
         def stored = [
-                groups: [[key       : "gear", label: "Gear", isAvailable: true, order: 1,
-                          attributes: [[key: "racket", label: "Racket", type: "STRING",
-                                        isAvailable: true, order: 1]]]]
+                defaultLocale: "en",
+                groups       : [[key       : "gear", label: [en: "Gear"], isAvailable: true, order: 1,
+                                  attributes: [[key: "racket", label: [en: "Racket"], type: "STRING",
+                                                isAvailable: true, order: 1]]]]
         ]
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
                 .attributesSchema(stored).build()
@@ -347,10 +348,10 @@ class SportServiceImplSpec extends Specification {
         given:
         def sportId = 1L
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true).build()
-        def schema = SportAttributeSchema.builder().groups([
-                SportAttributeGroup.builder().key("gear").label("Gear").isAvailable(true).order(1)
+        def schema = SportAttributeSchema.builder().defaultLocale("en").groups([
+                SportAttributeGroup.builder().key("gear").label(["en": "Gear"]).isAvailable(true).order(1)
                         .attributes([SportAttributeDefinition.builder()
-                                             .key("racket").label("Racket")
+                                             .key("racket").label(["en": "Racket"])
                                              .type(SportAttributeType.STRING)
                                              .isAvailable(true).order(1).build()])
                         .build()
@@ -374,14 +375,14 @@ class SportServiceImplSpec extends Specification {
         def sportId = 1L
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true).build()
         def duplicate = { String groupKey ->
-            SportAttributeGroup.builder().key(groupKey).label(groupKey).isAvailable(true).order(1)
+            SportAttributeGroup.builder().key(groupKey).label(["en": groupKey]).isAvailable(true).order(1)
                     .attributes([SportAttributeDefinition.builder()
-                                         .key("racket").label("Racket")
+                                         .key("racket").label(["en": "Racket"])
                                          .type(SportAttributeType.STRING)
                                          .isAvailable(true).order(1).build()])
                     .build()
         }
-        def schema = SportAttributeSchema.builder()
+        def schema = SportAttributeSchema.builder().defaultLocale("en")
                 .groups([duplicate("gear"), duplicate("other")]).build()
 
         when:
@@ -429,9 +430,10 @@ class SportServiceImplSpec extends Specification {
         given: "the exact case A9 left broken - the admin editor could write this schema but never read it back"
         def sportId = 1L
         def stored = [
-                groups: [[key       : "gear", label: "Gear", isAvailable: true, order: 1,
-                          attributes: [[key: "racket", label: "Racket", type: "STRING",
-                                        isAvailable: true, order: 1]]]]
+                defaultLocale: "en",
+                groups       : [[key       : "gear", label: [en: "Gear"], isAvailable: true, order: 1,
+                                  attributes: [[key: "racket", label: [en: "Racket"], type: "STRING",
+                                                isAvailable: true, order: 1]]]]
         ]
         def sport = Sport.builder().id(sportId).name("Tennis").isActive(false)
                 .attributesSchema(stored).build()

@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * A display grouping of attributes within a sport's schema (A9) — e.g. "Gear", "Play style".
@@ -22,8 +23,11 @@ public class SportAttributeGroup {
     /** Unique among groups. Must match {@code ^[a-z][a-zA-Z0-9_]*$}. */
     private String key;
 
-    /** Display text. Unconstrained. */
-    private String label;
+    /**
+     * Locale (BCP 47) → display text (A13). Must carry an entry for the enclosing schema's
+     * {@code defaultLocale}; text itself is otherwise unconstrained.
+     */
+    private Map<String, String> label;
 
     /**
      * Soft delete. An unavailable group hides its <em>whole subtree</em>: its children are not

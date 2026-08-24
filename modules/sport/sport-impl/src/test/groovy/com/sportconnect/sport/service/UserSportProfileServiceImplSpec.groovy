@@ -43,10 +43,10 @@ class UserSportProfileServiceImplSpec extends Specification {
     private static SportAttributeSchema schemaWith(String... keys) {
         SportAttributeSchema.builder()
                 .groups([SportAttributeGroup.builder()
-                                 .key("general").label("General").isAvailable(true).order(1)
+                                 .key("general").label(["en": "General"]).isAvailable(true).order(1)
                                  .attributes(keys.toList().withIndex().collect { key, i ->
                                      SportAttributeDefinition.builder()
-                                             .key(key).label(key)
+                                             .key(key).label(["en": key])
                                              .type(SportAttributeType.STRING)
                                              .isAvailable(true).order(i + 1).build()
                                  })

@@ -33,7 +33,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
                                                       String searchScope = null) {
         SportAttributeDefinition.builder()
                 .key(key)
-                .label(key)
+                .label(["en": key])
                 .type(type)
                 .options(options)
                 .isAvailable(true)
@@ -45,13 +45,14 @@ class SportAttributeSchemaValidatorSpec extends Specification {
     }
 
     private static SportAttributeSchema schemaOf(List<SportAttributeGroup> groups,
-                                                  List<SportAttributeDefinitionType> definitions = null) {
-        SportAttributeSchema.builder().definitions(definitions).groups(groups).build()
+                                                  List<SportAttributeDefinitionType> definitions = null,
+                                                  String defaultLocale = "en") {
+        SportAttributeSchema.builder().definitions(definitions).groups(groups).defaultLocale(defaultLocale).build()
     }
 
     private static SportAttributeGroup group(String key, List<SportAttributeDefinition> attributes) {
         SportAttributeGroup.builder()
-                .key(key).label(key).isAvailable(true).order(1).attributes(attributes).build()
+                .key(key).label(["en": key]).isAvailable(true).order(1).attributes(attributes).build()
     }
 
     private static SportAttributeField field(String key, SportAttributeType type,
@@ -59,7 +60,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
                                               String definitionRef = null,
                                               boolean isRequired = false) {
         SportAttributeField.builder()
-                .key(key).label(key).type(type).options(options)
+                .key(key).label(["en": key]).type(type).options(options)
                 .definitionRef(definitionRef).isRequired(isRequired).order(1).build()
     }
 
@@ -84,13 +85,13 @@ class SportAttributeSchemaValidatorSpec extends Specification {
                 group("gear", [
                         attribute("racket", SportAttributeType.STRING),
                         attribute("shuttlecock", SportAttributeType.ENUM,
-                                [new SportAttributeOption("feather", "Feather"),
-                                 new SportAttributeOption("nylon", "Nylon")], "nylon")
+                                [new SportAttributeOption("feather", ["en": "Feather"]),
+                                 new SportAttributeOption("nylon", ["en": "Nylon"])], "nylon")
                 ]),
                 group("play_style", [
                         attribute("preferred_shots", SportAttributeType.LIST,
-                                [new SportAttributeOption("smash", "Smash"),
-                                 new SportAttributeOption("drop", "Drop")], ["smash"])
+                                [new SportAttributeOption("smash", ["en": "Smash"]),
+                                 new SportAttributeOption("drop", ["en": "Drop"])], ["smash"])
                 ])
         ])
 
@@ -159,7 +160,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
     def "duplicate option values are rejected"() {
         given:
         def schema = schemaOf([group("gear", [attribute("choice", SportAttributeType.ENUM,
-                [new SportAttributeOption("a", "A"), new SportAttributeOption("a", "A again")])])])
+                [new SportAttributeOption("a", ["en": "A"]), new SportAttributeOption("a", ["en": "A again"])])])])
 
         when:
         validator.validate(schema)
@@ -171,7 +172,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
     def "a STRING attribute carrying options is rejected"() {
         given: "almost certainly meant to be an ENUM - rejecting beats silently ignoring the options"
         def schema = schemaOf([group("gear", [attribute("racket", SportAttributeType.STRING,
-                [new SportAttributeOption("a", "A")])])])
+                [new SportAttributeOption("a", ["en": "A"])])])])
 
         when:
         validator.validate(schema)
@@ -192,18 +193,18 @@ class SportAttributeSchemaValidatorSpec extends Specification {
 
         where:
         description                     | type                    | options                                        | defaultValue
-        "ENUM default not an option"    | SportAttributeType.ENUM | [new SportAttributeOption("nylon", "Nylon")]   | "plastic"
-        "ENUM default not a string"     | SportAttributeType.ENUM | [new SportAttributeOption("nylon", "Nylon")]   | 42
-        "LIST default not a list"       | SportAttributeType.LIST | [new SportAttributeOption("smash", "Smash")]   | "smash"
-        "LIST default element unknown"  | SportAttributeType.LIST | [new SportAttributeOption("smash", "Smash")]   | ["drop"]
-        "LIST default over the 10-item cap" | SportAttributeType.LIST | [new SportAttributeOption("smash", "Smash")] | (1..11).collect { "smash" }
+        "ENUM default not an option"    | SportAttributeType.ENUM | [new SportAttributeOption("nylon", ["en": "Nylon"])]   | "plastic"
+        "ENUM default not a string"     | SportAttributeType.ENUM | [new SportAttributeOption("nylon", ["en": "Nylon"])]   | 42
+        "LIST default not a list"       | SportAttributeType.LIST | [new SportAttributeOption("smash", ["en": "Smash"])]   | "smash"
+        "LIST default element unknown"  | SportAttributeType.LIST | [new SportAttributeOption("smash", ["en": "Smash"])]   | ["drop"]
+        "LIST default over the 10-item cap" | SportAttributeType.LIST | [new SportAttributeOption("smash", ["en": "Smash"])] | (1..11).collect { "smash" }
         "STRING default not a string"   | SportAttributeType.STRING | null                                         | 42
     }
 
     def "a defaultValue LIST at exactly the 10-item cap is accepted"() {
         given:
         def schema = schemaOf([group("gear", [
-                attribute("shots", SportAttributeType.LIST, [new SportAttributeOption("smash", "Smash")],
+                attribute("shots", SportAttributeType.LIST, [new SportAttributeOption("smash", ["en": "Smash"])],
                         (1..10).collect { "smash" })
         ])])
 
@@ -231,7 +232,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
     def "an attribute with no type is rejected"() {
         given:
         def schema = schemaOf([group("gear", [
-                SportAttributeDefinition.builder().key("racket").label("Racket").isAvailable(true).build()
+                SportAttributeDefinition.builder().key("racket").label(["en": "Racket"]).isAvailable(true).build()
         ])])
 
         when:
@@ -245,7 +246,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
         given: "many attributes with long labels, enough to exceed 16KB once serialised"
         def attributes = (1..400).collect {
             attribute("attr_${it}" as String, SportAttributeType.STRING)
-                    .tap { it.label = "L" * 60 }
+                    .tap { it.label = ["en": "L" * 60] }
         }
         def schema = schemaOf([group("gear", attributes)])
 
@@ -268,7 +269,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
                 ]),
                 definitionType("ShoeSize", [
                         field("system", SportAttributeType.ENUM,
-                                [new SportAttributeOption("US", "US")], null, true),
+                                [new SportAttributeOption("US", ["en": "US"])], null, true),
                         field("value", SportAttributeType.STRING, null, null, true)
                 ]),
                 definitionType("Shoe", [
@@ -363,7 +364,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
         given:
         def schema = schemaOf([group("gear", [])], [
                 definitionType("Reference", [
-                        SportAttributeField.builder().key("value").label("value").build()
+                        SportAttributeField.builder().key("value").label(["en": "value"]).build()
                 ])
         ])
 
@@ -504,7 +505,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
         given:
         def schema = schemaOf([
                 group("gear", [attribute("footwear", SportAttributeType.DEFINITION,
-                        [new SportAttributeOption("a", "A")], null, "Shoe")])
+                        [new SportAttributeOption("a", ["en": "A"])], null, "Shoe")])
         ], [definitionType("Shoe", [])])
 
         when:
@@ -583,6 +584,128 @@ class SportAttributeSchemaValidatorSpec extends Specification {
                 group("gear", [attribute("rackets", SportAttributeType.DEFINITION_LIST, null, null,
                         "Reference", "equipment.racket.badminton")])
         ], referenceRegistry())
+
+        when:
+        validator.validate(schema)
+
+        then:
+        noExceptionThrown()
+    }
+
+    // --- A13: localized labels ---
+
+    def "a schema with no defaultLocale is rejected"() {
+        given:
+        def schema = schemaOf([group("gear", [attribute("racket", SportAttributeType.STRING)])], null, null)
+
+        when:
+        validator.validate(schema)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains("defaultLocale")
+    }
+
+    def "a schema whose defaultLocale is not a well-formed BCP 47 tag is rejected: #defaultLocale"() {
+        given:
+        def schema = schemaOf([group("gear", [attribute("racket", SportAttributeType.STRING)])], null, defaultLocale)
+
+        when:
+        validator.validate(schema)
+
+        then:
+        thrown(BadRequestException)
+
+        where:
+        defaultLocale << ["vi_VN", "1", "", "-en"]
+    }
+
+    def "a node whose label is missing the schema's defaultLocale entry is rejected"() {
+        given: "the label carries only 'vi', but the schema's defaultLocale is 'en'"
+        def schema = schemaOf([group("gear", [
+                SportAttributeDefinition.builder().key("racket").label(["vi": "Vợt"])
+                        .type(SportAttributeType.STRING).isAvailable(true).order(1).build()
+        ])])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains("racket")
+        e.message.contains("defaultLocale")
+    }
+
+    def "a node with no label at all is rejected"() {
+        given:
+        def schema = schemaOf([group("gear", [
+                SportAttributeDefinition.builder().key("racket")
+                        .type(SportAttributeType.STRING).isAvailable(true).order(1).build()
+        ])])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        thrown(BadRequestException)
+    }
+
+    def "a node whose label carries a malformed locale key is rejected, even alongside a valid defaultLocale entry: #locale"() {
+        given:
+        def schema = schemaOf([group("gear", [
+                SportAttributeDefinition.builder().key("racket").label(["en": "Racket", (locale): "x"])
+                        .type(SportAttributeType.STRING).isAvailable(true).order(1).build()
+        ])])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        thrown(BadRequestException)
+
+        where:
+        locale << ["vi_VN", "1", "-en"]
+    }
+
+    def "an option's label is checked the same way as every other labeled node"() {
+        given:
+        def schema = schemaOf([group("gear", [attribute("choice", SportAttributeType.ENUM,
+                [SportAttributeOption.builder().value("a").label(["vi": "A"]).build()])])])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains("defaultLocale")
+    }
+
+    def "a definition field's label is checked the same way as every other labeled node"() {
+        given:
+        def schema = schemaOf([group("gear", [])], [
+                definitionType("Reference", [
+                        SportAttributeField.builder().key("value").label(["vi": "Giá trị"])
+                                .type(SportAttributeType.STRING).build()
+                ])
+        ])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains("defaultLocale")
+    }
+
+    def "a document with multiple locales on every label, all covering defaultLocale, passes"() {
+        given:
+        def schema = schemaOf([group("gear", [
+                SportAttributeDefinition.builder().key("racket").label(["en": "Racket", "vi": "Vợt"])
+                        .type(SportAttributeType.ENUM)
+                        .options([SportAttributeOption.builder().value("a")
+                                          .label(["en": "A", "vi": "A"]).build()])
+                        .isAvailable(true).order(1).build()
+        ])])
 
         when:
         validator.validate(schema)

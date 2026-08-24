@@ -56,6 +56,15 @@ class SportAttributeSchemaValidator {
     private static final Pattern DEFINITION_NAME_PATTERN = Pattern.compile("^[A-Z][a-zA-Z0-9]*$");
 
     /**
+     * BCP 47 language tag, permissively (a primary subtag plus any number of hyphenated subtags) —
+     * enough to reject the ISO-3166-country-code mistake ({@code "vn"} is a valid 2-letter primary
+     * subtag on its own, but {@code label} keys are what {@code Accept-Language} actually sends, so
+     * requiring the general tag shape catches typos like {@code "vi_VN"} without hand-maintaining a
+     * registry of valid subtags (A13).
+     */
+    private static final Pattern LOCALE_PATTERN = Pattern.compile("^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{1,8})*$");
+
+    /**
      * 16KB — larger than the 4KB profile-attributes cap because a schema carries labels and option
      * lists, not just values. Admin-only write, so this guards against a bad paste rather than
      * abuse.
@@ -67,10 +76,11 @@ class SportAttributeSchemaValidator {
     /**
      * Validates the document in full, throwing on the first violation found.
      *
-     * <p>Check order affects error quality only, not correctness: the {@code definitions} registry
-     * is validated before the group/attribute tree, so a {@code definitionRef} can be resolved
-     * against a fully-built map, and the size rule runs last so an oversized malformed document
-     * reports what is actually wrong with it rather than merely that it is too big.
+     * <p>Check order affects error quality only, not correctness: {@code defaultLocale} is checked
+     * first since every label check below needs it (A13); the {@code definitions} registry is then
+     * validated before the group/attribute tree, so a {@code definitionRef} can be resolved against
+     * a fully-built map; the size rule runs last so an oversized malformed document reports what is
+     * actually wrong with it rather than merely that it is too big.
      *
      * @param schema the document to validate; {@code null} is valid and means "offers no attributes"
      * @throws BadRequestException on any violation, naming the offending node
@@ -80,7 +90,17 @@ class SportAttributeSchemaValidator {
             return;
         }
 
-        Map<String, SportAttributeDefinitionType> definitionsByName = validateDefinitions(schema.getDefinitions());
+        // Fails fast, before any node in the tree is walked: every label check below needs a
+        // resolved defaultLocale to check against (A13).
+        if (schema.getDefaultLocale() == null || !LOCALE_PATTERN.matcher(schema.getDefaultLocale()).matches()) {
+            throw new BadRequestException(
+                    "Schema defaultLocale must match " + LOCALE_PATTERN.pattern()
+                            + " but was: " + schema.getDefaultLocale());
+        }
+        String defaultLocale = schema.getDefaultLocale();
+
+        Map<String, SportAttributeDefinitionType> definitionsByName =
+                validateDefinitions(schema.getDefinitions(), defaultLocale);
 
         Set<String> groupKeys = new HashSet<>();
         // Accumulated across every group rather than reset per group: leaf keys are unique across
@@ -93,8 +113,9 @@ class SportAttributeSchemaValidator {
             if (!groupKeys.add(group.getKey())) {
                 throw new BadRequestException("Duplicate group key: " + group.getKey());
             }
+            validateLabel(group.getLabel(), defaultLocale, "Group " + group.getKey());
             for (SportAttributeDefinition attribute : nullSafe(group.getAttributes())) {
-                validateAttribute(attribute, attributeKeys, definitionsByName);
+                validateAttribute(attribute, attributeKeys, definitionsByName, defaultLocale);
             }
         }
 
@@ -102,12 +123,14 @@ class SportAttributeSchemaValidator {
     }
 
     private void validateAttribute(SportAttributeDefinition attribute, Set<String> seenKeys,
-                                    Map<String, SportAttributeDefinitionType> definitionsByName) {
+                                    Map<String, SportAttributeDefinitionType> definitionsByName,
+                                    String defaultLocale) {
         validateKey(attribute.getKey(), "Attribute key");
         if (!seenKeys.add(attribute.getKey())) {
             throw new BadRequestException(
                     "Duplicate attribute key across the sport: " + attribute.getKey());
         }
+        validateLabel(attribute.getLabel(), defaultLocale, "Attribute " + attribute.getKey());
         if (attribute.getType() == null) {
             throw new BadRequestException(
                     "Attribute " + attribute.getKey() + " must declare a type");
@@ -116,7 +139,7 @@ class SportAttributeSchemaValidator {
         List<SportAttributeOption> options = nullSafe(attribute.getOptions());
         switch (attribute.getType()) {
             case ENUM, LIST -> validateOptionsList(
-                    "Attribute " + attribute.getKey(), options, attribute.getType());
+                    "Attribute " + attribute.getKey(), options, attribute.getType(), defaultLocale);
             // A STRING carrying options usually means the author meant ENUM. Rejecting is cheaper
             // than silently ignoring a list they expected to constrain input with.
             case STRING -> {
@@ -159,7 +182,8 @@ class SportAttributeSchemaValidator {
         }
     }
 
-    private void validateOptionsList(String context, List<SportAttributeOption> options, SportAttributeType type) {
+    private void validateOptionsList(String context, List<SportAttributeOption> options, SportAttributeType type,
+                                      String defaultLocale) {
         if (options.isEmpty()) {
             throw new BadRequestException(context + " is " + type + " and must declare at least one option");
         }
@@ -171,6 +195,7 @@ class SportAttributeSchemaValidator {
             if (!values.add(option.getValue())) {
                 throw new BadRequestException(context + " has duplicate option value: " + option.getValue());
             }
+            validateLabel(option.getLabel(), defaultLocale, context + " option " + option.getValue());
         }
     }
 
@@ -215,7 +240,8 @@ class SportAttributeSchemaValidator {
      * definitions may only hold primitives, so {@code B} fails this pass directly. A self-reference
      * {@code A → A} puts {@code A} in both positions, the same contradiction.
      */
-    private Map<String, SportAttributeDefinitionType> validateDefinitions(List<SportAttributeDefinitionType> definitions) {
+    private Map<String, SportAttributeDefinitionType> validateDefinitions(List<SportAttributeDefinitionType> definitions,
+                                                                           String defaultLocale) {
         Map<String, SportAttributeDefinitionType> byName = new LinkedHashMap<>();
         for (SportAttributeDefinitionType definition : nullSafe(definitions)) {
             if (definition.getName() == null || !DEFINITION_NAME_PATTERN.matcher(definition.getName()).matches()) {
@@ -235,7 +261,7 @@ class SportAttributeSchemaValidator {
                     throw new BadRequestException("Duplicate field key in definition "
                             + definition.getName() + ": " + field.getKey());
                 }
-                validateField(definition, field, byName);
+                validateField(definition, field, byName, defaultLocale);
             }
         }
 
@@ -244,7 +270,10 @@ class SportAttributeSchemaValidator {
     }
 
     private void validateField(SportAttributeDefinitionType definition, SportAttributeField field,
-                                Map<String, SportAttributeDefinitionType> definitionsByName) {
+                                Map<String, SportAttributeDefinitionType> definitionsByName,
+                                String defaultLocale) {
+        validateLabel(field.getLabel(), defaultLocale,
+                "Definition " + definition.getName() + " field " + field.getKey());
         if (field.getType() == null) {
             throw new BadRequestException("Definition " + definition.getName()
                     + " field " + field.getKey() + " must declare a type");
@@ -253,7 +282,8 @@ class SportAttributeSchemaValidator {
         List<SportAttributeOption> options = nullSafe(field.getOptions());
         switch (field.getType()) {
             case ENUM, LIST -> validateOptionsList(
-                    "Definition " + definition.getName() + " field " + field.getKey(), options, field.getType());
+                    "Definition " + definition.getName() + " field " + field.getKey(), options, field.getType(),
+                    defaultLocale);
             case STRING -> {
                 if (!options.isEmpty()) {
                     throw new BadRequestException("Definition " + definition.getName()
@@ -315,6 +345,28 @@ class SportAttributeSchemaValidator {
         if (key == null || !KEY_PATTERN.matcher(key).matches()) {
             throw new BadRequestException(
                     what + " must match " + KEY_PATTERN.pattern() + " but was: " + key);
+        }
+    }
+
+    /**
+     * Every labeled node (group, attribute, option, definition field) must carry an entry for the
+     * document's {@code defaultLocale} — that is the one rule that makes resolution total (A13):
+     * a missing label is caught here, at {@code PUT} time, never at render time by a user staring
+     * at a blank field. Every locale key present is also checked against {@link #LOCALE_PATTERN},
+     * not just the default one, since a malformed extra locale would otherwise sit in the document
+     * unnoticed until some caller's {@code Accept-Language} happened to match it.
+     */
+    private void validateLabel(Map<String, String> label, String defaultLocale, String context) {
+        if (label == null || label.isEmpty()) {
+            throw new BadRequestException(context + " must declare a label for locale " + defaultLocale);
+        }
+        for (String locale : label.keySet()) {
+            if (locale == null || !LOCALE_PATTERN.matcher(locale).matches()) {
+                throw new BadRequestException(context + " has a malformed label locale: " + locale);
+            }
+        }
+        if (!label.containsKey(defaultLocale)) {
+            throw new BadRequestException(context + " label is missing the schema's defaultLocale: " + defaultLocale);
         }
     }
 
