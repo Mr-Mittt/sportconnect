@@ -12,9 +12,19 @@ name: client-ci
 on:
   push:
     branches: [master]
-    paths: ['client/**', '.github/workflows/client-ci.yml']
+    # '!client/docs/**' skips this workflow for docs-only changes (ticket/backlog markdown).
+    # Path filters evaluate in order and the *last* matching pattern wins per changed file, so a
+    # PR touching both a doc and real client code still runs — the code file only matches the
+    # 'client/**' positive pattern, never the docs negation.
+    paths:
+      - 'client/**'
+      - '!client/docs/**'
+      - '.github/workflows/client-ci.yml'
   pull_request:
-    paths: ['client/**', '.github/workflows/client-ci.yml']
+    paths:
+      - 'client/**'
+      - '!client/docs/**'
+      - '.github/workflows/client-ci.yml'
   workflow_dispatch:
     inputs:
       update-baselines:

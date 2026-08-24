@@ -14,8 +14,14 @@ name: server-ci
 on:
   push:
     branches: [master]
+    # '!modules/**/docs/**' skips this workflow for docs-only changes (ticket/backlog markdown,
+    # at both modules/<domain>/docs/ and modules/<domain>/<submodule>/docs/). Path filters
+    # evaluate in order and the *last* matching pattern wins per changed file, so a PR touching
+    # both a doc and real module code still runs — the code file only matches the 'modules/**'
+    # positive pattern, never the docs negation.
     paths:
       - 'modules/**'
+      - '!modules/**/docs/**'
       - 'server/**'
       - 'build.gradle'
       - 'settings.gradle'
@@ -26,6 +32,7 @@ on:
   pull_request:
     paths:
       - 'modules/**'
+      - '!modules/**/docs/**'
       - 'server/**'
       - 'build.gradle'
       - 'settings.gradle'
