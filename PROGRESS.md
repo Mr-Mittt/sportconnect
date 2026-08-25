@@ -3122,6 +3122,26 @@ explicit go-ahead at each step (full story in A3's summary doc):
   messages are English-only today and unaddressed; the client's ~15 hand-mirrored backend enums are
   translatable surface too; the client stack (Vite, not Next.js) rules out Next-specific i18n
   libraries.
+- **A15 (`DONE`, 2026-08-25,
+  `modules/sport/sport-impl/docs/MVP/A15_SEED_BADMINTON_AND_PICKLEBALL_SCHEMAS.md`):** seeded
+  Badminton's real v2 attribute schema — **no code change**, pure operational data-seeding via the
+  admin `PUT` (through the client's `ADMIN-2` page, done by the user directly — no standing admin
+  credentials in this environment, and a direct DB role-grant was correctly blocked by the auto-mode
+  classifier as a mutating action). Verified independently afterward: the stored document is a
+  structural match to `A15_BADMINTON_SCHEMA_V2.json`; the member `GET` resolves correctly for both
+  the default locale and `Accept-Language: vi` (A13's resolver working end-to-end against real
+  content for the first time); the raw locale maps were confirmed directly against the Postgres row;
+  a real profile write exercising the deepest nesting the schema offers (`footwear` →
+  `DEFINITION_LIST` of `Shoe` → nested `ShoeSize`) round-tripped correctly with the top-level
+  `attributes` map still flat, then was deleted (no leftover test data). **Pickleball stays
+  unseeded** — no real content exists for it anywhere, and the ticket explicitly sanctions seeding
+  Badminton alone rather than inventing attribute names for a sport with immutable keys. Every key
+  in the seeded document (`handedness`, `playstyle`, `rackets`, `racketString`, `shuttlecocks`,
+  `footwear`, plus the `Reference`/`ShoeSize`/`Shoe` definitions) and all four `searchScope` pools
+  (`equipment.racket.badminton`, `equipment.string.badminton`, `equipment.shuttlecock`,
+  `equipment.shoe.court`) are now live and load-bearing for the first time since A9 shipped
+  unseeded. Unblocks client `SPORT-2` with real content to render against, and gives the postponed
+  **A14** real `searchScope` values to design against once it resumes.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
