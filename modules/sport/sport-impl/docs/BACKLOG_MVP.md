@@ -19,9 +19,9 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [A14](MVP/A14_ATTRIBUTE_VALUE_SUGGESTIONS_AND_SEARCH_SCOPE.md) | Attribute-value suggestions + `searchScope` — typeahead pooled from what users already typed, so free text converges *before* an Equipment catalogue exists; results carry an optional `id` from day one so the client never changes when it does | `TODO` |
-| 2 | [A16](MVP/A16_NUMBER_AND_BOOLEAN_ATTRIBUTE_TYPES.md) | `NUMBER` and `BOOLEAN` attribute types — named by v1 §3 as the next additions; writing a real Badminton schema is the first thing that needs them | `TODO` |
-| 3 | [A10](MVP/A10_NO_DELETE_PATH_FOR_A_STORED_PROFILE_ATTRIBUTE.md) | No delete path for a stored profile attribute — merge-only semantics retained by A9, so a stored key can never be removed; stale keys also consume the 4KB cap. **Sharpened by v2:** `DEFINITION_LIST` gets a working clear path for free (an empty list), which makes its absence for `STRING`/`ENUM` user-visible | `TODO` |
+| 1 | [A16](MVP/A16_NUMBER_AND_BOOLEAN_ATTRIBUTE_TYPES.md) | `NUMBER` and `BOOLEAN` attribute types — named by v1 §3 as the next additions; writing a real Badminton schema is the first thing that needs them | `TODO` |
+| 2 | [A10](MVP/A10_NO_DELETE_PATH_FOR_A_STORED_PROFILE_ATTRIBUTE.md) | No delete path for a stored profile attribute — merge-only semantics retained by A9, so a stored key can never be removed; stale keys also consume the 4KB cap. **Sharpened by v2:** `DEFINITION_LIST` gets a working clear path for free (an empty list), which makes its absence for `STRING`/`ENUM` user-visible | `TODO` |
+| 3 | [A14](MVP/A14_ATTRIBUTE_VALUE_SUGGESTIONS_AND_SEARCH_SCOPE.md) | Attribute-value suggestions + `searchScope` — typeahead pooled from what users already typed, so free text converges *before* an Equipment catalogue exists; results carry an optional `id` from day one so the client never changes when it does. **Postponed at 2026-08-25 pickup** — the aggregation strategy needs more design investigation before implementation (see the ticket's own Investigation notes) | `TODO` |
 
 ---
 
