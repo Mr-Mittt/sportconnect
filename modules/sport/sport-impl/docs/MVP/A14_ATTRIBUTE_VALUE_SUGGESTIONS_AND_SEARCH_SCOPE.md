@@ -92,3 +92,67 @@ like linking, the link rate measures something that does not exist.
 The Equipment domain itself, and the later resolution/backfill work (design §8.5 records the intended
 approach: seed the catalogue *from* the aggregate, exact-match auto-apply, user-confirmed linking for
 the ambiguous middle, and a non-destructive backfill that sets `id` and never rewrites `value`).
+
+## Investigation notes (postponed at pickup, 2026-08-25)
+
+Picked up, taken through most of Phase 1/design, then **explicitly postponed** — the aggregation
+strategy needs another pass before implementation starts, not a default picked under pressure to
+keep moving. Recorded here so the next pickup doesn't re-derive the same ground from scratch, but
+**nothing below is a locked decision** — treat it as the leading candidate, not the approved plan.
+
+**Two approaches were compared:**
+
+1. **Periodic full-scan + Redis cache.** A `@Scheduled` job (same shape as `SessionGenerationJob`)
+   re-scans every active profile's JSONB `attributes` on a fixed cadence, tallies distinct users per
+   `(searchScope, value)` in Java, writes the ranked result into a Redis sorted set
+   (`ZADD sport:attribute-suggestions:{searchScope} <count> <value>`), swapped in atomically via a
+   temp-key + `RENAME` so reads never see a half-rebuilt aggregate. Matches design §12's "cache"
+   wording and has real precedent in this codebase (`post-impl` B3's `StringRedisTemplate` counters).
+   Rejected primarily because **it reintroduces a staleness window** (a value only becomes a
+   suggestion on the next scheduled run, up to the cadence length later) for no longer than the
+   full-scan itself actually costs — at current MVP scale (A6 caps the catalogue at 2 active sports,
+   and A15 hasn't seeded anything yet, so this job would find zero `searchScope` attributes to
+   aggregate if it ran today) the full scan is cheap, but the staleness is a real, avoidable UX cost
+   regardless of scale.
+
+2. **A persistent, write-time-maintained dictionary table** (the direction the discussion converged
+   toward, not yet fully designed): a new table — sketched as
+   `sport_attribute_value_index(profile_id, attribute_key, search_scope, value, user_id)` — synced
+   incrementally in `UserSportProfileServiceImpl.createProfile`/`updateProfile`/`deleteProfile`
+   (delete this profile's existing `(profile_id, attribute_key)` rows, insert fresh ones for
+   whatever `searchScope`-bearing values are now stored — delete-then-insert rather than diffing
+   old-vs-new, so it's correct regardless of what changed). Reads become a live, indexed
+   `SELECT value, COUNT(DISTINCT user_id) ... GROUP BY value HAVING COUNT(DISTINCT user_id) >= :N
+   ORDER BY count DESC` — no cache, no scheduled job, no staleness window, and the earlier "what
+   happens on restart" concern disappears entirely since Postgres is already the durable store.
+   Costs a Liquibase migration + new entity/repository this ticket previously assumed it didn't
+   need, and a write-time hook that has to be gotten right on create/update/delete/reactivate.
+
+**A real flaw was caught and fixed mid-discussion, worth preserving:** the dictionary read query
+must **not** be parameterized by whatever the user is currently typing and re-run per keystroke —
+that reintroduces exactly the "must not run per keystroke" cost the design doc warns about, just
+against a smaller table instead of the full profile set. The fix: the endpoint takes **no**
+prefix/query parameter at all. It returns the *full* ranked list for a `searchScope` once (fired on
+field focus, not per keystroke), and the client filters that already-small, already-floor-passed
+list locally as the user types — search-as-you-type becomes client `SPORT-6`'s concern, not a
+backend query parameter. Under that call pattern (once per edit session, not once per character),
+even the live `GROUP BY`/`COUNT(DISTINCT)` query is comfortably fast against an indexed table sized
+by distinct-values-per-scope, not by profile count. A short TTL cache in front of that one query
+(a few seconds to a minute) was floated as cheap insurance against many users opening the same
+popular field at once, but was not settled as required.
+
+**Still genuinely open, not reached before postponing:**
+- Whether the dictionary-table approach is actually the final call, or whether it has its own
+  unexamined problems (e.g. write amplification if a profile has several `searchScope` attributes,
+  correctness of the delete-then-insert hook across `createProfile`'s reactivation path, whether
+  `DEFINITION_LIST`'s multiple values-per-attribute need special handling in the delete-then-insert).
+- The frequency floor **N** and its rationale — never reached; a candidate of 3 was floated but not
+  confirmed.
+- Whether a short TTL cache in front of the read query is worth adding now or only if it's ever
+  measured as needed.
+- Endpoint auth (public vs. `isAuthenticated()`, matching `getAttributeSchema`'s precedent) — never
+  reached.
+
+Given this ticket is inert until **A15** ships anyway (see *Why*), postponing costs nothing in
+practice — reordered to the back of the Open queue in `BACKLOG_MVP.md` rather than left `IN
+PROGRESS` on a half-decided design.
