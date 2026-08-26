@@ -3188,6 +3188,17 @@ explicit go-ahead at each step (full story in A3's summary doc):
   backend **U14** and client **FRIEND-2**, to give Friends its own purpose-built profile contract
   instead of continuing to borrow this one. Verified: new Vitest coverage for every hook/store,
   `tsc -b` clean, ESLint clean, `:modules:user:user-impl:test` and `:server:test` both green.
+- **Client PROFILE-1 (`DONE`, 2026-08-26, `client/docs/MVP/PROFILE-1_PROFILE_HEADER.md`):**
+  `shared/components/ProfileHeader.tsx` — the `/profile` page's cover-banner card (name, `@username`,
+  city, bio, Edit profile button). Delta from spec: prop type is `UserResponse` (what PROFILE-0
+  actually shipped), not the spec's assumed `MyProfile`. Design decision at pickup (user choice):
+  the mockup's cover fallback is a dark band with a diagonal stripe pattern that exists nowhere else
+  in this codebase — built the plain `GroupCoverBanner`/`FriendProfilePanel`-style band instead
+  (`coverUrl` overlays when set, no pattern), avoiding a new token and a first-of-its-kind decorative
+  treatment. `username`/`city` each render only if non-null, with the whole handle line omitted if
+  both are null (bio's existing "no placeholder" rule extended to the two fields the spec didn't
+  cover). 8 Vitest/RTL tests, 5 Storybook stories, production Storybook build green. No live browser
+  walkthrough (Claude-in-Chrome not connected this session).
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
