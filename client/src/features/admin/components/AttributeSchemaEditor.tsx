@@ -21,10 +21,11 @@ export interface AttributeSchemaEditorProps {
   onDirtyChange?: (isDirty: boolean) => void;
 }
 
-/** The starting document for a sport that has none. Not `{}` — A9's validator rejects a
- * document without a `version` ("Attribute schema must declare a version"), so an empty
- * object would fail on the very first Save for every sport in this state. */
-const EMPTY_SCHEMA: SportAttributeSchema = { version: 1, groups: [] };
+/** The starting document for a sport that has none. Not `{}` — the validator rejects a document
+ * without a `defaultLocale` (every labeled node must carry an entry for it, A13), so an empty
+ * object would fail on the very first Save for every sport in this state. No `version` field —
+ * A12 removed it server-side; there is no plan to version the schema syntax. */
+const EMPTY_SCHEMA: SportAttributeSchema = { defaultLocale: 'en', groups: [] };
 
 function toText(schema: SportAttributeSchema | null): string {
   return JSON.stringify(schema ?? EMPTY_SCHEMA, null, 2);

@@ -171,14 +171,14 @@ describe('logout from /admin (ADMIN-4)', () => {
   };
 
   const badmintonSchema = {
-    version: 1,
+    defaultLocale: 'en',
     groups: [
       {
         key: 'gear',
-        label: 'Gear',
+        label: { en: 'Gear' },
         isAvailable: true,
         order: 1,
-        attributes: [{ key: 'racketBrand', label: 'Racket brand', type: 'STRING' }],
+        attributes: [{ key: 'racketBrand', label: { en: 'Racket brand' }, type: 'STRING' }],
       },
     ],
   };

@@ -29,14 +29,14 @@ const badminton = sport({ id: 1, name: 'Badminton' });
 const tennis = sport({ id: 4, name: 'Tennis', isActive: false });
 
 const badmintonSchema: SportAttributeSchema = {
-  version: 1,
+  defaultLocale: 'en',
   groups: [
     {
       key: 'gear',
-      label: 'Gear',
+      label: { en: 'Gear' },
       isAvailable: true,
       order: 1,
-      attributes: [{ key: 'racketBrand', label: 'Racket brand', type: 'STRING' }],
+      attributes: [{ key: 'racketBrand', label: { en: 'Racket brand' }, type: 'STRING' }],
     },
   ],
 };
@@ -153,15 +153,18 @@ describe('AdminSportsPage', () => {
     expect(JSON.parse((textarea as HTMLTextAreaElement).value)).toEqual(badmintonSchema);
   });
 
-  it('prefills a versioned empty document for a sport with no schema', async () => {
+  it('prefills an empty document with a defaultLocale for a sport with no schema', async () => {
     // A9 returns data: null for "offers no attributes" — a valid state, not an error.
     mockGet(null);
     renderPage('/admin/sports/1');
 
     const textarea = await screen.findByLabelText('Schema document (JSON)');
-    // Not `{}` — the validator rejects a document with no version, so an empty
+    // Not `{}` — the validator rejects a document with no defaultLocale, so an empty
     // object would fail on the very first save.
-    expect(JSON.parse((textarea as HTMLTextAreaElement).value)).toEqual({ version: 1, groups: [] });
+    expect(JSON.parse((textarea as HTMLTextAreaElement).value)).toEqual({
+      defaultLocale: 'en',
+      groups: [],
+    });
   });
 
   it('blocks submit on invalid JSON and fires no request', async () => {

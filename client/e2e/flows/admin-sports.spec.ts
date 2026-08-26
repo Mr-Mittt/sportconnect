@@ -50,7 +50,7 @@ test('Admin sports — an admin edits and saves the attribute schema', async ({ 
   const textarea = page.getByLabel('Schema document (JSON)');
   await expect(textarea).toContainText('racketBrand');
 
-  await textarea.fill('{"version":1,"groups":[]}');
+  await textarea.fill('{"defaultLocale":"en","groups":[]}');
   await page.getByRole('button', { name: 'Save attributes' }).click();
 
   await expect(page.getByRole('status')).toHaveText('Saved');
@@ -85,7 +85,7 @@ test('Admin sports — a deactivated sport is editable like any other (A11)', as
   const textarea = page.getByLabel('Schema document (JSON)');
   await expect(textarea).toBeVisible();
 
-  await textarea.fill('{"version":1,"groups":[]}');
+  await textarea.fill('{"defaultLocale":"en","groups":[]}');
   await page.getByRole('button', { name: 'Save attributes' }).click();
   await expect(page.getByRole('status')).toHaveText('Saved');
 });

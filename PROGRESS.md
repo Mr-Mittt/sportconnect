@@ -3142,6 +3142,36 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `equipment.shoe.court`) are now live and load-bearing for the first time since A9 shipped
   unseeded. Unblocks client `SPORT-2` with real content to render against, and gives the postponed
   **A14** real `searchScope` values to design against once it resumes.
+- **Client SPORT-2 (`DONE`, 2026-08-26, `client/docs/MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md`):**
+  `SportAttributesFields` — the v2 schema-driven renderer for a user's per-sport attribute fields,
+  built against A15's real Badminton content. Reworked `shared/types/sport.ts` from the v1 shape to
+  the full v2 tree (5-member `SportAttributeType` union, the `definitions` registry,
+  `SportAttributeField`/`SportAttributeDefinitionType`, dropped the removed `version` field) and
+  added the **resolved** twins (`ResolvedSportAttributeSchema` etc., 1:1 with the `Resolved*` Java
+  DTOs — plain string labels, no locale maps) that the new `useSportAttributeSchema` hook consumes
+  from the member-facing `GET /api/sports/{sportId}/attribute-schema`. Two scope decisions locked in
+  before building: SPORT-2 itself builds the generic `DEFINITION_LIST` add/remove-row mechanic
+  (plain STRING/ENUM/LIST controls per field, including a `Reference` row as two plain text boxes —
+  SPORT-6 later only swaps those for its search combobox), and a nested `DEFINITION` record renders
+  **inline** as an indented sub-section, never a sub-modal (this codebase has hit the nested-dialog
+  aria-hide bug three times already). `isAvailable` parent-wins at both levels, an unknown `type` is
+  skipped rather than crashed on, `LIST`/`DEFINITION_LIST` are capped client-side at
+  `MAX_LIST_ITEMS = 10` (the server silently drops the whole value over the cap instead of
+  erroring), and a `defaultValue` is seeded as a real controlled value via a one-time `onChange` on
+  mount rather than a display-only illusion a save could silently omit. Required-field hints
+  (`isRequired` on definition fields) are visual only — no Save action exists in this ticket to
+  gate; that's PROFILE-4's job once it hosts this component. Retyping `SportAttributeSchema` to v2
+  required fixing every place that constructed one: ADMIN-2's `AttributeSchemaEditor` empty-document
+  constant (`version: 1` → `defaultLocale: 'en'`), its Storybook fixture, two admin test fixtures,
+  and the MSW mock handler (`e2e/mocks/handlers/sport.ts`) — which also gained a small label
+  resolver so the member-facing mock endpoint now genuinely returns the resolved shape instead of
+  the raw admin one, matching A13's real split. Verified: 16 new Vitest/RTL tests plus the full
+  suite (950/950 passing, no regressions), `tsc -b` clean, ESLint clean, Storybook production build
+  clean (proves every new story renders without a runtime error). No live browser/Storybook-dev
+  walkthrough — the Claude-in-Chrome extension wasn't connected this session. **No page hosts this
+  component yet** — `PROFILE-4` (filed 2026-08-26, `client/docs/PROFILE_PAGE_DESIGN.md`) is the
+  follow-up that finally does, alongside making `skillLevel`/`yearsOfExperience`/`preferredPosition`
+  editable for the first time.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with

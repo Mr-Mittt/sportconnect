@@ -1,6 +1,14 @@
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import type {
+  ResolvedSportAttributeDefinition,
+  ResolvedSportAttributeDefinitionType,
+  ResolvedSportAttributeField,
+  ResolvedSportAttributeGroup,
+  ResolvedSportAttributeOption,
+  ResolvedSportAttributeSchema,
+  SportAttributeField,
+  SportAttributeOption,
   SportAttributeSchema,
   SportResponse,
   UserSportProfileResponse,
@@ -68,26 +76,90 @@ function defaultAdminSportCatalog(): SportResponse[] {
   ];
 }
 
-// A9's document shape. Only Badminton starts with one — Pickleball exercises the
-// "sport has no schema yet, GET returns data: null" branch.
+// Schema v2 document shape (A12/A13). Only Badminton starts with one — Pickleball exercises
+// the "sport has no schema yet, GET returns data: null" branch.
 function defaultAttributeSchemas(): Record<number, SportAttributeSchema | null> {
   return {
     1: {
-      version: 1,
+      defaultLocale: 'en',
       groups: [
         {
           key: 'gear',
-          label: 'Gear',
+          label: { en: 'Gear' },
           isAvailable: true,
           order: 1,
           attributes: [
-            { key: 'racketBrand', label: 'Racket brand', type: 'STRING', isAvailable: true, order: 1 },
+            {
+              key: 'racketBrand',
+              label: { en: 'Racket brand' },
+              type: 'STRING',
+              isAvailable: true,
+              order: 1,
+            },
           ],
         },
       ],
     },
     3: null,
   };
+}
+
+/** Mimics `SportAttributeSchemaLabelResolver` (A13) — the real backend resolves every
+ * locale-map label to one string on the member-facing GET, never on the admin GET. Locale
+ * resolution itself isn't exercised here (no test asserts non-English output); this always
+ * resolves to the document's own `defaultLocale`, same as a caller with no matching
+ * `Accept-Language`. */
+function resolveLabel(label: Record<string, string>, defaultLocale: string): string {
+  return label[defaultLocale] ?? Object.values(label)[0] ?? '';
+}
+
+function resolveOption(
+  option: SportAttributeOption,
+  defaultLocale: string,
+): ResolvedSportAttributeOption {
+  return { value: option.value, label: resolveLabel(option.label, defaultLocale) };
+}
+
+function resolveField(field: SportAttributeField, defaultLocale: string): ResolvedSportAttributeField {
+  return {
+    key: field.key,
+    label: resolveLabel(field.label, defaultLocale),
+    type: field.type,
+    options: field.options?.map((option) => resolveOption(option, defaultLocale)),
+    definitionRef: field.definitionRef,
+    isRequired: field.isRequired,
+    order: field.order,
+  };
+}
+
+function resolveAttributeSchema(schema: SportAttributeSchema): ResolvedSportAttributeSchema {
+  const { defaultLocale } = schema;
+  const definitions: ResolvedSportAttributeDefinitionType[] | undefined = schema.definitions?.map(
+    (definitionType) => ({
+      name: definitionType.name,
+      fields: definitionType.fields.map((field) => resolveField(field, defaultLocale)),
+    }),
+  );
+  const groups: ResolvedSportAttributeGroup[] = schema.groups.map((group) => ({
+    key: group.key,
+    label: resolveLabel(group.label, defaultLocale),
+    isAvailable: group.isAvailable,
+    order: group.order,
+    attributes: group.attributes.map(
+      (attribute): ResolvedSportAttributeDefinition => ({
+        key: attribute.key,
+        label: resolveLabel(attribute.label, defaultLocale),
+        type: attribute.type,
+        options: attribute.options?.map((option) => resolveOption(option, defaultLocale)),
+        isAvailable: attribute.isAvailable,
+        order: attribute.order,
+        defaultValue: attribute.defaultValue,
+        definitionRef: attribute.definitionRef,
+        searchScope: attribute.searchScope,
+      }),
+    ),
+  }));
+  return { definitions, groups };
 }
 
 interface SportSession {
@@ -169,7 +241,8 @@ export const sportHandlers: HttpHandler[] = [
 
   // The member-facing read, still active-only (A6/A7 invisibility). Kept here — and kept
   // 404-ing for an inactive sport — so that a regression pointing the admin editor back at
-  // this path fails a test instead of passing silently. SPORT-2 will consume this one.
+  // this path fails a test instead of passing silently. SPORT-2 consumes this one — resolved
+  // (A13), not the raw locale-map document the admin GET returns.
   http.get('/api/sports/:sportId/attribute-schema', ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
@@ -179,9 +252,10 @@ export const sportHandlers: HttpHandler[] = [
     if (!sport || !sport.isActive) {
       return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
     }
+    const rawSchema = session.attributeSchemaState[sportId] ?? null;
     return HttpResponse.json(
       apiResponse(
-        session.attributeSchemaState[sportId] ?? null,
+        rawSchema === null ? null : resolveAttributeSchema(rawSchema),
         'Attribute schema retrieved successfully',
       ),
     );
@@ -197,10 +271,10 @@ export const sportHandlers: HttpHandler[] = [
       return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
     }
     const body = (await request.json()) as SportAttributeSchema | null;
-    // One stand-in for A9's real validator, enough to exercise the "server rejected it,
+    // One stand-in for the real validator, enough to exercise the "server rejected it,
     // render the message verbatim" path without reimplementing the rest of its rules.
-    if (body && body.version === undefined) {
-      return HttpResponse.json(apiError('Attribute schema must declare a version'), {
+    if (body && body.defaultLocale === undefined) {
+      return HttpResponse.json(apiError('Attribute schema must declare a defaultLocale'), {
         status: 400,
       });
     }
