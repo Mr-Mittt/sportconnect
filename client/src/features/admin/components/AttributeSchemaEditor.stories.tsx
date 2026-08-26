@@ -3,24 +3,30 @@ import type { SportAttributeSchema } from '@/shared/types/sport';
 import { AttributeSchemaEditor } from './AttributeSchemaEditor';
 
 const schema: SportAttributeSchema = {
-  version: 1,
+  defaultLocale: 'en',
   groups: [
     {
       key: 'gear',
-      label: 'Gear',
+      label: { en: 'Gear' },
       isAvailable: true,
       order: 1,
       attributes: [
-        { key: 'racketBrand', label: 'Racket brand', type: 'STRING', isAvailable: true, order: 1 },
+        {
+          key: 'racketBrand',
+          label: { en: 'Racket brand' },
+          type: 'STRING',
+          isAvailable: true,
+          order: 1,
+        },
         {
           key: 'grip',
-          label: 'Grip',
+          label: { en: 'Grip' },
           type: 'ENUM',
           isAvailable: true,
           order: 2,
           options: [
-            { value: 'eastern', label: 'Eastern' },
-            { value: 'western', label: 'Western' },
+            { value: 'eastern', label: { en: 'Eastern' } },
+            { value: 'western', label: { en: 'Western' } },
           ],
         },
       ],
@@ -58,8 +64,8 @@ export const Loading: Story = {
 };
 
 /** A9 returns `data: null` for a sport that offers no attributes — a valid state.
- * The editor prefills a versioned empty document, never `{}`, because the validator
- * rejects a document with no `version`. */
+ * The editor prefills a document with a `defaultLocale`, never `{}`, because the
+ * validator rejects a document with no `defaultLocale`. */
 export const NoSchemaYet: Story = {
   args: { schema: null },
 };

@@ -1,6 +1,6 @@
 # SPORT-2 · Render a user's per-sport attribute fields on their sport profile
 
-**Status:** `TODO` · **Type:** Component · **Depends on:** backend **A12** + **A13**
+**Status:** `DONE` (2026-08-26) · **Type:** Component · **Depends on:** backend **A12** + **A13**
 (`modules/sport/sport-impl`) — both hard · **Filed:** 2026-08-01 ·
 **Rescoped:** 2026-08-20, again 2026-08-24 (see below) ·
 **Design:** `documentation/md/SPORT_ATTRIBUTE_SCHEMA_V2_DESIGN.md` (v2, current);
@@ -116,11 +116,68 @@ deferred list. Same "component ships ahead of the page that uses it" precedent `
 (CLIENT-LOC-1) set ahead of `CreateSessionModal` (CLIENT-SESSION-1) — buildable and
 Storybook-verifiable standalone today.
 
-## Follow-up this unblocks (not filed)
+## Follow-up this unblocks — filed 2026-08-26 as PROFILE-4
 
-A "sport profile editing screen" ticket — `bio`, `preferredPosition`, and (via this ticket)
-per-sport `attributes` all become editable in one place. Worth filing once someone actually wants to
-build it; this ticket's job is only to make sure the attribute half isn't blocked when that happens.
+The "sport profile editing screen" this section originally described (unfiled at the time) is now
+`client/docs/MVP/PROFILE-4_SETTINGS_TAB_SPORT_PROFILE_EDITOR.md`, part of the `/profile` page
+(`client/docs/PROFILE_PAGE_DESIGN.md`) — the `/profile` Settings tab, scoped to the active
+`SportSwitcher` pill, hosting this ticket's `SportAttributesFields` alongside newly-editable
+`skillLevel`/`yearsOfExperience`/`preferredPosition`. **Not** the separate `/profile` Edit Profile
+modal (`PROFILE-5`) — that one is `bio`/cover/avatar/name/city/country only, explicitly no
+sport-profile content, per a scoping decision made when `/profile` was designed.
+
+## Implementation (2026-08-26) — `DONE`
+
+Built as designed, with two scope decisions locked in before starting (both already reflected
+above): SPORT-2 itself builds the generic `DEFINITION_LIST` add/remove-row mechanic (SPORT-6 only
+swaps in the search combobox for `Reference`-typed fields later), and a nested `DEFINITION` record
+renders inline, never a sub-modal.
+
+**Types** (`client/src/shared/types/sport.ts`) — reworked from the v1 shape to the full v2 tree:
+`SportAttributeType` is now the 5-member union, added `SportAttributeField`/
+`SportAttributeDefinitionType` (the registry), dropped the removed `version` field from
+`SportAttributeSchema`, and added the **resolved** twins (`ResolvedSportAttributeSchema`,
+`ResolvedSportAttributeGroup`, `ResolvedSportAttributeDefinition`,
+`ResolvedSportAttributeDefinitionType`, `ResolvedSportAttributeField`,
+`ResolvedSportAttributeOption`) 1:1 with the `Resolved*` Java DTOs — plain string labels, not the
+raw admin locale maps. Exported `MAX_LIST_ITEMS = 10` here so SPORT-6 shares the same constant
+later.
+
+**Hook** — `client/src/shared/hooks/useSportAttributeSchema.ts`, wrapping the member-facing
+`GET /api/sports/{sportId}/attribute-schema`, returns `{ data: ResolvedSportAttributeSchema | null,
+isLoading, isError }`. Deliberately a separate file/hook from `features/admin/
+useSportAttributeSchema.ts` (same name, different module, different endpoint, different type) — no
+actual collision, just two hooks over sibling documents.
+
+**Component** — `client/src/shared/components/SportAttributesFields.tsx`. Renders `schema.groups` →
+attributes, `isAvailable` parent-wins at both levels, an unknown `type` skipped rather than crashed
+on, `LIST`/`DEFINITION_LIST` capped client-side at `MAX_LIST_ITEMS` (unselected `LIST` checkboxes
+disable at the cap; `DEFINITION_LIST`'s Add button disables at the cap), `DEFINITION`/
+`DEFINITION_LIST` render their record's fields via a recursive `DefinitionFields`/`DefinitionField`
+pair (handles the depth-2 case — a `DEFINITION` field nested inside another definition, e.g. Shoe →
+Reference/ShoeSize), a required definition field shows a visual-only hint when empty (no save
+action exists in this ticket to gate on), and a `defaultValue` is seeded as a real controlled value
+via a one-time effect-driven `onChange` on mount (not just a display default the caller's save
+payload could silently miss). `LIST` renders as a checkbox group (not a native multi-select) to
+support the "disable at cap" affordance cleanly and to match this app's existing toggle/pill idiom
+for multi-choice UI.
+
+**Ripple fixes** — retyping `SportAttributeSchema` (dropped `version`, `label` now a locale map)
+broke every existing literal constructing one. Fixed: ADMIN-2's `AttributeSchemaEditor.tsx` empty-
+document constant (`{ version: 1, groups: [] }` → `{ defaultLocale: 'en', groups: [] }`, matching
+the real validator's actual requirement), its own Storybook fixture, two `AdminSportsPage`/
+`AdminLayout` test fixtures, and `e2e/mocks/handlers/sport.ts` — which also gained a small
+`resolveAttributeSchema` helper so its member-facing mock endpoint returns the resolved shape
+instead of continuing to serve the raw admin one (a real drift from the actual A13 contract that
+predated this ticket).
+
+**Verification:** 16 new Vitest/RTL tests (rendering, `isAvailable` at both levels, unknown-type
+skip, empty-schema, `onChange` shape per type incl. nested `DEFINITION`/`DEFINITION_LIST`, both caps,
+`defaultValue` seeding incl. the no-reseed case) plus the full client suite (950/950 passing, zero
+regressions). `tsc -b`, ESLint, and a Storybook production build all clean. **Not verified:** a live
+Storybook-dev visual walkthrough — the Claude-in-Chrome browser extension wasn't connected this
+session, so the component's actual on-screen appearance was not eyeballed, only its rendered
+DOM/behavior via RTL and a successful production build.
 
 ---
 
