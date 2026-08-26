@@ -70,6 +70,23 @@ New tickets get inserted at the appropriate position when filed, same as before 
 |---|---|---|---|
 | 1 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Render a user’s per-sport attribute fields on their sport profile — **rescoped 2026-08-20** from a static client config to consuming A9’s server-driven schema; **rescoped again 2026-08-24** onto schema **v2** (nested records, repeating lists, localized labels) and re-blocked on backend A12 + A13; user-facing half of A9 (ADMIN-2 is the admin half) | `TODO` |
 | 2 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control | `TODO` |
+| 3 | [PROFILE-0](MVP/PROFILE-0_TYPES_AND_HOOKS_SCAFFOLD.md) | `/profile` page — types + data hooks scaffold (`useMyProfile`, raw sport-profile hook, `useUserPosts`, `profilePageStore`) | `TODO` |
+| 4 | [PROFILE-1](MVP/PROFILE-1_PROFILE_HEADER.md) | `/profile` page — `ProfileHeader` component (cover, avatar, name/handle/city, bio, Edit profile button) | `TODO` |
+| 5 | [PROFILE-2](MVP/PROFILE-2_POSTS_TAB.md) | `/profile` page — Posts tab (composer + own posts, fully real, reuses `CreatePostForm`/`CommentSection`) | `TODO` |
+| 6 | [PROFILE-3](MVP/PROFILE-3_MEMORIES_TAB_PLACEHOLDER.md) | `/profile` page — Memories tab renders `ComingSoonPage` (no backend concept exists for it) | `TODO` |
+| 7 | [PROFILE-5](MVP/PROFILE-5_EDIT_PROFILE_MODAL.md) | `/profile` page — Edit Profile modal (cover/avatar/bio/name/city/country; explicitly no sport-profile fields) | `TODO` |
+| 8 | [PROFILE-4](MVP/PROFILE-4_SETTINGS_TAB_SPORT_PROFILE_EDITOR.md) | `/profile` page — Settings tab, rescoped to a per-sport profile editor (skillLevel/experience/position + SPORT-2's `SportAttributesFields`) — the ticket that finally hosts SPORT-2 | `TODO` |
+| 9 | [PROFILE-6](MVP/PROFILE-6_PROFILE_PAGE_INTEGRATION.md) | `/profile` page — `ProfilePage` integration (layout, tab wiring, right-rail reuse, route swap) | `TODO` |
+| 10 | [PROFILE-7](MVP/PROFILE-7_RESPONSIVE_A11Y_VISUAL_REGRESSION.md) | `/profile` page — responsive + accessibility + visual regression against `design-reference-profile.html` | `TODO` |
+| 11 | [PROFILE-8](MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md) | `/profile` page — E2E functional test, profile journey | `TODO` |
+| 12 | [PROFILE-9](MVP/PROFILE-9_QA_ACCEPTANCE_CHECKLIST.md) | `/profile` page — QA / acceptance checklist | `TODO` |
+| 13 | [ACCOUNT-1](MVP/ACCOUNT-1_ACCOUNT_SETTINGS_MODAL.md) | Account Settings modal, triggered from `TopBar`'s avatar dropdown — split out of `/profile` scoping (visibility/toggles/log out don't belong on that page); independent of every `PROFILE-*` ticket | `TODO` |
+
+**`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
+`PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
+`client/design-reference/design-reference-profile.html` (2026-08-26). `PROFILE-4` hard-depends on
+`SPORT-2`; `PROFILE-6` depends on `PROFILE-1/2/3/4/5`; `PROFILE-7`/`PROFILE-8` depend on `PROFILE-6`;
+`PROFILE-9` depends on everything above it. `ACCOUNT-1` has no dependency on any `PROFILE-*` ticket.
 
 **ADMIN-2 needs no new ticket for v2.** It shipped as a JSON textarea over the raw document by
 explicit choice, so it keeps working unchanged — the admin simply pastes a richer document. The
@@ -295,6 +312,19 @@ GRP-8 (new, filed 2026-07-24, amended same day) — GRP-3, GRP-4, GRP-7 (all DON
   to `GroupInvitationResponse`, which part 1's accept-invitation exception also benefits from. Split
   any part into its own follow-up if its backend dependency isn't ready by pickup, same "ship the
   unblocked part, split the rest" precedent GRP-1/GRP-2 and GRP-3/GRP-4 already used.
+PROFILE-0..PROFILE-9 (new, filed 2026-08-26, from a `/feature` session against
+  `client/design-reference/design-reference-profile.html`) — full design and per-tab scope
+  corrections in `client/docs/PROFILE_PAGE_DESIGN.md`. PROFILE-0 → PROFILE-1/2/3/4/5 (all need its
+  types/hooks). PROFILE-4 (Settings tab, rescoped to a per-sport profile editor) also hard-depends on
+  **SPORT-2** — it's the ticket that finally hosts SPORT-2's `SportAttributesFields`. PROFILE-1..5 →
+  PROFILE-6 (page integration) → PROFILE-7 (hardening)/PROFILE-8 (E2E) → PROFILE-9 (QA). No backend
+  work anywhere in this chain — every field these tickets touch is already served
+  (`UserResponse`/`UpdateProfileRequest`, `GET /api/posts/user/{userId}`, `UserSportProfile`'s
+  `skillLevel`/`yearsOfExperience`/`preferredPosition`, `PUT /api/sports/profiles/{profileId}`).
+ACCOUNT-1 (new, filed 2026-08-26, split out of the same `/feature` session — user decision: account-
+  level settings don't belong on `/profile`) — no dependency on any PROFILE-* ticket. Lives on
+  `TopBar`'s avatar dropdown instead. Its own toggle-mapping design question is left open in the
+  ticket itself, not resolved at filing time.
 ```
 
 **Backend blockers (tracked outside this backlog):**
