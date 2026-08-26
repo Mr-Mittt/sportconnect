@@ -12,7 +12,30 @@ export const sportProfilesQueryKey = (userId: string) => ['sportProfiles', userI
 
 /**
  * `GET /api/sports/profiles/user/{userId}` for an arbitrary user (public
- * endpoint) — extracted from `useSportProfiles` (SPORT-1, which was
+ * endpoint), before SPORT-1's `sportId -> SportKey -> SportProfile` mapping
+ * — the raw `UserSportProfileResponse[]` (`id`, `attributes`, `skillLevel`,
+ * `yearsOfExperience`, `preferredPosition`, all present). Extracted from
+ * `useSportProfilesForUser` itself (PROFILE-0) so `/profile`'s Settings tab
+ * can read the fields that mapping intentionally drops, without a second
+ * copy of this query — same `sportProfilesQueryKey`, so both hooks share one
+ * cache entry per user.
+ */
+export function useRawSportProfilesForUser(userId: string | undefined) {
+  return useQuery({
+    queryKey: sportProfilesQueryKey(userId ?? ''),
+    queryFn: async () => {
+      const response = await apiClient.get<ApiResponse<UserSportProfileResponse[]>>(
+        `/sports/profiles/user/${userId}`,
+      );
+      return response.data.data;
+    },
+    enabled: userId !== undefined,
+  });
+}
+
+/**
+ * Maps `useRawSportProfilesForUser`'s raw response down to the display-only
+ * `SportProfile` — extracted from `useSportProfiles` (SPORT-1, which was
  * hardcoded to the current authenticated user via `authStore`) so FRIEND-1
  * can fetch a selected friend/search-result's sports too, without
  * duplicating the `sportId -> SportKey -> SportProfile` mapping a second
@@ -27,16 +50,7 @@ export function useSportProfilesForUser(userId: string | undefined): {
   isLoading: boolean;
   isError: boolean;
 } {
-  const query = useQuery({
-    queryKey: sportProfilesQueryKey(userId ?? ''),
-    queryFn: async () => {
-      const response = await apiClient.get<ApiResponse<UserSportProfileResponse[]>>(
-        `/sports/profiles/user/${userId}`,
-      );
-      return response.data.data;
-    },
-    enabled: userId !== undefined,
-  });
+  const query = useRawSportProfilesForUser(userId);
 
   const data = useMemo<SportProfile[]>(() => {
     return (query.data ?? []).reduce<SportProfile[]>((profiles, profile) => {

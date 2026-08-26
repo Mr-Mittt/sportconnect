@@ -29,6 +29,8 @@ public class UserResponse {
     private String avatarUrl;
     private String coverUrl;
     private LocationResponse location;
+    private String city;
+    private String country;
     private Integer heightCm;
     private BigDecimal weightKg;
     private Integer shoeSizeCm;

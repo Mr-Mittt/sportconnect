@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useFriendsPageStore } from '@/app/friendsPageStore';
+import { useUserProfile } from '@/features/profile/useUserProfile';
 import { useSportProfilesForUser } from '@/shared/hooks/useSportProfilesForUser';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useAcceptFriendRequest } from './hooks/useAcceptFriendRequest';
@@ -9,7 +10,6 @@ import { useFriendRequestsReceived } from './hooks/useFriendRequestsReceived';
 import { useFriendRequestsSent } from './hooks/useFriendRequestsSent';
 import { useFriends } from './hooks/useFriends';
 import { useSendFriendRequest } from './hooks/useSendFriendRequest';
-import { useUserProfile } from './hooks/useUserProfile';
 import { useUserSearch } from './hooks/useUserSearch';
 import type { FriendRequestRow, FriendSectionKey, FriendUser, SelectedPerson } from './types';
 

@@ -59,4 +59,14 @@ built here — nothing depends on it yet); any change to `UserService`'s interna
 any in-process cross-domain caller; rate-limiting/enumeration defenses beyond narrowing the response
 (the ids themselves are already non-enumerable).
 
+**Update (2026-08-26, at `PROFILE-0` client pickup):** `UserResponse` gained `city`/`country`
+(`toUserResponse()` was silently dropping both, even though `UpdateProfileRequest` already
+persisted them — see `client/docs/MVP/PROFILE-0_TYPES_AND_HOOKS_SCAFFOLD.md`'s implementation
+notes) — this **grows** the three public endpoints' PII leak by two fields until this ticket ships.
+No rework needed here though: `city`/`country` were already excluded from the planned
+`PublicUserResponse` safe subset above, so the fix-approach section is still correct as written.
+The "flagged future gap" in point 4 also just became real — `/profile` is the page that needs a
+self-only full-profile source, and it's now being scoped without one (see PROFILE-0's own notes for
+why it went with the existing public `GET /api/users/{userId}` anyway, using the caller's own id).
+
 ---
