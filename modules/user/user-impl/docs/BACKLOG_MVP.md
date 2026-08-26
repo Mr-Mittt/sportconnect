@@ -22,6 +22,7 @@
 | 1 | [U11](MVP/U11_PROTECT_USER_DATA_SCOPE_PUBLIC_USER_LOOKUP_ENDPOINTS.md) | Protect user data — scope public user-lookup endpoints away from full PII | `TODO` |
 | 2 | [U12](MVP/U12_REVOKE_SESSIONS_WHEN_A_USER_IS_DEACTIVATED.md) | Revoke sessions when a user is deactivated | `TODO` |
 | 3 | [U13](MVP/U13_NOTIFICATION_OUTBOX_WIRING_FRIEND_REQUEST_RECEIVED_ACCEPTED.md) | Notification outbox wiring — friend request received/accepted | `TODO` |
+| 4 | [U14](MVP/U14_DEDICATED_FRIENDS_DIRECTORY_PROFILE_ENDPOINT.md) | Dedicated Friends-directory profile endpoint — stop borrowing the generic public `GET /api/users/{userId}` for the Friends directory-search popup | `TODO` |
 
 ---
 
@@ -48,6 +49,10 @@ U2 → U4
 U3, U5, U6, U7: no hard dependency (can run in parallel with anything)
 U6 reuses U1 (Friendship system, DONE) for friendship-status enrichment
 U12 adds a new user-impl → auth-api dependency (Fix 1); no dependency on any other ticket here
+U14 (new, filed 2026-08-26 at client PROFILE-0 pickup) — no hard dependency, but resolve against
+  U11 at pickup before designing anything new: U11's planned `PublicUserResponse` narrowing of
+  `GET /api/users/{userId}` may already cover everything U14 needs, in which case U14 collapses to
+  a client-side rename (see U14's own doc and client FRIEND-2).
 ```
 
 ---

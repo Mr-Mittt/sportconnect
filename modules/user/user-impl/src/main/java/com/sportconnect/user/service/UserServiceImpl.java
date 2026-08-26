@@ -374,6 +374,8 @@ public class UserServiceImpl implements UserService {
                 .coverUrl(user.getCoverUrl())
                 .location(user.getLocation() != null ?
                     LocationResponse.of(user.getLocation().getY(), user.getLocation().getX()) : null)
+                .city(user.getCity())
+                .country(user.getCountry())
                 .heightCm(user.getHeightCm())
                 .weightKg(user.getWeightKg())
                 .shoeSizeCm(user.getShoeSizeCm())

@@ -519,6 +519,8 @@ class UserServiceImplSpec extends Specification {
                 .lastName("Doe")
                 .username("johndoe")
                 .location(point)
+                .city("New York")
+                .country("USA")
                 .isEmailVerified(true)
                 .isActive(true)
                 .roles([role] as Set)
@@ -532,6 +534,8 @@ class UserServiceImplSpec extends Specification {
         result.location != null
         result.location.latitude == 40.7128
         result.location.longitude == -74.0060
+        result.city == "New York"
+        result.country == "USA"
         result.roles.contains("USER")
     }
 

@@ -3172,6 +3172,22 @@ explicit go-ahead at each step (full story in A3's summary doc):
   component yet** — `PROFILE-4` (filed 2026-08-26, `client/docs/PROFILE_PAGE_DESIGN.md`) is the
   follow-up that finally does, alongside making `skillLevel`/`yearsOfExperience`/`preferredPosition`
   editable for the first time.
+- **Client PROFILE-0 (`DONE`, 2026-08-26, `client/docs/MVP/PROFILE-0_TYPES_AND_HOOKS_SCAFFOLD.md`):**
+  `/profile` page types + data-hooks scaffold — new `features/profile/` folder
+  (`useMyProfile`/`useMySportProfilesRaw`/`useMyPosts`, `profilePageStore.ts`), no UI yet. Found and
+  fixed a real backend gap along the way: `UserResponse` (`GET /api/users/{userId}`) never mapped
+  `city`/`country` even though `UpdateProfileRequest` already persisted them — `toUserResponse()`
+  was silently dropping both since day one (fixed in `user-api`/`user-impl`, new Spock coverage);
+  see `modules/user/user-impl/docs/MVP/U11_...md`'s 2026-08-26 update for why this doesn't need
+  rework once U11's public-endpoint PII narrowing ships. Also found `useUserPosts(userId)`
+  (PROFILE-0's original spec) doesn't match the real `PostController` — there is no
+  `GET /api/posts/user/{userId}`, only self-scoped `GET /api/posts/mine` — shipped as `useMyPosts()`
+  instead, matching the page's own "own profile only" scope. Relocated `useUserProfile` from
+  `features/friends/hooks/` to `features/profile/` (a generic by-id public-profile lookup, not
+  friends-specific); Friends keeps using it unchanged for now. Filed two follow-ups (user decision):
+  backend **U14** and client **FRIEND-2**, to give Friends its own purpose-built profile contract
+  instead of continuing to borrow this one. Verified: new Vitest coverage for every hook/store,
+  `tsc -b` clean, ESLint clean, `:modules:user:user-impl:test` and `:server:test` both green.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
