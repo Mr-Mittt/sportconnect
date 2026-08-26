@@ -64,6 +64,12 @@ public class PostServiceImpl implements PostService {
             "if redis.call('exists', KEYS[1]) == 1 then return redis.call('decr', KEYS[1]) end return nil",
             Long.class);
 
+    // getUserPosts ("my posts") is scoped to USER_FEED only — GROUP_POST/GROUP_BROADCAST belong to
+    // a specific group's own feed, not a personal post history, and GROUP_SYSTEM/SESSION_POST are
+    // internal anchors, never meant to be reachable via /api/posts/** as a real "post" at all (see
+    // SESSION_POST's own doc comment in post-impl/CLAUDE.md).
+    private static final List<PostType> USER_VISIBLE_POST_TYPES = List.of(PostType.USER_FEED);
+
     private final PostRepository postRepository;
     private final PostLikeRepository postLikeRepository;
     private final CommentRepository commentRepository;
@@ -212,7 +218,8 @@ public class PostServiceImpl implements PostService {
     @Override
     @Transactional(readOnly = true)
     public Page<PostResponse> getUserPosts(UUID userId, UUID currentUserId, Pageable pageable) {
-        Page<Post> postsPage = postRepository.findByUserIdAndIsActiveTrue(userId, pageable);
+        Page<Post> postsPage = postRepository.findByUserIdAndPostTypeInAndIsActiveTrue(
+                userId, USER_VISIBLE_POST_TYPES, pageable);
         Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
         Map<UUID, UserResponse> usersById = getUsersForPosts(postsPage.getContent());
         return postsPage.map(post -> mapToResponse(post, currentUserId,

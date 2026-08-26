@@ -18,6 +18,10 @@ const PAGE_SIZE = 20;
  * derives the caller from the auth principal and takes no id param. This
  * matches the page's own "own profile only" scope (`PROFILE_PAGE_DESIGN.md`
  * §1) exactly, so no arbitrary-user variant is needed here.
+ *
+ * `profileKeys.myPosts()` is built off `feedKeys.all` (PROFILE-2 correction)
+ * so `useLikePost`/`useUnlikePost`/`useDeletePost`'s existing cache updates
+ * reach this bucket automatically — see `queryKeys.ts`'s comment for why.
  */
 export function useMyPosts() {
   return useInfiniteQuery({

@@ -5,9 +5,11 @@ import type { PageResponse, Post } from './types';
 type FeedInfiniteData = InfiniteData<PageResponse<Post>>;
 
 // The second segment of every feedKeys.* key that actually holds Post-shaped
-// InfiniteData (personalFeed/groupFeed/hashtagPosts). Every other feedKeys.*
-// entry (comments, userGroups, publicGroups, joinRequests, ...) shares the
-// same `['feed', ...]` prefix but holds a different shape — either a plain
+// InfiniteData (personalFeed/groupFeed/hashtagPosts, plus profile's
+// myPosts — PROFILE-2, built off feedKeys.all specifically so it's a member
+// of this family). Every other feedKeys.*-prefixed entry (comments,
+// userGroups, publicGroups, joinRequests, ...) shares the same
+// `['feed', ...]` prefix but holds a different shape — either a plain
 // Page<T> (no `.pages`, would throw if treated as InfiniteData) or, for
 // `comments`, InfiniteData<PageResponse<Comment>>. Comment also has `id`/
 // `likeCount`/`isLikedByCurrentUser` fields (both Post and Comment use their
@@ -15,7 +17,7 @@ type FeedInfiniteData = InfiniteData<PageResponse<Post>>;
 // Comment id routinely collide numerically), so matching on the whole
 // `feed` prefix wouldn't just risk a crash — it'd risk silently flipping
 // like-state on, or deleting, a same-numbered comment instead of the post.
-const POST_FEED_TAGS: ReadonlySet<string> = new Set(['personal', 'group', 'hashtag']);
+const POST_FEED_TAGS: ReadonlySet<string> = new Set(['personal', 'group', 'hashtag', 'my-posts']);
 
 function isPostFeedQueryKey(queryKey: QueryKey): boolean {
   return queryKey[0] === feedKeys.all[0] && typeof queryKey[1] === 'string' && POST_FEED_TAGS.has(queryKey[1]);
