@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.29.0/dist/tabler-icons.min.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f7f7f4; }
+  a { color: #185FA5; text-decoration: none; }
+  a:hover { color: #134B82; text-decoration: underline; }
+  button { font-family: inherit; }
+  textarea, input { font-family: inherit; }
+</style>
+</helmet>
+<div style="min-height:100vh;background:#f7f7f4;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a18;display:flex;justify-content:center;padding:32px 16px;">
+  <div style="width:960px;max-width:100%;">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <a href="#" style="font-size:18px;font-weight:500;color:#1a1a18;text-decoration:none;">SportHub</a>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <i class="ti ti-search" style="font-size:19px;color:#5f5e5a;" aria-hidden="true"></i>
+        <i class="ti ti-bell" style="font-size:19px;color:#5f5e5a;" aria-hidden="true"></i>
+        <div style="width:28px;height:28px;border-radius:50%;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:#185FA5;">BN</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:6px;border-bottom:0.5px solid rgba(44,44,42,0.12);padding-bottom:8px;margin-bottom:14px;">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="5">
+        <button style="{{ n.style }}"><i class="ti {{ n.icon }}" style="font-size:16px;" aria-hidden="true"></i>{{ n.label }}</button>
+      </sc-for>
+    </div>
+
+    <sc-if value="{{ showSportSwitcher }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <sc-for list="{{ sportChips }}" as="s" hint-placeholder-count="4">
+        <button onClick="{{ s.onClick }}" style="{{ s.style }}"><i class="ti {{ s.icon }}" style="font-size:15px;" aria-hidden="true"></i>{{ s.label }}</button>
+      </sc-for>
+      <button onClick="{{ onAddSport }}" style="border:0.5px dashed rgba(44,44,42,0.24);background:none;display:flex;align-items:center;gap:6px;font-size:13px;color:#5f5e5a;padding:7px 12px;border-radius:20px;cursor:pointer;"><i class="ti ti-plus" style="font-size:15px;" aria-hidden="true"></i>Add sport</button>
+    </div>
+    </sc-if>
+
+    <div style="background:#ffffff;border:0.5px solid rgba(44,44,42,0.12);border-radius:12px;overflow:hidden;margin-bottom:14px;">
+      <div style="height:110px;background:#1a1a18;position:relative;">
+        <div style="position:absolute;inset:0;opacity:0.5;background:repeating-linear-gradient(135deg,rgba(255,255,255,0.05) 0 12px,transparent 12px 24px);"></div>
+      </div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px;padding:0 14px 12px;">
+        <div style="display:flex;align-items:flex-end;gap:14px;min-width:0;">
+          <div style="width:64px;height:64px;flex-shrink:0;margin-top:-26px;border-radius:50%;background:#E6F1FB;border:3px solid #ffffff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:600;color:#185FA5;">BN</div>
+          <div style="min-width:0;padding-top:12px;">
+            <div style="font-size:15px;font-weight:500;color:#1a1a18;">Bilal Nasser</div>
+            <div style="font-size:12px;color:#6e6d66;">@bnasser · Riverside</div>
+          </div>
+        </div>
+        <button onClick="{{ onEditProfile }}" style="border:0.5px solid rgba(44,44,42,0.12);background:none;display:flex;align-items:center;gap:6px;font-size:12px;color:#5f5e5a;padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap;"><i class="ti ti-pencil" style="font-size:14px;" aria-hidden="true"></i>Edit profile</button>
+      </div>
+      <div style="padding:0 14px 14px;">
+        <div style="font-size:13px;color:#1a1a18;line-height:1.5;max-width:600px;">Midfielder for FC Weekend Warriors, Sunday pickup regular at Riverside. Always down for a game.</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2.1fr 0.9fr;gap:14px;">
+      <div style="min-width:0;min-height:calc(100vh - 180px);">
+        <div style="display:flex;gap:14px;min-width:0;height:100%;">
+          <div style="display:flex;flex-direction:column;gap:4px;width:150px;flex-shrink:0;">
+            <sc-for list="{{ railTabs }}" as="t" hint-placeholder-count="3">
+              <button onClick="{{ t.onClick }}" style="{{ t.style }}"><i class="ti {{ t.icon }}" style="font-size:16px;" aria-hidden="true"></i>{{ t.label }}</button>
+            </sc-for>
+          </div>
+
+          <div style="min-width:0;flex:1;display:flex;flex-direction:column;gap:10px;height:100%;">
+
+            <sc-if value="{{ isPosts }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="background:#ffffff;border:0.5px solid rgba(44,44,42,0.12);border-radius:12px;padding:14px;">
+                  <div style="display:flex;gap:10px;">
+                    <div style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:#185FA5;">BN</div>
+                    <textarea rows="1" placeholder="Post something to your profile…" value="{{ draft }}" onChange="{{ onDraft }}" style="flex:1;min-width:0;resize:none;border:none;outline:none;background:none;font-size:14px;color:#1a1a18;padding:8px 0;line-height:1.4;"></textarea>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;border-top:0.5px solid rgba(44,44,42,0.12);padding-top:10px;margin-top:4px;">
+                    <div style="display:flex;gap:14px;">
+                      <button onClick="{{ onPhoto }}" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:#5f5e5a;cursor:pointer;padding:2px;"><i class="ti ti-photo" style="font-size:16px;" aria-hidden="true"></i>Photo</button>
+                      <button onClick="{{ onTagSport }}" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:#5f5e5a;cursor:pointer;padding:2px;"><i class="ti ti-ball-football" style="font-size:16px;" aria-hidden="true"></i>Tag sport</button>
+                    </div>
+                    <button onClick="{{ onPost }}" style="{{ postBtnStyle }}">Post</button>
+                  </div>
+                </div>
+
+                <sc-for list="{{ posts }}" as="p" hint-placeholder-count="3">
+                  <div style="background:#ffffff;border:0.5px solid rgba(44,44,42,0.12);border-radius:12px;padding:14px;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                      <div style="width:36px;height:36px;border-radius:50%;background:#f1efe8;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:#1a1a18;">BN</div>
+                      <div style="flex:1;">
+                        <div style="font-size:14px;font-weight:500;color:#1a1a18;">Bilal Nasser</div>
+                        <div style="font-size:12px;color:#6e6d66;">{{ p.time }}</div>
+                      </div>
+                    </div>
+                    <div style="font-size:14px;color:#1a1a18;line-height:1.5;margin-bottom:8px;text-wrap:pretty;">{{ p.text }}</div>
+                    <div style="display:flex;gap:16px;border-top:0.5px solid rgba(44,44,42,0.12);padding-top:8px;">
+                      <button onClick="{{ p.onLike }}" style="{{ p.likeStyle }}"><i class="ti {{ p.likeIcon }}" style="font-size:15px;" aria-hidden="true"></i>{{ p.likes }}</button>
+                      <button onClick="{{ p.onComment }}" style="border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;color:#5f5e5a;cursor:pointer;padding:2px;"><i class="ti ti-message-circle" style="font-size:15px;" aria-hidden="true"></i>{{ p.comments }}</button>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isMemories }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <sc-for list="{{ memoryGroups }}" as="g" hint-placeholder-count="2">
+                  <div style="background:#ffffff;border:0.5px solid rgba(44,44,42,0.12);border-radius:12px;overflow:hidden;">
+                    <button onClick="{{ g.onToggle }}" style="width:100%;text-align:left;border:none;background:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;cursor:pointer;">
+                      <span style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:#1a1a18;"><i class="ti ti-history" style="font-size:16px;color:#6e6d66;" aria-hidden="true"></i>{{ g.label }}</span>
+                      <span style="display:flex;align-items:center;gap:8px;font-size:12px;color:#6e6d66;">{{ g.count }}<i class="ti {{ g.chevron }}" style="font-size:16px;" aria-hidden="true"></i></span>
+                    </button>
+                    <sc-if value="{{ g.open }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;flex-direction:column;gap:1px;background:rgba(44,44,42,0.12);border-top:0.5px solid rgba(44,44,42,0.12);">
+                        <sc-for list="{{ g.items }}" as="m" hint-placeholder-count="2">
+                          <div style="background:#ffffff;padding:12px 14px;display:flex;gap:12px;align-items:flex-start;">
+                            <span style="{{ m.iconStyle }}"><i class="ti {{ m.icon }}" style="font-size:17px;" aria-hidden="true"></i></span>
+                            <div style="min-width:0;flex:1;">
+                              <div style="font-size:13px;font-weight:500;color:#1a1a18;">{{ m.title }}</div>
+                              <div style="font-size:12px;color:#6e6d66;margin-top:2px;">{{ m.meta }}</div>
+                              <div style="font-size:13px;color:#5f5e5a;line-height:1.5;margin-top:6px;text-wrap:pretty;">{{ m.text }}</div>
+                              <div style="display:flex;gap:8px;margin-top:10px;">
+                                <button onClick="{{ m.onShare }}" style="border:0.5px solid rgba(44,44,42,0.24);background:none;display:flex;align-items:center;gap:6px;font-size:12px;color:#1a1a18;padding:5px 11px;border-radius:8px;cursor:pointer;"><i class="ti ti-share-2" style="font-size:14px;" aria-hidden="true"></i>Share memory</button>
+                                <button onClick="{{ m.onHide }}" style="border:none;background:none;font-size:12px;color:#6e6d66;padding:5px 8px;border-radius:8px;cursor:pointer;">Hide</button>
+                              </div>
+                            </div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#ffffff;border:0.5px solid rgba(44,44,42,0.12);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                  <div style="font-size:15px;font-weight:500;color:#1a1a18;margin-bottom:4px;">Bilal Nasser</div>
+                  <div style="font-size:13px;color:#5f5e5a;line-height:1.5;">@bnasser · Riverside. Joined March 2024.</div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:0.5px solid rgba(44,44,42,0.12);padding-top:14px;">
+                  <div>
+                    <div style="font-size:13px;font-weight:500;color:#1a1a18;">Profile visibility</div>
+                    <div style="font-size:12px;color:#6e6d66;">Who can see your posts and stats</div>
+                  </div>
+                  <div style="display:flex;gap:6px;">
+                    <sc-for list="{{ visibilityOptions }}" as="v" hint-placeholder-count="3">
+                      <button onClick="{{ v.onClick }}" style="{{ v.style }}">{{ v.label }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+                <sc-for list="{{ toggles }}" as="t" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:0.5px solid rgba(44,44,42,0.12);padding-top:14px;">
+                    <div>
+                      <div style="font-size:13px;font-weight:500;color:#1a1a18;">{{ t.label }}</div>
+                      <div style="font-size:12px;color:#6e6d66;">{{ t.hint }}</div>
+                    </div>
+                    <button onClick="{{ t.onClick }}" style="{{ t.style }}"><i class="ti {{ t.icon }}" style="font-size:14px;" aria-hidden="true"></i>{{ t.value }}</button>
+                  </div>
+                </sc-for>
+                <div style="border-top:0.5px solid rgba(44,44,42,0.12);padding-top:14px;display:flex;gap:8px;">
+                  <button onClick="{{ onEditProfile }}" style="border:0.5px solid rgba(44,44,42,0.24);background:none;font-size:13px;font-weight:500;color:#1a1a18;padding:8px 14px;border-radius:8px;cursor:pointer;">Edit profile</button>
+                  <button onClick="{{ onLogout }}" style="border:0.5px solid rgba(44,44,42,0.24);background:none;font-size:13px;font-weight:500;color:#A32D2D;padding:8px 14px;border-radius:8px;cursor:pointer;">Log out</button>
+                </div>
+              </div>
+            </sc-if>
+
+          </div>
+        </div>
+      </div>
+
+      <div style="min-width:0;display:flex;flex-direction:column;gap:14px;">
+        <div style="background:#ffffff;border:0.5px solid rgba(44,44,42,0.12);border-radius:12px;padding:14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="font-size:13px;font-weight:500;color:#1a1a18;">Upcoming</div>
+            <a href="#" style="font-size:12px;color:#185FA5;">See all</a>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <sc-for list="{{ upcoming }}" as="u" hint-placeholder-count="3">
+              <div style="border:0.5px solid rgba(44,44,42,0.12);border-radius:8px;padding:10px;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+                  <span style="{{ u.iconStyle }}"><i class="ti {{ u.icon }}" style="font-size:12px;" aria-hidden="true"></i></span>
+                  <div style="font-size:12px;font-weight:500;color:#1a1a18;line-height:1.3;">{{ u.title }}</div>
+                </div>
+                <div style="font-size:11px;color:#5f5e5a;margin-bottom:2px;"><i class="ti ti-clock" style="font-size:12px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>{{ u.when }}</div>
+                <div style="font-size:11px;color:#5f5e5a;margin-bottom:8px;"><i class="ti ti-map-pin" style="font-size:12px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>{{ u.where }}</div>
+                <button onClick="{{ u.onClick }}" style="{{ u.btnStyle }}">{{ u.btnLabel }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="background:#ffffff;border:0.5px solid rgba(44,44,42,0.12);border-radius:12px;padding:14px;">
+          <div style="font-size:13px;font-weight:500;color:#1a1a18;margin-bottom:10px;">Trending</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <sc-for list="{{ hashtags }}" as="h" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <a href="#" style="font-size:13px;color:#185FA5;">{{ h.tag }}</a>
+                <span style="font-size:12px;color:#6e6d66;">{{ h.count }} posts</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="background:#ffffff;border:0.5px solid rgba(44,44,42,0.12);border-radius:12px;padding:14px;">
+          <div style="font-size:13px;font-weight:500;color:#1a1a18;margin-bottom:10px;">Group broadcasts</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <sc-for list="{{ broadcasts }}" as="b" hint-placeholder-count="2">
+              <div style="display:flex;gap:9px;">
+                <div style="{{ b.avatarStyle }}">{{ b.init }}</div>
+                <div style="min-width:0;">
+                  <div style="font-size:12px;font-weight:500;color:#1a1a18;">{{ b.group }} <span style="font-weight:400;color:#6e6d66;">{{ b.time }}</span></div>
+                  <div style="font-size:12px;color:#5f5e5a;line-height:1.4;">{{ b.text }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<sc-if value="{{ dialogOpen }}" hint-placeholder-val="{{ false }}">
+  <div>
+    <div onClick="{{ onCloseDialog }}" style="position:fixed;inset:0;background:rgba(26,26,24,0.5);z-index:50;"></div>
+    <div role="dialog" aria-label="Comments" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:51;width:calc(100% - 2rem);max-width:448px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;background:#ffffff;border-radius:12px;border:0.5px solid rgba(44,44,42,0.24);box-shadow:0 1px 3px rgba(44,44,42,0.06),0 12px 40px rgba(44,44,42,0.06);font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:0.5px solid rgba(44,44,42,0.12);">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+          <div style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:#f1efe8;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:#1a1a18;">BN</div>
+          <div style="min-width:0;">
+            <div style="font-size:14px;font-weight:500;color:#1a1a18;">Bilal Nasser</div>
+            <div style="font-size:12px;color:#6e6d66;">{{ dialogTime }}</div>
+          </div>
+        </div>
+        <button onClick="{{ onCloseDialog }}" aria-label="Close" style="border:none;background:none;cursor:pointer;padding:4px;border-radius:6px;color:#5f5e5a;"><i class="ti ti-x" style="font-size:16px;" aria-hidden="true"></i></button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:14px;color:#1a1a18;line-height:1.5;padding-bottom:12px;border-bottom:0.5px solid rgba(44,44,42,0.12);">{{ dialogText }}</div>
+        <sc-if value="{{ dialogEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:13px;color:#6e6d66;">No comments yet. Be the first to comment.</div>
+        </sc-if>
+        <sc-for list="{{ dialogComments }}" as="c" hint-placeholder-count="2">
+          <div style="display:flex;align-items:flex-start;gap:8px;">
+            <div style="width:28px;height:28px;flex-shrink:0;border-radius:50%;background:#f1efe8;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:#1a1a18;">{{ c.init }}</div>
+            <div style="min-width:0;flex:1;">
+              <div style="background:#f1efe8;border-radius:8px;padding:6px 10px;">
+                <span style="font-size:13px;font-weight:500;color:#1a1a18;">{{ c.name }}</span>
+                <span style="font-size:11px;color:#6e6d66;margin-left:6px;">{{ c.time }}</span>
+                <div style="font-size:13px;color:#1a1a18;line-height:1.5;">{{ c.text }}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:4px 4px 0;">
+                <button onClick="{{ c.onLike }}" style="{{ c.likeStyle }}"><i class="ti {{ c.likeIcon }}" style="font-size:13px;" aria-hidden="true"></i>{{ c.likes }}</button>
+                <sc-if value="{{ c.isOwn }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ c.onDelete }}" style="border:none;background:none;cursor:pointer;padding:2px;font-size:11px;color:#6e6d66;"><i class="ti ti-trash" style="font-size:13px;" aria-hidden="true"></i></button>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:0.5px solid rgba(44,44,42,0.12);">
+        <div style="width:32px;height:32px;flex-shrink:0;border-radius:50%;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:#185FA5;">BN</div>
+        <input type="text" placeholder="Add a comment…" aria-label="Add a comment" value="{{ commentDraft }}" onChange="{{ onCommentDraft }}" style="flex:1;min-width:0;border:0.5px solid rgba(44,44,42,0.12);background:#f1efe8;border-radius:8px;padding:6px 12px;font-size:13px;color:#1a1a18;outline:none;">
+        <button onClick="{{ onPostComment }}" style="{{ commentBtnStyle }}">Post</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showSportSwitcher&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;defaultTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;posts&quot;,&quot;memories&quot;,&quot;settings&quot;],&quot;default&quot;:&quot;posts&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = {
+    sport: 'football',
+    tab: this.props.defaultTab || 'posts',
+    draft: '',
+    commentDraft: '',
+    dialogIndex: null,
+    openMemoryGroups: { 'thisWeek': true, 'lastMonth': true, 'lastYear': false },
+    hiddenMemories: {},
+    visibility: 'friends',
+    toggleState: { activity: true, tagging: true, digest: false },
+    posts: [
+      { id: 1, sport: 'football', time: '2h ago', text: 'Great 5-a-side session tonight, 3 wins in a row for the squad.', likes: 14, liked: false },
+      { id: 2, sport: 'basketball', time: '2d ago', text: 'First time running point in a while, legs are gone but we took it in overtime.', likes: 22, liked: false },
+      { id: 3, sport: 'football', time: '5d ago', text: 'Signed up for the open clan tournament next Saturday. Who else is in?', likes: 31, liked: true }
+    ],
+    comments: {
+      1: [{ id: 11, userId: 'seed', name: 'Priya Shah', text: 'Nice one, count me in next time!', likes: 1, liked: false, time: '1h ago' }],
+      2: [],
+      3: [{ id: 12, userId: 'seed', name: 'Hana Kim', text: 'We need a keeper, you in goal?', likes: 0, liked: false, time: '4d ago' }]
+    },
+    nextId: 100
+  };
+
+  sportMeta = {
+    all: { label: 'All', icon: 'ti-layout-grid' },
+    football: { label: 'Football', icon: 'ti-ball-football', bg: '#E1F5EE', fg: '#085041' },
+    basketball: { label: 'Basketball', icon: 'ti-ball-basketball', bg: '#FAECE7', fg: '#712B13' },
+    tennis: { label: 'Tennis', icon: 'ti-ball-tennis', bg: '#EEEDFE', fg: '#3C3489' }
+  };
+
+  initials(name) {
+    return name.split(' ').filter(Boolean).map(function(p) { return p[0]; }).join('').slice(0, 2).toUpperCase();
+  }
+
+  pill(active) {
+    return 'border:' + (active ? '2px solid #378ADD' : '0.5px solid rgba(44,44,42,0.12)') + ';background:#f1efe8;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:' + (active ? '500' : '400') + ';color:#1a1a18;padding:7px 12px;border-radius:20px;cursor:pointer;';
+  }
+
+  renderVals() {
+    var self = this;
+    var s = this.state;
+
+    var nav = [
+      { label: 'Home', icon: 'ti-home' },
+      { label: 'Friends', icon: 'ti-users' },
+      { label: 'Groups', icon: 'ti-users-group' },
+      { label: 'Matches', icon: 'ti-calendar-event' },
+      { label: 'Profile', icon: 'ti-user', active: true }
+    ].map(function(n) {
+      return { label: n.label, icon: n.icon,
+        style: 'border:none;background:none;display:flex;align-items:center;gap:5px;font-size:13px;padding:6px 8px;border-radius:8px;cursor:pointer;'
+          + (n.active ? 'color:#1a1a18;font-weight:500;' : 'color:#5f5e5a;') };
+    });
+
+    var sportChips = ['football', 'basketball', 'tennis'].map(function(k) {
+      var m = self.sportMeta[k];
+      return { label: m.label, icon: m.icon, style: self.pill(s.sport === k),
+        onClick: function() { self.setState({ sport: k }); } };
+    });
+
+    var railTabs = [
+      { key: 'posts', label: 'Posts', icon: 'ti-message-2' },
+      { key: 'memories', label: 'Memories', icon: 'ti-photo-heart' },
+      { key: 'settings', label: 'Settings', icon: 'ti-settings' }
+    ].map(function(t) {
+      var active = s.tab === t.key;
+      return { label: t.label, icon: t.icon,
+        onClick: function() { self.setState({ tab: t.key }); },
+        style: 'border:none;text-align:left;background:' + (active ? '#E6F1FB' : 'none') + ';display:flex;align-items:center;gap:8px;font-size:13px;font-weight:' + (active ? '500' : '400') + ';color:' + (active ? '#185FA5' : '#5f5e5a') + ';padding:8px 10px;border-radius:8px;cursor:pointer;' };
+    });
+
+    var visible = s.posts.filter(function(p) { return s.sport === 'all' || p.sport === s.sport; });
+    var posts = visible.map(function(p) {
+      var m = self.sportMeta[p.sport];
+      var cs = s.comments[p.id] || [];
+      return {
+        time: p.time, text: p.text, likes: p.likes, comments: cs.length,
+        sportLabel: m.label, icon: m.icon,
+        badgeStyle: 'background:' + m.bg + ';color:' + m.fg + ';font-size:11px;padding:3px 9px;border-radius:20px;display:flex;align-items:center;gap:4px;',
+        likeIcon: p.liked ? 'ti-heart-filled' : 'ti-heart',
+        likeStyle: 'border:none;background:none;display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:2px;color:' + (p.liked ? '#A32D2D' : '#5f5e5a') + ';',
+        onLike: function() {
+          self.setState({ posts: s.posts.map(function(x) {
+            return x.id === p.id ? Object.assign({}, x, { liked: !x.liked, likes: x.likes + (x.liked ? -1 : 1) }) : x;
+          }) });
+        },
+        onComment: function() { self.setState({ dialogIndex: p.id, commentDraft: '' }); }
+      };
+    });
+
+    var hasDraft = s.draft.trim().length > 0;
+    var postBtnStyle = 'border:none;background:' + (hasDraft ? '#185FA5' : 'rgba(44,44,42,0.12)') + ';color:' + (hasDraft ? '#fff' : '#6e6d66') + ';font-size:13px;font-weight:500;padding:7px 16px;border-radius:20px;cursor:' + (hasDraft ? 'pointer' : 'not-allowed') + ';';
+
+    var memoryData = [
+      { key: 'thisWeek', label: 'This week last year', items: [
+        { id: 'm1', sport: 'football', title: 'FC Weekend Warriors 4 – 2 Riverside FC', meta: '24 Aug 2025 · Central Turf Park', text: 'Two assists and a clean sheet in the second half. Squad went unbeaten for the rest of the month after this one.' },
+        { id: 'm2', sport: 'basketball', title: 'First Sunday pickup at Riverside', meta: '22 Aug 2025 · Riverside Courts', text: 'Showed up not knowing anyone. Now it is the standing weekend fixture.' }
+      ] },
+      { key: 'lastMonth', label: 'A month ago', items: [
+        { id: 'm3', sport: 'tennis', title: 'Ladder debut vs D. Alvarez', meta: '19 Jul 2026 · Greenwood Club', text: 'Lost 6–4, 5–7, 6–3 but the serve finally held up under pressure.' }
+      ] },
+      { key: 'lastYear', label: 'Two years ago', items: [
+        { id: 'm4', sport: 'football', title: 'Joined SportHub', meta: '12 Mar 2024', text: 'First post: looking for a Sunday five-a-side within cycling distance.' }
+      ] }
+    ];
+    var memoryGroups = memoryData.map(function(g) {
+      var items = g.items.filter(function(m) {
+        return !s.hiddenMemories[m.id] && (s.sport === 'all' || m.sport === s.sport);
+      }).map(function(m) {
+        var meta = self.sportMeta[m.sport];
+        return {
+          title: m.title, meta: m.meta, text: m.text, icon: meta.icon,
+          iconStyle: 'width:34px;height:34px;flex-shrink:0;border-radius:50%;background:' + meta.bg + ';color:' + meta.fg + ';display:flex;align-items:center;justify-content:center;',
+          onShare: function() { sendPrompt('Share my memory: ' + m.title); },
+          onHide: function() {
+            var h = Object.assign({}, s.hiddenMemories); h[m.id] = true;
+            self.setState({ hiddenMemories: h });
+          }
+        };
+      });
+      var open = !!s.openMemoryGroups[g.key];
+      return {
+        label: g.label, count: items.length + (items.length === 1 ? ' memory' : ' memories'),
+        open: open && items.length > 0, items: items,
+        chevron: open ? 'ti-chevron-up' : 'ti-chevron-down',
+        onToggle: function() {
+          var o = Object.assign({}, s.openMemoryGroups); o[g.key] = !o[g.key];
+          self.setState({ openMemoryGroups: o });
+        }
+      };
+    }).filter(function(g) { return g.items.length > 0; });
+
+    var visibilityOptions = [
+      { key: 'public', label: 'Public' },
+      { key: 'friends', label: 'Friends' },
+      { key: 'private', label: 'Only me' }
+    ].map(function(v) {
+      var active = s.visibility === v.key;
+      return { label: v.label,
+        onClick: function() { self.setState({ visibility: v.key }); },
+        style: 'border:' + (active ? '2px solid #378ADD' : '0.5px solid rgba(44,44,42,0.12)') + ';background:#f1efe8;font-size:12px;color:#1a1a18;padding:6px 12px;border-radius:20px;cursor:pointer;' };
+    });
+
+    var toggles = [
+      { key: 'activity', label: 'Activity sharing', hint: 'Post match results to your feed automatically' },
+      { key: 'tagging', label: 'Tagging', hint: 'Let friends tag you in posts and matches' },
+      { key: 'digest', label: 'Weekly digest', hint: 'Email summary of your stats and memories' }
+    ].map(function(t) {
+      var on = !!s.toggleState[t.key];
+      return { label: t.label, hint: t.hint, value: on ? 'On' : 'Off',
+        icon: on ? 'ti-check' : 'ti-x',
+        onClick: function() {
+          var ts = Object.assign({}, s.toggleState); ts[t.key] = !on;
+          self.setState({ toggleState: ts });
+        },
+        style: 'border:0.5px solid rgba(44,44,42,0.12);background:' + (on ? '#E6F1FB' : '#f1efe8') + ';color:' + (on ? '#185FA5' : '#5f5e5a') + ';font-size:12px;padding:6px 12px;border-radius:20px;cursor:pointer;display:flex;align-items:center;gap:6px;' };
+    });
+
+    var upcomingData = [
+      { sport: 'football', title: 'FC Weekend Warriors vs Riverside FC', when: 'Tomorrow, 7:00 PM', where: 'Central Turf Park', spots: 2 },
+      { sport: 'basketball', title: 'Sunday pickup run', when: 'Sun, 9:00 AM', where: 'Riverside Courts', spots: 4 },
+      { sport: 'tennis', title: 'Singles ladder match vs D. Alvarez', when: 'Wed, 6:30 PM', where: 'Greenwood Club', spots: 0 }
+    ];
+    var upcoming = upcomingData.filter(function(u) { return s.sport === 'all' || u.sport === s.sport; }).map(function(u) {
+      var m = self.sportMeta[u.sport];
+      var full = u.spots === 0;
+      return { title: u.title, when: u.when, where: u.where, icon: m.icon,
+        iconStyle: 'width:22px;height:22px;border-radius:50%;background:' + m.bg + ';color:' + m.fg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;',
+        btnLabel: full ? 'Full, view details' : u.spots + ' spots left, join',
+        btnStyle: 'width:100%;border:0.5px solid rgba(44,44,42,0.24);background:none;font-size:12px;color:' + (full ? '#6e6d66' : '#1a1a18') + ';padding:5px;border-radius:8px;cursor:pointer;',
+        onClick: function() { sendPrompt('Show me details for ' + u.title); } };
+    });
+
+    var hashtags = [
+      { tag: '#fridayrun', count: 128 },
+      { tag: '#tournament', count: 94 },
+      { tag: '#pickup', count: 61 },
+      { tag: '#tennislife', count: 47 }
+    ];
+
+    var broadcasts = [
+      { group: 'Riverside Ballers', init: 'RB', bg: '#FAECE7', fg: '#712B13', text: 'Court booking confirmed for Sunday 9am, see you there.', time: '1h' },
+      { group: 'FC Weekend Warriors', init: 'FW', bg: '#E1F5EE', fg: '#085041', text: 'Tournament bracket is posted, check the schedule tab.', time: '5h' }
+    ].map(function(b) {
+      return { group: b.group, init: b.init, text: b.text, time: b.time,
+        avatarStyle: 'width:30px;height:30px;flex-shrink:0;border-radius:50%;background:' + b.bg + ';color:' + b.fg + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;' };
+    });
+
+    var dialogPost = s.dialogIndex === null ? null : s.posts.find(function(p) { return p.id === s.dialogIndex; });
+    var dialogList = (dialogPost ? (s.comments[dialogPost.id] || []) : []).map(function(c) {
+      return { name: c.name, text: c.text, time: c.time, likes: c.likes, init: self.initials(c.name),
+        isOwn: c.userId === 'me',
+        likeIcon: c.liked ? 'ti-heart-filled' : 'ti-heart',
+        likeStyle: 'border:none;background:none;cursor:pointer;padding:2px;font-size:11px;display:flex;align-items:center;gap:4px;color:' + (c.liked ? '#A32D2D' : '#5f5e5a') + ';',
+        onLike: function() {
+          var all = Object.assign({}, s.comments);
+          all[dialogPost.id] = all[dialogPost.id].map(function(x) {
+            return x.id === c.id ? Object.assign({}, x, { liked: !x.liked, likes: x.likes + (x.liked ? -1 : 1) }) : x;
+          });
+          self.setState({ comments: all });
+        },
+        onDelete: function() {
+          var all = Object.assign({}, s.comments);
+          all[dialogPost.id] = all[dialogPost.id].filter(function(x) { return x.id !== c.id; });
+          self.setState({ comments: all });
+        } };
+    });
+
+    var hasComment = s.commentDraft.trim().length > 0;
+
+    return {
+      nav: nav, sportChips: sportChips, railTabs: railTabs,
+      showSportSwitcher: this.props.showSportSwitcher !== false,
+      isPosts: s.tab === 'posts', isMemories: s.tab === 'memories', isSettings: s.tab === 'settings',
+      posts: posts, draft: s.draft, postBtnStyle: postBtnStyle,
+      onDraft: function(e) { self.setState({ draft: e.target.value }); },
+      onPost: function() {
+        if (!hasDraft) return;
+        var sport = s.sport === 'all' ? 'football' : s.sport;
+        var id = s.nextId + 1;
+        self.setState({
+          posts: [{ id: id, sport: sport, time: 'just now', text: s.draft.trim(), likes: 0, liked: false }].concat(s.posts),
+          comments: Object.assign({}, s.comments, (function() { var o = {}; o[id] = []; return o; })()),
+          draft: '', nextId: id
+        });
+      },
+      onPhoto: function() { sendPrompt('Let me attach a photo to my profile post'); },
+      onTagSport: function() { sendPrompt('Let me tag a sport on my profile post'); },
+      onAddSport: function() { sendPrompt('I want to add a new sport profile to my account'); },
+      onEditProfile: function() { sendPrompt('Let me edit my profile details'); },
+      onLogout: function() { sendPrompt('Log me out of SportHub'); },
+      memoryGroups: memoryGroups,
+      visibilityOptions: visibilityOptions, toggles: toggles,
+      upcoming: upcoming, hashtags: hashtags, broadcasts: broadcasts,
+      dialogOpen: !!dialogPost,
+      dialogText: dialogPost ? dialogPost.text : '',
+      dialogTime: dialogPost ? dialogPost.time : '',
+      dialogComments: dialogList,
+      dialogEmpty: dialogList.length === 0,
+      commentDraft: s.commentDraft,
+      commentBtnStyle: 'border:none;background:' + (hasComment ? '#185FA5' : 'rgba(44,44,42,0.12)') + ';color:' + (hasComment ? '#fff' : '#6e6d66') + ';font-size:13px;font-weight:500;padding:6px 12px;border-radius:8px;cursor:' + (hasComment ? 'pointer' : 'default') + ';',
+      onCommentDraft: function(e) { self.setState({ commentDraft: e.target.value }); },
+      onPostComment: function() {
+        if (!hasComment || !dialogPost) return;
+        var all = Object.assign({}, s.comments);
+        var id = s.nextId + 1;
+        all[dialogPost.id] = [{ id: id, userId: 'me', name: 'Bilal Nasser', text: s.commentDraft.trim(), likes: 0, liked: false, time: 'just now' }].concat(all[dialogPost.id] || []);
+        self.setState({ comments: all, commentDraft: '', nextId: id });
+      },
+      onCloseDialog: function() { self.setState({ dialogIndex: null, commentDraft: '' }); }
+    };
+  }
+}
+
+</script>
+</body>
+</html>
