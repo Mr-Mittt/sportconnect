@@ -3220,6 +3220,13 @@ explicit go-ahead at each step (full story in A3's summary doc):
   wiring); no `PostsTab.stories.tsx` (every visual state already covered by `Feed`/`CreatePostForm`'s
   own stories, matching the `HomeFeedPage`/`GroupsPage` precedent of no stories for page-shaped
   composition components). `:modules:social:post-impl:test` + `:server:test` both green.
+- **Client PROFILE-3 (`DONE`, 2026-08-27, `client/docs/MVP/PROFILE-3_MEMORIES_TAB_PLACEHOLDER.md`):**
+  Memories tab placeholder — `features/profile/components/MemoriesTab.tsx` renders the existing
+  `ComingSoonPage` with `title="Memories"`, no mock data or backend design attempted (no plausible
+  data source exists yet for "on this day" memories). Built in isolation, same as `PROFILE-1`/
+  `PROFILE-2` before page integration exists — `PROFILE-6` will mount it inside the assembled
+  `ProfilePage`. 1 Vitest/RTL case; no Storybook story (matches `PostsTab`'s precedent, no new
+  visual state to capture).
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
