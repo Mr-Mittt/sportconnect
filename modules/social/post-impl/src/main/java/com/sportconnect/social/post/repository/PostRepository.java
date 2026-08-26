@@ -1,5 +1,6 @@
 package com.sportconnect.social.post.repository;
 
+import com.sportconnect.social.post.api.dto.PostType;
 import com.sportconnect.social.post.entity.Post;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,9 +17,9 @@ import java.util.UUID;
 
 @Repository
 public interface PostRepository extends JpaRepository<Post, Long> {
-    
-    Page<Post> findByUserIdAndIsActiveTrue(UUID userId, Pageable pageable);
-    
+
+    Page<Post> findByUserIdAndPostTypeInAndIsActiveTrue(UUID userId, List<PostType> postTypes, Pageable pageable);
+
     Page<Post> findByGroupIdAndIsActiveTrue(Long groupId, Pageable pageable);
     
     Page<Post> findByIsActiveTrueOrderByCreatedAtDesc(Pageable pageable);

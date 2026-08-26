@@ -34,3 +34,74 @@ it's inherited for free; if not, that's a separate ticket).
 Vitest/RTL — composer submits with the active sport tagged; list renders filtered by sport; like/
 comment wiring reuses existing tested components so only the wiring itself needs coverage here.
 Storybook: composer + list states (empty, populated, loading, error).
+
+---
+
+## Implementation summary (2026-08-26)
+
+**Built as approved**, plus two corrections found at pickup and fixed in this same ticket (both user
+decisions):
+
+**Real cache-invalidation gap, found before writing any UI code.** `useLikePost`/`useUnlikePost`/
+`useDeletePost`/`useCreatePost` (existing, shared) only reach query-cache buckets whose key starts
+with `'feed'` and is tagged in `optimisticFeedUpdates.ts`'s `POST_FEED_TAGS` set. PROFILE-0's
+`profileKeys.myPosts()` lived under a separate `'profile'` prefix — invisible to all three mutations'
+optimistic updates and to their `onSettled` invalidation. As specced, liking/unliking/deleting a post
+from this tab would have silently done nothing on screen (the mutation would still succeed
+server-side) until some unrelated event forced a refetch. Fixed by repointing
+`profileKeys.myPosts()` at `feedKeys.all` and adding `'my-posts'` to `POST_FEED_TAGS` — zero changes
+needed inside the three mutation hooks themselves, they just started covering one more bucket.
+Conceptually sound, not a hack: a user's own `USER_FEED` posts already appear in `personalFeed` too,
+so "my posts" was never a separate Post-feed concept, just a different view over the same one.
+
+**Real backend bug, found while checking what `/posts/mine` actually returns** (the first-ever
+client consumer of this endpoint — confirmed by grepping the whole client tree, nothing else touches
+it). `PostServiceImpl.getUserPosts()` queried `findByUserIdAndIsActiveTrue` with **no `postType`
+filter at all**, so it could return `GROUP_SYSTEM`/`SESSION_POST` rows — internal anchors
+`post-impl/CLAUDE.md` documents as "never meant to be reachable via `/api/posts/**`" — attributed to
+whoever triggered them. Content itself is benign (e.g. `"Session: Sunday pickup"`), not a security
+leak, but a real bug: violates the endpoint's own documented invariant, and the client's `PostType`
+union (`USER_FEED | GROUP_POST | GROUP_BROADCAST`) doesn't even model the other two values. **Fixed
+server-side** (user decision): new `PostRepository.findByUserIdAndPostTypeInAndIsActiveTrue`,
+`getUserPosts` now passes `USER_VISIBLE_POST_TYPES = [USER_FEED]` — narrowed from an initial
+`[USER_FEED, GROUP_POST, GROUP_BROADCAST]` (user correction, same day): `GROUP_POST`/
+`GROUP_BROADCAST` belong to a specific group's own feed, not a personal "my posts" history, so this
+tab only ever shows content the caller posted directly to their own feed. Every post `useMyPosts()`
+returns is now guaranteed `groupId: null`, so `PostsTab`'s `Feed` never needed `groupsById`/
+`showGroupName` wiring in the first place. Two Spock cases — one exercises the new query signature,
+one asserts the passed type list never contains `GROUP_SYSTEM`/`SESSION_POST` so a future revert
+back to the unfiltered method fails loudly.
+
+**`hashtag` click-through wired in, not left inert** — `onHashtagClick` is a required prop on
+`PostCard`/`Feed`/`CommentSection`, and every other post surface (Home Feed, Groups) wires it to
+`HashtagPostsModal`. Leaving it a no-op here would have made hashtags work everywhere in the app
+except silently on this one tab. Reused `HashtagPostsModal` + `useHashtagResultsData` exactly as
+`HomeFeedPage.tsx` does — no new component.
+
+**Built:**
+- `features/profile/usePostsTabData.ts` — same shape as `useHomeFeedData`, scoped to `useMyPosts()`
+  instead of the personalized feed. `createPost` tags with `profilePageStore`'s active sport pill,
+  omitting `sportId` when the pill is `'all'`.
+- `features/profile/components/PostsTab.tsx` — assembles `CreatePostForm` + `Feed` + `CommentSection`
+  + `HashtagPostsModal`, all reused as-is. Comment-dialog open state is local `useState<number |
+  null>`, **not** URL-routed like Home Feed's FEED-12 — no `/profile` route with a post-id param
+  exists, and nothing requires this tab's dialog to be a deep link.
+
+**No `PostsTab.stories.tsx`** — delta from the ticket's literal "Storybook: composer + list states"
+line. Every visual state it asks for (composer empty/submitting/error, list empty/populated/loading/
+error) already has a story on the reused `CreatePostForm`/`Feed` components themselves; `PostsTab`
+introduces no new visual surface of its own. Matches the established precedent that page-shaped
+composition components reading real hooks/stores (`HomeFeedPage`, `GroupsPage`) don't get their own
+`.stories.tsx` file either.
+
+**No dedicated `usePostsTabData.test.tsx`** — its logic (sport-tagging, like/delete wiring, pagination
+exposure) is already exercised end-to-end through `PostsTab.test.tsx`'s 8 cases; a separate hook-level
+test would just re-assert the same behavior through a narrower lens.
+
+**Verification:** `PostsTab.test.tsx` (8 Vitest/RTL cases: renders composer + own posts, sport-pill
+filtering, composer tags active sport, composer omits `sportId` for `'all'`, like/delete wiring,
+comment dialog open + cache-seeded (no redundant `GET /posts/1` — confirms the cache-key fix works),
+hashtag modal open). Full client suite green, `tsc -b` clean, `pnpm lint` clean (2 pre-existing
+unrelated warnings). Backend: new/updated `PostServiceImplSpec` cases green,
+`:modules:social:post-impl:test` and full `:server:test` both green. No browser walkthrough
+(Claude-in-Chrome not connected this session, same gap noted on PROFILE-0/PROFILE-1).

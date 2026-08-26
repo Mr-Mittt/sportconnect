@@ -3199,6 +3199,27 @@ explicit go-ahead at each step (full story in A3's summary doc):
   both are null (bio's existing "no placeholder" rule extended to the two fields the spec didn't
   cover). 8 Vitest/RTL tests, 5 Storybook stories, production Storybook build green. No live browser
   walkthrough (Claude-in-Chrome not connected this session).
+- **Client PROFILE-2 (`DONE`, 2026-08-26, `client/docs/MVP/PROFILE-2_POSTS_TAB.md`):** Posts tab —
+  composer + the caller's own posts, fully real (`features/profile/usePostsTabData.ts` +
+  `components/PostsTab.tsx`, reusing `CreatePostForm`/`Feed`/`CommentSection`/`HashtagPostsModal`
+  unchanged). Two real bugs found and fixed before any UI landed. **(1)** `useLikePost`/
+  `useUnlikePost`/`useDeletePost`/`useCreatePost` only reach query-cache buckets tagged in
+  `optimisticFeedUpdates.ts`'s `POST_FEED_TAGS`, all under the `feedKeys` prefix — PROFILE-0's
+  `profileKeys.myPosts()` lived under a separate `profile` prefix, invisible to all three. Fixed by
+  repointing it at `feedKeys.all` and adding `'my-posts'` to `POST_FEED_TAGS` — no changes needed
+  inside the mutation hooks themselves. **(2)** `PostServiceImpl.getUserPosts()` (`/posts/mine`, the
+  first-ever client consumer of that endpoint) queried with no `postType` filter at all, so it could
+  return `GROUP_SYSTEM`/`SESSION_POST` rows — internal anchors `post-impl/CLAUDE.md` documents as
+  never reachable via `/api/posts/**`. Fixed server-side (user decision): new
+  `PostRepository.findByUserIdAndPostTypeInAndIsActiveTrue`, scoped to `USER_FEED` only —
+  `GROUP_POST`/`GROUP_BROADCAST` belong to a specific group's own feed, not a personal post history
+  (narrowed from an initial 3-type list, user correction same day); 2 new Spock cases. Hashtag
+  click-through wired to
+  `HashtagPostsModal` (not left inert) for parity with every other post surface. 8 Vitest/RTL cases
+  (composer sport-tagging incl. `'all'` omission, sport-pill filtering, like/delete/comment/hashtag
+  wiring); no `PostsTab.stories.tsx` (every visual state already covered by `Feed`/`CreatePostForm`'s
+  own stories, matching the `HomeFeedPage`/`GroupsPage` precedent of no stories for page-shaped
+  composition components). `:modules:social:post-impl:test` + `:server:test` both green.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with

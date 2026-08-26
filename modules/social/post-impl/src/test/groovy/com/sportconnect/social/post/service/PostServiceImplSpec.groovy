@@ -529,9 +529,27 @@ class PostServiceImplSpec extends Specification {
         def result = postService.getUserPosts(userId, userId, pageable)
 
         then:
-        1 * postRepository.findByUserIdAndIsActiveTrue(userId, pageable) >> page
+        1 * postRepository.findByUserIdAndPostTypeInAndIsActiveTrue(
+                userId, [PostType.USER_FEED], pageable) >> page
         stubCounts()
         result.content.size() == 1
+    }
+
+    // GROUP_SYSTEM/SESSION_POST are internal anchors, never meant to be reachable via
+    // /api/posts/** — this asserts the repository call itself is scoped to the 3 real post
+    // types, so a future broadening back to findByUserIdAndIsActiveTrue (which has no type
+    // filter at all) would fail this test rather than silently reintroducing the leak.
+    def "getUserPosts never queries GROUP_SYSTEM or SESSION_POST types"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        postService.getUserPosts(userId, userId, pageable)
+
+        then:
+        1 * postRepository.findByUserIdAndPostTypeInAndIsActiveTrue(userId, { List types ->
+            !types.contains(PostType.GROUP_SYSTEM) && !types.contains(PostType.SESSION_POST)
+        }, pageable) >> new PageImpl<>([])
     }
 
     // ── getPersonalizedFeed ───────────────────────────────────────────────────
