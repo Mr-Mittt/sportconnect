@@ -7,10 +7,10 @@ import { RegisterPage } from './features/auth/RegisterPage';
 import { FriendsPage } from './features/friends/FriendsPage';
 import { GroupsPage } from './features/groups/GroupsPage';
 import { HomeFeedPage } from './features/home-feed/HomeFeedPage';
+import { ProfilePage } from './features/profile/ProfilePage';
 import { MatchesPage } from './features/session/MatchesPage';
 import { RootLayout } from './RootLayout';
 import { AppShell } from './shared/components/AppShell';
-import { ComingSoonPage } from './shared/components/ComingSoonPage';
 import { ProtectedRoute } from './shared/components/ProtectedRoute';
 import { PublicOnlyRoute } from './shared/components/PublicOnlyRoute';
 
@@ -61,7 +61,7 @@ export const routes = createRoutesFromElements(
       <Route path="/friends" element={<FriendsPage />} />
       <Route path="/groups" element={<GroupsPage />} />
       <Route path="/matches" element={<MatchesPage />} />
-      <Route path="/profile" element={<ComingSoonPage title="Profile" />} />
+      <Route path="/profile" element={<ProfilePage />} />
     </Route>
     {/* ADMIN-1: /admin sits outside the AppShell group on purpose — admin is not
         part of the member-facing chrome, so no TopBar/NavTabs. Still inside
