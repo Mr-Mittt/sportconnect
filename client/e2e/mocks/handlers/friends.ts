@@ -1,6 +1,7 @@
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import type { FriendRequest, FriendshipStatus, FriendUser } from '../../../src/features/friends/types.ts';
+import type { UserResponse } from '../../../src/features/profile/types.ts';
 import {
   mockFriend,
   mockIncomingFriendRequest,
@@ -58,6 +59,13 @@ interface FriendsSession {
   receivedRequestsState: FriendRequest[];
   sentRequestsState: FriendRequest[];
   nextRequestId: number;
+  // PROFILE-8: the logged-in user's own editable profile row — `/profile`'s
+  // Edit Profile modal (`useUpdateMyProfile`, `PUT /api/users/{userId}/profile`)
+  // needs a save to actually change what the next GET /api/users/{userId}
+  // returns, same "small stateful fake backend" reasoning as every other
+  // mutable fixture in this suite. Didn't exist before this ticket — PROFILE-7
+  // only ever needed the GET side (a clean, unsaved load).
+  myProfileState: UserResponse;
 }
 
 // Stateful, same reasoning as groups.ts/sport.ts — accepting/declining/
@@ -69,6 +77,7 @@ function defaultFriendsSession(): FriendsSession {
     receivedRequestsState: [mockIncomingFriendRequest],
     sentRequestsState: [mockSentFriendRequest],
     nextRequestId: 100,
+    myProfileState: mockMyProfile,
   };
 }
 
@@ -207,10 +216,11 @@ export const friendHandlers: HttpHandler[] = [
   // every other id still resolves through the narrow KNOWN_USERS directory
   // (every other consumer of this endpoint only ever narrows down to
   // FriendUser, so the extra fields are simply unused there).
-  http.get('/api/users/:userId', ({ params }) => {
+  http.get('/api/users/:userId', ({ request, params }) => {
     const userId = String(params.userId);
     if (userId === mockUser.id) {
-      return HttpResponse.json(apiResponse(mockMyProfile, 'User retrieved successfully'));
+      const session = friendsSessions.get(sessionIdFromRequest(request));
+      return HttpResponse.json(apiResponse(session.myProfileState, 'User retrieved successfully'));
     }
     const user = KNOWN_USERS[userId];
     if (user === undefined) {
@@ -224,6 +234,28 @@ export const friendHandlers: HttpHandler[] = [
       bio: user.bio,
     };
     return HttpResponse.json(apiResponse(profile, 'User retrieved successfully'));
+  }),
+
+  // PROFILE-8: `/profile`'s Edit Profile modal (PROFILE-5/useUpdateMyProfile) — didn't exist
+  // before this ticket. null-means-skip, mirroring `UserServiceImpl.updateProfile`'s real
+  // behavior (`EditProfileModal`'s own `buildProfileUpdatePayload` already only ever sends
+  // fields that changed, never `null`, so this handler doesn't need to special-case one).
+  http.put('/api/users/:userId/profile', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const userId = String(params.userId);
+    if (userId !== mockUser.id) {
+      return HttpResponse.json(apiError('User not found'), { status: 404 });
+    }
+    const session = friendsSessions.get(sessionIdFromRequest(request));
+    const body = (await request.json()) as Partial<UserResponse>;
+    const updated: UserResponse = {
+      ...session.myProfileState,
+      ...body,
+      fullName: `${body.firstName ?? session.myProfileState.firstName} ${body.lastName ?? session.myProfileState.lastName}`,
+    };
+    session.myProfileState = updated;
+    return HttpResponse.json(apiResponse(updated, 'Profile updated successfully'));
   }),
 ];
 

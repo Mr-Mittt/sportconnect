@@ -206,6 +206,7 @@ e2e/
     notification-bell.spec.ts # CLIENT-NOTIF-1
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
+    profile-journey.spec.ts   # PROFILE-8
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -260,7 +261,7 @@ The single logged-in test user, unless a spec explicitly overrides via an admin-
 | `mockUser` | Jordan Lee, `jordan@example.com` | `id: '11111111-...'` |
 | `mockAdminUser` | Alex Admin, `admin@example.com` | **ADMIN-1:** `id: '22222222-...'`, `roles: ['USER', 'ADMIN']` — the only fixture holding ADMIN. Deliberately holds USER too, matching how a real admin is provisioned (registration grants USER, ADMIN is added on top) |
 | `mockPassword` | `password123` | Shared by both accounts — they differ only by email and roles |
-| `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. **SPORT-5:** specs no longer assert `aria-disabled` for this state; they assert the dialog it now opens. The fixture still supplies the "every available sport already held" condition both depend on |
+| `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. **SPORT-5:** specs no longer assert `aria-disabled` for this state; they assert the dialog it now opens. The fixture still supplies the "every available sport already held" condition both depend on. **PROFILE-8:** Badminton is the only one with an attribute schema (`racketBrand`/"Racket brand", STRING — see `defaultAttributeSchemas()` in `sport.ts`); `PUT /api/sports/profiles/:profileId` (new this ticket) merges a saved `attributes` object into the existing one rather than replacing it, mirroring the real service |
 
 Posts (all owned by `mockUser` unless noted) — `sportId` 1 = Badminton, 3 = Pickleball
 (SPORT-3 — was 5 = Soccer/6 = Basketball before the real catalog shrank to 2 sports, A6):
@@ -328,6 +329,14 @@ and `GET /users/search` for every id these fixtures reference, plus the Add-mode
 | `mockIncomingFriendRequest` | `req-incoming-1`, sender `hana-kim` | Sent TO the test user — Friend Requests row + the profile panel's Accept/Decline action bar |
 | `mockSentFriendRequest` | `req-outgoing-1`, receiver `diego-alvarez` | Sent BY the test user — Friend Requests row + the profile panel's disabled "Waiting for response" |
 | `mockSearchResultUser` | `owen-clarke`, `friendshipStatus: 'NONE'` | Only reachable via Add mode's directory search, never in the default friend list |
+
+`mockMyProfile` (**PROFILE-7**): the test user's own full `UserResponse` (`fixtures.ts`) — `GET
+/api/users/:userId` special-cases `userId === mockUser.id` to return this instead of resolving
+through `KNOWN_USERS`'s narrow `FriendUser` shape, since `/profile`'s `useMyProfile`/`ProfileHeader`/
+`EditProfileModal` need the full row for the caller's own id. **PROFILE-8** made this session-scoped
+(`myProfileState`, seeded from `mockMyProfile`) and added `PUT /api/users/:userId/profile`, so an
+Edit Profile save actually changes what the next `GET` returns — PROFILE-7 never needed this (its
+baselines only ever exercised a clean load, no save).
 
 ---
 
@@ -739,6 +748,32 @@ response — which A11 changed from a **500** to a readable **400**, so the hand
 it rather than being left describing the old behaviour.
 
 Related docs: `client/docs/MVP/ADMIN-2_SPORT_ADMIN_MASTER_DETAIL_PAGE.md`.
+
+### `e2e/flows/profile-journey.spec.ts` (PROFILE-8, one `test()` with 7 steps)
+
+The `/profile` page's full journey — header/bio, `SportSwitcher`, posting from the composer, the
+comment modal, Settings tab save, Edit Profile save, and the Memories placeholder.
+
+| Step | Asserts |
+|---|---|
+| 1. load | Header shows "Jordan Lee" / "@jordanlee · Riverside" / the seeded bio, Posts tab selected by default, both of mockUser's own posts (`mockPost`/`mockGroupPost`, both Badminton) render |
+| 2. SportSwitcher | Pickleball pill → "No posts yet for this sport." (mockUser holds a Pickleball profile but no Pickleball posts) → Badminton pill restores both |
+| 3. composer | Typed content + "Post" (exact — `getByRole('button', { name: 'Post' })` without `exact: true` also matches "Post options"/the trending "#fridayrun 12 posts" button) → new article first, 3 total |
+| 4. comment modal | Opens empty on the new post, adds a comment via `dialog.getByLabel('Add a comment')`, comment count bumps to 1 |
+| 5. Settings tab | Skill level starts `intermediate`, Save disabled; changes skill level to `advanced` **and** the `SportAttributesFields` "Racket brand" attribute (Badminton's only schema field), Save enables, saves, Save disables again and both values persist |
+| 6. Edit Profile modal | Prefilled ("Jordan" in First name), changes Bio, saves — modal closes and the new bio appears in `ProfileHeader` |
+| 7. Memories tab | `ComingSoonPage` placeholder ("Memories" heading + "Coming soon.") |
+
+**Two real MSW mutation gaps found and fixed at pickup** — neither existed before this ticket
+(`PROFILE-7`'s visual-regression baselines never exercised a save, only a clean load):
+`PUT /api/sports/profiles/:profileId` (`sport.ts` — merges `attributes` into the existing map rather
+than replacing it wholesale, mirroring the real service's "omitted key keeps its stored value"
+behavior) and `PUT /api/users/:userId/profile` (`friends.ts` — the `GET /api/users/:userId` own-id
+branch `PROFILE-7` added was reading a fixed `mockMyProfile` constant; now backed by a new
+session-scoped `myProfileState` field so a save actually changes what the next `GET` returns, same
+"small stateful fake backend" pattern every other mutable fixture in this suite already uses).
+
+Related docs: `client/docs/MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md`.
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 
