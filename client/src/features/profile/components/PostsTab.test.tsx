@@ -150,6 +150,18 @@ describe('PostsTab', () => {
     expect(screen.queryByText('Basketball post')).not.toBeInTheDocument();
   });
 
+  it('does not render a sport badge on post cards — the active pill already shows it', async () => {
+    render(<PostsTab />, { wrapper });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
+    // Neither of the two sports the fixture posts could be tagged with — real
+    // confirmation the badge is suppressed, not just absent because of a
+    // wrong sport. Labels come from getSportProfileConfig's fallback
+    // title-case of the catalog key (test/setup.ts seeds id 5 -> 'football'),
+    // not the fixture's own descriptive `sportName`.
+    expect(screen.queryByText('Football')).not.toBeInTheDocument();
+    expect(screen.queryByText('Basketball')).not.toBeInTheDocument();
+  });
+
   it('filters the list by the active sport pill', async () => {
     useProfilePageStore.setState({ activeSport: 'basketball' });
     render(<PostsTab />, { wrapper });

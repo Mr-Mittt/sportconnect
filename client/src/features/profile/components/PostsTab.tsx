@@ -102,6 +102,7 @@ export function PostsTab() {
         onRetry={retryPosts}
         isLoadMoreError={isLoadMorePostsError}
         emptyMessage="No posts yet for this sport."
+        showSportBadge={false}
       />
       <CommentSection
         isOpen={activeCommentsPostId !== null}
