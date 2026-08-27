@@ -29,6 +29,6 @@ describe('NavTabs', () => {
     expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus();
     await user.tab();
     await user.keyboard('{Enter}');
-    expect(onChange).toHaveBeenCalledWith('friends');
+    expect(onChange).toHaveBeenCalledWith('groups');
   });
 });
