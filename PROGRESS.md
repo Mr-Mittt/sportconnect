@@ -3254,6 +3254,25 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `SportSwitcher` gained `showAllPill` (default `true`, unused by any page yet). Verified the real
   `PUT /api/sports/profiles/{profileId}` contract (including attribute-merge) against a running
   backend. 16 net new/changed Vitest/RTL tests, full suite green (150 files/1000 tests).
+- **Client PROFILE-6 (`DONE`, 2026-08-27, `client/docs/MVP/PROFILE-6_PROFILE_PAGE_INTEGRATION.md`):**
+  `/profile` page integration — `features/profile/ProfilePage.tsx` assembles `PROFILE-1`..`5` into
+  the real page (`router.tsx`'s `/profile` now renders it instead of `ComingSoonPage`), plus a new
+  `ProfileTabs.tsx` vertical rail nav (direct `GroupTabs` port). `PostsTab`/`MemoriesTab`/
+  `SportProfileSettingsTab` needed zero prop wiring (already self-contained); the right rail wires
+  the full `CreateSessionModal`/`SessionDiscoverModal`/`SessionDetailModal` stack verbatim, same as
+  every other rail-hosting page, since `UpcomingMatches`' CTAs require it. Two decisions made
+  explicit at pickup: added page-level Storybook stories despite no precedent on the three prior
+  page-integration tickets (user decision — new pattern, since no `msw-storybook-addon` exists here:
+  `apiClient.get` reassigned to a fixture map at story-module scope); and declined to build a
+  `PROFILE-4`-flagged unsaved-Settings-changes guard on sport switch, since that would be new logic
+  beyond this ticket's composition/wiring scope (left as a real known gap, not designed around
+  silently). **Delta (post-push, user-flagged):** added the same "zero-sport-profile gate on page
+  access" `GroupsPage`/`MatchesPage` have (auto-opens `AddSportModal` once if the caller has no
+  sport profiles) — `ProfilePage`'s Settings tab is unusable without one, same reasoning as those
+  two pages; direct port of the existing effect + `MatchesPage.test.tsx`'s two gate tests. Full
+  Vitest suite green (152 files/1008 tests), `build-storybook` green, `tsc -b`/lint clean. No
+  browser extension connected this session — could not visually confirm Storybook or walk the live
+  page in a browser; `PROFILE-7` will produce the first real screenshot evidence.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
