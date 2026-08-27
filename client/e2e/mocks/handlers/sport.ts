@@ -362,6 +362,44 @@ export const sportHandlers: HttpHandler[] = [
       status: 201,
     });
   }),
+
+  // PROFILE-8: `/profile`'s Settings tab (PROFILE-4/useUpdateSportProfile) — didn't exist before
+  // this ticket (PROFILE-7's visual-regression baselines never exercised a save, only a clean
+  // load). `attributes` merges with the existing map rather than replacing it wholesale — mirrors
+  // `UserSportProfileServiceImpl.updateProfile`'s real "an omitted key keeps its stored value"
+  // behavior, which `buildSportProfileUpdatePayload`'s own doc comment documents as load-bearing.
+  http.put('/api/sports/profiles/:profileId', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = sportSessions.get(sessionIdFromRequest(request));
+    const profileId = Number(params.profileId);
+    const existing = session.userSportProfilesState.find((profile) => profile.id === profileId);
+    if (!existing) {
+      return HttpResponse.json(apiError('Sport profile not found with id: ' + profileId), {
+        status: 404,
+      });
+    }
+    const body = (await request.json()) as {
+      skillLevel: string;
+      yearsOfExperience?: number;
+      preferredPosition?: string;
+      attributes?: Record<string, unknown>;
+    };
+    const updated: UserSportProfileResponse = {
+      ...existing,
+      skillLevel: body.skillLevel,
+      ...(body.preferredPosition !== undefined && { preferredPosition: body.preferredPosition }),
+      ...(body.yearsOfExperience !== undefined && { yearsOfExperience: body.yearsOfExperience }),
+      ...(body.attributes !== undefined && {
+        attributes: { ...(existing.attributes ?? {}), ...body.attributes },
+      }),
+      updatedAt: new Date().toISOString(),
+    };
+    session.userSportProfilesState = session.userSportProfilesState.map((profile) =>
+      profile.id === profileId ? updated : profile,
+    );
+    return HttpResponse.json(apiResponse(updated, 'Sport profile updated successfully'));
+  }),
 ];
 
 /** Test-only reset — used by the mock server's `/__mock/sessions/:id/reset`. */

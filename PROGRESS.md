@@ -3310,6 +3310,19 @@ explicit go-ahead at each step (full story in A3's summary doc):
   green, full `--project=e2e` green (73/73), `--project=visual-regression app-profile.spec.ts` stable
   (12/12). Baselines are Windows-rendered locally, pending the usual `client-ci` `update-baselines`
   dispatch swap before merge.
+- **Client PROFILE-8 (`DONE`, 2026-08-27,
+  `client/docs/MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md`):** `/profile` page's E2E functional journey —
+  header/bio, `SportSwitcher`, posting from the composer, the comment modal, Settings tab save
+  (skillLevel + a `SportAttributesFields` attribute), Edit Profile save, Memories placeholder — one
+  `test()`, 7 `test.step`s, `e2e/flows/profile-journey.spec.ts`. Found and fixed two more real MSW
+  mutation gaps (same class `PROFILE-7` found on the GET side): `PUT /api/sports/profiles/:profileId`
+  and `PUT /api/users/:userId/profile` neither existed — `PROFILE-7`'s baselines only ever exercised a
+  clean load, never a save. The latter also made `friends.ts`'s `GET /api/users/:userId` own-id branch
+  session-scoped (`myProfileState`, seeded from `PROFILE-7`'s `mockMyProfile`) instead of a fixed
+  constant, so a save now actually changes what the next `GET` returns. Full Vitest suite green (153
+  files/1029 tests, no regressions), `tsc -b`/lint clean, `build-storybook` green, the new spec stable
+  3/3 on repeat, full `--project=e2e` 73/74 (the one failure, unrelated to this ticket, passed in
+  isolation on re-run).
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
