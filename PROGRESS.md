@@ -3227,6 +3227,20 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `PROFILE-2` before page integration exists — `PROFILE-6` will mount it inside the assembled
   `ProfilePage`. 1 Vitest/RTL case; no Storybook story (matches `PostsTab`'s precedent, no new
   visual state to capture).
+- **Client PROFILE-5 (`DONE`, 2026-08-27, `client/docs/MVP/PROFILE-5_EDIT_PROFILE_MODAL.md`):** Edit
+  Profile modal — `shared/components/EditProfileModal.tsx` + `features/profile/useUpdateMyProfile.ts`
+  + `features/profile/profileEditDraft.ts` (diff-only payload, `sportFieldsDraft.ts`'s pattern).
+  **Widened at pickup (user decision)** from the original 8 fields to all 14 non-sport-profile
+  `UpdateProfileRequest` fields — `phoneNumber`/`dateOfBirth`/`gender`/`heightCm`/`weightKg`/
+  `shoeSizeCm` live on the same row/endpoint, so a planned `/ticket` split was folded in instead.
+  Verified the live `PUT /api/users/{userId}/profile` contract directly against a running backend
+  (curl, throwaway registered user) and found a pre-existing, repo-wide error-shape split
+  (bean-validation `@Size` failures return the generic "Validation failed" in `message` with the
+  real text under `data`; manually-thrown `BadRequestException` like U7's bounds checks put the
+  real text directly in `message`) — `useRegister`/`useUpdateSport`/`useLogin` share the same
+  extraction and the same gap, left as a known app-wide limitation, not fixed here. Built in
+  isolation (no page hosts it yet — `PROFILE-6`); `ProfileHeader`'s `onEditProfile` stays a no-op
+  until then. 9 new Vitest/RTL cases, 4 Storybook stories, production Storybook build green.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
