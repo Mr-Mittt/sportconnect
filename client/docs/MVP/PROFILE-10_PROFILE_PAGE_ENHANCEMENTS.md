@@ -159,7 +159,11 @@ the paragraph's text content).
 `motion-reduce:` overrides back to `scale-100` — addresses the ticket's own flagged a11y-baseline
 check proactively rather than leaving it for later. New Vitest case confirms the class split between
 active/inactive/hover. **Delta (post-close, user-flagged):** raised from the originally-shipped
-`scale-105` to `scale-110` — user tried the 5% version and asked for 10% instead.
+`scale-105` to `scale-110` — user tried the 5% version and asked for 10% instead. That in turn made
+the pill row's `gap-2` (8px) too tight — `scale()` grows from the center, so each pill's edge moves
+out by half of 10% = 5% of its own width; a representative pill ("Pickleball": ~117px) grows ~5.9px
+per side, ~11.7px combined between two adjacent pills, already past `gap-2`. Raised to `gap-3.5`
+(14px, ~2px margin over the calculated worst case).
 
 **Verification:** `tsc -b` clean throughout, `pnpm lint` clean (same 2 pre-existing unrelated
 warnings in `SessionStartTimePicker.tsx`), full Vitest suite green (153 files, 1029 tests, up from

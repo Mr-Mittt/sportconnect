@@ -89,8 +89,13 @@ export function SportSwitcher({
   // catalogue length as `maxSports`.
   const atCap = sports.length >= maxSports;
 
+  // PROFILE-10: gap-2 (8px) was tight enough for scale-110 to visually overlap neighboring pills.
+  // `scale()` grows from the center, so each side extends by half of 10% = 5% of the pill's own
+  // width. A representative pill ("Pickleball": 24px padding + 16px icon + 6px icon-label gap +
+  // ~71px of 13px text ≈ 117px) grows ~5.9px per side, ~11.7px combined between two adjacent
+  // pills — already past gap-2's 8px. gap-3.5 (14px) covers that with a ~2px margin.
   return (
-    <div role="group" aria-label="Sport filter" className="flex flex-wrap gap-2">
+    <div role="group" aria-label="Sport filter" className="flex flex-wrap gap-3.5">
       {showAllPill && (
         <Pill
           label="All"
