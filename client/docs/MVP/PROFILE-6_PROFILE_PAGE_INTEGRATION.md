@@ -92,14 +92,31 @@ title="Profile" />`; the now-unused `ComingSoonPage` import was removed from thi
 directly by `MemoriesTab.tsx`, unaffected).
 
 **Tests:** `ProfileTabs.test.tsx` (selection/click/arrow-key/order, direct `GroupTabs.test.tsx`
-port) + `ProfileTabs.stories.tsx` (Posts/Memories/Settings). `ProfilePage.test.tsx` (2 cases: tab
-switching renders Posts/Memories/Settings content including a real `Skill level` select value;
-switching the `SportSwitcher` pill re-filters `PostsTab`'s feed and re-seeds `SportProfileSettingsTab`'s
-draft — the two "propagate to Posts/Settings" cases the ticket asks for). `ProfilePage.stories.tsx`
-(Posts/Memories/Settings, per the decision above).
+port) + `ProfileTabs.stories.tsx` (Posts/Memories/Settings). `ProfilePage.test.tsx` (tab switching
+renders Posts/Memories/Settings content including a real `Skill level` select value; switching the
+`SportSwitcher` pill re-filters `PostsTab`'s feed and re-seeds `SportProfileSettingsTab`'s draft —
+the two "propagate to Posts/Settings" cases the ticket asks for; plus the two zero-sport-profile
+gate cases below). `ProfilePage.stories.tsx` (Posts/Memories/Settings, per the decision above).
+
+**Delta (2026-08-27, post-push, user-flagged):** `GroupsPage`/`MatchesPage` both have a
+"zero-sport-profile gate on page access" — an effect that auto-opens `AddSportModal` (with
+`PAGE_ACCESS_NO_SPORTS_PROMPT` copy) once if the caller lands with no sport profiles at all,
+latched via a ref so it doesn't reopen on every render or re-show after being closed. The original
+push of this ticket wired only the manual "+" pill (`useAddSportLauncher`), matching `HomeFeedPage`/
+`FriendsPage` — but those two pages don't need the page-access gate because their content still
+makes sense with zero sport profiles, and `ProfilePage` doesn't fit that group: its Settings tab is
+genuinely unusable with none (`SportProfileSettingsTab` already renders "Add a sport above to set
+up its profile."). User caught the gap after the initial push and confirmed folding it into this
+ticket (same branch) rather than filing a follow-up, since it's a direct, mechanical port of the
+existing Groups/Matches effect with no new design. Added: `hasAutoPromptedAddSportRef` +
+`addSportPromptMessage` state, the same effect shape (keyed on `sportProfilesQuery.isLoading`/
+`.data.length`), `AddSportModal`'s `promptMessage` prop wired, and the manual "+" pill's
+`onOpenPicker` now clears `addSportPromptMessage` first (so a manual open stays plain, matching
+Groups/Matches). Two new `ProfilePage.test.tsx` cases, direct ports of `MatchesPage.test.tsx`'s own
+two gate tests (auto-opens with zero profiles / stays closed with one).
 
 **Verification:** `tsc -b` clean, `pnpm lint` clean (2 pre-existing unrelated warnings in
-`SessionStartTimePicker.tsx`), full Vitest suite green (152 files, 1006 tests, no regressions),
+`SessionStartTimePicker.tsx`), full Vitest suite green (152 files, 1008 tests, no regressions),
 `build-storybook` green (new `ProfilePage.stories.tsx`/`ProfileTabs.stories.tsx` chunks emitted with
 no errors). The Claude-in-Chrome browser extension was not connected this session (same gap
 `PROFILE-0`/`PROFILE-1`/`PROFILE-5` noted) — could not visually confirm the built Storybook stories

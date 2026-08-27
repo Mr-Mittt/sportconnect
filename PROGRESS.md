@@ -3266,9 +3266,13 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `apiClient.get` reassigned to a fixture map at story-module scope); and declined to build a
   `PROFILE-4`-flagged unsaved-Settings-changes guard on sport switch, since that would be new logic
   beyond this ticket's composition/wiring scope (left as a real known gap, not designed around
-  silently). Full Vitest suite green (152 files/1006 tests), `build-storybook` green, `tsc -b`/lint
-  clean. No browser extension connected this session — could not visually confirm Storybook or walk
-  the live page in a browser; `PROFILE-7` will produce the first real screenshot evidence.
+  silently). **Delta (post-push, user-flagged):** added the same "zero-sport-profile gate on page
+  access" `GroupsPage`/`MatchesPage` have (auto-opens `AddSportModal` once if the caller has no
+  sport profiles) — `ProfilePage`'s Settings tab is unusable without one, same reasoning as those
+  two pages; direct port of the existing effect + `MatchesPage.test.tsx`'s two gate tests. Full
+  Vitest suite green (152 files/1008 tests), `build-storybook` green, `tsc -b`/lint clean. No
+  browser extension connected this session — could not visually confirm Storybook or walk the live
+  page in a browser; `PROFILE-7` will produce the first real screenshot evidence.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with

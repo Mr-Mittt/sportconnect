@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
@@ -126,11 +126,12 @@ const basketballProfile = {
 
 /** Static (test-invariant) GET responses — same "right rail's page-independent hooks"
  * shape every other page-integration test (HomeFeedPage/FriendsPage) uses. */
-function staticGetResponse(url: string): { data: unknown } | undefined {
+function staticGetResponse(
+  url: string,
+  sportProfiles: typeof footballProfile[],
+): { data: unknown } | undefined {
   if (url === '/users/user-1') return apiResponse(profileFixture);
-  if (url === '/sports/profiles/user/user-1') {
-    return apiResponse([footballProfile, basketballProfile]);
-  }
+  if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
   if (url === '/sports') {
     return apiResponse([
       { id: 5, name: 'Football', iconUrl: null },
@@ -147,9 +148,12 @@ function staticGetResponse(url: string): { data: unknown } | undefined {
   return undefined;
 }
 
-function mockProfileGet(posts: Post[]) {
+function mockProfileGet(
+  posts: Post[],
+  { sportProfiles = [footballProfile, basketballProfile] }: { sportProfiles?: typeof footballProfile[] } = {},
+) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-    const staticResponse = staticGetResponse(url);
+    const staticResponse = staticGetResponse(url, sportProfiles);
     if (staticResponse) return staticResponse;
     if (url === '/posts/mine') return apiResponse({ ...emptyPage().data.data, content: posts });
     throw new Error(`unexpected GET ${url}`);
@@ -205,5 +209,21 @@ describe('ProfilePage', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Settings' }));
     await waitFor(() => expect(screen.getByLabelText('Skill level')).toHaveValue('advanced'));
+  });
+
+  it('auto-opens the Add sport modal on page load when the caller has zero sport profiles', async () => {
+    mockProfileGet([], { sportProfiles: [] });
+    render(<ProfilePage />, { wrapper });
+
+    const dialog = await screen.findByRole('dialog', { name: 'Add a sport' });
+    expect(within(dialog).getByText(/add a sport first/i)).toBeInTheDocument();
+  });
+
+  it('does not open the Add sport modal when the caller already has a sport profile', async () => {
+    mockProfileGet([post({ id: 1, content: 'Football post', sportId: 5 })]);
+    render(<ProfilePage />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Football post')).toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Add a sport' })).not.toBeInTheDocument();
   });
 });

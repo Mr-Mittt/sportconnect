@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useProfilePageStore } from '@/app/profilePageStore';
@@ -25,6 +25,7 @@ import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useTrendingHashtags } from '@/shared/hooks/useTrendingHashtags';
 import { useUpcomingMatches } from '@/shared/hooks/useUpcomingMatches';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
+import { PAGE_ACCESS_NO_SPORTS_PROMPT } from '@/shared/lib/noSportsPrompt';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { MemoriesTab } from './components/MemoriesTab';
 import { PostsTab } from './components/PostsTab';
@@ -53,6 +54,17 @@ import { useUpdateMyProfile } from './useUpdateMyProfile';
  * wires the same `CreateSessionModal`/`SessionDiscoverModal`/
  * `SessionDetailModal` stack every other rail-hosting page
  * (Home Feed/Groups/Friends) already does, not a stub.
+ *
+ * Zero-sport-profile gate on page access, same as `GroupsPage`/`MatchesPage`
+ * (not Home Feed/Friends, which don't need one — their content still makes
+ * sense with no sport profile): a caller who lands here with none gets the
+ * same `AddSportModal` the SportSwitcher's own "+" pill opens, prompted
+ * automatically once (`hasAutoPromptedAddSportRef` latches after the first
+ * prompt, not re-shown just because it's closed), with the same
+ * `PAGE_ACCESS_NO_SPORTS_PROMPT` copy Groups/Matches use. Fitting: this
+ * page's Settings tab is the one place that's genuinely unusable with zero
+ * sport profiles (`SportProfileSettingsTab` already renders "Add a sport
+ * above to set up its profile.").
  */
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -90,13 +102,31 @@ export function ProfilePage() {
   );
 
   const addSportMutation = useAddSportProfile(user.id);
+  const [addSportPromptMessage, setAddSportPromptMessage] = useState<string | undefined>(undefined);
   const addSportLauncher = useAddSportLauncher({
     heldSportKeys: sportProfilesQuery.data.map((sport) => sport.key),
     onOpenPicker: () => {
+      setAddSportPromptMessage(undefined);
       setAddSportOpenCount((count) => count + 1);
       setIsAddSportOpen(true);
     },
   });
+
+  // Zero-sport-profile gate on page access — see the top-level doc comment.
+  const hasAutoPromptedAddSportRef = useRef(false);
+  useEffect(() => {
+    if (
+      hasAutoPromptedAddSportRef.current ||
+      sportProfilesQuery.isLoading ||
+      sportProfilesQuery.data.length > 0
+    ) {
+      return;
+    }
+    hasAutoPromptedAddSportRef.current = true;
+    setAddSportPromptMessage(PAGE_ACCESS_NO_SPORTS_PROMPT);
+    setAddSportOpenCount((count) => count + 1);
+    setIsAddSportOpen(true);
+  }, [sportProfilesQuery.isLoading, sportProfilesQuery.data.length]);
 
   const upcomingMatchesQuery = useUpcomingMatches();
   const hashtagsQuery = useTrendingHashtags();
@@ -224,6 +254,7 @@ export function ProfilePage() {
           onSubmit={(payload) =>
             addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
           }
+          promptMessage={addSportPromptMessage}
         />
         <CreateSessionModal
           key={createSessionModalData.isCreateModalOpen ? 'open' : 'closed'}
