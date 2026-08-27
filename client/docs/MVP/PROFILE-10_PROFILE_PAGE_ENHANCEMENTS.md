@@ -63,7 +63,8 @@ option to consider, not a decision made here.
 it italicized and wrapped in double quotes instead.
 
 **6. `SportSwitcher` pill hover/selected scale.** Pills (`SportSwitcher.tsx`'s `Pill`) should grow
-~5% smoothly on hover and when selected/active — label text included, which scaling the whole button
+~10% smoothly on hover and when selected/active (raised from the original ~5% at pickup, user
+decision) — label text included, which scaling the whole button
 achieves for free, no separate text-only treatment needed — with a transition alongside the existing
 `transition-colors`. Scoped to the sport pills only; the dashed "Add sport" pill is unchanged (not
 mentioned, and already has its own distinct treatment).
@@ -153,11 +154,12 @@ this up for free.
 `ProfileHeader.test.tsx` updated to match the new rendered text (quote characters are now part of
 the paragraph's text content).
 
-**6. `SportSwitcher` pill hover/selected scale.** `hover:scale-105` on every pill,
-`scale-105` additionally on the active one (stacks with the existing 2px active border), both with
+**6. `SportSwitcher` pill hover/selected scale.** `hover:scale-110` on every pill,
+`scale-110` additionally on the active one (stacks with the existing 2px active border), both with
 `motion-reduce:` overrides back to `scale-100` — addresses the ticket's own flagged a11y-baseline
 check proactively rather than leaving it for later. New Vitest case confirms the class split between
-active/inactive/hover.
+active/inactive/hover. **Delta (post-close, user-flagged):** raised from the originally-shipped
+`scale-105` to `scale-110` — user tried the 5% version and asked for 10% instead.
 
 **Verification:** `tsc -b` clean throughout, `pnpm lint` clean (same 2 pre-existing unrelated
 warnings in `SessionStartTimePicker.tsx`), full Vitest suite green (153 files, 1029 tests, up from

@@ -3288,9 +3288,10 @@ explicit go-ahead at each step (full story in A3's summary doc):
   guard hook, so Home Feed/Groups/`/profile` all get it for free; rippled into upgrading
   `CreatePostForm`'s/`HomeFeedPage`'s/`PostsTab`'s tests (and `CreatePostForm`'s stories) to a data
   router, since `useBlocker` requires one. (5) Bio renders italic, quoted. (6) `SportSwitcher` pills
-  scale ~5% on hover/selected, with `motion-reduce` overrides. Full Vitest suite green (153
-  files/1029 tests, +23 net new, no regressions), `tsc -b`/lint clean, `build-storybook` green,
-  `:modules:user:user-impl:test` green. No browser extension connected — could not visually confirm;
+  scale ~10% on hover/selected (raised from ~5% post-close, user decision), with `motion-reduce`
+  overrides. Full Vitest suite green (153 files/1029 tests, +23 net new, no regressions),
+  `tsc -b`/lint clean, `build-storybook` green, `:modules:user:user-impl:test` green. No browser
+  extension connected — could not visually confirm;
   `PROFILE-7` remains the first real screenshot evidence.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while

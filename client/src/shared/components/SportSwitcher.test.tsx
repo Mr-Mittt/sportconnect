@@ -101,15 +101,15 @@ describe('SportSwitcher', () => {
     expect(labels).toEqual(['Football', 'Basketball', 'Tennis', 'Add sport']);
   });
 
-  it('PROFILE-10: the active pill scales up, an inactive one does not (until hovered)', () => {
+  it('PROFILE-10: the active pill scales up 10%, an inactive one does not (until hovered)', () => {
     render(
       <SportSwitcher sports={threeSports} active="basketball" onChange={() => {}} onAddSport={() => {}} />,
     );
-    expect(screen.getByRole('button', { name: 'Basketball' })).toHaveClass('scale-105');
-    expect(screen.getByRole('button', { name: 'Football' })).not.toHaveClass('scale-105');
+    expect(screen.getByRole('button', { name: 'Basketball' })).toHaveClass('scale-110');
+    expect(screen.getByRole('button', { name: 'Football' })).not.toHaveClass('scale-110');
     // Every pill gets the hover-scale utility, active or not — hover is a
     // separate CSS state from the isActive className branch above.
-    expect(screen.getByRole('button', { name: 'Football' })).toHaveClass('hover:scale-105');
+    expect(screen.getByRole('button', { name: 'Football' })).toHaveClass('hover:scale-110');
   });
 
   it('is disabled and says so while the catalogue re-read is in flight', async () => {
