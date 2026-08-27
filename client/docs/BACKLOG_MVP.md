@@ -68,18 +68,29 @@ New tickets get inserted at the appropriate position when filed, same as before 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [PROFILE-7](MVP/PROFILE-7_RESPONSIVE_A11Y_VISUAL_REGRESSION.md) | `/profile` page — responsive + accessibility + visual regression against `design-reference-profile.html` | `TODO` |
-| 2 | [PROFILE-8](MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md) | `/profile` page — E2E functional test, profile journey | `TODO` |
-| 3 | [PROFILE-9](MVP/PROFILE-9_QA_ACCEPTANCE_CHECKLIST.md) | `/profile` page — QA / acceptance checklist | `TODO` |
-| 4 | [ACCOUNT-1](MVP/ACCOUNT-1_ACCOUNT_SETTINGS_MODAL.md) | Account Settings modal, triggered from `TopBar`'s avatar dropdown — split out of `/profile` scoping (visibility/toggles/log out don't belong on that page); independent of every `PROFILE-*` ticket | `TODO` |
-| 5 | [FRIEND-2](MVP/FRIEND-2_DEDICATED_FRIEND_PROFILE_HOOK.md) | Dedicated friend-profile hook, off `useUserProfile` (moved to `features/profile/` by `PROFILE-0`, still borrowed as-is by Friends) — blocked on backend U14 | `TODO` |
-| 6 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
+| 1 | [PROFILE-10](MVP/PROFILE-10_PROFILE_PAGE_ENHANCEMENTS.md) | `/profile` page enhancements — sport badge, edit-modal bound, unsaved-changes guards, bio styling, SportSwitcher hover — **inserted ahead of PROFILE-7 (user decision, 2026-08-27)** | `TODO` |
+| 2 | [PROFILE-7](MVP/PROFILE-7_RESPONSIVE_A11Y_VISUAL_REGRESSION.md) | `/profile` page — responsive + accessibility + visual regression against `design-reference-profile.html` | `TODO` |
+| 3 | [PROFILE-8](MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md) | `/profile` page — E2E functional test, profile journey | `TODO` |
+| 4 | [PROFILE-9](MVP/PROFILE-9_QA_ACCEPTANCE_CHECKLIST.md) | `/profile` page — QA / acceptance checklist | `TODO` |
+| 5 | [ACCOUNT-1](MVP/ACCOUNT-1_ACCOUNT_SETTINGS_MODAL.md) | Account Settings modal, triggered from `TopBar`'s avatar dropdown — split out of `/profile` scoping (visibility/toggles/log out don't belong on that page); independent of every `PROFILE-*` ticket | `TODO` |
+| 6 | [FRIEND-2](MVP/FRIEND-2_DEDICATED_FRIEND_PROFILE_HOOK.md) | Dedicated friend-profile hook, off `useUserProfile` (moved to `features/profile/` by `PROFILE-0`, still borrowed as-is by Friends) — blocked on backend U14 | `TODO` |
+| 7 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
 `client/design-reference/design-reference-profile.html` (2026-08-26). `PROFILE-4` hard-depends on
 `SPORT-2`; `PROFILE-6` depends on `PROFILE-1/2/3/4/5`; `PROFILE-7`/`PROFILE-8` depend on `PROFILE-6`;
 `PROFILE-9` depends on everything above it. `ACCOUNT-1` has no dependency on any `PROFILE-*` ticket.
+
+**PROFILE-10 (new, filed 2026-08-27, `/ticket` session)** — six independent gaps/polish items found
+using the shipped `/profile` page (`PROFILE-6`), bundled into one ticket rather than six. No
+dependency on `PROFILE-7`/`8`/`9` in either direction; **inserted ahead of `PROFILE-7` in queue order
+(user decision)** rather than appended — a queue-position choice, not a code dependency. Item 4 (post
+composer unsaved-changes guard) reaches beyond `/profile` — `CreatePostForm` is also mounted on Home
+Feed and Groups — bundled here anyway (user decision) since the natural fix lives in `CreatePostForm`
+itself. Item 2 (shoe-size bound) includes a small `modules/user/user-impl` backend touch (one bound
+value + one message string, no schema change) folded directly into this ticket rather than filed
+separately (user decision: too small to warrant its own ticket).
 
 **ADMIN-2 needs no new ticket for v2.** It shipped as a JSON textarea over the raw document by
 explicit choice, so it keeps working unchanged — the admin simply pastes a richer document. The
