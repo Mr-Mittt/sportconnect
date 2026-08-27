@@ -47,7 +47,11 @@ function Pill({ label, icon, isActive, onClick }: PillProps) {
       aria-pressed={isActive}
       onClick={onClick}
       className={cn(
-        'flex cursor-pointer items-center gap-1.5 rounded-full bg-surface-1 px-3 py-1.75 text-2sm text-text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0',
+        'flex cursor-pointer items-center gap-1.5 rounded-full bg-surface-1 px-3 py-1.75 text-2sm text-text-primary transition-[color,background-color,border-color,transform] hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0 motion-reduce:transition-none motion-reduce:hover:scale-100',
+        // PROFILE-10: the active pill itself scales too (not just hover) —
+        // stacks additively with the 2px border below, same "additive, not
+        // a swapped variant" reasoning that border already followed.
+        isActive && 'scale-105 motion-reduce:scale-100',
         // The 2px active border is the design system's one approved exception
         // to the hairline border rule.
         isActive ? 'border-2 border-border-accent font-medium' : 'border-hairline border-border',
