@@ -123,12 +123,18 @@ export function CreatePostForm({
           className="min-w-0 flex-1 resize-none border-none bg-transparent py-2 text-sm text-text-primary outline-none placeholder:text-text-muted"
         />
       </div>
-      <div className="border-hairline-t mt-1 flex items-center justify-between border-border pt-2.5">
-        <div className="flex gap-3.5">
+      <div className="border-hairline-t mt-1 flex items-center justify-between gap-2 border-border pt-2.5">
+        {/* PROFILE-7: scrolls within itself instead of the page overflowing
+            sideways — same overflow-x-auto/shrink-0 idiom NavTabs already
+            uses (HF-8). A narrow viewport alone never overflowed this row;
+            it only does inside a tab-rail layout (ProfileTabs/GroupTabs),
+            which leaves this card too little width for three labeled
+            buttons plus the Post button on one line. */}
+        <div className="flex min-w-0 flex-1 gap-3.5 overflow-x-auto">
           <button
             type="button"
             onClick={onPhotoClick}
-            className="flex cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
             {createElement(IconPhoto, { className: 'size-4', 'aria-hidden': true })}
             Photo
@@ -136,7 +142,7 @@ export function CreatePostForm({
           <button
             type="button"
             onClick={onLocationClick}
-            className="flex cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
             {createElement(IconMapPin, { className: 'size-4', 'aria-hidden': true })}
             Location
@@ -144,7 +150,7 @@ export function CreatePostForm({
           <button
             type="button"
             onClick={onTagSportClick}
-            className="flex cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
             {/* SPORT-4: a generic "tag a sport" glyph (same role as the Location
                 pin above), not bound to any specific SportProfile — stays a
@@ -158,7 +164,7 @@ export function CreatePostForm({
               aria-pressed={isBroadcastOn}
               onClick={() => setIsBroadcastOn((on) => !on)}
               className={cn(
-                'flex cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
+                'flex shrink-0 cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
                 isBroadcastOn ? 'font-medium text-text-accent' : 'text-text-secondary',
               )}
             >
@@ -172,7 +178,7 @@ export function CreatePostForm({
           size="sm"
           onClick={submitPost}
           disabled={!hasText || isSubmitting}
-          className={cn('cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
+          className={cn('shrink-0 cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
         >
           Post
         </Button>

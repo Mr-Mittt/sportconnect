@@ -202,8 +202,27 @@ export const feedHandlers: HttpHandler[] = [
     );
   }),
 
+  // PROFILE-7: the `/profile` page's Posts tab (`useMyPosts`) — the caller's
+  // own posts, paginated like `/posts/feed`. Filtering `postsState` by
+  // `userId` alone is enough to match the real backend's contract here: this
+  // fixture array only ever holds USER_FEED/GROUP_POST/GROUP_BROADCAST rows
+  // (GROUP_SYSTEM/SESSION_POST live in sessions.ts's own state), so there's
+  // nothing to additionally exclude the way the real `/posts/mine` does.
+  // Must stay before the `:postId` catch-all below, same literal-segment-
+  // first ordering rule as every other route in this handler array.
+  http.get('/api/posts/mine', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sessionId = sessionIdFromRequest(request);
+    const page = Number(new URL(request.url).searchParams.get('page') ?? 0);
+    const posts = feedSessions
+      .get(sessionId)
+      .postsState.filter((post) => post.userId === mockUser.id);
+    return HttpResponse.json(apiResponse(pagedFeedResponse(posts, page), 'Posts retrieved successfully'));
+  }),
+
   // FEED-12: must stay after every literal-segment /api/posts/* GET handler
-  // above (feed, group/:groupId, hashtag/:tag, broadcast) — msw matches
+  // above (feed, group/:groupId, hashtag/:tag, broadcast, mine) — msw matches
   // handlers in array order, and `:postId` would otherwise shadow those
   // literal routes (e.g. a request to /api/posts/feed would match `:postId`
   // first if this handler came before it).
