@@ -3323,6 +3323,36 @@ explicit go-ahead at each step (full story in A3's summary doc):
   files/1029 tests, no regressions), `tsc -b`/lint clean, `build-storybook` green, the new spec stable
   3/3 on repeat, full `--project=e2e` 73/74 (the one failure, unrelated to this ticket, passed in
   isolation on re-run).
+- **Client PROFILE-9 (`DONE`, 2026-08-27,
+  `client/docs/MVP/PROFILE-9_QA_ACCEPTANCE_CHECKLIST.md`):** `/profile` page QA/acceptance
+  checklist — the first live-browser pass against a real running backend for this page (every prior
+  `PROFILE-*` ticket had noted no browser session was available). Registered two throwaway accounts
+  directly against the real backend and drove the full page: header, `SportSwitcher` (no "All" pill),
+  Posts tab (sport-tagged composer, like/comment, no sport badge), Memories placeholder, Settings tab
+  (base fields + `SportAttributesFields` save via real `PUT`, unsaved-changes guard on both tab-switch
+  and sport-pill-switch), Edit Profile modal (14 fields, shoe-size raised bound persisted through a
+  real `PUT` round-trip), the zero-sport-profile auto-open gate, and the app-wide post-composer
+  unsaved-changes guard. All areas pass. Found and filed one trivial follow-up rather than fixing
+  inline (per the ticket's own verification-only scope): **PROFILE-11**, a duplicate React key between
+  `EditProfileModal`/`AddSportModal` on `ProfilePage.tsx` (both keyed from a counter starting at `0`) —
+  the same bug class `FEED-9` already fixed in `GroupsPage.tsx`. Full automated suite also re-run:
+  `tsc -b`/lint clean, Vitest 153/153 files (1029/1029 tests), `build-storybook` clean, full
+  `--project=e2e` 74/74 (incl. `profile-journey.spec.ts`). The full local `--project=visual-regression`
+  run failed 0/87 — inspected a representative diff and confirmed it's the same pre-existing,
+  machine-wide Windows-vs-Linux font-rendering skew this backlog already documents (`CLIENT-SESSION-12`,
+  `PROFILE-7`'s own baseline note), not a `/profile` regression: every screen's baselines failed
+  identically on this run, not just this page's.
+- **Client PROFILE-11 (`DONE`, 2026-08-28,
+  `client/docs/MVP/PROFILE-11_DUPLICATE_MODAL_KEY_ON_PROFILEPAGE.md`):** fixed the duplicate
+  React key `PROFILE-9` found — `ProfilePage.tsx`'s `EditProfileModal`/`AddSportModal` keys
+  namespaced (`` `edit-profile-${count}` ``/`` `add-sport-${count}` ``), same fix shape `FEED-9`
+  already applied to `GroupsPage.tsx`. Bundled into the same PR as `PROFILE-9` (user decision) rather
+  than picked up separately. Notable: a committed Vitest console-error-spy regression test was written,
+  then found — by deliberately reverting the fix and re-running it in isolation — to still pass with
+  the bug present, so it was removed rather than shipped as false confidence; the fix was instead
+  verified via a live browser before/after console check (real backend, both modals mounted together),
+  the same evidence class `FEED-9`'s original fix used. `tsc -b`/lint clean, full Vitest suite green
+  (153 files, 1029 tests, no regressions).
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
