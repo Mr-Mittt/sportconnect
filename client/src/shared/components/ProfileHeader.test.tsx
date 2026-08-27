@@ -37,11 +37,13 @@ function renderHeader(overrides: Partial<UserResponse> = {}) {
 }
 
 describe('ProfileHeader', () => {
-  it('renders full name, handle, city, and bio', () => {
+  it('renders full name, handle, city, and bio in italic, wrapped in quotes', () => {
     renderHeader();
     expect(screen.getByText('Bilal Nasser')).toBeInTheDocument();
     expect(screen.getByText('@bnasser · Riverside')).toBeInTheDocument();
-    expect(screen.getByText('Midfielder for FC Weekend Warriors.')).toBeInTheDocument();
+    const bio = screen.getByText('“Midfielder for FC Weekend Warriors.”');
+    expect(bio).toBeInTheDocument();
+    expect(bio).toHaveClass('italic');
   });
 
   it('falls back to initials when avatarUrl is null', () => {
@@ -51,7 +53,7 @@ describe('ProfileHeader', () => {
 
   it('renders no bio paragraph when bio is null', () => {
     renderHeader({ bio: null });
-    expect(screen.queryByText('Midfielder for FC Weekend Warriors.')).not.toBeInTheDocument();
+    expect(screen.queryByText('“Midfielder for FC Weekend Warriors.”')).not.toBeInTheDocument();
   });
 
   it('renders no bio paragraph when bio is an empty string', () => {

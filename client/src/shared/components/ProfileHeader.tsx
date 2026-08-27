@@ -34,6 +34,10 @@ interface ProfileHeaderProps {
  * `username`/`city` each render only when non-null, and the whole handle
  * line is omitted if both are null — same "no placeholder for missing
  * optional text" rule the design spec gives `bio`.
+ *
+ * PROFILE-10: `bio` renders in italic, wrapped in curly quotes (`&ldquo;`/`&rdquo;`, not a straight
+ * `"`) — a quote-style visual treatment, distinct from the plain handle line above it, to read as
+ * the user's own voice.
  */
 export function ProfileHeader({ user, onEditProfile }: ProfileHeaderProps) {
   const handleParts = [user.username !== null ? `@${user.username}` : null, user.city].filter(
@@ -67,7 +71,7 @@ export function ProfileHeader({ user, onEditProfile }: ProfileHeaderProps) {
       </div>
       {user.bio !== null && user.bio !== '' && (
         <div className="px-3.5 pb-3.5">
-          <p className="max-w-150 text-2sm text-text-primary">{user.bio}</p>
+          <p className="max-w-150 text-2sm text-text-primary italic">&ldquo;{user.bio}&rdquo;</p>
         </div>
       )}
     </div>
