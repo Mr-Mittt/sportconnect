@@ -20,14 +20,16 @@ import { useUpdateSportProfile } from './useUpdateSportProfile';
  * empty state for on this page (PROFILE-4 delta), so that is the only reason this can be
  * `undefined`.
  *
- * **Switching the active sport silently re-seeds the draft, discarding any unsaved edits to the
- * previous sport — no confirmation dialog.** Same baseline behavior `GRP-2`'s
- * `useSettingsUnsavedGuard` uses when its own `groupId` changes (reset without asking). This tab
- * is built in isolation, before `ProfilePage` (`PROFILE-6`) exists — it reacts to `activeSport`
- * changing, but does not own the `SportSwitcher` instance that changes it, so it cannot intercept
- * the click itself. A page-level "warn before switching away" is `PROFILE-6`'s call to make (it
- * would need to wrap `SportSwitcher`'s `onChange` in a guard that checks this hook's `isDirty`
- * first), not something buildable from inside this isolated component.
+ * **Switching the active sport re-seeds the draft** — whenever `activeProfile.id` changes, the
+ * draft resets to that profile's own saved values (below). This hook itself never blocks that
+ * switch; `PROFILE-10`'s `ProfilePage` is what intercepts the `SportSwitcher` click *before* it
+ * reaches `profilePageStore` at all, via `useUnsavedChangesGuard(isDirty)` — by the time this
+ * hook's `activeProfile` actually changes, the guard has already confirmed (Save or Discard) that
+ * losing the draft is fine, so this re-seed effect needs no guard logic of its own.
+ *
+ * `save`'s optional `{ onSuccess }` exists for that same guard — `ProfilePage` calls
+ * `save({ onSuccess: proceed })` from the confirm dialog's Save button so the pending
+ * tab-switch/sport-switch/navigation only proceeds once the mutation actually succeeds.
  */
 export function useSportProfileSettingsTabData(): {
   activeProfile: UserSportProfileResponse | undefined;
@@ -41,7 +43,12 @@ export function useSportProfileSettingsTabData(): {
   setPreferredPosition: (value: string) => void;
   setAttribute: (key: string, value: unknown) => void;
   isDirty: boolean;
-  save: () => void;
+  save: (options?: { onSuccess?: () => void }) => void;
+  /** PROFILE-10: resets `draft` to `activeProfile`'s saved values without
+   * requiring `activeProfile.id` to change first — the tab-switch leg of
+   * `ProfilePage`'s unsaved-changes guard needs this, since (unlike a sport
+   * switch) leaving the Settings tab doesn't touch `activeProfile` at all. */
+  discard: () => void;
   isSaving: boolean;
   errorMessage: string | null;
 } {
@@ -76,10 +83,14 @@ export function useSportProfileSettingsTabData(): {
 
   const isDirty = activeProfile !== undefined && isSportProfileDraftDirty(activeProfile, draft);
 
-  const save = () => {
+  const save = (options?: { onSuccess?: () => void }) => {
     if (activeProfile === undefined) return;
     const payload = buildSportProfileUpdatePayload(activeProfile, draft);
-    updateMutation.updateSportProfile({ profileId: activeProfile.id, payload });
+    updateMutation.updateSportProfile({ profileId: activeProfile.id, payload }, options);
+  };
+
+  const discard = () => {
+    setDraft(activeProfile !== undefined ? toSportProfileEditDraft(activeProfile) : emptyDraft());
   };
 
   return {
@@ -95,6 +106,7 @@ export function useSportProfileSettingsTabData(): {
     setAttribute,
     isDirty,
     save,
+    discard,
     isSaving: updateMutation.isPending,
     errorMessage: updateMutation.errorMessage,
   };
