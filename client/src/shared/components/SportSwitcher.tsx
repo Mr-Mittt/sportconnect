@@ -22,6 +22,11 @@ interface SportSwitcherProps {
    * before the catalog's first fetch resolves) — hardcoding 3 stopped reflecting reality once the
    * real active catalog shrank to 2 sports (A6). */
   maxSports?: number;
+  /** PROFILE-4: `/profile` has no `'all'` state on its page (`profilePageStore` never holds it) —
+   * editing a per-sport profile has no sane "all" meaning, and the user decided the whole page,
+   * not just the Settings tab, drops it for consistency. Every other caller (Home Feed, Groups,
+   * Matches) is unaffected by the default. */
+  showAllPill?: boolean;
 }
 
 interface PillProps {
@@ -72,6 +77,7 @@ export function SportSwitcher({
   onAddSport,
   maxSports = 3,
   isCheckingCatalog = false,
+  showAllPill = true,
 }: SportSwitcherProps) {
   // SPORT-5: retained only for the tooltip. It no longer gates the click — being at the cap is
   // now something the dialog explains, not something the pill refuses to discuss. Note this is
@@ -81,12 +87,14 @@ export function SportSwitcher({
 
   return (
     <div role="group" aria-label="Sport filter" className="flex flex-wrap gap-2">
-      <Pill
-        label="All"
-        icon={<IconLayoutGrid className="size-4" aria-hidden="true" />}
-        isActive={active === 'all'}
-        onClick={() => onChange('all')}
-      />
+      {showAllPill && (
+        <Pill
+          label="All"
+          icon={<IconLayoutGrid className="size-4" aria-hidden="true" />}
+          isActive={active === 'all'}
+          onClick={() => onChange('all')}
+        />
+      )}
       {sports.map((sport) => (
         <Pill
           key={sport.key}

@@ -86,6 +86,21 @@ describe('SportSwitcher', () => {
     expect(onAddSport).toHaveBeenCalledTimes(1);
   });
 
+  it('PROFILE-4: showAllPill={false} hides the All pill entirely', () => {
+    render(
+      <SportSwitcher
+        sports={threeSports}
+        active="football"
+        onChange={() => {}}
+        onAddSport={() => {}}
+        showAllPill={false}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument();
+    const labels = screen.getAllByRole('button').map((b) => b.textContent);
+    expect(labels).toEqual(['Football', 'Basketball', 'Tennis', 'Add sport']);
+  });
+
   it('is disabled and says so while the catalogue re-read is in flight', async () => {
     const user = userEvent.setup();
     const onAddSport = vi.fn();

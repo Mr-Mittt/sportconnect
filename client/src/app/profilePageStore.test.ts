@@ -3,11 +3,11 @@ import { useProfilePageStore } from './profilePageStore';
 
 describe('profilePageStore', () => {
   beforeEach(() => {
-    useProfilePageStore.setState({ activeSport: 'all' });
+    useProfilePageStore.setState({ activeSport: null });
   });
 
-  it('starts with "all" active sport', () => {
-    expect(useProfilePageStore.getState().activeSport).toBe('all');
+  it('starts with no active sport resolved yet', () => {
+    expect(useProfilePageStore.getState().activeSport).toBeNull();
   });
 
   it('setActiveSport updates the sport', () => {

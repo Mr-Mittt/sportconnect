@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from 'react';
 import { useAuthStore } from '@/app/authStore';
-import { useProfilePageStore } from '@/app/profilePageStore';
 import { useDeletePost } from '@/features/feed/hooks/useDeletePost';
 import { useLikePost } from '@/features/feed/hooks/useLikePost';
 import { useUnlikePost } from '@/features/feed/hooks/useUnlikePost';
@@ -10,6 +9,7 @@ import type { Post } from '@/features/feed/types';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { useMyPosts } from './useMyPosts';
+import { useProfileActiveSport } from './useProfileActiveSport';
 
 export interface PostsTabData {
   posts: Post[];
@@ -20,9 +20,10 @@ export interface PostsTabData {
  * The Posts tab's data boundary (PROFILE-2) — same shape as
  * `useHomeFeedData`, scoped to the caller's own posts (`useMyPosts`) instead
  * of the personalized feed. `createPost` tags new posts with the page's
- * active `SportSwitcher` pill (`profilePageStore`), omitting `sportId`
- * entirely when the pill is `'all'` — same convention Home Feed's composer
- * would use if its own inert "Tag sport" button were wired.
+ * active sport (`useProfileActiveSport`) — there is no `'all'` pill on this
+ * page (PROFILE-4 delta), so every post is tagged with a real `sportId`
+ * except the zero-sport-profile edge case, where `activeSport` is
+ * `undefined` and the post is created untagged.
  *
  * `toggleLikeForPost` exists for the same FEED-12 reason `useHomeFeedData`
  * has one: `CommentSection`'s dialog resolves its post via `usePost`, which
@@ -31,6 +32,7 @@ export interface PostsTabData {
  */
 export function usePostsTabData(): {
   data: PostsTabData;
+  activeSport: SportKey | undefined;
   isLoading: boolean;
   isError: boolean;
   toggleLike: (postId: number) => void;
@@ -47,7 +49,7 @@ export function usePostsTabData(): {
   retryPosts: () => void;
 } {
   const currentUserId = useAuthStore((state) => state.user?.id);
-  const activeSport = useProfilePageStore((state) => state.activeSport);
+  const { activeSport } = useProfileActiveSport();
   const postsQuery = useMyPosts();
   const sportProfilesQuery = useSportProfiles();
   const likeMutation = useLikePost();
@@ -100,7 +102,7 @@ export function usePostsTabData(): {
 
   const createPost = useCallback(
     (content: string) => {
-      const sportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
+      const sportId = activeSport !== undefined ? sportIdForKey(activeSport) : undefined;
       createMutation.mutate({ content, sportId });
     },
     [createMutation, activeSport],
@@ -110,6 +112,7 @@ export function usePostsTabData(): {
 
   return {
     data,
+    activeSport,
     isLoading: postsQuery.isLoading,
     isError: postsQuery.isError,
     toggleLike,

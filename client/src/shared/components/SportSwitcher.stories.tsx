@@ -37,3 +37,14 @@ export const BelowCapTwoSports: Story = {
     onAddSport: () => {},
   },
 };
+
+/** PROFILE-4: `/profile` has no `'all'` state — the pill is hidden entirely. */
+export const NoAllPill: Story = {
+  args: {
+    sports: threeSports,
+    active: 'football',
+    onChange: () => {},
+    onAddSport: () => {},
+    showAllPill: false,
+  },
+};

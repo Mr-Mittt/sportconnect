@@ -105,3 +105,19 @@ hashtag modal open). Full client suite green, `tsc -b` clean, `pnpm lint` clean 
 unrelated warnings). Backend: new/updated `PostServiceImplSpec` cases green,
 `:modules:social:post-impl:test` and full `:server:test` both green. No browser walkthrough
 (Claude-in-Chrome not connected this session, same gap noted on PROFILE-0/PROFILE-1).
+
+---
+
+**Delta (2026-08-27, at `PROFILE-4` pickup):** `/profile` has no `'all'` sport pill at all (user
+decision, applying to the whole page, not just `PROFILE-4`'s own Settings tab — should have been
+said back when this ticket was scoped). `usePostsTabData`/`PostsTab.tsx` retrofitted:
+`activeSport` now comes from the new shared `useProfileActiveSport()` hook (defaults to the
+caller's first sport profile instead of `'all'`), and the composer's `'all' → omit sportId` branch
+is gone — a post is always tagged with a real `sportId` except the zero-sport-profile edge case
+(no sport to tag with, `sportId` still omitted, just for a different reason). `PostsTab.tsx` passes
+`activeSport ?? 'all'` to `Feed` for that same edge case only — `Feed` itself is untouched and still
+shares its generic `SportKey | 'all'` contract with Home Feed/Groups, where `'all'` remains a real,
+navigable state. `PostsTab.test.tsx` updated: the tests that implicitly relied on "both posts
+visible by default" (the old `'all'`-default premise) now expect only the first sport's post; the
+dedicated `'all'`-pill composer test was replaced with a zero-sport-profile equivalent. Full detail
+in `PROFILE-4_SETTINGS_TAB_SPORT_PROFILE_EDITOR.md`'s implementation summary.
