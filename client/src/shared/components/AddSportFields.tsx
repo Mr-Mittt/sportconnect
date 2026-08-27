@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { sportIdForKey } from '@/features/feed/sportIdMap';
+import { SKILL_LEVELS } from '@/shared/lib/skillLevels';
 import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey } from '@/shared/types/sport';
@@ -7,12 +8,6 @@ import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
-
-const SKILL_LEVELS = [
-  { value: 'beginner', label: 'Beginner' },
-  { value: 'intermediate', label: 'Intermediate' },
-  { value: 'advanced', label: 'Advanced' },
-];
 
 export interface AddSportProfileSubmission {
   sportId: number;

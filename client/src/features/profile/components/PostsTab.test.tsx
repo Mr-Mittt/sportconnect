@@ -127,7 +127,7 @@ describe('PostsTab', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useAuthStore.getState().setSession(testUser, 'access-token');
-    useProfilePageStore.setState({ activeSport: 'all' });
+    useProfilePageStore.setState({ activeSport: null });
     mockGet(myPosts());
   });
 
@@ -139,16 +139,15 @@ describe('PostsTab', () => {
     // user (guaranteed by ProtectedRoute in the real app), which throws.
     cleanup();
     useAuthStore.getState().clearSession();
-    useProfilePageStore.setState({ activeSport: 'all' });
+    useProfilePageStore.setState({ activeSport: null });
   });
 
-  it('renders the composer and the caller\'s own posts', async () => {
+  it('renders the composer and defaults to the first sport profile\'s posts (no "all" pill on this page)', async () => {
     render(<PostsTab />, { wrapper });
     expect(screen.getByPlaceholderText(/what's on your mind/i)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
-    const articles = screen.getAllByRole('article');
-    expect(articles[0]).toHaveTextContent('Football post');
-    expect(articles[1]).toHaveTextContent('Basketball post');
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
+    expect(screen.getByText('Football post')).toBeInTheDocument();
+    expect(screen.queryByText('Basketball post')).not.toBeInTheDocument();
   });
 
   it('filters the list by the active sport pill', async () => {
@@ -181,8 +180,17 @@ describe('PostsTab', () => {
     );
   });
 
-  it('composer omits sportId when the active pill is "all"', async () => {
+  it('composer omits sportId for a caller with zero sport profiles (no "all" pill to fall back to)', async () => {
     const user = userEvent.setup();
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/posts/mine') {
+        return { data: { success: true, message: '', data: page([]), timestamp: '' } };
+      }
+      if (url === '/sports/profiles/user/user-1') {
+        return { data: { success: true, message: '', data: [], timestamp: '' } };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
     vi.spyOn(apiClient, 'post').mockImplementation(async (url: string, body?: unknown) => {
       if (url === '/posts') {
         return { data: { success: true, message: '', data: post({ id: 99, sportId: 5, ...(body as object) }), timestamp: '' } };
@@ -190,7 +198,7 @@ describe('PostsTab', () => {
       throw new Error(`unexpected POST ${url}`);
     });
     render(<PostsTab />, { wrapper });
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+    await waitFor(() => expect(screen.queryAllByRole('article')).toHaveLength(0));
 
     await user.type(screen.getByPlaceholderText(/what's on your mind/i), 'New post');
     await user.click(screen.getByRole('button', { name: /^post$/i }));
@@ -204,7 +212,7 @@ describe('PostsTab', () => {
     const user = userEvent.setup();
     vi.spyOn(apiClient, 'post').mockResolvedValue({ data: { success: true, message: '', data: null, timestamp: '' } });
     render(<PostsTab />, { wrapper });
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
 
     await user.click(screen.getAllByRole('button', { name: /like/i })[0]);
 
@@ -215,7 +223,7 @@ describe('PostsTab', () => {
     const user = userEvent.setup();
     vi.spyOn(apiClient, 'delete').mockResolvedValue({ data: { success: true, message: '', data: null, timestamp: '' } });
     render(<PostsTab />, { wrapper });
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
 
     await user.click(screen.getAllByRole('button', { name: /options/i })[0]);
     await user.click(screen.getByRole('menuitem', { name: /delete/i }));
@@ -226,7 +234,7 @@ describe('PostsTab', () => {
   it('opens the comment dialog for the clicked post and fetches its comments', async () => {
     const user = userEvent.setup();
     render(<PostsTab />, { wrapper });
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
 
     await user.click(screen.getAllByRole('button', { name: /comment/i })[0]);
 
@@ -253,7 +261,7 @@ describe('PostsTab', () => {
       throw new Error(`unexpected GET ${url}`);
     });
     render(<PostsTab />, { wrapper });
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
 
     await user.click(screen.getByRole('button', { name: '#fridayrun' }));
 

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
-import { useProfilePageStore } from '@/app/profilePageStore';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { usePost } from '@/features/feed/hooks/usePost';
@@ -22,9 +21,9 @@ import { usePostsTabData } from '../usePostsTabData';
  */
 export function PostsTab() {
   const user = useAuthStore((state) => state.user)!;
-  const activeSport = useProfilePageStore((state) => state.activeSport);
   const {
     data,
+    activeSport,
     isLoading,
     isError,
     toggleLike,
@@ -85,7 +84,10 @@ export function PostsTab() {
       />
       <Feed
         posts={data.posts}
-        activeSport={activeSport}
+        // 'all' here is Feed's own generic prop contract (shared with Home Feed/Groups, where it's
+        // a real navigable state), never this page's — activeSport is only undefined in the
+        // zero-sport-profile edge case, where there's nothing to filter by anyway.
+        activeSport={activeSport ?? 'all'}
         sportsByKey={data.sportsByKey}
         currentUserId={currentUserId}
         onToggleLike={toggleLike}

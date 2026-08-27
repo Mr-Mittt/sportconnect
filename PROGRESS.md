@@ -3241,6 +3241,19 @@ explicit go-ahead at each step (full story in A3's summary doc):
   extraction and the same gap, left as a known app-wide limitation, not fixed here. Built in
   isolation (no page hosts it yet — `PROFILE-6`); `ProfileHeader`'s `onEditProfile` stays a no-op
   until then. 9 new Vitest/RTL cases, 4 Storybook stories, production Storybook build green.
+- **Client PROFILE-4 (`DONE`, 2026-08-27, `client/docs/MVP/PROFILE-4_SETTINGS_TAB_SPORT_PROFILE_EDITOR.md`):**
+  Settings tab — per-sport profile editor (`skillLevel`/`yearsOfExperience`/`preferredPosition` +
+  `SPORT-2`'s `SportAttributesFields`, finally hosted). **Scope grew at pickup (user decision):**
+  `/profile` drops the `'all'` sport pill entirely, not just for this tab — retrofitted
+  `profilePageStore` (`activeSport: SportKey | 'all'` → `SportKey | null`) and `PostsTab`
+  (`PROFILE-2` delta) in the same pickup rather than leaving master inconsistent. New shared
+  `useProfileActiveSport()` hook resolves the page's active sport, defaulting to the caller's first
+  sport profile. Switching sport silently re-seeds/discards the draft (no confirm dialog) — this
+  tab is built in isolation, before `ProfilePage` (`PROFILE-6`) exists, so it can't intercept the
+  `SportSwitcher` click itself; noted for `PROFILE-6` to build a page-level guard if still wanted.
+  `SportSwitcher` gained `showAllPill` (default `true`, unused by any page yet). Verified the real
+  `PUT /api/sports/profiles/{profileId}` contract (including attribute-merge) against a running
+  backend. 16 net new/changed Vitest/RTL tests, full suite green (150 files/1000 tests).
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
