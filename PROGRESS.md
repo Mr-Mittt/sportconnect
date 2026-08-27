@@ -3293,6 +3293,23 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `tsc -b`/lint clean, `build-storybook` green, `:modules:user:user-impl:test` green. No browser
   extension connected — could not visually confirm;
   `PROFILE-7` remains the first real screenshot evidence.
+- **Client PROFILE-7 (`DONE`, 2026-08-27,
+  `client/docs/MVP/PROFILE-7_RESPONSIVE_A11Y_VISUAL_REGRESSION.md`):** `/profile` page hardening —
+  responsive check + a11y gate (`a11y.spec.ts`) + visual-regression spec (`app-profile.spec.ts`, 4
+  states × 3 breakpoints) against `design-reference-profile.html`, the first real screenshot evidence
+  for this page. This was also the first ticket to run `/profile` through Playwright/MSW at all,
+  which surfaced and fixed a real MSW test-infra gap (`GET /api/posts/mine` didn't exist; `GET
+  /api/users/:userId` returned too narrow a shape for the caller's own profile) and two real bugs: a
+  nested `<main>` landmark on the Memories tab (`ComingSoonPage`'s only call site left it stranded as
+  a top-level component nested inside `ProfilePage`'s own `<main>`), and a composer overflow at
+  375px in `CreatePostForm` (also latent on the already-shipped Groups page, never caught there since
+  no overflow assertion existed for it — fixed with the same `overflow-x-auto`/`shrink-0` idiom
+  `NavTabs` established in `HF-8`, verified via a stash/pop isolation that it changes nothing in
+  Home Feed's/Groups' own baselines beyond pre-existing local Windows font-rendering noise). Full
+  Vitest suite green (153 files/1029 tests, no regressions), `tsc -b`/lint clean, `build-storybook`
+  green, full `--project=e2e` green (73/73), `--project=visual-regression app-profile.spec.ts` stable
+  (12/12). Baselines are Windows-rendered locally, pending the usual `client-ci` `update-baselines`
+  dispatch swap before merge.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with

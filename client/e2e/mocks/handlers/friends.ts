@@ -4,6 +4,7 @@ import type { FriendRequest, FriendshipStatus, FriendUser } from '../../../src/f
 import {
   mockFriend,
   mockIncomingFriendRequest,
+  mockMyProfile,
   mockSearchResultUser,
   mockSentFriendRequest,
   mockUser,
@@ -200,10 +201,17 @@ export const friendHandlers: HttpHandler[] = [
     );
   }),
 
-  // Public — GET /api/users/{userId}, resolves bio/coverUrl for a selection
-  // not already covered by another already-loaded list.
+  // Public — GET /api/users/{userId}. PROFILE-7: the real endpoint always
+  // returns the full UserResponse regardless of caller — this mock now does
+  // too for the logged-in user's own id (useMyProfile's only caller), while
+  // every other id still resolves through the narrow KNOWN_USERS directory
+  // (every other consumer of this endpoint only ever narrows down to
+  // FriendUser, so the extra fields are simply unused there).
   http.get('/api/users/:userId', ({ params }) => {
     const userId = String(params.userId);
+    if (userId === mockUser.id) {
+      return HttpResponse.json(apiResponse(mockMyProfile, 'User retrieved successfully'));
+    }
     const user = KNOWN_USERS[userId];
     if (user === undefined) {
       return HttpResponse.json(apiError('User not found'), { status: 404 });

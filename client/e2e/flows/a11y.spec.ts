@@ -99,6 +99,55 @@ test('friends page — friend selected — axe reports no critical/serious viola
 });
 
 /*
+ * PROFILE-7: responsive + a11y gate for the `/profile` page. Unlike GRP-3/
+ * FRIEND-1 (axe-only, one representative state), this page's own ticket text
+ * explicitly calls for a responsive check at all 3 breakpoints too — same
+ * HF-8 shape (overflow + axe per breakpoint) for the default (Posts) state,
+ * plus one representative axe check each for the two richer states the
+ * ticket names (Settings tab's editor, Edit Profile modal), matching GRP-3/
+ * FRIEND-1's "one state, not a full matrix" scoping for those.
+ */
+async function loadProfilePage(page: import('@playwright/test').Page, width: number) {
+  await page.setViewportSize({ width, height: 900 });
+  await seedAuthenticatedSession(page, '/profile');
+  await expect(page.getByRole('tab', { name: 'Posts', selected: true })).toBeVisible();
+  await expect(page.getByRole('article').first()).toBeVisible();
+}
+
+for (const width of breakpoints) {
+  test(`profile page @ ${width}px — no horizontal overflow`, async ({ page }) => {
+    await loadProfilePage(page, width);
+    const overflow = await page.evaluate<number>(
+      'document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth',
+    );
+    expect(overflow, 'page must not scroll horizontally').toBeLessThanOrEqual(0);
+  });
+
+  test(`profile page @ ${width}px — axe reports no critical/serious violations`, async ({ page }) => {
+    await loadProfilePage(page, width);
+    expect(await gatingViolations(page)).toEqual([]);
+  });
+}
+
+test('profile page — Settings tab — axe reports no critical/serious violations', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await seedAuthenticatedSession(page, '/profile');
+  await page.getByRole('tab', { name: 'Settings' }).click();
+  await expect(page.getByLabel('Skill level')).toBeVisible();
+  expect(await gatingViolations(page)).toEqual([]);
+});
+
+test('profile page — Edit Profile modal open — axe reports no critical/serious violations', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await seedAuthenticatedSession(page, '/profile');
+  await page.getByRole('button', { name: 'Edit profile' }).click();
+  await expect(page.getByRole('dialog', { name: 'Edit profile' })).toBeVisible();
+  expect(await gatingViolations(page)).toEqual([]);
+});
+
+/*
  * AUTH-6: same a11y gate extended to Login/Register — logged-out routes, not
  * behind ProtectedRoute, so no seedAuthenticatedSession() call. MSW's default
  * /auth/refresh handler 401s without a cookie (fixtures.ts), which is the

@@ -212,6 +212,7 @@ e2e/
     app-session-detail-modal.spec.ts  # CLIENT-SESSION-12
     app-create-session-modal.spec.ts  # CLIENT-SESSION-12
     app-notification-bell.spec.ts  # CLIENT-NOTIF-2
+    app-profile.spec.ts       # PROFILE-7
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
   mocks/
     mockServer.ts            # the standalone Node HTTP server
@@ -354,7 +355,7 @@ helpers called.
 | 7. "Add sport" | Pill is **not** `aria-disabled`; clicking it opens `NoSportsToAddDialog` ("Nothing left to add"), dismissed with OK | **SPORT-5 reverses HF-2 here** — this step previously asserted `aria-disabled="true"`. A disabled control cannot explain itself, so the pill now always fires, re-reads the catalogue, and states the outcome. **SPORT-3:** still relies on the fixture user holding a profile for every sport the live catalog serves (2), not a numeric "3-sport cap" |
 | 8. delete | "..." menu only on the caller's own post (not Priya Shah's); delete removes it, count 3→2 | |
 
-### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + GRP-3 + FRIEND-1, several independent `test()`s)
+### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + GRP-3 + FRIEND-1 + PROFILE-7, several independent `test()`s)
 
 | Test(s) | What it checks | Notes |
 |---|---|---|
@@ -363,6 +364,10 @@ helpers called.
 | `sport-filtered state — axe reports no critical/serious violations` | Same axe gate after clicking Pickleball (1 article) | SPORT-3: renamed from Basketball |
 | `groups page — Members tab (owner) — axe reports no critical/serious violations` | Same axe gate on the Groups page, `mockOwnedGroup` selected, Members tab active | GRP-3: the first Groups-page a11y coverage in this file — GRP-1/GRP-2 both claimed to extend this file but never actually added a Groups-page block. One check (owner role, 1280px, Members tab — the richest per-group tab) establishes a baseline rather than backfilling every tab/breakpoint retroactively |
 | `friends page — friend selected — axe reports no critical/serious violations` | Same axe gate on the Friends page with `mockFriend` selected (profile + chat split, the richest state) | FRIEND-1: one check at 1280px, same "one representative state" scoping the Groups-page check above uses |
+| `profile page @ {375,768,1280}px — no horizontal overflow` (×3) | Same overflow check, `/profile`'s default Posts tab | PROFILE-7: found and fixed a real overflow at 375px — see `app-profile.spec.ts`'s own entry below |
+| `profile page @ {375,768,1280}px — axe reports no critical/serious violations` (×3) | Same axe gate, default Posts tab | PROFILE-7: this page's own ticket text explicitly asked for the full HF-8-shape 3-breakpoint gate, unlike Groups/Friends' single representative check |
+| `profile page — Settings tab — axe reports no critical/serious violations` | Same axe gate, Settings tab active (per-sport profile editor) | PROFILE-7: one representative state, same "richer state, not a full matrix" scoping the Groups/Friends checks above use |
+| `profile page — Edit Profile modal open — axe reports no critical/serious violations` | Same axe gate, `EditProfileModal` open | PROFILE-7 |
 | `/login`/`/register` @ {375,768,1280}px — no horizontal overflow (×6) | Same overflow check, logged-out pages | No `seedAuthenticatedSession` — these routes aren't behind `ProtectedRoute` |
 | `/login`/`/register` @ {375,768,1280}px — axe violations (×6) | Same axe gate | |
 | `/login: Tab reaches every control in order` | Explicit Tab sequence: Email → Password → "Show password" toggle → Log in → "Create an account" link | `getByLabel('Password', { exact: true })` — substring matching would collide with the toggle's `aria-label="Show password"` |
@@ -847,6 +852,53 @@ instant — `formatRelativeTime`'s negative-diff handling renders "just now" det
 accepted behavior `app-post-modal.spec.ts` documents for its own timestamps) / blur-before-screenshot
 / `document.fonts.ready` sequence and known-Windows-noise caveat as the specs above. Screenshots
 compared against `e2e/visual/__screenshots__/notification-bell-{state}-{width}.png`.
+
+### `e2e/visual/app-profile.spec.ts` (PROFILE-7, `visual-regression` project)
+
+Full-page (not dialog-scoped, matching `app-groups.spec.ts`'s reasoning — this is a page), except the
+`edit-profile-modal` state (dialog-scoped, matching `app-session-detail-modal.spec.ts`'s reasoning).
+Parameterized: 3 breakpoints × 4 states = **12 test instances**, `profile — ${state} @ ${width}px`.
+
+| State | Setup | Expects |
+|---|---|---|
+| `posts` | `seedAuthenticatedSession(page, '/profile')`, default landing tab | Posts tab selected, first article visible (`mockPost`/`mockGroupPost`, both mockUser's own, both Badminton — mockUser's first sport profile) |
+| `memories` | Posts tab → Memories tab | "Memories" heading visible (`ComingSoonPage` placeholder — no backend concept exists yet) |
+| `settings` | Posts tab → Settings tab | "Skill level" select visible (the per-sport profile editor, PROFILE-4/SPORT-2) — clean (non-dirty) state, Save stays disabled, so no PUT mutation handler is exercised |
+| `edit-profile-modal` | Click "Edit profile" (`ProfileHeader`) | Dialog-scoped, "First name" field visible — never submitted, so no PUT mutation handler is exercised either |
+
+**Real MSW gap found and fixed at pickup** (this ticket is the first to run the real `/profile` page
+through Playwright — `PROFILE-8`, the E2E functional ticket, is still `TODO`): `GET /api/posts/mine`
+didn't exist in `feed.ts` at all (added, filtered by `userId === mockUser.id`, placed before the
+`:postId` catch-all — same literal-segment-first ordering rule as every other route there), and
+`friends.ts`'s `GET /api/users/:userId` only ever returned the narrow `FriendUser` shape (fine for
+looking up *other* users, but missing `firstName`/`lastName`/`username`/`city`/`country`/`createdAt`/
+etc. that `useMyProfile`/`ProfileHeader`/`EditProfileModal` need for the caller's own profile) — now
+special-cases the caller's own id to return a new `mockMyProfile` fixture (full `UserResponse`),
+falling through to the existing narrow directory for every other id.
+
+**Two real bugs found and fixed along the way, not just test-infra gaps:**
+1. **Nested `<main>` landmark** — `MemoriesTab` mounts `ComingSoonPage` (whose only call site this now
+   is, router-level usage having been removed since PROFILE-6) inside `ProfilePage`'s own `<main>`.
+   `ComingSoonPage` no longer renders its own `<main>` (a `<div>` now) — invalid document structure
+   otherwise (axe: `landmark-main-is-top-level`).
+2. **Composer overflow at 375px** (`profile page @ 375px — no horizontal overflow` in `a11y.spec.ts`
+   caught this) — `CreatePostForm`'s Photo/Location/Tag-sport/Post action row doesn't fit one line
+   once a left tab rail (`ProfileTabs`, `w-37.5`) eats into a narrow viewport's width; the same
+   pre-existing bug is reachable on the already-shipped Groups page too (`GroupTabs` is the same
+   width), just never caught there since no overflow assertion was ever added for it. Fixed with the
+   same `overflow-x-auto`/`shrink-0` idiom `NavTabs` already established (HF-8): the icon-button group
+   scrolls within itself instead of pushing the Post button off-canvas or the page overflowing
+   sideways. Verified via a stash/pop isolation that this fix causes no diff in Home Feed's or
+   Groups' own already-committed baselines beyond pre-existing local Windows font-rendering noise
+   (reproduced identically with the fix reverted) — not touched.
+
+Every instance: freezes the clock (same instant as every other visual spec, for consistency — this
+page renders no clock-sensitive content beyond the same `formatRelativeTime` negative-diff "just now"
+every other spec's mockUser-authored fixtures already show) → waits for `document.fonts.ready` →
+(`edit-profile-modal` only) blurs the autofocused field first, same `CLIENT-SESSION-12` reasoning →
+screenshot compared against `e2e/visual/__screenshots__/profile-{state}-{width}.png`. Same
+known-Windows-noise caveat as every spec above — these 12 baselines are Windows-rendered locally and
+need the same `client-ci` `update-baselines` dispatch swap before merging.
 
 ---
 

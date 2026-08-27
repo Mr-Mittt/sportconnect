@@ -14,6 +14,7 @@ import type {
   Post,
 } from '../../src/features/feed/types.ts';
 import type { FriendRequest, FriendUser, UserSearchResult } from '../../src/features/friends/types.ts';
+import type { UserResponse } from '../../src/features/profile/types.ts';
 import { hoursAgo, hoursFromNow } from '../../src/shared/lib/mockClock.ts';
 import type { Location } from '../../src/shared/types/location.ts';
 import type { Session, SessionParticipant } from '../../src/shared/types/session.ts';
@@ -100,6 +101,39 @@ export const mockSportProfiles: UserSportProfileResponse[] = [
     updatedAt: '2026-06-01T10:00:00',
   },
 ];
+
+// PROFILE-7: mockUser's own full `UserResponse` — GET /api/users/:userId
+// (friends.ts) previously only ever returned the narrow `FriendUser` shape
+// (id/fullName/avatarUrl/coverUrl/bio), fine for looking up *other* users but
+// missing firstName/lastName/username/city/country/createdAt/etc. that
+// useMyProfile/ProfileHeader/EditProfileModal need for the caller's *own*
+// profile — a real gap, never hit before this ticket since no earlier
+// ticket ran the real /profile page through Playwright/MSW.
+export const mockMyProfile: UserResponse = {
+  id: mockUser.id,
+  email: mockUser.email,
+  firstName: mockUser.firstName,
+  lastName: mockUser.lastName,
+  username: mockUser.username,
+  phoneNumber: mockUser.phoneNumber,
+  dateOfBirth: null,
+  gender: null,
+  bio: 'Weekend warrior. Badminton on Saturdays, pickleball whenever the courts are free.',
+  avatarUrl: mockUser.avatarUrl,
+  coverUrl: null,
+  location: null,
+  city: 'Riverside',
+  country: 'USA',
+  heightCm: null,
+  weightKg: null,
+  shoeSizeCm: null,
+  isEmailVerified: true,
+  isActive: true,
+  roles: mockUser.roles,
+  createdAt: '2026-06-01T10:00:00',
+  lastLoginAt: null,
+  fullName: `${mockUser.firstName} ${mockUser.lastName}`,
+};
 
 // Feed/groups/hashtags fixtures (FEED-0) — reused by feed.ts's handlers and
 // by any future FEED-1..FEED-10 e2e spec, same reasoning as the auth
