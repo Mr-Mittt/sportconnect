@@ -103,7 +103,7 @@ export function MatchesPage() {
 
   return (
     <main className="py-4">
-      <h1 className="sr-only">Matches</h1>
+      <h1 className="sr-only">Play</h1>
       <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
         <SportSwitcher
           sports={Object.values(data.sportsByKey)}

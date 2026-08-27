@@ -6,7 +6,7 @@ import { NavTabs } from './NavTabs';
 describe('NavTabs', () => {
   it('renders all five tabs with the active one marked aria-current="page"', () => {
     render(<NavTabs active="groups" onChange={() => {}} />);
-    for (const label of ['Home', 'Friends', 'Groups', 'Matches', 'Profile']) {
+    for (const label of ['Home', 'Friends', 'Groups', 'Play', 'Profile']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     }
     expect(screen.getByRole('button', { name: 'Groups' })).toHaveAttribute('aria-current', 'page');
@@ -17,7 +17,7 @@ describe('NavTabs', () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<NavTabs active="home" onChange={onChange} />);
-    await user.click(screen.getByRole('button', { name: 'Matches' }));
+    await user.click(screen.getByRole('button', { name: 'Play' }));
     expect(onChange).toHaveBeenCalledWith('matches');
   });
 
