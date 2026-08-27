@@ -3273,6 +3273,25 @@ explicit go-ahead at each step (full story in A3's summary doc):
   Vitest suite green (152 files/1008 tests), `build-storybook` green, `tsc -b`/lint clean. No
   browser extension connected this session — could not visually confirm Storybook or walk the live
   page in a browser; `PROFILE-7` will produce the first real screenshot evidence.
+- **Client PROFILE-10 (`DONE`, 2026-08-27, `client/docs/MVP/PROFILE-10_PROFILE_PAGE_ENHANCEMENTS.md`):**
+  `/profile` page enhancements — 6 independent items filed together from a `/ticket` session, built
+  one commit per item. (1) Hide the redundant sport badge on the Posts tab. (2) Raise `shoeSizeCm`'s
+  bound 35→500, backend (`UserServiceImpl`) + client (`EditProfileModal`) together, folded into this
+  ticket rather than a separate backend ticket (small change, user decision). (3) Settings-tab
+  unsaved-changes guard — the big piece: converted `SportProfileSettingsTab` from self-contained to
+  **controlled** (`ProfilePage` now owns `useSportProfileSettingsTabData()`, mirrors
+  `GroupSettingsTab`/`GroupsPage`), exactly the refactor `PROFILE-4`'s own doc comment predicted
+  would eventually be needed. New shared `useUnsavedChangesGuard` (`useBlocker` + `beforeunload`,
+  extracted from `GroupsPage`'s `useSettingsUnsavedGuard`) guards tab switches, `SportSwitcher` pill
+  switches (the exact case `PROFILE-6` had declined), and in-app navigation away from `/profile`.
+  (4) Post composer unsaved-changes guard, app-wide — `CreatePostForm` itself uses the same shared
+  guard hook, so Home Feed/Groups/`/profile` all get it for free; rippled into upgrading
+  `CreatePostForm`'s/`HomeFeedPage`'s/`PostsTab`'s tests (and `CreatePostForm`'s stories) to a data
+  router, since `useBlocker` requires one. (5) Bio renders italic, quoted. (6) `SportSwitcher` pills
+  scale ~5% on hover/selected, with `motion-reduce` overrides. Full Vitest suite green (153
+  files/1029 tests, +23 net new, no regressions), `tsc -b`/lint clean, `build-storybook` green,
+  `:modules:user:user-impl:test` green. No browser extension connected — could not visually confirm;
+  `PROFILE-7` remains the first real screenshot evidence.
 - **SESSION-22 (`TODO`, 2026-08-20,
   `modules/session/docs/MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md`):** filed while
   verifying A7 — `SessionEventsConsumerIntegrationTest` fails intermittently with
