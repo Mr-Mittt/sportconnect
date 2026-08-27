@@ -260,7 +260,7 @@ export function ProfilePage() {
         </div>
         {profileQuery.data !== undefined && (
           <EditProfileModal
-            key={editProfileOpenCount}
+            key={`edit-profile-${editProfileOpenCount}`}
             isOpen={isEditProfileOpen}
             onClose={() => {
               updateProfile.reset();
@@ -293,7 +293,7 @@ export function ProfilePage() {
           isRetrying={addSportLauncher.isCheckingCatalog}
         />
         <AddSportModal
-          key={addSportOpenCount}
+          key={`add-sport-${addSportOpenCount}`}
           isOpen={isAddSportOpen}
           onClose={() => {
             addSportMutation.reset();
