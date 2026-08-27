@@ -204,7 +204,7 @@ export function EditProfileModal({
                   id="edit-profile-shoe-size"
                   type="number"
                   min={10}
-                  max={35}
+                  max={500}
                   value={draft.shoeSizeCm}
                   onChange={(event) => set('shoeSizeCm', event.target.value)}
                 />

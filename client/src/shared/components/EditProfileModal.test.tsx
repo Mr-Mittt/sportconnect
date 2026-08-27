@@ -59,6 +59,21 @@ describe('EditProfileModal', () => {
     expect(screen.getByLabelText('Shoe size (JP, cm)')).toHaveValue(26);
   });
 
+  it('allows a shoe size up to the raised 500 bound (PROFILE-10)', () => {
+    render(
+      <EditProfileModal
+        isOpen
+        onClose={vi.fn()}
+        user={user()}
+        onSave={vi.fn()}
+        isSaving={false}
+        errorMessage={null}
+      />,
+    );
+
+    expect(screen.getByLabelText('Shoe size (JP, cm)')).toHaveAttribute('max', '500');
+  });
+
   it('clamps the bio textarea at MAX_BIO_LENGTH', () => {
     render(
       <EditProfileModal

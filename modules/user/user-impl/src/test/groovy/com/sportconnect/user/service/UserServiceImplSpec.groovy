@@ -367,7 +367,7 @@ class UserServiceImplSpec extends Specification {
         thrown(BadRequestException)
 
         where:
-        shoeSizeValue << [9, 36]
+        shoeSizeValue << [9, 501]
     }
 
     def "updateProfile should update location when provided"() {

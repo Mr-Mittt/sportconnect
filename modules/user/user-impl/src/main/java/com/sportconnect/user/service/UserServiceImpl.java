@@ -186,8 +186,8 @@ public class UserServiceImpl implements UserService {
             user.setWeightKg(request.getWeightKg());
         }
         if (request.getShoeSizeCm() != null) {
-            if (request.getShoeSizeCm() < 10 || request.getShoeSizeCm() > 35) {
-                throw new BadRequestException("shoeSizeCm must be between 10 and 35");
+            if (request.getShoeSizeCm() < 10 || request.getShoeSizeCm() > 500) {
+                throw new BadRequestException("shoeSizeCm must be between 10 and 500");
             }
             user.setShoeSizeCm(request.getShoeSizeCm());
         }
