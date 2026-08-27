@@ -1,9 +1,11 @@
 import { IconBallFootball, IconMapPin, IconPhoto, IconSpeakerphone } from '@tabler/icons-react';
 import { createElement, useLayoutEffect, useRef, useState } from 'react';
 import { MAX_POST_LENGTH } from '@/features/feed/types';
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
+import { UnsavedPostConfirmDialog } from './UnsavedPostConfirmDialog';
 
 interface CreatePostFormProps {
   currentUser: { firstName: string; fullName: string; avatarUrl: string | null } | undefined;
@@ -58,6 +60,13 @@ function initialsFor(fullName: string): string {
  * to off on every submit, not lifted to the page. The caller decides what
  * `asBroadcast: true` actually means (create vs. update-the-existing-one);
  * this component only reports intent.
+ *
+ * PROFILE-10: unsubmitted `content` is a real draft the caller could lose by navigating away
+ * (in-app, or closing/refreshing the tab) — `useUnsavedChangesGuard(hasText)` owns both leave-
+ * points, same primitive `/profile`'s Settings-tab guard uses (`shared/hooks/`). Every hosting page
+ * (Home Feed, Groups, `/profile`) gets this for free with zero per-page wiring, since it lives
+ * entirely inside this component. No tab-switch leg (unlike Settings) — this composer isn't tied to
+ * a page tab — and no Save option in the confirm dialog, since a draft here has nothing to persist.
  */
 export function CreatePostForm({
   currentUser,
@@ -84,6 +93,7 @@ export function CreatePostForm({
   }, [content]);
 
   const hasText = content.trim().length > 0;
+  const unsavedGuard = useUnsavedChangesGuard(hasText);
 
   const submitPost = () => {
     const trimmed = content.trim();
@@ -170,6 +180,11 @@ export function CreatePostForm({
       {isError && (
         <p className="mt-2 text-2xs text-text-danger">Couldn't create post. Try again.</p>
       )}
+      <UnsavedPostConfirmDialog
+        isOpen={unsavedGuard.isLeaveDialogOpen}
+        onStay={unsavedGuard.cancelLeave}
+        onLeave={unsavedGuard.proceed}
+      />
     </div>
   );
 }

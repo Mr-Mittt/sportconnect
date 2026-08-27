@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
@@ -81,19 +81,24 @@ function feedPage<T>(content: T[]): PageResponse<T> {
 // FEED-12: HomeFeedPage now calls useParams/useNavigate (the comment
 // dialog's open state lives in the URL), so it needs a real Router context
 // to render at all — a bare QueryClientProvider isn't enough anymore.
-// `wrapperFor` lets a test choose which path it's mounted at; `wrapper`
-// (the default, `/`) covers every pre-existing test unchanged.
+// PROFILE-10: upgraded from a plain <MemoryRouter> to a data router —
+// CreatePostForm's own useUnsavedChangesGuard now calls useBlocker, which
+// only works inside one. `wrapperFor` lets a test choose which path it's
+// mounted at; `wrapper` (the default, `/`) covers every pre-existing test
+// unchanged.
 function wrapperFor(initialPath: string) {
   return function Wrapper({ children }: { children: ReactNode }) {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const router = createMemoryRouter(
+      [
+        { path: '/', element: children },
+        { path: '/posts/:postId', element: children },
+      ],
+      { initialEntries: [initialPath] },
+    );
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[initialPath]}>
-          <Routes>
-            <Route path="/" element={children} />
-            <Route path="/posts/:postId" element={children} />
-          </Routes>
-        </MemoryRouter>
+        <RouterProvider router={router} />
       </QueryClientProvider>
     );
   };
