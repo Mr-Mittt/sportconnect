@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
@@ -48,11 +48,23 @@ const profileFixture: UserResponse = {
   fullName: 'Jordan Lee',
 };
 
+/**
+ * `useUnsavedChangesGuard`'s `useBlocker` (PROFILE-10) requires a data router, unlike the plain
+ * `<MemoryRouter>` this wrapper used before — same two-route memory-router shape
+ * `useSettingsUnsavedGuard.test.tsx` (`features/groups/`) already established for this exact need.
+ */
 function wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const router = createMemoryRouter(
+    [
+      { path: '/', element: <>{children}</> },
+      { path: '/elsewhere', element: <div>Elsewhere</div> },
+    ],
+    { initialEntries: ['/'] },
+  );
   return (
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>{children}</MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
 }
@@ -225,5 +237,96 @@ describe('ProfilePage', () => {
 
     await waitFor(() => expect(screen.getByText('Football post')).toBeInTheDocument());
     expect(screen.queryByRole('dialog', { name: 'Add a sport' })).not.toBeInTheDocument();
+  });
+
+  describe('Settings unsaved-changes guard (PROFILE-10)', () => {
+    async function openSettingsAndEdit(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(screen.getByRole('tab', { name: 'Settings' }));
+      await waitFor(() => expect(screen.getByLabelText('Skill level')).toHaveValue('beginner'));
+      await user.type(screen.getByLabelText('Preferred position'), ' Jr.');
+    }
+
+    it('blocks switching away from Settings via ProfileTabs while dirty, and Discard proceeds', async () => {
+      const user = userEvent.setup();
+      mockProfileGet([post({ id: 1, content: 'Football post', sportId: 5 })]);
+      render(<ProfilePage />, { wrapper });
+      await waitFor(() => expect(screen.getByText('Football post')).toBeInTheDocument());
+      await openSettingsAndEdit(user);
+
+      await user.click(screen.getByRole('tab', { name: 'Posts' }));
+
+      const dialog = await screen.findByRole('dialog', { name: 'Unsaved changes' });
+      expect(within(dialog).getByText(/unsaved changes to this sport profile/i)).toBeInTheDocument();
+      // Blocked — still on Settings, still showing the edited value.
+      expect(screen.getByLabelText('Preferred position')).toHaveValue('Midfielder Jr.');
+
+      await user.click(within(dialog).getByRole('button', { name: 'Discard changes' }));
+
+      await waitFor(() => expect(screen.getByText('Football post')).toBeInTheDocument());
+      expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).not.toBeInTheDocument();
+    });
+
+    it('blocks switching the SportSwitcher pill while Settings is dirty, and Save proceeds once it succeeds', async () => {
+      const user = userEvent.setup();
+      mockProfileGet([post({ id: 1, content: 'Football post', sportId: 5 })]);
+      const putSpy = vi.spyOn(apiClient, 'put').mockResolvedValueOnce({
+        data: {
+          success: true,
+          message: '',
+          data: { ...footballProfile, preferredPosition: 'Midfielder Jr.' },
+          timestamp: '',
+        },
+      });
+      render(<ProfilePage />, { wrapper });
+      await waitFor(() => expect(screen.getByText('Football post')).toBeInTheDocument());
+      await openSettingsAndEdit(user);
+
+      await user.click(screen.getByRole('button', { name: /Basketball/ }));
+
+      const dialog = await screen.findByRole('dialog', { name: 'Unsaved changes' });
+      // Blocked — still Football's data, the pill switch hasn't gone through yet.
+      expect(screen.getByLabelText('Preferred position')).toHaveValue('Midfielder Jr.');
+
+      await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() =>
+        expect(putSpy).toHaveBeenCalledWith(
+          '/sports/profiles/101',
+          expect.objectContaining({ preferredPosition: 'Midfielder Jr.' }),
+        ),
+      );
+      // The guarded pill switch now proceeds automatically once the save resolves.
+      await waitFor(() => expect(screen.getByLabelText('Skill level')).toHaveValue('advanced'));
+      expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).not.toBeInTheDocument();
+    });
+
+    it('cancelling the dialog leaves the draft intact and stays on Settings', async () => {
+      const user = userEvent.setup();
+      mockProfileGet([post({ id: 1, content: 'Football post', sportId: 5 })]);
+      render(<ProfilePage />, { wrapper });
+      await waitFor(() => expect(screen.getByText('Football post')).toBeInTheDocument());
+      await openSettingsAndEdit(user);
+
+      await user.click(screen.getByRole('tab', { name: 'Posts' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Unsaved changes' });
+      await user.click(within(dialog).getByRole('button', { name: /close|cancel/i }));
+
+      expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Preferred position')).toHaveValue('Midfielder Jr.');
+    });
+
+    it('does not block switching tabs/pills when Settings has no unsaved changes', async () => {
+      const user = userEvent.setup();
+      mockProfileGet([post({ id: 1, content: 'Football post', sportId: 5 })]);
+      render(<ProfilePage />, { wrapper });
+      await waitFor(() => expect(screen.getByText('Football post')).toBeInTheDocument());
+
+      await user.click(screen.getByRole('tab', { name: 'Settings' }));
+      await waitFor(() => expect(screen.getByLabelText('Skill level')).toHaveValue('beginner'));
+      await user.click(screen.getByRole('tab', { name: 'Posts' }));
+
+      expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.getByText('Football post')).toBeInTheDocument());
+    });
   });
 });

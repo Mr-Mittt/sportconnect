@@ -134,4 +134,40 @@ describe('useSportProfileSettingsTabData', () => {
       }),
     );
   });
+
+  it('save runs the onSuccess callback once the mutation resolves (PROFILE-10 unsaved-changes guard)', async () => {
+    mockGet([profile({ sportId: 5 })]);
+    vi.spyOn(apiClient, 'put').mockResolvedValueOnce({
+      data: {
+        success: true,
+        message: '',
+        data: profile({ sportId: 5, preferredPosition: 'Winger' }),
+        timestamp: '',
+      },
+    });
+
+    const { result } = renderHook(() => useSportProfileSettingsTabData(), { wrapper });
+    await waitFor(() => expect(result.current.activeProfile).not.toBeUndefined());
+    act(() => result.current.setPreferredPosition('Winger'));
+
+    const onSuccess = vi.fn();
+    act(() => result.current.save({ onSuccess }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+  });
+
+  it('discard resets the draft to the saved profile without changing activeProfile', async () => {
+    mockGet([profile({ sportId: 5, preferredPosition: 'Striker' })]);
+
+    const { result } = renderHook(() => useSportProfileSettingsTabData(), { wrapper });
+    await waitFor(() => expect(result.current.activeProfile).not.toBeUndefined());
+
+    act(() => result.current.setPreferredPosition('Winger'));
+    expect(result.current.isDirty).toBe(true);
+
+    act(() => result.current.discard());
+
+    expect(result.current.draft.preferredPosition).toBe('Striker');
+    expect(result.current.isDirty).toBe(false);
+  });
 });

@@ -1,11 +1,27 @@
 import { SKILL_LEVELS } from '@/shared/lib/skillLevels';
 import { cn } from '@/shared/lib/utils';
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
+import type { ResolvedSportAttributeSchema, UserSportProfileResponse } from '@/shared/types/sport';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
-import { useSportProfileSettingsTabData } from '../useSportProfileSettingsTabData';
+import type { SportProfileEditDraft } from '../sportProfileEditDraft';
+
+interface SportProfileSettingsTabProps {
+  activeProfile: UserSportProfileResponse | undefined;
+  isLoading: boolean;
+  schema: ResolvedSportAttributeSchema | null;
+  draft: SportProfileEditDraft;
+  setSkillLevel: (value: string) => void;
+  setYearsOfExperience: (value: string) => void;
+  setPreferredPosition: (value: string) => void;
+  setAttribute: (key: string, value: unknown) => void;
+  isDirty: boolean;
+  onSave: () => void;
+  isSaving: boolean;
+  errorMessage: string | null;
+}
 
 /**
  * The `/profile` page's Settings tab (PROFILE-4) — a per-sport profile editor for the base
@@ -13,25 +29,27 @@ import { useSportProfileSettingsTabData } from '../useSportProfileSettingsTabDat
  * anywhere in the app since `AddSportModal` set them at creation time) plus `SportAttributesFields`
  * (SPORT-2) for the same active sport. This is the ticket that finally hosts that component.
  *
- * Self-contained, like `PostsTab` — owns its data/draft via `useSportProfileSettingsTabData`
- * rather than receiving props, since no `ProfilePage` (`PROFILE-6`) exists yet to wire one down.
+ * **Controlled, not self-contained (PROFILE-10 delta).** Originally owned `useSportProfileSettingsTabData()`
+ * directly (PROFILE-4, "since no ProfilePage exists yet to wire one down") — converted once
+ * `ProfilePage` (PROFILE-6) existed and PROFILE-10 needed to guard leaving this tab with unsaved
+ * edits (a tab switch, a `SportSwitcher` pill click, in-app navigation): `ProfilePage` is the only
+ * place that can intercept those, so it now owns the data hook and passes its fields down, same
+ * shape as `GroupSettingsTab`/`GroupsPage`.
  */
-export function SportProfileSettingsTab() {
-  const {
-    activeProfile,
-    isLoading,
-    schema,
-    draft,
-    setSkillLevel,
-    setYearsOfExperience,
-    setPreferredPosition,
-    setAttribute,
-    isDirty,
-    save,
-    isSaving,
-    errorMessage,
-  } = useSportProfileSettingsTabData();
-
+export function SportProfileSettingsTab({
+  activeProfile,
+  isLoading,
+  schema,
+  draft,
+  setSkillLevel,
+  setYearsOfExperience,
+  setPreferredPosition,
+  setAttribute,
+  isDirty,
+  onSave,
+  isSaving,
+  errorMessage,
+}: SportProfileSettingsTabProps) {
   if (isLoading) return null;
 
   if (activeProfile === undefined) {
@@ -47,7 +65,7 @@ export function SportProfileSettingsTab() {
       className="flex flex-col gap-5"
       onSubmit={(event) => {
         event.preventDefault();
-        save();
+        onSave();
       }}
     >
       <div className="flex flex-col gap-3.5">

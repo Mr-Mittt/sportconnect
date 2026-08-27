@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
@@ -118,9 +119,18 @@ function mockGet(posts: Post[]) {
   });
 }
 
+/**
+ * PROFILE-10: `CreatePostForm`'s own `useUnsavedChangesGuard` calls `useBlocker`, which requires a
+ * data router — same shape `useSettingsUnsavedGuard.test.tsx` (`features/groups/`) established.
+ */
 function wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  const router = createMemoryRouter([{ path: '/', element: children }], { initialEntries: ['/'] });
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  );
 }
 
 describe('PostsTab', () => {
@@ -148,6 +158,18 @@ describe('PostsTab', () => {
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
     expect(screen.getByText('Football post')).toBeInTheDocument();
     expect(screen.queryByText('Basketball post')).not.toBeInTheDocument();
+  });
+
+  it('does not render a sport badge on post cards — the active pill already shows it', async () => {
+    render(<PostsTab />, { wrapper });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
+    // Neither of the two sports the fixture posts could be tagged with — real
+    // confirmation the badge is suppressed, not just absent because of a
+    // wrong sport. Labels come from getSportProfileConfig's fallback
+    // title-case of the catalog key (test/setup.ts seeds id 5 -> 'football'),
+    // not the fixture's own descriptive `sportName`.
+    expect(screen.queryByText('Football')).not.toBeInTheDocument();
+    expect(screen.queryByText('Basketball')).not.toBeInTheDocument();
   });
 
   it('filters the list by the active sport pill', async () => {

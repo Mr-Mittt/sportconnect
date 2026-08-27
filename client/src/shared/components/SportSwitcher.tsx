@@ -47,7 +47,11 @@ function Pill({ label, icon, isActive, onClick }: PillProps) {
       aria-pressed={isActive}
       onClick={onClick}
       className={cn(
-        'flex cursor-pointer items-center gap-1.5 rounded-full bg-surface-1 px-3 py-1.75 text-2sm text-text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0',
+        'flex cursor-pointer items-center gap-1.5 rounded-full bg-surface-1 px-3 py-1.75 text-2sm text-text-primary transition-[color,background-color,border-color,transform] hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0 motion-reduce:transition-none motion-reduce:hover:scale-100',
+        // PROFILE-10: the active pill itself scales too (not just hover) —
+        // stacks additively with the 2px border below, same "additive, not
+        // a swapped variant" reasoning that border already followed.
+        isActive && 'scale-110 motion-reduce:scale-100',
         // The 2px active border is the design system's one approved exception
         // to the hairline border rule.
         isActive ? 'border-2 border-border-accent font-medium' : 'border-hairline border-border',
@@ -85,8 +89,13 @@ export function SportSwitcher({
   // catalogue length as `maxSports`.
   const atCap = sports.length >= maxSports;
 
+  // PROFILE-10: gap-2 (8px) was tight enough for scale-110 to visually overlap neighboring pills.
+  // `scale()` grows from the center, so each side extends by half of 10% = 5% of the pill's own
+  // width. A representative pill ("Pickleball": 24px padding + 16px icon + 6px icon-label gap +
+  // ~71px of 13px text ≈ 117px) grows ~5.9px per side, ~11.7px combined between two adjacent
+  // pills — already past gap-2's 8px. gap-3.5 (14px) covers that with a ~2px margin.
   return (
-    <div role="group" aria-label="Sport filter" className="flex flex-wrap gap-2">
+    <div role="group" aria-label="Sport filter" className="flex flex-wrap gap-3.5">
       {showAllPill && (
         <Pill
           label="All"

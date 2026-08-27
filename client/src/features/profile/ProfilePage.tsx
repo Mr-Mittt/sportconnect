@@ -23,6 +23,7 @@ import { useGroupBroadcasts } from '@/shared/hooks/useGroupBroadcasts';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useTrendingHashtags } from '@/shared/hooks/useTrendingHashtags';
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { useUpcomingMatches } from '@/shared/hooks/useUpcomingMatches';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
 import { PAGE_ACCESS_NO_SPORTS_PROMPT } from '@/shared/lib/noSportsPrompt';
@@ -30,9 +31,11 @@ import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { MemoriesTab } from './components/MemoriesTab';
 import { PostsTab } from './components/PostsTab';
 import { ProfileTabs, type ProfileTabKey } from './components/ProfileTabs';
+import { SettingsUnsavedChangesDialog } from './components/SettingsUnsavedChangesDialog';
 import { SportProfileSettingsTab } from './components/SportProfileSettingsTab';
 import { useMyProfile } from './useMyProfile';
 import { useProfileActiveSport } from './useProfileActiveSport';
+import { useSportProfileSettingsTabData } from './useSportProfileSettingsTabData';
 import { useUpdateMyProfile } from './useUpdateMyProfile';
 
 /**
@@ -65,6 +68,21 @@ import { useUpdateMyProfile } from './useUpdateMyProfile';
  * page's Settings tab is the one place that's genuinely unusable with zero
  * sport profiles (`SportProfileSettingsTab` already renders "Add a sport
  * above to set up its profile.").
+ *
+ * PROFILE-10: this page now owns `useSportProfileSettingsTabData()` directly
+ * (`SportProfileSettingsTab` is controlled, not self-contained — see that
+ * component's own doc comment) and wraps `ProfileTabs`' `onChange` and
+ * `SportSwitcher`'s `onChange` in `useUnsavedChangesGuard(settingsTab.isDirty)`'s
+ * `guard()` — leaving the Settings tab with unsaved edits, by any of those
+ * two in-page actions, or by an in-app navigation away from `/profile`,
+ * prompts `SettingsUnsavedChangesDialog` first (Discard/Save), same
+ * three-leave-points shape `GroupsPage`'s own Settings guard already
+ * established. Calling this hook unconditionally (not gated to when Settings
+ * is the active tab, unlike `GroupsPage`'s settings queries) means its
+ * `useSportAttributeSchema` fetch now runs on every `/profile` visit, not
+ * just a Settings visit — a small, deliberate eagerness trade-off: the guard
+ * needs to know `isDirty` before the user has necessarily ever opened
+ * Settings this session, and the request itself is cheap and cached.
  */
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -82,6 +100,8 @@ export function ProfilePage() {
 
   const profileQuery = useMyProfile();
   const updateProfile = useUpdateMyProfile();
+  const settingsTabData = useSportProfileSettingsTabData();
+  const settingsGuard = useUnsavedChangesGuard(settingsTabData.isDirty);
 
   const sportProfilesQuery = useSportProfiles();
   const sportCatalog = useSportCatalog();
@@ -160,9 +180,11 @@ export function ProfilePage() {
           <SportSwitcher
             sports={sportProfilesQuery.data}
             active={activeSport ?? 'all'}
-            onChange={(key) => {
-              if (key !== 'all') setStoredActiveSport(key);
-            }}
+            onChange={(key) =>
+              settingsGuard.guard(() => {
+                if (key !== 'all') setStoredActiveSport(key);
+              })
+            }
             maxSports={sportCatalog.data.length || undefined}
             isCheckingCatalog={addSportLauncher.isCheckingCatalog}
             onAddSport={addSportLauncher.launch}
@@ -181,11 +203,29 @@ export function ProfilePage() {
         <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[2.1fr_0.9fr]">
           <div className="min-w-0">
             <div className="border-hairline flex gap-3.5 rounded-xl border-border bg-surface-2 p-3.5">
-              <ProfileTabs activeTab={activeTab} onChange={setActiveTab} />
+              <ProfileTabs
+                activeTab={activeTab}
+                onChange={(tab) => settingsGuard.guard(() => setActiveTab(tab))}
+              />
               <div className="min-w-0 flex-1">
                 {activeTab === 'posts' && <PostsTab />}
                 {activeTab === 'memories' && <MemoriesTab />}
-                {activeTab === 'settings' && <SportProfileSettingsTab />}
+                {activeTab === 'settings' && (
+                  <SportProfileSettingsTab
+                    activeProfile={settingsTabData.activeProfile}
+                    isLoading={settingsTabData.isLoading}
+                    schema={settingsTabData.schema}
+                    draft={settingsTabData.draft}
+                    setSkillLevel={settingsTabData.setSkillLevel}
+                    setYearsOfExperience={settingsTabData.setYearsOfExperience}
+                    setPreferredPosition={settingsTabData.setPreferredPosition}
+                    setAttribute={settingsTabData.setAttribute}
+                    isDirty={settingsTabData.isDirty}
+                    onSave={() => settingsTabData.save()}
+                    isSaving={settingsTabData.isSaving}
+                    errorMessage={settingsTabData.errorMessage}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -234,6 +274,17 @@ export function ProfilePage() {
             errorMessage={updateProfile.errorMessage}
           />
         )}
+        <SettingsUnsavedChangesDialog
+          isOpen={settingsGuard.isLeaveDialogOpen}
+          onCancel={settingsGuard.cancelLeave}
+          onDiscard={() => {
+            settingsTabData.discard();
+            settingsGuard.proceed();
+          }}
+          onSave={() => settingsTabData.save({ onSuccess: settingsGuard.proceed })}
+          isSaving={settingsTabData.isSaving}
+          isSaveError={settingsTabData.errorMessage !== null}
+        />
         <NoSportsToAddDialog
           isOpen={addSportLauncher.isDialogOpen}
           onClose={addSportLauncher.closeDialog}

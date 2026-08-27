@@ -17,9 +17,9 @@ interface NavTabsProps {
 
 const tabs: ReadonlyArray<{ key: NavTabKey; label: string; TabIcon: Icon }> = [
   { key: 'home', label: 'Home', TabIcon: IconHome },
-  { key: 'friends', label: 'Friends', TabIcon: IconUsers },
   { key: 'groups', label: 'Groups', TabIcon: IconUsersGroup },
-  { key: 'matches', label: 'Matches', TabIcon: IconCalendarEvent },
+  { key: 'matches', label: 'Play', TabIcon: IconCalendarEvent },
+  { key: 'friends', label: 'Friends', TabIcon: IconUsers },
   { key: 'profile', label: 'Profile', TabIcon: IconUser },
 ];
 
