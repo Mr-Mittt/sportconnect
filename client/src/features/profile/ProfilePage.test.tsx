@@ -142,7 +142,7 @@ function staticGetResponse(
   url: string,
   sportProfiles: typeof footballProfile[],
 ): { data: unknown } | undefined {
-  if (url === '/users/user-1') return apiResponse(profileFixture);
+  if (url === '/users/me') return apiResponse(profileFixture);
   if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
   if (url === '/sports') {
     return apiResponse([

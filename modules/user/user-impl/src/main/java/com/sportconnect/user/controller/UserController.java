@@ -3,6 +3,7 @@ package com.sportconnect.user.controller;
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.user.api.dto.ChangePasswordRequest;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
+import com.sportconnect.user.api.dto.UserInfoResponse;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.dto.UserSearchResponse;
 import com.sportconnect.user.api.service.UserService;
@@ -52,37 +53,55 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("Search results retrieved successfully", response));
     }
 
-    @Operation(summary = "Get a user by id", security = {})
+    @Operation(summary = "Get the caller's own full profile", description = "Full UserResponse, including PII fields — the only lookup endpoint that returns them. Derives the target from the JWT principal, so there is no id/ownership check to get wrong.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Caller's profile"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    @GetMapping("/me")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<UserResponse>> getMe(@AuthenticationPrincipal String callerIdStr) {
+        UserResponse response = userService.getUserById(UUID.fromString(callerIdStr));
+        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", response));
+    }
+
+    @Operation(summary = "Get a user by id", description = "U11: returns the safe PII-free subset (UserInfoResponse), same as the email/username siblings — use GET /api/users/me for the caller's own full profile.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
     })
     @GetMapping("/{userId}")
-    public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable UUID userId) {
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<UserInfoResponse>> getUserById(@PathVariable UUID userId) {
         UserResponse response = userService.getUserById(userId);
-        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", UserInfoResponse.of(response)));
     }
 
-    @Operation(summary = "Get a user by email", security = {})
+    @Operation(summary = "Get a user by email", description = "U11: returns the safe PII-free subset (UserInfoResponse) — see GET /api/users/{userId}.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
     })
     @GetMapping("/email/{email}")
-    public ResponseEntity<ApiResponse<UserResponse>> getUserByEmail(@PathVariable String email) {
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<UserInfoResponse>> getUserByEmail(@PathVariable String email) {
         UserResponse response = userService.getUserByEmail(email);
-        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", UserInfoResponse.of(response)));
     }
 
-    @Operation(summary = "Get a user by username", security = {})
+    @Operation(summary = "Get a user by username", description = "U11: returns the safe PII-free subset (UserInfoResponse) — see GET /api/users/{userId}.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
     })
     @GetMapping("/username/{username}")
-    public ResponseEntity<ApiResponse<UserResponse>> getUserByUsername(@PathVariable String username) {
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<UserInfoResponse>> getUserByUsername(@PathVariable String username) {
         UserResponse response = userService.getUserByUsername(username);
-        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", UserInfoResponse.of(response)));
     }
 
     @Operation(summary = "Update a user's profile", description = "Ownership-gated — the caller must be updating their own profile.")
@@ -132,21 +151,25 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("User deleted successfully", null));
     }
 
-    @Operation(summary = "Check whether an email is already registered", security = {})
+    @Operation(summary = "Check whether an email is already registered", description = "U11: no longer public — unused by the client today (registration surfaces a duplicate-email error from POST /api/auth/register itself instead of a live pre-check). Re-open with permitAll in SecurityConfig if a real pre-registration availability check ever consumes this.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "true if the email is taken")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "true if the email is taken"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/check/email")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Boolean>> checkEmailExists(@RequestParam String email) {
         boolean exists = userService.existsByEmail(email);
         return ResponseEntity.ok(ApiResponse.success("Email check completed", exists));
     }
 
-    @Operation(summary = "Check whether a username is already taken", security = {})
+    @Operation(summary = "Check whether a username is already taken", description = "U11: no longer public — same reasoning as GET /api/users/check/email.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "true if the username is taken")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "true if the username is taken"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/check/username")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Boolean>> checkUsernameExists(@RequestParam String username) {
         boolean exists = userService.existsByUsername(username);
         return ResponseEntity.ok(ApiResponse.success("Username check completed", exists));

@@ -1,6 +1,6 @@
 # U11 · Protect user data — scope public user-lookup endpoints away from full PII
 
-**Status:** `TODO`  
+**Status:** `DONE`  
 **Type:** Security Fix  
 **Scope:** `UserController` (3 endpoints) + a new `user-api` DTO — no change to `UserService`'s
 internal contract or any cross-domain caller
@@ -68,5 +68,79 @@ No rework needed here though: `city`/`country` were already excluded from the pl
 The "flagged future gap" in point 4 also just became real — `/profile` is the page that needs a
 self-only full-profile source, and it's now being scoped without one (see PROFILE-0's own notes for
 why it went with the existing public `GET /api/users/{userId}` anyway, using the caller's own id).
+
+---
+
+## Implementation summary (2026-08-28)
+
+**Design confirmed at pickup, diverging from the original "no self special-case" plan above** —
+the collision flagged in the 2026-08-26 update was real and had to be resolved before writing any
+code. Two options were weighed: (a) a caller-dependent special case on `GET /{userId}` (full shape
+for self, safe subset for everyone else, no client change needed) vs. (b) a dedicated
+`GET /api/users/me` plus a small client migration. Went with (b) — it's what this ticket's own
+"flagged future gap" (point 4) always pointed at, and it keeps the three public-facing lookups on
+one static, caller-independent response shape rather than reintroducing the exact shape-mixing this
+ticket's original design explicitly rejected. Also decided at pickup, beyond the original plan:
+`check/email`/`check/username` gained the same `@PreAuthorize` gate as the three lookups — grepped
+the client and confirmed neither is called anywhere today (no live pre-registration availability
+check exists; registration surfaces a duplicate-email error from `POST /api/auth/register` itself
+instead), so there's no anonymous use case to preserve. Re-open with `permitAll` in `SecurityConfig`
+if a real feature ever needs one.
+
+**Backend (`modules/user`):**
+- New `UserInfoResponse` DTO (`user-api`) — `id`/`fullName`/`username`/`avatarUrl`/`coverUrl`/`bio`,
+  with a `UserInfoResponse.of(UserResponse)` static mapper (same `of(...)` factory convention as
+  `LocationResponse`).
+- `UserController`: `getUserById`/`getUserByEmail`/`getUserByUsername` now map their existing
+  `UserResponse` result through `UserInfoResponse.of()` before returning, and gained
+  `@PreAuthorize("hasRole('USER')")`. `checkEmailExists`/`checkUsernameExists` gained the same
+  annotation, response shape unchanged (still `Boolean`). New `GET /api/users/me` — also
+  `@PreAuthorize("hasRole('USER')")`, derives the caller via `@AuthenticationPrincipal String
+  callerIdStr` (this controller's own existing convention, e.g. `PUT /me/password`), and simply
+  calls the existing `userService.getUserById(callerId)` — no new service method, no change to
+  `UserService`'s interface or `UserServiceImpl`, so every in-process cross-domain caller
+  (`AuthServiceImpl`, `CommentServiceImpl`, `PostServiceImpl`) is untouched, confirmed by the
+  original ticket's own caller audit still holding.
+- `SecurityConfig` (`auth-impl`): removed the blanket `.requestMatchers(HttpMethod.GET,
+  "/api/users/**").permitAll()` rule entirely. Audited every other `GET` under that path first —
+  `/search`, `/friends/**`, `/me/preferences` already carried their own `@PreAuthorize`, so nothing
+  anonymous is left standing anywhere under `/api/users/**`.
+- No migration, no entity change — this is a controller/DTO/security-only ticket, nothing persisted
+  changed shape.
+
+**Client (`client/`):** `useMyProfile.ts` now calls `GET /api/users/me` instead of `` `GET
+/api/users/${userId}` ``. Nothing downstream changed — `EditProfileModal`/`ProfileHeader`/
+`SportProfileSettingsTab` consume the hook's returned data, not the URL. `useUserProfile.ts`
+(Friends' directory lookup) needed no change — it was already typed to the narrow `FriendUser`
+shape, a subset of the new `UserInfoResponse`. Updated `useMyProfile.test.tsx` and
+`ProfilePage.test.tsx`/`ProfilePage.stories.tsx`'s mock-URL matchers to `/users/me`. Updated the e2e
+MSW handler (`e2e/mocks/handlers/friends.ts`): added a dedicated `GET /api/users/me` handler
+(auth-gated, returns the session's `myProfileState`) and removed the old self-special-case branch
+from the `GET /api/users/:userId` handler, which now always resolves through the narrow
+`KNOWN_USERS` directory (auth-gated too) — matching the real backend's new caller-independent
+contract.
+
+**Tests:** new `server/src/test/java/com/sportconnect/integration/UserLookupAccessIntegrationTest`
+(10 cases, real `MockMvc` + H2 round trip, per this repo's authorization-boundary IT convention) —
+anonymous 401 on all 6 newly-gated endpoints (`{userId}`, `email/{email}`, `username/{username}`,
+`check/email`, `check/username`, `me`); authenticated lookups assert every stripped PII field is
+absent via `jsonPath(...).doesNotExist()` (`email`, `phoneNumber`, `dateOfBirth`, `gender`,
+`heightCm`, `weightKg`, `shoeSizeCm`, `location`, `lastLoginAt`, `roles`, `isEmailVerified`,
+`isActive`) while the safe fields are present; `/me` asserts the caller gets back their *own* full
+profile including `email`. No `UserServiceImplSpec` changes needed — the service layer's contract
+and behavior are unchanged.
+
+**Docs:** `CLAUDE.md`'s "Public endpoints" line updated — `GET /api/users/**` removed from the
+public list, replaced with a note pointing at this ticket.
+
+**Verification:** `:modules:user:user-impl:test` and `:server:test` both green (the new IT class:
+10/10 passing). Client: `tsc -b` clean, full Vitest suite green (153 files / 1029 tests), ESLint
+clean on every changed file, `playwright test --project=e2e --grep "profile|friend"` green (13/13,
+covers `profile-journey.spec.ts` and `friends-journey.spec.ts`, both exercising the touched MSW
+handler). One `visual-regression` failure on `app-profile.spec.ts` (`profile — posts`, a ~1265px vs
+1280px width pixel diff) — confirmed **pre-existing and unrelated** by stashing this ticket's
+changes and re-running the same spec directly against `master`: identical failure, same pixel count,
+same dimension mismatch. Not caused by this change (no UI/visual output changed here) and not
+re-baselined as part of this ticket.
 
 ---
