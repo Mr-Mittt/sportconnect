@@ -343,6 +343,17 @@ CREATE TABLE IF NOT EXISTS session_outbox_events (
     sent_at TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS user_outbox_events (
+    id BIGSERIAL PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    payload TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_attempt_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS processed_messages (
     message_id VARCHAR(255) PRIMARY KEY,
     processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

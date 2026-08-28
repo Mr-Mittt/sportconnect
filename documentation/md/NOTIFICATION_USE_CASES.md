@@ -97,3 +97,23 @@ Open questions for whoever scopes this:
   deactivated user must not be able to interact with the app" gaps. This is the *inbound* side of
   that rule — the user isn't acting, they're being written to — so it may or may not belong under
   the same fix.
+
+### NOTIF-5 · Friend request received / accepted
+**Date added:** 2026-08-28
+**Status:** `BUILT` (`U13`, 2026-08-28)
+**Source:** `documentation/md/vision/NOTIFICATION_MODULE_VISION.md` (the "Friend (`user-impl`)" v1
+trigger — friend request received, friend request accepted; declined stays silent), logged here
+retroactively at U13 pickup so this file stays the complete list it claims to be.
+
+When a friend request transitions into `PENDING` (a fresh request, or a re-send that reactivates a
+previously `DECLINED`/`CANCELLED`/stale-`ACCEPTED` row), the receiver is notified
+(`user.friend_request.created`). When a request is accepted — explicitly via `acceptFriendRequest`
+or implicitly via the U10 crossed-request path — the original sender is notified
+(`user.friend_request.accepted`). `declineFriendRequest` deliberately publishes nothing.
+
+Built as **U13** (`modules/user/user-impl`): transactional-outbox producer (`user_outbox_events`,
+`UserOutboxRelayJob`) plus the `modules/notification` consumer (`UserEventsConsumer` /
+`UserEventProcessor`, queue `notification.events.user`, pattern `user.*.*`). `Notification.entityType
+= "USER"`, `entityId` = the counterparty user id. The client cannot yet render these two types —
+`getNotificationText` has no case for them, so they show the generic fallback; tracked as a
+**CLIENT-NOTIF-*** follow-on ticket.

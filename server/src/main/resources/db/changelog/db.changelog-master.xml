@@ -155,4 +155,7 @@
     <!-- A9: sports.attributes_schema — admin-managed per-sport attribute definition -->
     <include file="db/changelog/changes/V059__add_attributes_schema_to_sports.sql" relativeToChangelogFile="false"/>
 
+    <!-- U13: user-impl's own outbox table (C3's OutboxEvent shape) — friend-request notification wiring -->
+    <include file="db/changelog/changes/V060__create_user_outbox_events.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

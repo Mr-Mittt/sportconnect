@@ -7,6 +7,8 @@ import com.sportconnect.user.api.dto.FriendRequestResponse;
 import com.sportconnect.user.api.dto.FriendRequestStatus;
 import com.sportconnect.user.api.dto.LocationResponse;
 import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.event.FriendRequestAcceptedEvent;
+import com.sportconnect.user.api.event.FriendRequestCreatedEvent;
 import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.entity.FriendRequest;
 import com.sportconnect.user.entity.Friendship;
@@ -42,6 +44,7 @@ public class UserFriendServiceImpl implements UserFriendService {
     private final UserRepository userRepository;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    private final UserOutboxWriter userOutboxWriter;
 
     // services/chat (the first non-Java service in this repo) consumes this stream to keep its
     // own local authorization cache in sync — see services/chat/docs/SYNC_DESIGN.md.
@@ -74,6 +77,11 @@ public class UserFriendServiceImpl implements UserFriendService {
      *       before U9).</li>
      *   <li><b>Fresh request:</b> no row exists for the pair at all — inserts a new one.</li>
      * </ol>
+     * <p>
+     * Both the reactivation and fresh-request paths write a {@code user.friend_request.created}
+     * outbox row for the receiver (U13, via {@link #publishFriendRequestCreated}) — a reactivated
+     * request is a new pending request from the receiver's point of view. The crossed-request path
+     * notifies instead via {@link #establishFriendship}'s {@code user.friend_request.accepted}.
      */
     @Override
     @Transactional
@@ -107,6 +115,7 @@ public class UserFriendServiceImpl implements UserFriendService {
             }
             request.setStatus(FriendRequestStatus.PENDING);
             friendRequestRepository.save(request);
+            publishFriendRequestCreated(request);
             log.info("Friend request re-sent from {} to {} (reactivated existing row, was {})",
                     senderId, receiverId, previousStatus);
             return;
@@ -117,8 +126,24 @@ public class UserFriendServiceImpl implements UserFriendService {
                 .receiverId(receiverId)
                 .build();
         friendRequestRepository.save(request);
+        publishFriendRequestCreated(request);
         log.info("Friend request sent from {} to {}", senderId, receiverId);
-        // TODO: notify receiver
+    }
+
+    /**
+     * Writes a {@code user.friend_request.created} outbox row (U13) for the request's receiver, in
+     * the caller's transaction. Called for every transition <em>into</em> {@code PENDING} — both a
+     * brand-new request and a re-send that reactivates a previously
+     * {@code DECLINED}/{@code CANCELLED}/stale-{@code ACCEPTED} row — since the receiver can't tell
+     * the two apart and needs to act on either. Aggregation on the consumer side collapses repeat
+     * re-sends from the same sender into one notification, so this can't be used to spam.
+     */
+    private void publishFriendRequestCreated(FriendRequest request) {
+        userOutboxWriter.record("user.friend_request.created", FriendRequestCreatedEvent.builder()
+                .requestId(request.getId())
+                .actorId(request.getSenderId())
+                .recipientUserId(request.getReceiverId())
+                .build());
     }
 
     /**
@@ -126,6 +151,17 @@ public class UserFriendServiceImpl implements UserFriendService {
      * Shared by {@link #acceptFriendRequest} (explicit accept) and {@link #sendFriendRequest}'s
      * crossed-request case (implicit accept of the other side's pending request) so there is one
      * place that defines "how a request becomes a friendship."
+     * <p>
+     * Emits two independent async events, both in the caller's transaction:
+     * <ul>
+     *   <li>{@code friendship.accepted} on the Redis domain-event stream — for services/chat's
+     *       authorization-cache sync (unchanged from U1).</li>
+     *   <li>a {@code user.friend_request.accepted} outbox row (U13) — notifies the request's
+     *       <em>original sender</em> ({@code request.getSenderId()}) that {@code request.getReceiverId()}
+     *       accepted. In the crossed-request path this maps correctly too: {@code request} there is
+     *       the reverse row, whose sender is the person who was waiting and whose receiver is the
+     *       caller who just reciprocated.</li>
+     * </ul>
      */
     private void establishFriendship(FriendRequest request) {
         request.setStatus(FriendRequestStatus.ACCEPTED);
@@ -143,6 +179,12 @@ public class UserFriendServiceImpl implements UserFriendService {
         publishDomainEvent("friendship.accepted", Map.of(
                 "user_id", request.getSenderId().toString(),
                 "friend_id", request.getReceiverId().toString()));
+
+        userOutboxWriter.record("user.friend_request.accepted", FriendRequestAcceptedEvent.builder()
+                .requestId(request.getId())
+                .actorId(request.getReceiverId())
+                .recipientUserId(request.getSenderId())
+                .build());
     }
 
     /**

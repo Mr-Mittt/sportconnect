@@ -22,6 +22,12 @@ dependencies {
     // services/chat/docs/SYNC_DESIGN.md.
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
+    // U13: transactional-outbox relay (UserOutboxRelayJob) publishes friend-request events to the
+    // sportconnect.events exchange via RabbitTemplate. Not transitively available from common,
+    // which declares spring-boot-starter-amqp as 'implementation', not 'api' — same as
+    // session-impl had to add it for SESSION-15.
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+
     // Password encoder (for password verification)
     implementation 'org.springframework.security:spring-security-crypto'
     
