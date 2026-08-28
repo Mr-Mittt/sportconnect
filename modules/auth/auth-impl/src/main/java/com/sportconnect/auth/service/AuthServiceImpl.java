@@ -126,17 +126,24 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("Refresh token expired or revoked");
         }
 
-        // Mark old token as revoked
-        refreshToken.setRevoked(true);
-        refreshTokenRepository.save(refreshToken);
-
-        // Fetch user via UserService
+        // U12: locks the user row (PESSIMISTIC_READ, held for this whole transaction) BEFORE
+        // touching refresh_tokens below — deliberately the same "users row first, refresh_tokens
+        // second" order UserServiceImpl.deleteUser() uses (PESSIMISTIC_WRITE on the same row), so
+        // the two can never deadlock on each other. This also closes the race where a concurrent
+        // deactivation's stale-read window would otherwise let this method mint a fresh token pair
+        // for an account that's being deactivated at that exact moment: this call now blocks until
+        // any in-flight deleteUser() for this user fully commits, then correctly observes
+        // isActive = false instead of racing ahead on stale data.
         UUID userId = refreshToken.getUserId();
-        UserResponse user = userService.getUserById(userId);
+        UserResponse user = userService.getActiveUserForUpdate(userId);
 
         if (!user.getIsActive()) {
             throw new UnauthorizedException("Account is deactivated");
         }
+
+        // Mark old token as revoked
+        refreshToken.setRevoked(true);
+        refreshTokenRepository.save(refreshToken);
 
         // Generate new tokens
         String newAccessToken = jwtTokenService.generateAccessToken(toTokenData(user));

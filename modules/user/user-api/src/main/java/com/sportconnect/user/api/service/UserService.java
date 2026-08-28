@@ -22,6 +22,16 @@ public interface UserService {
     UserResponse getUserById(UUID userId);
 
     /**
+     * U12: same "active user or not found" contract as {@link #getUserById}, but takes a shared
+     * row lock ({@code PESSIMISTIC_READ}) held for the caller's whole transaction, so a concurrent
+     * deactivation ({@code deleteUser}'s exclusive lock on the same row) blocks this instead of
+     * racing it. Only needed on a path that decides whether to mint new credentials for the user
+     * (today: {@code AuthServiceImpl.refreshToken()}) — everywhere else, the plain unlocked
+     * {@link #getUserById} is correct and cheaper.
+     */
+    UserResponse getActiveUserForUpdate(UUID userId);
+
+    /**
      * Batch lookup by ID. Missing/inactive ids are simply absent from the returned map —
      * no exception is thrown, mirroring a plain findAllById() semantics.
      */

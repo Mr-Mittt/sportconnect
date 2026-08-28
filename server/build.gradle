@@ -93,6 +93,11 @@ dependencies {
     // not declared for the main source set above, so it is test-only.
     testImplementation project(':modules:sport:sport-api')
 
+    // Same situation, via user-impl — needed here at compile time for the UserService interface
+    // UserServiceImpl implements, called directly (not through MockMvc) to exercise the real
+    // deactivation path in UserDeactivationSessionRevocationIntegrationTest (U12).
+    testImplementation project(':modules:user:user-api')
+
     // Polling assertions for async @RabbitListener processing (NTF-2's real-RabbitMQ IT test) —
     // a message is consumed on a background listener thread, not the test's calling thread.
     testImplementation 'org.awaitility:awaitility:4.2.2'

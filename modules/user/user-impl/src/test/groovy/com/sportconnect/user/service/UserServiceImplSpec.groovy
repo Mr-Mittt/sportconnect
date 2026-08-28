@@ -1,6 +1,7 @@
 package com.sportconnect.user.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.sportconnect.auth.api.service.AuthService
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
@@ -33,6 +34,7 @@ class UserServiceImplSpec extends Specification {
     RoleRepository roleRepository = Mock()
     PasswordEncoder passwordEncoder = Mock()
     UserFriendService userFriendService = Mock()
+    AuthService authService = Mock()
     StringRedisTemplate stringRedisTemplate = Mock()
     // Real instance, not a Mock() — a pure value-converter with no side effects, and using the
     // real one lets tests assert on the actual serialized payload publishDomainEvent produces.
@@ -40,7 +42,7 @@ class UserServiceImplSpec extends Specification {
     GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326)
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, stringRedisTemplate, objectMapper)
+    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, authService, stringRedisTemplate, objectMapper)
 
     def "getUserById should return user when found and active"() {
         given:
@@ -75,6 +77,38 @@ class UserServiceImplSpec extends Specification {
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.empty()
+        thrown(ResourceNotFoundException)
+    }
+
+    // U12: same contract as getUserById, but via the PESSIMISTIC_READ-locked query — used by
+    // AuthServiceImpl.refreshToken() so a concurrent deactivation can't race it.
+    def "getActiveUserForUpdate should return user when found and active"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        when:
+        def result = userService.getActiveUserForUpdate(userId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrueForShare(userId) >> Optional.of(user)
+        result.id == userId
+    }
+
+    def "getActiveUserForUpdate should throw exception when user not found or inactive"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        userService.getActiveUserForUpdate(userId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrueForShare(userId) >> Optional.empty()
         thrown(ResourceNotFoundException)
     }
 
@@ -440,11 +474,13 @@ class UserServiceImplSpec extends Specification {
         userService.deleteUser(userId)
 
         then:
-        1 * userRepository.findById(userId) >> Optional.of(user)
+        1 * userRepository.findByIdForUpdate(userId) >> Optional.of(user)
         1 * userRepository.save(_) >> { User savedUser ->
             assert savedUser.isActive == false
             return savedUser
         }
+        // U12: deactivation must also revoke the user's sessions, not just flip isActive.
+        1 * authService.logout(userId)
     }
 
     def "deleteUser should throw exception when user not found"() {
@@ -455,8 +491,9 @@ class UserServiceImplSpec extends Specification {
         userService.deleteUser(userId)
 
         then:
-        1 * userRepository.findById(userId) >> Optional.empty()
+        1 * userRepository.findByIdForUpdate(userId) >> Optional.empty()
         thrown(ResourceNotFoundException)
+        0 * authService.logout(_)
     }
 
     def "existsByEmail should return true when email exists"() {

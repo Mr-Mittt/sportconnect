@@ -215,7 +215,7 @@ class AuthServiceImplSpec extends Specification {
         userResponse.getUsername() >> null
         userResponse.getRoles() >> new HashSet<>(["USER"])
         userResponse.getIsActive() >> true
-        userService.getUserById(userId) >> userResponse
+        userService.getActiveUserForUpdate(userId) >> userResponse
 
         and: "jwt service generates tokens"
         jwtTokenService.generateAccessToken(_) >> "new-access-token"
