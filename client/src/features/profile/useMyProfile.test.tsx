@@ -67,7 +67,7 @@ describe('useMyProfile', () => {
     const { result } = renderHook(() => useMyProfile(), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(apiClient.get).toHaveBeenCalledWith('/users/user-1');
+    expect(apiClient.get).toHaveBeenCalledWith('/users/me');
     expect(result.current.data?.city).toBe('Hanoi');
     expect(result.current.data?.country).toBe('Vietnam');
   });

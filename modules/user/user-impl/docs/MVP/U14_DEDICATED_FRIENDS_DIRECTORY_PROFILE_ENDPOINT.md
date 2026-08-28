@@ -37,6 +37,16 @@ here. Only design a genuinely separate endpoint if Friends turns out to need som
 subset doesn't cover (e.g. friendship-status-aware fields) — don't build a parallel endpoint that
 duplicates U11's for no reason.
 
+**U11 shipped 2026-08-28** — `GET /api/users/{userId}` (and its email/username siblings) now
+returns `UserInfoResponse` (`id`, `fullName`, `username`, `avatarUrl`, `coverUrl`, `bio`), gated
+behind `@PreAuthorize("hasRole('USER')")` rather than public/unauthenticated. That's exactly the
+shape this ticket describes wanting, `username` included — so at pickup, this most likely is the
+"collapses to a client-side rename/re-type" case above: confirm Friends doesn't need anything beyond
+those 6 fields, then retype `useUserProfile`'s `FriendUser` consumption to a proper
+`UserInfoResponse`-shaped type (or just add `username` to `FriendUser`) rather than designing a new
+endpoint. Note the endpoint call itself now requires auth (was previously anonymous) — irrelevant to
+Friends' own caller, since every Friends page already sits behind `ProtectedRoute`.
+
 ## Out of scope
 
 Any friendship-relationship-specific enrichment (mutual friends, common sports) — not requested,

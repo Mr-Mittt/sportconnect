@@ -113,7 +113,7 @@ const footballPost = {
  * wrapper is.
  */
 function mockGet(url: string): { data: unknown } {
-  if (url === '/users/user-1') return apiResponse(profileFixture);
+  if (url === '/users/me') return apiResponse(profileFixture);
   if (url === '/sports/profiles/user/user-1') return apiResponse([footballProfile]);
   if (url === '/sports') return apiResponse([{ id: 5, name: 'Football', iconUrl: null }]);
   if (url === '/posts/mine') return apiResponse({ ...emptyPage().data.data, content: [footballPost] });

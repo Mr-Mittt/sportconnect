@@ -93,7 +93,10 @@ public class SecurityConfig {
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/sports/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/users/**").permitAll()
+                        // U11: no longer public — every GET under /api/users/** now either already
+                        // had its own @PreAuthorize (search, friends/**, me/preferences) or gained
+                        // one this ticket (the id/email/username lookups, the check/* endpoints,
+                        // and the new /me). Nothing anonymous remains under this path.
                         .requestMatchers(HttpMethod.GET, "/api/hashtags/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/posts/hashtag/**").permitAll()
 

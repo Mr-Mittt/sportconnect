@@ -61,10 +61,11 @@ interface FriendsSession {
   nextRequestId: number;
   // PROFILE-8: the logged-in user's own editable profile row — `/profile`'s
   // Edit Profile modal (`useUpdateMyProfile`, `PUT /api/users/{userId}/profile`)
-  // needs a save to actually change what the next GET /api/users/{userId}
-  // returns, same "small stateful fake backend" reasoning as every other
-  // mutable fixture in this suite. Didn't exist before this ticket — PROFILE-7
-  // only ever needed the GET side (a clean, unsaved load).
+  // needs a save to actually change what the next GET /api/users/me (U11;
+  // was GET /api/users/{userId}) returns, same "small stateful fake backend"
+  // reasoning as every other mutable fixture in this suite. Didn't exist
+  // before this ticket — PROFILE-7 only ever needed the GET side (a clean,
+  // unsaved load).
   myProfileState: UserResponse;
 }
 
@@ -210,18 +211,27 @@ export const friendHandlers: HttpHandler[] = [
     );
   }),
 
-  // Public — GET /api/users/{userId}. PROFILE-7: the real endpoint always
-  // returns the full UserResponse regardless of caller — this mock now does
-  // too for the logged-in user's own id (useMyProfile's only caller), while
-  // every other id still resolves through the narrow KNOWN_USERS directory
-  // (every other consumer of this endpoint only ever narrows down to
-  // FriendUser, so the extra fields are simply unused there).
+  // U11: the caller's own full profile moved to a dedicated self-only
+  // endpoint (PROFILE-6's `useMyProfile` now calls this instead of
+  // GET /api/users/{userId} with its own id). Requires auth, same as the
+  // real endpoint.
+  http.get('/api/users/me', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = friendsSessions.get(sessionIdFromRequest(request));
+    return HttpResponse.json(apiResponse(session.myProfileState, 'User retrieved successfully'));
+  }),
+
+  // GET /api/users/{userId}. U11: authenticated (no longer public) and
+  // always returns the safe PII-free subset (UserInfoResponse on the real
+  // backend) regardless of who's asking — including the caller's own id,
+  // which now resolves through GET /api/users/me instead. Every consumer of
+  // this endpoint only ever narrows down to FriendUser anyway, so the mock
+  // stays shaped that way.
   http.get('/api/users/:userId', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
     const userId = String(params.userId);
-    if (userId === mockUser.id) {
-      const session = friendsSessions.get(sessionIdFromRequest(request));
-      return HttpResponse.json(apiResponse(session.myProfileState, 'User retrieved successfully'));
-    }
     const user = KNOWN_USERS[userId];
     if (user === undefined) {
       return HttpResponse.json(apiError('User not found'), { status: 404 });

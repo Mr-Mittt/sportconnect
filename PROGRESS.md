@@ -233,6 +233,29 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   narrow: every internal caller (`AuthServiceImpl`, `CommentServiceImpl`, `PostServiceImpl`) calls
   `UserService` directly in-process, never through this HTTP layer. No client screen depends on the
   wider shape either. Scoping only, no code yet.
+- **U11 DONE** (2026-08-28, `modules/user/user-impl/docs/MVP/U11_PROTECT_USER_DATA_SCOPE_PUBLIC_USER_LOOKUP_ENDPOINTS.md`):
+  narrowed `GET /api/users/{userId}`/`/email/{email}`/`/username/{username}` to a new
+  `UserInfoResponse` (`id`/`fullName`/`username`/`avatarUrl`/`coverUrl`/`bio` only) and gated all
+  three plus `check/email`/`check/username` behind `@PreAuthorize("hasRole('USER')")`; removed
+  `SecurityConfig`'s blanket `GET /api/users/**` permit-all (nothing anonymous remains under that
+  path — decided at pickup after confirming no client caller uses the check endpoints or the
+  email/username lookups). Rescoped from the original filed plan: PROFILE-0 (client) had since built
+  `useMyProfile()` on top of `GET /api/users/{userId}` with the caller's own id for the *full*
+  profile, which the original "no self special-case" narrowing would have silently broken. Resolved
+  by adding a new self-only `GET /api/users/me` (still full `UserResponse`, caller derived from the
+  JWT principal via the same `@AuthenticationPrincipal` pattern as this controller's own
+  `PUT /me/password`) and migrating the client's `useMyProfile()` to call it instead — kept the three
+  public-facing lookups on one static response shape, no caller-dependent branching. No
+  `UserService`/entity/migration changes — narrowing happens entirely at the controller's DTO
+  mapping, reusing the existing `getUserById`/`getUserByEmail`/`getUserByUsername` methods as-is (all
+  in-process cross-domain callers — `AuthServiceImpl`/`CommentServiceImpl`/`PostServiceImpl` — are
+  unaffected, confirmed unchanged). New `UserLookupAccessIntegrationTest` (10 cases): anonymous 401
+  on all 6 gated endpoints, authenticated lookup responses assert every PII field is absent
+  (`doesNotExist()`), `/me` returns the caller's own full profile. `CLAUDE.md`'s public-endpoints line
+  updated to match. `:modules:user:user-impl:test` and `:server:test` both green; client `tsc -b`,
+  full Vitest (1029 tests), and the `e2e`/`profile`+`friends` Playwright flows all green — the one
+  pixel-diff visual-regression failure on `app-profile.spec.ts` was confirmed pre-existing on
+  `master` (unrelated scrollbar-width diff, not caused by this change) via a stash-and-rerun check.
 - **U12 filed (2026-08-10, `TODO`):** Revoke sessions on deactivation — found while discussing what
   "delete account" does today. `UserServiceImpl.deleteUser()` only flips `is_active = false`; it
   never revokes the user's refresh tokens (`user-impl` doesn't even depend on `auth-api` yet) or
@@ -242,8 +265,8 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   (access-token gap): DB lookup vs. Redis deny-list per request — tradeoff to confirm at pickup,
   may split into its own ticket; worth coordinating with whoever picks up auth's A5 (also about to
   add a per-request Redis check, for rate limiting).
-- **MVP backlog:** 12 tickets (U1–U12) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, 10 `DONE`,
-  U11/U12 `TODO`
+- **MVP backlog:** 12 tickets (U1–U12) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, 11 `DONE`,
+  U12 `TODO`
 
 #### `modules:sport:sport-api` + `modules:sport:sport-impl`
 - `Sport` entity: name, description, category, icon_url, min/max players, soft delete
