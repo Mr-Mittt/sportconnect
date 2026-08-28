@@ -1,5 +1,6 @@
 package com.sportconnect.auth.api.service;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -41,6 +42,14 @@ public interface JwtTokenService {
      * Extract authorities/roles from token
      */
     List<String> getAuthoritiesFromToken(String token);
+
+    /**
+     * U12: the token's {@code iat} claim, as the instant it was issued — compared against a
+     * user's revocation watermark ({@code TokenRevocationChecker}) to reject an access token
+     * that's cryptographically/temporally valid but was issued before the account was
+     * deactivated (or logged out) elsewhere.
+     */
+    Instant getIssuedAtFromToken(String token);
 
     /**
      * Get refresh token expiration time

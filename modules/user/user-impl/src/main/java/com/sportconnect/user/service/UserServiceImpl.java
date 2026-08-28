@@ -1,6 +1,7 @@
 package com.sportconnect.user.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sportconnect.auth.api.service.AuthService;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
@@ -16,8 +17,8 @@ import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
 import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -45,16 +46,44 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserFriendService userFriendService;
+    private final AuthService authService;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+
+    /**
+     * Explicit constructor (not {@code @RequiredArgsConstructor}) because {@code authService}
+     * must be {@code @Lazy}: U12 made AuthServiceImpl depend on UserService (it already did) AND
+     * UserServiceImpl depend on AuthService (new, for deleteUser()'s session revocation) — eager
+     * construction of both beans forms a cycle Spring refuses to start with by default, same
+     * class of problem as GroupServiceImpl's own {@code @Lazy PostService} (see that class for the
+     * fuller explanation). authService is only used here for one call in deleteUser() — a lazy
+     * proxy defers resolving the real AuthServiceImpl bean until that call actually happens, well
+     * after both beans exist. Relying on Lombok to copy @Lazy onto a generated constructor
+     * parameter is not guaranteed without a lombok.config entry, so this is spelled out by hand.
+     */
+    public UserServiceImpl(
+            UserRepository userRepository,
+            RoleRepository roleRepository,
+            PasswordEncoder passwordEncoder,
+            UserFriendService userFriendService,
+            @Lazy AuthService authService,
+            StringRedisTemplate stringRedisTemplate,
+            ObjectMapper objectMapper) {
+        this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.userFriendService = userFriendService;
+        this.authService = authService;
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.objectMapper = objectMapper;
+    }
 
     // services/chat (the first non-Java service in this repo) consumes this stream to keep its
     // own local authorization cache in sync — see services/chat/docs/SYNC_DESIGN.md.
@@ -89,6 +118,14 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public UserResponse getUserById(UUID userId) {
         User user = userRepository.findByIdAndIsActiveTrue(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        return toUserResponse(user);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getActiveUserForUpdate(UUID userId) {
+        User user = userRepository.findByIdAndIsActiveTrueForShare(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
         return toUserResponse(user);
     }
@@ -210,13 +247,25 @@ public class UserServiceImpl implements UserService {
         return toUserResponse(savedUser);
     }
 
+    /**
+     * Soft delete (isActive=false) plus U12's session-revocation follow-through, in one
+     * transaction. {@code findByIdForUpdate} takes an exclusive row lock held until this
+     * transaction commits — deliberately acquired <em>before</em> {@link #authService}'s revoke
+     * call touches {@code refresh_tokens}, matching the same "users row first, refresh_tokens
+     * second" lock order {@code AuthServiceImpl.refreshToken()} now also follows, so the two can
+     * never deadlock on each other. While this lock is held, a concurrent
+     * {@code getActiveUserForUpdate} (a racing refresh for this same user) blocks until this
+     * transaction commits, then correctly observes {@code isActive = false} instead of racing
+     * ahead on stale data. See U12's implementation doc for the full race analysis this closes.
+     */
     @Override
     @Transactional
     public void deleteUser(UUID userId) {
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
         user.setIsActive(false);
         userRepository.save(user);
+        authService.logout(userId);
         log.info("Soft deleted user: {}", userId);
     }
 

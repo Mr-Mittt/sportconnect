@@ -265,8 +265,34 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   (access-token gap): DB lookup vs. Redis deny-list per request — tradeoff to confirm at pickup,
   may split into its own ticket; worth coordinating with whoever picks up auth's A5 (also about to
   add a per-request Redis check, for rate limiting).
-- **MVP backlog:** 12 tickets (U1–U12) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, 11 `DONE`,
-  U12 `TODO`
+- **U12 DONE** (2026-08-28, `modules/user/user-impl/docs/MVP/U12_REVOKE_SESSIONS_WHEN_A_USER_IS_DEACTIVATED.md`):
+  built both fixes. Fix 1 — `UserServiceImpl.deleteUser()` now calls `authService.logout(userId)`
+  (new `user-impl` → `auth-api` dependency), revoking every refresh token row for the user in one
+  bulk update. Fix 2 — new `TokenRevocationChecker` (`auth-impl`), consulted by
+  `JwtAuthenticationFilter` after every `validateToken()` pass: cache-aside over
+  `RefreshTokenRepository.findLatestRevocationTimestamp()` (`MAX(revoked_at)`, already durably
+  written by Fix 1's bulk revoke — Redis is a pure read-through cache in front of it, never written
+  to directly, so a Redis crash/data-loss just costs one DB query on the next request instead of
+  silently reopening the hole). Also closes a **second** latent gap for free: since both a plain
+  logout and a deactivation call the same `AuthService.logout()`, a plain logout now also
+  invalidates the caller's held access token immediately (previously only refresh tokens were
+  revoked on logout). Design review surfaced and closed a real TOCTOU race not in the original
+  scope: a concurrent `refreshToken()` could read stale `isActive=true` and mint a fresh token pair
+  that a same-moment `deleteUser()`'s revoke sweep would never catch — fixed with `PESSIMISTIC_WRITE`
+  (`deleteUser`) / `PESSIMISTIC_READ` (`refreshToken`, new `UserService.getActiveUserForUpdate()`)
+  row locks on `users`, held for the whole transaction; also reordered `refreshToken()` to lock
+  `users` before `refresh_tokens` (matching `deleteUser()`'s order) to avoid a lock-order deadlock
+  between the two paths. `:server:test` (not the module-level Spock specs) surfaced a circular
+  Spring bean dependency (`UserServiceImpl` ↔ `AuthServiceImpl`) once both directions existed —
+  fixed with `@Lazy` on `UserServiceImpl`'s `AuthService` field via an explicit constructor, same
+  precedent as `GroupServiceImpl`'s `@Lazy PostService`. New `UserDeactivationSessionRevocationIntegrationTest`
+  (4 cases, real MockMvc + real Redis): active-user regression guard, refresh-token revocation,
+  access-token deny-list rejection, and the deny-list still rejecting with the Redis cache entry
+  explicitly cleared (Postgres-fallback proof). The concurrent-transaction race itself (two threads
+  racing for real) is **not** covered by an automated test — verified by the locking design/reasoning
+  only, recorded as a named verification gap rather than silently assumed correct. `:server:test`:
+  135/135 green.
+- **MVP backlog:** 12 tickets (U1–U12) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, all 12 `DONE`
 
 #### `modules:sport:sport-api` + `modules:sport:sport-impl`
 - `Sport` entity: name, description, category, icon_url, min/max players, soft delete

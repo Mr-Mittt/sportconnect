@@ -42,6 +42,21 @@ CREATE TABLE IF NOT EXISTS user_roles (
     FOREIGN KEY (role_id) REFERENCES roles(id)
 );
 
+-- Create refresh_tokens table (needed once an IT test started exercising real refresh/deactivation
+-- flows — U12, modules/user/user-impl/docs/BACKLOG_MVP.md). Mirrors V002__create_auth_tables.sql.
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL,
+    token VARCHAR(500) UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    revoked_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
+
 -- Create sports table (needed once PostServiceImpl started querying it directly — A9,
 -- modules/social/post-impl/docs/BACKLOG_MVP.md)
 CREATE TABLE IF NOT EXISTS sports (

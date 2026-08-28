@@ -4,6 +4,8 @@ import com.sportconnect.auth.config.JwtProperties
 import spock.lang.Specification
 import spock.lang.Subject
 
+import java.time.Instant
+
 class JwtTokenServiceImplSpec extends Specification {
 
     JwtProperties jwtProperties
@@ -98,6 +100,26 @@ class JwtTokenServiceImplSpec extends Specification {
 
         then: "should return correct user ID"
         extractedUserId == userId.toString()
+    }
+
+    // U12: TokenRevocationChecker compares this against a user's revocation watermark.
+    def "should extract issued-at instant from token"() {
+        given: "a token generated just now"
+        def userData = [
+            id: UUID.randomUUID(),
+            email: "test@example.com",
+            username: "testuser",
+            roles: ["USER"]
+        ]
+        def before = Instant.now().minusSeconds(1)
+        def token = jwtTokenService.generateAccessToken(userData)
+
+        when: "extracting issued-at"
+        def issuedAt = jwtTokenService.getIssuedAtFromToken(token)
+
+        then: "should be an instant around generation time, second-precision per the JWT spec"
+        !issuedAt.isBefore(before)
+        !issuedAt.isAfter(Instant.now().plusSeconds(1))
     }
 
     def "should extract email from token"() {
