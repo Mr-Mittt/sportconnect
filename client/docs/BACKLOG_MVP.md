@@ -71,6 +71,8 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 1 | [ACCOUNT-1](MVP/ACCOUNT-1_ACCOUNT_SETTINGS_MODAL.md) | Account Settings modal, triggered from `TopBar`'s avatar dropdown — split out of `/profile` scoping (visibility/toggles/log out don't belong on that page); independent of every `PROFILE-*` ticket | `TODO` |
 | 2 | [FRIEND-2](MVP/FRIEND-2_DEDICATED_FRIEND_PROFILE_HOOK.md) | Dedicated friend-profile hook, off `useUserProfile` (moved to `features/profile/` by `PROFILE-0`, still borrowed as-is by Friends) — blocked on backend U14 | `TODO` |
 | 3 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
+| 4 | [PROFILE-12](MVP/PROFILE-12_HEADER_LOADING_ERROR_PLACEHOLDER.md) | ProfileHeader shows a placeholder instead of blank space while `/profile`'s profile query is loading or errors — found during backend U11's rollout, when a stale backend made the header vanish entirely | `TODO` |
+| 5 | [GRP-11](MVP/GRP-11_GROUP_COVER_BANNER_PENDING_SELECTION_PLACEHOLDER.md) | `GroupCoverBanner` shows a placeholder instead of the discovery panel while a cross-page-navigated group selection is still loading — found alongside `PROFILE-12` | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
