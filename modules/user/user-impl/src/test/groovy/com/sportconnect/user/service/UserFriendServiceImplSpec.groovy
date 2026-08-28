@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.user.api.dto.FriendRequestStatus
+import com.sportconnect.user.api.event.FriendRequestAcceptedEvent
+import com.sportconnect.user.api.event.FriendRequestCreatedEvent
 import com.sportconnect.user.entity.FriendRequest
 import com.sportconnect.user.entity.Friendship
 import com.sportconnect.user.entity.User
@@ -25,6 +27,7 @@ class UserFriendServiceImplSpec extends Specification {
     // Real instance, not a Mock() — a pure value-converter with no side effects, and using the
     // real one lets tests assert on the actual serialized payload publishDomainEvent produces.
     ObjectMapper objectMapper = new ObjectMapper()
+    UserOutboxWriter userOutboxWriter = Mock()
 
     @Subject
     UserFriendServiceImpl service = new UserFriendServiceImpl(
@@ -32,7 +35,8 @@ class UserFriendServiceImplSpec extends Specification {
             friendshipRepository,
             userRepository,
             stringRedisTemplate,
-            objectMapper
+            objectMapper,
+            userOutboxWriter
     )
 
     UUID senderId = UUID.randomUUID()
@@ -169,6 +173,81 @@ class UserFriendServiceImplSpec extends Specification {
         0 * friendRequestRepository.findBySenderIdAndReceiverId(_, _)
     }
 
+    // ─── sendFriendRequest: U13 notification outbox ──────────────────────────
+
+    def "sendFriendRequest writes a user.friend_request.created outbox row for the receiver on a fresh request"() {
+        when:
+        service.sendFriendRequest(senderId, receiverId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.of(user(receiverId))
+        1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
+        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.empty()
+        1 * friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId) >> Optional.empty()
+        1 * friendRequestRepository.save(_ as FriendRequest)
+        1 * userOutboxWriter.record("user.friend_request.created", { FriendRequestCreatedEvent e ->
+            e.actorId == senderId && e.recipientUserId == receiverId
+        })
+        0 * userOutboxWriter.record("user.friend_request.accepted", _)
+    }
+
+    def "sendFriendRequest writes a user.friend_request.created outbox row when reactivating a DECLINED row"() {
+        given:
+        def existing = FriendRequest.builder().id(requestId).senderId(senderId).receiverId(receiverId)
+                .status(FriendRequestStatus.DECLINED).build()
+
+        when:
+        service.sendFriendRequest(senderId, receiverId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.of(user(receiverId))
+        1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
+        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.empty()
+        1 * friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId) >> Optional.of(existing)
+        1 * friendRequestRepository.save({ it.id == requestId && it.status == FriendRequestStatus.PENDING })
+        1 * userOutboxWriter.record("user.friend_request.created", { FriendRequestCreatedEvent e ->
+            e.requestId == requestId && e.actorId == senderId && e.recipientUserId == receiverId
+        })
+    }
+
+    def "sendFriendRequest writes user.friend_request.accepted (not .created) to the original requester on the crossed-request path"() {
+        given:
+        def reverseRequest = FriendRequest.builder().id(requestId).senderId(receiverId).receiverId(senderId)
+                .status(FriendRequestStatus.PENDING).build()
+
+        when:
+        service.sendFriendRequest(senderId, receiverId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.of(user(receiverId))
+        1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
+        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.of(reverseRequest)
+        2 * friendshipRepository.save(_ as Friendship)
+        // The original requester (receiverId, who sent the pending reverse request) is the recipient;
+        // the caller (senderId, who just reciprocated) is the actor.
+        1 * userOutboxWriter.record("user.friend_request.accepted", { FriendRequestAcceptedEvent e ->
+            e.requestId == requestId && e.actorId == senderId && e.recipientUserId == receiverId
+        })
+        0 * userOutboxWriter.record("user.friend_request.created", _)
+    }
+
+    def "sendFriendRequest writes no outbox row when the request is rejected as already pending"() {
+        given:
+        def existing = FriendRequest.builder().id(requestId).senderId(senderId).receiverId(receiverId)
+                .status(FriendRequestStatus.PENDING).build()
+
+        when:
+        service.sendFriendRequest(senderId, receiverId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.of(user(receiverId))
+        1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
+        1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.empty()
+        1 * friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId) >> Optional.of(existing)
+        thrown(BadRequestException)
+        0 * userOutboxWriter.record(_, _)
+    }
+
     // ─── acceptFriendRequest ─────────────────────────────────────────────────
 
     def "acceptFriendRequest should create two friendship rows on success"() {
@@ -211,6 +290,24 @@ class UserFriendServiceImplSpec extends Specification {
         })
     }
 
+    def "acceptFriendRequest writes a user.friend_request.accepted outbox row to the original sender"() {
+        given:
+        def request = FriendRequest.builder().id(requestId).senderId(senderId).receiverId(receiverId)
+                .status(FriendRequestStatus.PENDING).build()
+
+        when:
+        service.acceptFriendRequest(requestId, receiverId)
+
+        then:
+        1 * friendRequestRepository.findByIdAndReceiverId(requestId, receiverId) >> Optional.of(request)
+        1 * friendRequestRepository.save({ it.status == FriendRequestStatus.ACCEPTED })
+        2 * friendshipRepository.save(_ as Friendship)
+        1 * userOutboxWriter.record("user.friend_request.accepted", { FriendRequestAcceptedEvent e ->
+            e.requestId == requestId && e.actorId == receiverId && e.recipientUserId == senderId
+        })
+        0 * userOutboxWriter.record("user.friend_request.created", _)
+    }
+
     def "acceptFriendRequest should throw NotFoundException when request not found for receiver"() {
         when:
         service.acceptFriendRequest(requestId, receiverId)
@@ -235,7 +332,7 @@ class UserFriendServiceImplSpec extends Specification {
 
     // ─── declineFriendRequest ────────────────────────────────────────────────
 
-    def "declineFriendRequest should mark request declined"() {
+    def "declineFriendRequest should mark request declined and write no outbox row (reject stays silent)"() {
         given:
         def request = FriendRequest.builder().id(requestId).senderId(senderId).receiverId(receiverId)
                 .status(FriendRequestStatus.PENDING).build()
@@ -246,6 +343,7 @@ class UserFriendServiceImplSpec extends Specification {
         then:
         1 * friendRequestRepository.findByIdAndReceiverId(requestId, receiverId) >> Optional.of(request)
         1 * friendRequestRepository.save({ it.status == FriendRequestStatus.DECLINED })
+        0 * userOutboxWriter.record(_, _)
     }
 
     def "declineFriendRequest should throw NotFoundException when request not found"() {

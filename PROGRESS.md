@@ -292,7 +292,41 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   racing for real) is **not** covered by an automated test — verified by the locking design/reasoning
   only, recorded as a named verification gap rather than silently assumed correct. `:server:test`:
   135/135 green.
-- **MVP backlog:** 12 tickets (U1–U12) in `modules/user/user-impl/docs/BACKLOG_MVP.md`, all 12 `DONE`
+- **U13 DONE** (2026-08-28, `modules/user/user-impl/docs/MVP/U13_NOTIFICATION_OUTBOX_WIRING_FRIEND_REQUEST_RECEIVED_ACCEPTED.md`):
+  notification outbox wiring for friend requests — closes the `// TODO: notify receiver` stub in
+  `UserFriendServiceImpl` (open since U1). New `user_outbox_events` table (`V060`, `OutboxEvent`
+  shape / C3, partial index on `status='PENDING'` from the start per SESSION-17's lesson);
+  `UserOutboxEvent`/`UserOutboxEventRepository`/`UserOutboxWriter` (serialize + save in the caller's
+  txn) / `UserOutboxRelayJob` (`@Scheduled(fixedDelay=10000)`, own `OutboxRelay` per tick) — 1:1
+  with `session-impl`'s SESSION-15 pattern. Two `user-api` payload DTOs
+  (`FriendRequestCreatedEvent`/`FriendRequestAcceptedEvent`, both single-recipient). Routing keys
+  `user.friend_request.created` (written on **every** transition into `PENDING` — a fresh request
+  *and* a re-send that reactivates a `DECLINED`/`CANCELLED`/stale-`ACCEPTED` row, since the receiver
+  can't tell them apart) and `user.friend_request.accepted` (written inside `establishFriendship`,
+  so it covers explicit accept *and* the U10 crossed-request auto-accept; recipient is the original
+  sender). `declineFriendRequest` stays silent by explicit product decision.
+  **Consumer side pulled into this ticket** (not deferred like B7/B21's will be): `notification-impl`
+  gains `UserEventsConsumer` (`@RabbitListener`, queue `notification.events.user`, pattern
+  `user.*.*`) + `UserEventProcessor` (`@Transactional`, `processed_messages` dedup → `recordEvent`
+  → `NotificationLiveUpdateEvent`), mirroring the session consumer. `Notification.entityType="USER"`,
+  `entityId` = the counterparty's user id (= `actorId` for both events). No exchange `@Bean`
+  redeclared — `session-impl` owns that (would be `BeanDefinitionOverrideException` otherwise);
+  `UserOutboxRabbitConfig` is a constant-only holder. New `spring-boot-starter-amqp` dep on
+  `user-impl`. Tests: `UserFriendServiceImplSpec` (+6 cases), new `UserOutboxWriterSpec`,
+  `UserEventsConsumerSpec`, `UserEventProcessorSpec`, and `UserFriendEventsConsumerIntegrationTest`
+  (server, real RabbitMQ). **Deferred to a follow-on client ticket** (`CLIENT-NOTIF-*`, filed): the
+  client's `NotificationType` union + `getNotificationText` cases for the two new keys — until it
+  ships, friend notifications render the generic fallback row (graceful, dev-warns). Whether a
+  deactivated *recipient* should still get notified is `NOTIF-4` (unresolved) and out of scope here.
+  **Verification:** module specs + `UserFriendEventsConsumerIntegrationTest` (real RabbitMQ) 3/3
+  green (isolation, paired, full-suite); live end-to-end against the dev stack confirmed both events
+  (`V060` applied; outbox row → `SENT` via the relay → correct `Notification` row for the correct
+  recipient, `created`→receiver and `accepted`→original sender). Full-suite `:server:test` had a
+  6-test flake in the **pre-existing** `SessionEventsConsumerIntegrationTest` (`AmqpIOException`,
+  passes in isolation) from Docker/Hyper-V instability on the dev host — unrelated to U13, re-run on
+  CI.
+- **MVP backlog:** `modules/user/user-impl/docs/BACKLOG_MVP.md` — U1–U13 `DONE`, U14 (dedicated
+  Friends-directory profile endpoint) `TODO`
 
 #### `modules:sport:sport-api` + `modules:sport:sport-impl`
 - `Sport` entity: name, description, category, icon_url, min/max players, soft delete
