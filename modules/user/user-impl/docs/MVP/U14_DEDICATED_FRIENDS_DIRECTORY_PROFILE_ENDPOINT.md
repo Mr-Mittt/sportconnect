@@ -1,6 +1,6 @@
 # U14 · Dedicated Friends-directory profile endpoint
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-08-29) — resolved to **no backend change**; client cleanup handed to `FRIEND-2`
 **Type:** New Feature / Cleanup
 **Depends on:** none to file; **see relationship to U11 below before scoping**
 
@@ -52,5 +52,40 @@ Friends' own caller, since every Friends page already sits behind `ProtectedRout
 Any friendship-relationship-specific enrichment (mutual friends, common sports) — not requested,
 not scoped; this ticket is about giving Friends its own contract, not growing what that contract
 returns beyond today's `FriendUser` fields unless U11's subset turns out to be missing one of them.
+
+---
+
+## Resolution (2026-08-29, at `/workon user MVP` pickup)
+
+**Approved scope:** doc-only close. No backend surface built; the client-side hook rename/retype
+stays with `FRIEND-2` and is implemented later.
+
+**Finding — U11 already shipped the exact contract this ticket was filed to ask for:**
+
+- `GET /api/users/{userId}` (and its `/email/{email}`, `/username/{username}` siblings) now returns
+  `UserInfoResponse` — `{ id, fullName, username, avatarUrl, coverUrl, bio }` — via
+  `UserInfoResponse.of(UserResponse)` in `UserController`, gated `@PreAuthorize("hasRole('USER')")`
+  (was previously public / full-PII `UserResponse`).
+- That is a **superset** of today's client `FriendUser` (`id, fullName, avatarUrl, coverUrl, bio`) —
+  it adds `username`. `FriendProfilePanel` renders `fullName` / `bio` / `avatarUrl` / `coverUrl`
+  only; nothing in Friends needs a field `UserInfoResponse` doesn't carry.
+- `useMyProfile()` (the logged-in user's own full profile) already moved to `GET /api/users/me` in
+  U11, so `useUserProfile()` (the by-id lookup) is now consumed by exactly one call site —
+  `useFriendsPageData.ts` — and no longer shares an endpoint with anyone else's use case.
+
+So the only real work left is the client feature-folder cleanup already ticketed as `FRIEND-2`
+(move the borrowed `features/profile/useUserProfile` into a Friends-owned `useFriendProfile`, drop
+the cross-feature import). No parallel/duplicate endpoint is warranted.
+
+**Handoff to `FRIEND-2` (Delta recorded on its ticket):** consume `GET /api/users/{userId}`'s
+`UserInfoResponse` as-is; type `useFriendProfile`'s result **1:1 with `UserInfoResponse`** — all six
+fields including `username: string | null` (user decision at this pickup) — even though no Friends
+UI renders `username` yet.
+
+**Touched by this ticket:** `FRIEND-2` ticket doc + `client/docs/BACKLOG_MVP.md` references
+(unblock + Delta), this file, `PROGRESS.md`, `BACKLOG_MVP.md` status. No code, no tests, no
+migration. (The 3 now-stale doc comments in `features/profile/useUserProfile.ts`,
+`features/profile/types.ts`, `features/friends/types.ts` that still describe the pre-U11 "public /
+full `UserResponse`" behavior are left for `FRIEND-2` to correct when it does the retype.)
 
 ---

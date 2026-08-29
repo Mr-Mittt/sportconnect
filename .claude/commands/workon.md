@@ -103,6 +103,30 @@ Note the client's own compile-time guard covers only half of this: `Notification
 exhaustive union, so adding a member without a `getNotificationText` case fails the build — but
 nothing forces anyone to add the member in the first place. That gap is what this check exists for.
 
+### Scope-change gate — always ask before Phase 2
+
+A ticket's scope can shift between when it was filed and when it's picked up — a new requirement
+gets realized, or something originally in scope turns out not to belong. So once the questions
+above are answered, **always ask the user explicitly, in these words:**
+
+> **"Do you want to add or remove anything to this ticket before we move to Phase 2?"**
+
+If the user adds or removes anything:
+
+1. **Write the change into the ticket itself first** — its `<VERSION>/` file (restructured) or its
+   inline section (flat). Add/edit the affected requirement, acceptance criterion, or
+   **Out of scope** bullet, and mark it as a scope change with the date and a one-line why (same
+   spirit as a **Delta**). Don't leave the change living only in this conversation — the ticket is
+   the record.
+2. **Re-run Phase 1 against the revised scope** — every question above (What / Who / Entry point /
+   Inputs & outputs / Edge cases / Out of scope), *plus* the cross-domain concept-precedent check,
+   the account-lifecycle check, and the client-visible enum/event-type check. A late addition can
+   newly trip any of them even if the original scope didn't.
+3. **Ask the add/remove question again.** Repeat this loop until the user answers that there's
+   nothing more to change.
+
+Only once the user explicitly confirms there is nothing to add or remove is the scope locked.
+
 Do not proceed to Phase 2 until the user confirms the scope.
 
 ---
