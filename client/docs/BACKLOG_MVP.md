@@ -69,7 +69,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [ACCOUNT-1](MVP/ACCOUNT-1_ACCOUNT_SETTINGS_MODAL.md) | Account Settings modal, triggered from `TopBar`'s avatar dropdown — split out of `/profile` scoping (visibility/toggles/log out don't belong on that page); independent of every `PROFILE-*` ticket | `TODO` |
-| 2 | [FRIEND-2](MVP/FRIEND-2_DEDICATED_FRIEND_PROFILE_HOOK.md) | Dedicated friend-profile hook, off `useUserProfile` (moved to `features/profile/` by `PROFILE-0`, still borrowed as-is by Friends) — blocked on backend U14 | `TODO` |
+| 2 | [FRIEND-2](MVP/FRIEND-2_DEDICATED_FRIEND_PROFILE_HOOK.md) | Dedicated friend-profile hook, off `useUserProfile` (moved to `features/profile/` by `PROFILE-0`, still borrowed as-is by Friends) — **unblocked: backend U14 DONE 2026-08-29, resolved to no backend change (consume U11's `UserInfoResponse` as-is; type 1:1 incl. `username`) — see ticket Delta** | `TODO` |
 | 3 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
 | 4 | [PROFILE-12](MVP/PROFILE-12_HEADER_LOADING_ERROR_PLACEHOLDER.md) | ProfileHeader shows a placeholder instead of blank space while `/profile`'s profile query is loading or errors — found during backend U11's rollout, when a stale backend made the header vanish entirely | `TODO` |
 | 5 | [GRP-11](MVP/GRP-11_GROUP_COVER_BANNER_PENDING_SELECTION_PLACEHOLDER.md) | `GroupCoverBanner` shows a placeholder instead of the discovery panel while a cross-page-navigated group selection is still loading — found alongside `PROFILE-12` | `TODO` |
@@ -355,12 +355,15 @@ ACCOUNT-1 (new, filed 2026-08-26, split out of the same `/feature` session — u
   level settings don't belong on `/profile`) — no dependency on any PROFILE-* ticket. Lives on
   `TopBar`'s avatar dropdown instead. Its own toggle-mapping design question is left open in the
   ticket itself, not resolved at filing time.
-FRIEND-2 (new, filed 2026-08-26 at PROFILE-0 pickup — user decision) — blocked on backend U14
-  (`modules/user/user-impl/docs/BACKLOG_MVP.md`). PROFILE-0 moved `useUserProfile` from
-  `features/friends/hooks/` to `features/profile/` (a generic by-id public-profile lookup, not
-  friends-specific) and left Friends consuming it as-is, unchanged in shape, for now — FRIEND-2 is
-  the follow-up that gives Friends its own purpose-built contract instead. No dependency on any
-  PROFILE-* ticket beyond this one relocation.
+FRIEND-2 (new, filed 2026-08-26 at PROFILE-0 pickup — user decision) — **unblocked: backend U14
+  DONE 2026-08-29** (`modules/user/user-impl/docs/MVP/U14_...md` § Resolution). U14 collapsed to no
+  backend change — U11 already narrowed `GET /api/users/{userId}` to `UserInfoResponse`
+  (`id, fullName, username, avatarUrl, coverUrl, bio`, now `hasRole('USER')`-gated), which is
+  exactly what Friends needs. FRIEND-2 is now purely client cleanup: `useFriendProfile()` in
+  `features/friends/hooks/` consuming that endpoint, typed 1:1 with `UserInfoResponse` (incl.
+  `username: string | null`, user decision), switch `useFriendsPageData` to it, drop the
+  cross-feature import, and fix 3 now-stale doc comments (see the ticket's Delta section). No
+  dependency on any PROFILE-* ticket beyond PROFILE-0's one relocation.
 ```
 
 **Backend blockers (tracked outside this backlog):**

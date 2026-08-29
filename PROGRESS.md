@@ -325,8 +325,19 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   6-test flake in the **pre-existing** `SessionEventsConsumerIntegrationTest` (`AmqpIOException`,
   passes in isolation) from Docker/Hyper-V instability on the dev host — unrelated to U13, re-run on
   CI.
-- **MVP backlog:** `modules/user/user-impl/docs/BACKLOG_MVP.md` — U1–U13 `DONE`, U14 (dedicated
-  Friends-directory profile endpoint) `TODO`
+- **U14 DONE** (2026-08-29, `modules/user/user-impl/docs/MVP/U14_DEDICATED_FRIENDS_DIRECTORY_PROFILE_ENDPOINT.md`):
+  dedicated Friends-directory profile endpoint — **resolved to no backend change**. U14 was filed to
+  give the Friends directory-search popup its own contract instead of borrowing the generic public
+  full-PII `GET /api/users/{userId}`; U11 (2026-08-28) already did exactly that — the endpoint now
+  returns `UserInfoResponse` (`id`/`fullName`/`username`/`avatarUrl`/`coverUrl`/`bio`, `hasRole('USER')`-gated),
+  a superset of what Friends needs (`FriendProfilePanel` renders only fullName/bio/avatar/cover), and
+  `useMyProfile` already moved to `GET /api/users/me`, so the by-id hook has one consumer. No new
+  endpoint/DTO/migration/test. Client feature-folder cleanup (move the borrowed
+  `features/profile/useUserProfile` into a Friends-owned `useFriendProfile`, type it 1:1 with
+  `UserInfoResponse` incl. `username`, fix 3 now-stale doc comments) handed to client **FRIEND-2**,
+  now unblocked. Doc-only ticket: `PROGRESS.md`, both backlogs, U14 + FRIEND-2 ticket docs.
+- **MVP backlog:** `modules/user/user-impl/docs/BACKLOG_MVP.md` — U1–U14 all `DONE`; no open MVP
+  tickets
 
 #### `modules:sport:sport-api` + `modules:sport:sport-impl`
 - `Sport` entity: name, description, category, icon_url, min/max players, soft delete
