@@ -67,6 +67,33 @@ export const SessionStarted: Story = {
 };
 
 /**
+ * Friend-request notifications (U13 / CLIENT-NOTIF-5) — `entityType: 'USER'`,
+ * no entity title, so the text names only the other person. Clicking one routes
+ * to `/friends` (the one notification type that navigates).
+ */
+export const FriendRequestReceived: Story = {
+  args: {
+    notification: {
+      ...baseNotification,
+      type: 'user.friend_request.created',
+      entityType: 'USER',
+      entityTitle: null,
+    },
+  },
+};
+
+export const FriendRequestAccepted: Story = {
+  args: {
+    notification: {
+      ...baseNotification,
+      type: 'user.friend_request.accepted',
+      entityType: 'USER',
+      entityTitle: null,
+    },
+  },
+};
+
+/**
  * The degraded state for a routing key the client has no case for. Rendering
  * this deliberately stays generic, but it should be reviewable rather than only
  * unit-tested — this is what every unmapped backend event looks like to a user.

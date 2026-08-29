@@ -71,8 +71,18 @@ describe('getNotificationText', () => {
     ['session.invitation.created', 'Alice Nguyen invited you to join "Friday Pickup Game"'],
     ['session.participant.left', 'Alice Nguyen left "Friday Pickup Game"'],
     ['session.status.started', '"Friday Pickup Game" has started'],
+    ['user.friend_request.created', 'Alice Nguyen wants to be your friend'],
+    ['user.friend_request.accepted', 'Alice Nguyen is now your friend'],
   ] as [NotificationType, string][])('renders %s correctly', (type, expected) => {
     expect(notificationTextToString(getNotificationText(baseNotification({ type })))).toBe(expected);
+  });
+
+  it.each([
+    'user.friend_request.created',
+    'user.friend_request.accepted',
+  ] as NotificationType[])('%s bolds only the actor name — no entity segment (USER entity has no title)', (type) => {
+    const segments = getNotificationText(baseNotification({ type }));
+    expect(segments.filter((s) => s.bold)).toEqual([{ text: 'Alice Nguyen', bold: true }]);
   });
 
   it('the approval/rejection outcome types never bold an actor (the text never names one)', () => {

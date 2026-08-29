@@ -15,17 +15,17 @@ export interface NotificationTextSegment {
  * renders each segment; `bold` never applies to a fallback phrase ("Someone",
  * "your session") since neither is real data.
  *
- * Every known type today comes from `SessionEventsConsumer`'s session-only
- * scope (NTF-2) — post/group/friend types aren't emitted yet, so this falls
- * back to a generic sentence for anything it doesn't recognize, rather than
- * crashing or rendering blank, so the dropdown degrades gracefully the
- * moment a new producer ships. That graceful degradation is deliberate but it
- * is *not* free: it hid `session.status.started` and `session.participant.left`
+ * Known types come from two backend consumers: the `session.*` keys from
+ * `SessionEventsConsumer` (NTF-2) and the `user.friend_request.*` keys from
+ * `UserEventsConsumer` (U13). Anything else falls back to a generic sentence
+ * rather than crashing or rendering blank, so the dropdown degrades gracefully
+ * the moment a new producer ships. That graceful degradation is deliberate but
+ * it is *not* free: it hid `session.status.started` and `session.participant.left`
  * rendering as "You have a new notification" from the day each shipped, which
  * is what CLIENT-NOTIF-3 fixed. The default branch therefore also warns in dev
  * — silent degradation is exactly how this recurs. When a new routing key is
- * added backend-side (post-impl B7, group-impl B21, user-impl U13 are all
- * queued to add some), its case belongs here in the same change.
+ * added backend-side (post-impl B7, group-impl B21 are still queued to add
+ * some), its case belongs here in the same change.
  *
  * "and N others" is derived from `actors.length` (the bounded, deduped list
  * of *distinct* actors), never `actorCount` (total matched events — the
@@ -58,6 +58,14 @@ export function getNotificationText(notification: Notification): NotificationTex
       return [plain('Your request to join '), entity, plain(' was declined')];
     case 'session.invitation.created':
       return [actor, plain(' invited you to join '), entity];
+    // U13 / CLIENT-NOTIF-5 — `entityType` is USER, not SESSION, so there is no
+    // `entity` segment here: the text names only the other person. Both events
+    // always carry a real actor (a self-request is rejected upstream), so
+    // `actor` never degrades to the bold-suppressed 'Someone' in practice.
+    case 'user.friend_request.created':
+      return [actor, plain(' wants to be your friend')];
+    case 'user.friend_request.accepted':
+      return [actor, plain(' is now your friend')];
     default: {
       // CLIENT-NOTIF-4 — compile-time exhaustiveness. Every `NotificationType`
       // handled above narrows `notification.type` to `never` here; add a member

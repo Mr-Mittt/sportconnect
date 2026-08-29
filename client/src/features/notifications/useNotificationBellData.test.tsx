@@ -52,7 +52,7 @@ describe('useNotificationBellData', () => {
       throw new Error(`Unmocked GET ${url}`);
     });
 
-    const { result } = renderHook(() => useNotificationBellData(vi.fn()), { wrapper });
+    const { result } = renderHook(() => useNotificationBellData(vi.fn(), vi.fn()), { wrapper });
 
     await waitFor(() => expect(result.current.unreadCount).toBe(3));
     expect(result.current.notifications).toEqual([]);
@@ -66,7 +66,7 @@ describe('useNotificationBellData', () => {
       throw new Error(`Unmocked GET ${url}`);
     });
 
-    const { result } = renderHook(() => useNotificationBellData(vi.fn()), { wrapper });
+    const { result } = renderHook(() => useNotificationBellData(vi.fn(), vi.fn()), { wrapper });
     act(() => result.current.onOpenChange(true));
 
     await waitFor(() => expect(result.current.notifications).toHaveLength(1));
@@ -81,8 +81,9 @@ describe('useNotificationBellData', () => {
     });
     const put = vi.spyOn(apiClient, 'put').mockResolvedValue(apiResponse(null));
     const onViewSession = vi.fn();
+    const onViewFriendRequests = vi.fn();
 
-    const { result } = renderHook(() => useNotificationBellData(onViewSession), { wrapper });
+    const { result } = renderHook(() => useNotificationBellData(onViewSession, onViewFriendRequests), { wrapper });
     act(() => result.current.onOpenChange(true));
     await waitFor(() => expect(result.current.notifications).toHaveLength(1));
 
@@ -91,9 +92,38 @@ describe('useNotificationBellData', () => {
     await waitFor(() => expect(put).toHaveBeenCalledWith('/notifications/9/read'));
     expect(result.current.isOpen).toBe(false);
     expect(onViewSession).toHaveBeenCalledWith(42);
+    expect(onViewFriendRequests).not.toHaveBeenCalled();
   });
 
-  it('does not call onViewSession for a non-SESSION entityType', async () => {
+  it('onSelect calls onViewFriendRequests with the entityId (the counterparty user id), not onViewSession, for a USER entityType', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation((url) => {
+      if (url === '/notifications/unread-count') return Promise.resolve(apiResponse(1));
+      if (url === '/notifications') {
+        return Promise.resolve(
+          apiResponse(
+            pageOf([notification({ id: 9, type: 'user.friend_request.created', entityType: 'USER', entityId: 'hana-kim' })]),
+          ),
+        );
+      }
+      throw new Error(`Unmocked GET ${url}`);
+    });
+    const put = vi.spyOn(apiClient, 'put').mockResolvedValue(apiResponse(null));
+    const onViewSession = vi.fn();
+    const onViewFriendRequests = vi.fn();
+
+    const { result } = renderHook(() => useNotificationBellData(onViewSession, onViewFriendRequests), { wrapper });
+    act(() => result.current.onOpenChange(true));
+    await waitFor(() => expect(result.current.notifications).toHaveLength(1));
+
+    act(() => result.current.onSelect(result.current.notifications[0]!));
+
+    await waitFor(() => expect(put).toHaveBeenCalledWith('/notifications/9/read'));
+    expect(result.current.isOpen).toBe(false);
+    expect(onViewFriendRequests).toHaveBeenCalledWith('hana-kim');
+    expect(onViewSession).not.toHaveBeenCalled();
+  });
+
+  it('does not call onViewSession or onViewFriendRequests for an entityType that is neither SESSION nor USER', async () => {
     vi.spyOn(apiClient, 'get').mockImplementation((url) => {
       if (url === '/notifications/unread-count') return Promise.resolve(apiResponse(1));
       if (url === '/notifications') {
@@ -103,14 +133,16 @@ describe('useNotificationBellData', () => {
     });
     vi.spyOn(apiClient, 'put').mockResolvedValue(apiResponse(null));
     const onViewSession = vi.fn();
+    const onViewFriendRequests = vi.fn();
 
-    const { result } = renderHook(() => useNotificationBellData(onViewSession), { wrapper });
+    const { result } = renderHook(() => useNotificationBellData(onViewSession, onViewFriendRequests), { wrapper });
     act(() => result.current.onOpenChange(true));
     await waitFor(() => expect(result.current.notifications).toHaveLength(1));
 
     act(() => result.current.onSelect(result.current.notifications[0]!));
 
     expect(onViewSession).not.toHaveBeenCalled();
+    expect(onViewFriendRequests).not.toHaveBeenCalled();
   });
 
   it('onMarkAllRead fires one PUT per currently-loaded unread id, skipping already-read ones', async () => {
@@ -125,7 +157,7 @@ describe('useNotificationBellData', () => {
     });
     const put = vi.spyOn(apiClient, 'put').mockResolvedValue(apiResponse(null));
 
-    const { result } = renderHook(() => useNotificationBellData(vi.fn()), { wrapper });
+    const { result } = renderHook(() => useNotificationBellData(vi.fn(), vi.fn()), { wrapper });
     act(() => result.current.onOpenChange(true));
     await waitFor(() => expect(result.current.notifications).toHaveLength(3));
 

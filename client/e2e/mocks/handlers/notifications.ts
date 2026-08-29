@@ -45,13 +45,15 @@ function pagedResponse(all: Notification[], page: number) {
 // mockSession.id (1) so clicking a row's `/matches?session=1` deep link
 // resolves against the same session fixture MatchesPage.test.tsx already uses.
 //
-// CLIENT-NOTIF-3 added ids 4 and 5 so every notification type the backend
-// actually emits appears here — the fixture is meant to mirror the real
-// contract, and a type missing from it is how this ticket's bug stayed
-// invisible. Both are seeded `isRead: true` deliberately: the unread count
-// stays 2, so notification-bell.spec.ts's badge and mark-all-read assertions
-// keep testing what they were written to test rather than being rewritten to
-// accommodate new fixture rows.
+// CLIENT-NOTIF-3 added ids 4 and 5, and CLIENT-NOTIF-5 added ids 6 and 7, so
+// every notification type the backend actually emits appears here — the fixture
+// is meant to mirror the real contract, and a type missing from it is how
+// CLIENT-NOTIF-3's bug stayed invisible. Ids 4-7 are all seeded `isRead: true`
+// deliberately: the unread count stays 2, so notification-bell.spec.ts's badge
+// and mark-all-read assertions keep testing what they were written to test
+// rather than being rewritten to accommodate new fixture rows. Ids 6/7 carry
+// `entityType: 'USER'` and `entityId` = the actor's own id (matching U13's
+// UserEventProcessor), which is what drives the "/friends" navigation.
 function defaultNotificationsState(): Notification[] {
   return [
     {
@@ -124,6 +126,37 @@ function defaultNotificationsState(): Notification[] {
       updatedAt: '2026-08-14T08:00:00',
       actors: [],
       entityTitle: mockSession.title,
+    },
+    {
+      // `hana-kim` has a real pending *incoming* request in `handlers/friends.ts`'s
+      // default state, so clicking this row pre-selects her with the Accept/Decline
+      // panel — the happy path for CLIENT-NOTIF-5's focus navigation.
+      id: 6,
+      type: 'user.friend_request.created',
+      entityType: 'USER',
+      entityId: 'hana-kim',
+      actorIds: ['hana-kim'],
+      actorCount: 1,
+      isRead: true,
+      createdAt: '2026-08-13T08:00:00',
+      updatedAt: '2026-08-13T08:00:00',
+      actors: [{ id: 'hana-kim', fullName: 'Hana Kim' }],
+      entityTitle: null,
+    },
+    {
+      // `mockFriend` (priya-shah) is an established friend in `handlers/friends.ts`,
+      // so this row pre-selects her friend profile.
+      id: 7,
+      type: 'user.friend_request.accepted',
+      entityType: 'USER',
+      entityId: mockFriend.id,
+      actorIds: [mockFriend.id],
+      actorCount: 1,
+      isRead: true,
+      createdAt: '2026-08-12T08:00:00',
+      updatedAt: '2026-08-12T08:00:00',
+      actors: [{ id: mockFriend.id, fullName: mockFriend.fullName }],
+      entityTitle: null,
     },
   ];
 }

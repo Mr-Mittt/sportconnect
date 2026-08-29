@@ -3944,6 +3944,33 @@ explicit go-ahead at each step (full story in A3's summary doc):
   files, all deliberate out-of-union literals. Verification: `tsc -b`/`eslint` clean, `vitest`
   891/891, e2e `notification-bell` 2/2 (an earlier 2-failure run was CPU contention with a concurrent
   `vitest` run, confirmed by re-running clean). No baselines move — nothing rendered changed.
+- **CLIENT-NOTIF-5 (`DONE`, 2026-08-29,
+  `client/docs/MVP/CLIENT-NOTIF-5_NOTIFICATION_TEXT_FOR_FRIEND_REQUEST_TYPES.md`):** the client half
+  of U13 — `getNotificationText` cases for the two `user.friend_request.*` routing keys, which had
+  been rendering the generic "You have a new notification" fallback since U13 shipped its producer +
+  consumer. `NotificationType` gains the two members (CLIENT-NOTIF-4's `never` guard then forced the
+  cases — verified red-then-green); text is `[**actor**, ' wants to be your friend']` /
+  `[**actor**, ' is now your friend']` (warmer wording, user choice) — no entity segment, since a
+  `USER` entity has no title. **These are the one notification type that navigates**: clicking one
+  routes to `/friends` (`useNotificationBellData`'s new `onViewFriendRequests(personId)` callback,
+  `AppShell` wires it to `navigate('/friends', { state: { focusPersonId } })`) rather than opening a
+  shell-level modal like the session types. **Scope expanded mid-session (user request):** the
+  Friends page then **pre-selects that person** (`useFriendsPageData(focusPersonId?)` — seeds the
+  selection; the pending requester resolves to the Accept/Decline panel, an accepter to their
+  friend profile), or, if the id resolves to nobody in the friend/request lists (request cancelled,
+  account deactivated), shows a `FriendRequestUnavailableDialog` (shadcn `Dialog` — no toast system
+  in this client). `focusUnavailable` is **purely derived** from the `focusPersonId` prop + live
+  lists — two earlier tries (stored flag + effect, then ref + derived) each hit a distinct
+  React-Compiler lint error and were reworked, not suppressed. MSW: `defaultNotificationsState`
+  gains ids 6/7 (`entityType: 'USER'`, `isRead: true`; id 6's actor is Hana Kim, who has a real
+  pending incoming request so the pre-select path resolves); new
+  `seed-unavailable-friend-request-notification` mockServer action for the vanished-requester case.
+  Verification: `pnpm build` clean, `eslint` 0 errors, `vitest` 1041/1041 (+12), `pnpm e2e` 76/76
+  incl. two new `notification-bell.spec.ts` cases (pre-select → Accept/Decline visible;
+  vanished requester → dialog). **Remaining step:** the 3 `notification-bell-populated-*` visual
+  baselines (fixture grew 5→7 rows, plus id 6's actor-name text changed) need the `update-baselines`
+  GitHub dispatch — can't be regenerated on a Windows host (font-rendering noise floor); expect
+  exactly those 3 files to change.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

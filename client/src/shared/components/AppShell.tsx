@@ -61,6 +61,11 @@ function initialsOf(firstName: string, lastName: string): string {
  * opens it as an overlay on whatever page the caller is currently on, no
  * navigation, no page switch (see `useNotificationBellData`'s own comment
  * for why this replaced an earlier `/matches?session={id}` navigation).
+ * CLIENT-NOTIF-5: a friend-request notification (`entityType: 'USER'`, U13)
+ * instead routes to `/friends` (the one notification type that navigates —
+ * that section has no shell-level modal equivalent), passing the counterparty's
+ * user id as router `state.focusPersonId` so the Friends page can pre-select
+ * them (or explain, via a dialog, that the request is no longer available).
  */
 export function AppShell() {
   const navigate = useNavigate();
@@ -87,7 +92,9 @@ export function AppShell() {
     [sportProfilesQuery.data],
   );
 
-  const notificationBell = useNotificationBellData(setSelectedSessionId);
+  const notificationBell = useNotificationBellData(setSelectedSessionId, (personId) =>
+    navigate('/friends', { state: { focusPersonId: personId } }),
+  );
 
   if (sportCatalog.isLoading) {
     return <AuthLoadingState />;

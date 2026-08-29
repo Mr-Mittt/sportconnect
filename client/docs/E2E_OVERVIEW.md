@@ -203,7 +203,7 @@ e2e/
     group-chat.spec.ts        # CHAT-10
     direct-chat.spec.ts       # CHAT-10
     matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9
-    notification-bell.spec.ts # CLIENT-NOTIF-1
+    notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
     profile-journey.spec.ts   # PROFILE-8
@@ -234,7 +234,7 @@ e2e/
       chat.ts                   # CHAT-10 — a separate backend (services/chat), bare paths, no ApiResponse<T> envelope
       locations.ts               # CLIENT-SESSION-1
       sessions.ts                # CLIENT-SESSION-1
-      notifications.ts           # CLIENT-NOTIF-1
+      notifications.ts           # CLIENT-NOTIF-1, CLIENT-NOTIF-5
 ```
 
 ---
@@ -647,19 +647,26 @@ steps 9-10 are what's actually new.
 | 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverSessions`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED` row for, same exclusion rule as the real backend |
 | 10. search filters Discover; the panel toggle hides/shows My sessions | Typing a non-matching string into the search box shows "No sessions match your search." in Discover; the "Hide my sessions"/"Show my sessions" button toggles the whole `region` "My sessions" | Search is client-side only (`useMatchesPageData`'s `discoverSessions` memo), not a new backend query |
 
-### `e2e/flows/notification-bell.spec.ts` (CLIENT-NOTIF-1, two `test()`s — a 4-step journey + one regression case)
+### `e2e/flows/notification-bell.spec.ts` (CLIENT-NOTIF-1 + CLIENT-NOTIF-5, four `test()`s — a 4-step journey + three regression/navigation cases)
 
 The `TopBar` bell + dropdown — unread badge, list-on-open, mark-read-on-click + shell-level
 in-place modal, and "Mark all read". Fixtures: `mocks/handlers/notifications.ts`'s
 `defaultNotificationsState` — 2 unread (id 1 aggregated to 2 distinct actors, `mockFriend`/Priya
 Shah + a second inline actor "Hana Kim", exercising `getNotificationText`'s "and 1 other" branch;
-id 2 a single-actor `session.join_request.created`) and 3 already-read (id 3,
+id 2 a single-actor `session.join_request.created`) and 5 already-read (id 3,
 `session.join_request.approved`, no actor — exercises the "Someone"-less approval-outcome copy;
 ids 4 and 5, added by CLIENT-NOTIF-3, a `session.participant.left` and an actor-less
-`session.status.started`, so the fixture covers every type the backend actually emits — a type
-missing from it is how CLIENT-NOTIF-3's bug stayed invisible). **Ids 4 and 5 are seeded read on
-purpose:** the unread count stays 2, so this spec's badge and mark-all-read assertions were not
-rewritten to accommodate new fixture rows. All five reference `mockSession`'s id (1) as `entityId`.
+`session.status.started`; ids 6 and 7, added by CLIENT-NOTIF-5, a `user.friend_request.created`
+(actor **Hana Kim**, who has a real pending *incoming* request in `handlers/friends.ts`) and a
+`user.friend_request.accepted` (actor **Priya Shah**, an established friend) — the only two with
+`entityType: 'USER'`, so the fixture covers every type the backend actually emits, a type missing
+from it is how CLIENT-NOTIF-3's bug stayed invisible). **Ids 4-7 are seeded read on purpose:** the
+unread count stays 2, so this spec's badge and mark-all-read assertions were not rewritten to
+accommodate new fixture rows. Ids 1-5 reference `mockSession`'s id (1) as `entityId`; ids 6-7 use
+the actor's own user id (matching U13's `UserEventProcessor`), which is what the Friends page
+pre-selects. A third `user.friend_request.created` — pointing at an id in no list — is seeded
+per-test via `seedUnavailableFriendRequestNotification` (mockServer action
+`seed-unavailable-friend-request-notification`), not in the default fixture.
 No coverage of the STOMP live-push path
 here (NTF-3's own `NotificationStompIntegrationTest`/`useNotificationLiveSocket.test.tsx` already
 cover it end to end) — this spec is scoped to the REST-backed list/read/badge behavior
@@ -688,6 +695,23 @@ sessions" panel), opens the bell, clicks the aggregated row, and asserts the she
 opens and the URL stays exactly `/matches` (no `?session=` appended, no reload). This is the
 scenario that would have silently failed under the old navigate-to-`/matches?session={id}`
 approach.
+
+`Notification bell journey — a friend-request notification routes to /friends and pre-selects the
+requester` (CLIENT-NOTIF-5) — opens the bell, clicks the "Hana Kim wants to be your friend" row
+(fixture id 6, `entityType: 'USER'`), asserts the URL becomes `/friends`, the popover closes, and
+the profile panel's **Accept/Decline** action bar is showing (i.e. Hana's pending incoming request
+was pre-selected via router `location.state.focusPersonId`). Friend-request notifications are the
+**one** type that navigates rather than opening a shell-level modal — the Friends rail's
+incoming-requests section has no modal equivalent, and it's expanded by default on that page.
+
+`Notification bell journey — a friend-request notification for a vanished requester shows the
+unavailable dialog` (CLIENT-NOTIF-5) — seeds `seedUnavailableFriendRequestNotification`, clicks the
+"Sam Rivera wants to be your friend" row whose `entityId` matches nobody in the friend/request
+lists (request cancelled, or account deactivated), asserts the URL still becomes `/friends` but a
+**"Friend request unavailable"** dialog opens instead of a pre-selection; "Got it" closes it and
+the "Select a friend…" placeholder stays. `focusUnavailable` is derived in `useFriendsPageData`
+from the `focusPersonId` prop + the live lists (no stored flag); the dialog's close navigates to
+strip `location.state`, which is what flips it back off.
 
 ### `e2e/flows/admin-route-guard.spec.ts` (ADMIN-1, ADMIN-4, 4 `test()`s)
 
@@ -875,7 +899,7 @@ primitive) also renders `role="dialog"` in the DOM, so the same crop approach ca
 | State | Setup | Expects |
 |---|---|---|
 | `empty` | `seedEmptyNotificationsOnNextLoad(mockSessionId)` (new MSW override, `notificationsEmpty`) before `seedAuthenticatedSession`, then click the bell | "You're all caught up." visible |
-| `populated` | Default fixture (`defaultNotificationsState`, 2 unread + 3 read — was 2 + 1 before CLIENT-NOTIF-3 added the two missing session types), click the bell | Aggregated-actor notification text visible |
+| `populated` | Default fixture (`defaultNotificationsState`, 2 unread + 5 read — was 2 + 1 before CLIENT-NOTIF-3 added two session types, then 2 + 3; CLIENT-NOTIF-5 added the two `user.friend_request.*` rows), click the bell | Aggregated-actor notification text visible |
 | `with-load-more` | `seedPaginatedNotificationsOnNextLoad(mockSessionId)` (new fixture, 11 items — one more than the page size of 10) before seeding auth, click the bell, scroll the row list's internal scroll container so "Load more" clears the fold | "Load more" button visible |
 
 Curated down from `NotificationBell`'s full 6 Storybook stories (user decision at pickup): `loading`/

@@ -17,23 +17,34 @@ import type { Notification } from './types';
  * the badge alone only ever needs `useUnreadNotificationCount`, kept live by
  * `useNotificationLiveSocket` writing straight into that query's cache.
  *
- * Clicking a row marks it read and, since every notification type in scope
- * today is session-scoped (NTF-2's session-only consumer), calls
- * `onViewSession(entityId)` — deliberately **not** a navigation. `AppShell`
- * renders its own shell-level `SessionDetailModal` (fed by
- * `useSessionDetailModalData`, the same hook every page's own in-place
- * "View details" modal already uses) and passes its own `setSelectedSessionId`
- * as this callback, so clicking a notification opens the session's detail
- * as an overlay on whatever page the caller is currently on — no route
- * change, no page switch. (An earlier version of this hook navigated to
- * `/matches?session={id}` instead; that both forced a page switch the user
- * didn't ask for, and had a real bug — `MatchesPage`'s own `initialSessionId`
- * is read once from the URL at mount, so navigating to the same route with a
- * different `?session=` while already on `/matches` silently did nothing.)
- * A future non-SESSION `entityType` just marks read without opening
- * anything, rather than guessing a destination that doesn't exist yet.
+ * Clicking a row always marks it read and closes the popover. What else it
+ * does depends on `entityType`:
+ *  - `SESSION` — calls `onViewSession(entityId)`, deliberately **not** a
+ *    navigation. `AppShell` renders its own shell-level `SessionDetailModal`
+ *    (fed by `useSessionDetailModalData`, the same hook every page's own
+ *    in-place "View details" modal already uses) and passes its own
+ *    `setSelectedSessionId` as this callback, so the session detail opens as an
+ *    overlay on whatever page the caller is currently on — no route change.
+ *    (An earlier version navigated to `/matches?session={id}`; that forced a
+ *    page switch the user didn't ask for, and had a real bug — `MatchesPage`
+ *    reads its own `?session=` param once, at mount, so re-navigating to it
+ *    while already on `/matches` silently did nothing.)
+ *  - `USER` — a friend-request notification (U13 / CLIENT-NOTIF-5). Calls
+ *    `onViewFriendRequests(entityId)` with the counterparty's user id (the
+ *    sender for `created`, the accepter for `accepted` — `entityId` is a user
+ *    id for both). `AppShell` wires this to `navigate('/friends', { state: {
+ *    focusPersonId } })` — that IS a route change (unlike the session case),
+ *    because the Friends rail's incoming-requests section lives on that page
+ *    and has no shell-level modal equivalent. The Friends page then pre-selects
+ *    that person, or, if they no longer resolve to anyone in the friend/request
+ *    lists (request cancelled, account deactivated), opens an "unavailable"
+ *    dialog instead.
+ *  - anything else — just marks read, no destination.
  */
-export function useNotificationBellData(onViewSession: (sessionId: number) => void) {
+export function useNotificationBellData(
+  onViewSession: (sessionId: number) => void,
+  onViewFriendRequests: (personId: string) => void,
+) {
   const [isOpen, setIsOpen] = useState(false);
 
   const { data: unreadCount } = useUnreadNotificationCount();
@@ -48,6 +59,8 @@ export function useNotificationBellData(onViewSession: (sessionId: number) => vo
     setIsOpen(false);
     if (notification.entityType === 'SESSION') {
       onViewSession(Number(notification.entityId));
+    } else if (notification.entityType === 'USER') {
+      onViewFriendRequests(notification.entityId);
     }
   };
 
