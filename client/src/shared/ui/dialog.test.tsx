@@ -55,6 +55,22 @@ describe('DialogContent anchored positioning', () => {
     expect(dialog.className).toContain('top-1/2');
   });
 
+  it('stays centered when `centered` is set, even with an in-viewport anchor', () => {
+    render(
+      <ModalAnchorProvider value={120}>
+        <Dialog open onOpenChange={() => {}}>
+          <DialogContent centered>
+            <DialogHeader title="Test dialog" />
+          </DialogContent>
+        </Dialog>
+      </ModalAnchorProvider>,
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.style.top).toBe('');
+    expect(dialog.className).toContain('top-1/2');
+    expect(dialog.className).toContain('-translate-y-1/2');
+  });
+
   it('falls back to centered when there is no anchor configured (unchanged prior behavior)', () => {
     render(
       <Dialog open onOpenChange={() => {}}>

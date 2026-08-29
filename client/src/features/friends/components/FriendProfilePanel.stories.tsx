@@ -28,6 +28,9 @@ const meta = {
     onAccept: () => {},
     onDecline: () => {},
     onCancel: () => {},
+    onUnfriend: () => {},
+    onUnfriendDialogClose: () => {},
+    isUnfriendError: false,
     isActionPending: false,
   },
   decorators: [(Story) => <div className="h-100">{Story()}</div>],
@@ -36,7 +39,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Already friends — no docked action bar. */
+/** Already friends — the `Friend` button opens a menu with `Unfriend`. */
 export const Friends: Story = {};
 
 /** Never interacted — "Send a friend request" is the only action. */

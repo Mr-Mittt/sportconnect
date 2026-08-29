@@ -1,6 +1,11 @@
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
-import type { FriendRequest, FriendshipStatus, FriendUser } from '../../../src/features/friends/types.ts';
+import type {
+  FriendRequest,
+  FriendshipStatus,
+  FriendUser,
+  UserInfo,
+} from '../../../src/features/friends/types.ts';
 import type { UserResponse } from '../../../src/features/profile/types.ts';
 import {
   mockFriend,
@@ -185,6 +190,23 @@ export const friendHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(null, 'Friend request cancelled'));
   }),
 
+  // FRIEND-2 (unfriend enhancement): `DELETE /api/users/friends/{friendId}`
+  // (U1's removeFriend) — `friendId` is the other person's user id, a single
+  // path segment, so this never shadows the `requests/:requestId` route
+  // above. 400 if the pair aren't currently friends, mirroring the real
+  // service.
+  http.delete('/api/users/friends/:friendId', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const friendId = String(params.friendId);
+    const session = friendsSessions.get(sessionIdFromRequest(request));
+    if (!session.friendsState.some((friend) => friend.id === friendId)) {
+      return HttpResponse.json(apiError('Not currently friends with this user'), { status: 400 });
+    }
+    session.friendsState = session.friendsState.filter((friend) => friend.id !== friendId);
+    return HttpResponse.json(apiResponse(null, 'Friend removed'));
+  }),
+
   // Public — no auth required (U6, ROLE_USER-gated server-side, but this
   // fixture doesn't need to simulate the 403-vs-401 nuance; every e2e
   // session is already authenticated by the time it reaches Add mode).
@@ -234,11 +256,11 @@ export const friendHandlers: HttpHandler[] = [
   }),
 
   // GET /api/users/{userId}. U11: authenticated (no longer public) and
-  // always returns the safe PII-free subset (UserInfoResponse on the real
-  // backend) regardless of who's asking — including the caller's own id,
-  // which now resolves through GET /api/users/me instead. Every consumer of
-  // this endpoint only ever narrows down to FriendUser anyway, so the mock
-  // stays shaped that way.
+  // always returns the safe PII-free subset (UserInfoResponse) regardless of
+  // who's asking — including the caller's own id, which now resolves through
+  // GET /api/users/me instead. FRIEND-2: `useUserInfo` types this 1:1 with
+  // `UserInfoResponse`, so the mock carries `username` too (KNOWN_USERS
+  // already has it) even though FriendProfilePanel doesn't render it.
   http.get('/api/users/:userId', ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
@@ -247,9 +269,10 @@ export const friendHandlers: HttpHandler[] = [
     if (user === undefined) {
       return HttpResponse.json(apiError('User not found'), { status: 404 });
     }
-    const profile: FriendUser = {
+    const profile: UserInfo = {
       id: user.id,
       fullName: user.fullName,
+      username: user.username,
       avatarUrl: user.avatarUrl,
       coverUrl: user.coverUrl,
       bio: user.bio,

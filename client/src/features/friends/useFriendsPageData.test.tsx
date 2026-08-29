@@ -153,6 +153,21 @@ describe('useFriendsPageData', () => {
     await waitFor(() => expect(result.current.selectedPersonId).toBeUndefined());
   });
 
+  it('unfriending a friend DELETEs /users/friends/{id} and clears the selection on success', async () => {
+    mockGet({ friends: [priya] });
+    const del = vi.spyOn(apiClient, 'delete').mockResolvedValue(apiResponse(undefined));
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
+    act(() => result.current.selectPerson('f1'));
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('FRIENDS'));
+
+    act(() => result.current.unfriend('f1'));
+
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/users/friends/f1'));
+    await waitFor(() => expect(result.current.selectedPersonId).toBeUndefined());
+  });
+
   it('falls back to the search result\'s own friendshipStatus for a fresh directory selection', async () => {
     const searchResult: UserSearchResult = {
       id: 'u1',

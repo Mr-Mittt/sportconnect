@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useFriendsPageStore } from '@/app/friendsPageStore';
-import { useUserProfile } from '@/features/profile/useUserProfile';
 import { useSportProfilesForUser } from '@/shared/hooks/useSportProfilesForUser';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
+import { useUserInfo } from './useUserInfo';
 import { useAcceptFriendRequest } from './hooks/useAcceptFriendRequest';
 import { useCancelFriendRequest } from './hooks/useCancelFriendRequest';
 import { useDeclineFriendRequest } from './hooks/useDeclineFriendRequest';
@@ -11,6 +11,7 @@ import { useFriendRequestsReceived } from './hooks/useFriendRequestsReceived';
 import { useFriendRequestsSent } from './hooks/useFriendRequestsSent';
 import { useFriends } from './hooks/useFriends';
 import { useSendFriendRequest } from './hooks/useSendFriendRequest';
+import { useUnfriend } from './hooks/useUnfriend';
 import { useUserSearch } from './hooks/useUserSearch';
 import type { FriendRequestRow, FriendSectionKey, FriendUser, SelectedPerson } from './types';
 
@@ -38,10 +39,10 @@ function matchesQuery(name: string, normalizedQuery: string): boolean {
  * shape, so `friendshipStatus` is definitionally `FRIENDS`); a row found in
  * the received/sent pending-request lists resolves to
  * `PENDING_RECEIVED`/`PENDING_SENT` (both carry `requestId` — accept/decline for
- * the former, cancel for the latter) without a separate profile fetch beyond `useUserProfile`
+ * the former, cancel for the latter) without a separate profile fetch beyond `useUserInfo`
  * for bio/coverUrl; only a genuine directory-search selection (not yet in any
  * of the three lists) falls back to the search result's own `friendshipStatus`
- * (typically `NONE`). `useUserProfile` itself is only enabled for a selection
+ * (typically `NONE`). `useUserInfo` itself is only enabled for a selection
  * that ISN'T already a known friend (friend rows already carry bio/coverUrl).
  *
  * `query`/`isAddMode`/`selectedPersonId` live in `friendsPageStore`
@@ -136,7 +137,7 @@ export function useFriendsPageData(focusPersonId?: string) {
 
   const selectedFriend = friends.find((friend) => friend.id === selectedPersonId);
   const isKnownFriend = selectedFriend !== undefined;
-  const profileQuery = useUserProfile(isKnownFriend ? undefined : selectedPersonId);
+  const profileQuery = useUserInfo(isKnownFriend ? undefined : selectedPersonId);
   const sportsQuery = useSportProfilesForUser(selectedPersonId);
 
   const baseSelectedPerson: FriendUser | undefined = selectedFriend ?? profileQuery.data;
@@ -159,7 +160,7 @@ export function useFriendsPageData(focusPersonId?: string) {
   // User-requested: a `selectedPersonId` restored from a previous visit (or
   // one that's simply gone stale, e.g. an accepted/declined request) that no
   // longer resolves to anyone in the reloaded lists clears back to "no
-  // selection" instead of silently keeping whatever `useUserProfile` might
+  // selection" instead of silently keeping whatever `useUserInfo` might
   // still resolve for that raw id.
   useEffect(() => {
     if (selectedPersonId !== undefined && hasSelectionSourcesSettled && !isSelectedPersonAvailable) {
@@ -224,6 +225,7 @@ export function useFriendsPageData(focusPersonId?: string) {
   const acceptMutation = useAcceptFriendRequest();
   const declineMutation = useDeclineFriendRequest();
   const cancelMutation = useCancelFriendRequest();
+  const unfriendMutation = useUnfriend();
 
   return {
     currentUserId,
@@ -284,6 +286,17 @@ export function useFriendsPageData(focusPersonId?: string) {
     cancelRequest: (requestId: string) =>
       cancelMutation.mutate(requestId, { onSuccess: () => setSelectedPersonId(undefined) }),
     isCancellingRequest: cancelMutation.isPending,
+    // Unfriend takes the other person's user id (not a request id). Same
+    // clear-the-selection-on-success behavior as decline/cancel — the person
+    // drops out of the friends list on refetch, so there's nothing left to
+    // show. `resetUnfriend` is called by `FriendProfilePanel` when its
+    // confirm dialog closes so a failed attempt's error can't resurface on a
+    // later reopen (`CLIENT-MODAL-1`).
+    unfriend: (friendId: string) =>
+      unfriendMutation.mutate(friendId, { onSuccess: () => setSelectedPersonId(undefined) }),
+    isUnfriending: unfriendMutation.isPending,
+    isUnfriendError: unfriendMutation.isError,
+    resetUnfriend: () => unfriendMutation.reset(),
   };
 }
 

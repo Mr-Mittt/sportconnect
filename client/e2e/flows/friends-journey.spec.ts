@@ -34,11 +34,12 @@ test('Friends page — rail sections, search, directory search + send request, a
     await page.getByLabel('Search friends').fill('');
   });
 
-  await test.step('3. selecting an existing friend shows the profile + chat split, no action bar', async () => {
+  await test.step('3. selecting an existing friend shows the profile + chat split with the "Friend" menu button', async () => {
     await offlineSection.getByText('Priya Shah').click();
     await expect(page.getByText('Weekend hooper, always down for pickup.')).toBeVisible();
     await expect(page.getByLabel('Message')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Send a friend request' })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'Friend', exact: true })).toBeVisible();
   });
 
   await test.step('4. Add friend searches the real directory and sends a request', async () => {
@@ -82,6 +83,19 @@ test('Friends page — rail sections, search, directory search + send request, a
 
     await expect(requestsSection.getByText('Hana Kim')).not.toBeVisible();
     await expect(offlineSection.getByText('Hana Kim')).toBeVisible();
+  });
+
+  await test.step('8. unfriending via the Friend menu removes the friend and clears the panel', async () => {
+    await offlineSection.getByText('Priya Shah').click();
+    await page.getByRole('button', { name: 'Friend', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Unfriend' }).click();
+
+    const confirm = page.getByRole('dialog');
+    await expect(confirm.getByText('Do you really want to unfriend Priya Shah?')).toBeVisible();
+    await confirm.getByRole('button', { name: 'Unfriend', exact: true }).click();
+
+    await expect(offlineSection.getByText('Priya Shah')).not.toBeVisible();
+    await expect(page.getByText('Select a friend to view their profile and chat.')).toBeVisible();
   });
 
   // A 7th step here used to send a message through FriendChatPanel's old

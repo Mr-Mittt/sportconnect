@@ -5,16 +5,36 @@
 // result's action-bar state in FriendProfilePanel.
 export type FriendshipStatus = 'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'FRIENDS';
 
-// UserResponse (modules/user/user-api) — subset actually used by the
-// Friends page; unused fields (email, dateOfBirth, gender, height/weight,
-// roles, etc.) are irrelevant here and intentionally omitted. `fullName` is
-// a computed getter (`getFullName()`) on the Java DTO, not a stored field —
-// it still serializes as a normal JSON property (Jackson bean
-// introspection picks up any public getter), same as `Post.userFullName`
-// elsewhere in this codebase.
+// The narrowed shape of one `GET /api/users/friends` (U1) row — that
+// endpoint returns a full `List<UserResponse>`, but the Friends page only
+// ever needs these five fields; email, dateOfBirth, gender, height/weight,
+// roles, etc. are intentionally omitted. `fullName` is a computed getter
+// (`getFullName()`) on the Java DTO, not a stored field — it still
+// serializes as a normal JSON property (Jackson bean introspection picks up
+// any public getter), same as `Post.userFullName` elsewhere in this
+// codebase. For a single user looked up by id (directory-search popup), see
+// `UserInfo` / `useUserInfo` — that path returns the PII-free
+// `UserInfoResponse`, not a full `UserResponse`.
 export interface FriendUser {
   id: string;
   fullName: string;
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  bio: string | null;
+}
+
+// UserInfoResponse (modules/user/user-api, U11) — the PII-free subset every
+// authenticated-but-not-self lookup returns, i.e. exactly what
+// `GET /api/users/{userId}` gives back. 1:1 with the Java DTO's six fields.
+// `fullName` is the same computed getter noted on `FriendUser` above;
+// `username` is `string | null` (a freshly registered account with no
+// username set returns `null` — same live-verified nuance as
+// `UserSearchResult.username`). Consumed by `useUserInfo` for the Friends
+// directory-search profile popup.
+export interface UserInfo {
+  id: string;
+  fullName: string;
+  username: string | null;
   avatarUrl: string | null;
   coverUrl: string | null;
   bio: string | null;

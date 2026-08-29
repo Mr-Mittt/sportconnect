@@ -3989,6 +3989,45 @@ explicit go-ahead at each step (full story in A3's summary doc):
   command): `client-ci` `update-baselines` dispatch → SHA-256 confirmed exactly the 3
   `notification-bell-populated-*` files changed (fixture grew 5→7 rows + id 6's actor name), the
   other 84 byte-identical.
+- **FRIEND-2 (`DONE`, 2026-08-29,
+  `client/docs/MVP/FRIEND-2_DEDICATED_FRIEND_PROFILE_HOOK.md`):** feature-folder cleanup — the
+  Friends directory-search profile popup was borrowing `features/profile/useUserProfile` (relocated
+  there at PROFILE-0). Backend U14 (the ticket's original blocker) resolved to no change: U11 had
+  already narrowed `GET /api/users/{userId}` to `UserInfoResponse` (`id, fullName, username,
+  avatarUrl, coverUrl, bio`, `hasRole('USER')`-gated). Shipped: new Friends-owned `useUserInfo()`
+  at the `features/friends/` root (not `hooks/`, per locked scope), typed 1:1 with a new `UserInfo`
+  interface incl. `username: string | null`; `useFriendsPageData` switched to it;
+  `features/profile/useUserProfile` **deleted** (zero importers — `useMyProfile` on
+  `GET /api/users/me` already owns the own-profile case); stale `UserResponse` doc comments in
+  `features/profile/types.ts` + `features/friends/types.ts` corrected; MSW `GET /api/users/:userId`
+  handler now returns `username` too. No logic change — same URL, query key (`friendKeys.profile`),
+  and `enabled` gating. Verification: `tsc -b` clean, `eslint` 0 errors, `vitest` 1044/1044 incl.
+  new `useUserInfo.test.tsx`, `pnpm e2e` `friends-journey` 1/1 + `notification-bell` 4/4. No
+  baselined surface touched — no baseline change.
+  **Scope change (same session, user decision — folded in rather than filed as FRIEND-3):** added
+  the unfriend control the Friends feature never had (`FriendProfilePanel`'s `FRIENDS` state
+  rendered no action bar — a FRIEND-1 gap). Now a compact `Friend ▾` button (`size="sm"` + `h-7`,
+  ~80% of default height) → `DropdownMenu` (`Unfriend` only for now; this instance restyled to
+  `w-42` ≈70% width / tighter padding — the shared primitive untouched) → `UnfriendConfirmDialog`
+  → the pre-existing `DELETE /api/users/friends/{friendId}` (U1 `removeFriend`). Dialog copy +
+  chrome iterated with the user: chrome-light (no header bar / close X; `sr-only` `DialogTitle` for
+  the a11y name), single reconsider-style prompt **"Do you really want to unfriend {name}?"** (verb
+  kept as `unfriend` to match the button/menu, no trailing reassurance — user decision), buttons
+  ordered **Unfriend** (danger) **then Cancel**, `onOpenAutoFocus` prevented so no button is
+  focused on open (Radix's DOM-first default would land on the destructive button), and forced
+  viewport-centered via a new `DialogContent centered` prop (default off — every other modal
+  unchanged) since the Friends page's `ModalAnchorProvider` would otherwise pin it below the pill
+  row. CLIENT-NOTIF-5's `FriendRequestUnavailableDialog` was opted into the same `centered` prop in
+  this pass (user request). New `useUnfriend` hook (blunt-invalidates `friendKeys.all`);
+  `useFriendsPageData.unfriend` clears the selection on success like decline/cancel and exposes
+  `resetUnfriend` so the dialog's mutation error can't survive a reopen (`CLIENT-MODAL-1`). New MSW
+  `DELETE /api/users/friends/:friendId` handler; `friends-journey.spec.ts` gains step 8 (Friend →
+  Unfriend → confirm → friend leaves the list). Verification (final, after all UI iterations):
+  `tsc -b` clean, `eslint` 0 errors, `vitest` **1056/1056** (156 files;
+  +`UnfriendConfirmDialog.test.tsx`, +`dialog.test.tsx` `centered` case), `pnpm e2e friends-journey`
+  1/1 + `notification-bell` 4/4 (the latter covers the now-centered `FriendRequestUnavailableDialog`
+  path). No `visual/` spec covers `FriendProfilePanel` (no `app-friends.spec.ts`) — no baseline
+  change.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

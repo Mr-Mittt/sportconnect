@@ -172,11 +172,15 @@ export function FriendsPage() {
                         onAccept={() => requestId !== null && data.acceptRequest(requestId)}
                         onDecline={() => requestId !== null && data.declineRequest(requestId)}
                         onCancel={() => requestId !== null && data.cancelRequest(requestId)}
+                        onUnfriend={() => data.unfriend(selectedPerson.id)}
+                        onUnfriendDialogClose={data.resetUnfriend}
+                        isUnfriendError={data.isUnfriendError}
                         isActionPending={
                           data.isSendingRequest ||
                           data.isAcceptingRequest ||
                           data.isDecliningRequest ||
-                          data.isCancellingRequest
+                          data.isCancellingRequest ||
+                          data.isUnfriending
                         }
                       />
                     </div>
