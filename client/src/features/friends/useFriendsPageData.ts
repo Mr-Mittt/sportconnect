@@ -66,8 +66,15 @@ function matchesQuery(name: string, normalizedQuery: string): boolean {
  * on arrival — a later user-caused disappearance (accept then unfriend) does
  * not re-raise it. A plain stale `selectedPersonId` restored from
  * `sessionStorage` still clears silently, no dialog.
+ *
+ * `focusReason` (`'created' | 'accepted'`, from the notification type) gates
+ * the dialog: only a `'created'` focus (a pending request that may be gone)
+ * shows "friend request unavailable"; an `'accepted'` focus never does.
  */
-export function useFriendsPageData(focusPersonId?: string) {
+export function useFriendsPageData(
+  focusPersonId?: string,
+  focusReason?: 'created' | 'accepted',
+) {
   const currentUserId = useAuthStore((state) => state.user?.id);
 
   const query = useFriendsPageStore((state) => state.query);
@@ -199,8 +206,18 @@ export function useFriendsPageData(focusPersonId?: string) {
     (friends.some((friend) => friend.id === focusPersonId) ||
       received.some((request) => request.senderId === focusPersonId) ||
       sent.some((request) => request.receiverId === focusPersonId));
+  // The "unavailable" dialog only makes sense for a `created` notification —
+  // "this friend request is no longer available" describes a pending request
+  // that's gone. An `accepted` notification ("X is now your friend") carries no
+  // request; if X has since unfriended you, arriving from that notification just
+  // lands quietly on `/friends`, no modal (matches the behaviour when you
+  // navigate to the page yourself). `undefined` reason (a caller that predates
+  // this, or a direct nav) keeps the original behaviour.
   const focusUnavailable =
-    focusPersonId !== undefined && hasSelectionSourcesSettled && !focusResolved;
+    focusPersonId !== undefined &&
+    focusReason !== 'accepted' &&
+    hasSelectionSourcesSettled &&
+    !focusResolved;
 
   const selectedPerson = useMemo<SelectedPerson | undefined>(() => {
     if (selectedPersonId === undefined || baseSelectedPerson === undefined) return undefined;

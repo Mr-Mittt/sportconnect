@@ -67,8 +67,12 @@ export function FriendsPage() {
   // `focusUnavailable`; the state persists on this history entry until the
   // "unavailable" dialog is dismissed (`clearFocusState`) or the user navigates
   // away, at which point `focusUnavailable` derives back to false on its own.
-  const focusPersonId = (location.state as { focusPersonId?: string } | null)?.focusPersonId;
-  const data = useFriendsPageData(focusPersonId);
+  const focusState = location.state as
+    | { focusPersonId?: string; focusReason?: 'created' | 'accepted' }
+    | null;
+  const focusPersonId = focusState?.focusPersonId;
+  const focusReason = focusState?.focusReason;
+  const data = useFriendsPageData(focusPersonId, focusReason);
   const clearFocusState = () => navigate(location.pathname, { replace: true, state: null });
 
   // FRIEND-2: the notification's focus intent is one-shot. Once that person has

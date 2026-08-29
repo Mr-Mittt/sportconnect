@@ -360,6 +360,17 @@ describe('useFriendsPageData', () => {
     expect(result.current.focusResolved).toBe(false);
   });
 
+  it('an "accepted" focus never raises focusUnavailable, even when the person is in no list (they unfriended since)', async () => {
+    mockGet({ friends: [priya], received: [], sent: [] });
+    const { result } = renderHook(() => useFriendsPageData('ghost', 'accepted'), { wrapper });
+
+    await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
+    // give the lists a beat to settle so the (gated-off) dialog condition would otherwise be true
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(result.current.focusUnavailable).toBe(false);
+    expect(result.current.focusResolved).toBe(false);
+  });
+
   it('keeps a restored Add-mode search selection once the re-run search confirms it\'s still there', async () => {
     const searchResult: UserSearchResult = {
       id: 'u1',

@@ -95,7 +95,7 @@ describe('useNotificationBellData', () => {
     expect(onViewFriendRequests).not.toHaveBeenCalled();
   });
 
-  it('onSelect calls onViewFriendRequests with the entityId (the counterparty user id), not onViewSession, for a USER entityType', async () => {
+  it('onSelect calls onViewFriendRequests with the entityId + kind "created", not onViewSession, for a created USER notification', async () => {
     vi.spyOn(apiClient, 'get').mockImplementation((url) => {
       if (url === '/notifications/unread-count') return Promise.resolve(apiResponse(1));
       if (url === '/notifications') {
@@ -119,8 +119,32 @@ describe('useNotificationBellData', () => {
 
     await waitFor(() => expect(put).toHaveBeenCalledWith('/notifications/9/read'));
     expect(result.current.isOpen).toBe(false);
-    expect(onViewFriendRequests).toHaveBeenCalledWith('hana-kim');
+    expect(onViewFriendRequests).toHaveBeenCalledWith('hana-kim', 'created');
     expect(onViewSession).not.toHaveBeenCalled();
+  });
+
+  it('onSelect passes kind "accepted" for an accepted USER notification', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation((url) => {
+      if (url === '/notifications/unread-count') return Promise.resolve(apiResponse(1));
+      if (url === '/notifications') {
+        return Promise.resolve(
+          apiResponse(
+            pageOf([notification({ id: 10, type: 'user.friend_request.accepted', entityType: 'USER', entityId: 'diego' })]),
+          ),
+        );
+      }
+      throw new Error(`Unmocked GET ${url}`);
+    });
+    vi.spyOn(apiClient, 'put').mockResolvedValue(apiResponse(null));
+    const onViewFriendRequests = vi.fn();
+
+    const { result } = renderHook(() => useNotificationBellData(vi.fn(), onViewFriendRequests), { wrapper });
+    act(() => result.current.onOpenChange(true));
+    await waitFor(() => expect(result.current.notifications).toHaveLength(1));
+
+    act(() => result.current.onSelect(result.current.notifications[0]!));
+
+    await waitFor(() => expect(onViewFriendRequests).toHaveBeenCalledWith('diego', 'accepted'));
   });
 
   it('does not call onViewSession or onViewFriendRequests for an entityType that is neither SESSION nor USER', async () => {

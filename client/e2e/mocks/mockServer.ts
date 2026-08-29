@@ -242,6 +242,28 @@ async function handleAdminRoute(
     return;
   }
 
+  // FRIEND-2: a stale `accepted` notification pointing at nobody (they
+  // unfriended since). Clicking it routes to /friends but shows no dialog.
+  if (action === 'seed-stale-accepted-friend-notification' && req.method === 'POST') {
+    seedNotificationsState(sessionId, [
+      {
+        id: 9002,
+        type: 'user.friend_request.accepted',
+        entityType: 'USER',
+        entityId: 'ghost-requester',
+        actorIds: ['ghost-requester'],
+        actorCount: 1,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        actors: [{ id: 'ghost-requester', fullName: 'Sam Rivera' }],
+        entityTitle: null,
+      },
+    ]);
+    sendJson(res, 200, { seeded: true });
+    return;
+  }
+
   const overrideMatch = action.match(/^override\/(.+)$/);
   if (overrideMatch && req.method === 'POST') {
     const name = overrideMatch[1];

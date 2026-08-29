@@ -4037,9 +4037,16 @@ explicit go-ahead at each step (full story in A3's summary doc):
   work. (A render-phase ref latch in the hook was tried first and reverted — it tripped the
   `react-hooks` lint, the same wall CLIENT-NOTIF-5 documented.) `notification-bell.spec.ts`'s
   pre-select test now Accepts + Unfriends and asserts the dialog stays hidden; a `FriendsPage`
-  component test covers the same flow. Verification (final): `tsc -b` clean, `eslint` 0 errors,
-  `vitest` **156 files / 1060 pass**, `pnpm e2e friends-journey` 1/1 + `notification-bell` 4/4. No
-  `visual/` spec covers `FriendProfilePanel` (no `app-friends.spec.ts`) — no baseline change.
+  component test covers the same flow. **Fourth bug (`accepted`-type notification):** a stale
+  "X is now your friend" notification (X unfriended since) was still opening the "unavailable"
+  dialog — worse, only when the user was *already sitting on* `/friends` (fresh-mount vs.
+  same-route-nav settle timing). The dialog only makes sense for a `created` notification (a pending
+  request that's gone), so the notification type now rides as `location.state.focusReason`
+  (`created | accepted`, set in `useNotificationBellData` → `AppShell`) and `useFriendsPageData`
+  suppresses `focusUnavailable` entirely for `accepted`. New `seed-stale-accepted-friend-notification`
+  MSW action + e2e guard. Verification (final): `tsc -b` clean, `eslint` 0 errors, `vitest` **156
+  files, all pass**, `pnpm e2e friends-journey` 1/1 + `notification-bell` 5/5. No `visual/` spec
+  covers `FriendProfilePanel` (no `app-friends.spec.ts`) — no baseline change.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

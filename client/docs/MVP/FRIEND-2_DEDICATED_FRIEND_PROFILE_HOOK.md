@@ -106,6 +106,24 @@ fire on the arrival render(s). The genuine "gone on arrival" case never sets `fo
 state lingers until the dialog's own "Got it" dismiss; a re-sent request that reappears sets it and
 closes the dialog, same as before.
 
+### Fourth bug (2026-08-29) — stale "X is now your friend" notification opens the unavailable dialog
+
+**Repro (a variant the third fix doesn't cover):** A sends B a request and **stays on `/friends`**.
+B accepts then unfriends. A then clicks the (now-outdated) "B is now your friend" notification →
+"friend request unavailable" dialog shows. If A had *left* `/friends` and come back via the
+notification, no dialog — because the fresh mount vs. a same-route re-navigation behave differently
+around `hasSelectionSourcesSettled`.
+
+**Cause + fix:** the dialog was firing for **both** friend-request notification types. It only makes
+sense for `user.friend_request.created` ("wants to be your friend" — a pending request that may be
+gone). For `user.friend_request.accepted` ("is now your friend") there is no request for
+"no longer available" to describe, and "they unfriended you since" isn't a modal-worthy error — it
+should just land on `/friends`. So the notification type now rides along as
+`location.state.focusReason` (`'created' | 'accepted'`, set in `useNotificationBellData` →
+`AppShell`), and `useFriendsPageData` only computes `focusUnavailable` when `focusReason !==
+'accepted'`. This makes the "stayed on the page" and "left and came back" paths behave the same for
+an `accepted` notification (no dialog either way).
+
 **Scope-change gate:** user confirmed nothing further to add or remove.
 
 ## Why
@@ -272,21 +290,29 @@ Built as planned in the scope-change block above. Files:
   this is what keeps the just-accepted requester selected instead of dropping them in the window
   between `received` losing them and `friends` gaining them. `acceptRequest` gains an explaining
   comment (it deliberately does *not* clear, unlike decline/cancel/unfriend). **Third bug fix:** the
-  hook now returns `focusResolved` (focus person is in a friend/request list); the actual fix lives
-  in `FriendsPage` (below).
+  hook returns `focusResolved` (focus person is in a friend/request list); the fix lives in
+  `FriendsPage` (below). **Fourth bug fix:** new `focusReason?: 'created' | 'accepted'` param —
+  `focusUnavailable` is now `false` whenever `focusReason === 'accepted'`.
 - `client/src/features/friends/FriendsPage.tsx` — `useEffect` on `data.focusResolved`: once true,
   strips `focusPersonId` from the router state, so a later user-caused disappearance
   (accept-then-unfriend) can't re-raise `focusUnavailable`. (`useEffect` added to the react import.)
-- `client/src/features/friends/useFriendsPageData.test.tsx` — +1 case (unfriend DELETEs
-  `/users/friends/{id}` and clears the selection); +1 case (accept keeps the requester selected and
-  re-resolves them to `FRIENDS`); +2 cases (`focusResolved` true when the person is in a list,
-  false when "gone on arrival").
-- `client/src/features/friends/FriendsPage.test.tsx` — +1 case: a `focusPersonId`-seeded arrival,
-  Accept → Unfriend, asserts the "Friend request unavailable" dialog never appears (new
-  `focusWrapper` helper seeds `location.state`).
-- `client/e2e/flows/notification-bell.spec.ts` — the "routes to /friends and pre-selects the
-  requester" test now also Accepts then Unfriends Hana and asserts the "Friend request unavailable"
-  dialog stays hidden (third-bug guard).
+  Also reads `location.state.focusReason` and passes it to `useFriendsPageData`.
+- `client/src/features/notifications/useNotificationBellData.ts` — `onViewFriendRequests` gains a
+  `kind: 'created' | 'accepted'` arg (from `notification.type`).
+- `client/src/shared/components/AppShell.tsx` — forwards `kind` as `state.focusReason`.
+- `client/src/features/friends/useFriendsPageData.test.tsx` — +1 (unfriend DELETEs + clears
+  selection); +1 (accept keeps the requester selected → `FRIENDS`); +2 (`focusResolved` true/false);
+  +1 (an `'accepted'` focus never raises `focusUnavailable`).
+- `client/src/features/notifications/useNotificationBellData.test.tsx` — the `created` case asserts
+  `('hana-kim', 'created')`; +1 case for `('diego', 'accepted')`.
+- `client/src/features/friends/FriendsPage.test.tsx` — +1 (`focusPersonId` arrival, Accept →
+  Unfriend, no dialog); +1 (`focusReason: 'accepted'` arrival for a vanished person, no dialog).
+  New `focusWrapper(personId, reason?)` helper seeds `location.state`.
+- `client/e2e/mocks/mockServer.ts` / `fixtures.ts` — new `seed-stale-accepted-friend-notification`
+  admin action (`user.friend_request.accepted`, `entityId` matches nobody).
+- `client/e2e/flows/notification-bell.spec.ts` — the "pre-selects the requester" test now also
+  Accepts + Unfriends Hana and asserts no unavailable dialog (third-bug guard); **new test**: a
+  stale "is now your friend" notification lands on `/friends` with no dialog (fourth-bug guard).
 - `client/src/features/friends/FriendsPage.tsx` — passes the 3 new props; `data.isUnfriending`
   added to the `isActionPending` OR.
 - `client/src/features/friends/FriendsPage.test.tsx` — the stale "no action bar (already friends)"

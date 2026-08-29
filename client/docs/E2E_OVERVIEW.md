@@ -649,7 +649,7 @@ steps 9-10 are what's actually new.
 | 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverSessions`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED` row for, same exclusion rule as the real backend |
 | 10. search filters Discover; the panel toggle hides/shows My sessions | Typing a non-matching string into the search box shows "No sessions match your search." in Discover; the "Hide my sessions"/"Show my sessions" button toggles the whole `region` "My sessions" | Search is client-side only (`useMatchesPageData`'s `discoverSessions` memo), not a new backend query |
 
-### `e2e/flows/notification-bell.spec.ts` (CLIENT-NOTIF-1 + CLIENT-NOTIF-5, four `test()`s — a 4-step journey + three regression/navigation cases)
+### `e2e/flows/notification-bell.spec.ts` (CLIENT-NOTIF-1 + CLIENT-NOTIF-5 + FRIEND-2, five `test()`s — a 4-step journey + four regression/navigation cases)
 
 The `TopBar` bell + dropdown — unread badge, list-on-open, mark-read-on-click + shell-level
 in-place modal, and "Mark all read". Fixtures: `mocks/handlers/notifications.ts`'s
@@ -716,7 +716,15 @@ lists (request cancelled, or account deactivated), asserts the URL still becomes
 **"Friend request unavailable"** dialog opens instead of a pre-selection; "Got it" closes it and
 the "Select a friend…" placeholder stays. `focusUnavailable` is derived in `useFriendsPageData`
 from the `focusPersonId` prop + the live lists (no stored flag); the dialog's close navigates to
-strip `location.state`, which is what flips it back off.
+strip `location.state`, which is what flips it back off. This is a **`created`** notification —
+the dialog is gated to that type.
+
+`Notification bell journey — a stale "is now your friend" notification lands on /friends with no
+dialog` (FRIEND-2) — seeds `seedStaleAcceptedFriendNotification` (a `user.friend_request.accepted`
+row whose `entityId` matches nobody — the person accepted then unfriended since), clicks
+"Sam Rivera is now your friend", asserts the URL becomes `/friends` and the "Select a friend…"
+placeholder shows with **no** "Friend request unavailable" dialog. `focusReason: 'accepted'`
+(carried on `location.state` from the notification type) suppresses `focusUnavailable`.
 
 ### `e2e/flows/admin-route-guard.spec.ts` (ADMIN-1, ADMIN-4, 4 `test()`s)
 
