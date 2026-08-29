@@ -71,6 +71,21 @@ the mutation is pending; mutation error rendered inline in the dialog (`role="al
 rows; any notification on unfriend (consistent with decline being silent, per the U13 session);
 optimistic removal / undo.
 
+### Second scope change (2026-08-29) — accept keeps the requester selected
+
+**Why:** on the receiver's Friends page, selecting an incoming request and clicking **Accept** was
+dropping the selection instead of showing the new friend. Root cause: `acceptRequest` invalidates
+`friendKeys.all`, so `received` and `friends` refetch independently — with the auto-clear effect
+gated only on `isLoading`, a render where `received` had lost the just-accepted person but `friends`
+hadn't gained them yet looked like "resolves to nobody" and cleared the selection.
+
+**Added requirement:** after Accept, the requester **stays selected** and the panel re-resolves them
+to `FRIENDS` (their now-friend profile). After Decline, the selection clears (unchanged — already
+the behaviour). Fix: widen the auto-clear effect's `hasSelectionSourcesSettled` gate from
+`isLoading` to `isFetching` on the friends/received/sent (and search) queries, so a background
+refetch also defers the verdict until every list has settled — by which point the accepted person
+is in `friends`.
+
 **Scope-change gate:** user confirmed nothing further to add or remove.
 
 ## Why
@@ -231,17 +246,26 @@ Built as planned in the scope-change block above. Files:
   updated; new props added to `meta.args`.
 - `client/src/features/friends/useFriendsPageData.ts` — wires `useUnfriend`; exposes
   `unfriend(friendId)` (`onSuccess` → clear selection, like decline/cancel), `isUnfriending`
-  (OR'd into the panel's pending), `isUnfriendError`, `resetUnfriend`.
+  (OR'd into the panel's pending), `isUnfriendError`, `resetUnfriend`. **Second scope change:**
+  `hasSelectionSourcesSettled` now gates on `isFetching` (not `isLoading`) for the
+  friends/received/sent/search queries, so the auto-clear effect waits out a background refetch —
+  this is what keeps the just-accepted requester selected instead of dropping them in the window
+  between `received` losing them and `friends` gaining them. `acceptRequest` gains an explaining
+  comment (it deliberately does *not* clear, unlike decline/cancel/unfriend).
 - `client/src/features/friends/useFriendsPageData.test.tsx` — +1 case (unfriend DELETEs
-  `/users/friends/{id}` and clears the selection).
+  `/users/friends/{id}` and clears the selection); +1 case (accept keeps the requester selected and
+  re-resolves them to `FRIENDS`).
 - `client/src/features/friends/FriendsPage.tsx` — passes the 3 new props; `data.isUnfriending`
   added to the `isActionPending` OR.
+- `client/src/features/friends/FriendsPage.test.tsx` — the stale "no action bar (already friends)"
+  case retitled + now asserts the `Friend` menu button is present.
 - `client/e2e/mocks/handlers/friends.ts` — **new** `http.delete('/api/users/friends/:friendId')`:
   drops the row from `friendsState`, `400` if the pair aren't in `friendsState`. Single-segment
   `:friendId` never shadows the earlier `requests/:requestId` route.
-- `client/e2e/flows/friends-journey.spec.ts` — step 3 now also asserts the `Friend` button; **new
-  step 8** drives Friend → Unfriend → confirm and asserts the friend leaves the list + the panel
-  clears. `client/docs/E2E_OVERVIEW.md` §6 updated (7 → 8 steps).
+- `client/e2e/flows/friends-journey.spec.ts` — step 3 now also asserts the `Friend` button; **step
+  7** now asserts the accepted requester stays selected (panel shows the `Friend` button, not the
+  empty-selection placeholder); **new step 8** drives Friend → Unfriend → confirm and asserts the
+  friend leaves the list + the panel clears. `client/docs/E2E_OVERVIEW.md` §6 updated (7 → 8 steps).
 
 ### Key decisions
 

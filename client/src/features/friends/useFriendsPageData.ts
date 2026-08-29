@@ -144,13 +144,21 @@ export function useFriendsPageData(focusPersonId?: string) {
   const selectedSearchResult = searchResults.find((result) => result.id === selectedPersonId);
 
   // A restored (or stale) selection is only judged once every list it could
-  // legitimately come from has actually loaded — search only counts while in
-  // Add mode, since it isn't fetched at all otherwise.
+  // legitimately come from is fully idle — `isFetching`, not just
+  // `isLoading`, so a *background refetch* also defers the verdict. This
+  // matters on accept: `acceptRequest` invalidates `friendKeys.all`, so
+  // `received` and `friends` both refetch, and they can resolve in either
+  // order. With only an `isLoading` gate, a render where `received` has
+  // dropped the just-accepted person but `friends` hasn't picked them up yet
+  // would look like "selection resolves to nobody" and wrongly clear it.
+  // Waiting for every list to settle closes that window — by then the
+  // accepted person is in `friends`. Search only counts while in Add mode,
+  // since it isn't fetched at all otherwise.
   const hasSelectionSourcesSettled =
-    !friendsQuery.isLoading &&
-    !receivedQuery.isLoading &&
-    !sentQuery.isLoading &&
-    (!isAddMode || !searchQuery.isLoading);
+    !friendsQuery.isFetching &&
+    !receivedQuery.isFetching &&
+    !sentQuery.isFetching &&
+    (!isAddMode || !searchQuery.isFetching);
   const isSelectedPersonAvailable =
     isKnownFriend ||
     (receivedQuery.data ?? []).some((request) => request.senderId === selectedPersonId) ||
@@ -273,6 +281,11 @@ export function useFriendsPageData(focusPersonId?: string) {
 
     sendRequest: (userId: string) => sendMutation.mutate(userId),
     isSendingRequest: sendMutation.isPending,
+    // Unlike decline/cancel, accept deliberately keeps the selection: the
+    // requester becomes a friend and the panel re-resolves them to `FRIENDS`
+    // (their now-friend profile). The `isFetching` gate on the auto-clear
+    // effect above is what stops a transient deselect while the friends /
+    // requests lists refetch after the mutation settles.
     acceptRequest: (requestId: string) => acceptMutation.mutate(requestId),
     isAcceptingRequest: acceptMutation.isPending,
     // Mirrors the design reference's own behavior: declining clears the

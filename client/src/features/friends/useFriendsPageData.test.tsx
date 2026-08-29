@@ -235,6 +235,34 @@ describe('useFriendsPageData', () => {
     await waitFor(() => expect(result.current.selectedPersonId).toBeUndefined());
   });
 
+  it('accepting a request keeps the requester selected and re-resolves them to FRIENDS', async () => {
+    let accepted = false;
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/users/friends') return apiResponse(accepted ? [priya, hana] : [priya]);
+      if (url === '/users/friends/requests/received') {
+        return apiResponse(accepted ? [] : [receivedRequest]);
+      }
+      if (url === '/users/friends/requests/sent') return apiResponse([]);
+      if (url.startsWith('/sports/profiles/user/')) return apiResponse([]);
+      if (url.startsWith('/users/')) return apiResponse(hana); // useUserInfo, pre-accept
+      throw new Error(`unexpected GET ${url}`);
+    });
+    vi.spyOn(apiClient, 'put').mockImplementation(async () => {
+      accepted = true;
+      return apiResponse(undefined);
+    });
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
+    act(() => result.current.selectPerson('f3'));
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('PENDING_RECEIVED'));
+
+    act(() => result.current.acceptRequest('req-1'));
+
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('FRIENDS'));
+    expect(result.current.selectedPersonId).toBe('f3');
+  });
+
   it('filters the Offline section and Friend Requests section by the rail search, case-insensitively', async () => {
     mockGet({ friends: [priya, hana] });
     const { result } = renderHook(() => useFriendsPageData(), { wrapper });

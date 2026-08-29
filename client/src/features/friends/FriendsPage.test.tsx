@@ -115,7 +115,7 @@ describe('FriendsPage', () => {
     expect(screen.getByText('Select a friend to view their profile and chat.')).toBeInTheDocument();
   });
 
-  it('selecting a friend shows the profile + chat split, with no action bar (already friends)', async () => {
+  it('selecting a friend shows the profile + chat split, with the Friend menu button (already friends)', async () => {
     mockFriendsGet();
     const user = userEvent.setup();
     render(<FriendsPage />, { wrapper });
@@ -125,6 +125,7 @@ describe('FriendsPage', () => {
 
     await waitFor(() => expect(screen.getByText('Weekend hooper.')).toBeInTheDocument());
     expect(screen.getByLabelText('Message')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Friend' })).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /send a friend request|waiting|accept|decline/i }),
     ).not.toBeInTheDocument();

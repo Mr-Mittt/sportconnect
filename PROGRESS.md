@@ -4022,12 +4022,17 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `useFriendsPageData.unfriend` clears the selection on success like decline/cancel and exposes
   `resetUnfriend` so the dialog's mutation error can't survive a reopen (`CLIENT-MODAL-1`). New MSW
   `DELETE /api/users/friends/:friendId` handler; `friends-journey.spec.ts` gains step 8 (Friend →
-  Unfriend → confirm → friend leaves the list). Verification (final, after all UI iterations):
-  `tsc -b` clean, `eslint` 0 errors, `vitest` **1056/1056** (156 files;
-  +`UnfriendConfirmDialog.test.tsx`, +`dialog.test.tsx` `centered` case), `pnpm e2e friends-journey`
-  1/1 + `notification-bell` 4/4 (the latter covers the now-centered `FriendRequestUnavailableDialog`
-  path). No `visual/` spec covers `FriendProfilePanel` (no `app-friends.spec.ts`) — no baseline
-  change.
+  Unfriend → confirm → friend leaves the list). **Second small scope-add (user request):** on the
+  receiver's page, accepting an incoming request now **keeps the requester selected** (panel
+  re-resolves them to `FRIENDS`) instead of dropping the selection; decline still clears it
+  (unchanged). Root cause was the selection auto-clear effect racing the post-accept refetch — fixed
+  by widening its `hasSelectionSourcesSettled` gate from `isLoading` to `isFetching`, so a
+  background refetch also defers the verdict until every list has settled. `friends-journey` step 7
+  now guards this. Verification (final): `tsc -b` clean, `eslint` 0 errors, `vitest` **156 files,
+  all pass** (+ accept-keeps-selection unit case, + the earlier `UnfriendConfirmDialog` /
+  `dialog.test.tsx` / `FriendProfilePanel` additions), `pnpm e2e friends-journey` 1/1 +
+  `notification-bell` 4/4. No `visual/` spec covers `FriendProfilePanel` (no `app-friends.spec.ts`)
+  — no baseline change.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

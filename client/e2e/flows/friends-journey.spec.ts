@@ -73,7 +73,7 @@ test('Friends page — rail sections, search, directory search + send request, a
     await expect(offlineSection.getByText('Priya Shah')).toBeVisible();
   });
 
-  await test.step('7. accepting an incoming request moves it into Offline and clears the action bar', async () => {
+  await test.step('7. accepting an incoming request moves it into Offline and keeps the new friend selected', async () => {
     await requestsSection.getByText('Hana Kim').click();
     // exact: true — CLIENT-SESSION-12's mockInvitedSession ("Tuesday drop-in") now also renders
     // in this page's own Upcoming rail (shared useUpcomingMatches), with its own accessible name
@@ -83,6 +83,12 @@ test('Friends page — rail sections, search, directory search + send request, a
 
     await expect(requestsSection.getByText('Hana Kim')).not.toBeVisible();
     await expect(offlineSection.getByText('Hana Kim')).toBeVisible();
+    // Hana stays selected — the panel re-resolves her to a friend (the `Friend`
+    // menu button), it does not fall back to the empty-selection placeholder.
+    await expect(page.getByRole('button', { name: 'Friend', exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Select a friend to view their profile and chat.'),
+    ).not.toBeVisible();
   });
 
   await test.step('8. unfriending via the Friend menu removes the friend and clears the panel', async () => {
