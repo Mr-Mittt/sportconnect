@@ -4044,9 +4044,15 @@ explicit go-ahead at each step (full story in A3's summary doc):
   request that's gone), so the notification type now rides as `location.state.focusReason`
   (`created | accepted`, set in `useNotificationBellData` → `AppShell`) and `useFriendsPageData`
   suppresses `focusUnavailable` entirely for `accepted`. New `seed-stale-accepted-friend-notification`
-  MSW action + e2e guard. Verification (final): `tsc -b` clean, `eslint` 0 errors, `vitest` **156
-  files, all pass**, `pnpm e2e friends-journey` 1/1 + `notification-bell` 5/5. No `visual/` spec
-  covers `FriendProfilePanel` (no `app-friends.spec.ts`) — no baseline change.
+  MSW action + e2e guard. **Fifth enhancement (user-requested):** withdrawing your own outgoing
+  request (`PENDING_SENT` "Cancel request") now **keeps the person selected**, re-resolved to `NONE`
+  ("Send a friend request"), instead of dropping to the empty placeholder — `cancelRequest`
+  `onSuccess` records `keepSelectedAfterCancelIdRef` (a mount-scoped `useRef`, not `useState`: RQ's
+  `useSyncExternalStore`-driven refetch can run the auto-clear effect before an `onSuccess` setState
+  flushes; the ref is written before `onSettled` even refetches) and the auto-clear effect skips a
+  selection matching it; decline/unfriend still clear. `friends-journey` step 5 updated. Verification (final): `tsc -b` clean, `eslint` 0 errors,
+  `vitest` **156 files, all pass**, `pnpm e2e friends-journey` 1/1 + `notification-bell` 5/5. No
+  `visual/` spec covers `FriendProfilePanel` (no `app-friends.spec.ts`) — no baseline change.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

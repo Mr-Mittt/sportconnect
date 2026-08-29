@@ -124,6 +124,24 @@ should just land on `/friends`. So the notification type now rides along as
 'accepted'`. This makes the "stayed on the page" and "left and came back" paths behave the same for
 an `accepted` notification (no dialog either way).
 
+### Fifth enhancement (2026-08-29) — cancelling your own request keeps the person selected
+
+**Ask:** withdrawing your own outgoing request (`PENDING_SENT` → "Cancel request") was dropping the
+selection back to the empty "Select a friend…" placeholder. Keep the person selected instead — an
+accidental cancel or a change of mind is common, and the panel re-resolving them to `NONE` ("Send a
+friend request") is the useful next step.
+
+**Fix:** `cancelRequest`'s `onSuccess` records the id in a new `keepSelectedAfterCancelIdRef`
+instead of nulling `selectedPersonId`; the auto-clear effect skips any id that matches the ref, so
+the person survives and re-resolves to `NONE`. A **ref, not `useState`** — a first `useState`
+attempt worked in unit tests but not e2e: RQ v5's `useQuery` uses `useSyncExternalStore`, so the
+post-`onSettled` refetch forces a synchronous re-render that can run the auto-clear effect *before*
+the `onSuccess` `setState` flushes, clearing the selection anyway. The ref is written synchronously
+in `onSuccess` (before `onSettled` even starts the refetch), so the effect always sees it. It's
+mount-scoped, so a stale selection restored from `sessionStorage` on a later visit still clears, and
+`selectPerson` clears the ref when the user picks someone else. Decline and unfriend still clear
+(unchanged — different intent).
+
 **Scope-change gate:** user confirmed nothing further to add or remove.
 
 ## Why
@@ -292,7 +310,12 @@ Built as planned in the scope-change block above. Files:
   comment (it deliberately does *not* clear, unlike decline/cancel/unfriend). **Third bug fix:** the
   hook returns `focusResolved` (focus person is in a friend/request list); the fix lives in
   `FriendsPage` (below). **Fourth bug fix:** new `focusReason?: 'created' | 'accepted'` param —
-  `focusUnavailable` is now `false` whenever `focusReason === 'accepted'`.
+  `focusUnavailable` is now `false` whenever `focusReason === 'accepted'`. **Fifth enhancement:**
+  `cancelRequest` `onSuccess` records `keepSelectedAfterCancelIdRef` (a new mount-scoped `useRef` —
+  see the section above for why a ref, not state) instead of clearing the selection; the auto-clear
+  effect skips a `selectedPersonId` matching the ref, and the person re-resolves to `NONE`.
+  `selectPerson` (now wrapped) clears the ref on the next selection. (`useRef` added to the react
+  import.)
 - `client/src/features/friends/FriendsPage.tsx` — `useEffect` on `data.focusResolved`: once true,
   strips `focusPersonId` from the router state, so a later user-caused disappearance
   (accept-then-unfriend) can't re-raise `focusUnavailable`. (`useEffect` added to the react import.)
@@ -302,7 +325,8 @@ Built as planned in the scope-change block above. Files:
 - `client/src/shared/components/AppShell.tsx` — forwards `kind` as `state.focusReason`.
 - `client/src/features/friends/useFriendsPageData.test.tsx` — +1 (unfriend DELETEs + clears
   selection); +1 (accept keeps the requester selected → `FRIENDS`); +2 (`focusResolved` true/false);
-  +1 (an `'accepted'` focus never raises `focusUnavailable`).
+  +1 (an `'accepted'` focus never raises `focusUnavailable`); the cancel test now asserts the person
+  **stays** selected, re-resolved to `NONE` (was "clears the selection").
 - `client/src/features/notifications/useNotificationBellData.test.tsx` — the `created` case asserts
   `('hana-kim', 'created')`; +1 case for `('diego', 'accepted')`.
 - `client/src/features/friends/FriendsPage.test.tsx` — +1 (`focusPersonId` arrival, Accept →
@@ -321,9 +345,11 @@ Built as planned in the scope-change block above. Files:
   drops the row from `friendsState`, `400` if the pair aren't in `friendsState`. Single-segment
   `:friendId` never shadows the earlier `requests/:requestId` route.
 - `client/e2e/flows/friends-journey.spec.ts` — step 3 now also asserts the `Friend` button; **step
-  7** now asserts the accepted requester stays selected (panel shows the `Friend` button, not the
-  empty-selection placeholder); **new step 8** drives Friend → Unfriend → confirm and asserts the
-  friend leaves the list + the panel clears. `client/docs/E2E_OVERVIEW.md` §6 updated (7 → 8 steps).
+  5** now asserts a cancelled request keeps the person selected (panel shows "Send a friend
+  request", not the placeholder); **step 7** now asserts the accepted requester stays selected
+  (panel shows the `Friend` button, not the empty-selection placeholder); **new step 8** drives
+  Friend → Unfriend → confirm and asserts the friend leaves the list + the panel clears.
+  `client/docs/E2E_OVERVIEW.md` §6 updated (7 → 8 steps).
 
 ### Key decisions
 

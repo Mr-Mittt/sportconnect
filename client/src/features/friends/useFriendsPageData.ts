@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useFriendsPageStore } from '@/app/friendsPageStore';
 import { useSportProfilesForUser } from '@/shared/hooks/useSportProfilesForUser';
@@ -83,6 +83,20 @@ export function useFriendsPageData(
   const setIsAddMode = useFriendsPageStore((state) => state.setIsAddMode);
   const selectedPersonId = useFriendsPageStore((state) => state.selectedPersonId);
   const setSelectedPersonId = useFriendsPageStore((state) => state.setSelectedPersonId);
+  // FRIEND-2: after the caller withdraws their OWN outgoing request, keep that
+  // person selected (they re-resolve to `NONE`, so the panel shows "Send a
+  // friend request") rather than dropping to the empty placeholder — an
+  // accidental cancel or a change of mind is common. A ref, not state: it's set
+  // synchronously in the cancel mutation's `onSuccess` (before `onSettled`
+  // triggers the list refetch) and only ever read inside the auto-clear effect
+  // below, so there's no render-timing race between the write and the refetch
+  // settling. Cleared on the next explicit selection; mount-scoped, so a stale
+  // selection restored from `sessionStorage` on a later visit still clears.
+  const keepSelectedAfterCancelIdRef = useRef<string>();
+  const selectPerson = (personId: string | undefined) => {
+    keepSelectedAfterCancelIdRef.current = undefined;
+    setSelectedPersonId(personId);
+  };
   const [collapsedSections, setCollapsedSections] = useState<Record<FriendSectionKey, boolean>>({
     online: false,
     friendRequests: false,
@@ -178,9 +192,16 @@ export function useFriendsPageData(
   // one that's simply gone stale, e.g. an accepted/declined request) that no
   // longer resolves to anyone in the reloaded lists clears back to "no
   // selection" instead of silently keeping whatever `useUserInfo` might
-  // still resolve for that raw id.
+  // still resolve for that raw id. Exception: a person whose outgoing request
+  // we just cancelled this session stays (`keepSelectedAfterCancelIdRef`) —
+  // they re-resolve to `NONE` so "Send a friend request" is right there.
   useEffect(() => {
-    if (selectedPersonId !== undefined && hasSelectionSourcesSettled && !isSelectedPersonAvailable) {
+    if (
+      selectedPersonId !== undefined &&
+      hasSelectionSourcesSettled &&
+      !isSelectedPersonAvailable &&
+      selectedPersonId !== keepSelectedAfterCancelIdRef.current
+    ) {
       setSelectedPersonId(undefined);
     }
   }, [selectedPersonId, hasSelectionSourcesSettled, isSelectedPersonAvailable, setSelectedPersonId]);
@@ -294,7 +315,7 @@ export function useFriendsPageData(
     isSearchError: searchQuery.isError,
 
     selectedPersonId,
-    selectPerson: setSelectedPersonId,
+    selectPerson,
     selectedPerson,
     isSelectedPersonLoading: !isKnownFriend && selectedPersonId !== undefined && profileQuery.isLoading,
 
@@ -325,10 +346,19 @@ export function useFriendsPageData(
     declineRequest: (requestId: string) =>
       declineMutation.mutate(requestId, { onSuccess: () => setSelectedPersonId(undefined) }),
     isDecliningRequest: declineMutation.isPending,
-    // Same as decline: once the outgoing request is withdrawn there's nothing
-    // left in the panel to act on, so clear the selection.
-    cancelRequest: (requestId: string) =>
-      cancelMutation.mutate(requestId, { onSuccess: () => setSelectedPersonId(undefined) }),
+    // Unlike decline, withdrawing your OWN outgoing request keeps the person
+    // selected (user-requested) — they re-resolve to `NONE`, so the panel shows
+    // "Send a friend request", handy after an accidental cancel. Record the id
+    // in `keepSelectedAfterCancelIdRef` *before* the settle-triggered refetch so
+    // the auto-clear above leaves it.
+    cancelRequest: (requestId: string) => {
+      const personId = selectedPersonId;
+      cancelMutation.mutate(requestId, {
+        onSuccess: () => {
+          if (personId !== undefined) keepSelectedAfterCancelIdRef.current = personId;
+        },
+      });
+    },
     isCancellingRequest: cancelMutation.isPending,
     // Unfriend takes the other person's user id (not a request id). Same
     // clear-the-selection-on-success behavior as decline/cancel — the person

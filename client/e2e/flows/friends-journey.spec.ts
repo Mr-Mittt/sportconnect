@@ -58,14 +58,19 @@ test('Friends page — rail sections, search, directory search + send request, a
     await expect(page.getByRole('button', { name: 'Cancel request' })).toBeVisible();
   });
 
-  await test.step('5. cancelling the outgoing request withdraws it', async () => {
+  await test.step('5. cancelling the outgoing request withdraws it but keeps the person selected', async () => {
     // The seeded outgoing request to Diego Alvarez (mockSentFriendRequest) is the one with a
     // resolvable requestId; select it from the rail's Friend Requests section and cancel.
     await page.getByLabel('Clear search').click();
     await requestsSection.getByText('Diego Alvarez').click();
     await page.getByRole('button', { name: 'Cancel request' }).click();
     await expect(requestsSection.getByText('Diego Alvarez')).not.toBeVisible();
-    await expect(page.getByText('Select a friend to view their profile and chat.')).toBeVisible();
+    // FRIEND-2: the panel stays open on Diego, re-resolved to NONE — a "Send a
+    // friend request" button, not the empty-selection placeholder.
+    await expect(page.getByRole('button', { name: 'Send a friend request' })).toBeVisible();
+    await expect(
+      page.getByText('Select a friend to view their profile and chat.'),
+    ).not.toBeVisible();
   });
 
   await test.step('6. the default friend list is intact', async () => {

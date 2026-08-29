@@ -138,9 +138,21 @@ describe('useFriendsPageData', () => {
     expect(result.current.selectedPerson?.requestId).toBe('req-2');
   });
 
-  it('cancelling a sent request DELETEs it and clears the selection on success', async () => {
-    mockGet({ friends: [priya], profiles: { f4: { id: 'f4', fullName: 'Diego Alvarez', avatarUrl: null, coverUrl: null, bio: null } } });
-    const del = vi.spyOn(apiClient, 'delete').mockResolvedValue(apiResponse(undefined));
+  it('cancelling a sent request DELETEs it but keeps the person selected, re-resolved to NONE', async () => {
+    const diego: FriendUser = { id: 'f4', fullName: 'Diego Alvarez', avatarUrl: null, coverUrl: null, bio: null };
+    let cancelled = false;
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/users/friends') return apiResponse([priya]);
+      if (url === '/users/friends/requests/received') return apiResponse([]);
+      if (url === '/users/friends/requests/sent') return apiResponse(cancelled ? [] : [sentRequest]);
+      if (url.startsWith('/sports/profiles/user/')) return apiResponse([]);
+      if (url.startsWith('/users/')) return apiResponse(diego);
+      throw new Error(`unexpected GET ${url}`);
+    });
+    const del = vi.spyOn(apiClient, 'delete').mockImplementation(async () => {
+      cancelled = true;
+      return apiResponse(undefined);
+    });
     const { result } = renderHook(() => useFriendsPageData(), { wrapper });
 
     await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
@@ -150,7 +162,8 @@ describe('useFriendsPageData', () => {
     act(() => result.current.cancelRequest('req-2'));
 
     await waitFor(() => expect(del).toHaveBeenCalledWith('/users/friends/requests/req-2'));
-    await waitFor(() => expect(result.current.selectedPersonId).toBeUndefined());
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('NONE'));
+    expect(result.current.selectedPersonId).toBe('f4');
   });
 
   it('unfriending a friend DELETEs /users/friends/{id} and clears the selection on success', async () => {
