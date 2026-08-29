@@ -127,7 +127,7 @@ describe('useFriendsPageData', () => {
     expect(result.current.selectedPerson?.requestId).toBe('req-1');
   });
 
-  it('resolves a selection found in sent requests to PENDING_SENT', async () => {
+  it('resolves a selection found in sent requests to PENDING_SENT, carrying the real requestId for cancel', async () => {
     mockGet({ friends: [priya], profiles: { f4: { id: 'f4', fullName: 'Diego Alvarez', avatarUrl: null, coverUrl: null, bio: null } } });
     const { result } = renderHook(() => useFriendsPageData(), { wrapper });
 
@@ -135,7 +135,22 @@ describe('useFriendsPageData', () => {
     act(() => result.current.selectPerson('f4'));
 
     await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('PENDING_SENT'));
-    expect(result.current.selectedPerson?.requestId).toBe(null);
+    expect(result.current.selectedPerson?.requestId).toBe('req-2');
+  });
+
+  it('cancelling a sent request DELETEs it and clears the selection on success', async () => {
+    mockGet({ friends: [priya], profiles: { f4: { id: 'f4', fullName: 'Diego Alvarez', avatarUrl: null, coverUrl: null, bio: null } } });
+    const del = vi.spyOn(apiClient, 'delete').mockResolvedValue(apiResponse(undefined));
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
+    act(() => result.current.selectPerson('f4'));
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('PENDING_SENT'));
+
+    act(() => result.current.cancelRequest('req-2'));
+
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/users/friends/requests/req-2'));
+    await waitFor(() => expect(result.current.selectedPersonId).toBeUndefined());
   });
 
   it('falls back to the search result\'s own friendshipStatus for a fresh directory selection', async () => {

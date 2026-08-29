@@ -3965,12 +3965,19 @@ explicit go-ahead at each step (full story in A3's summary doc):
   gains ids 6/7 (`entityType: 'USER'`, `isRead: true`; id 6's actor is Hana Kim, who has a real
   pending incoming request so the pre-select path resolves); new
   `seed-unavailable-friend-request-notification` mockServer action for the vanished-requester case.
-  Verification: `pnpm build` clean, `eslint` 0 errors, `vitest` 1041/1041 (+12), `pnpm e2e` 76/76
-  incl. two new `notification-bell.spec.ts` cases (pre-select → Accept/Decline visible;
-  vanished requester → dialog). **Remaining step:** the 3 `notification-bell-populated-*` visual
-  baselines (fixture grew 5→7 rows, plus id 6's actor-name text changed) need the `update-baselines`
-  GitHub dispatch — can't be regenerated on a Windows host (font-rendering noise floor); expect
-  exactly those 3 files to change.
+  **Also added a "Cancel request" button** (second user request, same session) — `PENDING_SENT` in
+  `FriendProfilePanel` was a lone disabled "Waiting for response"; now it's a status label + a
+  Cancel button wired to a new `useCancelFriendRequest` hook (`DELETE
+  /api/users/friends/requests/{id}`, endpoint already existed) via `useFriendsPageData.cancelRequest`
+  (which also had to start carrying the real `requestId` for `PENDING_SENT`, not just
+  `PENDING_RECEIVED`). Needed so the unavailable-dialog path is testable end to end (sender cancels
+  → recipient's notification goes stale). Verification: `pnpm build` clean, `eslint` 0 errors,
+  `vitest` 1042/1042, `pnpm e2e` 76/76 incl. new/changed `notification-bell.spec.ts` (pre-select →
+  Accept/Decline visible; vanished requester → dialog) and `friends-journey.spec.ts` (now 7 steps,
+  +cancel). **Remaining step:** the 3 `notification-bell-populated-*` visual baselines (fixture grew
+  5→7 rows, plus id 6's actor-name text changed) need the `update-baselines` GitHub dispatch — can't
+  be regenerated on a Windows host (font-rendering noise floor); expect exactly those 3 files to
+  change.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

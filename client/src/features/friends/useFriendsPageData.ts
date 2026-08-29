@@ -5,6 +5,7 @@ import { useUserProfile } from '@/features/profile/useUserProfile';
 import { useSportProfilesForUser } from '@/shared/hooks/useSportProfilesForUser';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useAcceptFriendRequest } from './hooks/useAcceptFriendRequest';
+import { useCancelFriendRequest } from './hooks/useCancelFriendRequest';
 import { useDeclineFriendRequest } from './hooks/useDeclineFriendRequest';
 import { useFriendRequestsReceived } from './hooks/useFriendRequestsReceived';
 import { useFriendRequestsSent } from './hooks/useFriendRequestsSent';
@@ -36,8 +37,8 @@ function matchesQuery(name: string, normalizedQuery: string): boolean {
  * has: a friend-list row is used as-is (already the full `UserResponse`
  * shape, so `friendshipStatus` is definitionally `FRIENDS`); a row found in
  * the received/sent pending-request lists resolves to
- * `PENDING_RECEIVED`/`PENDING_SENT` (with `requestId` for the former, needed
- * for accept/decline) without a separate profile fetch beyond `useUserProfile`
+ * `PENDING_RECEIVED`/`PENDING_SENT` (both carry `requestId` — accept/decline for
+ * the former, cancel for the latter) without a separate profile fetch beyond `useUserProfile`
  * for bio/coverUrl; only a genuine directory-search selection (not yet in any
  * of the three lists) falls back to the search result's own `friendshipStatus`
  * (typically `NONE`). `useUserProfile` itself is only enabled for a selection
@@ -200,7 +201,10 @@ export function useFriendsPageData(focusPersonId?: string) {
     }
     const sentMatch = (sentQuery.data ?? []).find((request) => request.receiverId === selectedPersonId);
     if (sentMatch !== undefined) {
-      return { ...baseSelectedPerson, friendshipStatus: 'PENDING_SENT', requestId: null };
+      // `requestId` is carried here too now (CLIENT-NOTIF-5) — the PENDING_SENT
+      // action bar's "Cancel request" needs it, same as PENDING_RECEIVED's
+      // accept/decline.
+      return { ...baseSelectedPerson, friendshipStatus: 'PENDING_SENT', requestId: sentMatch.requestId };
     }
     return {
       ...baseSelectedPerson,
@@ -219,6 +223,7 @@ export function useFriendsPageData(focusPersonId?: string) {
   const sendMutation = useSendFriendRequest();
   const acceptMutation = useAcceptFriendRequest();
   const declineMutation = useDeclineFriendRequest();
+  const cancelMutation = useCancelFriendRequest();
 
   return {
     currentUserId,
@@ -274,6 +279,11 @@ export function useFriendsPageData(focusPersonId?: string) {
     declineRequest: (requestId: string) =>
       declineMutation.mutate(requestId, { onSuccess: () => setSelectedPersonId(undefined) }),
     isDecliningRequest: declineMutation.isPending,
+    // Same as decline: once the outgoing request is withdrawn there's nothing
+    // left in the panel to act on, so clear the selection.
+    cancelRequest: (requestId: string) =>
+      cancelMutation.mutate(requestId, { onSuccess: () => setSelectedPersonId(undefined) }),
+    isCancellingRequest: cancelMutation.isPending,
   };
 }
 

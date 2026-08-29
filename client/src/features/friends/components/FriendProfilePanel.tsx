@@ -22,6 +22,7 @@ interface FriendProfilePanelProps {
   onSendRequest: () => void;
   onAccept: () => void;
   onDecline: () => void;
+  onCancel: () => void;
   isActionPending: boolean;
 }
 
@@ -51,6 +52,7 @@ export function FriendProfilePanel({
   onSendRequest,
   onAccept,
   onDecline,
+  onCancel,
   isActionPending,
 }: FriendProfilePanelProps) {
   const [isAchievementsOpen, setIsAchievementsOpen] = useState(false);
@@ -110,9 +112,12 @@ export function FriendProfilePanel({
             </Button>
           )}
           {person.friendshipStatus === 'PENDING_SENT' && (
-            <Button type="button" variant="default" disabled>
-              Waiting for response
-            </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-2xs text-text-muted">Waiting for response</span>
+              <Button type="button" variant="outline" onClick={onCancel} disabled={isActionPending}>
+                Cancel request
+              </Button>
+            </div>
           )}
           {person.friendshipStatus === 'PENDING_RECEIVED' && (
             <div className="flex gap-2">

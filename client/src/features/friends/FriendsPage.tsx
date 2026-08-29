@@ -171,8 +171,12 @@ export function FriendsPage() {
                         onSendRequest={() => data.sendRequest(selectedPerson.id)}
                         onAccept={() => requestId !== null && data.acceptRequest(requestId)}
                         onDecline={() => requestId !== null && data.declineRequest(requestId)}
+                        onCancel={() => requestId !== null && data.cancelRequest(requestId)}
                         isActionPending={
-                          data.isSendingRequest || data.isAcceptingRequest || data.isDecliningRequest
+                          data.isSendingRequest ||
+                          data.isAcceptingRequest ||
+                          data.isDecliningRequest ||
+                          data.isCancellingRequest
                         }
                       />
                     </div>

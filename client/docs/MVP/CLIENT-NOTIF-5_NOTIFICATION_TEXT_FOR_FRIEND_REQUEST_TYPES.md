@@ -208,14 +208,40 @@ is live re-seeds the same selection — benign (the person is still there, or th
 a still-missing one). A normal in-app navigation to `/friends` carries no state, so this only
 affects an explicit reload.
 
-### Verification (re-run after the expansion)
+### Follow-on: "Cancel request" button (2026-08-29, user request, same session)
+
+To actually exercise the "unavailable" dialog end to end you need a way to withdraw an outgoing
+request (sender cancels → recipient's `friend_request.created` notification goes stale). The client
+had no such control — `FriendProfilePanel`'s `PENDING_SENT` state was a lone disabled "Waiting for
+response" button. Backend endpoint already exists (`DELETE /api/users/friends/requests/{requestId}`,
+U1's `cancelFriendRequest`), so this is client-only:
+
+- **`useCancelFriendRequest`** hook — `DELETE`, invalidates `friendKeys.all`; same shape as
+  `useDeclineFriendRequest` / `feed`'s `useCancelJoinRequest`.
+- **`useFriendsPageData`** — the `PENDING_SENT` branch of `selectedPerson` now carries the real
+  `requestId` (was hard-coded `null` — only `PENDING_RECEIVED` needed it before); adds
+  `cancelRequest` / `isCancellingRequest`, and clears the selection on success (same as decline).
+  `SelectedPerson.requestId`'s doc updated.
+- **`FriendProfilePanel`** — `PENDING_SENT` now renders a "Waiting for response" status label + a
+  "Cancel request" outline button (`onCancel` prop). `FriendsPage` wires it like `onDecline` and
+  folds `isCancellingRequest` into `isActionPending`.
+- **MSW** — new `DELETE /api/users/friends/requests/:requestId` handler in `handlers/friends.ts`
+  (drops the row from `sentRequestsState`).
+- **Tests** — `FriendProfilePanel.test/stories` PENDING_SENT updated (status + Cancel button);
+  `useFriendsPageData.test` — PENDING_SENT now asserts the real `requestId`, plus a cancel test
+  (DELETE called, selection cleared); `friends-journey.spec.ts` gains a step (select the outgoing
+  Diego Alvarez request → Cancel → row gone).
+
+### Verification (re-run after both expansions)
 
 - `pnpm build` (`tsc -b` + vite) — clean.
 - `pnpm lint` — 0 errors (2 pre-existing warnings, untouched file). Both intermediate
-  implementations that tripped React-Compiler lint errors were reworked, not suppressed.
-- `pnpm test` — **1041/1041** (154 files), +7 from the base pass.
-- `pnpm e2e` — **76/76**, incl. both new/changed `notification-bell.spec.ts` cases and the
-  unchanged `friends-journey.spec.ts`.
-- Visual baselines: unchanged from the base pass — the `notification-bell-populated-*` set still
-  needs the `update-baselines` dispatch (id 6's actor name changed from "Priya Shah" to "Hana Kim"
-  in that screenshot on top of the two added rows; still exactly the 3 `-populated-` files).
+  `focusUnavailable` implementations that tripped React-Compiler lint errors were reworked, not
+  suppressed.
+- `pnpm test` — **1042/1042** (154 files).
+- `pnpm e2e` — **76/76**, incl. the new/changed `notification-bell.spec.ts` and
+  `friends-journey.spec.ts` (now 7 steps) cases.
+- Visual baselines: the `notification-bell-populated-*` set still needs the `update-baselines`
+  dispatch (id 6's actor name changed from "Priya Shah" to "Hana Kim" on top of the two added
+  rows; still exactly the 3 `-populated-` files). The Cancel button is on `/friends`, not in any
+  baselined screenshot.

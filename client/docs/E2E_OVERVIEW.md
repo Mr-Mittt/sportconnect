@@ -327,7 +327,7 @@ and `GET /users/search` for every id these fixtures reference, plus the Add-mode
 |---|---|---|
 | `mockFriend` | `priya-shah` | Same person as `mockComment`'s commenter — an accepted friend, renders under Offline (Online always empty, no presence system exists). GRP-4 reuses it as `group-members.spec.ts`'s invitable-friend fixture — not a member/not already invited to `mockOwnedGroup` |
 | `mockIncomingFriendRequest` | `req-incoming-1`, sender `hana-kim` | Sent TO the test user — Friend Requests row + the profile panel's Accept/Decline action bar |
-| `mockSentFriendRequest` | `req-outgoing-1`, receiver `diego-alvarez` | Sent BY the test user — Friend Requests row + the profile panel's disabled "Waiting for response" |
+| `mockSentFriendRequest` | `req-outgoing-1`, receiver `diego-alvarez` | Sent BY the test user — Friend Requests row + the profile panel's "Waiting for response" status and "Cancel request" button (CLIENT-NOTIF-5) |
 | `mockSearchResultUser` | `owen-clarke`, `friendshipStatus: 'NONE'` | Only reachable via Add mode's directory search, never in the default friend list |
 
 `mockMyProfile` (**PROFILE-7**): the test user's own full `UserResponse` (`fixtures.ts`) — `GET
@@ -511,7 +511,7 @@ owner/admin approval-queue journey, and `mockPublicGroup` ("Riverside Hoopers", 
 | Join requests section withdraws the current user's own pending request | `mockJoinRequest` seeded via a new admin route (`seed-join-requests` — no existing e2e coverage of `JoinGroupModal`'s search UI to drive instead) → "Riverside Hoopers" row visible with a "Withdraw" button → clicking it empties the section | **GRP-8 part 3** |
 | Accepting an invitation for a sport the invitee lacks offers to add it first | Test user's sport profiles zeroed via `seedZeroSportProfilesOnNextLoad` → Accept → `AddSportIntroDialog` ("This Pickleball group…", OK button) → `AddSportModal` pre-selected to Pickleball → submitting adds the profile then accepts the invitation, landing on the new group's Posts tab | **GRP-8 part 5**. SPORT-3: renamed from Basketball |
 
-### `e2e/flows/friends-journey.spec.ts` (FRIEND-1, one `test()` with 6 steps)
+### `e2e/flows/friends-journey.spec.ts` (FRIEND-1 + CLIENT-NOTIF-5, one `test()` with 7 steps)
 
 Uses `mockFriend` ("Priya Shah", Offline), `mockIncomingFriendRequest` ("Hana Kim" → the test user,
 Friend Requests), `mockSentFriendRequest` ("Diego Alvarez", outgoing, also Friend Requests), and
@@ -522,9 +522,10 @@ Friend Requests), `mockSentFriendRequest` ("Diego Alvarez", outgoing, also Frien
 | 1. all 4 sections render | Online/Blocked "Nothing here yet." (no presence system/blacklist backend exists); Friend Requests shows Hana Kim; Offline shows Priya Shah | |
 | 2. rail search filters in place | Typing "priya" narrows Offline to Priya Shah, empties Friend Requests to "No matches." | No debounce — this is the rail's local filter, not Add mode's directory search |
 | 3. select an existing friend | Profile panel shows bio; chat panel visible; no "Send a friend request" button (`FRIENDS` status) | |
-| 4. Add friend searches the real directory + sends a request | "Add friend" → type "Owen" → `Matches for "Owen"` → select → real `POST /users/friends/requests` → button flips to disabled "Waiting for response" | Exercises the debounced `GET /users/search` end-to-end, not MSW-bypassed |
-| 5. clearing the search returns to the default list | "x" clear button exits Add mode, restores the unfiltered Offline section | |
-| 6. accept moves the request | Select Hana Kim (Accept/Decline visible) → Accept → disappears from Friend Requests, appears in Offline | Exercises the stateful MSW accept handler (moves the row from `receivedRequestsState` into `friendsState`) |
+| 4. Add friend searches the real directory + sends a request | "Add friend" → type "Owen" → `Matches for "Owen"` → select → real `POST /users/friends/requests` → panel shows "Waiting for response" status **+ a "Cancel request" button** (CLIENT-NOTIF-5) | Exercises the debounced `GET /users/search` end-to-end, not MSW-bypassed |
+| 5. cancel withdraws an outgoing request (CLIENT-NOTIF-5) | Clear search → select "Diego Alvarez" (`mockSentFriendRequest`, outgoing) from Friend Requests → "Cancel request" → real `DELETE /users/friends/requests/{id}` → row disappears, panel back to the "Select a friend…" placeholder | Exercises the stateful MSW delete handler (drops the row from `sentRequestsState`); `useFriendsPageData` now carries the real `requestId` for `PENDING_SENT`, not just `PENDING_RECEIVED` |
+| 6. the default friend list is intact | Add-mode "back to friend list" gone; Offline still shows Priya Shah | |
+| 7. accept moves the request | Select Hana Kim (Accept/Decline visible) → Accept → disappears from Friend Requests, appears in Offline | Exercises the stateful MSW accept handler (moves the row from `receivedRequestsState` into `friendsState`) |
 
 **Removed (CHAT-9, 2026-07-28):** a 7th step asserted `FriendChatPanel`'s old local-state-only mock
 chat didn't persist across a re-selection. CHAT-9 wired the panel to the real chat service

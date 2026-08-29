@@ -64,8 +64,8 @@ export interface FriendRequestRow {
 /** The person currently shown in `FriendProfilePanel` — `FriendUser` plus
  * the two fields resolved by `useFriendsPageData` from whichever
  * already-loaded list the person came from (friends/received/sent/search),
- * never fetched directly. `requestId` is only set for `PENDING_RECEIVED`
- * (needed to call accept/decline). */
+ * never fetched directly. `requestId` is set for `PENDING_RECEIVED` (accept /
+ * decline) and `PENDING_SENT` (cancel); `null` otherwise. */
 export interface SelectedPerson extends FriendUser {
   friendshipStatus: FriendshipStatus;
   requestId: string | null;

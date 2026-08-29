@@ -23,6 +23,7 @@ function renderPanel(overrides: Partial<SelectedPerson> = {}) {
   const onSendRequest = vi.fn();
   const onAccept = vi.fn();
   const onDecline = vi.fn();
+  const onCancel = vi.fn();
   render(
     <FriendProfilePanel
       person={{ ...basePerson, ...overrides }}
@@ -31,10 +32,11 @@ function renderPanel(overrides: Partial<SelectedPerson> = {}) {
       onSendRequest={onSendRequest}
       onAccept={onAccept}
       onDecline={onDecline}
+      onCancel={onCancel}
       isActionPending={false}
     />,
   );
-  return { onSendRequest, onAccept, onDecline };
+  return { onSendRequest, onAccept, onDecline, onCancel };
 }
 
 describe('FriendProfilePanel', () => {
@@ -68,9 +70,15 @@ describe('FriendProfilePanel', () => {
     expect(onSendRequest).toHaveBeenCalledTimes(1);
   });
 
-  it('PENDING_SENT: shows a disabled "Waiting for response" button', () => {
-    renderPanel({ friendshipStatus: 'PENDING_SENT' });
-    expect(screen.getByRole('button', { name: 'Waiting for response' })).toBeDisabled();
+  it('PENDING_SENT: shows the "Waiting for response" status and a "Cancel request" button that calls onCancel', async () => {
+    const user = userEvent.setup();
+    const { onCancel } = renderPanel({ friendshipStatus: 'PENDING_SENT', requestId: 'req-2' });
+
+    expect(screen.getByText('Waiting for response')).toBeInTheDocument();
+    const cancel = screen.getByRole('button', { name: 'Cancel request' });
+    expect(cancel).toBeEnabled();
+    await user.click(cancel);
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   it('PENDING_RECEIVED: Accept and Decline both call their handlers', async () => {

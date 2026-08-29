@@ -51,16 +51,28 @@ test('Friends page — rail sections, search, directory search + send request, a
     const sendButton = page.getByRole('button', { name: 'Send a friend request' });
     await expect(sendButton).toBeVisible();
     await sendButton.click();
-    await expect(page.getByRole('button', { name: 'Waiting for response' })).toBeVisible();
+    // CLIENT-NOTIF-5: PENDING_SENT now shows a "Waiting for response" status + a "Cancel request"
+    // button (was a lone disabled "Waiting for response" button).
+    await expect(page.getByText('Waiting for response')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Cancel request' })).toBeVisible();
   });
 
-  await test.step('5. clearing the search returns to the default friend list', async () => {
+  await test.step('5. cancelling the outgoing request withdraws it', async () => {
+    // The seeded outgoing request to Diego Alvarez (mockSentFriendRequest) is the one with a
+    // resolvable requestId; select it from the rail's Friend Requests section and cancel.
     await page.getByLabel('Clear search').click();
+    await requestsSection.getByText('Diego Alvarez').click();
+    await page.getByRole('button', { name: 'Cancel request' }).click();
+    await expect(requestsSection.getByText('Diego Alvarez')).not.toBeVisible();
+    await expect(page.getByText('Select a friend to view their profile and chat.')).toBeVisible();
+  });
+
+  await test.step('6. the default friend list is intact', async () => {
     await expect(page.getByRole('button', { name: /back to friend list/i })).not.toBeVisible();
     await expect(offlineSection.getByText('Priya Shah')).toBeVisible();
   });
 
-  await test.step('6. accepting an incoming request moves it into Offline and clears the action bar', async () => {
+  await test.step('7. accepting an incoming request moves it into Offline and clears the action bar', async () => {
     await requestsSection.getByText('Hana Kim').click();
     // exact: true — CLIENT-SESSION-12's mockInvitedSession ("Tuesday drop-in") now also renders
     // in this page's own Upcoming rail (shared useUpcomingMatches), with its own accessible name
