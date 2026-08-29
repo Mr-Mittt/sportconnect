@@ -27,6 +27,7 @@ const meta = {
     onSendRequest: () => {},
     onAccept: () => {},
     onDecline: () => {},
+    onCancel: () => {},
     isActionPending: false,
   },
   decorators: [(Story) => <div className="h-100">{Story()}</div>],
@@ -43,9 +44,9 @@ export const NoRelationship: Story = {
   args: { person: { ...basePerson, friendshipStatus: 'NONE', bio: null } },
 };
 
-/** Caller already sent a request — disabled "Waiting for response". */
+/** Caller already sent a request — "Waiting for response" status + "Cancel request". */
 export const PendingSent: Story = {
-  args: { person: { ...basePerson, friendshipStatus: 'PENDING_SENT' } },
+  args: { person: { ...basePerson, friendshipStatus: 'PENDING_SENT', requestId: 'req-2' } },
 };
 
 /** Caller received a request — Decline/Accept. */

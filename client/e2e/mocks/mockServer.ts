@@ -218,6 +218,30 @@ async function handleAdminRoute(
     return;
   }
 
+  // CLIENT-NOTIF-5: one unread friend-request notification pointing at a user id
+  // that is in none of the friend/request lists (and 404s from GET
+  // /api/users/{id}) — clicking it should open the "request unavailable" dialog
+  // rather than pre-selecting anyone.
+  if (action === 'seed-unavailable-friend-request-notification' && req.method === 'POST') {
+    seedNotificationsState(sessionId, [
+      {
+        id: 9001,
+        type: 'user.friend_request.created',
+        entityType: 'USER',
+        entityId: 'ghost-requester',
+        actorIds: ['ghost-requester'],
+        actorCount: 1,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        actors: [{ id: 'ghost-requester', fullName: 'Sam Rivera' }],
+        entityTitle: null,
+      },
+    ]);
+    sendJson(res, 200, { seeded: true });
+    return;
+  }
+
   const overrideMatch = action.match(/^override\/(.+)$/);
   if (overrideMatch && req.method === 'POST') {
     const name = overrideMatch[1];

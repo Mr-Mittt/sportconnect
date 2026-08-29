@@ -127,7 +127,7 @@ describe('useFriendsPageData', () => {
     expect(result.current.selectedPerson?.requestId).toBe('req-1');
   });
 
-  it('resolves a selection found in sent requests to PENDING_SENT', async () => {
+  it('resolves a selection found in sent requests to PENDING_SENT, carrying the real requestId for cancel', async () => {
     mockGet({ friends: [priya], profiles: { f4: { id: 'f4', fullName: 'Diego Alvarez', avatarUrl: null, coverUrl: null, bio: null } } });
     const { result } = renderHook(() => useFriendsPageData(), { wrapper });
 
@@ -135,7 +135,22 @@ describe('useFriendsPageData', () => {
     act(() => result.current.selectPerson('f4'));
 
     await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('PENDING_SENT'));
-    expect(result.current.selectedPerson?.requestId).toBe(null);
+    expect(result.current.selectedPerson?.requestId).toBe('req-2');
+  });
+
+  it('cancelling a sent request DELETEs it and clears the selection on success', async () => {
+    mockGet({ friends: [priya], profiles: { f4: { id: 'f4', fullName: 'Diego Alvarez', avatarUrl: null, coverUrl: null, bio: null } } });
+    const del = vi.spyOn(apiClient, 'delete').mockResolvedValue(apiResponse(undefined));
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
+    act(() => result.current.selectPerson('f4'));
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('PENDING_SENT'));
+
+    act(() => result.current.cancelRequest('req-2'));
+
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/users/friends/requests/req-2'));
+    await waitFor(() => expect(result.current.selectedPersonId).toBeUndefined());
   });
 
   it('falls back to the search result\'s own friendshipStatus for a fresh directory selection', async () => {
@@ -241,6 +256,48 @@ describe('useFriendsPageData', () => {
 
     await waitFor(() => expect(result.current.selectedPersonId).toBeUndefined());
     expect(result.current.selectedPerson).toBeUndefined();
+  });
+
+  // CLIENT-NOTIF-5: focusPersonId — the "select this person on arrival" intent a
+  // clicked friend-request notification carries through from router state.
+  it('pre-selects focusPersonId when it resolves to someone in the request lists, no focusUnavailable dialog', async () => {
+    mockGet({ friends: [priya], received: [receivedRequest], profiles: { f3: hana } });
+    const { result } = renderHook(() => useFriendsPageData('f3'), { wrapper });
+
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('PENDING_RECEIVED'));
+    expect(result.current.selectedPerson?.requestId).toBe('req-1');
+    expect(result.current.focusUnavailable).toBe(false);
+  });
+
+  it('raises focusUnavailable (and selects nobody) when focusPersonId is in none of the lists — request cancelled or account gone', async () => {
+    mockGet({ friends: [priya], received: [], sent: [] });
+    const { result } = renderHook(() => useFriendsPageData('ghost'), { wrapper });
+
+    await waitFor(() => expect(result.current.focusUnavailable).toBe(true));
+    expect(result.current.selectedPersonId).toBeUndefined();
+    expect(result.current.selectedPerson).toBeUndefined();
+  });
+
+  it('a plain stale restored selection still clears silently — no focusUnavailable dialog when there was no focus intent', async () => {
+    useFriendsPageStore.setState({ query: '', isAddMode: false, selectedPersonId: 'f9' });
+    mockGet({ friends: [priya], received: [], sent: [] });
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.selectedPersonId).toBeUndefined());
+    expect(result.current.focusUnavailable).toBe(false);
+  });
+
+  it('focusUnavailable derives back to false once the focus intent is dropped (FriendsPage clears the router state)', async () => {
+    mockGet({ friends: [priya], received: [], sent: [] });
+    const { result, rerender } = renderHook(({ focus }: { focus?: string }) => useFriendsPageData(focus), {
+      wrapper,
+      initialProps: { focus: 'ghost' } as { focus?: string },
+    });
+
+    await waitFor(() => expect(result.current.focusUnavailable).toBe(true));
+
+    rerender({ focus: undefined });
+    expect(result.current.focusUnavailable).toBe(false);
   });
 
   it('keeps a restored Add-mode search selection once the re-run search confirms it\'s still there', async () => {

@@ -174,6 +174,17 @@ export const friendHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(null, 'Friend request declined'));
   }),
 
+  // CLIENT-NOTIF-5: the sender withdrawing their own outgoing request
+  // (`DELETE /api/users/friends/requests/{requestId}`, U1's cancelFriendRequest).
+  http.delete('/api/users/friends/requests/:requestId', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const requestId = String(params.requestId);
+    const session = friendsSessions.get(sessionIdFromRequest(request));
+    session.sentRequestsState = session.sentRequestsState.filter((req) => req.requestId !== requestId);
+    return HttpResponse.json(apiResponse(null, 'Friend request cancelled'));
+  }),
+
   // Public — no auth required (U6, ROLE_USER-gated server-side, but this
   // fixture doesn't need to simulate the 403-vs-401 nuance; every e2e
   // session is already authenticated by the time it reaches Add mode).

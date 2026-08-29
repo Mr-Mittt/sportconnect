@@ -1031,6 +1031,17 @@ export async function seedPaginatedNotificationsOnNextLoad(sessionId: string): P
 }
 
 /**
+ * CLIENT-NOTIF-5 — replaces this session's notification list with a single
+ * unread `user.friend_request.created` whose `entityId` matches no
+ * friend/request row (and 404s from `GET /api/users/{id}`). Clicking it routes
+ * to `/friends` and opens the "Friend request unavailable" dialog instead of
+ * pre-selecting anyone.
+ */
+export async function seedUnavailableFriendRequestNotification(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'seed-unavailable-friend-request-notification');
+}
+
+/**
  * FEED-8 error-simulation helpers — one per real-data surface FEED-8
  * hardened. Call before `page.goto()`; the next matching request for this
  * session returns a 500, so the real query's `isError` (or, for the feed's

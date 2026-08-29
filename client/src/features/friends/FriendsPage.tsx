@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
 import { SessionDetailModal } from '@/features/session/components/SessionDetailModal';
@@ -21,6 +21,7 @@ import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { FriendChatPanel } from './components/FriendChatPanel';
 import { FriendProfilePanel } from './components/FriendProfilePanel';
 import { FriendRail } from './components/FriendRail';
+import { FriendRequestUnavailableDialog } from './components/FriendRequestUnavailableDialog';
 import { useFriendsPageData } from './useFriendsPageData';
 
 const noop = () => {};
@@ -38,6 +39,12 @@ const noop = () => {};
  * unlike Home Feed/Groups which filter by the shared `activeSport`. This
  * page has no sport switcher at all.
  *
+ * CLIENT-NOTIF-5: a clicked friend-request notification navigates here with the
+ * counterparty's user id in `location.state.focusPersonId`; `useFriendsPageData`
+ * pre-selects them, or reports `focusUnavailable` (request gone / account
+ * deactivated) which renders `FriendRequestUnavailableDialog`. The state is
+ * stripped from history right after so a reload doesn't re-focus.
+ *
  * `FriendContent` (profile + chat) is keyed by `selectedPersonId` so both
  * panels remount on every selection change — resets `FriendProfilePanel`'s
  * local Achievements-collapsed toggle, and (since CHAT-9) is what drives
@@ -53,7 +60,17 @@ const noop = () => {};
  */
 export function FriendsPage() {
   const navigate = useNavigate();
-  const data = useFriendsPageData();
+  const location = useLocation();
+  // CLIENT-NOTIF-5: a clicked friend-request notification lands here with the
+  // counterparty's user id in router state. It's read live (not copied into
+  // state) so `useFriendsPageData` can pre-select that person or report
+  // `focusUnavailable`; the state persists on this history entry until the
+  // "unavailable" dialog is dismissed (`clearFocusState`) or the user navigates
+  // away, at which point `focusUnavailable` derives back to false on its own.
+  const focusPersonId = (location.state as { focusPersonId?: string } | null)?.focusPersonId;
+  const data = useFriendsPageData(focusPersonId);
+  const clearFocusState = () => navigate(location.pathname, { replace: true, state: null });
+
   const user = useAuthStore((state) => state.user)!;
 
   const upcomingMatchesQuery = useUpcomingMatches();
@@ -154,8 +171,12 @@ export function FriendsPage() {
                         onSendRequest={() => data.sendRequest(selectedPerson.id)}
                         onAccept={() => requestId !== null && data.acceptRequest(requestId)}
                         onDecline={() => requestId !== null && data.declineRequest(requestId)}
+                        onCancel={() => requestId !== null && data.cancelRequest(requestId)}
                         isActionPending={
-                          data.isSendingRequest || data.isAcceptingRequest || data.isDecliningRequest
+                          data.isSendingRequest ||
+                          data.isAcceptingRequest ||
+                          data.isDecliningRequest ||
+                          data.isCancellingRequest
                         }
                       />
                     </div>
@@ -282,6 +303,7 @@ export function FriendsPage() {
           onDeleteComment={discoverModalData.onDeleteComment}
           onToggleCommentLike={discoverModalData.onToggleCommentLike}
         />
+        <FriendRequestUnavailableDialog isOpen={data.focusUnavailable} onClose={clearFocusState} />
       </main>
     </ModalAnchorProvider>
   );
