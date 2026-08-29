@@ -19,10 +19,7 @@ export function FriendRequestUnavailableDialog({ isOpen, onClose }: FriendReques
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">
         <DialogHeader title="Friend request unavailable" className="mb-3" onCloseClick={onClose} />
-        <p className="mb-3 text-2sm text-text-secondary">
-          This friend request is no longer available. It may have been cancelled, or the account is no
-          longer active.
-        </p>
+        <p className="mb-3 text-2sm text-text-secondary">This friend request is no longer available.</p>
         <div className="flex justify-end">
           <Button variant="primary" size="sm" onClick={onClose}>
             Got it

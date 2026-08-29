@@ -12,8 +12,7 @@ describe('FriendRequestUnavailableDialog (CLIENT-NOTIF-5)', () => {
   it('explains the request is gone when open', () => {
     render(<FriendRequestUnavailableDialog isOpen onClose={() => {}} />);
     expect(screen.getByText('Friend request unavailable')).toBeInTheDocument();
-    expect(screen.getByText(/no longer available/)).toBeInTheDocument();
-    expect(screen.getByText(/cancelled, or the account is no longer active/)).toBeInTheDocument();
+    expect(screen.getByText('This friend request is no longer available.')).toBeInTheDocument();
   });
 
   it('closes from "Got it"', async () => {
