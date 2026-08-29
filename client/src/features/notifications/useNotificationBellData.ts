@@ -30,20 +30,22 @@ import type { Notification } from './types';
  *    reads its own `?session=` param once, at mount, so re-navigating to it
  *    while already on `/matches` silently did nothing.)
  *  - `USER` — a friend-request notification (U13 / CLIENT-NOTIF-5). Calls
- *    `onViewFriendRequests(entityId)` with the counterparty's user id (the
- *    sender for `created`, the accepter for `accepted` — `entityId` is a user
- *    id for both). `AppShell` wires this to `navigate('/friends', { state: {
- *    focusPersonId } })` — that IS a route change (unlike the session case),
- *    because the Friends rail's incoming-requests section lives on that page
- *    and has no shell-level modal equivalent. The Friends page then pre-selects
- *    that person, or, if they no longer resolve to anyone in the friend/request
- *    lists (request cancelled, account deactivated), opens an "unavailable"
- *    dialog instead.
+ *    `onViewFriendRequests(entityId, kind)` with the counterparty's user id
+ *    (the sender for `created`, the accepter for `accepted` — `entityId` is a
+ *    user id for both) and `kind` = `'created' | 'accepted'`. `AppShell` wires
+ *    this to `navigate('/friends', { state: { focusPersonId, focusReason } })` —
+ *    that IS a route change (unlike the session case), because the Friends
+ *    rail's incoming-requests section lives on that page and has no shell-level
+ *    modal equivalent. The Friends page pre-selects that person; if they no
+ *    longer resolve to anyone, a `'created'` focus opens an "unavailable"
+ *    dialog (the pending request is gone), while an `'accepted'` focus just
+ *    lands quietly — there is no *request* for that copy to describe, and "they
+ *    unfriended you since" isn't a modal-worthy error.
  *  - anything else — just marks read, no destination.
  */
 export function useNotificationBellData(
   onViewSession: (sessionId: number) => void,
-  onViewFriendRequests: (personId: string) => void,
+  onViewFriendRequests: (personId: string, kind: 'created' | 'accepted') => void,
 ) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -60,7 +62,10 @@ export function useNotificationBellData(
     if (notification.entityType === 'SESSION') {
       onViewSession(Number(notification.entityId));
     } else if (notification.entityType === 'USER') {
-      onViewFriendRequests(notification.entityId);
+      onViewFriendRequests(
+        notification.entityId,
+        notification.type === 'user.friend_request.accepted' ? 'accepted' : 'created',
+      );
     }
   };
 

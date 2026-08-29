@@ -12,12 +12,14 @@ interface FriendRequestUnavailableDialogProps {
  * cancelled or declined elsewhere, or the account is no longer active. The
  * notification row is still marked read (the click already did that); this just
  * explains why `/friends` didn't open anyone. Same plain-copy-plus-dismiss shape
- * as `NoSportsToAddDialog`.
+ * as `NoSportsToAddDialog`. `centered` — like `UnfriendConfirmDialog` — overrides
+ * the Friends page's `ModalAnchorProvider` so this small notice sits dead-centre
+ * rather than pinned below the pill row.
  */
 export function FriendRequestUnavailableDialog({ isOpen, onClose }: FriendRequestUnavailableDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="p-4">
+      <DialogContent centered className="p-4">
         <DialogHeader title="Friend request unavailable" className="mb-3" onCloseClick={onClose} />
         <p className="mb-3 text-2sm text-text-secondary">This friend request is no longer available.</p>
         <div className="flex justify-end">

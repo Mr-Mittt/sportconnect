@@ -1042,6 +1042,17 @@ export async function seedUnavailableFriendRequestNotification(sessionId: string
 }
 
 /**
+ * FRIEND-2: an unread `user.friend_request.accepted` ("… is now your friend")
+ * whose `entityId` matches no friend/request row — the counterparty accepted
+ * then unfriended since. Clicking it routes to `/friends` but must NOT open the
+ * "unavailable" dialog (that copy is for a missing *request*, and an accepted
+ * notification carries none).
+ */
+export async function seedStaleAcceptedFriendNotification(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'seed-stale-accepted-friend-notification');
+}
+
+/**
  * FEED-8 error-simulation helpers — one per real-data surface FEED-8
  * hardened. Call before `page.goto()`; the next matching request for this
  * session returns a 500, so the real query's `isError` (or, for the feed's

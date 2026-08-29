@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useFriendsPageStore } from '@/app/friendsPageStore';
-import { useUserProfile } from '@/features/profile/useUserProfile';
 import { useSportProfilesForUser } from '@/shared/hooks/useSportProfilesForUser';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
+import { useUserInfo } from './useUserInfo';
 import { useAcceptFriendRequest } from './hooks/useAcceptFriendRequest';
 import { useCancelFriendRequest } from './hooks/useCancelFriendRequest';
 import { useDeclineFriendRequest } from './hooks/useDeclineFriendRequest';
@@ -11,6 +11,7 @@ import { useFriendRequestsReceived } from './hooks/useFriendRequestsReceived';
 import { useFriendRequestsSent } from './hooks/useFriendRequestsSent';
 import { useFriends } from './hooks/useFriends';
 import { useSendFriendRequest } from './hooks/useSendFriendRequest';
+import { useUnfriend } from './hooks/useUnfriend';
 import { useUserSearch } from './hooks/useUserSearch';
 import type { FriendRequestRow, FriendSectionKey, FriendUser, SelectedPerson } from './types';
 
@@ -38,10 +39,10 @@ function matchesQuery(name: string, normalizedQuery: string): boolean {
  * shape, so `friendshipStatus` is definitionally `FRIENDS`); a row found in
  * the received/sent pending-request lists resolves to
  * `PENDING_RECEIVED`/`PENDING_SENT` (both carry `requestId` — accept/decline for
- * the former, cancel for the latter) without a separate profile fetch beyond `useUserProfile`
+ * the former, cancel for the latter) without a separate profile fetch beyond `useUserInfo`
  * for bio/coverUrl; only a genuine directory-search selection (not yet in any
  * of the three lists) falls back to the search result's own `friendshipStatus`
- * (typically `NONE`). `useUserProfile` itself is only enabled for a selection
+ * (typically `NONE`). `useUserInfo` itself is only enabled for a selection
  * that ISN'T already a known friend (friend rows already carry bio/coverUrl).
  *
  * `query`/`isAddMode`/`selectedPersonId` live in `friendsPageStore`
@@ -58,13 +59,22 @@ function matchesQuery(name: string, normalizedQuery: string): boolean {
  * arrival" intent, passed by `FriendsPage` from router `location.state` when a
  * friend-request notification is clicked. It seeds `selectedPersonId`, then —
  * once the lists settle — either resolves normally (profile panel opens) or, if
- * that id is in none of them (request cancelled/declined, account deactivated),
- * clears the selection and raises `focusUnavailable` so `FriendsPage` can show a
- * dialog. A `ref` fires it once per distinct value; a plain stale
- * `selectedPersonId` restored from `sessionStorage` still clears silently, no
- * dialog.
+ * that id is in none of them *on arrival* (request cancelled/declined, account
+ * deactivated), clears the selection and raises `focusUnavailable` so
+ * `FriendsPage` can show a dialog. `FriendsPage` strips the router state as
+ * soon as the person resolves (FRIEND-2), so `focusUnavailable` can only fire
+ * on arrival — a later user-caused disappearance (accept then unfriend) does
+ * not re-raise it. A plain stale `selectedPersonId` restored from
+ * `sessionStorage` still clears silently, no dialog.
+ *
+ * `focusReason` (`'created' | 'accepted'`, from the notification type) gates
+ * the dialog: only a `'created'` focus (a pending request that may be gone)
+ * shows "friend request unavailable"; an `'accepted'` focus never does.
  */
-export function useFriendsPageData(focusPersonId?: string) {
+export function useFriendsPageData(
+  focusPersonId?: string,
+  focusReason?: 'created' | 'accepted',
+) {
   const currentUserId = useAuthStore((state) => state.user?.id);
 
   const query = useFriendsPageStore((state) => state.query);
@@ -73,6 +83,20 @@ export function useFriendsPageData(focusPersonId?: string) {
   const setIsAddMode = useFriendsPageStore((state) => state.setIsAddMode);
   const selectedPersonId = useFriendsPageStore((state) => state.selectedPersonId);
   const setSelectedPersonId = useFriendsPageStore((state) => state.setSelectedPersonId);
+  // FRIEND-2: after the caller withdraws their OWN outgoing request, keep that
+  // person selected (they re-resolve to `NONE`, so the panel shows "Send a
+  // friend request") rather than dropping to the empty placeholder — an
+  // accidental cancel or a change of mind is common. A ref, not state: it's set
+  // synchronously in the cancel mutation's `onSuccess` (before `onSettled`
+  // triggers the list refetch) and only ever read inside the auto-clear effect
+  // below, so there's no render-timing race between the write and the refetch
+  // settling. Cleared on the next explicit selection; mount-scoped, so a stale
+  // selection restored from `sessionStorage` on a later visit still clears.
+  const keepSelectedAfterCancelIdRef = useRef<string>();
+  const selectPerson = (personId: string | undefined) => {
+    keepSelectedAfterCancelIdRef.current = undefined;
+    setSelectedPersonId(personId);
+  };
   const [collapsedSections, setCollapsedSections] = useState<Record<FriendSectionKey, boolean>>({
     online: false,
     friendRequests: false,
@@ -136,20 +160,28 @@ export function useFriendsPageData(focusPersonId?: string) {
 
   const selectedFriend = friends.find((friend) => friend.id === selectedPersonId);
   const isKnownFriend = selectedFriend !== undefined;
-  const profileQuery = useUserProfile(isKnownFriend ? undefined : selectedPersonId);
+  const profileQuery = useUserInfo(isKnownFriend ? undefined : selectedPersonId);
   const sportsQuery = useSportProfilesForUser(selectedPersonId);
 
   const baseSelectedPerson: FriendUser | undefined = selectedFriend ?? profileQuery.data;
   const selectedSearchResult = searchResults.find((result) => result.id === selectedPersonId);
 
   // A restored (or stale) selection is only judged once every list it could
-  // legitimately come from has actually loaded — search only counts while in
-  // Add mode, since it isn't fetched at all otherwise.
+  // legitimately come from is fully idle — `isFetching`, not just
+  // `isLoading`, so a *background refetch* also defers the verdict. This
+  // matters on accept: `acceptRequest` invalidates `friendKeys.all`, so
+  // `received` and `friends` both refetch, and they can resolve in either
+  // order. With only an `isLoading` gate, a render where `received` has
+  // dropped the just-accepted person but `friends` hasn't picked them up yet
+  // would look like "selection resolves to nobody" and wrongly clear it.
+  // Waiting for every list to settle closes that window — by then the
+  // accepted person is in `friends`. Search only counts while in Add mode,
+  // since it isn't fetched at all otherwise.
   const hasSelectionSourcesSettled =
-    !friendsQuery.isLoading &&
-    !receivedQuery.isLoading &&
-    !sentQuery.isLoading &&
-    (!isAddMode || !searchQuery.isLoading);
+    !friendsQuery.isFetching &&
+    !receivedQuery.isFetching &&
+    !sentQuery.isFetching &&
+    (!isAddMode || !searchQuery.isFetching);
   const isSelectedPersonAvailable =
     isKnownFriend ||
     (receivedQuery.data ?? []).some((request) => request.senderId === selectedPersonId) ||
@@ -159,10 +191,17 @@ export function useFriendsPageData(focusPersonId?: string) {
   // User-requested: a `selectedPersonId` restored from a previous visit (or
   // one that's simply gone stale, e.g. an accepted/declined request) that no
   // longer resolves to anyone in the reloaded lists clears back to "no
-  // selection" instead of silently keeping whatever `useUserProfile` might
-  // still resolve for that raw id.
+  // selection" instead of silently keeping whatever `useUserInfo` might
+  // still resolve for that raw id. Exception: a person whose outgoing request
+  // we just cancelled this session stays (`keepSelectedAfterCancelIdRef`) —
+  // they re-resolve to `NONE` so "Send a friend request" is right there.
   useEffect(() => {
-    if (selectedPersonId !== undefined && hasSelectionSourcesSettled && !isSelectedPersonAvailable) {
+    if (
+      selectedPersonId !== undefined &&
+      hasSelectionSourcesSettled &&
+      !isSelectedPersonAvailable &&
+      selectedPersonId !== keepSelectedAfterCancelIdRef.current
+    ) {
       setSelectedPersonId(undefined);
     }
   }, [selectedPersonId, hasSelectionSourcesSettled, isSelectedPersonAvailable, setSelectedPersonId]);
@@ -176,12 +215,30 @@ export function useFriendsPageData(focusPersonId?: string) {
   // `selectedPersonId` in the same case; both read the same lists, so they
   // agree. A directory-search match doesn't count — a notification arrival is
   // never in Add mode.
-  const focusUnavailable =
+  //
+  // FRIEND-2: `focusResolved` is true once the focus person turns up in a
+  // friend/request list. `FriendsPage` strips `focusPersonId` from the router
+  // state as soon as that happens, so `focusUnavailable` can only fire on the
+  // *arrival* render(s) — a later disappearance the user caused (accept A, then
+  // unfriend A) no longer re-raises the dialog, while the genuine "gone on
+  // arrival" case (never resolves) still does.
+  const focusResolved =
     focusPersonId !== undefined &&
-    hasSelectionSourcesSettled &&
-    !(friends.some((friend) => friend.id === focusPersonId) ||
+    (friends.some((friend) => friend.id === focusPersonId) ||
       received.some((request) => request.senderId === focusPersonId) ||
       sent.some((request) => request.receiverId === focusPersonId));
+  // The "unavailable" dialog only makes sense for a `created` notification —
+  // "this friend request is no longer available" describes a pending request
+  // that's gone. An `accepted` notification ("X is now your friend") carries no
+  // request; if X has since unfriended you, arriving from that notification just
+  // lands quietly on `/friends`, no modal (matches the behaviour when you
+  // navigate to the page yourself). `undefined` reason (a caller that predates
+  // this, or a direct nav) keeps the original behaviour.
+  const focusUnavailable =
+    focusPersonId !== undefined &&
+    focusReason !== 'accepted' &&
+    hasSelectionSourcesSettled &&
+    !focusResolved;
 
   const selectedPerson = useMemo<SelectedPerson | undefined>(() => {
     if (selectedPersonId === undefined || baseSelectedPerson === undefined) return undefined;
@@ -224,6 +281,7 @@ export function useFriendsPageData(focusPersonId?: string) {
   const acceptMutation = useAcceptFriendRequest();
   const declineMutation = useDeclineFriendRequest();
   const cancelMutation = useCancelFriendRequest();
+  const unfriendMutation = useUnfriend();
 
   return {
     currentUserId,
@@ -257,7 +315,7 @@ export function useFriendsPageData(focusPersonId?: string) {
     isSearchError: searchQuery.isError,
 
     selectedPersonId,
-    selectPerson: setSelectedPersonId,
+    selectPerson,
     selectedPerson,
     isSelectedPersonLoading: !isKnownFriend && selectedPersonId !== undefined && profileQuery.isLoading,
 
@@ -266,11 +324,20 @@ export function useFriendsPageData(focusPersonId?: string) {
     // dialog and, on close, drops the router `location.state` that carried the
     // focus (which is what makes this flip back to false).
     focusUnavailable,
+    // FRIEND-2: the focus person did turn up in a friend/request list —
+    // `FriendsPage` strips the router state so a later user-caused disappearance
+    // (accept then unfriend) can't re-raise `focusUnavailable`.
+    focusResolved,
     selectedSports: sportsQuery.data,
     isSelectedSportsLoading: sportsQuery.isLoading,
 
     sendRequest: (userId: string) => sendMutation.mutate(userId),
     isSendingRequest: sendMutation.isPending,
+    // Unlike decline/cancel, accept deliberately keeps the selection: the
+    // requester becomes a friend and the panel re-resolves them to `FRIENDS`
+    // (their now-friend profile). The `isFetching` gate on the auto-clear
+    // effect above is what stops a transient deselect while the friends /
+    // requests lists refetch after the mutation settles.
     acceptRequest: (requestId: string) => acceptMutation.mutate(requestId),
     isAcceptingRequest: acceptMutation.isPending,
     // Mirrors the design reference's own behavior: declining clears the
@@ -279,11 +346,31 @@ export function useFriendsPageData(focusPersonId?: string) {
     declineRequest: (requestId: string) =>
       declineMutation.mutate(requestId, { onSuccess: () => setSelectedPersonId(undefined) }),
     isDecliningRequest: declineMutation.isPending,
-    // Same as decline: once the outgoing request is withdrawn there's nothing
-    // left in the panel to act on, so clear the selection.
-    cancelRequest: (requestId: string) =>
-      cancelMutation.mutate(requestId, { onSuccess: () => setSelectedPersonId(undefined) }),
+    // Unlike decline, withdrawing your OWN outgoing request keeps the person
+    // selected (user-requested) — they re-resolve to `NONE`, so the panel shows
+    // "Send a friend request", handy after an accidental cancel. Record the id
+    // in `keepSelectedAfterCancelIdRef` *before* the settle-triggered refetch so
+    // the auto-clear above leaves it.
+    cancelRequest: (requestId: string) => {
+      const personId = selectedPersonId;
+      cancelMutation.mutate(requestId, {
+        onSuccess: () => {
+          if (personId !== undefined) keepSelectedAfterCancelIdRef.current = personId;
+        },
+      });
+    },
     isCancellingRequest: cancelMutation.isPending,
+    // Unfriend takes the other person's user id (not a request id). Same
+    // clear-the-selection-on-success behavior as decline/cancel — the person
+    // drops out of the friends list on refetch, so there's nothing left to
+    // show. `resetUnfriend` is called by `FriendProfilePanel` when its
+    // confirm dialog closes so a failed attempt's error can't resurface on a
+    // later reopen (`CLIENT-MODAL-1`).
+    unfriend: (friendId: string) =>
+      unfriendMutation.mutate(friendId, { onSuccess: () => setSelectedPersonId(undefined) }),
+    isUnfriending: unfriendMutation.isPending,
+    isUnfriendError: unfriendMutation.isError,
+    resetUnfriend: () => unfriendMutation.reset(),
   };
 }
 

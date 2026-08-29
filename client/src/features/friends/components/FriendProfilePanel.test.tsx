@@ -19,11 +19,16 @@ const sports: SportProfile[] = [
   { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'coral' },
 ];
 
-function renderPanel(overrides: Partial<SelectedPerson> = {}) {
+function renderPanel(
+  overrides: Partial<SelectedPerson> = {},
+  propOverrides: { isUnfriendError?: boolean; isActionPending?: boolean } = {},
+) {
   const onSendRequest = vi.fn();
   const onAccept = vi.fn();
   const onDecline = vi.fn();
   const onCancel = vi.fn();
+  const onUnfriend = vi.fn();
+  const onUnfriendDialogClose = vi.fn();
   render(
     <FriendProfilePanel
       person={{ ...basePerson, ...overrides }}
@@ -33,10 +38,13 @@ function renderPanel(overrides: Partial<SelectedPerson> = {}) {
       onAccept={onAccept}
       onDecline={onDecline}
       onCancel={onCancel}
-      isActionPending={false}
+      onUnfriend={onUnfriend}
+      onUnfriendDialogClose={onUnfriendDialogClose}
+      isUnfriendError={propOverrides.isUnfriendError ?? false}
+      isActionPending={propOverrides.isActionPending ?? false}
     />,
   );
-  return { onSendRequest, onAccept, onDecline, onCancel };
+  return { onSendRequest, onAccept, onDecline, onCancel, onUnfriend, onUnfriendDialogClose };
 }
 
 describe('FriendProfilePanel', () => {
@@ -56,9 +64,47 @@ describe('FriendProfilePanel', () => {
     expect(screen.getByText('Coming soon.')).toBeInTheDocument();
   });
 
-  it('renders no action bar for an existing friend', () => {
+  it('FRIENDS: shows only the "Friend" menu button, no request/accept/decline actions', () => {
     renderPanel({ friendshipStatus: 'FRIENDS' });
-    expect(screen.queryByRole('button', { name: /friend request|waiting|accept|decline/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Friend' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /friend request|waiting|accept|decline/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('FRIENDS: the Friend menu opens a confirm dialog whose Unfriend button calls onUnfriend', async () => {
+    const user = userEvent.setup();
+    const { onUnfriend } = renderPanel({ friendshipStatus: 'FRIENDS' });
+
+    await user.click(screen.getByRole('button', { name: 'Friend' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Unfriend' }));
+
+    expect(screen.getByText('Do you really want to unfriend Priya Shah?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Unfriend' }));
+    expect(onUnfriend).toHaveBeenCalledTimes(1);
+  });
+
+  it('FRIENDS: closing the confirm dialog calls onUnfriendDialogClose (mutation reset hook)', async () => {
+    const user = userEvent.setup();
+    const { onUnfriendDialogClose } = renderPanel({ friendshipStatus: 'FRIENDS' });
+
+    await user.click(screen.getByRole('button', { name: 'Friend' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Unfriend' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onUnfriendDialogClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('FRIENDS: surfaces an unfriend error inside the dialog', async () => {
+    const user = userEvent.setup();
+    renderPanel({ friendshipStatus: 'FRIENDS' }, { isUnfriendError: true });
+
+    await user.click(screen.getByRole('button', { name: 'Friend' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Unfriend' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      "Couldn't unfriend Priya Shah. Please try again.",
+    );
   });
 
   it('NONE: shows an enabled "Send a friend request" button', async () => {

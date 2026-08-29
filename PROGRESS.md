@@ -3989,6 +3989,70 @@ explicit go-ahead at each step (full story in A3's summary doc):
   command): `client-ci` `update-baselines` dispatch → SHA-256 confirmed exactly the 3
   `notification-bell-populated-*` files changed (fixture grew 5→7 rows + id 6's actor name), the
   other 84 byte-identical.
+- **FRIEND-2 (`DONE`, 2026-08-29,
+  `client/docs/MVP/FRIEND-2_DEDICATED_FRIEND_PROFILE_HOOK.md`):** feature-folder cleanup — the
+  Friends directory-search profile popup was borrowing `features/profile/useUserProfile` (relocated
+  there at PROFILE-0). Backend U14 (the ticket's original blocker) resolved to no change: U11 had
+  already narrowed `GET /api/users/{userId}` to `UserInfoResponse` (`id, fullName, username,
+  avatarUrl, coverUrl, bio`, `hasRole('USER')`-gated). Shipped: new Friends-owned `useUserInfo()`
+  at the `features/friends/` root (not `hooks/`, per locked scope), typed 1:1 with a new `UserInfo`
+  interface incl. `username: string | null`; `useFriendsPageData` switched to it;
+  `features/profile/useUserProfile` **deleted** (zero importers — `useMyProfile` on
+  `GET /api/users/me` already owns the own-profile case); stale `UserResponse` doc comments in
+  `features/profile/types.ts` + `features/friends/types.ts` corrected; MSW `GET /api/users/:userId`
+  handler now returns `username` too. No logic change — same URL, query key (`friendKeys.profile`),
+  and `enabled` gating. Verification: `tsc -b` clean, `eslint` 0 errors, `vitest` 1044/1044 incl.
+  new `useUserInfo.test.tsx`, `pnpm e2e` `friends-journey` 1/1 + `notification-bell` 4/4. No
+  baselined surface touched — no baseline change.
+  **Scope change (same session, user decision — folded in rather than filed as FRIEND-3):** added
+  the unfriend control the Friends feature never had (`FriendProfilePanel`'s `FRIENDS` state
+  rendered no action bar — a FRIEND-1 gap). Now a compact `Friend ▾` button (`size="sm"` + `h-7`,
+  ~80% of default height) → `DropdownMenu` (`Unfriend` only for now; this instance restyled to
+  `w-42` ≈70% width / tighter padding — the shared primitive untouched) → `UnfriendConfirmDialog`
+  → the pre-existing `DELETE /api/users/friends/{friendId}` (U1 `removeFriend`). Dialog copy +
+  chrome iterated with the user: chrome-light (no header bar / close X; `sr-only` `DialogTitle` for
+  the a11y name), single reconsider-style prompt **"Do you really want to unfriend {name}?"** (verb
+  kept as `unfriend` to match the button/menu, no trailing reassurance — user decision), buttons
+  ordered **Unfriend** (danger) **then Cancel**, `onOpenAutoFocus` prevented so no button is
+  focused on open (Radix's DOM-first default would land on the destructive button), and forced
+  viewport-centered via a new `DialogContent centered` prop (default off — every other modal
+  unchanged) since the Friends page's `ModalAnchorProvider` would otherwise pin it below the pill
+  row. CLIENT-NOTIF-5's `FriendRequestUnavailableDialog` was opted into the same `centered` prop in
+  this pass (user request). New `useUnfriend` hook (blunt-invalidates `friendKeys.all`);
+  `useFriendsPageData.unfriend` clears the selection on success like decline/cancel and exposes
+  `resetUnfriend` so the dialog's mutation error can't survive a reopen (`CLIENT-MODAL-1`). New MSW
+  `DELETE /api/users/friends/:friendId` handler; `friends-journey.spec.ts` gains step 8 (Friend →
+  Unfriend → confirm → friend leaves the list). **Second small scope-add (user request):** on the
+  receiver's page, accepting an incoming request now **keeps the requester selected** (panel
+  re-resolves them to `FRIENDS`) instead of dropping the selection; decline still clears it
+  (unchanged). Root cause was the selection auto-clear effect racing the post-accept refetch — fixed
+  by widening its `hasSelectionSourcesSettled` gate from `isLoading` to `isFetching`, so a
+  background refetch also defers the verdict until every list has settled. `friends-journey` step 7
+  now guards this. **Third bug (notification path only):** accepting a request opened via its
+  notification and then unfriending — while the router state still carried the requester's
+  `focusPersonId` — was re-raising the "Friend request unavailable" dialog. Fix: the hook exposes
+  `focusResolved` (focus person turned up in a friend/request list) and `FriendsPage` strips the
+  router `focusPersonId` state the moment that's true, so the one-shot intent is actually consumed
+  on first resolution; the genuine "gone on arrival" and "re-sent request reappears" cases still
+  work. (A render-phase ref latch in the hook was tried first and reverted — it tripped the
+  `react-hooks` lint, the same wall CLIENT-NOTIF-5 documented.) `notification-bell.spec.ts`'s
+  pre-select test now Accepts + Unfriends and asserts the dialog stays hidden; a `FriendsPage`
+  component test covers the same flow. **Fourth bug (`accepted`-type notification):** a stale
+  "X is now your friend" notification (X unfriended since) was still opening the "unavailable"
+  dialog — worse, only when the user was *already sitting on* `/friends` (fresh-mount vs.
+  same-route-nav settle timing). The dialog only makes sense for a `created` notification (a pending
+  request that's gone), so the notification type now rides as `location.state.focusReason`
+  (`created | accepted`, set in `useNotificationBellData` → `AppShell`) and `useFriendsPageData`
+  suppresses `focusUnavailable` entirely for `accepted`. New `seed-stale-accepted-friend-notification`
+  MSW action + e2e guard. **Fifth enhancement (user-requested):** withdrawing your own outgoing
+  request (`PENDING_SENT` "Cancel request") now **keeps the person selected**, re-resolved to `NONE`
+  ("Send a friend request"), instead of dropping to the empty placeholder — `cancelRequest`
+  `onSuccess` records `keepSelectedAfterCancelIdRef` (a mount-scoped `useRef`, not `useState`: RQ's
+  `useSyncExternalStore`-driven refetch can run the auto-clear effect before an `onSuccess` setState
+  flushes; the ref is written before `onSettled` even refetches) and the auto-clear effect skips a
+  selection matching it; decline/unfriend still clear. `friends-journey` step 5 updated. Verification (final): `tsc -b` clean, `eslint` 0 errors,
+  `vitest` **156 files, all pass**, `pnpm e2e friends-journey` 1/1 + `notification-bell` 5/5. No
+  `visual/` spec covers `FriendProfilePanel` (no `app-friends.spec.ts`) — no baseline change.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

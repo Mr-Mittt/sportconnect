@@ -511,7 +511,7 @@ owner/admin approval-queue journey, and `mockPublicGroup` ("Riverside Hoopers", 
 | Join requests section withdraws the current user's own pending request | `mockJoinRequest` seeded via a new admin route (`seed-join-requests` — no existing e2e coverage of `JoinGroupModal`'s search UI to drive instead) → "Riverside Hoopers" row visible with a "Withdraw" button → clicking it empties the section | **GRP-8 part 3** |
 | Accepting an invitation for a sport the invitee lacks offers to add it first | Test user's sport profiles zeroed via `seedZeroSportProfilesOnNextLoad` → Accept → `AddSportIntroDialog` ("This Pickleball group…", OK button) → `AddSportModal` pre-selected to Pickleball → submitting adds the profile then accepts the invitation, landing on the new group's Posts tab | **GRP-8 part 5**. SPORT-3: renamed from Basketball |
 
-### `e2e/flows/friends-journey.spec.ts` (FRIEND-1 + CLIENT-NOTIF-5, one `test()` with 7 steps)
+### `e2e/flows/friends-journey.spec.ts` (FRIEND-1 + CLIENT-NOTIF-5 + FRIEND-2, one `test()` with 8 steps)
 
 Uses `mockFriend` ("Priya Shah", Offline), `mockIncomingFriendRequest` ("Hana Kim" → the test user,
 Friend Requests), `mockSentFriendRequest` ("Diego Alvarez", outgoing, also Friend Requests), and
@@ -521,11 +521,12 @@ Friend Requests), `mockSentFriendRequest` ("Diego Alvarez", outgoing, also Frien
 |---|---|---|
 | 1. all 4 sections render | Online/Blocked "Nothing here yet." (no presence system/blacklist backend exists); Friend Requests shows Hana Kim; Offline shows Priya Shah | |
 | 2. rail search filters in place | Typing "priya" narrows Offline to Priya Shah, empties Friend Requests to "No matches." | No debounce — this is the rail's local filter, not Add mode's directory search |
-| 3. select an existing friend | Profile panel shows bio; chat panel visible; no "Send a friend request" button (`FRIENDS` status) | |
+| 3. select an existing friend | Profile panel shows bio; chat panel visible; no "Send a friend request" button; the `FRIENDS`-status action bar shows the "Friend" menu button (FRIEND-2) | |
 | 4. Add friend searches the real directory + sends a request | "Add friend" → type "Owen" → `Matches for "Owen"` → select → real `POST /users/friends/requests` → panel shows "Waiting for response" status **+ a "Cancel request" button** (CLIENT-NOTIF-5) | Exercises the debounced `GET /users/search` end-to-end, not MSW-bypassed |
-| 5. cancel withdraws an outgoing request (CLIENT-NOTIF-5) | Clear search → select "Diego Alvarez" (`mockSentFriendRequest`, outgoing) from Friend Requests → "Cancel request" → real `DELETE /users/friends/requests/{id}` → row disappears, panel back to the "Select a friend…" placeholder | Exercises the stateful MSW delete handler (drops the row from `sentRequestsState`); `useFriendsPageData` now carries the real `requestId` for `PENDING_SENT`, not just `PENDING_RECEIVED` |
+| 5. cancel withdraws an outgoing request but keeps the person selected (CLIENT-NOTIF-5 + FRIEND-2) | Clear search → select "Diego Alvarez" (`mockSentFriendRequest`, outgoing) from Friend Requests → "Cancel request" → real `DELETE /users/friends/requests/{id}` → row disappears from Friend Requests, **panel stays open on Diego re-resolved to `NONE`** ("Send a friend request" button, not the placeholder) | Exercises the stateful MSW delete handler (drops the row from `sentRequestsState`); `useFriendsPageData` carries the real `requestId` for `PENDING_SENT` and, FRIEND-2, keeps the selection via `keepSelectedAfterCancelId` |
 | 6. the default friend list is intact | Add-mode "back to friend list" gone; Offline still shows Priya Shah | |
-| 7. accept moves the request | Select Hana Kim (Accept/Decline visible) → Accept → disappears from Friend Requests, appears in Offline | Exercises the stateful MSW accept handler (moves the row from `receivedRequestsState` into `friendsState`) |
+| 7. accept moves the request **and keeps the new friend selected** | Select Hana Kim (Accept/Decline visible) → Accept → disappears from Friend Requests, appears in Offline; the panel re-resolves her to a friend (the `Friend` menu button is shown, not the empty-selection placeholder) | Exercises the stateful MSW accept handler (moves the row from `receivedRequestsState` into `friendsState`); regression guard for the FRIEND-2 fix that widened the auto-clear gate to `isFetching` so the refetch race can't drop the selection |
+| 8. unfriend via the Friend menu (FRIEND-2) | Select Priya Shah → "Friend" button → `Unfriend` menuitem → `UnfriendConfirmDialog` ("Do you really want to unfriend Priya Shah?") → confirm → real `DELETE /users/friends/{id}` → row disappears from Offline, panel back to the "Select a friend…" placeholder | Exercises the new stateful MSW delete handler (drops the row from `friendsState`); `useFriendsPageData.unfriend` clears the selection on success, same as decline/cancel. The dialog is chrome-light — no header bar; its `DialogTitle` is `sr-only` |
 
 **Removed (CHAT-9, 2026-07-28):** a 7th step asserted `FriendChatPanel`'s old local-state-only mock
 chat didn't persist across a re-selection. CHAT-9 wired the panel to the real chat service
@@ -648,7 +649,7 @@ steps 9-10 are what's actually new.
 | 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverSessions`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED` row for, same exclusion rule as the real backend |
 | 10. search filters Discover; the panel toggle hides/shows My sessions | Typing a non-matching string into the search box shows "No sessions match your search." in Discover; the "Hide my sessions"/"Show my sessions" button toggles the whole `region` "My sessions" | Search is client-side only (`useMatchesPageData`'s `discoverSessions` memo), not a new backend query |
 
-### `e2e/flows/notification-bell.spec.ts` (CLIENT-NOTIF-1 + CLIENT-NOTIF-5, four `test()`s — a 4-step journey + three regression/navigation cases)
+### `e2e/flows/notification-bell.spec.ts` (CLIENT-NOTIF-1 + CLIENT-NOTIF-5 + FRIEND-2, five `test()`s — a 4-step journey + four regression/navigation cases)
 
 The `TopBar` bell + dropdown — unread badge, list-on-open, mark-read-on-click + shell-level
 in-place modal, and "Mark all read". Fixtures: `mocks/handlers/notifications.ts`'s
@@ -704,6 +705,9 @@ the profile panel's **Accept/Decline** action bar is showing (i.e. Hana's pendin
 was pre-selected via router `location.state.focusPersonId`). Friend-request notifications are the
 **one** type that navigates rather than opening a shell-level modal — the Friends rail's
 incoming-requests section has no modal equivalent, and it's expanded by default on that page.
+**FRIEND-2 guard:** then Accepts Hana (the `Friend` menu button appears), opens the menu → Unfriend
+→ confirm, and asserts the **"Friend request unavailable"** dialog does *not* appear — once the
+focus person has resolved once, a later user-caused disappearance can't re-raise it.
 
 `Notification bell journey — a friend-request notification for a vanished requester shows the
 unavailable dialog` (CLIENT-NOTIF-5) — seeds `seedUnavailableFriendRequestNotification`, clicks the
@@ -712,7 +716,15 @@ lists (request cancelled, or account deactivated), asserts the URL still becomes
 **"Friend request unavailable"** dialog opens instead of a pre-selection; "Got it" closes it and
 the "Select a friend…" placeholder stays. `focusUnavailable` is derived in `useFriendsPageData`
 from the `focusPersonId` prop + the live lists (no stored flag); the dialog's close navigates to
-strip `location.state`, which is what flips it back off.
+strip `location.state`, which is what flips it back off. This is a **`created`** notification —
+the dialog is gated to that type.
+
+`Notification bell journey — a stale "is now your friend" notification lands on /friends with no
+dialog` (FRIEND-2) — seeds `seedStaleAcceptedFriendNotification` (a `user.friend_request.accepted`
+row whose `entityId` matches nobody — the person accepted then unfriended since), clicks
+"Sam Rivera is now your friend", asserts the URL becomes `/friends` and the "Select a friend…"
+placeholder shows with **no** "Friend request unavailable" dialog. `focusReason: 'accepted'`
+(carried on `location.state` from the notification type) suppresses `focusUnavailable`.
 
 ### `e2e/flows/admin-route-guard.spec.ts` (ADMIN-1, ADMIN-4, 4 `test()`s)
 

@@ -51,6 +51,14 @@ interface DialogContentProps extends React.ComponentProps<typeof DialogPrimitive
    * user decision). No effect unless `fixedHeight` is also set.
    */
   fixedHeightVh?: number;
+  /**
+   * Force the viewport-centered position even on a page that has a
+   * `ModalAnchorProvider` (Home Feed, Groups, Profile, Friends). Small
+   * confirm dialogs (`UnfriendConfirmDialog`, user decision) read better
+   * dead-centre than pinned below the page's pill row. Ignored when there's
+   * no anchor context — that's already centered.
+   */
+  centered?: boolean;
 }
 
 function DialogContent({
@@ -59,6 +67,7 @@ function DialogContent({
   style,
   fixedHeight = false,
   fixedHeightVh = FIXED_HEIGHT_VH,
+  centered = false,
   ...props
 }: DialogContentProps) {
   // Page-level anchor (user decision) — Home Feed positions modals below the
@@ -77,7 +86,8 @@ function DialogContent({
   // the symmetric case — the anchor pushed below the viewport — included for completeness, not
   // reachable in practice today since the sport switcher/group pill row sit at the top of the
   // page layout and can only scroll up, never down, from their initial position.)
-  const anchored = anchorBottom !== null && anchorBottom > 0 && anchorBottom < window.innerHeight;
+  const anchored =
+    !centered && anchorBottom !== null && anchorBottom > 0 && anchorBottom < window.innerHeight;
 
   let computedStyle: React.CSSProperties | undefined;
   if (anchored) {

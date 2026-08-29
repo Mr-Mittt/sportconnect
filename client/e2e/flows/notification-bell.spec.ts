@@ -1,4 +1,8 @@
-import { seedAuthenticatedSession, seedUnavailableFriendRequestNotification } from '../mocks/fixtures.ts';
+import {
+  seedAuthenticatedSession,
+  seedStaleAcceptedFriendNotification,
+  seedUnavailableFriendRequestNotification,
+} from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -81,9 +85,24 @@ test('Notification bell journey — a friend-request notification routes to /fri
   await expect(page.getByRole('dialog')).not.toBeVisible();
   // Pre-selected: the profile panel resolved Hana Kim's pending incoming request, so its
   // Accept/Decline action bar (PENDING_RECEIVED only) is showing.
-  await expect(page.getByRole('button', { name: 'Accept' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Accept', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Decline' })).toBeVisible();
   await expect(page.getByText('Select a friend to view their profile and chat.')).not.toBeVisible();
+
+  // FRIEND-2 bug guard: accepting the request (Hana becomes a friend) and then
+  // unfriending her — while the router still carries her focus id — must NOT
+  // re-raise the "Friend request unavailable" dialog. That dialog is only for a
+  // requester who was already gone on arrival; here the focus intent was
+  // fulfilled the moment she first resolved.
+  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Friend', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Friend', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Unfriend' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Unfriend', exact: true }).click();
+
+  await expect(page.getByRole('dialog', { name: 'Friend request unavailable' })).not.toBeVisible();
+  await expect(page.getByText('Select a friend to view their profile and chat.')).toBeVisible();
 });
 
 /*
@@ -110,4 +129,25 @@ test('Notification bell journey — a friend-request notification for a vanished
   await expect(page.getByRole('dialog', { name: 'Friend request unavailable' })).not.toBeVisible();
   // Nobody got pre-selected — the placeholder stays.
   await expect(page.getByText('Select a friend to view their profile and chat.')).toBeVisible();
+});
+
+/*
+ * FRIEND-2: an outdated `user.friend_request.accepted` notification — the person
+ * accepted then unfriended since, so `entityId` now matches nobody. Unlike the
+ * `created` case above, this must NOT open the "unavailable" dialog (there is no
+ * pending *request* for that copy to describe); it just lands on `/friends`.
+ */
+test('Notification bell journey — a stale "is now your friend" notification lands on /friends with no dialog', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedStaleAcceptedFriendNotification(mockSessionId);
+  await seedAuthenticatedSession(page);
+
+  await page.getByRole('button', { name: 'Notifications' }).click();
+  await page.getByText('Sam Rivera is now your friend').click();
+
+  await expect(page).toHaveURL(/^http:\/\/localhost:5174\/friends$/);
+  await expect(page.getByText('Select a friend to view their profile and chat.')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Friend request unavailable' })).not.toBeVisible();
 });

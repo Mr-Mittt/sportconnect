@@ -138,9 +138,21 @@ describe('useFriendsPageData', () => {
     expect(result.current.selectedPerson?.requestId).toBe('req-2');
   });
 
-  it('cancelling a sent request DELETEs it and clears the selection on success', async () => {
-    mockGet({ friends: [priya], profiles: { f4: { id: 'f4', fullName: 'Diego Alvarez', avatarUrl: null, coverUrl: null, bio: null } } });
-    const del = vi.spyOn(apiClient, 'delete').mockResolvedValue(apiResponse(undefined));
+  it('cancelling a sent request DELETEs it but keeps the person selected, re-resolved to NONE', async () => {
+    const diego: FriendUser = { id: 'f4', fullName: 'Diego Alvarez', avatarUrl: null, coverUrl: null, bio: null };
+    let cancelled = false;
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/users/friends') return apiResponse([priya]);
+      if (url === '/users/friends/requests/received') return apiResponse([]);
+      if (url === '/users/friends/requests/sent') return apiResponse(cancelled ? [] : [sentRequest]);
+      if (url.startsWith('/sports/profiles/user/')) return apiResponse([]);
+      if (url.startsWith('/users/')) return apiResponse(diego);
+      throw new Error(`unexpected GET ${url}`);
+    });
+    const del = vi.spyOn(apiClient, 'delete').mockImplementation(async () => {
+      cancelled = true;
+      return apiResponse(undefined);
+    });
     const { result } = renderHook(() => useFriendsPageData(), { wrapper });
 
     await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
@@ -150,6 +162,22 @@ describe('useFriendsPageData', () => {
     act(() => result.current.cancelRequest('req-2'));
 
     await waitFor(() => expect(del).toHaveBeenCalledWith('/users/friends/requests/req-2'));
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('NONE'));
+    expect(result.current.selectedPersonId).toBe('f4');
+  });
+
+  it('unfriending a friend DELETEs /users/friends/{id} and clears the selection on success', async () => {
+    mockGet({ friends: [priya] });
+    const del = vi.spyOn(apiClient, 'delete').mockResolvedValue(apiResponse(undefined));
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
+    act(() => result.current.selectPerson('f1'));
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('FRIENDS'));
+
+    act(() => result.current.unfriend('f1'));
+
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/users/friends/f1'));
     await waitFor(() => expect(result.current.selectedPersonId).toBeUndefined());
   });
 
@@ -218,6 +246,34 @@ describe('useFriendsPageData', () => {
     act(() => result.current.declineRequest('req-1'));
 
     await waitFor(() => expect(result.current.selectedPersonId).toBeUndefined());
+  });
+
+  it('accepting a request keeps the requester selected and re-resolves them to FRIENDS', async () => {
+    let accepted = false;
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/users/friends') return apiResponse(accepted ? [priya, hana] : [priya]);
+      if (url === '/users/friends/requests/received') {
+        return apiResponse(accepted ? [] : [receivedRequest]);
+      }
+      if (url === '/users/friends/requests/sent') return apiResponse([]);
+      if (url.startsWith('/sports/profiles/user/')) return apiResponse([]);
+      if (url.startsWith('/users/')) return apiResponse(hana); // useUserInfo, pre-accept
+      throw new Error(`unexpected GET ${url}`);
+    });
+    vi.spyOn(apiClient, 'put').mockImplementation(async () => {
+      accepted = true;
+      return apiResponse(undefined);
+    });
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
+    act(() => result.current.selectPerson('f3'));
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('PENDING_RECEIVED'));
+
+    act(() => result.current.acceptRequest('req-1'));
+
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('FRIENDS'));
+    expect(result.current.selectedPersonId).toBe('f3');
   });
 
   it('filters the Offline section and Friend Requests section by the rail search, case-insensitively', async () => {
@@ -298,6 +354,34 @@ describe('useFriendsPageData', () => {
 
     rerender({ focus: undefined });
     expect(result.current.focusUnavailable).toBe(false);
+  });
+
+  it('flags focusResolved once the focused person turns up in a list (so FriendsPage can drop the one-shot intent)', async () => {
+    mockGet({ friends: [priya], received: [receivedRequest], profiles: { f3: hana } });
+    const { result } = renderHook(() => useFriendsPageData('f3'), { wrapper });
+
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('PENDING_RECEIVED'));
+    expect(result.current.focusResolved).toBe(true);
+    expect(result.current.focusUnavailable).toBe(false);
+  });
+
+  it('does not flag focusResolved when the focus person is in no list (genuine "gone on arrival")', async () => {
+    mockGet({ friends: [priya], received: [], sent: [] });
+    const { result } = renderHook(() => useFriendsPageData('ghost'), { wrapper });
+
+    await waitFor(() => expect(result.current.focusUnavailable).toBe(true));
+    expect(result.current.focusResolved).toBe(false);
+  });
+
+  it('an "accepted" focus never raises focusUnavailable, even when the person is in no list (they unfriended since)', async () => {
+    mockGet({ friends: [priya], received: [], sent: [] });
+    const { result } = renderHook(() => useFriendsPageData('ghost', 'accepted'), { wrapper });
+
+    await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
+    // give the lists a beat to settle so the (gated-off) dialog condition would otherwise be true
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(result.current.focusUnavailable).toBe(false);
+    expect(result.current.focusResolved).toBe(false);
   });
 
   it('keeps a restored Add-mode search selection once the re-run search confirms it\'s still there', async () => {

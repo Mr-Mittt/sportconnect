@@ -10,9 +10,11 @@ export const MAX_BIO_LENGTH = 500;
  * persisting but never returning them, see `modules/user/user-impl/docs/
  * MVP/U11_...md`'s 2026-08-26 update) — this type reflects the fixed shape.
  *
- * `useUserProfile` (features/profile) narrows this down to `FriendUser` for
- * the Friends feature's own purposes; `useMyProfile` returns this full type
- * for the logged-in user only.
+ * `useMyProfile` is the only consumer — it returns this full type for the
+ * logged-in user's own profile (`GET /api/users/me`). Any other user looked
+ * up by id comes back as the PII-free `UserInfoResponse`, never this
+ * (`GET /api/users/{userId}` since U11) — see `features/friends`'
+ * `UserInfo` / `useUserInfo`.
  */
 export interface UserResponse {
   id: string;

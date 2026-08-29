@@ -1,7 +1,15 @@
 import { useState } from 'react';
+import { IconChevronDown } from '@tabler/icons-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/ui/dropdown-menu';
+import { UnfriendConfirmDialog } from './UnfriendConfirmDialog';
 import type { SelectedPerson } from '../types';
 import type { SportProfile } from '@/shared/types/sport';
 
@@ -23,6 +31,12 @@ interface FriendProfilePanelProps {
   onAccept: () => void;
   onDecline: () => void;
   onCancel: () => void;
+  onUnfriend: () => void;
+  /** Called when the unfriend confirm dialog closes — the parent uses it to
+   * `reset()` the unfriend mutation so a prior error can't survive a reopen
+   * (`CLIENT-MODAL-1`). */
+  onUnfriendDialogClose: () => void;
+  isUnfriendError: boolean;
   isActionPending: boolean;
 }
 
@@ -37,7 +51,8 @@ interface FriendProfilePanelProps {
  * The docked action bar is driven entirely by `person.friendshipStatus` —
  * not a mockup-style "is this a directory result" branch, since the real
  * backend already tells us this directly (see `useFriendsPageData`'s
- * resolution logic). `FRIENDS` renders no action bar at all.
+ * resolution logic). `FRIENDS` shows a single `Friend` button that opens a
+ * menu (just `Unfriend` for now) → a confirm dialog.
  *
  * Achievements starts collapsed (user decision, 2026-07-22 — reduces empty
  * space for a friend with few sports/no bio, since the section's body is
@@ -53,9 +68,18 @@ export function FriendProfilePanel({
   onAccept,
   onDecline,
   onCancel,
+  onUnfriend,
+  onUnfriendDialogClose,
+  isUnfriendError,
   isActionPending,
 }: FriendProfilePanelProps) {
   const [isAchievementsOpen, setIsAchievementsOpen] = useState(false);
+  const [isUnfriendConfirmOpen, setIsUnfriendConfirmOpen] = useState(false);
+
+  function closeUnfriendConfirm() {
+    setIsUnfriendConfirmOpen(false);
+    onUnfriendDialogClose();
+  }
 
   return (
     <div className="border-hairline flex h-full flex-col overflow-hidden rounded-xl border-border bg-surface-2">
@@ -129,6 +153,41 @@ export function FriendProfilePanel({
               </Button>
             </div>
           )}
+        </div>
+      )}
+
+      {person.friendshipStatus === 'FRIENDS' && (
+        <div className="border-hairline-t flex shrink-0 justify-end border-border px-4 py-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7"
+                disabled={isActionPending}
+              >
+                Friend
+                <IconChevronDown className="ml-0.5 size-3.5" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-42 p-1">
+              <DropdownMenuItem
+                onSelect={() => setIsUnfriendConfirmOpen(true)}
+                className="py-1.5 text-text-danger"
+              >
+                Unfriend
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <UnfriendConfirmDialog
+            isOpen={isUnfriendConfirmOpen}
+            onClose={closeUnfriendConfirm}
+            onConfirm={onUnfriend}
+            isSubmitting={isActionPending}
+            isError={isUnfriendError}
+            personName={person.fullName}
+          />
         </div>
       )}
     </div>

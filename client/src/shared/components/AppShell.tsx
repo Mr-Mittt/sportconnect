@@ -64,8 +64,10 @@ function initialsOf(firstName: string, lastName: string): string {
  * CLIENT-NOTIF-5: a friend-request notification (`entityType: 'USER'`, U13)
  * instead routes to `/friends` (the one notification type that navigates —
  * that section has no shell-level modal equivalent), passing the counterparty's
- * user id as router `state.focusPersonId` so the Friends page can pre-select
- * them (or explain, via a dialog, that the request is no longer available).
+ * user id as router `state.focusPersonId` (plus `state.focusReason`, `'created'`
+ * or `'accepted'`) so the Friends page can pre-select them — or, for a
+ * `'created'` focus only, explain via a dialog that the request is no longer
+ * available.
  */
 export function AppShell() {
   const navigate = useNavigate();
@@ -92,8 +94,8 @@ export function AppShell() {
     [sportProfilesQuery.data],
   );
 
-  const notificationBell = useNotificationBellData(setSelectedSessionId, (personId) =>
-    navigate('/friends', { state: { focusPersonId: personId } }),
+  const notificationBell = useNotificationBellData(setSelectedSessionId, (personId, kind) =>
+    navigate('/friends', { state: { focusPersonId: personId, focusReason: kind } }),
   );
 
   if (sportCatalog.isLoading) {
