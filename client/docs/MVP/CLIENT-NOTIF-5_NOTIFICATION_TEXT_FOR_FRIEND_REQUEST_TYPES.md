@@ -1,6 +1,6 @@
 # CLIENT-NOTIF-5 · Notification text for `user.friend_request.created` and `user.friend_request.accepted`
 
-**Status:** `DONE` (2026-08-29) — code + unit/e2e tests complete; the 3 `notification-bell-populated-*` visual baselines still need the `update-baselines` dispatch (see Verification).
+**Status:** `DONE` (2026-08-29) — code, tests, and the 3 regenerated `notification-bell-populated-*` visual baselines all landed.
 **Type:** Bug Fix (display gap) — same shape as [CLIENT-NOTIF-3](CLIENT-NOTIF-3_NOTIFICATION_TEXT_FOR_MISSING_SESSION_TYPES.md)
 **Depends on:** none — backend **U13** (`DONE` 2026-08-28) ships both events end to end (producer in
 `modules/user/user-impl`, consumer in `modules/notification`).
@@ -133,17 +133,13 @@ None.
   project run confirms the 2 added fixture rows broke nothing.
 - **Storybook** — the two new stories typecheck via `tsc -b` (stories are in the main tsconfig);
   they're trivial `baseNotification` variants of the existing `NotificationRow` stories.
-- **Visual regression — remaining step (not a pass).** The `notification-bell-populated-{375,768,1280}.png`
-  baselines render `defaultNotificationsState`, now 7 rows instead of 5, so those 3 screenshots
-  genuinely need regenerating. This cannot be done on a Windows host (the whole `visual-regression`
-  project fails there on the documented Windows-vs-Linux font-rendering noise floor — see
-  CLIENT-NOTIF-3's write-up). **To execute:** the HF-20 process — trigger the `client-ci` workflow's
-  `update-baselines` manual dispatch, download the `visual-baselines` artifact, expect **exactly 3
-  files** to change (`notification-bell-populated-*`) with everything else byte-identical, verify by
-  SHA-256 + a human look that the two new rows read "Priya Shah wants to be your friend" /
-  "Priya Shah is now your friend", commit. `notification-bell-empty-*` and
-  `notification-bell-with-load-more-*` are unaffected (empty uses an override; with-load-more uses
-  its own separate 11-item fixture).
+- **Visual regression — Executed (2026-08-29, `/updatebaseline`).** `client-ci` `update-baselines`
+  dispatch run, `visual-baselines` artifact applied. SHA-256 against the committed set:
+  **exactly the 3 predicted `notification-bell-populated-{375,768,1280}.png` changed; the other 84
+  baselines byte-identical** (confirming the local Windows diffs on those were pure noise floor).
+  Human check of `notification-bell-populated-1280` — the dropdown now lists the two new rows
+  ("Hana Kim wants to be your friend", "Priya Shah is now your friend"); nothing else drifted.
+  `notification-bell-empty-*` / `-with-load-more-*` untouched (separate fixture / override).
 
 ### Delta for the epic spec
 
@@ -241,7 +237,6 @@ U1's `cancelFriendRequest`), so this is client-only:
 - `pnpm test` — **1042/1042** (154 files).
 - `pnpm e2e` — **76/76**, incl. the new/changed `notification-bell.spec.ts` and
   `friends-journey.spec.ts` (now 7 steps) cases.
-- Visual baselines: the `notification-bell-populated-*` set still needs the `update-baselines`
-  dispatch (id 6's actor name changed from "Priya Shah" to "Hana Kim" on top of the two added
-  rows; still exactly the 3 `-populated-` files). The Cancel button is on `/friends`, not in any
-  baselined screenshot.
+- Visual baselines: **regenerated and committed** (2026-08-29, `/updatebaseline`) — SHA-256
+  confirmed exactly the 3 `notification-bell-populated-*` files changed, the other 84
+  byte-identical. The Cancel button is on `/friends`, not in any baselined screenshot.

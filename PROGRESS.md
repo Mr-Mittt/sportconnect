@@ -3974,10 +3974,10 @@ explicit go-ahead at each step (full story in A3's summary doc):
   → recipient's notification goes stale). Verification: `pnpm build` clean, `eslint` 0 errors,
   `vitest` 1042/1042, `pnpm e2e` 76/76 incl. new/changed `notification-bell.spec.ts` (pre-select →
   Accept/Decline visible; vanished requester → dialog) and `friends-journey.spec.ts` (now 7 steps,
-  +cancel). **Remaining step:** the 3 `notification-bell-populated-*` visual baselines (fixture grew
-  5→7 rows, plus id 6's actor-name text changed) need the `update-baselines` GitHub dispatch — can't
-  be regenerated on a Windows host (font-rendering noise floor); expect exactly those 3 files to
-  change.
+  +cancel). Visual baselines **regenerated and committed** (2026-08-29, via the new `/updatebaseline`
+  command): `client-ci` `update-baselines` dispatch → SHA-256 confirmed exactly the 3
+  `notification-bell-populated-*` files changed (fixture grew 5→7 rows + id 6's actor name), the
+  other 84 byte-identical.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
