@@ -705,6 +705,9 @@ the profile panel's **Accept/Decline** action bar is showing (i.e. Hana's pendin
 was pre-selected via router `location.state.focusPersonId`). Friend-request notifications are the
 **one** type that navigates rather than opening a shell-level modal — the Friends rail's
 incoming-requests section has no modal equivalent, and it's expanded by default on that page.
+**FRIEND-2 guard:** then Accepts Hana (the `Friend` menu button appears), opens the menu → Unfriend
+→ confirm, and asserts the **"Friend request unavailable"** dialog does *not* appear — once the
+focus person has resolved once, a later user-caused disappearance can't re-raise it.
 
 `Notification bell journey — a friend-request notification for a vanished requester shows the
 unavailable dialog` (CLIENT-NOTIF-5) — seeds `seedUnavailableFriendRequestNotification`, clicks the

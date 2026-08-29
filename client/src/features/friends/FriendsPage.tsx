@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
@@ -70,6 +70,18 @@ export function FriendsPage() {
   const focusPersonId = (location.state as { focusPersonId?: string } | null)?.focusPersonId;
   const data = useFriendsPageData(focusPersonId);
   const clearFocusState = () => navigate(location.pathname, { replace: true, state: null });
+
+  // FRIEND-2: the notification's focus intent is one-shot. Once that person has
+  // actually turned up in a friend/request list (`data.focusResolved`), strip
+  // the router state — otherwise a later disappearance the user causes (accept
+  // the request, then unfriend) would re-trigger `focusUnavailable` and wrongly
+  // re-open the "unavailable" dialog. The genuine "gone on arrival" case never
+  // resolves, so the state lingers until the dialog's own "Got it" dismiss.
+  useEffect(() => {
+    if (data.focusResolved) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [data.focusResolved, navigate, location.pathname]);
 
   const user = useAuthStore((state) => state.user)!;
 

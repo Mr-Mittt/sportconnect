@@ -343,6 +343,23 @@ describe('useFriendsPageData', () => {
     expect(result.current.focusUnavailable).toBe(false);
   });
 
+  it('flags focusResolved once the focused person turns up in a list (so FriendsPage can drop the one-shot intent)', async () => {
+    mockGet({ friends: [priya], received: [receivedRequest], profiles: { f3: hana } });
+    const { result } = renderHook(() => useFriendsPageData('f3'), { wrapper });
+
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('PENDING_RECEIVED'));
+    expect(result.current.focusResolved).toBe(true);
+    expect(result.current.focusUnavailable).toBe(false);
+  });
+
+  it('does not flag focusResolved when the focus person is in no list (genuine "gone on arrival")', async () => {
+    mockGet({ friends: [priya], received: [], sent: [] });
+    const { result } = renderHook(() => useFriendsPageData('ghost'), { wrapper });
+
+    await waitFor(() => expect(result.current.focusUnavailable).toBe(true));
+    expect(result.current.focusResolved).toBe(false);
+  });
+
   it('keeps a restored Add-mode search selection once the re-run search confirms it\'s still there', async () => {
     const searchResult: UserSearchResult = {
       id: 'u1',

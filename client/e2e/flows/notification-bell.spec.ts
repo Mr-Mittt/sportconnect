@@ -81,9 +81,24 @@ test('Notification bell journey — a friend-request notification routes to /fri
   await expect(page.getByRole('dialog')).not.toBeVisible();
   // Pre-selected: the profile panel resolved Hana Kim's pending incoming request, so its
   // Accept/Decline action bar (PENDING_RECEIVED only) is showing.
-  await expect(page.getByRole('button', { name: 'Accept' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Accept', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Decline' })).toBeVisible();
   await expect(page.getByText('Select a friend to view their profile and chat.')).not.toBeVisible();
+
+  // FRIEND-2 bug guard: accepting the request (Hana becomes a friend) and then
+  // unfriending her — while the router still carries her focus id — must NOT
+  // re-raise the "Friend request unavailable" dialog. That dialog is only for a
+  // requester who was already gone on arrival; here the focus intent was
+  // fulfilled the moment she first resolved.
+  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Friend', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Friend', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Unfriend' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Unfriend', exact: true }).click();
+
+  await expect(page.getByRole('dialog', { name: 'Friend request unavailable' })).not.toBeVisible();
+  await expect(page.getByText('Select a friend to view their profile and chat.')).toBeVisible();
 });
 
 /*

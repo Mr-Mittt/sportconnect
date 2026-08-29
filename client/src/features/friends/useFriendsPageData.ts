@@ -59,11 +59,13 @@ function matchesQuery(name: string, normalizedQuery: string): boolean {
  * arrival" intent, passed by `FriendsPage` from router `location.state` when a
  * friend-request notification is clicked. It seeds `selectedPersonId`, then —
  * once the lists settle — either resolves normally (profile panel opens) or, if
- * that id is in none of them (request cancelled/declined, account deactivated),
- * clears the selection and raises `focusUnavailable` so `FriendsPage` can show a
- * dialog. A `ref` fires it once per distinct value; a plain stale
- * `selectedPersonId` restored from `sessionStorage` still clears silently, no
- * dialog.
+ * that id is in none of them *on arrival* (request cancelled/declined, account
+ * deactivated), clears the selection and raises `focusUnavailable` so
+ * `FriendsPage` can show a dialog. `FriendsPage` strips the router state as
+ * soon as the person resolves (FRIEND-2), so `focusUnavailable` can only fire
+ * on arrival — a later user-caused disappearance (accept then unfriend) does
+ * not re-raise it. A plain stale `selectedPersonId` restored from
+ * `sessionStorage` still clears silently, no dialog.
  */
 export function useFriendsPageData(focusPersonId?: string) {
   const currentUserId = useAuthStore((state) => state.user?.id);
@@ -185,12 +187,20 @@ export function useFriendsPageData(focusPersonId?: string) {
   // `selectedPersonId` in the same case; both read the same lists, so they
   // agree. A directory-search match doesn't count — a notification arrival is
   // never in Add mode.
-  const focusUnavailable =
+  //
+  // FRIEND-2: `focusResolved` is true once the focus person turns up in a
+  // friend/request list. `FriendsPage` strips `focusPersonId` from the router
+  // state as soon as that happens, so `focusUnavailable` can only fire on the
+  // *arrival* render(s) — a later disappearance the user caused (accept A, then
+  // unfriend A) no longer re-raises the dialog, while the genuine "gone on
+  // arrival" case (never resolves) still does.
+  const focusResolved =
     focusPersonId !== undefined &&
-    hasSelectionSourcesSettled &&
-    !(friends.some((friend) => friend.id === focusPersonId) ||
+    (friends.some((friend) => friend.id === focusPersonId) ||
       received.some((request) => request.senderId === focusPersonId) ||
       sent.some((request) => request.receiverId === focusPersonId));
+  const focusUnavailable =
+    focusPersonId !== undefined && hasSelectionSourcesSettled && !focusResolved;
 
   const selectedPerson = useMemo<SelectedPerson | undefined>(() => {
     if (selectedPersonId === undefined || baseSelectedPerson === undefined) return undefined;
@@ -276,6 +286,10 @@ export function useFriendsPageData(focusPersonId?: string) {
     // dialog and, on close, drops the router `location.state` that carried the
     // focus (which is what makes this flip back to false).
     focusUnavailable,
+    // FRIEND-2: the focus person did turn up in a friend/request list —
+    // `FriendsPage` strips the router state so a later user-caused disappearance
+    // (accept then unfriend) can't re-raise `focusUnavailable`.
+    focusResolved,
     selectedSports: sportsQuery.data,
     isSelectedSportsLoading: sportsQuery.isLoading,
 

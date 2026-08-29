@@ -4028,11 +4028,18 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (unchanged). Root cause was the selection auto-clear effect racing the post-accept refetch — fixed
   by widening its `hasSelectionSourcesSettled` gate from `isLoading` to `isFetching`, so a
   background refetch also defers the verdict until every list has settled. `friends-journey` step 7
-  now guards this. Verification (final): `tsc -b` clean, `eslint` 0 errors, `vitest` **156 files,
-  all pass** (+ accept-keeps-selection unit case, + the earlier `UnfriendConfirmDialog` /
-  `dialog.test.tsx` / `FriendProfilePanel` additions), `pnpm e2e friends-journey` 1/1 +
-  `notification-bell` 4/4. No `visual/` spec covers `FriendProfilePanel` (no `app-friends.spec.ts`)
-  — no baseline change.
+  now guards this. **Third bug (notification path only):** accepting a request opened via its
+  notification and then unfriending — while the router state still carried the requester's
+  `focusPersonId` — was re-raising the "Friend request unavailable" dialog. Fix: the hook exposes
+  `focusResolved` (focus person turned up in a friend/request list) and `FriendsPage` strips the
+  router `focusPersonId` state the moment that's true, so the one-shot intent is actually consumed
+  on first resolution; the genuine "gone on arrival" and "re-sent request reappears" cases still
+  work. (A render-phase ref latch in the hook was tried first and reverted — it tripped the
+  `react-hooks` lint, the same wall CLIENT-NOTIF-5 documented.) `notification-bell.spec.ts`'s
+  pre-select test now Accepts + Unfriends and asserts the dialog stays hidden; a `FriendsPage`
+  component test covers the same flow. Verification (final): `tsc -b` clean, `eslint` 0 errors,
+  `vitest` **156 files / 1060 pass**, `pnpm e2e friends-journey` 1/1 + `notification-bell` 4/4. No
+  `visual/` spec covers `FriendProfilePanel` (no `app-friends.spec.ts`) — no baseline change.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

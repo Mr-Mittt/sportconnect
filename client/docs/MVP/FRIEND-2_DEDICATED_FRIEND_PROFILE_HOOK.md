@@ -86,6 +86,26 @@ the behaviour). Fix: widen the auto-clear effect's `hasSelectionSourcesSettled` 
 refetch also defers the verdict until every list has settled — by which point the accepted person
 is in `friends`.
 
+### Third bug (2026-08-29) — "Friend request unavailable" dialog after accept-then-unfriend via a notification
+
+**Repro (notification path only):** B opens A's friend request *via the notification*, Accepts (the
+`Friend` button shows), then immediately Unfriends A → the "Friend request unavailable" dialog
+wrongly appears. Going to `/friends` directly (no `focusPersonId`) works fine.
+
+**Cause:** `focusUnavailable` is purely derived from `focusPersonId` + the live lists and stayed
+live for as long as the router state carried the id. After unfriend, A is in no list again →
+`focusUnavailable` flips back true → dialog. The dialog is only meant for "the notification pointed
+at someone already gone *on arrival*".
+
+**Fix (in `FriendsPage`, not the hook — a render-phase ref latch tripped the `react-hooks` lint,
+same wall CLIENT-NOTIF-5 hit):** the hook now also returns `focusResolved` (true once the focus
+person turns up in a friend/request list). `FriendsPage` `useEffect`s on it and, when true, strips
+`focusPersonId` from the router state (`navigate(pathname, { replace: true, state: null })`). So the
+one-shot intent is actually consumed the first time it resolves — `focusUnavailable` can then only
+fire on the arrival render(s). The genuine "gone on arrival" case never sets `focusResolved`, so the
+state lingers until the dialog's own "Got it" dismiss; a re-sent request that reappears sets it and
+closes the dialog, same as before.
+
 **Scope-change gate:** user confirmed nothing further to add or remove.
 
 ## Why
@@ -251,10 +271,22 @@ Built as planned in the scope-change block above. Files:
   friends/received/sent/search queries, so the auto-clear effect waits out a background refetch —
   this is what keeps the just-accepted requester selected instead of dropping them in the window
   between `received` losing them and `friends` gaining them. `acceptRequest` gains an explaining
-  comment (it deliberately does *not* clear, unlike decline/cancel/unfriend).
+  comment (it deliberately does *not* clear, unlike decline/cancel/unfriend). **Third bug fix:** the
+  hook now returns `focusResolved` (focus person is in a friend/request list); the actual fix lives
+  in `FriendsPage` (below).
+- `client/src/features/friends/FriendsPage.tsx` — `useEffect` on `data.focusResolved`: once true,
+  strips `focusPersonId` from the router state, so a later user-caused disappearance
+  (accept-then-unfriend) can't re-raise `focusUnavailable`. (`useEffect` added to the react import.)
 - `client/src/features/friends/useFriendsPageData.test.tsx` — +1 case (unfriend DELETEs
   `/users/friends/{id}` and clears the selection); +1 case (accept keeps the requester selected and
-  re-resolves them to `FRIENDS`).
+  re-resolves them to `FRIENDS`); +2 cases (`focusResolved` true when the person is in a list,
+  false when "gone on arrival").
+- `client/src/features/friends/FriendsPage.test.tsx` — +1 case: a `focusPersonId`-seeded arrival,
+  Accept → Unfriend, asserts the "Friend request unavailable" dialog never appears (new
+  `focusWrapper` helper seeds `location.state`).
+- `client/e2e/flows/notification-bell.spec.ts` — the "routes to /friends and pre-selects the
+  requester" test now also Accepts then Unfriends Hana and asserts the "Friend request unavailable"
+  dialog stays hidden (third-bug guard).
 - `client/src/features/friends/FriendsPage.tsx` — passes the 3 new props; `data.isUnfriending`
   added to the `isActionPending` OR.
 - `client/src/features/friends/FriendsPage.test.tsx` — the stale "no action bar (already friends)"

@@ -30,6 +30,21 @@ function wrapper({ children }: { children: ReactNode }) {
   );
 }
 
+/** Wrapper that seeds router `location.state.focusPersonId`, as a clicked
+ * friend-request notification does (CLIENT-NOTIF-5). */
+function focusWrapper(focusPersonId: string) {
+  return function FocusWrapper({ children }: { children: ReactNode }) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return (
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[{ pathname: '/friends', state: { focusPersonId } }]}>
+          {children}
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+  };
+}
+
 function apiResponse<T>(data: T) {
   return { data: { success: true, message: '', data, timestamp: '' } };
 }
@@ -144,6 +159,46 @@ describe('FriendsPage', () => {
     await user.click(acceptButton);
 
     expect(putSpy).toHaveBeenCalledWith('/users/friends/requests/req-1/accept');
+  });
+
+  it('FRIEND-2: a friend-request notification arrival — accepting then unfriending does not re-open the unavailable dialog', async () => {
+    const hana: FriendUser = { id: 'f3', fullName: 'Hana Kim', avatarUrl: null, coverUrl: null, bio: null };
+    let phase: 'request' | 'friend' | 'removed' = 'request';
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      const staticResponse = staticGetResponse(url);
+      if (staticResponse) return staticResponse;
+      if (url === '/users/friends') return apiResponse(phase === 'friend' ? [priya, hana] : [priya]);
+      if (url === '/users/friends/requests/received') {
+        return apiResponse(phase === 'request' ? [receivedRequest] : []);
+      }
+      if (url === '/users/friends/requests/sent') return apiResponse([]);
+      if (url === '/sports/profiles/user/f1' || url === '/sports/profiles/user/f3') return apiResponse([]);
+      if (url === '/users/f3') return apiResponse(hana);
+      throw new Error(`unexpected GET ${url}`);
+    });
+    vi.spyOn(apiClient, 'put').mockImplementation(async () => {
+      phase = 'friend';
+      return apiResponse(undefined);
+    });
+    vi.spyOn(apiClient, 'delete').mockImplementation(async () => {
+      phase = 'removed';
+      return apiResponse(undefined);
+    });
+    const user = userEvent.setup();
+    render(<FriendsPage />, { wrapper: focusWrapper('f3') });
+
+    // arrives pre-selected on Hana's incoming request
+    await user.click(await screen.findByRole('button', { name: 'Accept' }));
+
+    // now a friend — the Friend menu button
+    await user.click(await screen.findByRole('button', { name: 'Friend' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Unfriend' }));
+    await user.click(screen.getByRole('button', { name: 'Unfriend' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('Select a friend to view their profile and chat.')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Friend request unavailable')).not.toBeInTheDocument();
   });
 
   it('Add friend mode searches the real directory and sends a request', async () => {
