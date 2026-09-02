@@ -117,3 +117,13 @@ Built as **U13** (`modules/user/user-impl`): transactional-outbox producer (`use
 = "USER"`, `entityId` = the counterparty user id. The client cannot yet render these two types —
 `getNotificationText` has no case for them, so they show the generic fallback; tracked as a
 **CLIENT-NOTIF-*** follow-on ticket.
+
+### NOTIF-6 · Session matches a user's sport profile attributes
+**Date added:** 2026-09-02
+**Status:** `CANDIDATE` — unresolved
+**Source:** session-attribute-schema design session (A17 / SESSION-23).
+
+When a session is created with structured attributes (A17's session schema), should users whose
+sport profile attributes for that sport "match" be notified? Open: what "match" means (any shared
+attribute value? a threshold?), opt-in vs opt-out, and interaction with SESSION-8 discovery
+ranking (which may make a passive surface the better answer than a push).

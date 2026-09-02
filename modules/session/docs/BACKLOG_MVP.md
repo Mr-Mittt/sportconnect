@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | [SESSION-8](MVP/SESSION-8_SESSION_DISCOVER_RANKING_ALGORITHM.md) | Session discover ranking algorithm | `TODO` |
 | 2 | [SESSION-22](MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md) | `SessionEventsConsumerIntegrationTest` fails intermittently on its RabbitMQ container — **~50% flake rate** (6 of 12 full runs), fails as a block on `AmqpIOException`, passes in isolation | `TODO` |
+| 3 | [SESSION-23](MVP/SESSION-23_SESSION_ATTRIBUTES.md) | Session attributes — `sessions.attributes` JSONB, replace-semantics filter-on-write against the sport's session schema, `SessionResponse.attributes`. Depends on sport A17 | `TODO` |
 
 ---
 

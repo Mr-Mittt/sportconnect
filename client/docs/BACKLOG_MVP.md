@@ -72,6 +72,12 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 2 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
 | 3 | [PROFILE-12](MVP/PROFILE-12_HEADER_LOADING_ERROR_PLACEHOLDER.md) | ProfileHeader shows a placeholder instead of blank space while `/profile`'s profile query is loading or errors — found during backend U11's rollout, when a stale backend made the header vanish entirely | `TODO` |
 | 4 | [GRP-11](MVP/GRP-11_GROUP_COVER_BANNER_PENDING_SELECTION_PLACEHOLDER.md) | `GroupCoverBanner` shows a placeholder instead of the discovery panel while a cross-page-navigated group selection is still loading — found alongside `PROFILE-12` | `TODO` |
+| 5 | [CLIENT-SESSION-14](MVP/CLIENT-SESSION-14_SESSION_ATTRIBUTE_SCHEMA_HOOK.md) | `useSessionAttributeSchema` hook + `SessionResponse.attributes` type — scaffolding for session-attribute UI | `TODO` |
+| 6 | [CLIENT-SESSION-15](MVP/CLIENT-SESSION-15_SESSION_ATTRIBUTES_IN_CREATE_MODAL.md) | Session attributes in `CreateSessionModal`, pre-filled from the creator's sport profile (`#ref` nodes only) | `TODO` |
+| 7 | [CLIENT-SESSION-16](MVP/CLIENT-SESSION-16_SESSION_ATTRIBUTES_READ_ONLY_IN_DETAIL_MODAL.md) | Read-only session attributes (term/value, not disabled inputs) in `SessionDetailModal` | `TODO` |
+| 8 | [ADMIN-5](MVP/ADMIN-5_SESSION_ATTRIBUTE_SCHEMA_EDITOR.md) | Session attribute schema editor — second JSON textarea in the sport admin page (ADMIN-2 pattern) | `TODO` |
+| 9 | [SPORT-7](MVP/SPORT-7_ATTRIBUTE_FIELDS_ORDER_AND_LAYOUT.md) | `SportAttributesFields` — honor `order`, group-level layout (collapsible + responsive grid); helps the profile editor too | `TODO` |
+| 10 | [SPORT-8](MVP/SPORT-8_REMOVE_PREFERRED_POSITION_FROM_PROFILE_EDITOR.md) | Remove "Preferred position" from the sport profile editor — client half of backend A18 | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
