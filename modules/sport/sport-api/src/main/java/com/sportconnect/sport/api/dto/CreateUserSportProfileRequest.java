@@ -33,9 +33,13 @@ public class CreateUserSportProfileRequest {
     private String bio;
 
     /**
-     * Sport-specific attributes (e.g. dominant hand, stroke style) that don't fit a fixed schema —
-     * no per-key validation here, the frontend owns which keys make sense for which sport. On
-     * update, these are merged into existing attributes rather than replacing them wholesale.
+     * Sport-specific attributes, validated server-side against the sport's admin-managed schema
+     * (A9) — unknown keys and wrong-shaped values are dropped silently, not rejected.
+     *
+     * <p>On update these <strong>merge</strong> into the stored attributes: a key the request omits
+     * keeps its stored value. Two ways a key is removed (A10): the request carries it with an
+     * explicit {@code null} (a delete marker — distinct from omitting it), or its definition has
+     * been deleted from the schema since it was stored, in which case the next update prunes it.
      */
     private Map<String, Object> attributes;
 }

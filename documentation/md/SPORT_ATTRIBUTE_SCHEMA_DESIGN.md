@@ -193,7 +193,11 @@ holding a key whose definition later changes. The policy:
   new attribute and deactivate the old one.
 - **Stale keys are tolerated on read**, never silently dropped. A profile may hold keys with no
   current definition (retired attributes, or data written before this feature). Reads pass them
-  through; only *writes* are validated against the live schema.
+  through; only *writes* are validated against the live schema. **Revised by A10 (`DONE`
+  2026-09-03):** a *deactivated* (`isAvailable: false`) attribute's value still passes through
+  untouched, but a key whose definition has been **physically deleted** from the schema is pruned
+  on the profile's next `updateProfile` — the merge re-filters the whole stored map, not just the
+  incoming request. Reads themselves are still passive; the prune is a write-path effect.
 
 This makes migration of existing rows a non-problem rather than a recurring chore, and it is far
 easier to relax later than to retrofit.
