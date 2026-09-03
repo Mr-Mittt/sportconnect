@@ -1,6 +1,7 @@
 package com.sportconnect.user.api.service;
 
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
+import com.sportconnect.user.api.dto.UserInfoResponse;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.dto.UserSearchResponse;
 import org.springframework.data.domain.Page;
@@ -46,6 +47,23 @@ public interface UserService {
      * Get user by username
      */
     UserResponse getUserByUsername(String username);
+
+    /**
+     * U15: the PII-free public view ({@link UserInfoResponse}) of an already-loaded user, enriched
+     * with {@code activeSportIds} — the ids of the sports that user holds an <em>active</em>
+     * {@code UserSportProfile} for.
+     *
+     * <p>Flow: one cross-domain read via {@code sport-api}'s
+     * {@code UserSportProfileService.getUserProfiles(userId)} (active-only), mapped to sport ids.
+     * Takes the resolved {@link UserResponse} rather than an id so the three lookup controller
+     * endpoints (by id / email / username) don't pay a second user read.
+     *
+     * <p>Exists so a caller rendering another user's sport pills gets just the sport-id list —
+     * name and icon are client-local — without the full non-owner sport-profile read that A22
+     * deliberately removed. {@code activeSportIds} is never null ({@code []} when the user has no
+     * active profiles); order is unspecified.
+     */
+    UserInfoResponse toPublicUserInfo(UserResponse user);
 
     /**
      * Update user profile. Caller may only update their own profile.

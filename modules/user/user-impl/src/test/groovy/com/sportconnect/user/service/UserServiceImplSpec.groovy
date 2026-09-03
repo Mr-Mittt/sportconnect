@@ -5,10 +5,13 @@ import com.sportconnect.auth.api.service.AuthService
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
+import com.sportconnect.sport.api.dto.UserSportProfileResponse
+import com.sportconnect.sport.api.service.UserSportProfileService
 import com.sportconnect.user.api.dto.FriendRequestResponse
 import com.sportconnect.user.api.dto.LocationRequest
 import com.sportconnect.user.api.dto.UpdateProfileRequest
 import com.sportconnect.user.api.dto.UserFriendshipStatus
+import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.entity.Role
 import com.sportconnect.user.entity.User
@@ -35,6 +38,7 @@ class UserServiceImplSpec extends Specification {
     PasswordEncoder passwordEncoder = Mock()
     UserFriendService userFriendService = Mock()
     AuthService authService = Mock()
+    UserSportProfileService userSportProfileService = Mock()
     StringRedisTemplate stringRedisTemplate = Mock()
     // Real instance, not a Mock() — a pure value-converter with no side effects, and using the
     // real one lets tests assert on the actual serialized payload publishDomainEvent produces.
@@ -42,7 +46,7 @@ class UserServiceImplSpec extends Specification {
     GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326)
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, authService, stringRedisTemplate, objectMapper)
+    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, authService, userSportProfileService, stringRedisTemplate, objectMapper)
 
     def "getUserById should return user when found and active"() {
         given:
@@ -186,6 +190,70 @@ class UserServiceImplSpec extends Specification {
         1 * userRepository.findByUsernameAndIsActiveTrue(username) >> Optional.empty()
         0 * userRepository.findByUsername(_)
         thrown(ResourceNotFoundException)
+    }
+
+    // ---- U15: toPublicUserInfo ----
+
+    def "toPublicUserInfo maps the user's active sport ids onto the PII-free response"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = UserResponse.builder()
+                .id(userId)
+                .firstName("Target")
+                .lastName("User")
+                .username("target")
+                .avatarUrl("https://example.com/a.png")
+                .coverUrl("https://example.com/c.png")
+                .bio("Weekend baller.")
+                .build()
+
+        when:
+        def result = userService.toPublicUserInfo(user)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(userId) >> [
+                UserSportProfileResponse.builder().sportId(7L).build(),
+                UserSportProfileResponse.builder().sportId(3L).build()
+        ]
+        result.id == userId
+        result.fullName == "Target User"
+        result.username == "target"
+        result.bio == "Weekend baller."
+        result.activeSportIds as Set == [7L, 3L] as Set
+    }
+
+    def "toPublicUserInfo returns an empty activeSportIds list when the user has no active profiles"() {
+        given:
+        def user = UserResponse.builder().id(UUID.randomUUID()).firstName("No").lastName("Sports").build()
+
+        when:
+        def result = userService.toPublicUserInfo(user)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(user.id) >> []
+        result.activeSportIds == []
+    }
+
+    def "toPublicUserInfo de-duplicates sport ids"() {
+        given:
+        def user = UserResponse.builder().id(UUID.randomUUID()).firstName("Dup").lastName("User").build()
+
+        when:
+        def result = userService.toPublicUserInfo(user)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(user.id) >> [
+                UserSportProfileResponse.builder().sportId(5L).build(),
+                UserSportProfileResponse.builder().sportId(5L).build()
+        ]
+        result.activeSportIds == [5L]
+    }
+
+    def "UserInfoResponse.of(user) one-arg overload yields a non-null empty activeSportIds"() {
+        expect:
+        com.sportconnect.user.api.dto.UserInfoResponse
+                .of(UserResponse.builder().id(UUID.randomUUID()).build())
+                .activeSportIds == []
     }
 
     def "updateProfile should update all fields when provided"() {
