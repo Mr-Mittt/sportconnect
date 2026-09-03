@@ -10,6 +10,9 @@ dependencies {
     // (interface + DTOs), no dependency the other way (auth-api depends on neither user-api nor
     // user-impl), so no cycle.
     implementation project(':modules:auth:auth-api')
+    // U15: toPublicUserInfo() reads the target user's active sport ids via UserSportProfileService
+    // — sport-api only (interface + DTOs); sport-api depends solely on :modules:common, so no cycle.
+    implementation project(':modules:sport:sport-api')
     
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'

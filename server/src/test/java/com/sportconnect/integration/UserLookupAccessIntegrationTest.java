@@ -1,14 +1,21 @@
 package com.sportconnect.integration;
 
+import com.sportconnect.sport.entity.Sport;
+import com.sportconnect.sport.entity.UserSportProfile;
+import com.sportconnect.sport.repository.SportRepository;
+import com.sportconnect.sport.repository.UserSportProfileRepository;
 import com.sportconnect.user.entity.User;
 import com.sportconnect.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
 
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -35,12 +42,23 @@ class UserLookupAccessIntegrationTest extends BaseIT {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private SportRepository sportRepository;
+
+    @Autowired
+    private UserSportProfileRepository profileRepository;
+
+    @Autowired
+    private CacheManager cacheManager;
+
     private UUID targetUserId;
     private UUID callerId;
+    private Long badmintonId;
+    private Long pickleballId;
 
     @BeforeEach
     void setUpFixtures() {
-        userRepository.deleteAll();
+        clearAll();
 
         targetUserId = userRepository.save(User.builder()
                 .email("u11-target@example.com")
@@ -63,11 +81,39 @@ class UserLookupAccessIntegrationTest extends BaseIT {
                 .username("u11caller")
                 .isActive(true)
                 .build()).getId();
+
+        // U15: the target holds active profiles in two sports and one soft-deleted profile in a
+        // third — activeSportIds must carry exactly the two active sport ids.
+        badmintonId = sportRepository.save(Sport.builder().name("U15 Badminton").isActive(true).build()).getId();
+        pickleballId = sportRepository.save(Sport.builder().name("U15 Pickleball").isActive(true).build()).getId();
+        Long tennisId = sportRepository.save(Sport.builder().name("U15 Tennis").isActive(true).build()).getId();
+
+        profileRepository.save(UserSportProfile.builder()
+                .userId(targetUserId).sportId(badmintonId).skillLevel("Intermediate").isActive(true).build());
+        profileRepository.save(UserSportProfile.builder()
+                .userId(targetUserId).sportId(pickleballId).skillLevel("Beginner").isActive(true).build());
+        profileRepository.save(UserSportProfile.builder()
+                .userId(targetUserId).sportId(tennisId).skillLevel("Advanced").isActive(false).build());
+
+        evictSportCache();
     }
 
     @AfterEach
     void tearDownFixtures() {
+        clearAll();
+        evictSportCache();
+    }
+
+    private void clearAll() {
+        profileRepository.deleteAll();
+        sportRepository.deleteAll();
         userRepository.deleteAll();
+    }
+
+    private void evictSportCache() {
+        if (cacheManager.getCache("sports") != null) {
+            cacheManager.getCache("sports").clear();
+        }
     }
 
     @Test
@@ -88,6 +134,11 @@ class UserLookupAccessIntegrationTest extends BaseIT {
                 .andExpect(jsonPath("$.data.avatarUrl").value("https://example.com/avatar.png"))
                 .andExpect(jsonPath("$.data.coverUrl").value("https://example.com/cover.png"))
                 .andExpect(jsonPath("$.data.bio").value("Weekend baller."))
+                // U15: exactly the two ACTIVE sport ids (the soft-deleted third profile is excluded),
+                // membership only — getUserProfiles gives no order guarantee.
+                .andExpect(jsonPath("$.data.activeSportIds", hasSize(2)))
+                .andExpect(jsonPath("$.data.activeSportIds",
+                        containsInAnyOrder(badmintonId.intValue(), pickleballId.intValue())))
                 .andExpect(jsonPath("$.data.email").doesNotExist())
                 .andExpect(jsonPath("$.data.phoneNumber").doesNotExist())
                 .andExpect(jsonPath("$.data.dateOfBirth").doesNotExist())
@@ -115,6 +166,8 @@ class UserLookupAccessIntegrationTest extends BaseIT {
         mockMvc.perform(get("/api/users/email/{email}", "u11-target@example.com"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.username").value("u11target"))
+                .andExpect(jsonPath("$.data.activeSportIds",
+                        containsInAnyOrder(badmintonId.intValue(), pickleballId.intValue())))
                 .andExpect(jsonPath("$.data.email").doesNotExist())
                 .andExpect(jsonPath("$.data.phoneNumber").doesNotExist());
     }
@@ -132,8 +185,20 @@ class UserLookupAccessIntegrationTest extends BaseIT {
         mockMvc.perform(get("/api/users/username/{username}", "u11target"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.username").value("u11target"))
+                .andExpect(jsonPath("$.data.activeSportIds",
+                        containsInAnyOrder(badmintonId.intValue(), pickleballId.intValue())))
                 .andExpect(jsonPath("$.data.email").doesNotExist())
                 .andExpect(jsonPath("$.data.phoneNumber").doesNotExist());
+    }
+
+    @Test
+    void getUserById_userWithNoActiveSportProfiles_returnsEmptyActiveSportIds() throws Exception {
+        authenticateAs(targetUserId); // caller looks up the "caller" fixture, who has no sport profiles
+
+        mockMvc.perform(get("/api/users/{userId}", callerId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(callerId.toString()))
+                .andExpect(jsonPath("$.data.activeSportIds", hasSize(0)));
     }
 
     @Test

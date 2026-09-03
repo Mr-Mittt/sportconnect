@@ -7,8 +7,11 @@ import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.user.api.dto.FriendRequestResponse;
 import com.sportconnect.user.api.dto.LocationResponse;
+import com.sportconnect.sport.api.dto.UserSportProfileResponse;
+import com.sportconnect.sport.api.service.UserSportProfileService;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserFriendshipStatus;
+import com.sportconnect.user.api.dto.UserInfoResponse;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.dto.UserSearchResponse;
 import com.sportconnect.user.api.service.UserFriendService;
@@ -53,6 +56,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserFriendService userFriendService;
     private final AuthService authService;
+    private final UserSportProfileService userSportProfileService;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
@@ -74,6 +78,7 @@ public class UserServiceImpl implements UserService {
             PasswordEncoder passwordEncoder,
             UserFriendService userFriendService,
             @Lazy AuthService authService,
+            UserSportProfileService userSportProfileService,
             StringRedisTemplate stringRedisTemplate,
             ObjectMapper objectMapper) {
         this.userRepository = userRepository;
@@ -81,6 +86,7 @@ public class UserServiceImpl implements UserService {
         this.passwordEncoder = passwordEncoder;
         this.userFriendService = userFriendService;
         this.authService = authService;
+        this.userSportProfileService = userSportProfileService;
         this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
     }
@@ -151,6 +157,25 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByUsernameAndIsActiveTrue(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
         return toUserResponse(user);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Cross-domain: calls {@code sport-api}'s active-only
+     * {@link UserSportProfileService#getUserProfiles(UUID)} once and maps to sport ids. No
+     * {@code sorted()} — {@code getUserProfiles} gives no order guarantee and the client sorts for
+     * display; {@code distinct()} is defensive only (one profile per {@code (userId, sportId)} is
+     * already enforced). Returns {@code activeSportIds = []} for a user with no active profiles.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public UserInfoResponse toPublicUserInfo(UserResponse user) {
+        List<Long> activeSportIds = userSportProfileService.getUserProfiles(user.getId()).stream()
+                .map(UserSportProfileResponse::getSportId)
+                .distinct()
+                .toList();
+        return UserInfoResponse.of(user, activeSportIds);
     }
 
     @Override

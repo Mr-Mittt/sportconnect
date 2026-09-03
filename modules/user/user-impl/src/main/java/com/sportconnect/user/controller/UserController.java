@@ -65,7 +65,7 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", response));
     }
 
-    @Operation(summary = "Get a user by id", description = "U11: returns the safe PII-free subset (UserInfoResponse), same as the email/username siblings — use GET /api/users/me for the caller's own full profile.")
+    @Operation(summary = "Get a user by id", description = "U11: returns the safe PII-free subset (UserInfoResponse), same as the email/username siblings — use GET /api/users/me for the caller's own full profile. U15: includes activeSportIds (the ids of sports this user has an active profile for).")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User found"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
@@ -75,7 +75,7 @@ public class UserController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<UserInfoResponse>> getUserById(@PathVariable UUID userId) {
         UserResponse response = userService.getUserById(userId);
-        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", UserInfoResponse.of(response)));
+        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", userService.toPublicUserInfo(response)));
     }
 
     @Operation(summary = "Get a user by email", description = "U11: returns the safe PII-free subset (UserInfoResponse) — see GET /api/users/{userId}.")
@@ -88,7 +88,7 @@ public class UserController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<UserInfoResponse>> getUserByEmail(@PathVariable String email) {
         UserResponse response = userService.getUserByEmail(email);
-        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", UserInfoResponse.of(response)));
+        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", userService.toPublicUserInfo(response)));
     }
 
     @Operation(summary = "Get a user by username", description = "U11: returns the safe PII-free subset (UserInfoResponse) — see GET /api/users/{userId}.")
@@ -101,7 +101,7 @@ public class UserController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<UserInfoResponse>> getUserByUsername(@PathVariable String username) {
         UserResponse response = userService.getUserByUsername(username);
-        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", UserInfoResponse.of(response)));
+        return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", userService.toPublicUserInfo(response)));
     }
 
     @Operation(summary = "Update a user's profile", description = "Ownership-gated — the caller must be updating their own profile.")

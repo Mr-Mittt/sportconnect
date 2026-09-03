@@ -1,15 +1,28 @@
 # SPORT-11 · Move sport-profile reads to the caller-scoped endpoints
 
-**Status:** `TODO` · **Type:** Refactor (API contract change) · **Filed:** 2026-09-03 ·
+**Status:** `TODO` (blocked on backend **U15**) · **Type:** Refactor (API contract change) · **Filed:** 2026-09-03 ·
 **Origin:** backend **A20** (`DONE`/merged) § "Client follow-ups" item 2 (owner-only gate on the
 profile-list read) **+ backend A22** (in progress) which reworks that endpoint's *URL* to be
 caller-scoped. A20 named this follow-up but it was never filed here; found and filed during A22's
 Phase 1 consumer census. ·
 **Depends on:** backend **A22** (`GET /api/sports/profiles`, `GET /api/sports/profiles/sport/{sportId}`,
-removal of both `/profiles/user/{userId}` paths). Do not start until A22 has merged — the exact
-paths are what this ticket repoints to. ·
+removal of both `/profiles/user/{userId}` paths) — **merged 2026-09-04**. And backend **U15**
+(`UserInfoResponse.activeSportIds`) — **not yet merged; this ticket is blocked on it** for the
+friend-pill rewire in §2. ·
 **Spec source:** `modules/sport/sport-impl/docs/MVP/A22_CALLER_SCOPED_SPORT_PROFILE_READS.md`,
-`modules/sport/sport-impl/docs/MVP/A20_ISRESUME_REACTIVATION_MODE.md` § "Client-visible" → "Breaking"
+`modules/sport/sport-impl/docs/MVP/A20_ISRESUME_REACTIVATION_MODE.md` § "Client-visible" → "Breaking",
+`modules/user/user-impl/docs/MVP/U15_ACTIVE_SPORT_IDS_ON_USER_INFO_RESPONSE.md`
+
+## Scope change — 2026-09-04 (`/workon` Phase 1 gate)
+
+Originally §2 offered a binary: **drop** the friend-profile sport pills, or a **"coming soon"
+placeholder**, because A22 left no way to read another user's sports. User decision at pickup: do
+**neither** — the old endpoint only leaked *too much* (skill/years/position/attributes); the friend
+pills only need the *list of sport ids* the selected user has an active profile for (name + icon are
+already resolved client-side from `sportIdMap`). So a new backend field carries exactly that:
+**`UserInfoResponse.activeSportIds: number[]`** (filed as `user-impl` **U15**), served by the
+`GET /api/users/{userId}` call `FriendProfilePanel` *already makes* via `useUserInfo`. §2 below is
+rewritten to rewire onto that field. This ticket is now **blocked on U15 merging**.
 
 ## Why
 
@@ -27,8 +40,9 @@ The client calls the old list path from **one** hook, `useRawSportProfilesForUse
 - **self:** `useSportProfiles()` and `features/profile/useMySportProfilesRaw` pass the current
   user's id — these still work under A20's owner gate but the **path is gone** under A22.
 - **other user:** `features/friends/useFriendsPageData.ts:164` passes `selectedPersonId` (a
-  friend / search result). A20's gate already **403s** these today; A22 removes the capability
-  outright ("any endpoint returning another user's sport profiles — deliberately removed").
+  friend / search result). A20's gate already **403s** these today; A22 removed the endpoint. The
+  replacement is not a sport-profile read at all — it's the new `activeSportIds` field on the
+  `UserInfoResponse` the friend panel already fetches (U15).
 
 Nothing else hits the single-sport path (`/user/{id}/sport/{sportId}`) — no hook, no MSW handler.
 
@@ -44,14 +58,24 @@ Nothing else hits the single-sport path (`/user/{id}/sport/{sportId}`) — no ho
 - `sportProfilesQueryKey(userId)` → `['sportProfiles', 'me']` (single entry; no per-user fan-out).
   Update `useAddSportProfile` / `useUpdateSportProfile` cache writes to the new key.
 
-### 2. Other-user sport display — remove or re-gate
+### 2. Other-user sport display — rewire onto `UserInfoResponse.activeSportIds` (U15)
 
-- `useFriendsPageData` can no longer fetch a selected person's sport profiles. **MVP decision
-  needed (see Open question):** drop the friend-profile sport pills entirely, or hide them behind a
-  "coming soon" placeholder until a PII-scoped `GET /api/users/{id}/sports` (or similar) backend
-  endpoint is scoped. A22 explicitly leaves that new endpoint unfiled.
-- Whichever: `FriendProfilePanel` / the search-result chips must not render a broken/empty sport
-  row and must not fire a request that 404s or 403s.
+- Remove `useSportProfilesForUser(selectedPersonId)` from `useFriendsPageData` (and any
+  search-result-chip caller). Nothing may fire a `/sports/profiles/...` request for another user.
+- Source the friend's sports from the **`useUserInfo(selectedPersonId)`** query that
+  `FriendProfilePanel` already drives (FRIEND-2) — `UserInfoResponse` gains
+  `activeSportIds: number[]` in U15.
+- Map `activeSportIds` → the display `SportProfile[]` the panel expects, reusing the **exact**
+  `sportId → SportKey → { label, iconUrl, config }` mapping `useSportProfilesForUser` does today
+  (`sportKeyForId` / `sportIconUrlForId` / `getSportProfileConfig`) — an unknown/again-inactive
+  `sportId` is silently dropped, same as now. Factor that mapping into a small pure helper so both
+  the self path and this path share it rather than duplicating it.
+- `FriendProfilePanel`'s `sports: SportProfile[]` / `isSportsLoading` props stay — only their
+  *source* moves (from the removed hook to the `useUserInfo` query's `activeSportIds`). The pill
+  row markup is unchanged.
+- Until U15 merges, `activeSportIds` is absent from the response → treat `undefined` as `[]` (row
+  renders nothing), so the client is not broken in the gap between this ticket and U15. But this
+  ticket is **not considered done** until it is verified against a U15 backend.
 
 ### 3. MSW + tests
 
@@ -60,7 +84,11 @@ Nothing else hits the single-sport path (`/user/{id}/sport/{sportId}`) — no ho
   `http.get('/api/sports/profiles/sport/:sportId')` only if a test needs it. Drop the
   other-user branch.
 - Every `*.test.tsx` URL stub for `/sports/profiles/user/...` (~20: HomeFeed, Groups, Profile,
-  Friends, Matches, AppShell) → `/sports/profiles`.
+  Friends, Matches, AppShell) → `/sports/profiles`. The **Friends** stubs additionally move the
+  selected person's sports from the (now gone) `/sports/profiles/user/:id` response onto
+  `activeSportIds` in the `GET /api/users/:userId` mock body.
+- `e2e/mocks/handlers/users.ts` (or wherever `GET /api/users/:userId` is mocked) — add
+  `activeSportIds` to the `UserInfoResponse` fixture shape.
 
 ## Edge cases
 
@@ -73,22 +101,18 @@ Nothing else hits the single-sport path (`/user/{id}/sport/{sportId}`) — no ho
 ## Out of scope
 
 - The `isResume` add-sport flow — **SPORT-10**.
-- Building the new other-user sport-display backend endpoint — not filed; this ticket only stops
-  the client depending on the removed capability.
-- Any change to `UserSportProfileResponse` / `SportProfile` shape.
-
-## Open question (resolve in Phase 1)
-
-Friend-profile sport pills: **drop** for MVP, or **placeholder** pending a future PII-scoped
-endpoint? Affects `FriendProfilePanel`, the search-result chips, and `FRIEND-1`'s acceptance
-criteria. Flag to the user before implementing.
+- The backend `activeSportIds` field itself — **U15** (`user-impl`). This ticket only consumes it.
+- Any change to `UserSportProfileResponse` / `SportProfile` shape, or to `UserResponse` (`/me`).
+- Showing another user's sport *detail* (skill/years/position/attributes) — permanently removed by
+  A22; only the id-list comes back.
 
 ## Tests
 
 - Vitest — `useSportProfiles` calls `GET /sports/profiles` (no id in the URL); cache write from
   `useAddSportProfile` lands on the `'me'` key and is visible to `useSportProfiles`;
-  `useFriendsPageData` no longer requests any `/sports/profiles/...` URL for the selected person.
-- Storybook — `FriendProfilePanel` without sport pills (or with the placeholder), per the resolved
-  Open question.
+  `useFriendsPageData` no longer requests any `/sports/profiles/...` URL for the selected person;
+  the friend panel's sports come from `useUserInfo`'s `activeSportIds` (mapped, unknown ids
+  dropped); `activeSportIds` absent → row renders nothing (no crash).
+- Storybook — `FriendProfilePanel` with sports (from `activeSportIds`) and with none.
 - `client/docs/E2E_OVERVIEW.md` — update the catalog for any e2e/visual spec whose URL stubs or
-  assertions change (Friends flow at minimum).
+  assertions change (Friends flow at minimum — its user-info mock now carries `activeSportIds`).

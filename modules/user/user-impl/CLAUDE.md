@@ -8,6 +8,8 @@ User entity with UUID PK and PostGIS geolocation, role management, profile CRUD,
 |---|---|
 | `modules/user/user-api` | UserService interface + all DTOs |
 | `modules/common` | ApiResponse<T>, shared exceptions |
+| `modules/auth/auth-api` | `AuthService.logout()` — U12 session revocation on deactivation (`@Lazy`, cycle) |
+| `modules/sport/sport-api` | U15: `UserSportProfileService.getUserProfiles(id)` — the target's active sport ids for `UserInfoResponse.activeSportIds` (no cycle; `sport-api` → only `common`) |
 | Hibernate Spatial 6.4.0 | Maps `geography(Point,4326)` to JTS `Point` |
 | JTS 1.19.0 | `GeometryFactory`, `Point`, `Coordinate` |
 
@@ -17,7 +19,7 @@ User entity with UUID PK and PostGIS geolocation, role management, profile CRUD,
 |---|---|
 | `User` | UUID PK; PostGIS `Point` location; `isActive` soft delete; eager ManyToMany roles |
 | `UserServiceImpl` | CRUD + location conversion; `GeometryFactory(PrecisionModel(), 4326)` created in constructor |
-| `UserController` | `/api/users/**` — all GET endpoints are public (declared in auth-impl's `SecurityConfig`) |
+| `UserController` | `/api/users/**` — GET lookups are `hasRole('USER')` since U11 (not public); the by-id/email/username lookups return `UserInfoResponse` (PII-free, + `activeSportIds` since U15) |
 
 ## Location Pattern
 

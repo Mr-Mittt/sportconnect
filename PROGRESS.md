@@ -337,7 +337,23 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `features/profile/useUserProfile` into a Friends-owned `useFriendProfile`, type it 1:1 with
   `UserInfoResponse` incl. `username`, fix 3 now-stale doc comments) handed to client **FRIEND-2**,
   now unblocked. Doc-only ticket: `PROGRESS.md`, both backlogs, U14 + FRIEND-2 ticket docs.
-- **MVP backlog:** `modules/user/user-impl/docs/BACKLOG_MVP.md` — U1–U14 all `DONE`; no open MVP
+- **U15 DONE** (2026-09-04, `modules/user/user-impl/docs/MVP/U15_ACTIVE_SPORT_IDS_ON_USER_INFO_RESPONSE.md`):
+  `activeSportIds: List<Long>` added to `UserInfoResponse` — the ids of sports a user holds an
+  active `UserSportProfile` for, so a caller rendering another user's sport pills gets just the id
+  list (name/icon are client-local), not the profile detail backend **A22** deliberately removed
+  for non-owners. New `UserService.toPublicUserInfo(UserResponse)` (`user-api`) does one
+  cross-domain read via `sport-api`'s active-only `getUserProfiles(UUID)` and maps to sport ids
+  (no `sorted()` — no order guarantee, client sorts; `distinct()` defensive). All 3 lookup
+  endpoints (`/{userId}`, `/email/{email}`, `/username/{username}`) call it. First
+  **`user-impl → sport-api`** gradle edge (interface+DTO only; `sport-api` → only `common`, so no
+  cycle — unlike U12's auth-api edge which needed `@Lazy`). `UserServiceImpl`'s explicit
+  constructor gains the sport service (plain, not `@Lazy`). `UserInfoResponse.activeSportIds` never
+  null (`[]` when none), order unspecified. **Client SPORT-11** (filed, rescoped 2026-09-04)
+  consumes it for the friend-profile sport pills — was the whole reason U15 exists. 4 new
+  `UserServiceImplSpec` cases; `UserLookupAccessIntegrationTest` now asserts `activeSportIds`
+  membership on all 3 endpoints + a `[]` case (real `user-impl → sport-impl` wiring). Green:
+  `:modules:user:user-impl:test`, full `:server:test`, live Postgres smoke.
+- **MVP backlog:** `modules/user/user-impl/docs/BACKLOG_MVP.md` — U1–U15 all `DONE`; no open MVP
   tickets
 
 #### `modules:sport:sport-api` + `modules:sport:sport-impl`
