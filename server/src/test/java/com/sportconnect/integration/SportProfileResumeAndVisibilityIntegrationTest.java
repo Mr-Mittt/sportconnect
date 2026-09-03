@@ -35,12 +35,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *       keeping the stored scalars and only pruning stored {@code attributes} to the live schema —
  *       nothing from the request body applied. And {@code isResume:true} with nothing to resume is a
  *       real {@code 400}.</li>
- *   <li><strong>Owner-only list gate:</strong> {@code GET /api/sports/profiles/user/{userId}} now
- *       runs through {@code @PreAuthorize} + the {@code principal == {userId}} check —
- *       {@code 403}/{@code 401} for a non-owner / anonymous caller — and only the owner, with
- *       {@code ?includeInactive=true}, sees soft-deleted rows.</li>
+ *   <li><strong>Caller-scoped list (A22):</strong> {@code GET /api/sports/profiles} has no
+ *       {@code {userId}} path param — the owner is the authenticated principal. {@code 401} for an
+ *       anonymous caller; an authenticated caller sees only their own rows (never another user's),
+ *       and with {@code ?includeInactive=true} also their soft-deleted rows. Supersedes A20's
+ *       owner-gated {@code GET /api/sports/profiles/user/{userId}}.</li>
+ *   <li><strong>Caller-scoped per-sport read (A22):</strong> {@code GET /api/sports/profiles/sport/{sportId}}
+ *       returns the caller's own profile for that sport — {@code 200} when they have one,
+ *       {@code 404} when they don't (or the sport is inactive), {@code 401} anonymous. Supersedes
+ *       the previously-public {@code GET /api/sports/profiles/user/{userId}/sport/{sportId}}.</li>
  *   <li><strong>Owner-only get-by-id gate (A21):</strong>
- *       {@code GET /api/sports/profiles/{profileId}} is owner-only the same way —
+ *       {@code GET /api/sports/profiles/{profileId}} is owner-only —
  *       {@code 200} owner, {@code 403} other authenticated user, {@code 401} anonymous,
  *       {@code 404} for a missing id resolved before the ownership check.</li>
  * </ul>
@@ -121,8 +126,13 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
     }
 
     private Long storedProfile(Long sport, boolean active, String skillLevel, Map<String, Object> attributes) {
+        return storedProfileForUser(ownerId, sport, active, skillLevel, attributes);
+    }
+
+    private Long storedProfileForUser(UUID userId, Long sport, boolean active, String skillLevel,
+            Map<String, Object> attributes) {
         return profileRepository.save(UserSportProfile.builder()
-                .userId(ownerId).sportId(sport).skillLevel(skillLevel).bio("stored bio")
+                .userId(userId).sportId(sport).skillLevel(skillLevel).bio("stored bio")
                 .preferredPosition("Net").yearsOfExperience(4)
                 .isActive(active)
                 .attributes(new HashMap<>(attributes))
@@ -190,15 +200,15 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
                 .andExpect(jsonPath("$.message").value("Validation failed"));
     }
 
-    // ---- Owner-only list gate + includeInactive ----
+    // ---- A22: caller-scoped list (GET /api/sports/profiles) + includeInactive ----
 
     @Test
-    void list_ownerWithIncludeInactive_seesBothActiveAndSoftDeletedRows() throws Exception {
+    void list_callerWithIncludeInactive_seesBothActiveAndSoftDeletedRows() throws Exception {
         storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));
         Long deletedId = storedProfile(sportId2, false, "Beginner", Map.of());
         authenticateAs(ownerId);
 
-        mockMvc.perform(get("/api/sports/profiles/user/{userId}", ownerId)
+        mockMvc.perform(get("/api/sports/profiles")
                         .param("includeInactive", "true"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(2))
@@ -206,32 +216,81 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
     }
 
     @Test
-    void list_ownerWithoutFlag_omitsSoftDeletedRows() throws Exception {
+    void list_callerWithoutFlag_omitsSoftDeletedRows() throws Exception {
         storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));
         storedProfile(sportId2, false, "Beginner", Map.of());
         authenticateAs(ownerId);
 
-        mockMvc.perform(get("/api/sports/profiles/user/{userId}", ownerId))
+        mockMvc.perform(get("/api/sports/profiles"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].isActive").value(true));
     }
 
     @Test
-    void list_otherAuthenticatedUser_is403() throws Exception {
+    void list_authenticated_returnsOnlyTheCallersOwnRows() throws Exception {
+        // A22 removed the {userId} param: the endpoint is scoped to the principal, so there is no
+        // "another user's list" to 403 on — the caller simply never sees rows that aren't theirs.
+        storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));          // ownerId
+        Long othersProfileId = storedProfileForUser(otherUserId, sportId2, true, "Beginner", Map.of());
         authenticateAs(otherUserId);
 
-        mockMvc.perform(get("/api/sports/profiles/user/{userId}", ownerId))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("You can only list your own sport profiles"));
+        mockMvc.perform(get("/api/sports/profiles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(othersProfileId.intValue()))
+                .andExpect(jsonPath("$.data[0].sportId").value(sportId2.intValue()));
     }
 
     @Test
     void list_anonymous_is401() throws Exception {
-        // A20 added a SecurityConfig matcher for GET /api/sports/profiles/user/* ahead of the
-        // /api/sports/** permitAll, so an anonymous caller is rejected by the filter chain
-        // (jwtAuthenticationEntryPoint → 401) before reaching the controller.
-        mockMvc.perform(get("/api/sports/profiles/user/{userId}", ownerId).with(anonymous()))
+        // A22 replaced A20's "/api/sports/profiles/user/*" matcher with an exact
+        // "/api/sports/profiles" matcher ahead of the /api/sports/** permitAll, so an anonymous
+        // caller is rejected by the filter chain (jwtAuthenticationEntryPoint → 401) before
+        // reaching the controller.
+        mockMvc.perform(get("/api/sports/profiles").with(anonymous()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    // ---- A22: caller-scoped per-sport read (GET /api/sports/profiles/sport/{sportId}) ----
+
+    @Test
+    void getForSport_callerWithProfile_is200() throws Exception {
+        storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));
+        authenticateAs(ownerId);
+
+        mockMvc.perform(get("/api/sports/profiles/sport/{sportId}", sportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sportId").value(sportId.intValue()))
+                .andExpect(jsonPath("$.data.skillLevel").value("Advanced"));
+    }
+
+    @Test
+    void getForSport_callerWithoutProfile_is404() throws Exception {
+        authenticateAs(ownerId);
+
+        mockMvc.perform(get("/api/sports/profiles/sport/{sportId}", sportId))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getForSport_readsTheCallersOwn_notAnotherUsers() throws Exception {
+        // A profile exists for this sport, but it belongs to ownerId, not the caller.
+        storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));
+        authenticateAs(otherUserId);
+
+        mockMvc.perform(get("/api/sports/profiles/sport/{sportId}", sportId))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getForSport_anonymous_is401() throws Exception {
+        // A22 added a SecurityConfig matcher for GET /api/sports/profiles/sport/* ahead of the
+        // /api/sports/** permitAll ("/profiles/*"'s single "*" does not cover the two-segment path).
+        storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));
+
+        mockMvc.perform(get("/api/sports/profiles/sport/{sportId}", sportId).with(anonymous()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.data").doesNotExist());
     }

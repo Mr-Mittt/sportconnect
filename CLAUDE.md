@@ -221,6 +221,19 @@ compile errors would not have, since the signature was unchanged).
    **updated in this change** / **deferred with a filed follow-up ticket**. "Probably fine" is not
    one of the three.
 
+**File any follow-up ticket the moment it comes out — before the next step, in any phase.** This
+applies wherever a follow-up is identified, not just the census: a consumer marked "deferred", a
+gap found while exploring, a scope cut, a "we should also…" raised mid-implementation. "Deferred
+with a filed follow-up ticket" means the ticket **exists as a real, linkable backlog entry**
+(thin-index row + `<VERSION>/` detail file, or inline section for a flat backlog) in the right
+module's backlog — *including a different module than the one you're working in* (e.g. a `client/`
+ticket filed from a backend `/workon`). Naming a follow-up in prose, in a summary doc, or "to be
+filed by the user" does **not** count and must not be relied on by a later ticket. Concrete miss
+this rule exists to prevent: backend A20 named two client follow-ups as "filed by the user, not in
+this PR"; they were never filed; A21 and A22 were then both written citing "A20 already filed 2
+client tickets" without re-checking `client/docs/BACKLOG_MVP.md` — the gap survived two more
+tickets until A22's pickup census caught it and filed client `SPORT-10`/`SPORT-11`.
+
 A `PostToolUse` hook (`.claude/settings.json`) prints a reminder when a controller, `-api` file,
 entity/repository, changelog, or `.sql` file is edited — the reminder is a prompt to do the census,
 not a substitute for it. `/workon` Phase 2 folds the census into its exploration step.

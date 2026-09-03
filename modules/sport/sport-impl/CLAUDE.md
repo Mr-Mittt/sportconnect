@@ -31,9 +31,9 @@ PUT    /api/sports/{sportId}                               ROLE_ADMIN
 DELETE /api/sports/{sportId}                               soft delete — ROLE_ADMIN
 
 POST   /api/sports/profiles                                 ROLE_USER — userId from JWT principal
-GET    /api/sports/profiles/{profileId}                    public
-GET    /api/sports/profiles/user/{userId}                  public
-GET    /api/sports/profiles/user/{userId}/sport/{sportId}
+GET    /api/sports/profiles/{profileId}                    ROLE_USER — owner-only (A21)
+GET    /api/sports/profiles                                 ROLE_USER — caller-scoped list (A22); ?includeInactive=true
+GET    /api/sports/profiles/sport/{sportId}                ROLE_USER — caller-scoped, 404 if none (A22)
 PUT    /api/sports/profiles/{profileId}                    ROLE_USER
 DELETE /api/sports/profiles/{profileId}                    ROLE_USER
 ```

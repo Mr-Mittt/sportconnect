@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/common`
-**Last updated:** 2026-08-16
+**Last updated:** 2026-09-03
 
 ---
 
@@ -19,6 +19,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 1 | [C4](MVP/C4_NO_RESOURCE_FOUND_MAPS_TO_404.md) | `NoResourceFoundException`/`NoHandlerFoundException` → **404** in `GlobalExceptionHandler` (currently fall through the catch-all → **500** for every unmapped path). Pre-existing; surfaced by sport A22's Phase 5 smoke test | `TODO` |
 
 ---
 
