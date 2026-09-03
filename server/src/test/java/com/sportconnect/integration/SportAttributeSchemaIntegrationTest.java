@@ -464,4 +464,71 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
                 .andExpect(status().isBadRequest());
     }
 
+    // --- A16: NUMBER / BOOLEAN ---
+
+    @Test
+    void adminPut_thenGet_roundTripsANumberAttributeWithBoundsAndABoolean() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        SportAttributeSchema schema = SportAttributeSchema.builder()
+                .defaultLocale("en")
+                .groups(List.of(SportAttributeGroup.builder()
+                        .key("gear").label(Map.of("en", "Gear")).isAvailable(true).order(1)
+                        .attributes(List.of(
+                                SportAttributeDefinition.builder()
+                                        .key("tension").label(Map.of("en", "String tension"))
+                                        .type(SportAttributeType.NUMBER).min(15.0).max(35.0)
+                                        .isAvailable(true).order(1).defaultValue(27).build(),
+                                SportAttributeDefinition.builder()
+                                        .key("strung").label(Map.of("en", "Strung"))
+                                        .type(SportAttributeType.BOOLEAN)
+                                        .isAvailable(true).order(2).build()))
+                        .build()))
+                .build();
+
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(schema)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].type").value("NUMBER"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].min").value(15.0))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].max").value(35.0))
+                .andExpect(jsonPath("$.data.groups[0].attributes[1].type").value("BOOLEAN"));
+
+        evictSportCache();
+
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].type").value("NUMBER"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].min").value(15.0))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].max").value(35.0));
+    }
+
+    @Test
+    void adminPut_rejectsMinGreaterThanMaxOnANumberAttribute_withBadRequest() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        SportAttributeSchema schema = SportAttributeSchema.builder()
+                .defaultLocale("en")
+                .groups(List.of(SportAttributeGroup.builder()
+                        .key("gear").label(Map.of("en", "Gear")).isAvailable(true).order(1)
+                        .attributes(List.of(SportAttributeDefinition.builder()
+                                .key("tension").label(Map.of("en", "String tension"))
+                                .type(SportAttributeType.NUMBER).min(35.0).max(15.0)
+                                .isAvailable(true).order(1).build()))
+                        .build()))
+                .build();
+
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(schema)))
+                .andExpect(status().isBadRequest());
+
+        evictSportCache();
+
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
 }

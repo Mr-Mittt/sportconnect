@@ -4053,6 +4053,23 @@ explicit go-ahead at each step (full story in A3's summary doc):
   selection matching it; decline/unfriend still clear. `friends-journey` step 5 updated. Verification (final): `tsc -b` clean, `eslint` 0 errors,
   `vitest` **156 files, all pass**, `pnpm e2e friends-journey` 1/1 + `notification-bell` 5/5. No
   `visual/` spec covers `FriendProfilePanel` (no `app-friends.spec.ts`) — no baseline change.
+- **A16 (`DONE`, 2026-09-02, `modules/sport/sport-impl/docs/MVP/A16_NUMBER_AND_BOOLEAN_ATTRIBUTE_TYPES.md`):**
+  `NUMBER` and `BOOLEAN` added to `SportAttributeType` — the first real schema (Badminton, A15) has
+  genuinely numeric fields (string tension, shoe-size value) that were being stored as free text.
+  `NUMBER` validity is `instanceof Number` (any integer or decimal — Jackson's box type varies by
+  literal; a numeric *string* and a `boolean` both fail it), `BOOLEAN` is `instanceof Boolean`
+  (`0`/`1`/`"true"` rejected). **Scope addition at pickup (user decision):** optional inclusive
+  `min`/`max` on a `NUMBER` node — legal only on `NUMBER`, `min ≤ max`, `defaultValue` checked in
+  range; carried through to the `Resolved*` DTOs so the client input can constrain. Both types are
+  legal as definition fields including inner-position (primitives-only rule extended). The strict
+  admin-`PUT` / lenient-profile-write split is unchanged: an out-of-range number is dropped silently
+  on a profile write, rejected with 400 as a `defaultValue`. No migration (JSONB document, enum is
+  Java-only), no cross-domain or auth change. New Spock coverage in `SportAttributeSchemaValidatorSpec`,
+  `ProfileAttributeFilterSpec`, `SportAttributeSchemaLabelResolverSpec`; new round-trip + `min>max`
+  cases in `SportAttributeSchemaIntegrationTest`. `:modules:sport:sport-impl:test` and `:server:test`
+  green. **Client half filed as `SPORT-9`** (the two form controls in `SportAttributesFields`) —
+  not landed here since this was `/workon sport`; the shipped SPORT-2 renderer degrades a
+  `NUMBER`/`BOOLEAN` field via its `default: return null` until SPORT-9 ships.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

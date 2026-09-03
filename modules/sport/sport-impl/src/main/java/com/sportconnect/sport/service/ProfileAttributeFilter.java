@@ -113,7 +113,8 @@ class ProfileAttributeFilter {
                                 Map<String, SportAttributeDefinitionType> definitions) {
         if (definition.getType() != SportAttributeType.DEFINITION_LIST) {
             return SportAttributeValues.filterScalarOrRecord(
-                    rawValue, definition.getType(), allowedValues(definition), definition.getDefinitionRef(), definitions);
+                    rawValue, definition.getType(), allowedValues(definition),
+                    definition.getMin(), definition.getMax(), definition.getDefinitionRef(), definitions);
         }
 
         if (!(rawValue instanceof List<?> list) || list.size() > SportAttributeValues.MAX_LIST_ITEMS) {
@@ -121,8 +122,10 @@ class ProfileAttributeFilter {
         }
         List<Object> kept = new ArrayList<>();
         for (Object element : list) {
+            // Element type is DEFINITION — min/max are meaningless here, so pass null.
             Object valid = SportAttributeValues.filterScalarOrRecord(
-                    element, SportAttributeType.DEFINITION, allowedValues(definition), definition.getDefinitionRef(), definitions);
+                    element, SportAttributeType.DEFINITION, allowedValues(definition),
+                    null, null, definition.getDefinitionRef(), definitions);
             if (valid != null) {
                 kept.add(valid);
             }

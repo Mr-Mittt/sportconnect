@@ -25,6 +25,11 @@ public class ResolvedSportAttributeField {
 
     private List<ResolvedSportAttributeOption> options;
 
+    /** Inclusive bounds for a {@code NUMBER} field (A16); {@code null} for every other type. */
+    private Double min;
+
+    private Double max;
+
     private String definitionRef;
 
     private Boolean isRequired;

@@ -5,9 +5,10 @@ package com.sportconnect.sport.api.dto;
  * {@link SportAttributeDefinitionType}) can hold (A9; {@code DEFINITION}/{@code DEFINITION_LIST}
  * added by v2/A12).
  *
- * <p>Deliberately a small closed set. {@code NUMBER} and {@code BOOLEAN} are the obvious next
- * additions but are not present until a real attribute needs one, per this codebase's standing
- * "don't design for hypothetical future requirements" rule (tracked as A16).
+ * <p>Deliberately a small closed set. {@code NUMBER} and {@code BOOLEAN} were added by A16 — the
+ * first real schema (Badminton, A15) has fields that are genuinely numeric (string tension, a shoe
+ * size value) rather than free text. {@code DATE}/{@code DATETIME} and any further kind stay out
+ * under the same "don't add a type until a real attribute needs it" rule.
  *
  * <p><strong>Client-visible.</strong> The client branches on this to decide which form control to
  * render, so adding a member here is a client-facing change: client {@code SPORT-2} (renderer) and
@@ -17,6 +18,19 @@ public enum SportAttributeType {
 
     /** Free text. Stored as a {@code String}. Not bounded by the schema — only by the profile size cap. */
     STRING,
+
+    /**
+     * A numeric value (A16). Stored as a JSON number — Jackson hands it back as an {@code Integer},
+     * {@code Long}, {@code Double}, {@code BigInteger} or {@code BigDecimal} depending on the
+     * literal, so validity is an {@code instanceof Number} check, never {@code instanceof Integer}.
+     * Any numeric value is accepted (integers and decimals alike); a numeric <em>string</em> and a
+     * {@code boolean} are not. The optional {@code min}/{@code max} on the declaring node bound it
+     * inclusively.
+     */
+    NUMBER,
+
+    /** A true/false value (A16). Stored as a JSON boolean; {@code 0}/{@code 1} and {@code "true"} are not valid. */
+    BOOLEAN,
 
     /** Single choice. Stored as a {@code String} that must equal one of the node's {@code options[].value}. */
     ENUM,

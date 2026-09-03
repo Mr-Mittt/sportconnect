@@ -41,12 +41,13 @@ final class SportAttributeValues {
     }
 
     /**
-     * Validity for the three <strong>primitive</strong> types only. {@code type} is the full
-     * {@link SportAttributeType} enum, so the switch below is compile-time exhaustive — but
-     * {@code DEFINITION}/{@code DEFINITION_LIST} throw rather than silently answering, because a
-     * caller reaching this method with a record type is a programming error: record values go
-     * through {@link #isValidRecord}/{@link #filterScalarOrRecord} instead, since "is this record
-     * valid" also needs to say *which of its fields* to keep, which a boolean cannot express.
+     * Validity for the <strong>primitive</strong> types only ({@code STRING}, {@code NUMBER},
+     * {@code BOOLEAN}, {@code ENUM}, {@code LIST}). {@code type} is the full {@link SportAttributeType}
+     * enum, so the switch below is compile-time exhaustive — but {@code DEFINITION}/
+     * {@code DEFINITION_LIST} throw rather than silently answering, because a caller reaching this
+     * method with a record type is a programming error: record values go through
+     * {@link #isValidRecord}/{@link #filterScalarOrRecord} instead, since "is this record valid" also
+     * needs to say *which of its fields* to keep, which a boolean cannot express.
      *
      * <p>In practice this is never invoked with a record type: {@link SportAttributeSchemaValidator}
      * forbids {@code defaultValue} on {@code DEFINITION}/{@code DEFINITION_LIST} attributes before
@@ -55,15 +56,22 @@ final class SportAttributeValues {
      *
      * @param value        the candidate value; never {@code null} here (callers handle null first)
      * @param type         the attribute's declared type
-     * @param allowedValues the attribute's option values; empty for {@code STRING}
+     * @param allowedValues the attribute's option values; empty for {@code STRING}/{@code NUMBER}/{@code BOOLEAN}
+     * @param min          inclusive lower bound for {@code NUMBER}, or {@code null} for no bound / other types
+     * @param max          inclusive upper bound for {@code NUMBER}, or {@code null} for no bound / other types
      * @return whether the value is storable under this attribute
      */
-    static boolean isValid(Object value, SportAttributeType type, Set<String> allowedValues) {
+    static boolean isValid(Object value, SportAttributeType type, Set<String> allowedValues, Double min, Double max) {
         if (value == null || type == null) {
             return false;
         }
         return switch (type) {
             case STRING -> value instanceof String;
+            // instanceof Number, never instanceof Integer: Jackson picks Integer/Long/Double/
+            // BigInteger/BigDecimal by the literal. A boolean is not a Number and a numeric String
+            // is not a Number, so both are rejected here for free (A16).
+            case NUMBER -> value instanceof Number n && withinBounds(n, min, max);
+            case BOOLEAN -> value instanceof Boolean;
             case ENUM -> value instanceof String s && allowedValues.contains(s);
             // Every element must be an allowed String. An empty list is valid: it is how a user
             // clears a multi-select without needing a delete-a-key path (which A9 does not have).
@@ -75,6 +83,20 @@ final class SportAttributeValues {
                     "isValid is for primitive types only — DEFINITION/DEFINITION_LIST values go "
                             + "through isValidRecord/filterScalarOrRecord instead");
         };
+    }
+
+    /**
+     * @return whether {@code n} is a finite number within the inclusive {@code [min, max]} range;
+     *         a {@code null} bound is "unbounded on that side". NaN and infinity are never valid
+     *         (they cannot arise from standard JSON parsing, but a caller-built value could carry
+     *         one).
+     */
+    private static boolean withinBounds(Number n, Double min, Double max) {
+        double d = n.doubleValue();
+        if (Double.isNaN(d) || Double.isInfinite(d)) {
+            return false;
+        }
+        return (min == null || d >= min) && (max == null || d <= max);
     }
 
     /**
@@ -115,7 +137,7 @@ final class SportAttributeValues {
                 continue;
             }
             Object value = filterScalarOrRecord(raw, field.getType(), optionValues(field.getOptions()),
-                    field.getDefinitionRef(), definitions);
+                    field.getMin(), field.getMax(), field.getDefinitionRef(), definitions);
             if (value == null) {
                 if (required) {
                     return null;
@@ -139,13 +161,16 @@ final class SportAttributeValues {
      * {@code DEFINITION_LIST} attributes are unwrapped into per-element {@code DEFINITION} calls by
      * their caller before reaching this method.
      *
+     * @param min inclusive lower bound for a {@code NUMBER} node, or {@code null}; ignored otherwise
+     * @param max inclusive upper bound for a {@code NUMBER} node, or {@code null}; ignored otherwise
      * @return the value to store ({@code raw} itself for a valid primitive, or the filtered record
      *         map for a valid {@code DEFINITION}), or {@code null} if nothing survives
      */
     static Object filterScalarOrRecord(Object raw, SportAttributeType type, Set<String> allowedValues,
-                                        String definitionRef, Map<String, SportAttributeDefinitionType> definitions) {
+                                        Double min, Double max, String definitionRef,
+                                        Map<String, SportAttributeDefinitionType> definitions) {
         return switch (type) {
-            case STRING, ENUM, LIST -> isValid(raw, type, allowedValues) ? raw : null;
+            case STRING, NUMBER, BOOLEAN, ENUM, LIST -> isValid(raw, type, allowedValues, min, max) ? raw : null;
             case DEFINITION -> {
                 Map<String, Object> record = asRecord(raw);
                 yield record == null ? null : isValidRecord(record, definitions.get(definitionRef), definitions);

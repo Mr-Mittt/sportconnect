@@ -141,4 +141,32 @@ class SportAttributeSchemaLabelResolverSpec extends Specification {
         attribute.order == 2
         attribute.defaultValue == "Yonex"
     }
+
+    def "carries a NUMBER attribute's min/max through to the resolved tree (A16)"() {
+        given:
+        def spec = SportAttributeDefinitionType.builder().name("Spec").fields([
+                SportAttributeField.builder().key("gauge").label(["en": "Gauge"])
+                        .type(SportAttributeType.NUMBER).min(0.60d).max(0.75d).order(1).build()
+        ]).build()
+        def schema = SportAttributeSchema.builder()
+                .defaultLocale("en")
+                .definitions([spec])
+                .groups([SportAttributeGroup.builder()
+                                 .key("gear").label(["en": "Gear"]).isAvailable(true).order(1)
+                                 .attributes([SportAttributeDefinition.builder()
+                                                      .key("tension").label(["en": "Tension"])
+                                                      .type(SportAttributeType.NUMBER).min(15.0d).max(35.0d)
+                                                      .isAvailable(true).order(1).build()])
+                                 .build()])
+                .build()
+
+        when:
+        def result = resolver.resolve(schema, Locale.ENGLISH)
+
+        then:
+        result.groups[0].attributes[0].min == 15.0d
+        result.groups[0].attributes[0].max == 35.0d
+        result.definitions[0].fields[0].min == 0.60d
+        result.definitions[0].fields[0].max == 0.75d
+    }
 }

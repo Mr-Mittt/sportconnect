@@ -31,6 +31,11 @@ public class ResolvedSportAttributeDefinition {
 
     private Object defaultValue;
 
+    /** Inclusive bounds for a {@code NUMBER} attribute (A16); {@code null} for every other type. */
+    private Double min;
+
+    private Double max;
+
     private String definitionRef;
 
     private String searchScope;

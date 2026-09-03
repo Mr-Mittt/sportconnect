@@ -84,6 +84,8 @@ public class SportAttributeSchemaLabelResolver {
                 .options(nullSafe(field.getOptions()).stream()
                         .map(option -> resolveOption(option, exact, language, defaultLocale))
                         .collect(Collectors.toList()))
+                .min(field.getMin())
+                .max(field.getMax())
                 .definitionRef(field.getDefinitionRef())
                 .isRequired(field.getIsRequired())
                 .order(field.getOrder())
@@ -115,6 +117,8 @@ public class SportAttributeSchemaLabelResolver {
                 .isAvailable(attribute.getIsAvailable())
                 .order(attribute.getOrder())
                 .defaultValue(attribute.getDefaultValue())
+                .min(attribute.getMin())
+                .max(attribute.getMax())
                 .definitionRef(attribute.getDefinitionRef())
                 .searchScope(attribute.getSearchScope())
                 .build();

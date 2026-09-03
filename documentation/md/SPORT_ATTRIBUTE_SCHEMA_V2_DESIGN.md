@@ -739,9 +739,10 @@ Worth listing, because the review question for any patch here is "did this stay 
 | `A13` | Localized labels — `label` maps, `defaultLocale`, `Accept-Language` resolution, admin-raw vs user-resolved | — |
 | `A14` | Entity references — `searchScope`, the suggestion aggregate, the search endpoint | `A12` |
 | `A15` | Seed Badminton (and Pickleball) in v2 | `A12`, `A13` |
-| `A16` | `NUMBER` and `BOOLEAN` type kinds | — |
+| `A16` | `NUMBER` and `BOOLEAN` type kinds + optional inclusive `min`/`max` on `NUMBER` (**`DONE` 2026-09-02**) — not required by v2, the small independent gap authoring a real schema exposed | — |
 | `SPORT-2` | Renderer — **rescoped** onto v2 | `A12`, `A13` |
 | `SPORT-6` | Reference field widget — search, link, free-text fallback | `A14`, `SPORT-2` |
+| `SPORT-9` | `NUMBER`/`BOOLEAN` form controls — client half of `A16` | `A16`, `SPORT-2` |
 
 `A12` and `A13` are independent of each other and both block `A15`. Landing them close together is
 preferable: both change the document format, and while there is nothing seeded there is nothing to

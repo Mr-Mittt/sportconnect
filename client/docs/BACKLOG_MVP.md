@@ -78,6 +78,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 8 | [ADMIN-5](MVP/ADMIN-5_SESSION_ATTRIBUTE_SCHEMA_EDITOR.md) | Session attribute schema editor — second JSON textarea in the sport admin page (ADMIN-2 pattern) | `TODO` |
 | 9 | [SPORT-7](MVP/SPORT-7_ATTRIBUTE_FIELDS_ORDER_AND_LAYOUT.md) | `SportAttributesFields` — honor `order`, group-level layout (collapsible + responsive grid); helps the profile editor too | `TODO` |
 | 10 | [SPORT-8](MVP/SPORT-8_REMOVE_PREFERRED_POSITION_FROM_PROFILE_EDITOR.md) | Remove "Preferred position" from the sport profile editor — client half of backend A18 | `TODO` |
+| 11 | [SPORT-9](MVP/SPORT-9_NUMBER_AND_BOOLEAN_ATTRIBUTE_CONTROLS.md) | `NUMBER` (number input, honors `min`/`max`) and `BOOLEAN` (checkbox) form controls in `SportAttributesFields` + `DefinitionFields`; mirror the enum + resolved `min`/`max` in `shared/types/sport.ts` — client half of backend A16 (`DONE` 2026-09-02); renderer currently `default: return null`-degrades both | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
