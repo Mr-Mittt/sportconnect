@@ -687,9 +687,14 @@ Worth listing, because the review question for any patch here is "did this stay 
 
 - `UserSportProfile.attributes` is still a **flat** `Map<String, Object>` keyed by globally-unique
   attribute keys. A3's entity and `V025` are untouched.
-- Merge is still by **top-level key**. An absent key keeps its stored value.
+- Merge is still by **top-level key**. An absent key keeps its stored value. (A10, `DONE`
+  2026-09-03: an explicit `null` on a key is now a delete marker, and every `updateProfile`
+  re-filters the whole stored map — see below.)
 - Profile writes still never fail on `attributes` **content** — only on size.
 - Reads stay **permissive**: stored keys with no current definition pass through untouched (v1 §5.1).
+  **A10 narrows this to the read path only** — a `updateProfile` prunes a key whose definition was
+  physically deleted (and re-validates the rest), though an `isAvailable: false` attribute's value
+  is still kept verbatim.
 - `isAvailable` soft-delete semantics, including parent-wins, are unchanged.
 - Keys remain **immutable by policy** — a rename orphans stored values, so a rename is add-new +
   retire-old.

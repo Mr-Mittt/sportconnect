@@ -4070,6 +4070,29 @@ explicit go-ahead at each step (full story in A3's summary doc):
   green. **Client half filed as `SPORT-9`** (the two form controls in `SportAttributesFields`) —
   not landed here since this was `/workon sport`; the shipped SPORT-2 renderer degrades a
   `NUMBER`/`BOOLEAN` field via its `default: return null` until SPORT-9 ships.
+- **A10 (`DONE`, 2026-09-03, `modules/sport/sport-impl/docs/MVP/A10_NO_DELETE_PATH_FOR_A_STORED_PROFILE_ATTRIBUTE.md`):**
+  a stored profile attribute can finally be removed — two paths, both on `updateProfile` only.
+  **Part 1:** an explicit `null` in the request's `attributes` map deletes that key (`""` still
+  stores an empty string — `ProfileAttributeFilter`'s "null = invalid, drop" becomes "null =
+  delete marker", honoured against the raw request map since `filter()` has already dropped null
+  entries). **Part 2 / "2b":** every `updateProfile` — even one carrying no `attributes` — now
+  re-filters the *entire* stored map through the live schema via the new
+  `ProfileAttributeFilter.retainDefined`: a key with no physically-present definition is pruned, an
+  `isAvailable:false` attribute's/group's value is kept **verbatim** (soft delete freezes, never
+  destroys — the one place `filter()` couldn't be reused, so a new `definedAttributesByKey`
+  traversal), and a live key's value is re-run through the existing `filterValue` so an undeclared
+  nested `DEFINITION` field is stripped and a record failing its current definition is dropped
+  whole. That whole-record case (a schema *tightening* — optional→required, type narrow, `NUMBER`
+  bounds — retroactively invalidating stored data on the next unrelated save) is an accepted gap
+  that client **SPORT-6**'s strict required-field validation closes. New private
+  `UserSportProfileServiceImpl.mergeAttributes(stored, requested, schema)` helper (A20 will reuse
+  it). No migration/entity/repo/`-api`/controller/security change. `createProfile` untouched — both
+  its paths already set `attributes` purely from `filter(request)`. Keeping attributes across a
+  reactivation is a deliberate **A7 revision filed as A20** (`isResume` mode). Client "remove
+  field" affordance filed alongside as `SPORT-*`/`PROFILE-*`. New: 11 `ProfileAttributeFilterSpec`
+  cases, 5 `UserSportProfileServiceImplSpec` cases, new `SportProfileAttributeWriteIntegrationTest`
+  (JSON `null` through `@RequestBody` → delete, verified against the real JSON column). Green:
+  `:modules:sport:sport-impl:test`, full `:server:test`.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

@@ -6,6 +6,7 @@ import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest;
+import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
@@ -222,22 +223,17 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
         if (request.getBio() != null) {
             profile.setBio(request.getBio());
         }
-        if (request.getAttributes() != null) {
-            // A9: merge semantics are unchanged - a key the caller omits keeps its stored value, and
-            // a stale key with no current definition survives untouched (reads stay permissive; only
-            // writes are validated). What is new is that the incoming map is filtered against the
-            // sport's live schema first, so unknown keys, wrong-shaped values, and switched-off
-            // attributes never reach the stored map. All three are dropped silently, by explicit
-            // product decision - this endpoint does not fail over them.
-            //
-            // Because merge is retained, there is still no way to REMOVE a stored attribute: an
-            // absent key means "leave it alone", not "delete it". Known and accepted; tracked as A10.
-            Map<String, Object> mergedAttributes = new HashMap<>(profile.getAttributes());
-            mergedAttributes.putAll(attributeFilter.filter(
-                    request.getAttributes(), sportService.getAttributeSchema(profile.getSportId())));
-            validateAttributesSize(mergedAttributes);
-            profile.setAttributes(mergedAttributes);
-        }
+        // A10: re-filter what is already stored against the live schema on EVERY update - even one
+        // that carries no attributes - so the profile self-heals of definitions the admin has since
+        // deleted (Part 2 / "2b"), then overlay the incoming request (A9's lenient filter) and
+        // honour an explicit null as a delete marker (Part 1). An absent key still means "leave it
+        // alone". The schema lookup is a SportLookupCache hit; the sport is already known active
+        // from requireActiveSportById above, though the document itself may still be null.
+        SportAttributeSchema schema = sportService.getAttributeSchema(profile.getSportId());
+        Map<String, Object> mergedAttributes =
+                mergeAttributes(profile.getAttributes(), request.getAttributes(), schema);
+        validateAttributesSize(mergedAttributes);
+        profile.setAttributes(mergedAttributes);
 
         UserSportProfile updatedProfile = profileRepository.save(profile);
 
@@ -287,6 +283,45 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
         profile.setIsActive(false);
         profileRepository.save(profile);
         log.info("Soft deleted sport profile: {}", profileId);
+    }
+
+    /**
+     * Combines a profile's stored attributes with an incoming request map against the sport's live
+     * schema (A10). Three steps:
+     *
+     * <ol>
+     *   <li>the stored map is re-filtered by {@link ProfileAttributeFilter#retainDefined} — keys the
+     *       schema no longer defines are pruned, {@code isAvailable: false} values are kept verbatim,
+     *       live values are re-validated ("2b");</li>
+     *   <li>the request map is filtered by {@link ProfileAttributeFilter#filter} (A9's lenient
+     *       drop-what-does-not-fit) and merged on top by top-level key;</li>
+     *   <li>any key the raw request carries with an explicit {@code null} is removed from the result
+     *       — the delete marker (Part 1). {@code filter} has already dropped those entries, so this
+     *       reads the raw request to see them.</li>
+     * </ol>
+     *
+     * <p>An absent key still means "leave it alone"; only an explicit {@code null} deletes. When
+     * {@code requested} is {@code null} (the update touches no attributes) only step 1 runs, so the
+     * prune still happens on every save. The caller enforces the size cap on the returned map.
+     *
+     * @param stored    the profile's current attributes; may be {@code null}
+     * @param requested the request's attributes map, or {@code null} for "no attribute changes"
+     * @param schema    the sport's live schema, or {@code null} when it offers none
+     * @return a new, mutable map to store
+     */
+    private Map<String, Object> mergeAttributes(Map<String, Object> stored,
+                                                Map<String, Object> requested,
+                                                SportAttributeSchema schema) {
+        Map<String, Object> result = new HashMap<>(attributeFilter.retainDefined(stored, schema));
+        if (requested != null) {
+            result.putAll(attributeFilter.filter(requested, schema));
+            for (Map.Entry<String, Object> entry : requested.entrySet()) {
+                if (entry.getValue() == null) {
+                    result.remove(entry.getKey());
+                }
+            }
+        }
+        return result;
     }
 
     private void validateAttributesSize(Map<String, Object> attributes) {

@@ -447,4 +447,93 @@ class ProfileAttributeFilterSpec extends Specification {
         then:
         result == [racket: [tension: 27]]
     }
+
+    // --- A10 Part 2: retainDefined (re-filter of an already-stored map) ---
+
+    def "retainDefined drops a stored key the schema no longer defines"() {
+        when:
+        def result = filter.retainDefined([racket: "Yonex", legacyKey: "written before A9"], schema())
+
+        then:
+        result == [racket: "Yonex"]
+    }
+
+    def "retainDefined keeps a value under an isAvailable:false attribute verbatim, without re-validating it"() {
+        when: "racket is switched off; its stored value would be invalid for a STRING if re-checked"
+        def result = filter.retainDefined([racket: 42], schema(true, false))
+
+        then:
+        result == [racket: 42]
+    }
+
+    def "retainDefined keeps a value under an isAvailable:false group verbatim"() {
+        when:
+        def result = filter.retainDefined([racket: 42], schema(false, true))
+
+        then:
+        result == [racket: 42]
+    }
+
+    def "retainDefined drops a live key whose stored value is no longer valid for its type"() {
+        when: "racket is live, so 42 IS re-validated against STRING and fails"
+        def result = filter.retainDefined([racket: 42], schema())
+
+        then:
+        result == [:]
+    }
+
+    def "retainDefined strips an undeclared nested field from a still-valid DEFINITION record"() {
+        when: "Shoe declares shoe + size only; the stored record also carries width"
+        def result = filter.retainDefined(
+                [footwear: [shoe: [value: "Yonex Aerus"], size: [system: "US", value: "9"], width: "wide"]],
+                schemaWithDefinitions())
+
+        then:
+        result == [footwear: [shoe: [value: "Yonex Aerus"], size: [system: "US", value: "9"]]]
+    }
+
+    def "retainDefined drops a DEFINITION record that no longer satisfies its definition - the accepted 2b gap"() {
+        when: "Shoe.shoe is required and the stored record lacks it"
+        def result = filter.retainDefined([footwear: [size: [system: "US", value: "9"]]], schemaWithDefinitions())
+
+        then:
+        result == [:]
+    }
+
+    def "retainDefined re-filters a stored DEFINITION_LIST - drops a malformed element and an undeclared nested field"() {
+        when: "one good element (with an undeclared 'brand'), one missing Reference's required 'value'"
+        def result = filter.retainDefined(
+                [rackets: [[value: "Astrox 88D", brand: "Yonex"], [id: "eq_2"]]],
+                schemaWithDefinitions())
+
+        then:
+        result == [rackets: [[value: "Astrox 88D"]]]
+    }
+
+    def "retainDefined keeps a DEFINITION_LIST that re-filters down to empty rather than dropping the key"() {
+        when: "every stored element lacks Reference's required 'value'"
+        def result = filter.retainDefined([rackets: [[id: "eq_1"], [id: "eq_2"]]], schemaWithDefinitions())
+
+        then:
+        result == [rackets: []]
+    }
+
+    def "retainDefined drops a stored NUMBER now outside a tightened min/max"() {
+        when: "tension was stored as 27 when unbounded; the schema now bounds it to 15..35... 100 fails"
+        def result = filter.retainDefined([tension: 100], schemaWithNumberAndBoolean())
+
+        then:
+        result == [:]
+    }
+
+    def "retainDefined drops everything when the sport has no schema"() {
+        expect:
+        filter.retainDefined([racket: "Yonex"], null).isEmpty()
+    }
+
+    def "retainDefined returns an empty map for a null or empty stored map"() {
+        expect:
+        filter.retainDefined(null, schema()).isEmpty()
+        filter.retainDefined([:], schema()).isEmpty()
+    }
 }

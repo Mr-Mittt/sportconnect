@@ -473,6 +473,141 @@ class UserSportProfileServiceImplSpec extends Specification {
         result.attributes == ["dominantHand": "left", "strokeStyle": "freestyle"]
     }
 
+    def "updateProfile removes a stored attribute when the request sends it as an explicit null (A10 Part 1)"() {
+        given:
+        def profileId = 1L
+        def sportId = 1L
+        def ownerId = UUID.randomUUID()
+        def profile = UserSportProfile.builder()
+                .id(profileId).userId(ownerId).sportId(sportId)
+                .attributes(["dominantHand": "left", "strokeStyle": "freestyle"])
+                .build()
+        def request = CreateUserSportProfileRequest.builder()
+                .attributes(["dominantHand": null])
+                .build()
+
+        when:
+        def result = profileService.updateProfile(profileId, ownerId, request)
+
+        then:
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Swimming").isActive(true).build()
+        1 * profileRepository.save(_) >> { UserSportProfile p ->
+            assert p.attributes == ["strokeStyle": "freestyle"]
+            return p
+        }
+        result.attributes == ["strokeStyle": "freestyle"]
+    }
+
+    def "updateProfile stores an empty string rather than deleting when the request sends one (A10 Part 1)"() {
+        given:
+        def profileId = 1L
+        def sportId = 1L
+        def ownerId = UUID.randomUUID()
+        def profile = UserSportProfile.builder()
+                .id(profileId).userId(ownerId).sportId(sportId)
+                .attributes(["dominantHand": "left"])
+                .build()
+        def request = CreateUserSportProfileRequest.builder()
+                .attributes(["dominantHand": ""])
+                .build()
+
+        when:
+        def result = profileService.updateProfile(profileId, ownerId, request)
+
+        then:
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Swimming").isActive(true).build()
+        1 * profileRepository.save(_) >> { UserSportProfile p ->
+            assert p.attributes == ["dominantHand": ""]
+            return p
+        }
+        result.attributes == ["dominantHand": ""]
+    }
+
+    def "updateProfile prunes a stored attribute the schema no longer defines, even with no attributes in the request (A10 Part 2)"() {
+        given:
+        def profileId = 1L
+        def sportId = 1L
+        def ownerId = UUID.randomUUID()
+        def profile = UserSportProfile.builder()
+                .id(profileId).userId(ownerId).sportId(sportId).skillLevel("Beginner")
+                .attributes(["dominantHand": "left", "retiredKey": "orphan"])
+                .build()
+        def request = CreateUserSportProfileRequest.builder().skillLevel("Intermediate").build()
+
+        when:
+        def result = profileService.updateProfile(profileId, ownerId, request)
+
+        then:
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Football").isActive(true).build()
+        // the sport's live schema offers dominantHand but not retiredKey - declared here so it
+        // overrides setup()'s permissive stub.
+        _ * sportService.getAttributeSchema(sportId) >> schemaWith("dominantHand")
+        1 * profileRepository.save(_) >> { UserSportProfile p ->
+            assert p.attributes == ["dominantHand": "left"]
+            return p
+        }
+        result.attributes == ["dominantHand": "left"]
+    }
+
+    def "updateProfile prunes an orphan, adds a key, and deletes another - all in one call (A10 Parts 1 and 2)"() {
+        given:
+        def profileId = 1L
+        def sportId = 1L
+        def ownerId = UUID.randomUUID()
+        def profile = UserSportProfile.builder()
+                .id(profileId).userId(ownerId).sportId(sportId)
+                .attributes(["dominantHand": "left", "strokeStyle": "fly", "retiredKey": "orphan"])
+                .build()
+        // setup()'s stub already offers dominantHand / strokeStyle / blob - and not retiredKey,
+        // which is exactly the shape this case needs.
+        def request = CreateUserSportProfileRequest.builder()
+                .attributes([blob: "added", dominantHand: null])
+                .build()
+
+        when:
+        def result = profileService.updateProfile(profileId, ownerId, request)
+
+        then:
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Swimming").isActive(true).build()
+        1 * profileRepository.save(_) >> { UserSportProfile p ->
+            // retiredKey pruned (Part 2), dominantHand deleted (Part 1), blob added, strokeStyle untouched
+            assert p.attributes == ["strokeStyle": "fly", "blob": "added"]
+            return p
+        }
+        result.attributes == ["strokeStyle": "fly", "blob": "added"]
+    }
+
+    def "updateProfile against a sport whose schema offers no attributes wipes the stored map (A10)"() {
+        given:
+        def profileId = 1L
+        def sportId = 1L
+        def ownerId = UUID.randomUUID()
+        def profile = UserSportProfile.builder()
+                .id(profileId).userId(ownerId).sportId(sportId)
+                .attributes(["dominantHand": "left"])
+                .build()
+        def request = CreateUserSportProfileRequest.builder().skillLevel("Advanced").build()
+
+        when:
+        def result = profileService.updateProfile(profileId, ownerId, request)
+
+        then:
+        1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Football").isActive(true).build()
+        // an empty schema document - the sport has one, but it declares nothing. Declared in the
+        // then: block so it takes precedence over setup()'s permissive stub.
+        _ * sportService.getAttributeSchema(sportId) >> SportAttributeSchema.builder().build()
+        1 * profileRepository.save(_) >> { UserSportProfile p ->
+            assert p.attributes == [:]
+            return p
+        }
+        result.attributes == [:]
+    }
+
     def "updateProfile should reject oversized attributes payload"() {
         given:
         def profileId = 1L
