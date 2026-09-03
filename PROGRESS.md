@@ -4093,6 +4093,45 @@ explicit go-ahead at each step (full story in A3's summary doc):
   cases, 5 `UserSportProfileServiceImplSpec` cases, new `SportProfileAttributeWriteIntegrationTest`
   (JSON `null` through `@RequestBody` → delete, verified against the real JSON column). Green:
   `:modules:sport:sport-impl:test`, full `:server:test`.
+- **A21 (`DONE`, 2026-09-03, `modules/sport/sport-impl/docs/MVP/A21_OWNER_ONLY_GET_PROFILE_BY_ID.md`):**
+  owner-only gate on `GET /api/sports/profiles/{profileId}` — the follow-up A20 deferred (A20 gated
+  the *list* endpoint, explicitly left this one public). `SportController.getProfileById` gains
+  `@PreAuthorize("hasRole('USER')")` + a fetch-then-authorize check
+  (`UUID.fromString(principal).equals(response.getUserId())` → `ForbiddenException`); `404` for a
+  missing / soft-deleted / dead-sport profile is still resolved first, so a non-owner can't probe
+  which ids exist. `SecurityConfig`'s A20 GET matcher widened from `/api/sports/profiles/user/*` to
+  also cover `/api/sports/profiles/*` (each single `*` = one segment, so the still-public
+  `GET /profiles/user/{userId}/sport/{sportId}` is untouched) → anonymous `401` at the filter chain.
+  **First use of the new CLAUDE.md § API Change Discipline consumer census:** grep of all backend
+  modules + `client/src` + MSW handlers + `*.test.tsx` found no consumer of this GET beyond two
+  integration tests, both already owner-authenticated — both stayed green. No service/DTO/migration
+  change. `getUserProfileForSport` is the identical remaining public read gap, left as a follow-up.
+  4 new IT cases in `SportProfileResumeAndVisibilityIntegrationTest`. Green:
+  `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, `:server:test`.
+- **A20 (`DONE`, 2026-09-03, `modules/sport/sport-impl/docs/MVP/A20_ISRESUME_REACTIVATION_MODE.md`):**
+  `isResume` mode on sport-profile reactivation — revises A7's "re-adding a deleted profile behaves
+  like a fresh create". New `Boolean isResume` on `CreateUserSportProfileRequest`; when `true`,
+  `createProfile` forks to a new private `resumeProfile()` that **purely reactivates** the caller's
+  soft-deleted row — stored scalar columns (`skillLevel`/`bio`/`preferredPosition`/
+  `yearsOfExperience`) kept verbatim, stored `attributes` run through A10's
+  `ProfileAttributeFilter.retainDefined` prune **only** (no request merge, no `null`-delete), the
+  rest of the request body ignored. `400` if there is no soft-deleted row, or the row is currently
+  active (reuses A7's "already has a profile" message). **Scope grew at pickup (user-directed),
+  twice:** (a) `isResume` went from a null-check merge to pure reactivation, and a no-op resume is
+  now a `400` not a silent fresh create; (b) `GET /api/sports/profiles/user/{userId}` gained
+  `?includeInactive=true` (backed by a new `getUserProfiles(UUID, boolean)` overload — the single-arg
+  stays active-only so `SessionServiceImpl.discoverSessions` / `GroupServiceImpl.getGroupIdsBySportProfiles`
+  are untouched) and became **owner-only**: a `SecurityConfig` matcher
+  (`GET /api/sports/profiles/user/*` → `authenticated()`, ahead of the `/api/sports/**` permit) so
+  anonymous → `401`, plus `@PreAuthorize` + a controller `principal == {userId}` check so an
+  authenticated non-owner → `403`. `skillLevel`'s `@NotNull` became an `@AssertTrue` cross-field
+  getter (required unless `isResume`). No migration/entity/repo change (`findByUserId` already
+  existed). **Client breakage acknowledged:** `useSportProfilesForUser` calls that list route for
+  arbitrary users (ProfilePage/FriendsPage/search chips) and will now `401`/`403` — 2 client tickets
+  filed alongside (resume/fresh confirm UI; adapt other-user display). New: 7
+  `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
+  (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
+  `:server:test`, full `./gradlew build`.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

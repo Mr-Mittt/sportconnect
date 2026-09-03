@@ -1,6 +1,7 @@
 package com.sportconnect.sport.controller;
 
 import com.sportconnect.common.dto.ApiResponse;
+import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.sport.api.dto.CreateSportRequest;
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest;
 import com.sportconnect.sport.api.dto.ResolvedSportAttributeSchema;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -209,10 +211,13 @@ public class SportController {
     }
 
     // User Sport Profile endpoints
-    @Operation(summary = "Create a sport profile for the caller", description = "Max 3 profiles per user; one profile per sport.")
+    @Operation(summary = "Create a sport profile for the caller",
+            description = "One profile per sport. A20: pass isResume=true to purely reactivate a "
+                    + "previously deleted profile for this sport (stored data kept, request body "
+                    + "otherwise ignored).")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Profile created"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, already has 3 profiles, or already has a profile for this sport"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Profile created or resumed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, already has a profile for this sport, or isResume=true with no deactivated profile to resume"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Sport not found")
     })
@@ -227,24 +232,47 @@ public class SportController {
                 .body(ApiResponse.success("Sport profile created successfully", response));
     }
 
-    @Operation(summary = "Get a sport profile by id", security = {})
+    @Operation(summary = "Get the caller's own sport profile by id",
+            description = "A21: owner-only — the profile's userId must match the authenticated "
+                    + "principal. 404 (missing / soft-deleted / dead-sport) is resolved before the "
+                    + "ownership check, so a non-owner cannot probe which ids exist.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Profile found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the profile owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Profile not found")
     })
     @GetMapping("/profiles/{profileId}")
-    public ResponseEntity<ApiResponse<UserSportProfileResponse>> getProfileById(@PathVariable Long profileId) {
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<UserSportProfileResponse>> getProfileById(
+            @AuthenticationPrincipal String callerIdStr,
+            @PathVariable Long profileId) {
         UserSportProfileResponse response = profileService.getProfileById(profileId);
+        if (!UUID.fromString(callerIdStr).equals(response.getUserId())) {
+            throw new ForbiddenException("You can only view your own sport profile");
+        }
         return ResponseEntity.ok(ApiResponse.success("Profile retrieved successfully", response));
     }
 
-    @Operation(summary = "List a user's sport profiles", security = {})
+    @Operation(summary = "List the caller's own sport profiles",
+            description = "A20: owner-only — the path {userId} must match the authenticated principal. "
+                    + "Pass ?includeInactive=true to also get soft-deleted profiles (for the "
+                    + "resume-a-deactivated-profile flow); each row carries isActive.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Profiles (possibly empty)")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Profiles (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Requested another user's profile list")
     })
     @GetMapping("/profiles/user/{userId}")
-    public ResponseEntity<ApiResponse<List<UserSportProfileResponse>>> getUserProfiles(@PathVariable UUID userId) {
-        List<UserSportProfileResponse> response = profileService.getUserProfiles(userId);
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<List<UserSportProfileResponse>>> getUserProfiles(
+            @AuthenticationPrincipal String callerIdStr,
+            @PathVariable UUID userId,
+            @RequestParam(defaultValue = "false") boolean includeInactive) {
+        if (!UUID.fromString(callerIdStr).equals(userId)) {
+            throw new ForbiddenException("You can only list your own sport profiles");
+        }
+        List<UserSportProfileResponse> response = profileService.getUserProfiles(userId, includeInactive);
         return ResponseEntity.ok(ApiResponse.success("User profiles retrieved successfully", response));
     }
 

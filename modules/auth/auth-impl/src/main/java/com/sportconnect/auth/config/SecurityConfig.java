@@ -92,6 +92,17 @@ public class SecurityConfig {
 
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
+                        // A20 + A21: the caller's own sport profile (by id) and profile list are
+                        // owner-only. Ordered before the /api/sports/** permit below
+                        // (first-match-wins) so an anonymous caller is rejected by the filter chain
+                        // (401 via jwtAuthenticationEntryPoint) rather than reaching the controller
+                        // and getting a 403 from @PreAuthorize. Each single "*" matches exactly one
+                        // path segment, so the still-public
+                        // GET /api/sports/profiles/user/{userId}/sport/{sportId} (three segments
+                        // after profiles/) is NOT caught here.
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/sports/profiles/*",
+                                "/api/sports/profiles/user/*").authenticated()
                         .requestMatchers("/api/sports/**").permitAll()
                         // U11: no longer public — every GET under /api/users/** now either already
                         // had its own @PreAuthorize (search, friends/**, me/preferences) or gained

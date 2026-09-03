@@ -188,6 +188,43 @@ All REST responses use `ApiResponse<T>` from `modules/common` (`common/src/main/
 
 Base API path is `/api`. Public endpoints: `/api/auth/**`, `/api/sports/**`. All others require a Bearer JWT — including every `GET /api/users/**` endpoint (U11 removed the earlier blanket permit-all for this path; lookups by id/email/username now return a PII-free `UserInfoResponse` rather than being closed off).
 
+### API Change Discipline
+
+**Whenever a change touches an existing contract, do a consumer census *before* writing the change
+— and again if the change grows.** This is a hard rule, not a nicety: a monorepo change that alters
+a shape other code already depends on is the single most common way to ship a silent break here
+(A20 caught `SessionServiceImpl.discoverSessions` and `GroupServiceImpl.getGroupIdsBySportProfiles`
+both relying on `getUserProfiles(UUID)` being active-only — a census found them; a `grep` for
+compile errors would not have, since the signature was unchanged).
+
+**What counts as "an existing contract" (any of these triggers the census):**
+
+- a **REST endpoint** — path, HTTP method, query/path params, request body shape, response body
+  shape, status codes, **or auth/visibility** (making one owner-only, adding `@PreAuthorize`, etc.);
+- a **cross-module `-api` interface** — a method signature, its return/parameter types, its
+  documented semantics (e.g. "active-only") even when the signature is untouched;
+- a **shared DTO** — any field the client or another module reads or writes (rename, type change,
+  removal, nullability change, a new value in a mirrored enum);
+- a **DB column or migration** — a dropped/renamed column, a changed constraint or type, a new
+  `NOT NULL`, anything a Liquibase changelog does to an existing table.
+
+**How to run the census:**
+
+1. `grep` every caller across **all backend modules** — for an `-api` method, its interface name
+   and method name; for a REST endpoint, its path string; for a DTO field, the getter/field name.
+2. Check the **client** (`client/src`, `client/e2e/mocks` MSW handlers, `*.test.tsx`) for the
+   endpoint path and any mirrored type — the client hand-mirrors backend shapes and nothing links
+   them.
+3. For a **DB** change, also check entities, repositories, and JPQL/`@Query` strings that name the
+   column.
+4. List what you found, and for **each** consumer state one of: **compatible as-is** /
+   **updated in this change** / **deferred with a filed follow-up ticket**. "Probably fine" is not
+   one of the three.
+
+A `PostToolUse` hook (`.claude/settings.json`) prints a reminder when a controller, `-api` file,
+entity/repository, changelog, or `.sql` file is edited — the reminder is a prompt to do the census,
+not a substitute for it. `/workon` Phase 2 folds the census into its exploration step.
+
 ### Auth flow
 
 Stateless JWT (JJWT 0.12.x). Access token + refresh token pair. The new client keeps the access token in memory only and expects the refresh token in an httpOnly cookie — the cookie contract is backend ticket A2 in `modules/auth/docs/BACKLOG_MVP.md` (until it ships, the API still returns `refreshToken` in the response body). The old client's localStorage token storage was an XSS exposure and must not be reintroduced.
