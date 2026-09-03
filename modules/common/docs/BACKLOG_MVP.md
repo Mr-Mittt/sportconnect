@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/common`
-**Last updated:** 2026-09-03
+**Last updated:** 2026-09-03 (C4 done)
 
 ---
 
@@ -19,7 +19,6 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [C4](MVP/C4_NO_RESOURCE_FOUND_MAPS_TO_404.md) | `NoResourceFoundException`/`NoHandlerFoundException` → **404** in `GlobalExceptionHandler` (currently fall through the catch-all → **500** for every unmapped path). Pre-existing; surfaced by sport A22's Phase 5 smoke test | `TODO` |
 
 ---
 
@@ -27,6 +26,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [C3](MVP/C3_TRANSACTIONAL_OUTBOX.md) | Generic transactional-outbox mechanism | `DONE` |
-| 2 | [C2](MVP/C2_RESOURCE_GATE.md) | `ResourceGate<T>` — shared availability/visibility check shape | `DONE` |
-| 3 | [C1](MVP/C1_GLOBAL_EXCEPTION_HANDLER.md) | Global exception handler for common exception types | `DONE` |
+| 1 | [C4](MVP/C4_NO_RESOURCE_FOUND_MAPS_TO_404.md) | Map swallowed Spring MVC exceptions to their real HTTP status (2026-09-03) — `GlobalExceptionHandler extends ResponseEntityExceptionHandler`: no-route → **404**, wrong method → **405**, wrong/absent `Content-Type` → **415**, unacceptable `Accept` → **406**, unreadable body → **400**, path-var type mismatch → **400** (all were **500** via the `Exception` catch-all); one `handleExceptionInternal` override re-envelopes as `ApiResponse`, the two field-specific handlers become `@Override`s to dodge "Ambiguous @ExceptionHandler". Widened at pickup from "404 only". Surfaced by sport A22's smoke test. Green: `:modules:common:test`, full `:server:test`, live smoke | `DONE` |
+| 2 | [C3](MVP/C3_TRANSACTIONAL_OUTBOX.md) | Generic transactional-outbox mechanism | `DONE` |
+| 3 | [C2](MVP/C2_RESOURCE_GATE.md) | `ResourceGate<T>` — shared availability/visibility check shape | `DONE` |
+| 4 | [C1](MVP/C1_GLOBAL_EXCEPTION_HANDLER.md) | Global exception handler for common exception types | `DONE` |

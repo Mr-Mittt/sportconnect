@@ -163,6 +163,10 @@ this ticket's Phase 5 live smoke test: the two `/profiles/user/...` paths A22 re
 confirmed those two paths have zero consumers — so filed as its own cross-cutting `common` ticket
 rather than widening A22 into the shared exception handler.
 
+**Delta (C4 done 2026-09-03):** C4 was widened at pickup and also fixed path-var type mismatch →
+**400** (was 500 via the same catch-all). This ticket's Edge-cases line "non-numeric `sportId` →
+Spring `400` type-mismatch" is only actually true from C4 onward; before C4 that case was a 500.
+
 ### Verification
 
 - N+1: none — the controller only relocates an argument; no new mapping loop.
