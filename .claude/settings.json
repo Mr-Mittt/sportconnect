@@ -1,4 +1,4 @@
- {
+{
   "hooks": {
     "Stop": [
       {
@@ -7,6 +7,18 @@
             "type": "command",
             "command": "echo '{\"systemMessage\": \"DOCUMENTATION REMINDER: If this turn involved any architecture discussion, design decision, implementation plan, or feature analysis — track the full thread (analysis, discussion, questions raised, and final decision) in a new MD file in documentation/md/ (named by topic, e.g. PARTNER_FINDING_DESIGN.md). The file should capture the reasoning journey from initial analysis to final decision, not just the conclusion. Also add a summary of the key points to the relevant section of PROGRESS.md.\"}'",
             "shell": "powershell"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$raw=[Console]::In.ReadToEnd();try{$p=($raw|ConvertFrom-Json).tool_input.file_path}catch{$p=$null};if($p -and ($p -match '(Controller.java$)|([\\/][A-Za-z0-9._-]+-api[\\/].*.java$)|([\\/](entity|repository)[\\/][^\\/]*.java$)|([\\/]db[\\/]changelog[\\/])|(.sql$)')){$n=Split-Path $p -Leaf;$m=\"API SURFACE TOUCHED ($n): before continuing, do the consumer census from CLAUDE.md 'API Change Discipline' - list every consumer of the changed REST endpoint / cross-module -api method / shared DTO field / DB column across ALL backend modules AND client/ (callers, client hooks, MSW handlers, tests), and mark each: compatible as-is, updated in this change, or deferred with a filed ticket.\";$o=@{systemMessage=$m;hookSpecificOutput=@{hookEventName='PostToolUse';additionalContext=$m}}|ConvertTo-Json -Compress;Write-Output $o}"
           }
         ]
       }

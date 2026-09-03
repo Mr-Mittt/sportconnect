@@ -15,6 +15,14 @@ public interface UserSportProfileService {
      * Create user sport profile. {@code request.getAttributes()} (sport-specific, schema-less data)
      * is stored as-is if present; rejected with {@code BadRequestException} if its serialized JSON
      * exceeds ~4KB.
+     *
+     * <p><strong>A20 — {@code request.getIsResume() == true}:</strong> instead of creating or
+     * rebuilding, this <em>purely reactivates</em> the caller's soft-deleted profile for
+     * {@code request.getSportId()}. The stored scalar columns are kept verbatim; the stored
+     * {@code attributes} map is only pruned to the sport's live schema (A10
+     * {@code retainDefined} — no request merge). Throws {@code BadRequestException} if there is no
+     * soft-deleted row for the pair, or if that row is currently active. Absent / {@code false}
+     * keeps A7 behaviour (a soft-deleted row is reactivated but fully repopulated from the request).
      */
     UserSportProfileResponse createProfile(UUID userId, CreateUserSportProfileRequest request);
 
@@ -24,9 +32,26 @@ public interface UserSportProfileService {
     UserSportProfileResponse getProfileById(Long profileId);
 
     /**
-     * Get all profiles for a user
+     * Get all <strong>active</strong> profiles for a user. Soft-deleted profiles are never
+     * returned. Equivalent to {@link #getUserProfiles(UUID, boolean) getUserProfiles(userId,
+     * false)} — this is the overload cross-domain callers use.
      */
     List<UserSportProfileResponse> getUserProfiles(UUID userId);
+
+    /**
+     * Get a user's profiles, optionally including soft-deleted ones.
+     *
+     * <p>When {@code includeInactive} is {@code true} the result also contains profiles with
+     * {@code isActive == false} (each response carries {@code isActive}, so the caller can tell
+     * them apart) — this backs the client's "resume a deactivated profile" flow (A20). A profile
+     * whose <em>sport</em> has itself been deactivated is omitted regardless of
+     * {@code includeInactive}, exactly as in the active-only path — a dead sport disappears from
+     * the app and so does anything hanging off it.
+     *
+     * @param userId          the profile owner
+     * @param includeInactive {@code true} to also return soft-deleted profiles
+     */
+    List<UserSportProfileResponse> getUserProfiles(UUID userId, boolean includeInactive);
 
     /**
      * Get user profile for specific sport

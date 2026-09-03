@@ -61,6 +61,11 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
      * "no such sport" and "sport switched off" into one outcome across every write path in the app
      * (see {@code SportService.requireActiveSportById}). The lookup is a single
      * {@code findByIdAndIsActiveTrue} query instead of a fetch followed by a flag check.
+     *
+     * <p>A20 forks here on {@code request.getIsResume()}: {@code true} routes to
+     * {@link #resumeProfile} — a pure reactivation that keeps the soft-deleted row's scalar columns
+     * and only prunes its {@code attributes} to the live schema, ignoring the rest of the request.
+     * Absent / {@code false} keeps the A7 behaviour below unchanged.
      */
     @Override
     @Transactional
@@ -70,6 +75,13 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
         // Routed through SportService so it reads SportLookupCache (A5) rather than the database,
         // the same reason getUserProfiles was routed that way.
         SportResponse sport = sportService.requireActiveSportById(request.getSportId());
+
+        // A20: a resume is a pure reactivation of the soft-deleted row - none of the request's
+        // scalar/attribute data is applied - so it takes a wholly separate path from the A7
+        // create/repopulate logic below.
+        if (Boolean.TRUE.equals(request.getIsResume())) {
+            return resumeProfile(userId, request, sport);
+        }
 
         // A9: keep only what the sport currently offers. Unknown keys, values of the wrong shape,
         // and writes aimed at a switched-off attribute are dropped silently rather than rejected -
@@ -123,6 +135,51 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
         return toUserSportProfileResponse(savedProfile, sport.getName());
     }
 
+    /**
+     * A20: pure reactivation of the caller's soft-deleted profile for this sport, for the client's
+     * "you had a profile here before — resume it" flow. Nothing from {@code request} is applied:
+     *
+     * <ul>
+     *   <li>the stored scalar columns ({@code skillLevel}, {@code bio}, {@code preferredPosition},
+     *       {@code yearsOfExperience}) are left exactly as they were before the soft delete;</li>
+     *   <li>the stored {@code attributes} map is run through A10's {@link
+     *       ProfileAttributeFilter#retainDefined} only — keys with no live definition are pruned,
+     *       {@code isAvailable:false} values are kept verbatim, live values re-validated — with
+     *       <em>no</em> merge of the request's attributes and no {@code null}-delete handling;</li>
+     *   <li>{@code isActive} is flipped back to {@code true}.</li>
+     * </ul>
+     *
+     * <p>Requires a soft-deleted row for {@code (userId, sportId)}: a missing row and a
+     * currently-active row are both {@code BadRequestException} (the latter reusing A7's
+     * active-duplicate message). The sport-active gate has already run in {@link #createProfile};
+     * the size cap is re-checked on the pruned map for completeness, though a prune can only shrink
+     * it.
+     */
+    private UserSportProfileResponse resumeProfile(UUID userId, CreateUserSportProfileRequest request,
+                                                   SportResponse sport) {
+        UserSportProfile existing = profileRepository
+                .findByUserIdAndSportId(userId, request.getSportId())
+                .orElseThrow(() -> new BadRequestException(
+                        "No deactivated profile to resume for sport: " + sport.getName()));
+
+        if (Boolean.TRUE.equals(existing.getIsActive())) {
+            throw new BadRequestException("User already has a profile for sport: " + sport.getName());
+        }
+
+        SportAttributeSchema schema = sportService.getAttributeSchema(request.getSportId());
+        Map<String, Object> pruned =
+                new HashMap<>(attributeFilter.retainDefined(existing.getAttributes(), schema));
+        validateAttributesSize(pruned);
+
+        existing.setAttributes(pruned);
+        existing.setIsActive(true);
+
+        UserSportProfile resumed = profileRepository.save(existing);
+        log.info("Resumed sport profile {} for user {} and sport {}",
+                resumed.getId(), userId, sport.getName());
+        return toUserSportProfileResponse(resumed, sport.getName());
+    }
+
     @Override
     @Transactional(readOnly = true)
     public UserSportProfileResponse getProfileById(Long profileId) {
@@ -160,7 +217,24 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
     @Override
     @Transactional(readOnly = true)
     public List<UserSportProfileResponse> getUserProfiles(UUID userId) {
-        List<UserSportProfile> profiles = profileRepository.findByUserIdAndIsActiveTrue(userId);
+        return getUserProfiles(userId, false);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>{@code includeInactive} only widens the <em>profile</em> query
+     * ({@code findByUserId} vs {@code findByUserIdAndIsActiveTrue}); the dead-sport filter below is
+     * unchanged, so a soft-deleted profile is returned only when its sport is still active (which is
+     * also the only case A20's resume flow can act on). Each {@code UserSportProfileResponse}
+     * carries {@code isActive}, so the caller distinguishes a resumable row from a live one.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserSportProfileResponse> getUserProfiles(UUID userId, boolean includeInactive) {
+        List<UserSportProfile> profiles = includeInactive
+                ? profileRepository.findByUserId(userId)
+                : profileRepository.findByUserIdAndIsActiveTrue(userId);
 
         List<Long> sportIds = profiles.stream()
                 .map(UserSportProfile::getSportId)

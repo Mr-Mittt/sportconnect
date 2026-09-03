@@ -230,7 +230,7 @@ class UserSportProfileServiceImplSpec extends Specification {
     }
 
     def "createProfile does not inherit stale values from the deleted profile"() {
-        given: "a request that omits the optional fields the old profile had set"
+        given: "isResume absent/false — the A7 fresh-create branch; a request that omits the optional fields the old profile had set"
         def userId = UUID.randomUUID()
         def sportId = 1L
         def request = CreateUserSportProfileRequest.builder().sportId(sportId).build()
@@ -251,6 +251,87 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * profileRepository.save({ UserSportProfile p ->
             p.skillLevel == null && p.bio == null && p.preferredPosition == null && p.attributes == [:]
         }) >> { UserSportProfile p -> p }
+    }
+
+    // ---- A20: isResume — pure reactivation, no merge ----
+
+    def "createProfile with isResume=true reactivates keeping stored scalars and pruning attributes, ignoring the request body"() {
+        given: "a soft-deleted profile whose stored scalars and attributes differ from what the request carries"
+        def userId = UUID.randomUUID()
+        def sportId = 1L
+        def request = CreateUserSportProfileRequest.builder()
+                .sportId(sportId)
+                .isResume(true)
+                .skillLevel("Advanced")
+                .bio("new bio")
+                .preferredPosition("Baseline")
+                .yearsOfExperience(9)
+                .attributes(["dominantHand": "right"])
+                .build()
+
+        and: "the stored map has one still-defined key (dominantHand, offered by setup()) and one orphan"
+        def existing = UserSportProfile.builder()
+                .id(7L).userId(userId).sportId(sportId)
+                .skillLevel("Beginner").bio("old bio").preferredPosition("Net").yearsOfExperience(2)
+                .attributes(["dominantHand": "left", "retiredKey": "orphan"])
+                .isActive(false)
+                .build()
+
+        when:
+        def result = profileService.createProfile(userId, request)
+
+        then:
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Badminton").isActive(true).build()
+        1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.of(existing)
+
+        and: "every stored scalar survives verbatim; attributes = retainDefined(stored) with NO request merge"
+        1 * profileRepository.save({ UserSportProfile p ->
+            p.id == 7L &&
+            p.isActive &&
+            p.skillLevel == "Beginner" &&
+            p.bio == "old bio" &&
+            p.preferredPosition == "Net" &&
+            p.yearsOfExperience == 2 &&
+            p.attributes == ["dominantHand": "left"]
+        }) >> { UserSportProfile p -> p }
+
+        result.id == 7L
+        result.skillLevel == "Beginner"
+        result.attributes == ["dominantHand": "left"]
+    }
+
+    def "createProfile with isResume=true throws when there is no profile to resume"() {
+        given:
+        def userId = UUID.randomUUID()
+        def sportId = 1L
+        def request = CreateUserSportProfileRequest.builder().sportId(sportId).isResume(true).build()
+
+        when:
+        profileService.createProfile(userId, request)
+
+        then:
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Badminton").isActive(true).build()
+        1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.empty()
+        0 * profileRepository.save(_)
+        thrown(BadRequestException)
+    }
+
+    def "createProfile with isResume=true still rejects a currently-active profile"() {
+        given:
+        def userId = UUID.randomUUID()
+        def sportId = 1L
+        def request = CreateUserSportProfileRequest.builder().sportId(sportId).isResume(true).build()
+        def existing = UserSportProfile.builder()
+                .id(7L).userId(userId).sportId(sportId).isActive(true).build()
+
+        when:
+        profileService.createProfile(userId, request)
+
+        then:
+        1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Badminton").isActive(true).build()
+        1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.of(existing)
+        0 * profileRepository.save(_)
+        thrown(BadRequestException)
     }
 
     def "getProfileById should return profile when found"() {
@@ -351,6 +432,72 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         and: "the profile is dropped entirely, not surfaced with an Unknown placeholder name (A7)"
         result.isEmpty()
+    }
+
+    // ---- A20: getUserProfiles(userId, includeInactive) ----
+
+    def "getUserProfiles(userId, true) returns active and inactive profiles for still-active sports"() {
+        given:
+        def userId = UUID.randomUUID()
+        def profiles = [
+            UserSportProfile.builder().id(1L).userId(userId).sportId(1L).isActive(true).build(),
+            UserSportProfile.builder().id(2L).userId(userId).sportId(2L).isActive(false).build()
+        ]
+
+        when:
+        def result = profileService.getUserProfiles(userId, true)
+
+        then: "the widened query is used, not the active-only one"
+        1 * profileRepository.findByUserId(userId) >> profiles
+        0 * profileRepository.findByUserIdAndIsActiveTrue(_)
+        1 * sportService.getActiveSportsByIds([1L, 2L]) >> [
+            (1L): SportResponse.builder().id(1L).name("Badminton").build(),
+            (2L): SportResponse.builder().id(2L).name("Pickleball").build()
+        ]
+
+        and: "the soft-deleted row comes back too, flagged isActive=false"
+        result.size() == 2
+        result.find { it.id == 2L }.isActive == false
+    }
+
+    def "getUserProfiles(userId, true) still omits a profile whose sport is no longer active"() {
+        given: "an inactive profile under a since-deactivated sport - cannot be resumed, so still hidden"
+        def userId = UUID.randomUUID()
+        def profiles = [
+            UserSportProfile.builder().id(1L).userId(userId).sportId(1L).isActive(false).build()
+        ]
+
+        when:
+        def result = profileService.getUserProfiles(userId, true)
+
+        then:
+        1 * profileRepository.findByUserId(userId) >> profiles
+        1 * sportService.getActiveSportsByIds([1L]) >> [:]
+        result.isEmpty()
+    }
+
+    def "getUserProfiles(userId, false) queries only active profiles"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        profileService.getUserProfiles(userId, false)
+
+        then:
+        1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> []
+        0 * profileRepository.findByUserId(_)
+    }
+
+    def "getUserProfiles(userId) single-arg keeps its active-only contract for cross-domain callers"() {
+        given: "SessionServiceImpl.discoverSessions / GroupServiceImpl.getGroupIdsBySportProfiles rely on this"
+        def userId = UUID.randomUUID()
+
+        when:
+        profileService.getUserProfiles(userId)
+
+        then:
+        1 * profileRepository.findByUserIdAndIsActiveTrue(userId) >> []
+        0 * profileRepository.findByUserId(_)
     }
 
     def "getUserProfileForSport should return specific profile"() {

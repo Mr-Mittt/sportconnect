@@ -141,6 +141,7 @@ Do not proceed to Phase 2 until the user confirms the scope.
 - Any cross-domain concerns — flag immediately if the ticket would require importing from another domain's `-impl` or creating a JPA relationship across domain boundaries
 - **Cross-domain concept precedent** — if this ticket's fields overlap a concept another domain already treats as first-class (`sportId`, `groupId`, `userId`, etc.), grep for that concept's existing `-api` interface usages across every module (e.g. `sport-api`'s `hasProfileForSport`, `getSportsByIds`) to find established validation/business-rule precedent, not just structural import violations — a new consumer of an existing concept should match how existing consumers already gate/validate it unless there's a real reason to diverge
 - **Account lifecycle** — check whether the endpoint(s)/service method(s) this ticket adds need an explicit `isActive` check (via `UserService`), rather than assuming the existing JWT filter or `SecurityConfig` already excludes deactivated users — confirm against `JwtAuthenticationFilter` (auth-impl) directly, don't assume it re-checks active status just because it validates the token
+- **Consumer census (CLAUDE.md § API Change Discipline)** — if this ticket changes anything about an *existing* contract (a REST endpoint's path/params/body/status/**auth**, a cross-module `-api` method signature *or its documented semantics like "active-only"*, a shared DTO field, a DB column/constraint), enumerate every consumer **before** designing: `grep` all backend modules for callers, check `client/src` + `client/e2e/mocks` (MSW) + `*.test.tsx` for the path and any mirrored type, and for a DB change check entities/repositories/JPQL. List each consumer as **compatible as-is** / **updated in this change** / **deferred with a filed ticket** — never "probably fine". Re-run this if the scope grows in Phase 1's gate. (A20's `getUserProfiles(UUID)` census is why `SessionServiceImpl.discoverSessions` and `GroupServiceImpl.getGroupIdsBySportProfiles` weren't silently broken by adding an inactive-including overload.)
 
 **Client:** explore to find:
 
@@ -149,6 +150,7 @@ Do not proceed to Phase 2 until the user confirms the scope.
 - Whether the backend already serves this feature for real — check the actual controllers under `modules/`, not just docs; don't default to mock data for something with a real endpoint
 - The exact backend DTO shapes for any endpoint this ticket calls (field names come from the Java DTOs, verified — never guessed)
 - Existing Tailwind theme tokens — if the design needs a color/spacing that has no token yet, adding the token comes first
+- **Consumer census (CLAUDE.md § API Change Discipline)** — if this ticket changes a shared type, a hook's public shape, or a store slice other features read, `grep` `src/` for every importer and list each as compatible / updated-here / deferred before redesigning it
 
 **Infra:** explore to find:
 
