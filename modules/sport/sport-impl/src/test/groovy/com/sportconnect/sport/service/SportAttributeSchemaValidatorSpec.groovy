@@ -30,7 +30,9 @@ class SportAttributeSchemaValidatorSpec extends Specification {
                                                       List<SportAttributeOption> options = null,
                                                       Object defaultValue = null,
                                                       String definitionRef = null,
-                                                      String searchScope = null) {
+                                                      String searchScope = null,
+                                                      Double min = null,
+                                                      Double max = null) {
         SportAttributeDefinition.builder()
                 .key(key)
                 .label(["en": key])
@@ -41,6 +43,8 @@ class SportAttributeSchemaValidatorSpec extends Specification {
                 .defaultValue(defaultValue)
                 .definitionRef(definitionRef)
                 .searchScope(searchScope)
+                .min(min)
+                .max(max)
                 .build()
     }
 
@@ -58,10 +62,13 @@ class SportAttributeSchemaValidatorSpec extends Specification {
     private static SportAttributeField field(String key, SportAttributeType type,
                                               List<SportAttributeOption> options = null,
                                               String definitionRef = null,
-                                              boolean isRequired = false) {
+                                              boolean isRequired = false,
+                                              Double min = null,
+                                              Double max = null) {
         SportAttributeField.builder()
                 .key(key).label(["en": key]).type(type).options(options)
-                .definitionRef(definitionRef).isRequired(isRequired).order(1).build()
+                .definitionRef(definitionRef).isRequired(isRequired).order(1)
+                .min(min).max(max).build()
     }
 
     private static SportAttributeDefinitionType definitionType(String name, List<SportAttributeField> fields) {
@@ -712,5 +719,156 @@ class SportAttributeSchemaValidatorSpec extends Specification {
 
         then:
         noExceptionThrown()
+    }
+
+    // --- A16: NUMBER and BOOLEAN ---
+
+    def "a document with NUMBER (bounded and unbounded) and BOOLEAN attributes passes"() {
+        given:
+        def schema = schemaOf([group("gear", [
+                attribute("tension", SportAttributeType.NUMBER, null, 27.0, null, null, 15.0, 35.0),
+                attribute("weight", SportAttributeType.NUMBER),
+                attribute("strung", SportAttributeType.BOOLEAN, null, true)
+        ])])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "a NUMBER defaultValue is accepted whether the literal is an integer or a decimal: #description"() {
+        given:
+        def schema = schemaOf([group("gear", [attribute("tension", SportAttributeType.NUMBER, null, defaultValue)])])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        noExceptionThrown()
+
+        where:
+        description        | defaultValue
+        "integer literal"  | 27
+        "long literal"     | 27L
+        "decimal literal"  | 27.5d
+    }
+
+    def "#type carrying options is rejected"() {
+        given:
+        def schema = schemaOf([group("gear", [attribute("x", type,
+                [new SportAttributeOption("a", ["en": "A"])])])])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains(type.toString())
+
+        where:
+        type << [SportAttributeType.NUMBER, SportAttributeType.BOOLEAN]
+    }
+
+    def "a defaultValue invalid for NUMBER/BOOLEAN is rejected: #description"() {
+        given:
+        def schema = schemaOf([group("gear", [attribute("x", type, null, defaultValue, null, null, min, max)])])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        thrown(BadRequestException)
+
+        where:
+        description                         | type                       | defaultValue | min   | max
+        "NUMBER default is a numeric string"| SportAttributeType.NUMBER  | "27"         | null  | null
+        "NUMBER default is a boolean"       | SportAttributeType.NUMBER  | true         | null  | null
+        "NUMBER default below min"          | SportAttributeType.NUMBER  | 10.0         | 15.0  | 35.0
+        "NUMBER default above max"          | SportAttributeType.NUMBER  | 40.0         | 15.0  | 35.0
+        "BOOLEAN default is a string"       | SportAttributeType.BOOLEAN | "true"       | null  | null
+        "BOOLEAN default is a number"       | SportAttributeType.BOOLEAN | 1            | null  | null
+    }
+
+    def "a NUMBER defaultValue exactly on an inclusive bound is accepted: #description"() {
+        given:
+        def schema = schemaOf([group("gear", [
+                attribute("tension", SportAttributeType.NUMBER, null, defaultValue, null, null, 15.0, 35.0)
+        ])])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        noExceptionThrown()
+
+        where:
+        description | defaultValue
+        "at min"    | 15.0
+        "at max"    | 35.0
+    }
+
+    def "a NUMBER attribute whose min is greater than its max is rejected"() {
+        given:
+        def schema = schemaOf([group("gear", [
+                attribute("tension", SportAttributeType.NUMBER, null, null, null, null, 35.0, 15.0)
+        ])])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains("min")
+    }
+
+    def "min/max declared on a non-NUMBER attribute is rejected: #type"() {
+        given:
+        def schema = schemaOf([group("gear", [attribute("x", type, options, null, null, null, 1.0, 10.0)])])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        thrown(BadRequestException)
+
+        where:
+        type                       | options
+        SportAttributeType.STRING  | null
+        SportAttributeType.BOOLEAN | null
+        SportAttributeType.ENUM    | [new SportAttributeOption("a", ["en": "A"])]
+    }
+
+    def "NUMBER and BOOLEAN are legal as definition fields, including in an inner-position definition"() {
+        given: "Spec{tension: NUMBER, strung: BOOLEAN} is referenced by Racket.spec (inner position)"
+        def schema = schemaOf([
+                group("gear", [attribute("racket", SportAttributeType.DEFINITION, null, null, "Racket")])
+        ], [
+                definitionType("Spec", [
+                        field("tension", SportAttributeType.NUMBER, null, null, false, 15.0, 35.0),
+                        field("strung", SportAttributeType.BOOLEAN)
+                ]),
+                definitionType("Racket", [field("spec", SportAttributeType.DEFINITION, null, "Spec", true)])
+        ])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "a definition field carrying min/max while not NUMBER is rejected"() {
+        given:
+        def schema = schemaOf([group("gear", [])], [
+                definitionType("Spec", [field("name", SportAttributeType.STRING, null, null, false, 1.0, 10.0)])
+        ])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        thrown(BadRequestException)
     }
 }

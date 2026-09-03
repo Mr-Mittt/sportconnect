@@ -339,4 +339,112 @@ class ProfileAttributeFilterSpec extends Specification {
         then:
         result == [:]
     }
+
+    // --- A16: NUMBER / BOOLEAN ---
+
+    /**
+     * {@code tension: NUMBER[15..35]}, {@code weight: NUMBER} (unbounded), {@code strung: BOOLEAN}
+     * top-level, plus a {@code spec: DEFINITION} over {@code Spec{tension: NUMBER[15..35] required,
+     * strung: BOOLEAN optional}} so the record cascade is exercised for the new types too.
+     */
+    private static SportAttributeSchema schemaWithNumberAndBoolean() {
+        def spec = SportAttributeDefinitionType.builder().name("Spec").fields([
+                SportAttributeField.builder().key("tension").label(["en": "Tension"])
+                        .type(SportAttributeType.NUMBER).min(15.0d).max(35.0d).isRequired(true).order(1).build(),
+                SportAttributeField.builder().key("strung").label(["en": "Strung"])
+                        .type(SportAttributeType.BOOLEAN).isRequired(false).order(2).build()
+        ]).build()
+
+        SportAttributeSchema.builder()
+                .definitions([spec])
+                .groups([
+                        SportAttributeGroup.builder()
+                                .key("gear").label(["en": "Gear"]).isAvailable(true).order(1)
+                                .attributes([
+                                        SportAttributeDefinition.builder()
+                                                .key("tension").label(["en": "Tension"])
+                                                .type(SportAttributeType.NUMBER).min(15.0d).max(35.0d)
+                                                .isAvailable(true).order(1).build(),
+                                        SportAttributeDefinition.builder()
+                                                .key("weight").label(["en": "Weight"])
+                                                .type(SportAttributeType.NUMBER)
+                                                .isAvailable(true).order(2).build(),
+                                        SportAttributeDefinition.builder()
+                                                .key("strung").label(["en": "Strung"])
+                                                .type(SportAttributeType.BOOLEAN)
+                                                .isAvailable(true).order(3).build(),
+                                        SportAttributeDefinition.builder()
+                                                .key("racket").label(["en": "Racket"])
+                                                .type(SportAttributeType.DEFINITION).definitionRef("Spec")
+                                                .isAvailable(true).order(4).build()
+                                ]).build()
+                ]).build()
+    }
+
+    def "a valid number (integer or decimal) and a valid boolean survive"() {
+        when:
+        def result = filter.filter([tension: 27, weight: 88.5, strung: true], schemaWithNumberAndBoolean())
+
+        then:
+        result == [tension: 27, weight: 88.5, strung: true]
+    }
+
+    def "a value of the wrong shape for NUMBER/BOOLEAN is dropped, not rejected: #description"() {
+        when:
+        def result = filter.filter(attributes, schemaWithNumberAndBoolean())
+
+        then:
+        noExceptionThrown()
+        result == [:]
+
+        where:
+        description                     | attributes
+        "NUMBER sent as a numeric string" | [tension: "27"]
+        "NUMBER sent as a boolean"        | [tension: true]
+        "BOOLEAN sent as 1"               | [strung: 1]
+        "BOOLEAN sent as \"true\""        | [strung: "true"]
+    }
+
+    def "a NUMBER outside its inclusive bounds is dropped, but a value exactly on a bound is kept: #description"() {
+        when:
+        def result = filter.filter([tension: value], schemaWithNumberAndBoolean())
+
+        then:
+        result == expected
+
+        where:
+        description   | value | expected
+        "below min"   | 14.9  | [:]
+        "at min"      | 15    | [tension: 15]
+        "at max"      | 35    | [tension: 35]
+        "above max"   | 35.1  | [:]
+    }
+
+    def "an unbounded NUMBER accepts any finite value"() {
+        when:
+        def result = filter.filter([weight: -5, tension: 20], schemaWithNumberAndBoolean())
+
+        then:
+        result == [weight: -5, tension: 20]
+    }
+
+    def "NUMBER and BOOLEAN as definition fields follow the required/optional record cascade"() {
+        when: "tension (required) is out of range -> the whole record drops; strung is optional"
+        def result = filter.filter([
+                racket: [tension: 100, strung: true]
+        ], schemaWithNumberAndBoolean())
+
+        then:
+        result == [:]
+    }
+
+    def "a definition record with a valid NUMBER and an invalid optional BOOLEAN keeps the record without that field"() {
+        when:
+        def result = filter.filter([
+                racket: [tension: 27, strung: "yes"]
+        ], schemaWithNumberAndBoolean())
+
+        then:
+        result == [racket: [tension: 27]]
+    }
 }

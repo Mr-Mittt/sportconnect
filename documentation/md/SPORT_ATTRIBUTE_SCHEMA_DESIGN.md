@@ -135,11 +135,15 @@ per this codebase's standing "don't design for hypothetical future requirements"
 | `type` | Stored value in `UserSportProfile.attributes` | Notes |
 |---|---|---|
 | `STRING` | `String` | Free text |
+| `NUMBER` | JSON number (`Integer`/`Long`/`Double`/`BigDecimal`) | Any numeric literal; optional inclusive `min`/`max` on the node (A16) |
+| `BOOLEAN` | `Boolean` | JSON `true`/`false` only |
 | `ENUM` | `String` | Must be one of `options[].value` |
 | `LIST` | `List<String>` | Each element must be one of `options[].value` (multi-select) |
 
-`NUMBER` and `BOOLEAN` are the obvious next additions; they are not in scope until something needs
-them.
+`NUMBER` and `BOOLEAN` were added by **A16** (`DONE` 2026-09-02) once the real Badminton schema had
+genuinely numeric fields. `DATE`/`DATETIME` and any further kind stay out under the same rule —
+added only when a real attribute needs one. Schema **v2** additionally introduced `DEFINITION` /
+`DEFINITION_LIST` (see `SPORT_ATTRIBUTE_SCHEMA_V2_DESIGN.md`).
 
 A sport with no schema at all (`NULL` column) behaves exactly as today: no attributes offered, and
 `attributes` accepts nothing. This is the correct default for every existing row, so the migration
@@ -252,5 +256,6 @@ The two client tickets are siblings over the same schema: **ADMIN-2 edits it, SP
   that still isn't filed. This design makes that screen buildable; it does not build it.
 - **A rich admin schema builder.** `ADMIN-2` is a JSON textarea by explicit choice (§ADMIN-2).
   Drag-to-reorder, per-field forms, and live preview are later enhancements.
-- **`NUMBER`/`BOOLEAN` node types**, per §3.
+- ~~**`NUMBER`/`BOOLEAN` node types**, per §3.~~ — shipped in **A16** (`DONE` 2026-09-02), with
+  optional `min`/`max` on `NUMBER`. Client controls: `SPORT-9`.
 - **Optimistic locking on concurrent admin edits**, per §2.2.

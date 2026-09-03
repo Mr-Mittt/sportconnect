@@ -56,6 +56,17 @@ public class SportAttributeDefinition {
     private Object defaultValue;
 
     /**
+     * Optional inclusive lower bound for a {@code NUMBER} attribute (A16). Only legal when
+     * {@code type} is {@code NUMBER}; the write validator rejects it on any other type, and rejects
+     * {@code min > max} when both are set. A value below it is dropped on a profile write, same as
+     * any other shape mismatch.
+     */
+    private Double min;
+
+    /** Optional inclusive upper bound for a {@code NUMBER} attribute (A16). See {@link #min}. */
+    private Double max;
+
+    /**
      * The name of the {@link SportAttributeDefinitionType} this attribute's value is shaped by.
      * Required when {@code type} is {@code DEFINITION}/{@code DEFINITION_LIST}; must be absent for
      * every other type (schema v2, A12).

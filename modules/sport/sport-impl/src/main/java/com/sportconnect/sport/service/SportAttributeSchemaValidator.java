@@ -141,11 +141,13 @@ class SportAttributeSchemaValidator {
             case ENUM, LIST -> validateOptionsList(
                     "Attribute " + attribute.getKey(), options, attribute.getType(), defaultLocale);
             // A STRING carrying options usually means the author meant ENUM. Rejecting is cheaper
-            // than silently ignoring a list they expected to constrain input with.
-            case STRING -> {
+            // than silently ignoring a list they expected to constrain input with. NUMBER/BOOLEAN
+            // (A16) are bounded by min/max, never an option set.
+            case STRING, NUMBER, BOOLEAN -> {
                 if (!options.isEmpty()) {
                     throw new BadRequestException(
-                            "Attribute " + attribute.getKey() + " is STRING and must not declare options");
+                            "Attribute " + attribute.getKey() + " is " + attribute.getType()
+                                    + " and must not declare options");
                 }
             }
             case DEFINITION, DEFINITION_LIST -> {
@@ -168,6 +170,9 @@ class SportAttributeSchemaValidator {
             }
         }
 
+        validateNumericBounds("Attribute " + attribute.getKey(), attribute.getType(),
+                attribute.getMin(), attribute.getMax());
+
         if (attribute.getType() != SportAttributeType.DEFINITION
                 && attribute.getType() != SportAttributeType.DEFINITION_LIST) {
             if (attribute.getDefinitionRef() != null) {
@@ -179,6 +184,23 @@ class SportAttributeSchemaValidator {
                         + " must not declare searchScope unless its type is DEFINITION or DEFINITION_LIST");
             }
             validateDefaultValue(attribute, options);
+        }
+    }
+
+    /**
+     * {@code min}/{@code max} are legal only on a {@code NUMBER} node, and require {@code min <= max}
+     * when both are set (A16). Any other combination is an authoring mistake the admin needs told
+     * about loudly, same as every other rule here.
+     */
+    private void validateNumericBounds(String context, SportAttributeType type, Double min, Double max) {
+        if (type != SportAttributeType.NUMBER) {
+            if (min != null || max != null) {
+                throw new BadRequestException(context + " is " + type + " and must not declare min/max");
+            }
+            return;
+        }
+        if (min != null && max != null && min > max) {
+            throw new BadRequestException(context + " has a min greater than its max");
         }
     }
 
@@ -206,8 +228,8 @@ class SportAttributeSchemaValidator {
      *
      * <p>Never called for {@code DEFINITION}/{@code DEFINITION_LIST} attributes — those forbid
      * {@code defaultValue} outright in {@link #validateAttribute}, before this method would be
-     * reached — so {@link SportAttributeValues#isValid} only ever sees the three primitive types
-     * here.
+     * reached — so {@link SportAttributeValues#isValid} only ever sees the primitive types here
+     * ({@code STRING}/{@code NUMBER}/{@code BOOLEAN}/{@code ENUM}/{@code LIST}).
      */
     private void validateDefaultValue(SportAttributeDefinition attribute, List<SportAttributeOption> options) {
         Object defaultValue = attribute.getDefaultValue();
@@ -218,7 +240,8 @@ class SportAttributeSchemaValidator {
         for (SportAttributeOption option : options) {
             allowed.add(option.getValue());
         }
-        if (!SportAttributeValues.isValid(defaultValue, attribute.getType(), allowed)) {
+        if (!SportAttributeValues.isValid(defaultValue, attribute.getType(), allowed,
+                attribute.getMin(), attribute.getMax())) {
             throw new BadRequestException("Attribute " + attribute.getKey()
                     + " has a defaultValue invalid for type " + attribute.getType());
         }
@@ -284,10 +307,11 @@ class SportAttributeSchemaValidator {
             case ENUM, LIST -> validateOptionsList(
                     "Definition " + definition.getName() + " field " + field.getKey(), options, field.getType(),
                     defaultLocale);
-            case STRING -> {
+            case STRING, NUMBER, BOOLEAN -> {
                 if (!options.isEmpty()) {
                     throw new BadRequestException("Definition " + definition.getName()
-                            + " field " + field.getKey() + " is STRING and must not declare options");
+                            + " field " + field.getKey() + " is " + field.getType()
+                            + " and must not declare options");
                 }
             }
             case DEFINITION -> {
@@ -313,6 +337,9 @@ class SportAttributeSchemaValidator {
             throw new BadRequestException("Definition " + definition.getName() + " field " + field.getKey()
                     + " must not declare definitionRef unless its type is DEFINITION");
         }
+
+        validateNumericBounds("Definition " + definition.getName() + " field " + field.getKey(),
+                field.getType(), field.getMin(), field.getMax());
     }
 
     private void validateInnerPositionDefinitionsArePrimitiveOnly(Map<String, SportAttributeDefinitionType> byName) {
@@ -329,12 +356,11 @@ class SportAttributeSchemaValidator {
             // Guaranteed resolved already: validateField rejected an unresolved definitionRef above.
             SportAttributeDefinitionType inner = byName.get(name);
             for (SportAttributeField field : nullSafe(inner.getFields())) {
-                if (field.getType() != SportAttributeType.STRING
-                        && field.getType() != SportAttributeType.ENUM
-                        && field.getType() != SportAttributeType.LIST) {
-                    throw new BadRequestException("Definition " + name
+                switch (field.getType()) {
+                    case STRING, NUMBER, BOOLEAN, ENUM, LIST -> { /* primitive — allowed inner */ }
+                    default -> throw new BadRequestException("Definition " + name
                             + " is referenced by another definition and so may only contain primitive "
-                            + "fields (STRING/ENUM/LIST), but field " + field.getKey()
+                            + "fields (STRING/NUMBER/BOOLEAN/ENUM/LIST), but field " + field.getKey()
                             + " is " + field.getType());
                 }
             }
