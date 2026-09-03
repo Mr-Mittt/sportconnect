@@ -255,37 +255,38 @@ public class SportController {
     }
 
     @Operation(summary = "List the caller's own sport profiles",
-            description = "A20: owner-only — the path {userId} must match the authenticated principal. "
-                    + "Pass ?includeInactive=true to also get soft-deleted profiles (for the "
-                    + "resume-a-deactivated-profile flow); each row carries isActive.")
+            description = "Caller-scoped (A22): the owner is the authenticated principal — there is no "
+                    + "{userId} path param. Pass ?includeInactive=true to also get soft-deleted "
+                    + "profiles (for the resume-a-deactivated-profile flow); each row carries "
+                    + "isActive. Returns an empty list when the caller has no profiles.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Profiles (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Requested another user's profile list")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
-    @GetMapping("/profiles/user/{userId}")
+    @GetMapping("/profiles")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<List<UserSportProfileResponse>>> getUserProfiles(
             @AuthenticationPrincipal String callerIdStr,
-            @PathVariable UUID userId,
             @RequestParam(defaultValue = "false") boolean includeInactive) {
-        if (!UUID.fromString(callerIdStr).equals(userId)) {
-            throw new ForbiddenException("You can only list your own sport profiles");
-        }
-        List<UserSportProfileResponse> response = profileService.getUserProfiles(userId, includeInactive);
+        UUID callerId = UUID.fromString(callerIdStr);
+        List<UserSportProfileResponse> response = profileService.getUserProfiles(callerId, includeInactive);
         return ResponseEntity.ok(ApiResponse.success("User profiles retrieved successfully", response));
     }
 
-    @Operation(summary = "Get a user's profile for a specific sport", security = {})
+    @Operation(summary = "Get the caller's own sport profile for a specific sport",
+            description = "Caller-scoped (A22): the owner is the authenticated principal. 404 when the "
+                    + "caller has no active profile for this sport (or the sport is inactive).")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Profile found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User has no profile for this sport, or the sport doesn't exist")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "The caller has no profile for this sport, or the sport doesn't exist")
     })
-    @GetMapping("/profiles/user/{userId}/sport/{sportId}")
+    @GetMapping("/profiles/sport/{sportId}")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<UserSportProfileResponse>> getUserProfileForSport(
-            @PathVariable UUID userId,
+            @AuthenticationPrincipal String callerIdStr,
             @PathVariable Long sportId) {
-        UserSportProfileResponse response = profileService.getUserProfileForSport(userId, sportId);
+        UserSportProfileResponse response = profileService.getUserProfileForSport(UUID.fromString(callerIdStr), sportId);
         return ResponseEntity.ok(ApiResponse.success("Profile retrieved successfully", response));
     }
 

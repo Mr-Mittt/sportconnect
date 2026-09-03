@@ -1,6 +1,6 @@
 # A22 · Caller-scoped sport-profile reads (drop `{userId}`)
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-03)
 **Type:** Enhancement (Security)
 **Depends on:** none. **Supersedes part of A20** — the owner-only gate on the profile-list
 endpoint. A20 is merged; this reworks that endpoint's URL and removes its `principal == {userId}`
@@ -65,11 +65,14 @@ status.
 - **HTTP callers of `GET /api/sports/profiles/user/{userId}`:** the client hooks
   `useRawSportProfilesForUser` / `useSportProfilesForUser` (SportSwitcher, HomeFeed, GroupsPage,
   ProfilePage, FriendsPage, search chips) and the MSW handler
-  `http.get('/api/sports/profiles/user/:userId')`. A20 already recorded these break under its
-  owner-only gate and filed **2 client tickets** (repoint the self hook; drop / re-gate other-user
-  sport display). Those two tickets now also absorb the **path change**
-  (`/sports/profiles` instead of `/sports/profiles/user/${userId}`); no additional client ticket
-  needed.
+  `http.get('/api/sports/profiles/user/:userId')`. **Correction (pickup 2026-09-03):** A20's
+  summary *named* two client follow-ups but recorded them as "filed by the user, not in this PR" —
+  and they were never actually filed into `client/docs/BACKLOG_MVP.md`. This census caught that.
+  They are now filed: **client `SPORT-10`** (the `isResume` add-sport flow) and **client
+  `SPORT-11`** (repoint the self read `/sports/profiles/user/{id}` → `/sports/profiles`, and
+  drop/placeholder other-user sport display since the `{userId}` capability is removed). `SPORT-11`
+  absorbs the A22 path change and is marked blocked on A22 merging. **Deferred with filed
+  follow-up tickets.**
 - No client-visible enum, routing key, or event type.
 
 ## Out of scope
@@ -94,3 +97,92 @@ status.
     caller with none → `404`; anonymous → `401`.
   - Move the A20 owner-only-list IT cases in `SportProfileResumeAndVisibilityIntegrationTest` onto
     the new path; delete the `403`-for-other-user case (the concept no longer exists).
+
+---
+
+## Implementation summary (2026-09-03)
+
+### Approved design
+
+Two production files, one test file. No service, `-api`, DTO, migration, or repository change —
+the three service methods (`getUserProfiles(UUID)`, `getUserProfiles(UUID, boolean)`,
+`getUserProfileForSport(UUID, Long)`) are untouched; only the controller's *source* of `userId`
+moves from a path variable to the JWT principal.
+
+| Layer | Change |
+|---|---|
+| `SportController.getUserProfiles` (sport-impl) | `@GetMapping("/profiles/user/{userId}")` → `@GetMapping("/profiles")`; `@PathVariable UUID userId` and the `UUID.fromString(callerIdStr).equals(userId)` → `ForbiddenException` guard **both removed** (no path id to mismatch); keeps `@PreAuthorize("hasRole('USER')")` + `@RequestParam(defaultValue="false") boolean includeInactive`; resolves `UUID callerId = UUID.fromString(callerIdStr)` and calls the unchanged `getUserProfiles(callerId, includeInactive)`; `@Operation`/`@ApiResponses` reworded, `403` dropped |
+| `SportController.getUserProfileForSport` (sport-impl) | `@GetMapping("/profiles/user/{userId}/sport/{sportId}")` → `@GetMapping("/profiles/sport/{sportId}")`; `@Operation(..., security = {})` marker dropped; `@PathVariable UUID userId` removed; **adds** `@PreAuthorize("hasRole('USER')")` + `@AuthenticationPrincipal String callerIdStr`; calls the unchanged `getUserProfileForSport(UUID.fromString(callerIdStr), sportId)`; `@ApiResponses` gains `401` |
+| `SecurityConfig` (auth-impl) | GET matcher list: **removed** `"/api/sports/profiles/user/*"` (A20); **added** `"/api/sports/profiles"` (exact — without it `/api/sports/**` permitAll would make the list endpoint public) and `"/api/sports/profiles/sport/*"` (`/profiles/*`'s single `*` is one segment, does not cover the two-segment `/profiles/sport/{sportId}`); **kept** `"/api/sports/profiles/*"` (A21 get-by-id). Comment block rewritten |
+
+### What was built
+
+Matches the design — no divergence. `ForbiddenException` import stays in `SportController` (still
+used by `getProfileById`).
+
+### Key decisions
+
+- **No ownership `403` anywhere in this ticket.** With the `{userId}` param gone there is no
+  "not the owner" case for the list or the per-sport read — the principal *is* the scope. The
+  positive proof is an IT (`list_authenticated_returnsOnlyTheCallersOwnRows`) that seeds rows for
+  two users, authenticates as one, and asserts only that caller's row comes back.
+- **Anonymous → `401` via `SecurityConfig`, not `403` via `@PreAuthorize`** — same shape as
+  A20/A21. The exact `"/api/sports/profiles"` matcher is load-bearing: `/api/sports/**` stays
+  `permitAll`, so without it an anonymous `GET /api/sports/profiles` would reach the method.
+- **Per your Phase 1 answer**, the deleted `403`-for-other-user IT slot was replaced by an
+  anonymous-`401` assertion on the new list path (not left empty), plus the caller-scoping
+  positive test above.
+- **`getUserProfileForSport` bad/unknown `sportId`** left to the unchanged service: non-numeric
+  path segment → Spring `400` type-mismatch; unknown/absent → `404` (`ResourceNotFoundException`).
+  No new sport-exists validation added (Phase 1 decision).
+
+### Consumer census result (re-confirmed at pickup)
+
+- **Service methods** — all three unchanged; `SessionServiceImpl.discoverSessions` and
+  `GroupServiceImpl.getGroupIdsBySportProfiles` call them in-process with their own caller id.
+  **Compatible as-is.**
+- **Backend HTTP callers of either `/profiles/user/...` path** — none (only `SportController` +
+  its ITs). No reference in `services/` or `server/src/main`.
+- **`SecurityConfig`** — **updated in this change.**
+- **Client** — one hook family (`useRawSportProfilesForUser` / `useSportProfilesForUser` /
+  `useSportProfiles` / `useMySportProfilesRaw`), the MSW handler
+  `http.get('/api/sports/profiles/user/:userId')`, and ~20 `*.test.tsx` stubs; plus genuine
+  other-user display in `useFriendsPageData`. A20 *named* two client follow-ups but recorded them
+  as "filed by the user, not in this PR" — **they were never filed**. This census caught that and
+  filed them: **client `SPORT-10`** (`isResume` add-sport flow) and **client `SPORT-11`** (repoint
+  self read to `/sports/profiles`; drop/placeholder other-user sport display), `SPORT-11` marked
+  blocked on A22 merging. **Deferred with filed follow-up tickets.**
+- No client-visible enum, routing key, or event type.
+
+### Follow-up filed mid-ticket
+
+`common` **C4** — `NoResourceFoundException`/`NoHandlerFoundException` fall through
+`GlobalExceptionHandler`'s catch-all → **500** for every unmapped path (should be `404`). Found in
+this ticket's Phase 5 live smoke test: the two `/profiles/user/...` paths A22 removed now return
+`500` instead of `404`. Pre-existing (any unmapped path 500s), not introduced here, and the census
+confirmed those two paths have zero consumers — so filed as its own cross-cutting `common` ticket
+rather than widening A22 into the shared exception handler.
+
+### Verification
+
+- N+1: none — the controller only relocates an argument; no new mapping loop.
+- `./gradlew :modules:sport:sport-impl:test` — green (`--rerun-tasks`).
+- `./gradlew :modules:auth:auth-impl:test` — green (`--rerun-tasks`).
+- `./gradlew :server:test` — full suite green. `SportProfileResumeAndVisibilityIntegrationTest`
+  15/15 (8 new/reworked: `list_callerWith{IncludeInactive,outFlag}...`,
+  `list_authenticated_returnsOnlyTheCallersOwnRows`, `list_anonymous_is401` on the new path, and
+  `getForSport_{callerWithProfile_is200, callerWithoutProfile_is404, readsTheCallersOwn_notAnotherUsers, anonymous_is401}`).
+- Live smoke (fresh `bootRun` on the branch, against dev Postgres): anon → `401` on
+  `/api/sports/profiles`, `/api/sports/profiles?includeInactive=true`,
+  `/api/sports/profiles/sport/1`, `/api/sports/profiles/1`; `/api/sports` still `200` (public);
+  authenticated → `200` + `[]` on the list (and with `?includeInactive=true`), `404` on
+  `/api/sports/profiles/sport/{id}` with no profile for the caller.
+
+### Delta for the client (SPORT-11)
+
+The removed endpoints are gone as of this change — `GET /api/sports/profiles/user/{userId}` and
+`GET /api/sports/profiles/user/{userId}/sport/{sportId}` both 404 (via C4, currently 500). The
+replacements are `GET /api/sports/profiles` (self list, `?includeInactive` kept) and
+`GET /api/sports/profiles/sport/{sportId}` (self per-sport, `404` when the caller has none). There
+is **no** replacement for reading another user's sport profiles — that capability was removed by
+design; a new PII-scoped endpoint would be its own backend ticket.

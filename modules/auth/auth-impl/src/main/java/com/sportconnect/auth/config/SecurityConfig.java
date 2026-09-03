@@ -92,17 +92,23 @@ public class SecurityConfig {
 
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
-                        // A20 + A21: the caller's own sport profile (by id) and profile list are
-                        // owner-only. Ordered before the /api/sports/** permit below
+                        // A21: the caller's own sport profile by id —
+                        // GET /api/sports/profiles/{profileId} (one segment after profiles/),
+                        // owner-only via @PreAuthorize + a principal check.
+                        // A22: the caller's own profile list and per-sport read are caller-scoped —
+                        // GET /api/sports/profiles (exact) and
+                        // GET /api/sports/profiles/sport/{sportId}. A single "*" matches exactly one
+                        // path segment, so "/profiles/*" does NOT cover the two-segment
+                        // "/profiles/sport/{sportId}" — it is listed explicitly. Without the exact
+                        // "/api/sports/profiles" entry the /api/sports/** permit below would make
+                        // the list endpoint public. All ordered before that permit
                         // (first-match-wins) so an anonymous caller is rejected by the filter chain
                         // (401 via jwtAuthenticationEntryPoint) rather than reaching the controller
-                        // and getting a 403 from @PreAuthorize. Each single "*" matches exactly one
-                        // path segment, so the still-public
-                        // GET /api/sports/profiles/user/{userId}/sport/{sportId} (three segments
-                        // after profiles/) is NOT caught here.
+                        // and getting a 403 from @PreAuthorize.
                         .requestMatchers(HttpMethod.GET,
+                                "/api/sports/profiles",
                                 "/api/sports/profiles/*",
-                                "/api/sports/profiles/user/*").authenticated()
+                                "/api/sports/profiles/sport/*").authenticated()
                         .requestMatchers("/api/sports/**").permitAll()
                         // U11: no longer public — every GET under /api/users/** now either already
                         // had its own @PreAuthorize (search, friends/**, me/preferences) or gained

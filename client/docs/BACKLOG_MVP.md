@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-08-29
+**Last updated:** 2026-09-03
 
 ---
 
@@ -79,6 +79,8 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 9 | [SPORT-7](MVP/SPORT-7_ATTRIBUTE_FIELDS_ORDER_AND_LAYOUT.md) | `SportAttributesFields` — honor `order`, group-level layout (collapsible + responsive grid); helps the profile editor too | `TODO` |
 | 10 | [SPORT-8](MVP/SPORT-8_REMOVE_PREFERRED_POSITION_FROM_PROFILE_EDITOR.md) | Remove "Preferred position" from the sport profile editor — client half of backend A18 | `TODO` |
 | 11 | [SPORT-9](MVP/SPORT-9_NUMBER_AND_BOOLEAN_ATTRIBUTE_CONTROLS.md) | `NUMBER` (number input, honors `min`/`max`) and `BOOLEAN` (checkbox) form controls in `SportAttributesFields` + `DefinitionFields`; mirror the enum + resolved `min`/`max` in `shared/types/sport.ts` — client half of backend A16 (`DONE` 2026-09-02); renderer currently `default: return null`-degrades both | `TODO` |
+| 12 | [SPORT-10](MVP/SPORT-10_ADD_SPORT_RESUME_REACTIVATION_FLOW.md) | Add-sport resume/reactivation flow — detect a soft-deleted profile for the chosen sport (`?includeInactive=true`), show a plain "we'll reactivate your existing profile" confirmation, `POST /api/sports/profiles` with `isResume:true`. Client half of backend **A20** (named in A20 but never filed here; caught by A22's consumer census 2026-09-03) | `TODO` |
+| 13 | [SPORT-11](MVP/SPORT-11_CALLER_SCOPED_SPORT_PROFILE_READS.md) | Move sport-profile reads to the caller-scoped endpoints — `useRawSportProfilesForUser` repointed `GET /sports/profiles/user/{id}` → `GET /sports/profiles` (self), other-user sport display (FriendsPage pills, search chips) dropped/placeholdered since the `{userId}` capability is removed. Client half of backend **A20** owner-only gate + **A22** path change (named but never filed; caught by A22's consumer census 2026-09-03). **Blocked on A22 merging.** | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against

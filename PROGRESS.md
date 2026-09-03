@@ -4093,6 +4093,28 @@ explicit go-ahead at each step (full story in A3's summary doc):
   cases, 5 `UserSportProfileServiceImplSpec` cases, new `SportProfileAttributeWriteIntegrationTest`
   (JSON `null` through `@RequestBody` → delete, verified against the real JSON column). Green:
   `:modules:sport:sport-impl:test`, full `:server:test`.
+- **A22 (`DONE`, 2026-09-03, `modules/sport/sport-impl/docs/MVP/A22_CALLER_SCOPED_SPORT_PROFILE_READS.md`):**
+  caller-scoped sport-profile reads — dropped the redundant `{userId}` path param from both remaining
+  reads. `GET /api/sports/profiles/user/{userId}` → `GET /api/sports/profiles` (the caller's own list,
+  `?includeInactive=true` kept); `GET /api/sports/profiles/user/{userId}/sport/{sportId}` →
+  `GET /api/sports/profiles/sport/{sportId}` (the caller's own profile for that sport, `404` if none).
+  Owner comes from the JWT principal, so there is **no ownership `403`** — this supersedes A20's
+  owner-only list gate and closes the `getUserProfileForSport` public-read gap A21 left as a
+  follow-up. `SecurityConfig` GET matchers: removed `/api/sports/profiles/user/*`, added
+  `/api/sports/profiles` (exact — needed or `/api/sports/**` permitAll makes the list public) and
+  `/api/sports/profiles/sport/*` → anonymous `401` at the filter chain. The three service methods
+  (`getUserProfiles(UUID)`, `getUserProfiles(UUID, boolean)`, `getUserProfileForSport(UUID, Long)`)
+  are untouched — only the controller's source of `userId` moves path → principal; no DTO/migration
+  change. **Consumer census:** no backend HTTP consumer of either removed path; the client's
+  `useSportProfilesForUser` hook family + MSW handler + ~20 test stubs + genuine other-user display
+  in `useFriendsPageData` were covered by two client follow-ups A20 had *named but never actually
+  filed* — filed now as client **SPORT-10** (`isResume` add-sport flow) and **SPORT-11** (repoint
+  self read; drop/placeholder other-user sport display), SPORT-11 blocked on A22 merging. Also filed
+  `common` **C4** — the Phase 5 smoke test showed an unmapped path returns **500 not 404** (`GlobalExceptionHandler`
+  has no `NoResourceFoundException` case), pre-existing and now reachable via the two removed routes.
+  8 new/reworked IT cases in `SportProfileResumeAndVisibilityIntegrationTest`. Green:
+  `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full `:server:test`, live smoke
+  against dev Postgres.
 - **A21 (`DONE`, 2026-09-03, `modules/sport/sport-impl/docs/MVP/A21_OWNER_ONLY_GET_PROFILE_BY_ID.md`):**
   owner-only gate on `GET /api/sports/profiles/{profileId}` — the follow-up A20 deferred (A20 gated
   the *list* endpoint, explicitly left this one public). `SportController.getProfileById` gains
