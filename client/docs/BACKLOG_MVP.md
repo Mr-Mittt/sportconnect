@@ -77,9 +77,8 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 7 | [CLIENT-SESSION-16](MVP/CLIENT-SESSION-16_SESSION_ATTRIBUTES_READ_ONLY_IN_DETAIL_MODAL.md) | Read-only session attributes (term/value, not disabled inputs) in `SessionDetailModal` | `TODO` |
 | 8 | [ADMIN-5](MVP/ADMIN-5_SESSION_ATTRIBUTE_SCHEMA_EDITOR.md) | Session attribute schema editor — second JSON textarea in the sport admin page (ADMIN-2 pattern) | `TODO` |
 | 9 | [SPORT-7](MVP/SPORT-7_ATTRIBUTE_FIELDS_ORDER_AND_LAYOUT.md) | `SportAttributesFields` — honor `order`, group-level layout (collapsible + responsive grid); helps the profile editor too | `TODO` |
-| 10 | [SPORT-8](MVP/SPORT-8_REMOVE_PREFERRED_POSITION_FROM_PROFILE_EDITOR.md) | Remove "Preferred position" from the sport profile editor — client half of backend A18 | `TODO` |
-| 11 | [SPORT-9](MVP/SPORT-9_NUMBER_AND_BOOLEAN_ATTRIBUTE_CONTROLS.md) | `NUMBER` (number input, honors `min`/`max`) and `BOOLEAN` (checkbox) form controls in `SportAttributesFields` + `DefinitionFields`; mirror the enum + resolved `min`/`max` in `shared/types/sport.ts` — client half of backend A16 (`DONE` 2026-09-02); renderer currently `default: return null`-degrades both | `TODO` |
-| 12 | [SPORT-12](MVP/SPORT-12_DEACTIVATE_REACTIVATE_UI_VISUAL_REGRESSION.md) | New `visual-regression` coverage for SPORT-10's deactivate/reactivate UI — the Settings-tab inactive read-only state, `SportProfileStatusConfirmDialog`, `ReactivateSportNudgeDialog`, muted `SportSwitcher` pills (the 3 `profile-settings-*` baselines SPORT-10 changed were already regenerated). Follow-up from SPORT-10 (pattern: CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10) | `TODO` |
+| 10 | [SPORT-9](MVP/SPORT-9_NUMBER_AND_BOOLEAN_ATTRIBUTE_CONTROLS.md) | `NUMBER` (number input, honors `min`/`max`) and `BOOLEAN` (checkbox) form controls in `SportAttributesFields` + `DefinitionFields`; mirror the enum + resolved `min`/`max` in `shared/types/sport.ts` — client half of backend A16 (`DONE` 2026-09-02); renderer currently `default: return null`-degrades both | `TODO` |
+| 11 | [SPORT-12](MVP/SPORT-12_DEACTIVATE_REACTIVATE_UI_VISUAL_REGRESSION.md) | New `visual-regression` coverage for SPORT-10's deactivate/reactivate UI — the Settings-tab inactive read-only state, `SportProfileStatusConfirmDialog`, `ReactivateSportNudgeDialog`, muted `SportSwitcher` pills (the 3 `profile-settings-*` baselines SPORT-10 changed were already regenerated). Follow-up from SPORT-10 (pattern: CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10) | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
@@ -129,107 +128,108 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [SPORT-10](MVP/SPORT-10_ADD_SPORT_RESUME_REACTIVATION_FLOW.md) | Add-sport resume/reactivation flow — `useResumableSports()` reads `GET /sports/profiles?includeInactive=true`; a soft-deleted sport selected in the picker shows read-only prior skill/YoE + **Reactivate** (`POST {sportId, isResume:true}`) + **Cancel**; Profile-page `SportSwitcher` also shows deactivated sports as muted pills that open that flow. Client half of backend **A20** | `DONE` (2026-09-04) |
-| 2 | [SPORT-11](MVP/SPORT-11_CALLER_SCOPED_SPORT_PROFILE_READS.md) | Move sport-profile reads to the caller-scoped endpoints — self read repointed `GET /sports/profiles/user/{id}` → `GET /sports/profiles` (A22), single `['sportProfiles','me']` cache key; friend-profile sport pills rewired onto `UserInfoResponse.activeSportIds` (backend **U15**), `useUserInfo` now runs for every selection. Client half of backend **A20** owner-only gate + **A22** path change | `DONE` (2026-09-04) |
-| 3 | [FRIEND-2](MVP/FRIEND-2_DEDICATED_FRIEND_PROFILE_HOOK.md) | Dedicated friend-profile hook — replaced the borrowed `features/profile/useUserProfile` with a Friends-owned `useUserInfo` on `GET /api/users/{userId}`, typed 1:1 with U11's `UserInfoResponse` (incl. `username`); deleted the old hook (zero importers), fixed stale doc comments — **backend U14 resolved to no change**. **+ scope change same session:** `FriendProfilePanel`'s `FRIENDS` state gained a `Friend ▾` menu → `Unfriend` → confirm dialog → `DELETE /api/users/friends/{id}` (closes a FRIEND-1 gap) | `DONE` (2026-08-29) |
-| 4 | [CLIENT-NOTIF-5](MVP/CLIENT-NOTIF-5_NOTIFICATION_TEXT_FOR_FRIEND_REQUEST_TYPES.md) | Notification text + `/friends` navigation for `user.friend_request.created` / `.accepted` (U13) — union members + `getNotificationText` cases + the one notification type that navigates; pre-selects the requester (or shows an "unavailable" dialog if the request/account is gone) | `DONE` (2026-08-29) |
-| 5 | [PROFILE-11](MVP/PROFILE-11_DUPLICATE_MODAL_KEY_ON_PROFILEPAGE.md) | Duplicate React key on `ProfilePage`'s `EditProfileModal`/`AddSportModal` (both keyed by a counter starting at `0`) — found during `PROFILE-9`'s QA pass, same bug class `FEED-9` already fixed in `GroupsPage.tsx`; fixed and live-verified same session | `DONE` |
-| 6 | [PROFILE-9](MVP/PROFILE-9_QA_ACCEPTANCE_CHECKLIST.md) | `/profile` page — QA / acceptance checklist — first live-browser pass against a real backend for this page; found/filed one trivial duplicate-React-key bug (`PROFILE-11`) rather than fixing inline | `DONE` |
-| 7 | [PROFILE-8](MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md) | `/profile` page — E2E functional test, profile journey — found/fixed two more real MSW mutation gaps (PUT handlers for sport profile + user profile) | `DONE` |
-| 8 | [PROFILE-7](MVP/PROFILE-7_RESPONSIVE_A11Y_VISUAL_REGRESSION.md) | `/profile` page — responsive + accessibility + visual regression against `design-reference-profile.html` — found/fixed a real MSW test-infra gap, a nested-`<main>` landmark bug, and a composer overflow bug also reachable on the Groups page | `DONE` |
-| 9 | [PROFILE-10](MVP/PROFILE-10_PROFILE_PAGE_ENHANCEMENTS.md) | `/profile` page enhancements — sport badge, edit-modal bound, unsaved-changes guards, bio styling, SportSwitcher hover | `DONE` |
-| 10 | [PROFILE-6](MVP/PROFILE-6_PROFILE_PAGE_INTEGRATION.md) | `/profile` page — `ProfilePage` integration (layout, tab wiring, right-rail reuse, route swap) | `DONE` |
-| 11 | [PROFILE-4](MVP/PROFILE-4_SETTINGS_TAB_SPORT_PROFILE_EDITOR.md) | `/profile` page — Settings tab, per-sport profile editor (skillLevel/experience/position + SPORT-2's `SportAttributesFields`) — widened at pickup to also drop `all` from the whole page (PROFILE-2 retrofit) | `DONE` |
-| 12 | [PROFILE-5](MVP/PROFILE-5_EDIT_PROFILE_MODAL.md) | `/profile` page — Edit Profile modal (all 14 non-sport-profile `UpdateProfileRequest` fields — widened at pickup, user decision, from the original 8) | `DONE` |
-| 13 | [PROFILE-3](MVP/PROFILE-3_MEMORIES_TAB_PLACEHOLDER.md) | `/profile` page — Memories tab renders `ComingSoonPage` (no backend concept exists for it) | `DONE` |
-| 14 | [PROFILE-2](MVP/PROFILE-2_POSTS_TAB.md) | `/profile` page — Posts tab (composer + own posts, fully real, reuses `CreatePostForm`/`CommentSection`) — found and fixed a cache-key gap (like/unlike/delete/create were invisible to this tab) and a backend leak (`GROUP_SYSTEM`/`SESSION_POST` rows in `/posts/mine`) along the way | `DONE` |
-| 15 | [PROFILE-1](MVP/PROFILE-1_PROFILE_HEADER.md) | `/profile` page — `ProfileHeader` component (cover, avatar, name/handle/city, bio, Edit profile button) — matched `GroupCoverBanner`/`FriendProfilePanel`'s existing cover-fallback precedent rather than inventing a new decorative pattern (user decision) | `DONE` |
-| 16 | [PROFILE-0](MVP/PROFILE-0_TYPES_AND_HOOKS_SCAFFOLD.md) | `/profile` page — types + data hooks scaffold (`useMyProfile`, raw sport-profile hook, `useMyPosts`, `profilePageStore`) — found and fixed a real backend gap (`UserResponse` never mapped `city`/`country`) along the way, filed **U14**/**FRIEND-2** follow-ups | `DONE` |
-| 17 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Render a user's per-sport attribute fields on their sport profile (v2: nested records, repeating lists, localized labels) - user-facing half of A9 (ADMIN-2 is the admin half); no page hosts it yet, PROFILE-4 will | `DONE` |
-| 18 | [SPORT-5](MVP/SPORT-5_REFRESH_THE_SPORT_CATALOG_ON_ADD_SPORT_AND_SPEAK_UP_WHEN_THERE_IS_NOTHING_TO_ADD.md) | Re-read the sport catalogue when "Add sport" is clicked, and open a dialog when there is nothing to add — **reverses HF-2's aria-disabled pill**; found at pickup that the cap *is* the catalogue size, so the two "empty" states were always one | `DONE` |
-| 19 | [CLIENT-MODAL-1](MVP/CLIENT-MODAL-1_STALE_MUTATION_ERROR_ON_MODAL_REOPEN.md) | Stale mutation error survives modal close/reopen — audited all 10 candidate dialogs; 8 leaked (mutation-derived errors) and 2 were cleared (query-derived). Includes `SessionDetailModal` attributing a failed join to the *next* session opened | `DONE` |
-| 20 | [ADMIN-4](MVP/ADMIN-4_LOG_OUT_FROM_THE_ADMIN_AREA.md) | Log out from the admin area — `ADMIN-1` put `/admin` outside `AppShell`, so it had no session exit at all; **widened at filing** to include the unsaved-changes guard the admin forms never got | `DONE` |
-| 21 | [ADMIN-2](MVP/ADMIN-2_SPORT_ADMIN_MASTER_DETAIL_PAGE.md) | Sport admin master-detail page — table of all sports + side-panel form editing sport fields and the A9 attribute schema — **unblocked 2026-08-21** (backend A9 merged 2026-08-20 PR #176, ADMIN-1 shipped the `/admin` shell), **rescoped the same day** from attribute-schema-only to also cover sport-field updates (SPORT-2 remains the user-facing half of A9) | `DONE` |
-| 22 | [ADMIN-1](MVP/ADMIN-1_ADMIN_AREA_ROUTE_AND_GUARD.md) | `/admin` area — route, ADMIN role guard, and shell — first use of `ProtectedRoute`'s `requiredRole` prop; also the e2e suite's first authorization coverage | `DONE` |
-| 23 | [CLIENT-NOTIF-4](MVP/CLIENT-NOTIF-4_NOTIFICATION_TYPE_COVERAGE_GUARD.md) | Guard against a backend routing key shipping without its client text case | `DONE` |
-| 24 | [CLIENT-SESSION-13](MVP/CLIENT-SESSION-13_SYSTEM_COMMENTS_IN_SESSION_THREAD.md) | Render system comments in the session discussion thread | `DONE` |
-| 25 | [CLIENT-NOTIF-3](MVP/CLIENT-NOTIF-3_NOTIFICATION_TEXT_FOR_MISSING_SESSION_TYPES.md) | Notification text for `session.status.started` and `session.participant.left` | `DONE` |
-| 26 | [CLIENT-NOTIF-2](MVP/CLIENT-NOTIF-2_NOTIFICATION_BELL_VISUAL_REGRESSION.md) | Visual regression harness for the notification bell dropdown | `DONE` |
-| 27 | [CLIENT-SESSION-12](MVP/CLIENT-SESSION-12_SESSION_MODALS_VISUAL_REGRESSION.md) | Visual regression harness for `SessionDetailModal` and `CreateSessionModal` | `DONE` |
-| 28 | [GRP-10](MVP/GRP-10_GROUP_PAGE_VISUAL_REGRESSION.md) | Visual regression harness for the Group page | `DONE` |
-| 29 | [CLIENT-NOTIF-1](MVP/CLIENT-NOTIF-1_NOTIFICATION_BELL_DROPDOWN.md) | Notification bell/dropdown — live badge + list + mark-as-read | `DONE` |
-| 30 | [SPORT-4](MVP/SPORT-4_REAL_SPORT_ICONS.md) | Use the real per-sport `iconUrl` instead of the Tabler stand-in — **new ticket, not in either epic, filed 2026-08-14, inserted ahead of SPORT-2 (user decision)** | `DONE` |
-| 31 | [CLIENT-SESSION-11](MVP/CLIENT-SESSION-11_SHARED_SESSION_CARD.md) | Extract a shared `SessionCard` (compact/full size variant) — de-dupes `UpcomingMatches`' rail row and `SessionListCard` — **new ticket, not in either epic, filed while discussing SPORT-4's `SportIcon` reuse** (2026-08-15) | `DONE` |
-| 32 | [HF-20](MVP/HF-20_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from CLIENT-SESSION-9's `UpcomingMatches` second button) | `DONE` |
-| 33 | [CLIENT-SESSION-10](MVP/CLIENT-SESSION-10_SESSION_MODAL_UX_UI_PASS.md) | Session card + `SessionDetailModal` UX/UI enhancement pass — **new ticket, not in either epic, filed inserted right after CLIENT-SESSION-9** (2026-08-13) | `DONE` |
-| 34 | [CLIENT-SESSION-9](MVP/CLIENT-SESSION-9_PARTICIPATION_ACTION.md) | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) — **reordered ahead of SPORT-2, user decision 2026-08-13; SESSION-9 backend shipped 2026-08-08, no longer blocking** | `DONE` |
-| 35 | [CLIENT-SESSION-8](MVP/CLIENT-SESSION-8_SESSION_COMMENTS.md) | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `DONE` |
-| 36 | [GRP-9](MVP/GRP-9_MOVE_SETTINGS_TAB_GENERAL_SAVE_RULES_SCHEDULE_TO_THE_DEDICAT.md) | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
-| 37 | [SPORT-3](MVP/SPORT-3_SPORT_CATALOG_REAL_FETCH.md) | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `DONE` |
-| 38 | [CLIENT-SESSION-7](MVP/CLIENT-SESSION-7_RAIL_CTAS_AND_HOOK_EXTRACTION.md) | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
-| 39 | [CLIENT-SESSION-6](MVP/CLIENT-SESSION-6_STANDALONE_DISCOVERY.md) | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `DONE` |
-| 40 | [CLIENT-SESSION-4](MVP/CLIENT-SESSION-4_INVITE_APPROVAL.md) | Invite-friends + auto-approve at creation, plus approval queue UI (SESSION-6) | `DONE` |
-| 41 | [CLIENT-SESSION-5](MVP/CLIENT-SESSION-5_FAVORITE_LOCATIONS.md) | Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown (LOC-2) | `DONE` |
-| 42 | [CLIENT-SESSION-2](MVP/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md) | Standalone-only `CreateSessionModal` redesign (core fields) | `DONE` |
-| 43 | [CLIENT-SESSION-3](MVP/CLIENT-SESSION-3_CAPACITY_AND_FEE.md) | Capacity + fee/pricing fields in `CreateSessionModal` (SESSION-5) | `DONE` |
-| 44 | [CLIENT-LOC-1](MVP/CLIENT-LOC-1_LOCATIONPICKER_COMPONENT.md) | `LocationPicker` component — search, Google-Maps-link paste-and-resolve, OSM/Leaflet preview pin, Get Directions | `DONE` |
-| 45 | [CLIENT-SESSION-1](MVP/CLIENT-SESSION-1_SESSION_UI.md) | Session create/list/join/leave/cancel UI, de-mocks HF-4 (`UpcomingMatches`) | `DONE` |
-| 46 | [GRP-8](MVP/GRP-8_INVITATION_LIFECYCLE_POLISH.md) | Sport pill follows an opened group + merged multi-inviter display (invitee + owner/admin views) + reason-gated invitation reject + join-request withdraw + sport-add confirmation on accept — **new ticket, not in either epic, filed while using GRP-7's shipped lifecycle, amended same day** (2026-07-24) — backend B13/B14/B15 all shipped, no longer blocking | `DONE` |
-| 47 | [GRP-7](MVP/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md) | Wire the invitation approve/accept lifecycle — owner/admin approval + invitee acceptance — **new ticket, not in either epic, found while closing out GRP-4** (2026-07-23) — blocked on backend B11 | `DONE` |
-| 48 | [HF-19](MVP/HF-19_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from GRP-6's app-wide Dialog position/size changes) | `DONE` |
-| 49 | [FRIEND-1](MVP/FRIEND-1_FRIENDS_PAGE.md) | Friends page — rail, profile/chat panel, directory search, friend-request actions — **new ticket, not in either epic**, inserted ahead of GRP-4 (user decision, 2026-07-22) | `DONE` |
-| 50 | [GRP-4](MVP/GRP-4_INVITE_FRIEND_REAL.md) | Wire invite-friend search to the real backend — blocked on GRP-3, unblocked now that FRIEND-1 is `DONE` | `DONE` |
-| 51 | [GRP-2](MVP/GRP-2_SETTINGS_TAB_FULL_DATA_SET.md) | Adapt Settings tab to the full group settings data set — blocked on B7 (group-impl) | `DONE` |
-| 52 | [GRP-3](MVP/GRP-3_MEMBERS_TAB.md) | Members tab — group member management (search, invite, 5 status-grouped lists) | `DONE` |
-| 53 | [GRP-6](MVP/GRP-6_JOIN_GROUP_MODAL_MULTI_SPORT_FILTER.md) | Join Group modal — multi-select sport filter + grouped results — **new ticket, not in either epic, supersedes GRP-5** | `DONE` |
-| 54 | [GRP-5](MVP/GRP-5_JOIN_GROUP_MODAL_SHOW_THE_ACTIVE_SPORT_FILTER.md) | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
-| 55 | [GRP-1](MVP/GRP-1_GROUP_PAGE_RESTRUCTURE.md) | Group page restructure — cover banner, Posts/Chat/Settings tabs, inline discovery panel | `DONE` |
-| 56 | [FEED-11](MVP/FEED-11_POST_MODAL_VISUAL_REGRESSION.md) | Visual regression harness for the post comment modal — **new ticket, not in either epic** | `DONE` |
-| 57 | [FEED-9](MVP/FEED-9_QA_ACCEPTANCE_CHECKLIST.md) | QA / acceptance checklist (integration) | `DONE` |
-| 58 | [MSW-1](MVP/MSW-1_STANDALONE_MOCK_SERVER.md) | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `DONE` |
-| 59 | [FEED-12](MVP/FEED-12_COMMENT_MODAL_DEEP_LINK.md) | Comment modal fetches its own post + URL-addressable deep link — **new ticket, not in either epic** | `DONE` |
-| 60 | [HF-18](MVP/HF-18_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from FEED-7's real group broadcasts) | `DONE` |
-| 61 | [FEED-7](MVP/FEED-7_GROUPBROADCASTS_REAL.md) | GroupBroadcasts (real) — de-mocks HF-6 | `DONE` |
-| 62 | [FEED-8](MVP/FEED-8_INTEGRATION_HARDENING.md) | Integration hardening (loading/error/empty states, pagination edges) | `DONE` |
-| 63 | [FEED-10](MVP/FEED-10_E2E_FEED_GROUPS_JOURNEY.md) | E2E functional test — feed/groups journey | `DONE` |
-| 64 | [HF-17](MVP/HF-17_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from FEED-6's real trending hashtags) | `DONE` |
-| 65 | [FEED-4](MVP/FEED-4_GROUP_SWITCHING_REAL.md) | Group switching (real groups list) | `DONE` |
-| 66 | [FEED-5](MVP/FEED-5_GROUP_CREATE_JOIN_MODALS.md) | CreateGroupModal + JoinGroupModal (real) | `DONE` |
-| 67 | [FEED-6](MVP/FEED-6_TRENDINGHASHTAGS_REAL.md) | TrendingHashtags (real) — de-mocks HF-5 | `DONE` |
-| 68 | [SPORT-1](MVP/SPORT-1_SPORT_SWITCHER_REAL.md) | Sport switcher (real) — de-mocks HF-2, **new ticket, not in the epics** | `DONE` |
-| 69 | [HF-15](MVP/HF-15_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from FEED-1's real feed + delete menu) | `DONE` |
-| 70 | [HF-16](MVP/HF-16_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from FEED-2's comment button + dialog) | `DONE` |
-| 71 | [FEED-1](MVP/FEED-1_FEED_POSTCARD_REAL.md) | Feed + PostCard (real — absorbs post-impl's old F1) | `DONE` |
-| 72 | [FEED-2](MVP/FEED-2_COMMENTSECTION_REAL.md) | CommentSection (real) | `DONE` |
-| 73 | [FEED-3](MVP/FEED-3_CREATEPOSTFORM_REAL.md) | CreatePostForm (real) | `DONE` |
-| 74 | [AUTH-8](MVP/AUTH-8_E2E_AUTH_JOURNEY.md) | E2E functional test — auth journey | `DONE` |
-| 75 | [AUTH-7](MVP/AUTH-7_QA_ACCEPTANCE_CHECKLIST.md) | QA / acceptance checklist (auth) | `DONE` |
-| 76 | [FEED-0](MVP/FEED-0_TYPES_TANSTACK_QUERY_HOOKS_SCAFFOLD.md) | Types + TanStack Query hooks scaffold | `DONE` |
-| 77 | [AUTH-6](MVP/AUTH-6_AUTH_HARDENING.md) | Auth hardening (errors, rate-limit messaging, a11y) | `DONE` |
-| 78 | [AUTH-5](MVP/AUTH-5_401_REFRESH_RETRY_INTERCEPTOR.md) | 401 refresh-retry interceptor | `DONE` |
-| 79 | [HF-14](MVP/HF-14_REGENERATE_VISUAL_BASELINES.md) | Regenerate visual-regression baselines (follow-up from AUTH-4's TopBar avatar-menu change) | `DONE` |
-| 80 | [AUTH-4](MVP/AUTH-4_PROTECTED_ROUTE_LOGOUT.md) | ProtectedRoute + logout | `DONE` |
-| 81 | [HF-13](MVP/HF-13_REGENERATE_VISUAL_BASELINES.md) | Regenerate visual-regression baselines (follow-up from AUTH-1's cn() border-hairline fix) | `DONE` |
-| 82 | [AUTH-1](MVP/AUTH-1_LOGIN.md) | Login | `DONE` |
-| 83 | [AUTH-2](MVP/AUTH-2_REGISTER.md) | Register | `DONE` |
-| 84 | [AUTH-3](MVP/AUTH-3_SESSION_BOOTSTRAP.md) | Session bootstrap on app load | `DONE` |
-| 85 | [HF-12](MVP/HF-12_CI_BOOTSTRAP.md) | CI bootstrap + first green run (follow-up from HF-9 item 7) | `DONE` |
-| 86 | [MSW-0](MVP/MSW-0_MOCK_SERVICE_WORKER_HANDLER_SETUP.md) | Mock Service Worker handler setup | `DONE` |
-| 87 | [AUTH-0](MVP/AUTH-0_TYPES_API_CLIENT_STORE.md) | Types, API client, auth store | `DONE` |
-| 88 | [HF-5](MVP/HF-5_TRENDINGHASHTAGS.md) | TrendingHashtags | `DONE` |
-| 89 | [HF-6](MVP/HF-6_GROUPBROADCASTS.md) | GroupBroadcasts | `DONE` |
-| 90 | [HF-7](MVP/HF-7_HOMEFEEDPAGE.md) | HomeFeedPage — layout, state wiring, data hook | `DONE` |
-| 91 | [HF-8](MVP/HF-8_RESPONSIVE_A11Y_PASS.md) | Responsive + accessibility pass | `DONE` |
-| 92 | [HF-10b](MVP/HF-10B_VISUAL_REGRESSION_CI_GATE.md) | Full-page visual regression + CI gate | `DONE` |
-| 93 | [HF-11](MVP/HF-11_E2E_HOME_FEED_JOURNEY.md) | E2E functional test — Home Feed journey | `DONE` |
-| 94 | [HF-9](MVP/HF-9_QA_ACCEPTANCE_CHECKLIST.md) | QA / acceptance checklist (Home Feed) | `DONE` |
-| 95 | [HF-00](MVP/HF-00_PROJECT_SCAFFOLDING.md) | Project scaffolding + tooling (Vite, TS, Tailwind, Storybook, Playwright) | `DONE` |
-| 96 | [HF-0](MVP/HF-0_SHARED_TYPES_AND_MOCK_DATA.md) | Shared types + mock data layer | `DONE` |
-| 97 | [HF-10a](MVP/HF-10a_VISUAL_REGRESSION_HARNESS.md) | Visual-regression harness (baseline screenshots from reference HTML) | `DONE` |
-| 98 | [HF-1](MVP/HF-1_TOPBAR_NAVTABS.md) | TopBar + NavTabs | `DONE` |
-| 99 | [HF-2](MVP/HF-2_SPORTSWITCHER.md) | SportSwitcher | `DONE` |
-| 100 | [HF-3](MVP/HF-3_POSTCARD_FEED.md) | PostCard + Feed | `DONE` |
-| 101 | [HF-4](MVP/HF-4_UPCOMINGMATCHES.md) | UpcomingMatches | `DONE` |
+| 1 | [SPORT-8](MVP/SPORT-8_REMOVE_PREFERRED_POSITION_FROM_PROFILE_EDITOR.md) | Remove "Preferred position" from the sport profile editor — client half of backend A18 | `DONE` (2026-09-04) |
+| 2 | [SPORT-10](MVP/SPORT-10_ADD_SPORT_RESUME_REACTIVATION_FLOW.md) | Add-sport resume/reactivation flow — `useResumableSports()` reads `GET /sports/profiles?includeInactive=true`; a soft-deleted sport selected in the picker shows read-only prior skill/YoE + **Reactivate** (`POST {sportId, isResume:true}`) + **Cancel**; Profile-page `SportSwitcher` also shows deactivated sports as muted pills that open that flow. Client half of backend **A20** | `DONE` (2026-09-04) |
+| 3 | [SPORT-11](MVP/SPORT-11_CALLER_SCOPED_SPORT_PROFILE_READS.md) | Move sport-profile reads to the caller-scoped endpoints — self read repointed `GET /sports/profiles/user/{id}` → `GET /sports/profiles` (A22), single `['sportProfiles','me']` cache key; friend-profile sport pills rewired onto `UserInfoResponse.activeSportIds` (backend **U15**), `useUserInfo` now runs for every selection. Client half of backend **A20** owner-only gate + **A22** path change | `DONE` (2026-09-04) |
+| 4 | [FRIEND-2](MVP/FRIEND-2_DEDICATED_FRIEND_PROFILE_HOOK.md) | Dedicated friend-profile hook — replaced the borrowed `features/profile/useUserProfile` with a Friends-owned `useUserInfo` on `GET /api/users/{userId}`, typed 1:1 with U11's `UserInfoResponse` (incl. `username`); deleted the old hook (zero importers), fixed stale doc comments — **backend U14 resolved to no change**. **+ scope change same session:** `FriendProfilePanel`'s `FRIENDS` state gained a `Friend ▾` menu → `Unfriend` → confirm dialog → `DELETE /api/users/friends/{id}` (closes a FRIEND-1 gap) | `DONE` (2026-08-29) |
+| 5 | [CLIENT-NOTIF-5](MVP/CLIENT-NOTIF-5_NOTIFICATION_TEXT_FOR_FRIEND_REQUEST_TYPES.md) | Notification text + `/friends` navigation for `user.friend_request.created` / `.accepted` (U13) — union members + `getNotificationText` cases + the one notification type that navigates; pre-selects the requester (or shows an "unavailable" dialog if the request/account is gone) | `DONE` (2026-08-29) |
+| 6 | [PROFILE-11](MVP/PROFILE-11_DUPLICATE_MODAL_KEY_ON_PROFILEPAGE.md) | Duplicate React key on `ProfilePage`'s `EditProfileModal`/`AddSportModal` (both keyed by a counter starting at `0`) — found during `PROFILE-9`'s QA pass, same bug class `FEED-9` already fixed in `GroupsPage.tsx`; fixed and live-verified same session | `DONE` |
+| 7 | [PROFILE-9](MVP/PROFILE-9_QA_ACCEPTANCE_CHECKLIST.md) | `/profile` page — QA / acceptance checklist — first live-browser pass against a real backend for this page; found/filed one trivial duplicate-React-key bug (`PROFILE-11`) rather than fixing inline | `DONE` |
+| 8 | [PROFILE-8](MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md) | `/profile` page — E2E functional test, profile journey — found/fixed two more real MSW mutation gaps (PUT handlers for sport profile + user profile) | `DONE` |
+| 9 | [PROFILE-7](MVP/PROFILE-7_RESPONSIVE_A11Y_VISUAL_REGRESSION.md) | `/profile` page — responsive + accessibility + visual regression against `design-reference-profile.html` — found/fixed a real MSW test-infra gap, a nested-`<main>` landmark bug, and a composer overflow bug also reachable on the Groups page | `DONE` |
+| 10 | [PROFILE-10](MVP/PROFILE-10_PROFILE_PAGE_ENHANCEMENTS.md) | `/profile` page enhancements — sport badge, edit-modal bound, unsaved-changes guards, bio styling, SportSwitcher hover | `DONE` |
+| 11 | [PROFILE-6](MVP/PROFILE-6_PROFILE_PAGE_INTEGRATION.md) | `/profile` page — `ProfilePage` integration (layout, tab wiring, right-rail reuse, route swap) | `DONE` |
+| 12 | [PROFILE-4](MVP/PROFILE-4_SETTINGS_TAB_SPORT_PROFILE_EDITOR.md) | `/profile` page — Settings tab, per-sport profile editor (skillLevel/experience/position + SPORT-2's `SportAttributesFields`) — widened at pickup to also drop `all` from the whole page (PROFILE-2 retrofit) | `DONE` |
+| 13 | [PROFILE-5](MVP/PROFILE-5_EDIT_PROFILE_MODAL.md) | `/profile` page — Edit Profile modal (all 14 non-sport-profile `UpdateProfileRequest` fields — widened at pickup, user decision, from the original 8) | `DONE` |
+| 14 | [PROFILE-3](MVP/PROFILE-3_MEMORIES_TAB_PLACEHOLDER.md) | `/profile` page — Memories tab renders `ComingSoonPage` (no backend concept exists for it) | `DONE` |
+| 15 | [PROFILE-2](MVP/PROFILE-2_POSTS_TAB.md) | `/profile` page — Posts tab (composer + own posts, fully real, reuses `CreatePostForm`/`CommentSection`) — found and fixed a cache-key gap (like/unlike/delete/create were invisible to this tab) and a backend leak (`GROUP_SYSTEM`/`SESSION_POST` rows in `/posts/mine`) along the way | `DONE` |
+| 16 | [PROFILE-1](MVP/PROFILE-1_PROFILE_HEADER.md) | `/profile` page — `ProfileHeader` component (cover, avatar, name/handle/city, bio, Edit profile button) — matched `GroupCoverBanner`/`FriendProfilePanel`'s existing cover-fallback precedent rather than inventing a new decorative pattern (user decision) | `DONE` |
+| 17 | [PROFILE-0](MVP/PROFILE-0_TYPES_AND_HOOKS_SCAFFOLD.md) | `/profile` page — types + data hooks scaffold (`useMyProfile`, raw sport-profile hook, `useMyPosts`, `profilePageStore`) — found and fixed a real backend gap (`UserResponse` never mapped `city`/`country`) along the way, filed **U14**/**FRIEND-2** follow-ups | `DONE` |
+| 18 | [SPORT-2](MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md) | Render a user's per-sport attribute fields on their sport profile (v2: nested records, repeating lists, localized labels) - user-facing half of A9 (ADMIN-2 is the admin half); no page hosts it yet, PROFILE-4 will | `DONE` |
+| 19 | [SPORT-5](MVP/SPORT-5_REFRESH_THE_SPORT_CATALOG_ON_ADD_SPORT_AND_SPEAK_UP_WHEN_THERE_IS_NOTHING_TO_ADD.md) | Re-read the sport catalogue when "Add sport" is clicked, and open a dialog when there is nothing to add — **reverses HF-2's aria-disabled pill**; found at pickup that the cap *is* the catalogue size, so the two "empty" states were always one | `DONE` |
+| 20 | [CLIENT-MODAL-1](MVP/CLIENT-MODAL-1_STALE_MUTATION_ERROR_ON_MODAL_REOPEN.md) | Stale mutation error survives modal close/reopen — audited all 10 candidate dialogs; 8 leaked (mutation-derived errors) and 2 were cleared (query-derived). Includes `SessionDetailModal` attributing a failed join to the *next* session opened | `DONE` |
+| 21 | [ADMIN-4](MVP/ADMIN-4_LOG_OUT_FROM_THE_ADMIN_AREA.md) | Log out from the admin area — `ADMIN-1` put `/admin` outside `AppShell`, so it had no session exit at all; **widened at filing** to include the unsaved-changes guard the admin forms never got | `DONE` |
+| 22 | [ADMIN-2](MVP/ADMIN-2_SPORT_ADMIN_MASTER_DETAIL_PAGE.md) | Sport admin master-detail page — table of all sports + side-panel form editing sport fields and the A9 attribute schema — **unblocked 2026-08-21** (backend A9 merged 2026-08-20 PR #176, ADMIN-1 shipped the `/admin` shell), **rescoped the same day** from attribute-schema-only to also cover sport-field updates (SPORT-2 remains the user-facing half of A9) | `DONE` |
+| 23 | [ADMIN-1](MVP/ADMIN-1_ADMIN_AREA_ROUTE_AND_GUARD.md) | `/admin` area — route, ADMIN role guard, and shell — first use of `ProtectedRoute`'s `requiredRole` prop; also the e2e suite's first authorization coverage | `DONE` |
+| 24 | [CLIENT-NOTIF-4](MVP/CLIENT-NOTIF-4_NOTIFICATION_TYPE_COVERAGE_GUARD.md) | Guard against a backend routing key shipping without its client text case | `DONE` |
+| 25 | [CLIENT-SESSION-13](MVP/CLIENT-SESSION-13_SYSTEM_COMMENTS_IN_SESSION_THREAD.md) | Render system comments in the session discussion thread | `DONE` |
+| 26 | [CLIENT-NOTIF-3](MVP/CLIENT-NOTIF-3_NOTIFICATION_TEXT_FOR_MISSING_SESSION_TYPES.md) | Notification text for `session.status.started` and `session.participant.left` | `DONE` |
+| 27 | [CLIENT-NOTIF-2](MVP/CLIENT-NOTIF-2_NOTIFICATION_BELL_VISUAL_REGRESSION.md) | Visual regression harness for the notification bell dropdown | `DONE` |
+| 28 | [CLIENT-SESSION-12](MVP/CLIENT-SESSION-12_SESSION_MODALS_VISUAL_REGRESSION.md) | Visual regression harness for `SessionDetailModal` and `CreateSessionModal` | `DONE` |
+| 29 | [GRP-10](MVP/GRP-10_GROUP_PAGE_VISUAL_REGRESSION.md) | Visual regression harness for the Group page | `DONE` |
+| 30 | [CLIENT-NOTIF-1](MVP/CLIENT-NOTIF-1_NOTIFICATION_BELL_DROPDOWN.md) | Notification bell/dropdown — live badge + list + mark-as-read | `DONE` |
+| 31 | [SPORT-4](MVP/SPORT-4_REAL_SPORT_ICONS.md) | Use the real per-sport `iconUrl` instead of the Tabler stand-in — **new ticket, not in either epic, filed 2026-08-14, inserted ahead of SPORT-2 (user decision)** | `DONE` |
+| 32 | [CLIENT-SESSION-11](MVP/CLIENT-SESSION-11_SHARED_SESSION_CARD.md) | Extract a shared `SessionCard` (compact/full size variant) — de-dupes `UpcomingMatches`' rail row and `SessionListCard` — **new ticket, not in either epic, filed while discussing SPORT-4's `SportIcon` reuse** (2026-08-15) | `DONE` |
+| 33 | [HF-20](MVP/HF-20_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from CLIENT-SESSION-9's `UpcomingMatches` second button) | `DONE` |
+| 34 | [CLIENT-SESSION-10](MVP/CLIENT-SESSION-10_SESSION_MODAL_UX_UI_PASS.md) | Session card + `SessionDetailModal` UX/UI enhancement pass — **new ticket, not in either epic, filed inserted right after CLIENT-SESSION-9** (2026-08-13) | `DONE` |
+| 35 | [CLIENT-SESSION-9](MVP/CLIENT-SESSION-9_PARTICIPATION_ACTION.md) | Wire Join/Accept/Decline/Cancel/Leave button on session card + `SessionDetailModal` (SESSION-9) — **reordered ahead of SPORT-2, user decision 2026-08-13; SESSION-9 backend shipped 2026-08-08, no longer blocking** | `DONE` |
+| 36 | [CLIENT-SESSION-8](MVP/CLIENT-SESSION-8_SESSION_COMMENTS.md) | Session comments — discussion section in `SessionDetailModal` (SESSION-10) | `DONE` |
+| 37 | [GRP-9](MVP/GRP-9_MOVE_SETTINGS_TAB_GENERAL_SAVE_RULES_SCHEDULE_TO_THE_DEDICAT.md) | Move Settings tab General save (rules/schedule) to the new dedicated `generalData` endpoint — **new ticket, not in either epic, filed while explaining `useSettingsUnsavedGuard` to the user** (2026-08-11) — depends on backend B19 | `DONE` |
+| 38 | [SPORT-3](MVP/SPORT-3_SPORT_CATALOG_REAL_FETCH.md) | Sport catalog — fetch the real `GET /api/sports` list instead of the hardcoded 3-sport config (A6) — **reordered ahead of SPORT-2/CLIENT-SESSION-8, user decision 2026-08-07** | `DONE` |
+| 39 | [CLIENT-SESSION-7](MVP/CLIENT-SESSION-7_RAIL_CTAS_AND_HOOK_EXTRACTION.md) | Upcoming rail create/join CTAs + create-session hook extraction across pages | `DONE` |
+| 40 | [CLIENT-SESSION-6](MVP/CLIENT-SESSION-6_STANDALONE_DISCOVERY.md) | Standalone session discover — real "Join a match" browse UI (SESSION-4) | `DONE` |
+| 41 | [CLIENT-SESSION-4](MVP/CLIENT-SESSION-4_INVITE_APPROVAL.md) | Invite-friends + auto-approve at creation, plus approval queue UI (SESSION-6) | `DONE` |
+| 42 | [CLIENT-SESSION-5](MVP/CLIENT-SESSION-5_FAVORITE_LOCATIONS.md) | Favorite locations — heart-toggle + `CreateSessionModal` favorites dropdown (LOC-2) | `DONE` |
+| 43 | [CLIENT-SESSION-2](MVP/CLIENT-SESSION-2_RAIL_CTAS_AND_CREATE_REDESIGN.md) | Standalone-only `CreateSessionModal` redesign (core fields) | `DONE` |
+| 44 | [CLIENT-SESSION-3](MVP/CLIENT-SESSION-3_CAPACITY_AND_FEE.md) | Capacity + fee/pricing fields in `CreateSessionModal` (SESSION-5) | `DONE` |
+| 45 | [CLIENT-LOC-1](MVP/CLIENT-LOC-1_LOCATIONPICKER_COMPONENT.md) | `LocationPicker` component — search, Google-Maps-link paste-and-resolve, OSM/Leaflet preview pin, Get Directions | `DONE` |
+| 46 | [CLIENT-SESSION-1](MVP/CLIENT-SESSION-1_SESSION_UI.md) | Session create/list/join/leave/cancel UI, de-mocks HF-4 (`UpcomingMatches`) | `DONE` |
+| 47 | [GRP-8](MVP/GRP-8_INVITATION_LIFECYCLE_POLISH.md) | Sport pill follows an opened group + merged multi-inviter display (invitee + owner/admin views) + reason-gated invitation reject + join-request withdraw + sport-add confirmation on accept — **new ticket, not in either epic, filed while using GRP-7's shipped lifecycle, amended same day** (2026-07-24) — backend B13/B14/B15 all shipped, no longer blocking | `DONE` |
+| 48 | [GRP-7](MVP/GRP-7_INVITATION_APPROVE_ACCEPT_LIFECYCLE.md) | Wire the invitation approve/accept lifecycle — owner/admin approval + invitee acceptance — **new ticket, not in either epic, found while closing out GRP-4** (2026-07-23) — blocked on backend B11 | `DONE` |
+| 49 | [HF-19](MVP/HF-19_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from GRP-6's app-wide Dialog position/size changes) | `DONE` |
+| 50 | [FRIEND-1](MVP/FRIEND-1_FRIENDS_PAGE.md) | Friends page — rail, profile/chat panel, directory search, friend-request actions — **new ticket, not in either epic**, inserted ahead of GRP-4 (user decision, 2026-07-22) | `DONE` |
+| 51 | [GRP-4](MVP/GRP-4_INVITE_FRIEND_REAL.md) | Wire invite-friend search to the real backend — blocked on GRP-3, unblocked now that FRIEND-1 is `DONE` | `DONE` |
+| 52 | [GRP-2](MVP/GRP-2_SETTINGS_TAB_FULL_DATA_SET.md) | Adapt Settings tab to the full group settings data set — blocked on B7 (group-impl) | `DONE` |
+| 53 | [GRP-3](MVP/GRP-3_MEMBERS_TAB.md) | Members tab — group member management (search, invite, 5 status-grouped lists) | `DONE` |
+| 54 | [GRP-6](MVP/GRP-6_JOIN_GROUP_MODAL_MULTI_SPORT_FILTER.md) | Join Group modal — multi-select sport filter + grouped results — **new ticket, not in either epic, supersedes GRP-5** | `DONE` |
+| 55 | [GRP-5](MVP/GRP-5_JOIN_GROUP_MODAL_SHOW_THE_ACTIVE_SPORT_FILTER.md) | ~~Join Group modal — show the active sport filter~~ — **SUPERSEDED by GRP-6** | `SUPERSEDED` |
+| 56 | [GRP-1](MVP/GRP-1_GROUP_PAGE_RESTRUCTURE.md) | Group page restructure — cover banner, Posts/Chat/Settings tabs, inline discovery panel | `DONE` |
+| 57 | [FEED-11](MVP/FEED-11_POST_MODAL_VISUAL_REGRESSION.md) | Visual regression harness for the post comment modal — **new ticket, not in either epic** | `DONE` |
+| 58 | [FEED-9](MVP/FEED-9_QA_ACCEPTANCE_CHECKLIST.md) | QA / acceptance checklist (integration) | `DONE` |
+| 59 | [MSW-1](MVP/MSW-1_STANDALONE_MOCK_SERVER.md) | Standalone mock server for e2e — replaces per-navigation Service Worker setup | `DONE` |
+| 60 | [FEED-12](MVP/FEED-12_COMMENT_MODAL_DEEP_LINK.md) | Comment modal fetches its own post + URL-addressable deep link — **new ticket, not in either epic** | `DONE` |
+| 61 | [HF-18](MVP/HF-18_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from FEED-7's real group broadcasts) | `DONE` |
+| 62 | [FEED-7](MVP/FEED-7_GROUPBROADCASTS_REAL.md) | GroupBroadcasts (real) — de-mocks HF-6 | `DONE` |
+| 63 | [FEED-8](MVP/FEED-8_INTEGRATION_HARDENING.md) | Integration hardening (loading/error/empty states, pagination edges) | `DONE` |
+| 64 | [FEED-10](MVP/FEED-10_E2E_FEED_GROUPS_JOURNEY.md) | E2E functional test — feed/groups journey | `DONE` |
+| 65 | [HF-17](MVP/HF-17_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from FEED-6's real trending hashtags) | `DONE` |
+| 66 | [FEED-4](MVP/FEED-4_GROUP_SWITCHING_REAL.md) | Group switching (real groups list) | `DONE` |
+| 67 | [FEED-5](MVP/FEED-5_GROUP_CREATE_JOIN_MODALS.md) | CreateGroupModal + JoinGroupModal (real) | `DONE` |
+| 68 | [FEED-6](MVP/FEED-6_TRENDINGHASHTAGS_REAL.md) | TrendingHashtags (real) — de-mocks HF-5 | `DONE` |
+| 69 | [SPORT-1](MVP/SPORT-1_SPORT_SWITCHER_REAL.md) | Sport switcher (real) — de-mocks HF-2, **new ticket, not in the epics** | `DONE` |
+| 70 | [HF-15](MVP/HF-15_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from FEED-1's real feed + delete menu) | `DONE` |
+| 71 | [HF-16](MVP/HF-16_REGENERATE_VISUAL_REGRESSION_BASELINES_FOLLOW_UP_TICKET_NOT_.md) | Regenerate visual-regression baselines (follow-up from FEED-2's comment button + dialog) | `DONE` |
+| 72 | [FEED-1](MVP/FEED-1_FEED_POSTCARD_REAL.md) | Feed + PostCard (real — absorbs post-impl's old F1) | `DONE` |
+| 73 | [FEED-2](MVP/FEED-2_COMMENTSECTION_REAL.md) | CommentSection (real) | `DONE` |
+| 74 | [FEED-3](MVP/FEED-3_CREATEPOSTFORM_REAL.md) | CreatePostForm (real) | `DONE` |
+| 75 | [AUTH-8](MVP/AUTH-8_E2E_AUTH_JOURNEY.md) | E2E functional test — auth journey | `DONE` |
+| 76 | [AUTH-7](MVP/AUTH-7_QA_ACCEPTANCE_CHECKLIST.md) | QA / acceptance checklist (auth) | `DONE` |
+| 77 | [FEED-0](MVP/FEED-0_TYPES_TANSTACK_QUERY_HOOKS_SCAFFOLD.md) | Types + TanStack Query hooks scaffold | `DONE` |
+| 78 | [AUTH-6](MVP/AUTH-6_AUTH_HARDENING.md) | Auth hardening (errors, rate-limit messaging, a11y) | `DONE` |
+| 79 | [AUTH-5](MVP/AUTH-5_401_REFRESH_RETRY_INTERCEPTOR.md) | 401 refresh-retry interceptor | `DONE` |
+| 80 | [HF-14](MVP/HF-14_REGENERATE_VISUAL_BASELINES.md) | Regenerate visual-regression baselines (follow-up from AUTH-4's TopBar avatar-menu change) | `DONE` |
+| 81 | [AUTH-4](MVP/AUTH-4_PROTECTED_ROUTE_LOGOUT.md) | ProtectedRoute + logout | `DONE` |
+| 82 | [HF-13](MVP/HF-13_REGENERATE_VISUAL_BASELINES.md) | Regenerate visual-regression baselines (follow-up from AUTH-1's cn() border-hairline fix) | `DONE` |
+| 83 | [AUTH-1](MVP/AUTH-1_LOGIN.md) | Login | `DONE` |
+| 84 | [AUTH-2](MVP/AUTH-2_REGISTER.md) | Register | `DONE` |
+| 85 | [AUTH-3](MVP/AUTH-3_SESSION_BOOTSTRAP.md) | Session bootstrap on app load | `DONE` |
+| 86 | [HF-12](MVP/HF-12_CI_BOOTSTRAP.md) | CI bootstrap + first green run (follow-up from HF-9 item 7) | `DONE` |
+| 87 | [MSW-0](MVP/MSW-0_MOCK_SERVICE_WORKER_HANDLER_SETUP.md) | Mock Service Worker handler setup | `DONE` |
+| 88 | [AUTH-0](MVP/AUTH-0_TYPES_API_CLIENT_STORE.md) | Types, API client, auth store | `DONE` |
+| 89 | [HF-5](MVP/HF-5_TRENDINGHASHTAGS.md) | TrendingHashtags | `DONE` |
+| 90 | [HF-6](MVP/HF-6_GROUPBROADCASTS.md) | GroupBroadcasts | `DONE` |
+| 91 | [HF-7](MVP/HF-7_HOMEFEEDPAGE.md) | HomeFeedPage — layout, state wiring, data hook | `DONE` |
+| 92 | [HF-8](MVP/HF-8_RESPONSIVE_A11Y_PASS.md) | Responsive + accessibility pass | `DONE` |
+| 93 | [HF-10b](MVP/HF-10B_VISUAL_REGRESSION_CI_GATE.md) | Full-page visual regression + CI gate | `DONE` |
+| 94 | [HF-11](MVP/HF-11_E2E_HOME_FEED_JOURNEY.md) | E2E functional test — Home Feed journey | `DONE` |
+| 95 | [HF-9](MVP/HF-9_QA_ACCEPTANCE_CHECKLIST.md) | QA / acceptance checklist (Home Feed) | `DONE` |
+| 96 | [HF-00](MVP/HF-00_PROJECT_SCAFFOLDING.md) | Project scaffolding + tooling (Vite, TS, Tailwind, Storybook, Playwright) | `DONE` |
+| 97 | [HF-0](MVP/HF-0_SHARED_TYPES_AND_MOCK_DATA.md) | Shared types + mock data layer | `DONE` |
+| 98 | [HF-10a](MVP/HF-10a_VISUAL_REGRESSION_HARNESS.md) | Visual-regression harness (baseline screenshots from reference HTML) | `DONE` |
+| 99 | [HF-1](MVP/HF-1_TOPBAR_NAVTABS.md) | TopBar + NavTabs | `DONE` |
+| 100 | [HF-2](MVP/HF-2_SPORTSWITCHER.md) | SportSwitcher | `DONE` |
+| 101 | [HF-3](MVP/HF-3_POSTCARD_FEED.md) | PostCard + Feed | `DONE` |
+| 102 | [HF-4](MVP/HF-4_UPCOMINGMATCHES.md) | UpcomingMatches | `DONE` |
 
 **Dependencies:**
 ```
@@ -384,6 +384,7 @@ FRIEND-2 (filed 2026-08-26 at PROFILE-0 pickup — user decision) — **DONE 202
 
 | Blocker | Where tracked | Blocked | Status |
 |---|---|---|---|
+| 1 | [SPORT-8](MVP/SPORT-8_REMOVE_PREFERRED_POSITION_FROM_PROFILE_EDITOR.md) | Remove "Preferred position" from the sport profile editor — client half of backend A18 | `DONE` (2026-09-04) |
 | BE-1: refresh token → httpOnly cookie | `modules/auth/docs/BACKLOG_MVP.md` · A2 | AUTH-3, AUTH-5 | `DONE` (2026-07-08) |
 | BE-2: logout derives user from principal | `modules/auth/docs/BACKLOG_MVP.md` · A3 | AUTH-4 (production) | `DONE` (2026-07-08) |
 | BE-3: login/registration rate limiting | `modules/auth/docs/BACKLOG_MVP.md` · A5 | a future client ticket (not yet filed) for rate-limit error surfacing, split out of AUTH-6 on 2026-07-12 | `TODO` |

@@ -119,7 +119,6 @@ const footballProfile = {
   sportName: 'Football',
   skillLevel: 'beginner',
   yearsOfExperience: 2,
-  preferredPosition: 'Midfielder',
   bio: null,
   attributes: {},
   isActive: true,
@@ -133,7 +132,6 @@ const basketballProfile = {
   sportId: 6,
   sportName: 'Basketball',
   skillLevel: 'advanced',
-  preferredPosition: 'Guard',
 };
 
 /** Static (test-invariant) GET responses — same "right rail's page-independent hooks"
@@ -317,7 +315,9 @@ describe('ProfilePage', () => {
     async function openSettingsAndEdit(user: ReturnType<typeof userEvent.setup>) {
       await user.click(screen.getByRole('tab', { name: 'Settings' }));
       await waitFor(() => expect(screen.getByLabelText('Skill level')).toHaveValue('beginner'));
-      await user.type(screen.getByLabelText('Preferred position'), ' Jr.');
+      // Dirty the draft via Years of experience (2 -> 25). SPORT-8 removed the
+      // "Preferred position" field this helper previously typed into.
+      await user.type(screen.getByLabelText('Years of experience'), '5');
     }
 
     it('blocks switching away from Settings via ProfileTabs while dirty, and Discard proceeds', async () => {
@@ -332,7 +332,7 @@ describe('ProfilePage', () => {
       const dialog = await screen.findByRole('dialog', { name: 'Unsaved changes' });
       expect(within(dialog).getByText(/unsaved changes to this sport profile/i)).toBeInTheDocument();
       // Blocked — still on Settings, still showing the edited value.
-      expect(screen.getByLabelText('Preferred position')).toHaveValue('Midfielder Jr.');
+      expect(screen.getByLabelText('Years of experience')).toHaveValue(25);
 
       await user.click(within(dialog).getByRole('button', { name: 'Discard changes' }));
 
@@ -347,7 +347,7 @@ describe('ProfilePage', () => {
         data: {
           success: true,
           message: '',
-          data: { ...footballProfile, preferredPosition: 'Midfielder Jr.' },
+          data: { ...footballProfile, yearsOfExperience: 25 },
           timestamp: '',
         },
       });
@@ -359,14 +359,14 @@ describe('ProfilePage', () => {
 
       const dialog = await screen.findByRole('dialog', { name: 'Unsaved changes' });
       // Blocked — still Football's data, the pill switch hasn't gone through yet.
-      expect(screen.getByLabelText('Preferred position')).toHaveValue('Midfielder Jr.');
+      expect(screen.getByLabelText('Years of experience')).toHaveValue(25);
 
       await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
 
       await waitFor(() =>
         expect(putSpy).toHaveBeenCalledWith(
           '/sports/profiles/101',
-          expect.objectContaining({ preferredPosition: 'Midfielder Jr.' }),
+          expect.objectContaining({ yearsOfExperience: 25 }),
         ),
       );
       // The guarded pill switch now proceeds automatically once the save resolves.
@@ -386,7 +386,7 @@ describe('ProfilePage', () => {
       await user.click(within(dialog).getByRole('button', { name: /close|cancel/i }));
 
       expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).not.toBeInTheDocument();
-      expect(screen.getByLabelText('Preferred position')).toHaveValue('Midfielder Jr.');
+      expect(screen.getByLabelText('Years of experience')).toHaveValue(25);
     });
 
     it('does not block switching tabs/pills when Settings has no unsaved changes', async () => {

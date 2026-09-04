@@ -61,7 +61,6 @@ const sportProfiles = [
     sportName: 'Basketball',
     skillLevel: null,
     yearsOfExperience: null,
-    preferredPosition: null,
     bio: null,
     attributes: null,
     isActive: true,

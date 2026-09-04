@@ -36,7 +36,6 @@ function makeProfile(overrides: Partial<UserSportProfileResponse>): UserSportPro
     sportName: 'Soccer',
     skillLevel: null,
     yearsOfExperience: null,
-    preferredPosition: null,
     bio: null,
     attributes: null,
     isActive: true,

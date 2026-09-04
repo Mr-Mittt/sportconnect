@@ -27,7 +27,6 @@ function profile(overrides: Partial<UserSportProfileResponse>): UserSportProfile
     sportName: 'Football',
     skillLevel: 'beginner',
     yearsOfExperience: 2,
-    preferredPosition: 'Striker',
     bio: null,
     attributes: { dominantFoot: 'right' },
     isActive: true,
@@ -75,28 +74,27 @@ describe('useSportProfileSettingsTabData', () => {
     expect(result.current.draft).toEqual({
       skillLevel: 'beginner',
       yearsOfExperience: '2',
-      preferredPosition: 'Striker',
       attributes: { dominantFoot: 'right' },
     });
   });
 
   it('re-seeds and discards unsaved edits when the active sport switches', async () => {
     mockGet([
-      profile({ id: 1, sportId: 5, skillLevel: 'beginner' }),
-      profile({ id: 2, sportId: 6, skillLevel: 'advanced', preferredPosition: 'Point guard' }),
+      profile({ id: 1, sportId: 5, skillLevel: 'beginner', yearsOfExperience: 2 }),
+      profile({ id: 2, sportId: 6, skillLevel: 'advanced', yearsOfExperience: 8 }),
     ]);
 
     const { result } = renderHook(() => useSportProfileSettingsTabData(), { wrapper });
     await waitFor(() => expect(result.current.activeProfile?.sportId).toBe(5));
 
-    act(() => result.current.setPreferredPosition('Winger'));
-    expect(result.current.draft.preferredPosition).toBe('Winger');
+    act(() => result.current.setYearsOfExperience('9'));
+    expect(result.current.draft.yearsOfExperience).toBe('9');
     expect(result.current.isDirty).toBe(true);
 
     act(() => useProfilePageStore.getState().setActiveSport('basketball'));
 
     await waitFor(() => expect(result.current.activeProfile?.sportId).toBe(6));
-    expect(result.current.draft.preferredPosition).toBe('Point guard');
+    expect(result.current.draft.yearsOfExperience).toBe('8');
     expect(result.current.isDirty).toBe(false);
   });
 
@@ -115,7 +113,7 @@ describe('useSportProfileSettingsTabData', () => {
       data: {
         success: true,
         message: '',
-        data: profile({ sportId: 5, preferredPosition: 'Winger' }),
+        data: profile({ sportId: 5, yearsOfExperience: 9 }),
         timestamp: '',
       },
     });
@@ -123,14 +121,14 @@ describe('useSportProfileSettingsTabData', () => {
     const { result } = renderHook(() => useSportProfileSettingsTabData(), { wrapper });
     await waitFor(() => expect(result.current.activeProfile).not.toBeUndefined());
 
-    act(() => result.current.setPreferredPosition('Winger'));
+    act(() => result.current.setYearsOfExperience('9'));
     act(() => result.current.save());
 
     await waitFor(() =>
       expect(apiClient.put).toHaveBeenCalledWith('/sports/profiles/1', {
         sportId: 5,
         skillLevel: 'beginner',
-        preferredPosition: 'Winger',
+        yearsOfExperience: 9,
       }),
     );
   });
@@ -141,14 +139,14 @@ describe('useSportProfileSettingsTabData', () => {
       data: {
         success: true,
         message: '',
-        data: profile({ sportId: 5, preferredPosition: 'Winger' }),
+        data: profile({ sportId: 5, yearsOfExperience: 9 }),
         timestamp: '',
       },
     });
 
     const { result } = renderHook(() => useSportProfileSettingsTabData(), { wrapper });
     await waitFor(() => expect(result.current.activeProfile).not.toBeUndefined());
-    act(() => result.current.setPreferredPosition('Winger'));
+    act(() => result.current.setYearsOfExperience('9'));
 
     const onSuccess = vi.fn();
     act(() => result.current.save({ onSuccess }));
@@ -157,17 +155,17 @@ describe('useSportProfileSettingsTabData', () => {
   });
 
   it('discard resets the draft to the saved profile without changing activeProfile', async () => {
-    mockGet([profile({ sportId: 5, preferredPosition: 'Striker' })]);
+    mockGet([profile({ sportId: 5, yearsOfExperience: 7 })]);
 
     const { result } = renderHook(() => useSportProfileSettingsTabData(), { wrapper });
     await waitFor(() => expect(result.current.activeProfile).not.toBeUndefined());
 
-    act(() => result.current.setPreferredPosition('Winger'));
+    act(() => result.current.setYearsOfExperience('9'));
     expect(result.current.isDirty).toBe(true);
 
     act(() => result.current.discard());
 
-    expect(result.current.draft.preferredPosition).toBe('Striker');
+    expect(result.current.draft.yearsOfExperience).toBe('7');
     expect(result.current.isDirty).toBe(false);
   });
 

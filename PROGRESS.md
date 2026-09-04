@@ -4171,6 +4171,22 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client SPORT-8 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-8_REMOVE_PREFERRED_POSITION_FROM_PROFILE_EDITOR.md`):**
+  client half of backend **A18** — removed the fixed `preferredPosition` free-text field from the
+  `/profile` Settings-tab per-sport profile editor. `preferredPosition` is gone from
+  `UserSportProfileResponse` (`shared/types/sport.ts`), `SportProfileEditDraft`,
+  `toSportProfileEditDraft`, `buildSportProfileUpdatePayload`, `isSportProfileDraftDirty`,
+  `useSportProfileSettingsTabData` (`setPreferredPosition`), `SportProfileSettingsTab` (the
+  `<Input>` + prop), `ProfilePage`'s wire, and the MSW `sport.ts` handlers + `fixtures.ts`.
+  `AddSportFields`/`AddSportModal` never collected it — no change there. ~16 test/story files:
+  fixture-literal removals, plus the `SportProfileSettingsTab` / `useSportProfileSettingsTabData` /
+  `ProfilePage` (PROFILE-10 guard) behavioural cases re-pointed onto **Years of experience** so
+  draft/payload/dirty/unsaved-guard coverage is unchanged. Position is sport-specific and belongs
+  in the per-sport A9 attribute schema, not a flat column. Client-first is the mandated order
+  (backend still returns the key harmlessly until A18 drops the column). `tsc -b` / Vitest green.
+  **Visual regression:** the 3 `profile-settings-*` baselines (`app-profile.spec.ts`) legitimately
+  change (Settings tab loses one field row) — expected to fail until an `update-baselines` dispatch
+  regenerates exactly those; every other baseline byte-identical.
 - **Client SPORT-11 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-11_CALLER_SCOPED_SPORT_PROFILE_READS.md`):**
   the client half of backend A20's owner-only gate + A22's path change. The caller's own
   sport-profile read (`useRawSportProfilesForUser(userId)` → renamed `useRawMySportProfiles()`)

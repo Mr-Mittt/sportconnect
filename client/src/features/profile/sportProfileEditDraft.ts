@@ -11,19 +11,20 @@ export interface UpdateSportProfilePayload {
   sportId: number;
   skillLevel: string;
   yearsOfExperience?: number;
-  preferredPosition?: string;
   attributes?: Record<string, unknown>;
 }
 
-/** The form's local draft. `skillLevel`/`preferredPosition` are strings bound to inputs;
- * `yearsOfExperience` too (converted back to a number only when sent), same shape
- * `sportFieldsDraft.ts`'s `minPlayers`/`maxPlayers` already use. `attributes` is the flat
- * key -> value map `SportAttributesFields` reads/writes directly — no string conversion, since it
- * is never bound to a plain text input itself. */
+/** The form's local draft. `skillLevel` is a string bound to an input; `yearsOfExperience` too
+ * (converted back to a number only when sent), same shape `sportFieldsDraft.ts`'s
+ * `minPlayers`/`maxPlayers` already use. `attributes` is the flat key -> value map
+ * `SportAttributesFields` reads/writes directly — no string conversion, since it is never bound to
+ * a plain text input itself.
+ *
+ * SPORT-8: `preferredPosition` was removed — a fixed "position" column was a mistake (position is
+ * sport-specific and belongs in the per-sport A9 attribute schema). Pairs with backend A18. */
 export interface SportProfileEditDraft {
   skillLevel: string;
   yearsOfExperience: string;
-  preferredPosition: string;
   attributes: Record<string, unknown>;
 }
 
@@ -32,7 +33,6 @@ export function toSportProfileEditDraft(profile: UserSportProfileResponse): Spor
   return {
     skillLevel: profile.skillLevel ?? '',
     yearsOfExperience: profile.yearsOfExperience?.toString() ?? '',
-    preferredPosition: profile.preferredPosition ?? '',
     attributes: profile.attributes ?? {},
   };
 }
@@ -49,10 +49,9 @@ export function toSportProfileEditDraft(profile: UserSportProfileResponse): Spor
  * nothing in it changed; still gated on a real difference here to avoid a no-op field in the
  * request body on every save.
  *
- * Known limit inherited from the same null-means-skip rule `sportFieldsDraft.ts` documents:
- * `preferredPosition` can be cleared back to `''` (still non-null, reaches the server), but an
+ * Known limit inherited from the same null-means-skip rule `sportFieldsDraft.ts` documents: an
  * emptied `yearsOfExperience` is omitted rather than sent as `0` — there is no way to express
- * "unset" for that field either.
+ * "unset" for that field.
  */
 export function buildSportProfileUpdatePayload(
   profile: UserSportProfileResponse,
@@ -61,9 +60,6 @@ export function buildSportProfileUpdatePayload(
   const payload: UpdateSportProfilePayload = { sportId: profile.sportId, skillLevel: draft.skillLevel };
   const original = toSportProfileEditDraft(profile);
 
-  if (draft.preferredPosition !== original.preferredPosition) {
-    payload.preferredPosition = draft.preferredPosition;
-  }
   if (draft.yearsOfExperience !== original.yearsOfExperience && draft.yearsOfExperience !== '') {
     payload.yearsOfExperience = Number(draft.yearsOfExperience);
   }
@@ -86,7 +82,6 @@ export function isSportProfileDraftDirty(
   const original = toSportProfileEditDraft(profile);
   return (
     draft.skillLevel !== original.skillLevel ||
-    draft.preferredPosition !== original.preferredPosition ||
     (draft.yearsOfExperience !== original.yearsOfExperience && draft.yearsOfExperience !== '') ||
     JSON.stringify(draft.attributes) !== JSON.stringify(original.attributes)
   );

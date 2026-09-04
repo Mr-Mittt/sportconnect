@@ -245,7 +245,6 @@ export function ProfilePage() {
                     draft={settingsTabData.draft}
                     setSkillLevel={settingsTabData.setSkillLevel}
                     setYearsOfExperience={settingsTabData.setYearsOfExperience}
-                    setPreferredPosition={settingsTabData.setPreferredPosition}
                     setAttribute={settingsTabData.setAttribute}
                     isDirty={settingsTabData.isDirty}
                     onSave={() => settingsTabData.save()}

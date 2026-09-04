@@ -51,7 +51,6 @@ const footballProfile = {
   sportName: 'Football',
   skillLevel: 'beginner',
   yearsOfExperience: 2,
-  preferredPosition: 'Midfielder',
   bio: null,
   attributes: {},
   isActive: true,

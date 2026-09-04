@@ -49,7 +49,6 @@ export function useSportProfileSettingsTabData(sportKeyOverride?: SportKey): {
   draft: SportProfileEditDraft;
   setSkillLevel: (value: string) => void;
   setYearsOfExperience: (value: string) => void;
-  setPreferredPosition: (value: string) => void;
   setAttribute: (key: string, value: unknown) => void;
   isDirty: boolean;
   save: (options?: { onSuccess?: () => void }) => void;
@@ -88,8 +87,6 @@ export function useSportProfileSettingsTabData(sportKeyOverride?: SportKey): {
   const setSkillLevel = (value: string) => setDraft((current) => ({ ...current, skillLevel: value }));
   const setYearsOfExperience = (value: string) =>
     setDraft((current) => ({ ...current, yearsOfExperience: value }));
-  const setPreferredPosition = (value: string) =>
-    setDraft((current) => ({ ...current, preferredPosition: value }));
   const setAttribute = (key: string, value: unknown) =>
     setDraft((current) => ({ ...current, attributes: { ...current.attributes, [key]: value } }));
 
@@ -114,7 +111,6 @@ export function useSportProfileSettingsTabData(sportKeyOverride?: SportKey): {
     draft,
     setSkillLevel,
     setYearsOfExperience,
-    setPreferredPosition,
     setAttribute,
     isDirty,
     save,
@@ -125,5 +121,5 @@ export function useSportProfileSettingsTabData(sportKeyOverride?: SportKey): {
 }
 
 function emptyDraft(): SportProfileEditDraft {
-  return { skillLevel: '', yearsOfExperience: '', preferredPosition: '', attributes: {} };
+  return { skillLevel: '', yearsOfExperience: '', attributes: {} };
 }

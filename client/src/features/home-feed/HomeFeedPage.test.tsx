@@ -120,7 +120,6 @@ const sportProfileFixtures = [5, 6, 2].map((sportId, index) => ({
   sportName: ['Soccer', 'Basketball', 'Tennis'][index],
   skillLevel: null,
   yearsOfExperience: null,
-  preferredPosition: null,
   bio: null,
   attributes: null,
   isActive: true,

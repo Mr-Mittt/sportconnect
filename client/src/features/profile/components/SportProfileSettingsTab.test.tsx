@@ -13,7 +13,6 @@ function profile(overrides: Partial<UserSportProfileResponse> = {}): UserSportPr
     sportName: 'Football',
     skillLevel: 'beginner',
     yearsOfExperience: null,
-    preferredPosition: null,
     bio: null,
     attributes: null,
     isActive: true,
@@ -27,7 +26,6 @@ function draft(overrides: Partial<SportProfileEditDraft> = {}): SportProfileEdit
   return {
     skillLevel: 'beginner',
     yearsOfExperience: '',
-    preferredPosition: '',
     attributes: {},
     ...overrides,
   };
@@ -38,7 +36,6 @@ const baseProps = {
   schema: null,
   setSkillLevel: vi.fn(),
   setYearsOfExperience: vi.fn(),
-  setPreferredPosition: vi.fn(),
   setAttribute: vi.fn(),
   onSave: vi.fn(),
   isSaving: false,
@@ -73,13 +70,12 @@ describe('SportProfileSettingsTab', () => {
       <SportProfileSettingsTab
         {...baseProps}
         activeProfile={profile()}
-        draft={draft({ skillLevel: 'advanced', yearsOfExperience: '5', preferredPosition: 'Striker' })}
+        draft={draft({ skillLevel: 'advanced', yearsOfExperience: '5' })}
         isDirty={false}
       />,
     );
     expect(screen.getByLabelText('Skill level')).toHaveValue('advanced');
     expect(screen.getByLabelText('Years of experience')).toHaveValue(5);
-    expect(screen.getByLabelText('Preferred position')).toHaveValue('Striker');
   });
 
   it('Save is disabled until isDirty is true, and disabled while skill level is empty', () => {
@@ -122,22 +118,22 @@ describe('SportProfileSettingsTab', () => {
     expect(onSave).toHaveBeenCalled();
   });
 
-  it('calls setPreferredPosition as the field is edited', async () => {
+  it('calls setYearsOfExperience as the field is edited', async () => {
     const user = userEvent.setup();
-    const setPreferredPosition = vi.fn();
+    const setYearsOfExperience = vi.fn();
     render(
       <SportProfileSettingsTab
         {...baseProps}
-        setPreferredPosition={setPreferredPosition}
+        setYearsOfExperience={setYearsOfExperience}
         activeProfile={profile()}
         draft={draft()}
         isDirty={false}
       />,
     );
 
-    await user.type(screen.getByLabelText('Preferred position'), 'W');
+    await user.type(screen.getByLabelText('Years of experience'), '3');
 
-    expect(setPreferredPosition).toHaveBeenCalledWith('W');
+    expect(setYearsOfExperience).toHaveBeenCalledWith('3');
   });
 
   it('renders the server error message when errorMessage is set', () => {
@@ -190,7 +186,6 @@ describe('SportProfileSettingsTab', () => {
 
     expect(screen.getByLabelText('Skill level')).toBeDisabled();
     expect(screen.getByLabelText('Years of experience')).toBeDisabled();
-    expect(screen.getByLabelText('Preferred position')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
   });
 
