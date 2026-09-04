@@ -97,12 +97,17 @@ None.
 
 Baselines **`profile-settings-375.png` / `profile-settings-768.png` / `profile-settings-1280.png`**
 (`e2e/visual/app-profile.spec.ts`) legitimately change — the Settings tab loses one field row
-(`sport-profile-position`). They are expected to fail until the `update-baselines` GitHub dispatch
-(`/updatebaseline`) regenerates exactly those three files; **every other baseline must come back
-byte-identical**. Baselines cannot be regenerated on this Windows host. A local
-`visual-regression` run was not used as evidence — on Windows it fails wholesale on the documented
-font-rendering noise floor; the expectation above is by construction (a DOM row was removed from a
-baselined surface, nothing else baselined was touched).
+(`sport-profile-position`); everything below it (Gear section, Save button) shifts up one row.
+**Every other baseline must come back byte-identical.** Baselines cannot be regenerated on this
+Windows host; a local `visual-regression` run was not used as evidence — on Windows it fails
+wholesale on the documented font-rendering noise floor.
+
+**Executed (2026-09-04).** `client-ci` `update-baselines` manual dispatch run on Linux; the
+`visual-baselines` artifact was applied via `/updatebaseline`. SHA-256 against the committed set:
+**exactly the 3 `profile-settings-*` files changed; the other 84 baselines byte-identical** — the
+`update-baselines` run confirms the expectation held. Human eyeball check (375 + 1280): the
+"Preferred position" label + input are gone, Gear/Racket brand/Save shift up ~1 row, nothing else
+on the page (nav, header, right rail) moved.
 
 ### Verification
 
@@ -114,11 +119,13 @@ baselined surface, nothing else baselined was touched).
   all pass. (`friends-journey` flaked once under `--workers=2` three-spec contention — the
   documented Windows-host starvation — and passed clean in isolation; unrelated to this change,
   which touches no friend-request path.)
-- `visual-regression` not run — Windows font-rendering noise floor makes a local run
-  non-informative; see the expectation line above (3 `profile-settings-*` baselines change by
-  construction, nothing else baselined touched).
-- No e2e spec files added/removed/materially changed → `client/docs/E2E_OVERVIEW.md` unchanged
-  (`profile-journey.spec.ts` never referenced the field).
+- `visual-regression` — regenerated on Linux via the `client-ci` `update-baselines` dispatch and
+  applied; SHA-256 confirms exactly the 3 `profile-settings-*` baselines changed, 84 byte-identical
+  (see the Visual-regression expectation section above).
+- No e2e spec files added/removed/materially changed → `client/docs/E2E_OVERVIEW.md`'s spec catalog
+  is unchanged (`profile-journey.spec.ts` never referenced the field); the stale PROFILE-7-era
+  "12 baselines still Windows-rendered, pending a dispatch" note on `app-profile.spec.ts` is
+  corrected to reflect that all 12 are now CI-current.
 
 ### Delta for later tickets
 

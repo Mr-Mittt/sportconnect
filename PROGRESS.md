@@ -4184,9 +4184,9 @@ explicit go-ahead at each step (full story in A3's summary doc):
   draft/payload/dirty/unsaved-guard coverage is unchanged. Position is sport-specific and belongs
   in the per-sport A9 attribute schema, not a flat column. Client-first is the mandated order
   (backend still returns the key harmlessly until A18 drops the column). `tsc -b` / Vitest green.
-  **Visual regression:** the 3 `profile-settings-*` baselines (`app-profile.spec.ts`) legitimately
-  change (Settings tab loses one field row) — expected to fail until an `update-baselines` dispatch
-  regenerates exactly those; every other baseline byte-identical.
+  **Visual regression:** the 3 `profile-settings-*` baselines (`app-profile.spec.ts`) changed
+  (Settings tab loses one field row) — **regenerated via the `client-ci` `update-baselines`
+  dispatch** and applied; SHA-256 confirms exactly those 3 changed, the other 84 byte-identical.
 - **Client SPORT-11 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-11_CALLER_SCOPED_SPORT_PROFILE_READS.md`):**
   the client half of backend A20's owner-only gate + A22's path change. The caller's own
   sport-profile read (`useRawSportProfilesForUser(userId)` → renamed `useRawMySportProfiles()`)
