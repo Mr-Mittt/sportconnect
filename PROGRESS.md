@@ -4219,12 +4219,11 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `matches-journey` (pill nudge "Yes"), `profile-journey` (Settings toggle). `tsc -b` / `eslint`
   clean, Vitest **161 files / 1099 pass**, Playwright `e2e` green (`--workers=2` — default
   parallelism starves this Windows host). **Visual regression:** the 3 `profile-settings-*`
-  baselines (`app-profile.spec.ts`) legitimately change — the Settings tab gained the Active
-  toggle row at the top; every other baseline is byte-identical (everything else new is
-  conditionally rendered, absent from every default fixture). Regenerating those 3 + new-surface
-  coverage (both dialogs, the switch, muted pills) filed as follow-up **SPORT-12** (repo pattern —
-  CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10 + the HF-1x regen tickets); baselines are
-  Linux-only via the `client-ci` `update-baselines` dispatch.
+  baselines (`app-profile.spec.ts`) changed — the Settings tab gained the Active toggle row at the
+  top — and were **regenerated via `/updatebaseline`** (`update-baselines` dispatch, commit
+  `1fb1cf1`); SHA-256 confirmed exactly those 3 changed, the other 84 byte-identical. Dedicated
+  new-surface coverage (both dialogs, the switch's inactive state, muted pills) filed as follow-up
+  **SPORT-12** (repo pattern — CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

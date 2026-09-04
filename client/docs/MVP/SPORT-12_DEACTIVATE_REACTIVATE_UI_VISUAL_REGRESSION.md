@@ -8,11 +8,11 @@
 `ReactivateSportNudgeDialog`, and muted `SportSwitcher` pills) with **no `visual-regression`
 coverage** — deliberately, matching this repo's established pattern of filing a visual-regression
 harness as its own follow-up ticket (CLIENT-NOTIF-2 for the bell dropdown, CLIENT-SESSION-12 for
-the session modals, GRP-10 for the Group page, FEED-11 for the post modal). **This ticket also owns
-regenerating 3 baselines SPORT-10 legitimately changed** — `profile-settings-{375,768,1280}.png`
-in `e2e/visual/app-profile.spec.ts`, which now show the new "Active" toggle row at the top of the
-Settings tab. Every other existing baseline is byte-identical (everything else new is conditionally
-rendered, absent from every default fixture).
+the session modals, GRP-10 for the Group page, FEED-11 for the post modal). The 3
+`profile-settings-{375,768,1280}.png` baselines SPORT-10 legitimately changed (the Settings tab
+gained the "Active" toggle row) were **already regenerated** on SPORT-10's own branch via
+`/updatebaseline` (commit `1fb1cf1`) — they are not this ticket's concern. Every other existing
+baseline is byte-identical; this ticket is purely *new* coverage for surfaces no spec captures.
 
 ## Why
 
@@ -30,20 +30,15 @@ SPORT-10's functional behaviour is covered by unit/component tests + e2e (`feed-
 
 ## What ships
 
-1. **Regenerate `profile-settings-{375,768,1280}.png`** (`e2e/visual/app-profile.spec.ts`) — SPORT-10
-   added the "Active" toggle row to the top of the Settings tab, so the existing `profile —
-   settings @ {width}px` baselines are stale. No spec change needed for the *active*-profile shot;
-   the regeneration is the deliverable. (If the Settings-tab-*inactive* read-only state gets its
-   own state below, that's a new screenshot, not a regeneration.)
-2. **New `visual-regression` coverage** for the surfaces with none — dialog-scoped where it's a
-   dialog, page/component-scoped otherwise, matching `app-post-modal.spec.ts` /
-   `app-session-detail-modal.spec.ts`' shape: `page.getByRole('dialog')` for `SportProfileStatusConfirmDialog`
-   (deactivate + reactivate) and `ReactivateSportNudgeDialog` (sport-pill + group); a `/profile`
-   Settings-tab screenshot in the *inactive* read-only state; a `SportSwitcher`-scoped shot with a
-   muted pill. Standard 3 breakpoints.
-
-All Linux-rendered via the `client-ci` workflow's `update-baselines` dispatch (they cannot be
-generated on a Windows host).
+**New `visual-regression` coverage** for the surfaces no existing spec captures — dialog-scoped
+where it's a dialog, page/component-scoped otherwise, matching `app-post-modal.spec.ts` /
+`app-session-detail-modal.spec.ts`' shape: `page.getByRole('dialog')` for
+`SportProfileStatusConfirmDialog` (deactivate + reactivate) and `ReactivateSportNudgeDialog`
+(sport-pill + group); a `/profile` Settings-tab screenshot in the *inactive* read-only state (the
+`<fieldset disabled>` dimming, distinct from the now-current *active* `profile-settings-*` shot); a
+`SportSwitcher`-scoped shot with a muted pill (plain + as the active filter). Standard 3
+breakpoints. All Linux-rendered via the `client-ci` workflow's `update-baselines` dispatch (they
+cannot be generated on a Windows host).
 
 Exact spec-file split (one new `app-sport-reactivate.spec.ts`, or folding the profile states into
 `app-profile.spec.ts` and adding a small dialog spec) and the exact state list are a Phase 3

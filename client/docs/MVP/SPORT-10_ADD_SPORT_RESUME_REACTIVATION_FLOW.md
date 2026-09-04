@@ -322,27 +322,23 @@ wired from `ProfilePage`.
 
 ### Follow-up filed
 
-**SPORT-12** (`client/docs/BACKLOG_MVP.md`) — visual-regression harness for the new surfaces here
-(Settings-tab Active switch + inactive read-only state, `SportProfileStatusConfirmDialog`,
-`ReactivateSportNudgeDialog`, muted `SportSwitcher` pills). Filed as its own ticket per the repo's
-established pattern (CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10 / FEED-11).
+**SPORT-12** (`client/docs/BACKLOG_MVP.md`) — dedicated `visual-regression` coverage for the new
+surfaces here (Settings-tab Active switch + inactive read-only state, `SportProfileStatusConfirmDialog`,
+`ReactivateSportNudgeDialog`, muted `SportSwitcher` pills) that no existing spec captures. Filed as
+its own ticket per the repo's established pattern (CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10 /
+FEED-11). The 3 `profile-settings-*` baselines this ticket *changed* were regenerated here (see
+below), so they are **not** part of SPORT-12.
 
-### Visual-regression expectation
+### Visual-regression — executed
 
-**Baselines `profile-settings-375.png` / `-768.png` / `-1280.png` (`e2e/visual/app-profile.spec.ts`)
-legitimately change** — §2d adds the "Active" toggle row (label + description + the `Switch`) as
-the Settings tab's first control, above "Skill level", so the `profile — settings @ {width}px`
-screenshots differ. Expected to fail until the `client-ci` `update-baselines` dispatch regenerates
-**exactly those 3** (can't be done on a Windows host). **Every other baseline must come back
-byte-identical:**
-
-- `profile — posts` / `memories` / `edit-profile-modal` — the Settings tab isn't rendered there;
-  the default fixture has no soft-deleted sport so `SportSwitcher` emits no muted pills, and the
-  `aria-pressed={isActive}` change is a no-op for non-muted pills.
-- `app-home-feed.spec.ts` / `app-groups.spec.ts` — same reason, unaffected.
-- The reactivate variant, both nudge dialogs, and the inactive read-only `<fieldset>` are only
-  reachable through an interaction none of these baselines perform.
-
-The 3 stale baselines and dedicated coverage of the new surfaces are both **SPORT-12**'s scope
-(below). A wholesale `visual-regression` failure on a non-CI Windows host is still the documented
-font-rendering noise floor and separate from the 3 real changes above.
+§2d added the "Active" toggle row (label + description + the `Switch`) as the Settings tab's first
+control, above "Skill level", so the `profile — settings @ {width}px` screenshots in
+`e2e/visual/app-profile.spec.ts` changed. **`update-baselines` dispatch run; artifact applied via
+`/updatebaseline` (commit `1fb1cf1`).** SHA-256 against the committed set: **exactly the predicted
+3** — `profile-settings-375.png` / `-768.png` / `-1280.png` — changed; the other **84 baselines
+came back byte-identical**, confirming the local Windows wholesale-fail on those is pure
+font-rendering noise floor. Human visual check of the regenerated `profile-settings-768.png`: the
+new "Active" row (label + "You're playing Badminton — it shows in your sport switcher." + the blue
+on-switch) sits above an otherwise-unchanged "Sport profile" form; `SportSwitcher` shows only
+Badminton/Pickleball/Add sport (no muted pills, as expected for the default fixture). Nothing
+unrelated drifted.
