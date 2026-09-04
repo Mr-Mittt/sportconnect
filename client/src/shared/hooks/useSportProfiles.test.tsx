@@ -58,7 +58,7 @@ describe('useSportProfiles', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('returns the convention shape, resolved from GET /sports/profiles/user/{userId}', async () => {
+  it('returns the convention shape, resolved from GET /sports/profiles (caller-scoped, A22)', async () => {
     useAuthStore.setState({ user: mockUser, accessToken: 'token', isBootstrapping: false });
     vi.spyOn(apiClient, 'get').mockResolvedValueOnce(
       apiResponse([
@@ -71,7 +71,7 @@ describe('useSportProfiles', () => {
     const { result } = renderHook(() => useSportProfiles(), { wrapper });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(apiClient.get).toHaveBeenCalledWith(`/sports/profiles/user/${mockUser.id}`);
+    expect(apiClient.get).toHaveBeenCalledWith('/sports/profiles');
     expect(result.current.isError).toBe(false);
     // SPORT-3: football/basketball/tennis have no bespoke SPORT_PROFILE_CONFIG entry anymore
     // (the real MVP catalog only has Badminton/Pickleball, A6) — getSportProfileConfig's generic

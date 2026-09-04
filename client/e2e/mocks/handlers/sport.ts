@@ -173,8 +173,8 @@ interface SportSession {
 
 // Stateful, same reasoning as groups.ts's userGroupsState — a profile
 // created via POST /sports/profiles must actually appear on the next GET
-// /sports/profiles/user/:userId, since useAddSportProfile's own optimistic
-// cache write would otherwise be clobbered by the mutation's background
+// /sports/profiles, since useAddSportProfile's own optimistic cache write
+// would otherwise be clobbered by the mutation's background
 // invalidate+refetch if this were a fixed responder.
 function defaultSportSession(): SportSession {
   return {
@@ -189,8 +189,12 @@ function defaultSportSession(): SportSession {
 const sportSessions = createSessionStore(defaultSportSession);
 
 export const sportHandlers: HttpHandler[] = [
-  // Public GET — no auth required (SportController's @Operation(security = {})).
-  http.get('/api/sports/profiles/user/:userId', ({ request }) => {
+  // A22: caller-scoped — the owner comes from the JWT, not the path, and the
+  // endpoint requires `hasRole('USER')` (anonymous → 401). SPORT-11 repointed
+  // the client here from the removed `GET /sports/profiles/user/:userId`.
+  http.get('/api/sports/profiles', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
     const sessionId = sessionIdFromRequest(request);
     // MSW-1: replaces emptySportProfiles.ts's overrideSportProfilesToEmpty.
     if (getOverrides(sessionId).sportProfilesEmpty) {

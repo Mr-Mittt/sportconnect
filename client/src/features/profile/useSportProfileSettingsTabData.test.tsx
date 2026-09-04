@@ -39,7 +39,7 @@ function profile(overrides: Partial<UserSportProfileResponse>): UserSportProfile
 
 function mockGet(profiles: UserSportProfileResponse[]) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-    if (url === '/sports/profiles/user/user-1') {
+    if (url === '/sports/profiles') {
       return { data: { success: true, message: '', data: profiles, timestamp: '' } };
     }
     if (/\/sports\/\d+\/attribute-schema$/.test(url)) {

@@ -38,9 +38,24 @@ function requireAuth(request: Request): Response | null {
 // fields happen to be on a FriendRequest row. Real ids used across
 // fixtures.ts (hana-kim/diego-alvarez are the two pending-request
 // counterparts; owen-clarke is the search-only stranger).
-const KNOWN_USERS: Record<string, FriendUser & { username: string }> = {
-  [mockFriend.id]: { ...mockFriend, username: 'priyashah' },
-  'hana-kim': { id: 'hana-kim', fullName: 'Hana Kim', avatarUrl: null, coverUrl: null, bio: null, username: 'hanakim' },
+// `activeSportIds` (U15) — sport ids the user holds an ACTIVE profile for.
+// Ids match `mockSportCatalog` in sport.ts (Badminton=1, Pickleball=3).
+// SPORT-11: `GET /api/users/:userId` now carries this, and it's the only
+// source of another user's sports for `FriendProfilePanel`'s pill row.
+const KNOWN_USERS: Record<
+  string,
+  FriendUser & { username: string; activeSportIds: number[] }
+> = {
+  [mockFriend.id]: { ...mockFriend, username: 'priyashah', activeSportIds: [1, 3] },
+  'hana-kim': {
+    id: 'hana-kim',
+    fullName: 'Hana Kim',
+    avatarUrl: null,
+    coverUrl: null,
+    bio: null,
+    username: 'hanakim',
+    activeSportIds: [3],
+  },
   'diego-alvarez': {
     id: 'diego-alvarez',
     fullName: 'Diego Alvarez',
@@ -48,6 +63,7 @@ const KNOWN_USERS: Record<string, FriendUser & { username: string }> = {
     coverUrl: null,
     bio: null,
     username: 'diegoalvarez',
+    activeSportIds: [],
   },
   [mockSearchResultUser.id]: {
     id: mockSearchResultUser.id,
@@ -56,6 +72,7 @@ const KNOWN_USERS: Record<string, FriendUser & { username: string }> = {
     coverUrl: null,
     bio: null,
     username: mockSearchResultUser.username,
+    activeSportIds: [1],
   },
 };
 
@@ -261,6 +278,9 @@ export const friendHandlers: HttpHandler[] = [
   // GET /api/users/me instead. FRIEND-2: `useUserInfo` types this 1:1 with
   // `UserInfoResponse`, so the mock carries `username` too (KNOWN_USERS
   // already has it) even though FriendProfilePanel doesn't render it.
+  // U15/SPORT-11: also carries `activeSportIds` — FriendProfilePanel's sport
+  // pill row is sourced from it now, not the removed
+  // GET /api/sports/profiles/user/{userId}.
   http.get('/api/users/:userId', ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
@@ -276,6 +296,7 @@ export const friendHandlers: HttpHandler[] = [
       avatarUrl: user.avatarUrl,
       coverUrl: user.coverUrl,
       bio: user.bio,
+      activeSportIds: user.activeSportIds,
     };
     return HttpResponse.json(apiResponse(profile, 'User retrieved successfully'));
   }),

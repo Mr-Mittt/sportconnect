@@ -56,7 +56,7 @@ describe('useMySportProfilesRaw', () => {
     const { result } = renderHook(() => useMySportProfilesRaw(), { wrapper });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(apiClient.get).toHaveBeenCalledWith('/sports/profiles/user/user-1');
+    expect(apiClient.get).toHaveBeenCalledWith('/sports/profiles');
     expect(result.current.data).toEqual([fixtureProfile]);
   });
 

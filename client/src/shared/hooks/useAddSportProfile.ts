@@ -3,7 +3,7 @@ import { apiClient } from '@/app/apiClient';
 import { sessionKeys } from '@/features/session/queryKeys';
 import type { ApiResponse } from '@/shared/types/api';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
-import { sportProfilesQueryKey } from './useSportProfilesForUser';
+import { sportProfilesQueryKey } from './useRawMySportProfiles';
 
 export interface AddSportProfilePayload {
   sportId: number;
@@ -20,8 +20,9 @@ export interface AddSportProfilePayload {
  * duplicate sport (400) — surfaced via `isError`, same as every other
  * mutation-backed modal in this app (CreateGroupModal, JoinGroupModal).
  *
- * `userId` is a hook param (not read from an internal store) so the target
- * cache entry is explicit — same shape as `useCreateGroup(currentUserId)`.
+ * `userId` is kept as a readiness guard only — SPORT-11 / A22 collapsed the
+ * cache to the single caller-scoped `sportProfilesQueryKey` (no per-user
+ * fan-out), so this just skips the optimistic write until a user is known.
  */
 export function useAddSportProfile(userId: string | undefined) {
   const queryClient = useQueryClient();
@@ -37,13 +38,13 @@ export function useAddSportProfile(userId: string | undefined) {
     onSuccess: (profile) => {
       if (userId === undefined) return;
       queryClient.setQueryData<UserSportProfileResponse[]>(
-        sportProfilesQueryKey(userId),
+        sportProfilesQueryKey,
         (data) => (data ? [...data, profile] : [profile]),
       );
     },
     onSettled: () => {
       if (userId === undefined) return;
-      queryClient.invalidateQueries({ queryKey: sportProfilesQueryKey(userId) });
+      queryClient.invalidateQueries({ queryKey: sportProfilesQueryKey });
       // GET /sessions/discover is gated server-side to sports the caller holds an active
       // profile for (see useDiscoverSessions's own doc comment) — without this, a Discover
       // view opened while the caller had zero profiles (e.g. SessionDiscoverModal/

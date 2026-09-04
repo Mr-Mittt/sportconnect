@@ -23,14 +23,19 @@ export interface FriendUser {
   bio: string | null;
 }
 
-// UserInfoResponse (modules/user/user-api, U11) — the PII-free subset every
-// authenticated-but-not-self lookup returns, i.e. exactly what
-// `GET /api/users/{userId}` gives back. 1:1 with the Java DTO's six fields.
+// UserInfoResponse (modules/user/user-api, U11 + U15) — the PII-free subset
+// every authenticated-but-not-self lookup returns, i.e. exactly what
+// `GET /api/users/{userId}` gives back. 1:1 with the Java DTO's seven fields.
 // `fullName` is the same computed getter noted on `FriendUser` above;
 // `username` is `string | null` (a freshly registered account with no
 // username set returns `null` — same live-verified nuance as
-// `UserSearchResult.username`). Consumed by `useUserInfo` for the Friends
-// directory-search profile popup.
+// `UserSearchResult.username`). `activeSportIds` (U15) is the ids of the
+// sports the user holds an ACTIVE sport profile for — never `null` (`[]` when
+// none), order not guaranteed (the client sorts for display). It replaces
+// the removed `GET /api/sports/profiles/user/{userId}` as the only way to
+// show another user's sports (A22 deliberately dropped the profile-detail
+// read); SPORT-11 maps it to display `SportProfile[]` via `sportProfileForId`.
+// Consumed by `useUserInfo` for the Friends profile panel.
 export interface UserInfo {
   id: string;
   fullName: string;
@@ -38,6 +43,7 @@ export interface UserInfo {
   avatarUrl: string | null;
   coverUrl: string | null;
   bio: string | null;
+  activeSportIds: number[];
 }
 
 // UserSearchResponse (GET /api/users/search) — U6's directory-search

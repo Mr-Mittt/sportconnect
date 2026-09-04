@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
-import { sportProfilesQueryKey } from '@/shared/hooks/useSportProfilesForUser';
+import { sportProfilesQueryKey } from '@/shared/hooks/useRawMySportProfiles';
 import type { ApiResponse } from '@/shared/types/api';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
 import type { UpdateSportProfilePayload } from './sportProfileEditDraft';
@@ -14,11 +14,13 @@ interface UpdateSportProfileVariables {
 
 /**
  * PROFILE-4: wraps `PUT /api/sports/profiles/{profileId}`. Patches the shared
- * `sportProfilesQueryKey(userId)` cache in place on success (same "patch,
- * don't refetch" reasoning as `useUpdateGroup`/`useUpdateMyProfile`) — that
- * one array backs `useMySportProfilesRaw`, `useSportProfilesForUser`
- * (`SportSwitcher`'s own source), and `useAddSportProfile`, so a save is
- * reflected everywhere on the page immediately, no separate invalidation.
+ * `sportProfilesQueryKey` cache in place on success (same "patch, don't
+ * refetch" reasoning as `useUpdateGroup`/`useUpdateMyProfile`) — that one
+ * array backs `useMySportProfilesRaw`, `useSportProfiles` (`SportSwitcher`'s
+ * own source), and `useAddSportProfile`, so a save is reflected everywhere on
+ * the page immediately, no separate invalidation. SPORT-11 / A22 collapsed
+ * the key to the single caller-scoped entry; `userId` stays only as a
+ * readiness guard on the patch.
  *
  * `errorMessage` surfaces the server's own text, same extraction as
  * `useUpdateSport`/`useUpdateMyProfile`.
@@ -37,7 +39,7 @@ export function useUpdateSportProfile() {
     },
     onSuccess: (updated) => {
       if (userId === undefined) return;
-      queryClient.setQueryData<UserSportProfileResponse[]>(sportProfilesQueryKey(userId), (data) =>
+      queryClient.setQueryData<UserSportProfileResponse[]>(sportProfilesQueryKey, (data) =>
         (data ?? []).map((profile) => (profile.id === updated.id ? updated : profile)),
       );
     },

@@ -86,7 +86,7 @@ function staticGetResponse(url: string): { data: unknown } | undefined {
   if (url.startsWith('/groups/user/')) return emptyPage();
   if (url === '/sessions/mine') return emptyPage();
   if (url === '/sessions/discover') return emptyPage();
-  if (url === '/sports/profiles/user/me') return apiResponse([]);
+  if (url === '/sports/profiles') return apiResponse([]); // SPORT-11: caller-scoped (A22)
   return undefined;
 }
 
@@ -100,9 +100,30 @@ function mockFriendsGet({
     if (url === '/users/friends') return apiResponse(friends);
     if (url === '/users/friends/requests/received') return apiResponse(received);
     if (url === '/users/friends/requests/sent') return apiResponse([]);
-    if (url === '/sports/profiles/user/f1' || url === '/sports/profiles/user/f3') return apiResponse([]);
+    // SPORT-11: `useUserInfo` now runs for every selection (known friends
+    // included) and carries `activeSportIds` for the panel's sport pills;
+    // no `/sports/profiles/...` request fires for another user anymore.
+    if (url === '/users/f1') {
+      return apiResponse({
+        id: 'f1',
+        fullName: 'Priya Shah',
+        username: 'priyashah',
+        avatarUrl: null,
+        coverUrl: null,
+        bio: 'Weekend hooper.',
+        activeSportIds: [1, 3],
+      });
+    }
     if (url === '/users/f3') {
-      return apiResponse({ id: 'f3', fullName: 'Hana Kim', avatarUrl: null, coverUrl: null, bio: null });
+      return apiResponse({
+        id: 'f3',
+        fullName: 'Hana Kim',
+        username: 'hanakim',
+        avatarUrl: null,
+        coverUrl: null,
+        bio: null,
+        activeSportIds: [],
+      });
     }
     throw new Error(`unexpected GET ${url}`);
   });
@@ -174,8 +195,7 @@ describe('FriendsPage', () => {
         return apiResponse(phase === 'request' ? [receivedRequest] : []);
       }
       if (url === '/users/friends/requests/sent') return apiResponse([]);
-      if (url === '/sports/profiles/user/f1' || url === '/sports/profiles/user/f3') return apiResponse([]);
-      if (url === '/users/f3') return apiResponse(hana);
+      if (url === '/users/f3') return apiResponse({ ...hana, username: 'hanakim', activeSportIds: [3] });
       throw new Error(`unexpected GET ${url}`);
     });
     vi.spyOn(apiClient, 'put').mockImplementation(async () => {
@@ -210,9 +230,16 @@ describe('FriendsPage', () => {
       if (url === '/users/friends') return apiResponse([priya]); // f3 is NOT a friend
       if (url === '/users/friends/requests/received') return apiResponse([]);
       if (url === '/users/friends/requests/sent') return apiResponse([]);
-      if (url === '/sports/profiles/user/f1' || url === '/sports/profiles/user/f3') return apiResponse([]);
       if (url === '/users/f3') {
-        return apiResponse({ id: 'f3', fullName: 'Hana Kim', avatarUrl: null, coverUrl: null, bio: null });
+        return apiResponse({
+          id: 'f3',
+          fullName: 'Hana Kim',
+          username: 'hanakim',
+          avatarUrl: null,
+          coverUrl: null,
+          bio: null,
+          activeSportIds: [],
+        });
       }
       throw new Error(`unexpected GET ${url}`);
     });
@@ -260,9 +287,16 @@ describe('FriendsPage', () => {
         });
       }
       if (url === '/users/u1') {
-        return apiResponse({ id: 'u1', fullName: 'Owen Clarke', avatarUrl: null, coverUrl: null, bio: null });
+        return apiResponse({
+          id: 'u1',
+          fullName: 'Owen Clarke',
+          username: 'owenc',
+          avatarUrl: null,
+          coverUrl: null,
+          bio: null,
+          activeSportIds: [1],
+        });
       }
-      if (url === '/sports/profiles/user/u1') return apiResponse([]);
       throw new Error(`unexpected GET ${url}`);
     });
     const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue(apiResponse(undefined));

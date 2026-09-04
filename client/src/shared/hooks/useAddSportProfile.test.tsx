@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { sessionKeys } from '@/features/session/queryKeys';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
-import { sportProfilesQueryKey } from './useSportProfilesForUser';
+import { sportProfilesQueryKey } from './useRawMySportProfiles';
 import { useAddSportProfile } from './useAddSportProfile';
 
 function profile(overrides: Partial<UserSportProfileResponse>): UserSportProfileResponse {
@@ -55,7 +55,7 @@ describe('useAddSportProfile', () => {
 
   it('appends the new profile into the sportProfiles cache immediately', async () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-    queryClient.setQueryData(sportProfilesQueryKey('user-1'), [profile({ id: 1, sportId: 5 })]);
+    queryClient.setQueryData(sportProfilesQueryKey, [profile({ id: 1, sportId: 5 })]);
     const created = profile({ id: 9, sportId: 6 });
     vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
       data: { success: true, message: '', data: created, timestamp: '' },
@@ -67,7 +67,7 @@ describe('useAddSportProfile', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     const cached = queryClient.getQueryData<UserSportProfileResponse[]>(
-      sportProfilesQueryKey('user-1'),
+      sportProfilesQueryKey,
     );
     expect(cached).toHaveLength(2);
     expect(cached?.[1]).toEqual(created);
@@ -85,7 +85,7 @@ describe('useAddSportProfile', () => {
     act(() => result.current.mutate({ sportId: 6, skillLevel: 'beginner' }));
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: sportProfilesQueryKey('user-1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: sportProfilesQueryKey });
   });
 
   it('invalidates discover-session queries too, since GET /sessions/discover is gated to the caller\'s sport profiles', async () => {

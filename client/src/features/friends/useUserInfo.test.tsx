@@ -18,6 +18,7 @@ const fixture: UserInfo = {
   avatarUrl: null,
   coverUrl: null,
   bio: 'Plays most weekends.',
+  activeSportIds: [1, 3],
 };
 
 describe('useUserInfo', () => {
