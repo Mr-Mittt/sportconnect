@@ -27,7 +27,6 @@ function profile(overrides: Partial<UserSportProfileResponse> = {}): UserSportPr
     sportName: 'Football',
     skillLevel: 'beginner',
     yearsOfExperience: null,
-    preferredPosition: null,
     bio: null,
     attributes: null,
     isActive: true,

@@ -30,7 +30,6 @@ const fixtureProfile: UserSportProfileResponse = {
   sportName: 'Badminton',
   skillLevel: 'INTERMEDIATE',
   yearsOfExperience: 3,
-  preferredPosition: null,
   bio: null,
   attributes: { racket: { id: null, value: 'Yonex Astrox' } },
   isActive: true,

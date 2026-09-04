@@ -32,7 +32,7 @@ interface UseRawMySportProfilesOptions {
 /**
  * `GET /api/sports/profiles` — the authenticated caller's own raw
  * `UserSportProfileResponse[]` (`id`, `attributes`, `skillLevel`,
- * `yearsOfExperience`, `preferredPosition`, all present), before the
+ * `yearsOfExperience`, all present), before the
  * `sportId -> SportKey -> SportProfile` mapping `useSportProfiles` applies.
  *
  * SPORT-11: replaces `useRawSportProfilesForUser(userId)` —

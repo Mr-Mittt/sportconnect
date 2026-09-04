@@ -79,7 +79,6 @@ const sportProfiles = [
     sportName: 'Soccer',
     skillLevel: null,
     yearsOfExperience: null,
-    preferredPosition: null,
     bio: null,
     attributes: null,
     isActive: true,

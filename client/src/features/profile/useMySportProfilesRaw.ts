@@ -3,8 +3,8 @@ import type { UserSportProfileResponse } from '@/shared/types/sport';
 
 /**
  * The logged-in user's own raw `UserSportProfileResponse[]` — `id`,
- * `attributes`, `skillLevel`, `yearsOfExperience`, `preferredPosition`, all
- * present. `useSportProfiles` intentionally maps this down to the
+ * `attributes`, `skillLevel`, `yearsOfExperience`, all present.
+ * `useSportProfiles` intentionally maps this down to the
  * display-only `SportProfile` and drops these fields; `/profile`'s Settings
  * tab (PROFILE-4) needs them raw to edit a sport profile.
  *

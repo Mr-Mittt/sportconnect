@@ -996,8 +996,11 @@ page renders no clock-sensitive content beyond the same `formatRelativeTime` neg
 every other spec's mockUser-authored fixtures already show) → waits for `document.fonts.ready` →
 (`edit-profile-modal` only) blurs the autofocused field first, same `CLIENT-SESSION-12` reasoning →
 screenshot compared against `e2e/visual/__screenshots__/profile-{state}-{width}.png`. Same
-known-Windows-noise caveat as every spec above — these 12 baselines are Windows-rendered locally and
-need the same `client-ci` `update-baselines` dispatch swap before merging.
+known-Windows-noise caveat as every spec above: `pnpm test:visual` on a Windows host diffs these
+wholesale on font-rendering noise — the committed baselines are Linux-rendered via the `client-ci`
+`update-baselines` dispatch. All 12 are CI-current as of SPORT-8 (which regenerated the 3
+`profile-settings-*` after removing the "Preferred position" field; the other 9 were confirmed
+byte-identical against that same artifact).
 
 ---
 

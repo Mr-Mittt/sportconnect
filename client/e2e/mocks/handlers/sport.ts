@@ -391,7 +391,6 @@ export const sportHandlers: HttpHandler[] = [
       sportName: mockSportCatalog.find((sport) => sport.id === body.sportId)?.name ?? 'Unknown',
       skillLevel: body.skillLevel ?? null,
       yearsOfExperience: body.yearsOfExperience ?? null,
-      preferredPosition: null,
       bio: null,
       attributes: null,
       isActive: true,
@@ -427,13 +426,11 @@ export const sportHandlers: HttpHandler[] = [
     const body = (await request.json()) as {
       skillLevel: string;
       yearsOfExperience?: number;
-      preferredPosition?: string;
       attributes?: Record<string, unknown>;
     };
     const updated: UserSportProfileResponse = {
       ...existing,
       skillLevel: body.skillLevel,
-      ...(body.preferredPosition !== undefined && { preferredPosition: body.preferredPosition }),
       ...(body.yearsOfExperience !== undefined && { yearsOfExperience: body.yearsOfExperience }),
       ...(body.attributes !== undefined && {
         attributes: { ...(existing.attributes ?? {}), ...body.attributes },
@@ -513,7 +510,6 @@ export function seedSoftDeletedSportProfile(
     sportName: mockSportCatalog.find((sport) => sport.id === sportId)?.name ?? 'Unknown',
     skillLevel: previous.skillLevel,
     yearsOfExperience: previous.yearsOfExperience,
-    preferredPosition: null,
     bio: null,
     attributes: null,
     isActive: false,

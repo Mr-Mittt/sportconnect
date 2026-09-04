@@ -56,7 +56,6 @@ export interface UserSportProfileResponse {
   sportName: string;
   skillLevel: string | null;
   yearsOfExperience: number | null;
-  preferredPosition: string | null;
   bio: string | null;
   attributes: Record<string, unknown> | null;
   isActive: boolean;

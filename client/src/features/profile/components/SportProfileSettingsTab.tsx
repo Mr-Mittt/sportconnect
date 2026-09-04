@@ -16,7 +16,6 @@ interface SportProfileSettingsTabProps {
   draft: SportProfileEditDraft;
   setSkillLevel: (value: string) => void;
   setYearsOfExperience: (value: string) => void;
-  setPreferredPosition: (value: string) => void;
   setAttribute: (key: string, value: unknown) => void;
   isDirty: boolean;
   onSave: () => void;
@@ -66,9 +65,13 @@ function ActiveToggleRow({
 
 /**
  * The `/profile` page's Settings tab (PROFILE-4) — a per-sport profile editor for the base
- * `UserSportProfile` fields (`skillLevel`/`yearsOfExperience`/`preferredPosition`, first editable
- * anywhere in the app since `AddSportModal` set them at creation time) plus `SportAttributesFields`
- * (SPORT-2) for the same active sport. This is the ticket that finally hosts that component.
+ * `UserSportProfile` fields (`skillLevel`/`yearsOfExperience`, first editable anywhere in the app
+ * since `AddSportModal` set them at creation time) plus `SportAttributesFields` (SPORT-2) for the
+ * same active sport. This is the ticket that finally hosts that component.
+ *
+ * SPORT-8: the free-text "Preferred position" field was removed — a fixed position column was a
+ * mistake (position is sport-specific and belongs in the per-sport A9 attribute schema). Pairs
+ * with backend A18.
  *
  * **Controlled, not self-contained (PROFILE-10 delta).** Originally owned `useSportProfileSettingsTabData()`
  * directly (PROFILE-4, "since no ProfilePage exists yet to wire one down") — converted once
@@ -84,7 +87,6 @@ export function SportProfileSettingsTab({
   draft,
   setSkillLevel,
   setYearsOfExperience,
-  setPreferredPosition,
   setAttribute,
   isDirty,
   onSave,
@@ -154,14 +156,6 @@ export function SportProfileSettingsTab({
             min={0}
             value={draft.yearsOfExperience}
             onChange={(event) => setYearsOfExperience(event.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="sport-profile-position">Preferred position</Label>
-          <Input
-            id="sport-profile-position"
-            value={draft.preferredPosition}
-            onChange={(event) => setPreferredPosition(event.target.value)}
           />
         </div>
       </div>
