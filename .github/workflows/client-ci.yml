@@ -7,6 +7,10 @@
 # manually (Actions → client-ci → Run workflow) with update-baselines=true,
 # download the "visual-baselines" artifact, replace
 # client/e2e/visual/__screenshots__/ with its contents, and commit.
+#
+# A update-baselines=true dispatch runs ONLY the regenerate + upload path —
+# lint / typecheck / unit / e2e / visual-diff are skipped, so a baseline
+# refresh can't be blocked by an unrelated failure or a flaky e2e run.
 name: client-ci
 
 on:
@@ -54,15 +58,23 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # lint / typecheck / unit / e2e are skipped on a baseline-regen dispatch
+      # (update-baselines=true) — that run does only regenerate + upload below.
+      # `inputs.update-baselines` is empty (falsy) for push / pull_request, so
+      # these run normally there.
       - run: pnpm lint
+        if: ${{ !inputs.update-baselines }}
 
       - run: pnpm exec tsc -b
+        if: ${{ !inputs.update-baselines }}
 
       - run: pnpm test
+        if: ${{ !inputs.update-baselines }}
 
       - run: pnpm exec playwright install --with-deps chromium
 
       - run: pnpm e2e
+        if: ${{ !inputs.update-baselines }}
 
       - name: Visual regression
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.update-baselines) }}
