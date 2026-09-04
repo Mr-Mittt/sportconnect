@@ -27,6 +27,13 @@ interface SportSwitcherProps {
    * not just the Settings tab, drops it for consistency. Every other caller (Home Feed, Groups,
    * Matches) is unaffected by the default. */
   showAllPill?: boolean;
+  /** SPORT-10: the caller's *deactivated* sports (soft-deleted profiles), rendered as muted pills
+   * after the active ones. Clicking one calls `onInactiveSelect` (not `onChange`) — on `/profile`
+   * that opens the Settings-tab Active toggle, everywhere else the reactivate nudge (§2e). A
+   * deactivated sport may be the active filter on a non-profile page (`active === key`) once the
+   * nudge is dismissed; on `/profile` it never is. */
+  inactiveSports?: SportProfile[];
+  onInactiveSelect?: (key: SportKey) => void;
 }
 
 interface PillProps {
@@ -38,14 +45,21 @@ interface PillProps {
   icon: ReactNode;
   isActive: boolean;
   onClick: () => void;
+  /** SPORT-10: a deactivated sport — `text-text-muted`, with its own `title` for what clicking
+   * does (colour is not the only signal: position after the active pills + the title + the muting
+   * are three). Still reflects `isActive` / `aria-pressed` — §2e lets a deactivated sport be the
+   * active filter on a non-profile page. */
+  muted?: boolean;
+  title?: string;
 }
 
-function Pill({ label, icon, isActive, onClick }: PillProps) {
+function Pill({ label, icon, isActive, onClick, muted = false, title }: PillProps) {
   return (
     <button
       type="button"
       aria-pressed={isActive}
       onClick={onClick}
+      title={title}
       className={cn(
         'flex cursor-pointer items-center gap-1.5 rounded-full bg-surface-1 px-3 py-1.75 text-2sm text-text-primary transition-[color,background-color,border-color,transform] hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0 motion-reduce:transition-none motion-reduce:hover:scale-100',
         // PROFILE-10: the active pill itself scales too (not just hover) —
@@ -55,6 +69,9 @@ function Pill({ label, icon, isActive, onClick }: PillProps) {
         // The 2px active border is the design system's one approved exception
         // to the hairline border rule.
         isActive ? 'border-2 border-border-accent font-medium' : 'border-hairline border-border',
+        // SPORT-10: a deactivated sport reads as "not one of your current
+        // sports" — dimmed text, no active affordances.
+        muted && 'text-text-muted',
       )}
     >
       {icon}
@@ -82,6 +99,8 @@ export function SportSwitcher({
   maxSports = 3,
   isCheckingCatalog = false,
   showAllPill = true,
+  inactiveSports = [],
+  onInactiveSelect,
 }: SportSwitcherProps) {
   // SPORT-5: retained only for the tooltip. It no longer gates the click — being at the cap is
   // now something the dialog explains, not something the pill refuses to discuss. Note this is
@@ -111,6 +130,21 @@ export function SportSwitcher({
           icon={<SportIcon iconUrl={sport.iconUrl} className="size-4" />}
           isActive={active === sport.key}
           onClick={() => onChange(sport.key)}
+        />
+      ))}
+      {/* SPORT-10: deactivated sports, after the active ones. Clicking runs `onInactiveSelect`
+          (the reactivate nudge / Settings-tab toggle, per page). §2e: a deactivated sport CAN be
+          the active filter on a non-profile page ("Later" lets the selection through), so it
+          still shows the active border when `active` matches. */}
+      {inactiveSports.map((sport) => (
+        <Pill
+          key={`inactive-${sport.key}`}
+          label={sport.label}
+          icon={<SportIcon iconUrl={sport.iconUrl} className="size-4" />}
+          isActive={active === sport.key}
+          muted
+          title={`Reactivate ${sport.label}`}
+          onClick={() => onInactiveSelect?.(sport.key)}
         />
       ))}
       <button

@@ -2,7 +2,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
-import { sportProfilesQueryKey } from '@/shared/hooks/useRawMySportProfiles';
+import {
+  sportProfilesQueryKey,
+  sportProfilesWithInactiveQueryKey,
+} from '@/shared/hooks/useRawMySportProfiles';
 import type { ApiResponse } from '@/shared/types/api';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
 import type { UpdateSportProfilePayload } from './sportProfileEditDraft';
@@ -39,9 +42,11 @@ export function useUpdateSportProfile() {
     },
     onSuccess: (updated) => {
       if (userId === undefined) return;
-      queryClient.setQueryData<UserSportProfileResponse[]>(sportProfilesQueryKey, (data) =>
-        (data ?? []).map((profile) => (profile.id === updated.id ? updated : profile)),
-      );
+      const patch = (data: UserSportProfileResponse[] | undefined) =>
+        (data ?? []).map((profile) => (profile.id === updated.id ? updated : profile));
+      // SPORT-10: the Settings tab reads the `?includeInactive` list, so patch both entries.
+      queryClient.setQueryData<UserSportProfileResponse[]>(sportProfilesQueryKey, patch);
+      queryClient.setQueryData<UserSportProfileResponse[]>(sportProfilesWithInactiveQueryKey, patch);
     },
   });
 

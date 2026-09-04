@@ -39,6 +39,15 @@ export const ErrorState: Story = {
   args: { isError: true },
 };
 
+/** SPORT-10: the selected sport has a soft-deleted profile — skill/YoE are pre-filled and
+ * read-only, and the button becomes "Reactivate" (POSTs `isResume: true`). Cancel is shown too. */
+export const Reactivate: Story = {
+  args: {
+    initialSport: 'basketball',
+    resumableProfiles: new Map([['basketball', { skillLevel: 'advanced', yearsOfExperience: 6 }]]),
+  },
+};
+
 /** CLIENT-SESSION-7 follow-up: auto-opened by the zero-sport-profile page-access gate on
  * Groups/Matches, rather than the SportSwitcher "+" pill — carries the funny prompt. */
 export const AutoPromptedOnPageAccess: Story = {

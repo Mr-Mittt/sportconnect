@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { sessionKeys } from '@/features/session/queryKeys';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
-import { sportProfilesQueryKey } from './useRawMySportProfiles';
+import {
+  sportProfilesQueryKey,
+  sportProfilesWithInactiveQueryKey,
+} from './useRawMySportProfiles';
 import { useAddSportProfile } from './useAddSportProfile';
 
 function profile(overrides: Partial<UserSportProfileResponse>): UserSportProfileResponse {
@@ -119,5 +122,37 @@ describe('useAddSportProfile', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(setQueryDataSpy).not.toHaveBeenCalled();
+  });
+
+  // ─── SPORT-10 ─────────────────────────────────────────────────────────────
+
+  it('passes an isResume payload straight through to POST /sports/profiles', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
+      data: { success: true, message: '', data: profile({ id: 9, sportId: 3 }), timestamp: '' },
+    });
+
+    const { result } = renderHook(() => useAddSportProfile('user-1'), { wrapper: wrapper(queryClient) });
+
+    act(() => result.current.mutate({ sportId: 3, isResume: true }));
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(apiClient.post).toHaveBeenCalledWith('/sports/profiles', { sportId: 3, isResume: true });
+  });
+
+  it('on settle, invalidates both the active-only and the includeInactive sport-profile keys', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
+      data: { success: true, message: '', data: profile({ id: 9 }), timestamp: '' },
+    });
+
+    const { result } = renderHook(() => useAddSportProfile('user-1'), { wrapper: wrapper(queryClient) });
+
+    act(() => result.current.mutate({ sportId: 3, isResume: true }));
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: sportProfilesQueryKey });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: sportProfilesWithInactiveQueryKey });
   });
 });

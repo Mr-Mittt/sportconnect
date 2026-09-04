@@ -1,4 +1,5 @@
 import { AddSportFields, type AddSportProfileSubmission } from '@/shared/components/AddSportFields';
+import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
@@ -30,6 +31,9 @@ interface SessionDiscoverModalProps {
    * the Discover panel is replaced by an inline "add a sport first" prompt (`AddSportFields`) —
    * same reasoning and same shared fields component as `CreateSessionModal`'s own gate. */
   availableSports: SportKey[];
+  /** SPORT-10: forwarded to the inline `AddSportFields` so re-adding a soft-deleted sport from
+   * this gate offers the read-only reactivate variant, same as the standalone `AddSportModal`. */
+  resumableProfiles?: Map<SportKey, ResumablePrevious>;
   onAddSport: (payload: AddSportProfileSubmission) => void;
   isAddingSport: boolean;
   isAddSportError: boolean;
@@ -59,6 +63,7 @@ export function SessionDiscoverModal({
   onParticipationAction,
   isParticipationActionPending,
   availableSports,
+  resumableProfiles,
   onAddSport,
   isAddingSport,
   isAddSportError,
@@ -79,6 +84,7 @@ export function SessionDiscoverModal({
         {hasNoSportProfiles ? (
           <AddSportFields
             availableSports={availableSports}
+            resumableProfiles={resumableProfiles}
             onSubmit={onAddSport}
             isSubmitting={isAddingSport}
             isError={isAddSportError}

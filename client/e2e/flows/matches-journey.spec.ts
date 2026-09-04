@@ -1,4 +1,10 @@
-import { mockDiscoverableSession, mockFriend, mockLocation, seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import {
+  mockDiscoverableSession,
+  mockFriend,
+  mockLocation,
+  seedAuthenticatedSession,
+  seedSoftDeletedSportProfileOnNextLoad,
+} from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -276,4 +282,32 @@ test('Matches journey', async ({ page }) => {
     await page.getByRole('button', { name: 'Show my sessions' }).click();
     await expect(page.getByRole('region', { name: 'My sessions' })).toBeVisible();
   });
+});
+
+/*
+ * SPORT-10 §2e: the reactivate nudge on a non-profile page also covers "Yes" (reactivate),
+ * exercised here on the Matches page.
+ */
+test('Matches — a deactivated sport pill nudge, "Yes" reactivates it', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedSoftDeletedSportProfileOnNextLoad(mockSessionId); // Pickleball soft-deleted
+  await seedAuthenticatedSession(page, '/matches');
+
+  const filter = page.getByRole('group', { name: 'Sport filter' });
+  const pickleball = filter.getByRole('button', { name: 'Pickleball' });
+  await expect(pickleball).toHaveClass(/text-text-muted/);
+
+  await pickleball.click();
+  const nudge = page.getByRole('dialog');
+  await expect(nudge.getByText('This sport profile is down. Do you want to bring it up?')).toBeVisible();
+  await nudge.getByRole('button', { name: 'Yes' }).click();
+  await expect(nudge).toBeHidden();
+
+  // Reactivated: the muted "Reactivate Pickleball" pill is gone, Pickleball is a normal pill.
+  await expect(
+    filter.getByRole('button', { name: 'Pickleball', description: 'Reactivate Pickleball' }),
+  ).toBeHidden();
+  await expect(filter.getByRole('button', { name: 'Pickleball' })).not.toHaveClass(/text-text-muted/);
 });

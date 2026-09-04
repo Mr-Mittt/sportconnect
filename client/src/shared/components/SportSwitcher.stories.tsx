@@ -48,3 +48,19 @@ export const NoAllPill: Story = {
     showAllPill: false,
   },
 };
+
+/** SPORT-10 (Profile page only): deactivated sports render as muted pills after the active
+ * ones — clicking one opens the reactivate flow rather than switching the filter. */
+export const WithDeactivatedSports: Story = {
+  args: {
+    sports: threeSports.slice(0, 2),
+    active: 'football',
+    onChange: () => {},
+    onAddSport: () => {},
+    showAllPill: false,
+    inactiveSports: [
+      { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'purple' },
+    ],
+    onInactiveSelect: () => {},
+  },
+};

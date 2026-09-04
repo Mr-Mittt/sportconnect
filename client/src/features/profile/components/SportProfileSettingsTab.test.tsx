@@ -43,6 +43,8 @@ const baseProps = {
   onSave: vi.fn(),
   isSaving: false,
   errorMessage: null,
+  onToggleActive: vi.fn(),
+  isTogglingActive: false,
 };
 
 describe('SportProfileSettingsTab', () => {
@@ -149,5 +151,59 @@ describe('SportProfileSettingsTab', () => {
       />,
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Could not save your sport profile');
+  });
+
+  // ─── SPORT-10: Active toggle ──────────────────────────────────────────────
+
+  it('shows an Active toggle for an active profile and calls onToggleActive on click', async () => {
+    const user = userEvent.setup();
+    const onToggleActive = vi.fn();
+    render(
+      <SportProfileSettingsTab
+        {...baseProps}
+        onToggleActive={onToggleActive}
+        activeProfile={profile({ isActive: true })}
+        draft={draft()}
+        isDirty={false}
+      />,
+    );
+
+    const toggle = screen.getByRole('switch', { name: /profile: Active/ });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    await user.click(toggle);
+    expect(onToggleActive).toHaveBeenCalled();
+  });
+
+  it('an inactive profile: toggle reads Inactive, and every field + Save below is disabled', () => {
+    render(
+      <SportProfileSettingsTab
+        {...baseProps}
+        activeProfile={profile({ isActive: false })}
+        draft={draft()}
+        isDirty
+      />,
+    );
+
+    const toggle = screen.getByRole('switch', { name: /profile: Inactive/ });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(toggle).toBeEnabled(); // the one live control
+
+    expect(screen.getByLabelText('Skill level')).toBeDisabled();
+    expect(screen.getByLabelText('Years of experience')).toBeDisabled();
+    expect(screen.getByLabelText('Preferred position')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
+
+  it('disables the toggle while the deactivate/reactivate mutation is in flight', () => {
+    render(
+      <SportProfileSettingsTab
+        {...baseProps}
+        isTogglingActive
+        activeProfile={profile({ isActive: true })}
+        draft={draft()}
+        isDirty={false}
+      />,
+    );
+    expect(screen.getByRole('switch', { name: /profile: Active/ })).toBeDisabled();
   });
 });

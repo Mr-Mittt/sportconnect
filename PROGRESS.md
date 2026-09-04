@@ -4185,6 +4185,45 @@ explicit go-ahead at each step (full story in A3's summary doc):
   MSW `sport.ts`/`friends.ts` handlers + ~14 `*.test.tsx` URL stubs updated; 4 new
   `useFriendsPageData` cases + new `sportProfileFromId.test.ts`. `tsc -b` / `eslint` clean, Vitest
   green. No baselined surface touched — no visual-regression baseline change.
+- **Client SPORT-10 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-10_ADD_SPORT_RESUME_REACTIVATION_FLOW.md`):**
+  the client half of backend A20's `isResume` reactivation. New `useResumableSports()` hook reads
+  `GET /api/sports/profiles?includeInactive=true` (its own key `['sportProfiles','me','all']`,
+  `staleTime: 0` so it reloads on navigation) → the sports with a soft-deleted profile and no
+  active one, plus their previous skill/YoE. `AddSportFields` gained a **reactivate** variant:
+  when the selected sport is resumable it shows the prior skill level + YoE **read-only**
+  (A20 ignores the request body on resume, so an editable field would lie), swaps the button to
+  **Reactivate** (`POST { sportId, isResume: true }`) and adds **Cancel**. Wired into every
+  add-sport surface (Home Feed / Groups ×2 / Matches / Profile `AddSportModal` + the inline
+  `AddSportFields` gate in `CreateSessionModal` / `SessionDiscoverModal`). **Scope grew several
+  times at pickup (user decision):** (1) keep the form visible with read-only pre-filled fields
+  rather than a text-only confirmation; (2) the Profile-page `SportSwitcher` renders the caller's
+  deactivated sports as muted pills after the active ones; (3) clicking a muted pill opens the
+  **Settings tab** for that sport — where a new first control, an **Active/Inactive sliding
+  switch** (new `shared/ui/switch.tsx` primitive), toggles it: *"Stop playing {Sport} for a
+  while?"* → `DELETE /api/sports/profiles/{id}` (new `useDeactivateSportProfile` hook), or
+  *"Welcome back to {Sport}!"* → `POST {sportId, isResume:true}`, both behind a confirm dialog
+  (`SportProfileStatusConfirmDialog`). While Inactive every field + Save below is read-only via a
+  native `<fieldset disabled>`. `useSportProfileSettingsTabData` now reads the `?includeInactive`
+  list (new `sportKeyOverride` param) and `useUpdateSportProfile` patches both cache keys.
+  `AddSportProfileSubmission` widened to a `{...} | { sportId, isResume: true }` union.
+  **(4) §2e — muted pills on _every_ `SportSwitcher`, not just Profile:** on Home Feed / Groups /
+  Matches, clicking a deactivated pill raises `ReactivateSportNudgeDialog` ("This sport profile is
+  down. Do you want to bring it up?" — **Later** / **Yes**); **Yes** reactivates, **Later** lets
+  the selection through and silences the nudge for that sport for the session
+  (`inactiveSportNudgeStore`, a non-persisted Zustand store). A muted pill can now be the active
+  filter (`aria-pressed`). The Groups page also nudges when a group linked to a deactivated sport
+  is opened ("This is a {sportName} group, but your {sportName} profile is down…", once per group
+  per session). Shared `useInactiveSportPillSelect` hook. Profile keeps the Settings-tab toggle,
+  no nudge. MSW `sport.ts` handles `?includeInactive` + `isResume` + a new soft-delete `DELETE`.
+  e2e: `feed-groups-journey` (reactivate variant, pill nudge "Later", Groups group-nudge "Yes"),
+  `matches-journey` (pill nudge "Yes"), `profile-journey` (Settings toggle). `tsc -b` / `eslint`
+  clean, Vitest **161 files / 1099 pass**, Playwright `e2e` green (`--workers=2` — default
+  parallelism starves this Windows host). **Visual regression:** the 3 `profile-settings-*`
+  baselines (`app-profile.spec.ts`) changed — the Settings tab gained the Active toggle row at the
+  top — and were **regenerated via `/updatebaseline`** (`update-baselines` dispatch, commit
+  `1fb1cf1`); SHA-256 confirmed exactly those 3 changed, the other 84 byte-identical. Dedicated
+  new-surface coverage (both dialogs, the switch's inactive state, muted pills) filed as follow-up
+  **SPORT-12** (repo pattern — CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

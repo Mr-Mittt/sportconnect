@@ -1,6 +1,7 @@
 import {
   seedAuthenticatedSession,
   seedPaginatedFeedOnNextLoad,
+  seedSoftDeletedSportProfileOnNextLoad,
   seedZeroSportProfilesOnNextLoad,
   simulateCreatePostFailOnce,
 } from '../mocks/fixtures.ts';
@@ -399,4 +400,105 @@ test('a sport activated mid-session appears on the next "Add sport" click', asyn
   const picker = page.getByRole('dialog', { name: 'Add a sport' });
   await expect(picker).toBeVisible();
   await expect(picker.getByLabel('Sport')).toHaveValue('squash');
+});
+
+/*
+ * SPORT-10: re-adding a sport with a soft-deleted profile offers the read-only
+ * "Reactivate" flow (pre-filled skill/YoE, `isResume: true`) instead of a lossy fresh create.
+ */
+test('re-adding a soft-deleted sport shows the read-only Reactivate flow', async ({
+  page,
+  mockSessionId,
+}) => {
+  // Fixture user keeps Badminton active; Pickleball becomes soft-deleted (prev advanced / 6y).
+  await seedSoftDeletedSportProfileOnNextLoad(mockSessionId);
+  await seedAuthenticatedSession(page);
+
+  await page.getByRole('button', { name: 'Add sport' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add a sport' });
+  await expect(dialog.getByText(/You had a Pickleball profile before/)).toBeVisible();
+
+  const skill = dialog.getByLabel('Skill level');
+  await expect(skill).toHaveValue('advanced');
+  await expect(skill).toBeDisabled();
+  await expect(dialog.getByLabel('Years of experience (optional)')).toBeDisabled();
+
+  await dialog.getByRole('button', { name: 'Reactivate' }).click();
+  await expect(dialog).toBeHidden();
+
+  // The muted "Reactivate Pickleball" pill (§2e) goes away and Pickleball is an active pill.
+  const filter = page.getByRole('group', { name: 'Sport filter' });
+  await expect(
+    filter.getByRole('button', { name: 'Pickleball', description: 'Reactivate Pickleball' }),
+  ).toBeHidden();
+  await expect(filter.getByRole('button', { name: 'Pickleball' })).toBeVisible();
+});
+
+/*
+ * SPORT-10 §2e: on a non-profile page the deactivated sport shows as a muted pill; clicking it
+ * prompts the reactivate nudge. "Later" lets the selection through and silences the nudge for
+ * the session.
+ */
+test('Home Feed — a deactivated sport pill prompts the reactivate nudge, "Later" lets it through', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedSoftDeletedSportProfileOnNextLoad(mockSessionId); // Pickleball soft-deleted
+  await seedAuthenticatedSession(page);
+
+  const filter = page.getByRole('group', { name: 'Sport filter' });
+  const pickleball = filter.getByRole('button', { name: 'Pickleball' });
+  await expect(pickleball).toBeVisible();
+  await expect(pickleball).toHaveClass(/text-text-muted/);
+
+  await pickleball.click();
+  const nudge = page.getByRole('dialog');
+  await expect(nudge.getByText('This sport profile is down. Do you want to bring it up?')).toBeVisible();
+
+  await nudge.getByRole('button', { name: 'Later' }).click();
+  await expect(nudge).toBeHidden();
+  await expect(pickleball).toHaveAttribute('aria-pressed', 'true'); // selection went through
+
+  // Switch away and back — no nudge this time (deferred for the session).
+  await filter.getByRole('button', { name: 'All', exact: true }).click();
+  await pickleball.click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(pickleball).toHaveAttribute('aria-pressed', 'true');
+});
+
+/*
+ * SPORT-10 §2e: on the Groups page, opening a group linked to a deactivated sport raises the
+ * group-flavoured nudge; "Yes" reactivates the profile.
+ */
+test('Groups — opening a group linked to a deactivated sport prompts the reactivate nudge', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedSoftDeletedSportProfileOnNextLoad(mockSessionId); // Pickleball soft-deleted
+  await seedAuthenticatedSession(page, '/groups');
+
+  // "Weekend Tennis Ladder" is a Pickleball group (mockOwnedGroup, sportId 3).
+  await page
+    .getByRole('group', { name: 'Group filter' })
+    .getByRole('button', { name: /Weekend Tennis Ladder/ })
+    .click();
+
+  const nudge = page.getByRole('dialog');
+  await expect(
+    nudge
+      .getByText(
+        'This is a Pickleball group, but your Pickleball profile is down. Do you want to bring it up?',
+      )
+      .first(),
+  ).toBeVisible();
+
+  await nudge.getByRole('button', { name: 'Yes' }).click();
+  await expect(nudge).toBeHidden();
+
+  // Pickleball reactivated — the muted "Reactivate Pickleball" Sport-filter pill is gone.
+  await expect(
+    page
+      .getByRole('group', { name: 'Sport filter' })
+      .getByRole('button', { name: 'Pickleball', description: 'Reactivate Pickleball' }),
+  ).toBeHidden();
 });

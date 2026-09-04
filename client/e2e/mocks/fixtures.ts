@@ -1002,6 +1002,16 @@ export async function seedZeroSportProfilesOnNextLoad(sessionId: string): Promis
 }
 
 /**
+ * SPORT-10 — gives the caller a soft-deleted Pickleball profile (prev skill
+ * `advanced` / 6y). `GET /sports/profiles?includeInactive=true` then returns
+ * it, so the add-sport picker (and the Profile-page `SportSwitcher`'s muted
+ * pill) offer the read-only "Reactivate" flow.
+ */
+export async function seedSoftDeletedSportProfileOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'seed-soft-deleted-sport-profile');
+}
+
+/**
  * GRP-8 part 3 — seeds `mockJoinRequest` (the test user's own pending
  * request against `mockPublicGroup`) directly into session state, rather
  * than driving JoinGroupModal's search UI (no existing e2e coverage to

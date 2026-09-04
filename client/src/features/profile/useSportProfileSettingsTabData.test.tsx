@@ -170,4 +170,18 @@ describe('useSportProfileSettingsTabData', () => {
     expect(result.current.draft.preferredPosition).toBe('Striker');
     expect(result.current.isDirty).toBe(false);
   });
+
+  it('SPORT-10: sportKeyOverride resolves a deactivated (isActive:false) row', async () => {
+    // sportId 6 → 'basketball' in the global test catalog; only an inactive row for it.
+    mockGet([
+      profile({ id: 5, sportId: 5, isActive: true }),
+      profile({ id: 6, sportId: 6, isActive: false, skillLevel: 'advanced' }),
+    ]);
+
+    const { result } = renderHook(() => useSportProfileSettingsTabData('basketball'), { wrapper });
+
+    await waitFor(() => expect(result.current.activeProfile).not.toBeUndefined());
+    expect(result.current.activeProfile?.id).toBe(6);
+    expect(result.current.activeProfile?.isActive).toBe(false);
+  });
 });

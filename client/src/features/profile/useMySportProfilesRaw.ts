@@ -11,13 +11,16 @@ import type { UserSportProfileResponse } from '@/shared/types/sport';
  * SPORT-11: now a thin normalize (`data` never `undefined`) over the shared
  * `useRawMySportProfiles()` — the `authStore` user-id plumbing went away when
  * A22 made `GET /api/sports/profiles` caller-scoped.
+ *
+ * SPORT-10: pass `{ includeInactive: true }` so the Settings tab can also
+ * show / edit a soft-deleted profile (the Active toggle path).
  */
-export function useMySportProfilesRaw(): {
+export function useMySportProfilesRaw(options: { includeInactive?: boolean } = {}): {
   data: UserSportProfileResponse[];
   isLoading: boolean;
   isError: boolean;
 } {
-  const query = useRawMySportProfiles();
+  const query = useRawMySportProfiles(options);
 
   return { data: query.data ?? [], isLoading: query.isLoading, isError: query.isError };
 }

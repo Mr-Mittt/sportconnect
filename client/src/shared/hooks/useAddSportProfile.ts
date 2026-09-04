@@ -1,15 +1,17 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
+import type { AddSportProfileSubmission } from '@/shared/components/AddSportFields';
 import { sessionKeys } from '@/features/session/queryKeys';
 import type { ApiResponse } from '@/shared/types/api';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
-import { sportProfilesQueryKey } from './useRawMySportProfiles';
+import {
+  sportProfilesQueryKey,
+  sportProfilesWithInactiveQueryKey,
+} from './useRawMySportProfiles';
 
-export interface AddSportProfilePayload {
-  sportId: number;
-  skillLevel: string;
-  yearsOfExperience?: number;
-}
+/** SPORT-10: a fresh create carries the form fields; a reactivate carries only
+ * `{ sportId, isResume: true }` (backend A20 ignores the rest of the body on resume). */
+export type AddSportProfilePayload = AddSportProfileSubmission;
 
 /**
  * Wraps `POST /api/sports/profiles` — the "Add sport" flow SportSwitcher's
@@ -45,6 +47,9 @@ export function useAddSportProfile(userId: string | undefined) {
     onSettled: () => {
       if (userId === undefined) return;
       queryClient.invalidateQueries({ queryKey: sportProfilesQueryKey });
+      // SPORT-10: a reactivate flips a soft-deleted row to active — the
+      // `?includeInactive=true` list (`useResumableSports`) must drop it.
+      queryClient.invalidateQueries({ queryKey: sportProfilesWithInactiveQueryKey });
       // GET /sessions/discover is gated server-side to sports the caller holds an active
       // profile for (see useDiscoverSessions's own doc comment) — without this, a Discover
       // view opened while the caller had zero profiles (e.g. SessionDiscoverModal/
