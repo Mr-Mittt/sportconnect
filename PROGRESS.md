@@ -4179,9 +4179,9 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `ReactivateSportNudgeDialog` (sport-pill/group), and the muted `SportSwitcher` pill (plain/as
   active filter). Every trigger flow reuses selectors already proven by SPORT-10's own e2e
   functional specs. No product code changed. **Visual regression:** all 21 are new baselines
-  (nothing existing changes) — verified via a local `--update-snapshots` dry run (21/21 passed,
-  eyeballed correct, discarded per the Windows-baseline rule); real baselines pending the
-  `client-ci` `update-baselines` dispatch.
+  (nothing existing changes) — **regenerated via the `client-ci` `update-baselines` dispatch**
+  (its first lean regen-only run) and applied; SHA-256 confirms exactly those 21 are new, the
+  other 87 byte-identical.
 - **Client SPORT-8 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-8_REMOVE_PREFERRED_POSITION_FROM_PROFILE_EDITOR.md`):**
   client half of backend **A18** — removed the fixed `preferredPosition` free-text field from the
   `/profile` Settings-tab per-sport profile editor. `preferredPosition` is gone from

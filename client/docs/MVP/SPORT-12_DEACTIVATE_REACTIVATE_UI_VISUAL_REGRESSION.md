@@ -122,6 +122,15 @@ diff against on a Windows run beyond the noise floor — the real baselines come
 `update-baselines` dispatch + `/updatebaseline`, same as every prior ticket. No other baseline is
 touched by this ticket.
 
+**Executed (2026-09-04).** `client-ci` `update-baselines` manual dispatch run on Linux (the first
+run of the lean regen-only path — no lint/typecheck/unit/e2e, just install → regenerate → upload);
+the `visual-baselines` artifact was applied via `/updatebaseline`. SHA-256 against the committed
+set: **exactly the 21 predicted files were NEW; the other 87 baselines byte-identical** — 0
+unexpected CHANGED, 0 MISSING. Human eyeball check (4 representative surfaces, mixed breakpoints):
+the deactivate-confirm copy, the sport-pill nudge copy (correctly distinct from the group variant),
+the plain muted pill, and the inactive read-only Settings tab (toggle off, Skill level/Years of
+experience/Save all disabled) all render correctly — nothing unrelated drifted.
+
 ### Verification
 
 - `pnpm exec tsc -b` — clean.
@@ -130,4 +139,7 @@ touched by this ticket.
   **21/21 passed**; generated PNGs eyeballed correct, then deleted (not committed).
 - No product code changed — the module-wide Vitest/e2e suites are unaffected; not re-run for a
   pure-new-spec-file change.
+- `visual-regression` — the 21 baselines regenerated on Linux via the `client-ci` `update-baselines`
+  dispatch and applied; SHA-256 confirms exactly those 21 are new, 87 byte-identical (see the
+  Visual-regression expectation section above).
 - `client/docs/E2E_OVERVIEW.md` §3 + a new §6 section added for the new spec file.
