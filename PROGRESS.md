@@ -4171,6 +4171,17 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client SPORT-12 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-12_DEACTIVATE_REACTIVATE_UI_VISUAL_REGRESSION.md`):**
+  new `visual-regression` coverage for SPORT-10's deactivate/reactivate chrome, which shipped with
+  none — one new `e2e/visual/app-sport-reactivate.spec.ts` (cross-page surface, own file, same
+  precedent as `app-session-detail-modal.spec.ts`), 7 states × 3 breakpoints = 21 new baselines: the
+  Settings-tab inactive/read-only state, `SportProfileStatusConfirmDialog` (deactivate/reactivate),
+  `ReactivateSportNudgeDialog` (sport-pill/group), and the muted `SportSwitcher` pill (plain/as
+  active filter). Every trigger flow reuses selectors already proven by SPORT-10's own e2e
+  functional specs. No product code changed. **Visual regression:** all 21 are new baselines
+  (nothing existing changes) — verified via a local `--update-snapshots` dry run (21/21 passed,
+  eyeballed correct, discarded per the Windows-baseline rule); real baselines pending the
+  `client-ci` `update-baselines` dispatch.
 - **Client SPORT-8 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-8_REMOVE_PREFERRED_POSITION_FROM_PROFILE_EDITOR.md`):**
   client half of backend **A18** — removed the fixed `preferredPosition` free-text field from the
   `/profile` Settings-tab per-sport profile editor. `preferredPosition` is gone from
