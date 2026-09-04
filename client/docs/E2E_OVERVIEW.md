@@ -214,6 +214,7 @@ e2e/
     app-create-session-modal.spec.ts  # CLIENT-SESSION-12
     app-notification-bell.spec.ts  # CLIENT-NOTIF-2
     app-profile.spec.ts       # PROFILE-7
+    app-sport-reactivate.spec.ts  # SPORT-12
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
   mocks/
     mockServer.ts            # the standalone Node HTTP server
@@ -1001,6 +1002,39 @@ wholesale on font-rendering noise — the committed baselines are Linux-rendered
 `update-baselines` dispatch. All 12 are CI-current as of SPORT-8 (which regenerated the 3
 `profile-settings-*` after removing the "Preferred position" field; the other 9 were confirmed
 byte-identical against that same artifact).
+
+### `e2e/visual/app-sport-reactivate.spec.ts` (SPORT-12, `visual-regression` project)
+
+SPORT-10 shipped its deactivate/reactivate chrome with no `visual-regression` coverage at all
+(deliberately — same "file the harness as its own follow-up" pattern as CLIENT-NOTIF-2 /
+CLIENT-SESSION-12 / GRP-10 / FEED-11). One new file rather than folding into `app-profile.spec.ts`
+— these 7 states span 3 pages (Profile / Home Feed / Groups), same "own file for a cross-page
+surface" precedent as `app-session-detail-modal.spec.ts` / `app-notification-bell.spec.ts`.
+Parameterized: 3 breakpoints × 7 states = **21 test instances**, all *new* baselines — the 3
+`profile-settings-*` baselines SPORT-10 itself changed are not this spec's concern (already
+regenerated on SPORT-10's own branch, commit `1fb1cf1`).
+
+| State | Scope | Setup | Expects |
+|---|---|---|---|
+| `profile settings — inactive (read-only)` | full page (`/profile`) | Pickleball soft-deleted, click its muted pill | "Pickleball profile: Inactive" switch + disabled "Skill level" visible |
+| `sport status confirm dialog — deactivate` | dialog | `/profile` Settings tab, click Badminton's Active toggle | the "hidden from your active sports" keep-your-data note visible |
+| `sport status confirm dialog — reactivate` | dialog | Pickleball soft-deleted, muted pill → Inactive toggle click | "Welcome back to Pickleball!" visible |
+| `reactivate nudge dialog — sport-pill` | dialog | Home Feed, Pickleball soft-deleted, click muted pill | "This sport profile is down…" visible |
+| `reactivate nudge dialog — group` | dialog | Groups, Pickleball soft-deleted, open "Weekend Tennis Ladder" (Pickleball group) | the group-flavoured prompt visible |
+| `sport switcher — muted pill, plain` | `role=group name="Sport filter"` | Home Feed, Pickleball soft-deleted | muted Pickleball pill visible, unselected |
+| `sport switcher — muted pill, as active filter` | same | above → click pill → nudge → **Later** | pill still muted, now `aria-pressed=true` |
+
+Every trigger flow is copied verbatim from the already-passing SPORT-10 e2e functional specs
+(`feed-groups-journey.spec.ts`, `matches-journey.spec.ts`, `profile-journey.spec.ts`) — same
+`seedSoftDeletedSportProfileOnNextLoad` fixture (defaults to Pickleball), same selectors, a
+screenshot added at each proven checkpoint instead of a functional assertion. Neither dialog has a
+focusable text input or autofocus (`onOpenAutoFocus` prevented on both), so unlike
+`app-session-detail-modal.spec.ts` there's no blinking-caret flake source to blur away. Clock frozen
+at the same instant as every other visual spec, `document.fonts.ready` awaited, screenshots compared
+against `e2e/visual/__screenshots__/{profile-settings-inactive,sport-status-confirm-deactivate,
+sport-status-confirm-reactivate,reactivate-nudge-sport-pill,reactivate-nudge-group,
+sport-switcher-muted-plain,sport-switcher-muted-selected}-{width}.png`. Same known-Windows-noise
+caveat as every spec above — Linux-rendered via the `client-ci` `update-baselines` dispatch.
 
 ---
 

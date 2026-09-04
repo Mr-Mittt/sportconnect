@@ -1,6 +1,6 @@
 # SPORT-12 · Visual regression harness for SPORT-10's deactivate / reactivate UI
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-04)
 **Type:** Infrastructure (Testing)
 **Depends on:** none — SPORT-10 (`DONE`) shipped every surface below.
 **Filed:** 2026-09-04, closing a gap SPORT-10 flagged in its own summary: it added new UI surfaces
@@ -51,3 +51,95 @@ already-shipped SPORT-10 behaviour. Regenerating any baseline other than the 3 `
 ones named above (nothing else changed for SPORT-10).
 
 **Tests:** the spec files *are* the test — no separate unit/component coverage implied.
+
+---
+
+## Implementation summary (2026-09-04)
+
+### Approved design (Phase 3)
+
+One new file, `e2e/visual/app-sport-reactivate.spec.ts` (the ticket's own first option), rather
+than folding into `app-profile.spec.ts` — the 7 states span 3 pages (Profile / Home Feed / Groups),
+matching the "own file for a cross-page surface" precedent `app-session-detail-modal.spec.ts` /
+`app-notification-bell.spec.ts` already set. 7 states × 3 breakpoints = 21 new baselines. Every
+trigger flow reuses the exact selectors the already-passing SPORT-10 e2e functional specs
+(`feed-groups-journey.spec.ts`, `matches-journey.spec.ts`, `profile-journey.spec.ts`) proved —
+these visual tests add a screenshot at each proven checkpoint instead of inventing new setup.
+
+### What was built
+
+`e2e/visual/app-sport-reactivate.spec.ts` — 7 parameterized states:
+
+1. **`profile settings — inactive (read-only)`** — full page, `/profile`, Pickleball soft-deleted
+   → click its muted pill → the `<fieldset disabled>` Settings tab.
+2. **`sport status confirm dialog — deactivate`** — dialog, `/profile` Settings, active Badminton's
+   toggle click.
+3. **`sport status confirm dialog — reactivate`** — dialog, state 1's setup → the Inactive toggle
+   click.
+4. **`reactivate nudge dialog — sport-pill`** — dialog, Home Feed, muted-pill click.
+5. **`reactivate nudge dialog — group`** — dialog, Groups, opening the Pickleball-linked group.
+6. **`sport switcher — muted pill, plain`** — `role=group name="Sport filter"`, Home Feed, no
+   interaction.
+7. **`sport switcher — muted pill, as active filter`** — same scope → click pill → nudge → **Later**
+   (keeps it muted while making it the selected filter, unlike **Yes** which would reactivate it
+   and remove the muted state this baseline exists to capture).
+
+`E2E_OVERVIEW.md` §3 (directory listing) and a new §6 catalog section, matching every other spec's
+format.
+
+### Key decisions
+
+- **Deactivate-confirm assertion targets the "hidden from your active sports" note, not the dialog's
+  own prompt text.** `SportProfileStatusConfirmDialog` renders its `prompt` string twice — once in a
+  `sr-only` `DialogTitle`, once in a visible `<p>` — so asserting on the prompt itself needs a
+  disambiguating `.first()` for no reason when a second, singly-rendered string already proves the
+  right mode is showing. The reactivate-confirm assertion has no such second string, so it does use
+  `.first()` on the (necessarily duplicated) prompt text — matching exactly what
+  `profile-journey.spec.ts`'s own functional test already does for both cases.
+- **No active-element blur before dialog screenshots.** `app-session-detail-modal.spec.ts` needs one
+  because a focused text input's blinking caret is a real flake source; neither new dialog here has
+  a focusable text input or autofocus (`onOpenAutoFocus` prevented on both), so the extra step would
+  be dead code.
+- **Verified by an `--update-snapshots` dry run, then discarded.** Ran
+  `pnpm exec playwright test --project=visual-regression app-sport-reactivate --update-snapshots`
+  locally — all 21 executed and passed (every selector resolved, every dialog opened), confirming
+  the spec logic itself before handing baseline generation to Linux CI. The resulting
+  Windows-rendered PNGs were inspected (deactivate dialog copy, group-nudge copy, the muted-selected
+  pill showing both the accent border *and* muted text at once, the inactive Settings tab) and then
+  deleted — never committed, per this repo's Windows-baseline rule.
+
+### Divergence from the approved design
+
+None.
+
+### Visual-regression expectation
+
+All **21 baselines are new** — nothing existing changes. `profile-settings-inactive-{375,768,1280}`,
+`sport-status-confirm-{deactivate,reactivate}-{375,768,1280}`,
+`reactivate-nudge-{sport-pill,group}-{375,768,1280}`,
+`sport-switcher-muted-{plain,selected}-{375,768,1280}`. They don't exist yet, so there is nothing to
+diff against on a Windows run beyond the noise floor — the real baselines come from the `client-ci`
+`update-baselines` dispatch + `/updatebaseline`, same as every prior ticket. No other baseline is
+touched by this ticket.
+
+**Executed (2026-09-04).** `client-ci` `update-baselines` manual dispatch run on Linux (the first
+run of the lean regen-only path — no lint/typecheck/unit/e2e, just install → regenerate → upload);
+the `visual-baselines` artifact was applied via `/updatebaseline`. SHA-256 against the committed
+set: **exactly the 21 predicted files were NEW; the other 87 baselines byte-identical** — 0
+unexpected CHANGED, 0 MISSING. Human eyeball check (4 representative surfaces, mixed breakpoints):
+the deactivate-confirm copy, the sport-pill nudge copy (correctly distinct from the group variant),
+the plain muted pill, and the inactive read-only Settings tab (toggle off, Skill level/Years of
+experience/Save all disabled) all render correctly — nothing unrelated drifted.
+
+### Verification
+
+- `pnpm exec tsc -b` — clean.
+- `pnpm exec eslint e2e/visual/app-sport-reactivate.spec.ts` — clean.
+- `pnpm exec playwright test --project=visual-regression app-sport-reactivate --update-snapshots` —
+  **21/21 passed**; generated PNGs eyeballed correct, then deleted (not committed).
+- No product code changed — the module-wide Vitest/e2e suites are unaffected; not re-run for a
+  pure-new-spec-file change.
+- `visual-regression` — the 21 baselines regenerated on Linux via the `client-ci` `update-baselines`
+  dispatch and applied; SHA-256 confirms exactly those 21 are new, 87 byte-identical (see the
+  Visual-regression expectation section above).
+- `client/docs/E2E_OVERVIEW.md` §3 + a new §6 section added for the new spec file.
