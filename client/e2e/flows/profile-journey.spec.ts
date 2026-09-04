@@ -1,4 +1,7 @@
-import { seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import {
+  seedAuthenticatedSession,
+  seedSoftDeletedSportProfileOnNextLoad,
+} from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -108,4 +111,42 @@ test('Profile journey', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Memories' })).toBeVisible();
     await expect(page.getByText('Coming soon.')).toBeVisible();
   });
+});
+
+/*
+ * SPORT-10: the Settings tab's Active/Inactive toggle, and the Profile-page
+ * SportSwitcher's muted deactivated pill routing into it.
+ */
+test('Settings tab — deactivate a sport, then reactivate it via the muted pill', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedSoftDeletedSportProfileOnNextLoad(mockSessionId); // Pickleball starts soft-deleted
+  await seedAuthenticatedSession(page, '/profile');
+
+  // The muted "Pickleball" pill opens the Settings tab for it, Inactive + read-only.
+  await page.getByRole('button', { name: 'Pickleball' }).click();
+  await expect(page.getByRole('switch', { name: /Pickleball profile: Inactive/ })).toBeVisible();
+  await expect(page.getByLabel('Skill level')).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+
+  // Toggle → "Welcome back" confirm → reactivate.
+  await page.getByRole('switch', { name: /Pickleball profile: Inactive/ }).click();
+  const reDialog = page.getByRole('dialog');
+  await expect(reDialog.getByText('Welcome back to Pickleball!').first()).toBeVisible();
+  await reDialog.getByRole('button', { name: 'Reactivate' }).click();
+
+  // Now Active — fields editable, and Pickleball is an active pill again.
+  await expect(page.getByRole('switch', { name: /Pickleball profile: Active/ })).toBeVisible();
+  await expect(page.getByLabel('Skill level')).toBeEnabled();
+  await expect(
+    page.getByRole('group', { name: 'Sport filter' }).getByRole('button', { name: 'Pickleball' }),
+  ).not.toHaveClass(/text-text-muted/);
+
+  // Toggle back off → "Stop playing" confirm → deactivate.
+  await page.getByRole('switch', { name: /Pickleball profile: Active/ }).click();
+  const offDialog = page.getByRole('dialog');
+  await expect(offDialog.getByText(/hidden from your active sports/)).toBeVisible();
+  await offDialog.getByRole('button', { name: 'Deactivate' }).click();
+  await expect(page.getByRole('switch', { name: /Pickleball profile: Inactive/ })).toBeVisible();
 });

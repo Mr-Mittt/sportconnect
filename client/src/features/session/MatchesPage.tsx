@@ -4,6 +4,9 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { NoSportsToAddDialog } from '@/shared/components/NoSportsToAddDialog';
 import { useAddSportLauncher } from '@/shared/hooks/useAddSportLauncher';
+import { useResumableSports } from '@/shared/hooks/useResumableSports';
+import { useInactiveSportPillSelect } from '@/shared/hooks/useInactiveSportPillSelect';
+import { ReactivateSportNudgeDialog } from '@/shared/components/ReactivateSportNudgeDialog';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
@@ -38,6 +41,11 @@ export function MatchesPage() {
 
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
   const addSportMutation = useAddSportProfile(data.currentUserId);
+  const { resumableProfiles, inactiveSports } = useResumableSports();
+  const inactiveSportPill = useInactiveSportPillSelect({
+    userId: data.currentUserId ?? undefined,
+    onSelectSport: data.setActiveSport,
+  });
   // SPORT-5: re-read the catalogue before opening anything — see useAddSportLauncher.
   const addSportLauncher = useAddSportLauncher({
     heldSportKeys: Object.values(data.sportsByKey).map((sport) => sport.key),
@@ -112,7 +120,10 @@ export function MatchesPage() {
           maxSports={sportCatalog.data.length || undefined}
           isCheckingCatalog={addSportLauncher.isCheckingCatalog}
           onAddSport={addSportLauncher.launch}
+          inactiveSports={inactiveSports}
+          onInactiveSelect={inactiveSportPill.onInactiveSelect}
         />
+        {inactiveSportPill.nudge && <ReactivateSportNudgeDialog {...inactiveSportPill.nudge} />}
         <button
           type="button"
           onClick={data.openCreateModal}
@@ -212,6 +223,7 @@ export function MatchesPage() {
         isSubmitting={data.isCreating}
         isError={data.isCreateError}
         availableSports={availableSports}
+        resumableProfiles={resumableProfiles}
         onAddSport={addSportMutation.mutate}
         isAddingSport={addSportMutation.isPending}
         isAddSportError={addSportMutation.isError}
@@ -276,6 +288,7 @@ export function MatchesPage() {
           setIsAddSportOpen(false);
         }}
         availableSports={availableSports}
+        resumableProfiles={resumableProfiles}
         isSubmitting={addSportMutation.isPending}
         isError={addSportMutation.isError}
         onSubmit={(payload) =>

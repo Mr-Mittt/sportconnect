@@ -84,4 +84,96 @@ describe('AddSportModal', () => {
     rerender(<AddSportModal {...baseProps} promptMessage="Hey champ, add a sport first!" />);
     expect(screen.getByText('Hey champ, add a sport first!')).toBeInTheDocument();
   });
+
+  // ─── SPORT-10: reactivate flow ─────────────────────────────────────────────
+
+  const resumableProfiles = new Map([
+    ['basketball', { skillLevel: 'advanced', yearsOfExperience: 6 }],
+  ]);
+
+  it('a resumable sport: pre-fills skill/YoE read-only and swaps the button to Reactivate', () => {
+    render(<AddSportModal {...baseProps} resumableProfiles={resumableProfiles} initialSport="basketball" />);
+
+    expect(
+      screen.getByText(/You had a Basketball profile before/),
+    ).toBeInTheDocument();
+    const skill = screen.getByLabelText('Skill level');
+    expect(skill).toHaveValue('advanced');
+    expect(skill).toBeDisabled();
+    const years = screen.getByLabelText('Years of experience (optional)');
+    expect(years).toHaveValue(6);
+    expect(years).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reactivate' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Add sport' })).not.toBeInTheDocument();
+  });
+
+  it('Reactivate submits only { sportId, isResume: true }', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(
+      <AddSportModal
+        {...baseProps}
+        onSubmit={onSubmit}
+        resumableProfiles={resumableProfiles}
+        initialSport="basketball"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Reactivate' }));
+    expect(onSubmit).toHaveBeenCalledWith({ sportId: 6, isResume: true });
+  });
+
+  it('Cancel in the reactivate state calls onClose', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <AddSportModal
+        {...baseProps}
+        onClose={onClose}
+        resumableProfiles={resumableProfiles}
+        initialSport="basketball"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('switching from a resumable sport to a non-resumable one restores the editable create form', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(
+      <AddSportModal
+        {...baseProps}
+        onSubmit={onSubmit}
+        resumableProfiles={resumableProfiles}
+        initialSport="basketball"
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText('Sport'), 'tennis');
+    expect(screen.queryByText(/You had a .* profile before/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Skill level')).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Skill level'), 'beginner');
+    await user.click(screen.getByRole('button', { name: 'Add sport' }));
+    expect(onSubmit).toHaveBeenCalledWith({
+      sportId: 2,
+      skillLevel: 'beginner',
+      yearsOfExperience: undefined,
+    });
+  });
+
+  it('shows "Reactivating…" and disables the button while submitting', () => {
+    render(
+      <AddSportModal
+        {...baseProps}
+        isSubmitting
+        resumableProfiles={resumableProfiles}
+        initialSport="basketball"
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Reactivating…' })).toBeDisabled();
+  });
 });

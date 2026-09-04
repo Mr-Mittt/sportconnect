@@ -412,7 +412,7 @@ helpers called.
 | 6. simulated expired session | Login, then force one 401 on `POST /api/auth/logout` via `page.route()` → AUTH-5's retry interceptor attempts a silent refresh (fails, no valid cookie) → session cleared regardless → redirected to `/login`; re-visiting `/` redirects again (not a stale render) | **Deliberately not reload-based** — an earlier reload-triggered version was unreliable even under normal, non-repeated runs (a genuine stuck state, not the MSW-1 race) |
 | 7. deep link while logged out | `/friends` → redirected to `/login` → log in → redirected **back to `/friends`** | Tests the redirect-back mechanism specifically |
 
-### `e2e/flows/feed-groups-journey.spec.ts` (FEED-10 + CLIENT-MODAL-1, one `test()` with 9 steps + 4 separate `test()`s)
+### `e2e/flows/feed-groups-journey.spec.ts` (FEED-10 + CLIENT-MODAL-1, one `test()` with 9 steps + 6 separate `test()`s)
 
 Uses `seedPaginatedFeedOnNextLoad(mockSessionId)` — replaces the feed with **21 posts** before the
 first fetch (index 19 = a `GROUP_POST` for `mockGroup`, index 20 = Pickleball, everything else
@@ -444,6 +444,13 @@ This spec destructures `mockSessionId` directly (needed by the seed/override adm
 | Test | What it checks | Notes |
 |---|---|---|
 | a sport activated mid-session appears on the next "Add sport" click | Hold everything → dialog → a `page.route()` override activates Squash → click again → the **picker** opens offering Squash | Drives the exact sequence that used to fail: the catalogue query is `staleTime: 0` so it refetches on mount and focus, but nothing refetched at *click* time, so a mounted, focused session never saw the new sport. Overrides `GET /api/sports` rather than mutating a fixture, because the MSW handler serves a module-level constant. Confirmed to fail with the re-read reverted |
+
+**Separate test — SPORT-10 reactivate flow:**
+
+| Test | What it checks | Notes |
+|---|---|---|
+| re-adding a soft-deleted sport shows the read-only Reactivate flow | `seedSoftDeletedSportProfileOnNextLoad(mockSessionId)` makes Pickleball soft-deleted (prev `advanced`/6y) → "Add sport" pill → picker shows "You had a Pickleball profile before", skill `advanced` + YoE both **disabled**, **Reactivate** button → click → modal closes; the muted "Reactivate Pickleball" pill goes away and Pickleball is an active pill | The picker defaults its Sport select to the only addable sport (Pickleball), which is resumable → the modal opens straight into the reactivate variant. `POST /api/sports/profiles {sportId, isResume:true}` flips the MSW row back to active. §2e: this page's `SportSwitcher` also now shows the muted Pickleball pill, hence the "Reactivate Pickleball" (button + `description`) disambiguation |
+| Home Feed — a deactivated sport pill prompts the reactivate nudge, "Later" lets it through | Same seed → the muted "Pickleball" pill (`text-text-muted`) → click → `ReactivateSportNudgeDialog` ("This sport profile is down. Do you want to bring it up?") → **Later** → nudge closes, Pickleball pill is now `aria-pressed` (selection went through) → switch to "All" and back to Pickleball → **no nudge** this time (deferred for the session via `inactiveSportNudgeStore`) | §2e. `Later` doesn't reactivate — it just lets the current selection through and silences the nudge for the session |
 
 **Separate tests — CLIENT-MODAL-1 stale-mutation-error regressions:**
 
@@ -792,7 +799,7 @@ it rather than being left describing the old behaviour.
 
 Related docs: `client/docs/MVP/ADMIN-2_SPORT_ADMIN_MASTER_DETAIL_PAGE.md`.
 
-### `e2e/flows/profile-journey.spec.ts` (PROFILE-8, one `test()` with 7 steps)
+### `e2e/flows/profile-journey.spec.ts` (PROFILE-8, one `test()` with 7 steps + 1 separate `test()` — SPORT-10)
 
 The `/profile` page's full journey — header/bio, `SportSwitcher`, posting from the composer, the
 comment modal, Settings tab save, Edit Profile save, and the Memories placeholder.
@@ -816,7 +823,14 @@ branch `PROFILE-7` added was reading a fixed `mockMyProfile` constant; now backe
 session-scoped `myProfileState` field so a save actually changes what the next `GET` returns, same
 "small stateful fake backend" pattern every other mutable fixture in this suite already uses).
 
-Related docs: `client/docs/MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md`.
+**Separate test — SPORT-10 Active/Inactive toggle:**
+
+| Test | What it checks | Notes |
+|---|---|---|
+| Settings tab — deactivate a sport, then reactivate it via the muted pill | `seedSoftDeletedSportProfileOnNextLoad(mockSessionId)` makes Pickleball soft-deleted → its **muted** `SportSwitcher` pill opens the Settings tab (`role="switch"` reads "Pickleball profile: Inactive", Skill level + Save disabled) → the switch → "Welcome back to Pickleball!" confirm → Reactivate → switch reads Active, fields editable, Pickleball is an un-muted active pill → switch back → "hidden from your active sports" confirm → Deactivate → Inactive again | The muted pill routes into the Settings tab (not `AddSportModal` — that reactivate variant is for the non-Profile surfaces). `DELETE /api/sports/profiles/:profileId` (soft delete) + `POST { isResume: true }` both go through `SportProfileStatusConfirmDialog`. `SportProfileStatusConfirmDialog` duplicates its prompt in an `sr-only` `DialogTitle` + a visible `<p>`, so `getByText(...).first()` |
+
+Related docs: `client/docs/MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md`,
+`client/docs/MVP/SPORT-10_ADD_SPORT_RESUME_REACTIVATION_FLOW.md`.
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 

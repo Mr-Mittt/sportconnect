@@ -11,7 +11,11 @@ import { resetGroupHandlersState, seedJoinRequestsState } from './handlers/group
 import { resetLocationHandlersState } from './handlers/locations.ts';
 import { resetNotificationHandlersState, seedNotificationsState } from './handlers/notifications.ts';
 import { resetSessionHandlersState } from './handlers/sessions.ts';
-import { resetSportHandlersState, seedZeroSportProfilesState } from './handlers/sport.ts';
+import {
+  resetSportHandlersState,
+  seedSoftDeletedSportProfile,
+  seedZeroSportProfilesState,
+} from './handlers/sport.ts';
 import { mockJoinRequest } from './fixtures.ts';
 import { buildPaginatedFeed } from './paginatedFeedFixture.ts';
 import { buildPaginatedNotifications } from './paginatedNotificationsFixture.ts';
@@ -214,6 +218,14 @@ async function handleAdminRoute(
 
   if (action === 'seed-paginated-notifications' && req.method === 'POST') {
     seedNotificationsState(sessionId, buildPaginatedNotifications());
+    sendJson(res, 200, { seeded: true });
+    return;
+  }
+
+  // SPORT-10: give the caller a soft-deleted Pickleball profile so the add-sport
+  // picker offers the read-only "Reactivate" flow for it.
+  if (action === 'seed-soft-deleted-sport-profile' && req.method === 'POST') {
+    seedSoftDeletedSportProfile(sessionId);
     sendJson(res, 200, { seeded: true });
     return;
   }

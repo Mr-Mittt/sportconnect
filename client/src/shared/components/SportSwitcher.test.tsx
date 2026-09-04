@@ -112,6 +112,78 @@ describe('SportSwitcher', () => {
     expect(screen.getByRole('button', { name: 'Football' })).toHaveClass('hover:scale-110');
   });
 
+  // ─── SPORT-10: deactivated sports ────────────────────────────────────────
+
+  const inactiveSports: SportProfile[] = [
+    { key: 'archery', label: 'Archery', iconUrl: null, colorRamp: 'gray' },
+  ];
+
+  it('renders inactiveSports as muted pills after the active ones, before Add sport', () => {
+    render(
+      <SportSwitcher
+        sports={threeSports}
+        active="all"
+        onChange={() => {}}
+        onAddSport={() => {}}
+        showAllPill={false}
+        inactiveSports={inactiveSports}
+        onInactiveSelect={() => {}}
+      />,
+    );
+    const labels = screen.getAllByRole('button').map((b) => b.textContent);
+    expect(labels).toEqual(['Football', 'Basketball', 'Tennis', 'Archery', 'Add sport']);
+    const archery = screen.getByRole('button', { name: 'Archery' });
+    expect(archery).toHaveClass('text-text-muted');
+    expect(archery).toHaveAttribute('aria-pressed', 'false'); // not the active filter here
+    expect(archery).toHaveAttribute('title', 'Reactivate Archery');
+  });
+
+  it('§2e: a deactivated pill that IS the active filter shows aria-pressed + the active border', () => {
+    render(
+      <SportSwitcher
+        sports={threeSports}
+        active="archery"
+        onChange={() => {}}
+        onAddSport={() => {}}
+        showAllPill={false}
+        inactiveSports={inactiveSports}
+        onInactiveSelect={() => {}}
+      />,
+    );
+    const archery = screen.getByRole('button', { name: 'Archery' });
+    expect(archery).toHaveAttribute('aria-pressed', 'true');
+    expect(archery).toHaveClass('text-text-muted'); // still muted
+    expect(archery).toHaveClass('border-border-accent');
+  });
+
+  it('clicking a deactivated pill calls onInactiveSelect, never onChange', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onInactiveSelect = vi.fn();
+    render(
+      <SportSwitcher
+        sports={threeSports}
+        active="all"
+        onChange={onChange}
+        onAddSport={() => {}}
+        showAllPill={false}
+        inactiveSports={inactiveSports}
+        onInactiveSelect={onInactiveSelect}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Archery' }));
+    expect(onInactiveSelect).toHaveBeenCalledWith('archery');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('renders no extra pills when inactiveSports is omitted (default)', () => {
+    render(
+      <SportSwitcher sports={threeSports} active="all" onChange={() => {}} onAddSport={() => {}} />,
+    );
+    const labels = screen.getAllByRole('button').map((b) => b.textContent);
+    expect(labels).toEqual(['All', 'Football', 'Basketball', 'Tennis', 'Add sport']);
+  });
+
   it('is disabled and says so while the catalogue re-read is in flight', async () => {
     const user = userEvent.setup();
     const onAddSport = vi.fn();

@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { sportIdForKey } from '@/features/feed/sportIdMap';
 import { useSportAttributeSchema } from '@/shared/hooks/useSportAttributeSchema';
-import type { ResolvedSportAttributeSchema, UserSportProfileResponse } from '@/shared/types/sport';
+import type {
+  ResolvedSportAttributeSchema,
+  SportKey,
+  UserSportProfileResponse,
+} from '@/shared/types/sport';
 import {
   buildSportProfileUpdatePayload,
   isSportProfileDraftDirty,
@@ -30,8 +34,13 @@ import { useUpdateSportProfile } from './useUpdateSportProfile';
  * `save`'s optional `{ onSuccess }` exists for that same guard — `ProfilePage` calls
  * `save({ onSuccess: proceed })` from the confirm dialog's Save button so the pending
  * tab-switch/sport-switch/navigation only proceeds once the mutation actually succeeds.
+ *
+ * SPORT-10: `sportKeyOverride` lets `ProfilePage` point the tab at a *deactivated* sport (its
+ * muted `SportSwitcher` pill) — the profile list is now read with `includeInactive`, so
+ * `activeProfile` may be an `isActive: false` row (the tab renders it read-only with the Active
+ * toggle set to Inactive). With no override the tab follows the page's active sport, as before.
  */
-export function useSportProfileSettingsTabData(): {
+export function useSportProfileSettingsTabData(sportKeyOverride?: SportKey): {
   activeProfile: UserSportProfileResponse | undefined;
   isLoading: boolean;
   isError: boolean;
@@ -53,9 +62,12 @@ export function useSportProfileSettingsTabData(): {
   errorMessage: string | null;
 } {
   const { activeSport } = useProfileActiveSport();
-  const rawProfiles = useMySportProfilesRaw();
-  const activeSportId = activeSport !== undefined ? sportIdForKey(activeSport) : undefined;
-  const activeProfile = rawProfiles.data.find((profile) => profile.sportId === activeSportId);
+  const effectiveSport = sportKeyOverride ?? activeSport;
+  const rawProfiles = useMySportProfilesRaw({ includeInactive: true });
+  const effectiveSportId = effectiveSport !== undefined ? sportIdForKey(effectiveSport) : undefined;
+  // May be an `isActive: false` row (SPORT-10 — the deactivated-pill path); the tab renders
+  // it read-only. Only `undefined` for a caller with no profile at all for this sport.
+  const activeProfile = rawProfiles.data.find((profile) => profile.sportId === effectiveSportId);
 
   const schemaQuery = useSportAttributeSchema(activeProfile?.sportId);
   const updateMutation = useUpdateSportProfile();

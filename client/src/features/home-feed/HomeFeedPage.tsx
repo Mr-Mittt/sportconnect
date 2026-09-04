@@ -25,6 +25,9 @@ import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
 import { useAddSportLauncher } from '@/shared/hooks/useAddSportLauncher';
+import { useResumableSports } from '@/shared/hooks/useResumableSports';
+import { useInactiveSportPillSelect } from '@/shared/hooks/useInactiveSportPillSelect';
+import { ReactivateSportNudgeDialog } from '@/shared/components/ReactivateSportNudgeDialog';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -144,6 +147,11 @@ export function HomeFeedPage() {
   );
   const hashtagResultsData = useHashtagResultsData(activeHashtag, activeHashtag !== null);
   const addSportMutation = useAddSportProfile(currentUserId);
+  const { resumableProfiles, inactiveSports } = useResumableSports();
+  const inactiveSportPill = useInactiveSportPillSelect({
+    userId: currentUserId,
+    onSelectSport: setActiveSport,
+  });
   const sportCatalog = useSportCatalog();
   const availableSports = useMemo(
     () =>
@@ -227,8 +235,11 @@ export function HomeFeedPage() {
             maxSports={sportCatalog.data.length || undefined}
             isCheckingCatalog={addSportLauncher.isCheckingCatalog}
             onAddSport={addSportLauncher.launch}
+            inactiveSports={inactiveSports}
+            onInactiveSelect={inactiveSportPill.onInactiveSelect}
           />
         </div>
+        {inactiveSportPill.nudge && <ReactivateSportNudgeDialog {...inactiveSportPill.nudge} />}
         <CreatePostForm
           currentUser={{
             firstName: user.firstName,
@@ -353,6 +364,7 @@ export function HomeFeedPage() {
             setIsAddSportOpen(false);
           }}
           availableSports={availableSports}
+          resumableProfiles={resumableProfiles}
           isSubmitting={addSportMutation.isPending}
           isError={addSportMutation.isError}
           onSubmit={(payload) =>
@@ -406,6 +418,7 @@ export function HomeFeedPage() {
           isSubmitting={createSessionModalData.isCreating}
           isError={createSessionModalData.isCreateError}
           availableSports={availableSports}
+          resumableProfiles={resumableProfiles}
           onAddSport={addSportMutation.mutate}
           isAddingSport={addSportMutation.isPending}
           isAddSportError={addSportMutation.isError}
@@ -426,6 +439,7 @@ export function HomeFeedPage() {
           currentUserId={discoverModalData.currentUserId ?? ''}
           onViewDetails={discoverModalData.onViewDetails}
           availableSports={availableSports}
+          resumableProfiles={resumableProfiles}
           onAddSport={addSportMutation.mutate}
           isAddingSport={addSportMutation.isPending}
           isAddSportError={addSportMutation.isError}

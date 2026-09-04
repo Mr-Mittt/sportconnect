@@ -1,3 +1,4 @@
+import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import type { SportKey } from '@/shared/types/sport';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { AddSportFields, type AddSportProfileSubmission } from './AddSportFields';
@@ -15,6 +16,11 @@ interface AddSportModalProps {
    * open, set when this modal is auto-triggered by the zero-sport-profile page-access gate
    * (CLIENT-SESSION-7 follow-up) on Groups/Matches. See `AddSportFields`' own doc comment. */
   promptMessage?: string;
+  /** SPORT-10: sports with a soft-deleted profile → their previous skill/YoE. When the selected
+   * sport is one of these the modal renders the read-only "Reactivate" variant. */
+  resumableProfiles?: Map<SportKey, ResumablePrevious>;
+  /** SPORT-10: pre-select this sport (e.g. the Profile-page deactivated pill that opened this). */
+  initialSport?: SportKey;
 }
 
 /**
@@ -26,6 +32,8 @@ interface AddSportModalProps {
  *
  * Resets on every *open* via a changing `key` prop from the parent (same reasoning as
  * CreateGroupModal — avoids a setState-in-effect reset).
+ *
+ * SPORT-10: `Cancel` in the reactivate state maps to `onClose`.
  */
 export function AddSportModal({
   isOpen,
@@ -35,6 +43,8 @@ export function AddSportModal({
   isSubmitting,
   isError,
   promptMessage,
+  resumableProfiles,
+  initialSport,
 }: AddSportModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -46,6 +56,9 @@ export function AddSportModal({
           isSubmitting={isSubmitting}
           isError={isError}
           promptMessage={promptMessage}
+          resumableProfiles={resumableProfiles}
+          onCancel={onClose}
+          initialSport={initialSport}
         />
       </DialogContent>
     </Dialog>

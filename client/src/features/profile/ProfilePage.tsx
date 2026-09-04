@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useProfilePageStore } from '@/app/profilePageStore';
-import { sportIdForKey } from '@/features/feed/sportIdMap';
+import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
 import { SessionDetailModal } from '@/features/session/components/SessionDetailModal';
 import { SessionDiscoverModal } from '@/features/session/components/SessionDiscoverModal';
@@ -18,6 +18,7 @@ import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
 import { useAddSportLauncher } from '@/shared/hooks/useAddSportLauncher';
+import { useResumableSports } from '@/shared/hooks/useResumableSports';
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
 import { useGroupBroadcasts } from '@/shared/hooks/useGroupBroadcasts';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
@@ -33,6 +34,8 @@ import { PostsTab } from './components/PostsTab';
 import { ProfileTabs, type ProfileTabKey } from './components/ProfileTabs';
 import { SettingsUnsavedChangesDialog } from './components/SettingsUnsavedChangesDialog';
 import { SportProfileSettingsTab } from './components/SportProfileSettingsTab';
+import { SportProfileStatusConfirmDialog } from './components/SportProfileStatusConfirmDialog';
+import { useDeactivateSportProfile } from './useDeactivateSportProfile';
 import { useMyProfile } from './useMyProfile';
 import { useProfileActiveSport } from './useProfileActiveSport';
 import { useSportProfileSettingsTabData } from './useSportProfileSettingsTabData';
@@ -97,11 +100,23 @@ export function ProfilePage() {
   const [editProfileOpenCount, setEditProfileOpenCount] = useState(0);
   const [isAddSportOpen, setIsAddSportOpen] = useState(false);
   const [addSportOpenCount, setAddSportOpenCount] = useState(0);
+  // SPORT-10: which sport the Settings tab edits, when it isn't the page's active sport — set
+  // by clicking a *deactivated* `SportSwitcher` pill (which also switches to the Settings tab).
+  // Cleared whenever an active pill is picked, so the tab follows the active sport again.
+  const [settingsSportOverride, setSettingsSportOverride] = useState<SportKey | undefined>(undefined);
+  // SPORT-10: the Active toggle's confirm dialog. `null` = closed.
+  const [statusToggle, setStatusToggle] = useState<{
+    mode: 'deactivate' | 'reactivate';
+    sportId: number;
+    profileId: number;
+    sportName: string;
+  } | null>(null);
 
   const profileQuery = useMyProfile();
   const updateProfile = useUpdateMyProfile();
-  const settingsTabData = useSportProfileSettingsTabData();
+  const settingsTabData = useSportProfileSettingsTabData(settingsSportOverride);
   const settingsGuard = useUnsavedChangesGuard(settingsTabData.isDirty);
+  const deactivateSportProfile = useDeactivateSportProfile();
 
   const sportProfilesQuery = useSportProfiles();
   const sportCatalog = useSportCatalog();
@@ -122,6 +137,7 @@ export function ProfilePage() {
   );
 
   const addSportMutation = useAddSportProfile(user.id);
+  const { resumableProfiles, inactiveSports } = useResumableSports();
   const [addSportPromptMessage, setAddSportPromptMessage] = useState<string | undefined>(undefined);
   const addSportLauncher = useAddSportLauncher({
     heldSportKeys: sportProfilesQuery.data.map((sport) => sport.key),
@@ -182,6 +198,8 @@ export function ProfilePage() {
             active={activeSport ?? 'all'}
             onChange={(key) =>
               settingsGuard.guard(() => {
+                // SPORT-10: back to following the active sport for the Settings tab.
+                setSettingsSportOverride(undefined);
                 if (key !== 'all') setStoredActiveSport(key);
               })
             }
@@ -189,6 +207,15 @@ export function ProfilePage() {
             isCheckingCatalog={addSportLauncher.isCheckingCatalog}
             onAddSport={addSportLauncher.launch}
             showAllPill={false}
+            inactiveSports={inactiveSports}
+            onInactiveSelect={(key) =>
+              // SPORT-10: a deactivated pill opens the Settings tab for that sport (toggle set to
+              // Inactive, everything below read-only) — not AddSportModal.
+              settingsGuard.guard(() => {
+                setSettingsSportOverride(key);
+                setActiveTab('settings');
+              })
+            }
           />
         </div>
         {profileQuery.data !== undefined && (
@@ -224,6 +251,26 @@ export function ProfilePage() {
                     onSave={() => settingsTabData.save()}
                     isSaving={settingsTabData.isSaving}
                     errorMessage={settingsTabData.errorMessage}
+                    onToggleActive={() => {
+                      const profile = settingsTabData.activeProfile;
+                      if (profile === undefined) return;
+                      deactivateSportProfile.reset();
+                      addSportMutation.reset();
+                      // Pin the Settings tab to this sport across the active/inactive flip so it
+                      // doesn't jump to another sport once this one leaves (or rejoins) the active
+                      // list.
+                      const key = sportKeyForId(profile.sportId);
+                      if (key !== undefined) setSettingsSportOverride(key);
+                      setStatusToggle({
+                        mode: profile.isActive ? 'deactivate' : 'reactivate',
+                        sportId: profile.sportId,
+                        profileId: profile.id,
+                        sportName: profile.sportName,
+                      });
+                    }}
+                    isTogglingActive={
+                      deactivateSportProfile.isPending || addSportMutation.isPending
+                    }
                   />
                 )}
               </div>
@@ -300,12 +347,43 @@ export function ProfilePage() {
             setIsAddSportOpen(false);
           }}
           availableSports={availableSports}
+          resumableProfiles={resumableProfiles}
           isSubmitting={addSportMutation.isPending}
           isError={addSportMutation.isError}
           onSubmit={(payload) =>
             addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
           }
           promptMessage={addSportPromptMessage}
+        />
+        <SportProfileStatusConfirmDialog
+          key={statusToggle ? `${statusToggle.mode}-${statusToggle.profileId}` : 'closed'}
+          isOpen={statusToggle !== null}
+          mode={statusToggle?.mode ?? 'deactivate'}
+          sportName={statusToggle?.sportName ?? ''}
+          onClose={() => {
+            deactivateSportProfile.reset();
+            addSportMutation.reset();
+            setStatusToggle(null);
+          }}
+          onConfirm={() => {
+            if (statusToggle === null) return;
+            if (statusToggle.mode === 'deactivate') {
+              deactivateSportProfile.deactivateSportProfile(statusToggle.profileId, {
+                onSuccess: () => setStatusToggle(null),
+              });
+            } else {
+              addSportMutation.mutate(
+                { sportId: statusToggle.sportId, isResume: true },
+                { onSuccess: () => setStatusToggle(null) },
+              );
+            }
+          }}
+          isSubmitting={deactivateSportProfile.isPending || addSportMutation.isPending}
+          isError={
+            statusToggle?.mode === 'deactivate'
+              ? deactivateSportProfile.isError
+              : addSportMutation.isError
+          }
         />
         <CreateSessionModal
           key={createSessionModalData.isCreateModalOpen ? 'open' : 'closed'}
@@ -326,6 +404,7 @@ export function ProfilePage() {
           isSubmitting={createSessionModalData.isCreating}
           isError={createSessionModalData.isCreateError}
           availableSports={availableSports}
+          resumableProfiles={resumableProfiles}
           onAddSport={addSportMutation.mutate}
           isAddingSport={addSportMutation.isPending}
           isAddSportError={addSportMutation.isError}
@@ -346,6 +425,7 @@ export function ProfilePage() {
           onParticipationAction={discoverModalData.onParticipationAction}
           isParticipationActionPending={discoverModalData.isParticipationActionPending}
           availableSports={availableSports}
+          resumableProfiles={resumableProfiles}
           onAddSport={addSportMutation.mutate}
           isAddingSport={addSportMutation.isPending}
           isAddSportError={addSportMutation.isError}

@@ -32,6 +32,10 @@ import { UpdateBroadcastConfirmDialog } from '@/shared/components/UpdateBroadcas
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
 import { NoSportsToAddDialog } from '@/shared/components/NoSportsToAddDialog';
 import { useAddSportLauncher } from '@/shared/hooks/useAddSportLauncher';
+import { useResumableSports } from '@/shared/hooks/useResumableSports';
+import { useInactiveSportPillSelect } from '@/shared/hooks/useInactiveSportPillSelect';
+import { useInactiveSportNudgeStore } from '@/app/inactiveSportNudgeStore';
+import { ReactivateSportNudgeDialog } from '@/shared/components/ReactivateSportNudgeDialog';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
@@ -197,12 +201,30 @@ export function GroupsPage() {
     isGroupsError,
     retryGroups,
   } = useGroupsPageData();
+  const { resumableProfiles, inactiveSports } = useResumableSports();
+  // SPORT-10 §2e: opening a group linked to a deactivated sport prompts a reactivate nudge
+  // (once per group per session). `null` = closed.
+  const [groupSportNudge, setGroupSportNudge] = useState<{
+    groupId: number;
+    sportKey: SportKey;
+  } | null>(null);
+  const isGroupNudgeDeferred = useInactiveSportNudgeStore((state) => state.isGroupDeferred);
+  const deferGroupNudge = useInactiveSportNudgeStore((state) => state.deferGroup);
+
   // GRP-1: every place that changes which group is selected also resets the
   // per-group tab back to Posts — a stale Settings/Chat selection from a
   // previously viewed group would be confusing to land on.
   const selectGroupAndShowPosts = (groupId: number | null, groupSportId?: number | null) => {
     selectGroup(groupId, groupSportId ?? undefined);
     setActiveGroupTab('posts');
+    // §2e: this group's sport is one the caller has deactivated → nudge (unless deferred).
+    if (groupId !== null && groupSportId != null) {
+      const key = sportKeyForId(groupSportId);
+      if (key !== undefined && inactiveSports.some((s) => s.key === key) && !isGroupNudgeDeferred(groupId)) {
+        addSportMutation.reset();
+        setGroupSportNudge({ groupId, sportKey: key });
+      }
+    }
   };
   // GRP-2: unsaved GroupSettings-toggle draft, Save, and the leave-guard
   // (tab/group switch here; in-app nav + browser close/refresh inside the
@@ -224,6 +246,10 @@ export function GroupsPage() {
   const hashtagResultsData = useHashtagResultsData(activeHashtag, activeHashtag !== null);
   const createGroupMutation = useCreateGroup(currentUserId);
   const addSportMutation = useAddSportProfile(currentUserId);
+  const inactiveSportPill = useInactiveSportPillSelect({
+    userId: currentUserId,
+    onSelectSport: (key) => guardedSetActiveSport(key),
+  });
 
   // Zero-sport-profile gate on page access (not just on create/join a match — see
   // CreateSessionModal/SessionDiscoverModal's own inline gate for that): a caller who lands here
@@ -524,8 +550,32 @@ export function GroupsPage() {
             maxSports={sportCatalog.data.length || undefined}
             isCheckingCatalog={addSportLauncher.isCheckingCatalog}
             onAddSport={addSportLauncher.launch}
+            inactiveSports={inactiveSports}
+            onInactiveSelect={inactiveSportPill.onInactiveSelect}
           />
         </div>
+        {inactiveSportPill.nudge && <ReactivateSportNudgeDialog {...inactiveSportPill.nudge} />}
+        <ReactivateSportNudgeDialog
+          key={groupSportNudge ? `group-nudge-${groupSportNudge.groupId}` : 'closed'}
+          isOpen={groupSportNudge !== null}
+          mode="group"
+          sportName={
+            groupSportNudge !== null ? getSportProfileConfig(groupSportNudge.sportKey).label : ''
+          }
+          onLater={() => {
+            if (groupSportNudge !== null) deferGroupNudge(groupSportNudge.groupId);
+            setGroupSportNudge(null);
+          }}
+          onReactivate={() => {
+            if (groupSportNudge === null) return;
+            addSportMutation.mutate(
+              { sportId: sportIdForKey(groupSportNudge.sportKey) ?? 0, isResume: true },
+              { onSuccess: () => setGroupSportNudge(null) },
+            );
+          }}
+          isReactivating={addSportMutation.isPending}
+          isError={addSportMutation.isError}
+        />
         {/* Every modal on this page positions below the group pill row specifically (user
           decision) — regardless of whether the cover banner is also showing underneath it.
           `modalAnchorRef` on the outer wrapper still measures through the banner too, for
@@ -818,6 +868,7 @@ export function GroupsPage() {
             setIsAddSportOpen(false);
           }}
           availableSports={availableSports}
+          resumableProfiles={resumableProfiles}
           isSubmitting={addSportMutation.isPending}
           isError={addSportMutation.isError}
           onSubmit={(payload) =>
@@ -864,6 +915,7 @@ export function GroupsPage() {
             setSportGate(null);
           }}
           availableSports={sportGate !== null ? [sportGate.sportKey] : []}
+          resumableProfiles={resumableProfiles}
           isSubmitting={addSportMutation.isPending}
           isError={addSportMutation.isError}
           onSubmit={(payload) =>
@@ -955,6 +1007,7 @@ export function GroupsPage() {
           isSubmitting={createSessionModalData.isCreating}
           isError={createSessionModalData.isCreateError}
           availableSports={availableSports}
+          resumableProfiles={resumableProfiles}
           onAddSport={addSportMutation.mutate}
           isAddingSport={addSportMutation.isPending}
           isAddSportError={addSportMutation.isError}
@@ -975,6 +1028,7 @@ export function GroupsPage() {
           onParticipationAction={discoverModalData.onParticipationAction}
           isParticipationActionPending={discoverModalData.isParticipationActionPending}
           availableSports={availableSports}
+          resumableProfiles={resumableProfiles}
           onAddSport={addSportMutation.mutate}
           isAddingSport={addSportMutation.isPending}
           isAddSportError={addSportMutation.isError}

@@ -25,6 +25,7 @@ import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
 import { AddSportFields, type AddSportProfileSubmission } from '@/shared/components/AddSportFields';
+import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import type { CreateSessionPayload } from '../types';
 import { SessionStartTimePicker } from './SessionStartTimePicker';
 
@@ -404,6 +405,9 @@ interface CreateSessionModalProps {
    * `AddSportModal` (SportSwitcher's "+" pill) — always the full live catalog in this gated case,
    * since a caller with zero profiles has no sport to exclude. */
   availableSports: SportKey[];
+  /** SPORT-10: forwarded to the inline `AddSportFields` so re-adding a soft-deleted sport from
+   * this gate offers the read-only reactivate variant, same as the standalone `AddSportModal`. */
+  resumableProfiles?: Map<SportKey, ResumablePrevious>;
   onAddSport: (payload: AddSportProfileSubmission) => void;
   isAddingSport: boolean;
   isAddSportError: boolean;
@@ -493,6 +497,7 @@ export function CreateSessionModal({
   isSubmitting,
   isError,
   availableSports,
+  resumableProfiles,
   onAddSport,
   isAddingSport,
   isAddSportError,
@@ -610,6 +615,7 @@ export function CreateSessionModal({
           {sportKeys.length === 0 ? (
             <AddSportFields
               availableSports={availableSports}
+              resumableProfiles={resumableProfiles}
               onSubmit={onAddSport}
               isSubmitting={isAddingSport}
               isError={isAddSportError}

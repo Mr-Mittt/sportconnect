@@ -192,17 +192,22 @@ export const sportHandlers: HttpHandler[] = [
   // A22: caller-scoped — the owner comes from the JWT, not the path, and the
   // endpoint requires `hasRole('USER')` (anonymous → 401). SPORT-11 repointed
   // the client here from the removed `GET /sports/profiles/user/:userId`.
+  // SPORT-10 (A20): `?includeInactive=true` also returns soft-deleted rows;
+  // without it the list is active-only.
   http.get('/api/sports/profiles', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const sessionId = sessionIdFromRequest(request);
+    const includeInactive =
+      new URL(request.url).searchParams.get('includeInactive') === 'true';
     // MSW-1: replaces emptySportProfiles.ts's overrideSportProfilesToEmpty.
     if (getOverrides(sessionId).sportProfilesEmpty) {
       return HttpResponse.json(apiResponse([], 'User profiles retrieved successfully'));
     }
+    const all = sportSessions.get(sessionId).userSportProfilesState;
     return HttpResponse.json(
       apiResponse<UserSportProfileResponse[]>(
-        sportSessions.get(sessionId).userSportProfilesState,
+        includeInactive ? all : all.filter((profile) => profile.isActive),
         'User profiles retrieved successfully',
       ),
     );
@@ -335,24 +340,56 @@ export const sportHandlers: HttpHandler[] = [
     if (unauthorized) return unauthorized;
     const body = (await request.json()) as {
       sportId: number;
-      skillLevel: string;
+      skillLevel?: string;
       yearsOfExperience?: number;
+      isResume?: boolean;
     };
     const session = sportSessions.get(sessionIdFromRequest(request));
-    if (session.userSportProfilesState.some((profile) => profile.sportId === body.sportId)) {
+    const existing = session.userSportProfilesState.find(
+      (profile) => profile.sportId === body.sportId,
+    );
+
+    // SPORT-10 (A20): pure reactivation of a soft-deleted row — the request body is otherwise
+    // ignored, the stored scalars/attributes are kept verbatim.
+    if (body.isResume === true) {
+      if (existing === undefined) {
+        return HttpResponse.json(
+          apiError('No deactivated profile to resume for this sport'),
+          { status: 400 },
+        );
+      }
+      if (existing.isActive) {
+        return HttpResponse.json(apiError('Already has a profile for this sport'), { status: 400 });
+      }
+      const reactivated: UserSportProfileResponse = {
+        ...existing,
+        isActive: true,
+        updatedAt: new Date().toISOString(),
+      };
+      session.userSportProfilesState = session.userSportProfilesState.map((profile) =>
+        profile.id === existing.id ? reactivated : profile,
+      );
+      return HttpResponse.json(
+        apiResponse(reactivated, 'Sport profile reactivated successfully'),
+        { status: 201 },
+      );
+    }
+
+    // Fresh create — only an *active* row blocks it (A7 reactivates a soft-deleted one).
+    if (existing?.isActive) {
       return HttpResponse.json(apiError('Already has a profile for this sport'), { status: 400 });
     }
-    if (session.userSportProfilesState.length >= 3) {
+    if (session.userSportProfilesState.filter((profile) => profile.isActive).length >= 3) {
       return HttpResponse.json(apiError('Maximum number of sport profiles reached'), {
         status: 400,
       });
     }
     const created: UserSportProfileResponse = {
-      id: session.nextProfileId++,
+      id: existing?.id ?? session.nextProfileId++,
       userId: mockUser.id,
       sportId: body.sportId,
       sportName: mockSportCatalog.find((sport) => sport.id === body.sportId)?.name ?? 'Unknown',
-      skillLevel: body.skillLevel,
+      skillLevel: body.skillLevel ?? null,
       yearsOfExperience: body.yearsOfExperience ?? null,
       preferredPosition: null,
       bio: null,
@@ -361,7 +398,11 @@ export const sportHandlers: HttpHandler[] = [
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    session.userSportProfilesState = [...session.userSportProfilesState, created];
+    session.userSportProfilesState = existing
+      ? session.userSportProfilesState.map((profile) =>
+          profile.id === existing.id ? created : profile,
+        )
+      : [...session.userSportProfilesState, created];
     return HttpResponse.json(apiResponse(created, 'Sport profile created successfully'), {
       status: 201,
     });
@@ -404,6 +445,28 @@ export const sportHandlers: HttpHandler[] = [
     );
     return HttpResponse.json(apiResponse(updated, 'Sport profile updated successfully'));
   }),
+
+  // SPORT-10: soft delete — flips `isActive` to false, keeps the row (skill/YoE/attributes
+  // intact) so `GET /sports/profiles?includeInactive=true` still returns it and it can be
+  // reactivated via `POST { sportId, isResume: true }`. Mirrors `deleteProfile`'s A7 behaviour.
+  http.delete('/api/sports/profiles/:profileId', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = sportSessions.get(sessionIdFromRequest(request));
+    const profileId = Number(params.profileId);
+    const existing = session.userSportProfilesState.find((profile) => profile.id === profileId);
+    if (!existing) {
+      return HttpResponse.json(apiError('Sport profile not found with id: ' + profileId), {
+        status: 404,
+      });
+    }
+    session.userSportProfilesState = session.userSportProfilesState.map((profile) =>
+      profile.id === profileId
+        ? { ...profile, isActive: false, updatedAt: new Date().toISOString() }
+        : profile,
+    );
+    return HttpResponse.json(apiResponse(null, 'Sport profile deleted successfully'));
+  }),
 ];
 
 /** Test-only reset — used by the mock server's `/__mock/sessions/:id/reset`. */
@@ -425,4 +488,40 @@ export function resetSportHandlersState(sessionId: string): void {
  */
 export function seedZeroSportProfilesState(sessionId: string): void {
   sportSessions.get(sessionId).userSportProfilesState = [];
+}
+
+/**
+ * SPORT-10: give the caller a soft-deleted profile for `sportId` (default: Pickleball, id 3 —
+ * which the default fixture holds as active) so the add-sport picker offers the reactivate
+ * flow. Replaces any existing row for that sport with an inactive one carrying the given
+ * skill/YoE, so `GET /sports/profiles?includeInactive=true` returns it and a plain
+ * `GET /sports/profiles` does not.
+ */
+export function seedSoftDeletedSportProfile(
+  sessionId: string,
+  sportId = 3,
+  previous: { skillLevel: string | null; yearsOfExperience: number | null } = {
+    skillLevel: 'advanced',
+    yearsOfExperience: 6,
+  },
+): void {
+  const session = sportSessions.get(sessionId);
+  const softDeleted: UserSportProfileResponse = {
+    id: session.nextProfileId++,
+    userId: mockUser.id,
+    sportId,
+    sportName: mockSportCatalog.find((sport) => sport.id === sportId)?.name ?? 'Unknown',
+    skillLevel: previous.skillLevel,
+    yearsOfExperience: previous.yearsOfExperience,
+    preferredPosition: null,
+    bio: null,
+    attributes: null,
+    isActive: false,
+    createdAt: '2026-05-01T10:00:00',
+    updatedAt: '2026-06-01T10:00:00',
+  };
+  session.userSportProfilesState = [
+    ...session.userSportProfilesState.filter((profile) => profile.sportId !== sportId),
+    softDeleted,
+  ];
 }

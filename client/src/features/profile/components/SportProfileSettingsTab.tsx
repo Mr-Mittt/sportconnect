@@ -6,6 +6,7 @@ import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
+import { Switch } from '@/shared/ui/switch';
 import type { SportProfileEditDraft } from '../sportProfileEditDraft';
 
 interface SportProfileSettingsTabProps {
@@ -21,6 +22,46 @@ interface SportProfileSettingsTabProps {
   onSave: () => void;
   isSaving: boolean;
   errorMessage: string | null;
+  /** SPORT-10: opens `ProfilePage`'s confirm dialog for the Active toggle. The tab itself never
+   * fires the `DELETE` / `isResume` mutation — `ProfilePage` owns those (controlled, not
+   * self-contained). */
+  onToggleActive: () => void;
+  /** SPORT-10: the deactivate/reactivate mutation is in flight — the toggle is disabled. */
+  isTogglingActive: boolean;
+}
+
+/** SPORT-10: the Active/Inactive pill toggle — first control in the tab. Mirrors
+ * `GroupSettingsTab`'s `ToggleFieldRow` shape. Lives outside the read-only `<fieldset>` below so
+ * it stays interactive while the profile is Inactive. */
+function ActiveToggleRow({
+  sportName,
+  isActive,
+  onToggle,
+  isBusy,
+}: {
+  sportName: string;
+  isActive: boolean;
+  onToggle: () => void;
+  isBusy: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <div className="text-2sm font-medium text-text-primary">Active</div>
+        <div className="text-2xs text-text-muted">
+          {isActive
+            ? `You're playing ${sportName} — it shows in your sport switcher.`
+            : `${sportName} is deactivated — your details are kept, reactivate any time.`}
+        </div>
+      </div>
+      <Switch
+        checked={isActive}
+        onCheckedChange={onToggle}
+        disabled={isBusy}
+        aria-label={`${sportName} profile: ${isActive ? 'Active' : 'Inactive'}`}
+      />
+    </div>
+  );
 }
 
 /**
@@ -49,6 +90,8 @@ export function SportProfileSettingsTab({
   onSave,
   isSaving,
   errorMessage,
+  onToggleActive,
+  isTogglingActive,
 }: SportProfileSettingsTabProps) {
   if (isLoading) return null;
 
@@ -60,6 +103,8 @@ export function SportProfileSettingsTab({
     );
   }
 
+  const isActive = activeProfile.isActive;
+
   return (
     <form
       className="flex flex-col gap-5"
@@ -68,6 +113,20 @@ export function SportProfileSettingsTab({
         onSave();
       }}
     >
+      <ActiveToggleRow
+        sportName={activeProfile.sportName}
+        isActive={isActive}
+        onToggle={onToggleActive}
+        isBusy={isTogglingActive}
+      />
+
+      {/* SPORT-10: a native disabled <fieldset> makes every control below (incl. all of
+          SportAttributesFields' nested inputs and the Save button) read-only while the profile
+          is Inactive — no per-field prop threading. */}
+      <fieldset
+        disabled={!isActive}
+        className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0 disabled:opacity-60"
+      >
       <div className="flex flex-col gap-3.5">
         <h3 className="text-sm font-semibold text-text-primary">Sport profile</h3>
         <div>
@@ -120,11 +179,12 @@ export function SportProfileSettingsTab({
       <Button
         type="submit"
         variant="primary"
-        disabled={!isDirty || draft.skillLevel === '' || isSaving}
+        disabled={!isActive || !isDirty || draft.skillLevel === '' || isSaving}
         className={cn('self-start cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
       >
         {isSaving ? 'Saving…' : 'Save changes'}
       </Button>
+      </fieldset>
     </form>
   );
 }

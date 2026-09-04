@@ -239,6 +239,80 @@ describe('ProfilePage', () => {
     expect(screen.queryByRole('dialog', { name: 'Add a sport' })).not.toBeInTheDocument();
   });
 
+  const softDeletedTennis = {
+    ...footballProfile,
+    id: 103,
+    sportId: 2,
+    sportName: 'Tennis',
+    skillLevel: 'advanced',
+    yearsOfExperience: 7,
+    isActive: false,
+  };
+
+  /** GET mock where the `?includeInactive=true` list also carries a soft-deleted Tennis row. */
+  function mockGetWithSoftDeletedTennis(deleteSpy?: ReturnType<typeof vi.spyOn>) {
+    let tennisActive = false;
+    if (deleteSpy) {
+      deleteSpy.mockImplementation(async () => {
+        tennisActive = false;
+        return apiResponse(null);
+      });
+    }
+    return vi.spyOn(apiClient, 'get').mockImplementation(
+      async (url: string, config?: { params?: Record<string, unknown> }) => {
+        if (url === '/sports/profiles') {
+          const active = [footballProfile, basketballProfile];
+          if (config?.params?.includeInactive === true) {
+            return apiResponse([...active, { ...softDeletedTennis, isActive: tennisActive }]);
+          }
+          return apiResponse(tennisActive ? [...active, softDeletedTennis] : active);
+        }
+        if (url === '/sports/2/attribute-schema') return apiResponse(null);
+        const staticResponse = staticGetResponse(url, [footballProfile, basketballProfile]);
+        if (staticResponse) return staticResponse;
+        if (url === '/posts/mine') return apiResponse({ ...emptyPage().data.data, content: [] });
+        throw new Error(`unexpected GET ${url}`);
+      },
+    );
+  }
+
+  it('SPORT-10: a deactivated SportSwitcher pill opens the Settings tab for that sport, read-only', async () => {
+    const user = userEvent.setup();
+    mockGetWithSoftDeletedTennis();
+    render(<ProfilePage />, { wrapper });
+
+    const tennisPill = await screen.findByRole('button', { name: 'Tennis' });
+    expect(tennisPill).toHaveClass('text-text-muted');
+
+    await user.click(tennisPill);
+
+    // Landed on the Settings tab, showing Tennis, toggle Inactive, fields read-only.
+    expect(await screen.findByRole('switch', { name: /Tennis profile: Inactive/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('Skill level')).toHaveValue('advanced');
+    expect(screen.getByLabelText('Skill level')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    expect(screen.queryByRole('dialog', { name: 'Add a sport' })).not.toBeInTheDocument();
+  });
+
+  it('SPORT-10: the Active toggle confirms then DELETEs the profile', async () => {
+    const user = userEvent.setup();
+    const deleteSpy = vi.spyOn(apiClient, 'delete');
+    mockGetWithSoftDeletedTennis();
+    deleteSpy.mockResolvedValue(apiResponse(null));
+    render(<ProfilePage />, { wrapper });
+
+    // Open Settings on the active Football sport.
+    await user.click(await screen.findByRole('tab', { name: 'Settings' }));
+    await user.click(await screen.findByRole('switch', { name: /Football profile: Active/ }));
+
+    // Confirm dialog with the deactivate copy.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/hidden from your active sports/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Deactivate' }));
+
+    await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith('/sports/profiles/101'));
+  });
+
   describe('Settings unsaved-changes guard (PROFILE-10)', () => {
     async function openSettingsAndEdit(user: ReturnType<typeof userEvent.setup>) {
       await user.click(screen.getByRole('tab', { name: 'Settings' }));
