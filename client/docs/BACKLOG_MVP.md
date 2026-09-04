@@ -79,6 +79,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 9 | [SPORT-7](MVP/SPORT-7_ATTRIBUTE_FIELDS_ORDER_AND_LAYOUT.md) | `SportAttributesFields` — honor `order`, group-level layout (collapsible + responsive grid); helps the profile editor too | `TODO` |
 | 10 | [SPORT-8](MVP/SPORT-8_REMOVE_PREFERRED_POSITION_FROM_PROFILE_EDITOR.md) | Remove "Preferred position" from the sport profile editor — client half of backend A18 | `TODO` |
 | 11 | [SPORT-9](MVP/SPORT-9_NUMBER_AND_BOOLEAN_ATTRIBUTE_CONTROLS.md) | `NUMBER` (number input, honors `min`/`max`) and `BOOLEAN` (checkbox) form controls in `SportAttributesFields` + `DefinitionFields`; mirror the enum + resolved `min`/`max` in `shared/types/sport.ts` — client half of backend A16 (`DONE` 2026-09-02); renderer currently `default: return null`-degrades both | `TODO` |
+| 12 | [SPORT-12](MVP/SPORT-12_DEACTIVATE_REACTIVATE_UI_VISUAL_REGRESSION.md) | Visual regression harness for SPORT-10's deactivate/reactivate UI — the Settings-tab Active switch + inactive read-only state, `SportProfileStatusConfirmDialog`, `ReactivateSportNudgeDialog`, muted `SportSwitcher` pills. Follow-up filed from SPORT-10 (same pattern as CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10) | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against

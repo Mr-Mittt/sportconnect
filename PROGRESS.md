@@ -4214,11 +4214,13 @@ explicit go-ahead at each step (full story in A3's summary doc):
   filter (`aria-pressed`). The Groups page also nudges when a group linked to a deactivated sport
   is opened ("This is a {sportName} group, but your {sportName} profile is down…", once per group
   per session). Shared `useInactiveSportPillSelect` hook. Profile keeps the Settings-tab toggle,
-  no nudge. MSW `sport.ts` handles `?includeInactive` + `isResume` + a new soft-delete `DELETE`;
-  new `feed-groups-journey` reactivate + nudge e2e, `profile-journey` toggle e2e. `tsc -b` /
-  `eslint` clean, Vitest **161 files / 1099 pass**, Playwright `e2e` green (`--workers=2` — default
+  no nudge. MSW `sport.ts` handles `?includeInactive` + `isResume` + a new soft-delete `DELETE`.
+  e2e: `feed-groups-journey` (reactivate variant, pill nudge "Later", Groups group-nudge "Yes"),
+  `matches-journey` (pill nudge "Yes"), `profile-journey` (Settings toggle). `tsc -b` / `eslint`
+  clean, Vitest **161 files / 1099 pass**, Playwright `e2e` green (`--workers=2` — default
   parallelism starves this Windows host). No baselined surface touched — everything new is
-  conditionally rendered, absent from every default fixture.
+  conditionally rendered, absent from every default fixture; **visual-regression harness filed as
+  follow-up SPORT-12** (repo pattern — CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

@@ -256,7 +256,7 @@ read-only "Reactivate" variant to `AddSportFields` (for every non-Profile add-sp
 | `SportSwitcher.tsx` (§2e) | a muted pill now reflects `active === sport.key` (`aria-pressed` + active border) — a deactivated sport can be the active filter on a non-Profile page |
 | `HomeFeedPage.tsx` / `MatchesPage.tsx` (§2e) | grab `inactiveSports` from `useResumableSports()`; wire `useInactiveSportPillSelect` + `SportSwitcher` props + render `ReactivateSportNudgeDialog` |
 | `GroupsPage.tsx` (§2e) | same pill nudge (`onSelectSport = guardedSetActiveSport`), **plus** a group nudge: `selectGroupAndShowPosts` opens `ReactivateSportNudgeDialog mode="group"` when the group's `sportId` is an inactive-only sport and the group isn't session-deferred |
-| e2e | `feed-groups-journey.spec.ts` — "re-adding a soft-deleted sport shows the read-only Reactivate flow" + "Home Feed — a deactivated sport pill prompts the reactivate nudge, 'Later' lets it through"; `profile-journey.spec.ts` — "Settings tab — deactivate a sport, then reactivate it via the muted pill". `E2E_OVERVIEW.md` catalog updated |
+| e2e | `feed-groups-journey.spec.ts` — "re-adding a soft-deleted sport shows the read-only Reactivate flow", "Home Feed — a deactivated sport pill prompts the reactivate nudge, 'Later' lets it through", "Groups — opening a group linked to a deactivated sport prompts the reactivate nudge" (**Yes** path); `matches-journey.spec.ts` — "Matches — a deactivated sport pill nudge, 'Yes' reactivates it"; `profile-journey.spec.ts` — "Settings tab — deactivate a sport, then reactivate it via the muted pill". `E2E_OVERVIEW.md` catalog updated |
 
 ### Key decisions / non-obvious constraints
 
@@ -319,6 +319,13 @@ wired from `ProfilePage`.
 - Live browser walk against a running backend — **not done** (same as SPORT-11). A20's contract is
   backend-live-verified in its own summary; `DELETE /api/sports/profiles/{id}` is a pre-existing
   `ROLE_USER` endpoint; MSW mirrors both 1:1.
+
+### Follow-up filed
+
+**SPORT-12** (`client/docs/BACKLOG_MVP.md`) — visual-regression harness for the new surfaces here
+(Settings-tab Active switch + inactive read-only state, `SportProfileStatusConfirmDialog`,
+`ReactivateSportNudgeDialog`, muted `SportSwitcher` pills). Filed as its own ticket per the repo's
+established pattern (CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10 / FEED-11).
 
 ### Visual-regression expectation
 

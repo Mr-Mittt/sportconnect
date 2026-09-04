@@ -412,7 +412,7 @@ helpers called.
 | 6. simulated expired session | Login, then force one 401 on `POST /api/auth/logout` via `page.route()` → AUTH-5's retry interceptor attempts a silent refresh (fails, no valid cookie) → session cleared regardless → redirected to `/login`; re-visiting `/` redirects again (not a stale render) | **Deliberately not reload-based** — an earlier reload-triggered version was unreliable even under normal, non-repeated runs (a genuine stuck state, not the MSW-1 race) |
 | 7. deep link while logged out | `/friends` → redirected to `/login` → log in → redirected **back to `/friends`** | Tests the redirect-back mechanism specifically |
 
-### `e2e/flows/feed-groups-journey.spec.ts` (FEED-10 + CLIENT-MODAL-1, one `test()` with 9 steps + 6 separate `test()`s)
+### `e2e/flows/feed-groups-journey.spec.ts` (FEED-10 + CLIENT-MODAL-1, one `test()` with 9 steps + 7 separate `test()`s)
 
 Uses `seedPaginatedFeedOnNextLoad(mockSessionId)` — replaces the feed with **21 posts** before the
 first fetch (index 19 = a `GROUP_POST` for `mockGroup`, index 20 = Pickleball, everything else
@@ -451,6 +451,7 @@ This spec destructures `mockSessionId` directly (needed by the seed/override adm
 |---|---|---|
 | re-adding a soft-deleted sport shows the read-only Reactivate flow | `seedSoftDeletedSportProfileOnNextLoad(mockSessionId)` makes Pickleball soft-deleted (prev `advanced`/6y) → "Add sport" pill → picker shows "You had a Pickleball profile before", skill `advanced` + YoE both **disabled**, **Reactivate** button → click → modal closes; the muted "Reactivate Pickleball" pill goes away and Pickleball is an active pill | The picker defaults its Sport select to the only addable sport (Pickleball), which is resumable → the modal opens straight into the reactivate variant. `POST /api/sports/profiles {sportId, isResume:true}` flips the MSW row back to active. §2e: this page's `SportSwitcher` also now shows the muted Pickleball pill, hence the "Reactivate Pickleball" (button + `description`) disambiguation |
 | Home Feed — a deactivated sport pill prompts the reactivate nudge, "Later" lets it through | Same seed → the muted "Pickleball" pill (`text-text-muted`) → click → `ReactivateSportNudgeDialog` ("This sport profile is down. Do you want to bring it up?") → **Later** → nudge closes, Pickleball pill is now `aria-pressed` (selection went through) → switch to "All" and back to Pickleball → **no nudge** this time (deferred for the session via `inactiveSportNudgeStore`) | §2e. `Later` doesn't reactivate — it just lets the current selection through and silences the nudge for the session |
+| Groups — opening a group linked to a deactivated sport prompts the reactivate nudge | Same seed → open "Weekend Tennis Ladder" (`mockOwnedGroup`, a Pickleball group) in the Group filter → `ReactivateSportNudgeDialog mode="group"` ("This is a Pickleball group, but your Pickleball profile is down…") → **Yes** → reactivates (`POST {isResume:true}`), the muted "Reactivate Pickleball" Sport-filter pill is gone | §2e. Fires from `selectGroupAndShowPosts` when the group's `sportId` is an inactive-only sport; once per group per session |
 
 **Separate tests — CLIENT-MODAL-1 stale-mutation-error regressions:**
 
@@ -613,7 +614,7 @@ path other specs already exercise incidentally.
 | `loading a shared post link directly renders the post + comments, even outside the feed's first page` | `seedPaginatedFeedOnNextLoad(mockSessionId)` (21-post fixture) → direct `seedAuthenticatedSession(page, '/posts/1020')` (post **1020**, index 20 — only reachable via "Load more" on page 0) → dialog renders the right post/comments on a cold load; closing returns to `/` with the normal Home Feed visible | Drives the real "shared link, not logged in yet" flow end-to-end (redirect to `/login`, bounce back) — the same generic mechanism AUTH-8's step 7 already covers, not something FEED-12 built itself. Proves the dialog doesn't depend on the feed having paginated the post into view first. |
 | `opening comments from the feed updates the URL, and closing returns to it` | Click a post's "View comments" from `/` → URL becomes `/posts/{id}` → Close → URL back to `/` | Confirms the in-feed path is also URL-addressable now (`navigate` push on open, `replace` on close), not just the direct-load path above |
 
-### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9, one `test()` with 10 steps + steps 3b/3c/5b)
+### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/…/CLIENT-SESSION-9, SPORT-10, one `test()` with 10 steps + steps 3b/3c/5b + 1 separate `test()`)
 
 `/matches` (real page, replacing `ComingSoonPage`) — list/create/join/leave/cancel, plus
 CLIENT-SESSION-4's invite/auto-approve fields and approval queue, plus CLIENT-SESSION-5's
@@ -661,6 +662,12 @@ steps 9-10 are what's actually new.
 | 8. favorite a location, then pick it from the favorites dropdown | Open a new create form → dropdown shows "No favorites yet." → open `LocationPicker`, search "Riverside" → click the heart on `mockLocation`'s row (aria-label flips to "Unfavorite …") → select it → reopen the dropdown → the just-favorited location now lists instead of the empty state → selecting it sets the location again | Confirms `LocationFavoritesDropdown`'s real Radix `DropdownMenu` (`modal={false}`) actually works nested inside the Dialog — CLIENT-SESSION-2 had reverted an earlier attempt after it appeared broken live; CLIENT-SESSION-5 found and fixed the real cause (see its summary doc) |
 | 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverSessions`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED` row for, same exclusion rule as the real backend |
 | 10. search filters Discover; the panel toggle hides/shows My sessions | Typing a non-matching string into the search box shows "No sessions match your search." in Discover; the "Hide my sessions"/"Show my sessions" button toggles the whole `region` "My sessions" | Search is client-side only (`useMatchesPageData`'s `discoverSessions` memo), not a new backend query |
+
+**Separate test — SPORT-10 §2e reactivate nudge ("Yes" path):**
+
+| Test | What it checks | Notes |
+|---|---|---|
+| Matches — a deactivated sport pill nudge, "Yes" reactivates it | `seedSoftDeletedSportProfileOnNextLoad(mockSessionId)` → the muted "Pickleball" Sport-filter pill → click → `ReactivateSportNudgeDialog` ("This sport profile is down…") → **Yes** → `POST /api/sports/profiles {isResume:true}`, dialog closes, the muted "Reactivate Pickleball" pill is gone and Pickleball is a normal pill | §2e. The `feed-groups-journey` nudge test covers **Later**; this covers **Yes** on a second non-profile page |
 
 ### `e2e/flows/notification-bell.spec.ts` (CLIENT-NOTIF-1 + CLIENT-NOTIF-5 + FRIEND-2, five `test()`s — a 4-step journey + four regression/navigation cases)
 
