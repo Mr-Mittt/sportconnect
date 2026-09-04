@@ -329,12 +329,20 @@ established pattern (CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10 / FEED-11).
 
 ### Visual-regression expectation
 
-No baselined surface changes. Everything new is **conditionally rendered**, off in every
-baseline's default fixture state: the reactivate variant only when a resumable sport is selected;
-the muted `SportSwitcher` pills only when the caller has a soft-deleted profile (no baseline
-fixture does); the nudge dialogs only on a muted-pill click / a deactivated-sport-group open; the
-Settings tab's Active toggle only once the tab has a profile, and the `<fieldset>` `disabled` only
-when that profile is inactive. `SportSwitcher` renders byte-identically for every existing baseline
-(empty `inactiveSports.map()` emits nothing; the `aria-pressed={isActive}` change is inert when
-there are no muted pills). No `/profile` visual spec exists. A failing `visual-regression` run is
-the Windows font-rendering noise floor — no `update-baselines` dispatch needed.
+**Baselines `profile-settings-375.png` / `-768.png` / `-1280.png` (`e2e/visual/app-profile.spec.ts`)
+legitimately change** — §2d adds the "Active" toggle row (label + description + the `Switch`) as
+the Settings tab's first control, above "Skill level", so the `profile — settings @ {width}px`
+screenshots differ. Expected to fail until the `client-ci` `update-baselines` dispatch regenerates
+**exactly those 3** (can't be done on a Windows host). **Every other baseline must come back
+byte-identical:**
+
+- `profile — posts` / `memories` / `edit-profile-modal` — the Settings tab isn't rendered there;
+  the default fixture has no soft-deleted sport so `SportSwitcher` emits no muted pills, and the
+  `aria-pressed={isActive}` change is a no-op for non-muted pills.
+- `app-home-feed.spec.ts` / `app-groups.spec.ts` — same reason, unaffected.
+- The reactivate variant, both nudge dialogs, and the inactive read-only `<fieldset>` are only
+  reachable through an interaction none of these baselines perform.
+
+The 3 stale baselines and dedicated coverage of the new surfaces are both **SPORT-12**'s scope
+(below). A wholesale `visual-regression` failure on a non-CI Windows host is still the documented
+font-rendering noise floor and separate from the 3 real changes above.
