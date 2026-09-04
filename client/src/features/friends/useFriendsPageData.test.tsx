@@ -87,11 +87,21 @@ function mockGet({
       const keyword = config?.params?.q as string;
       return pagedResponse(search.filter((result) => result.fullName.toLowerCase().includes(keyword.toLowerCase())));
     }
-    if (url.startsWith('/sports/profiles/user/')) return apiResponse([]);
     if (url.startsWith('/users/')) {
       const userId = url.replace('/users/', '');
-      const profile = profiles[userId];
-      if (profile) return apiResponse(profile);
+      // SPORT-11: `useUserInfo` runs for every selection now; the response is
+      // `UserInfoResponse` (+ `activeSportIds`, U15). A synthetic row (whose
+      // `fullName` is just the id) stands in for an unlisted lookup so a
+      // known-friend selection can prove its core fields come from the
+      // friend-list row, not this call.
+      const base = profiles[userId] ?? {
+        id: userId,
+        fullName: userId,
+        avatarUrl: null,
+        coverUrl: null,
+        bio: null,
+      };
+      return apiResponse({ username: null, activeSportIds: [], ...base });
     }
     throw new Error(`unexpected GET ${url}`);
   });
@@ -104,16 +114,83 @@ describe('useFriendsPageData', () => {
     useFriendsPageStore.setState({ query: '', isAddMode: false, selectedPersonId: undefined });
   });
 
-  it('resolves a friend-list selection to FRIENDS without calling GET /users/{id}', async () => {
-    const getSpy = mockGet();
+  it('resolves a friend-list selection to FRIENDS from the friend-list row (core fields, not GET /users/{id})', async () => {
+    mockGet();
     const { result } = renderHook(() => useFriendsPageData(), { wrapper });
 
     await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
     act(() => result.current.selectPerson('f1'));
 
     await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('FRIENDS'));
+    // SPORT-11: `useUserInfo('f1')` DOES fire now (it carries `activeSportIds`
+    // for the pill row), but the panel's core fields still come from the
+    // friend-list row — the synthetic `/users/f1` stub returns `fullName: 'f1'`.
     expect(result.current.selectedPerson?.fullName).toBe('Priya Shah');
-    expect(getSpy).not.toHaveBeenCalledWith('/users/f1');
+    expect(result.current.isSelectedPersonLoading).toBe(false); // never loads for a known friend
+  });
+
+  it('sources a friend selection\'s sport pills from GET /users/{id} activeSportIds (mapped, unknown ids dropped)', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/users/friends') return apiResponse([priya]);
+      if (url === '/users/friends/requests/received') return apiResponse([]);
+      if (url === '/users/friends/requests/sent') return apiResponse([]);
+      if (url === '/users/f1') {
+        return apiResponse({
+          id: 'f1',
+          fullName: 'Priya Shah',
+          username: 'priyashah',
+          avatarUrl: null,
+          coverUrl: null,
+          bio: null,
+          activeSportIds: [5, 999, 6], // 999 is unresolvable in the catalog → dropped
+        });
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
+    act(() => result.current.selectPerson('f1'));
+
+    await waitFor(() =>
+      expect(result.current.selectedSports.map((s) => s.key)).toEqual(['football', 'basketball']),
+    );
+    expect(result.current.isSelectedSportsLoading).toBe(false);
+  });
+
+  it('never fires a /sports/profiles request for another user', async () => {
+    const getSpy = mockGet({ friends: [priya], profiles: { f3: hana } });
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
+    act(() => result.current.selectPerson('f3'));
+    await waitFor(() =>
+      expect(result.current.selectedPerson?.friendshipStatus).toBe('PENDING_RECEIVED'),
+    );
+
+    expect(
+      getSpy.mock.calls.every(([calledUrl]) => !String(calledUrl).includes('/sports/profiles')),
+    ).toBe(true);
+  });
+
+  it('renders no sport pills when activeSportIds is absent (a backend that predates U15)', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/users/friends') return apiResponse([priya]);
+      if (url === '/users/friends/requests/received') return apiResponse([]);
+      if (url === '/users/friends/requests/sent') return apiResponse([]);
+      if (url === '/users/f1') {
+        // no `activeSportIds` key at all
+        return apiResponse({ id: 'f1', fullName: 'Priya Shah', avatarUrl: null, coverUrl: null, bio: null });
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+    const { result } = renderHook(() => useFriendsPageData(), { wrapper });
+
+    await waitFor(() => expect(result.current.isFriendsLoading).toBe(false));
+    act(() => result.current.selectPerson('f1'));
+    await waitFor(() => expect(result.current.selectedPerson?.friendshipStatus).toBe('FRIENDS'));
+
+    expect(result.current.selectedSports).toEqual([]);
   });
 
   it('resolves a selection found in received requests to PENDING_RECEIVED with the real requestId', async () => {
@@ -145,8 +222,7 @@ describe('useFriendsPageData', () => {
       if (url === '/users/friends') return apiResponse([priya]);
       if (url === '/users/friends/requests/received') return apiResponse([]);
       if (url === '/users/friends/requests/sent') return apiResponse(cancelled ? [] : [sentRequest]);
-      if (url.startsWith('/sports/profiles/user/')) return apiResponse([]);
-      if (url.startsWith('/users/')) return apiResponse(diego);
+      if (url.startsWith('/users/')) return apiResponse({ ...diego, activeSportIds: [] });
       throw new Error(`unexpected GET ${url}`);
     });
     const del = vi.spyOn(apiClient, 'delete').mockImplementation(async () => {
@@ -256,8 +332,7 @@ describe('useFriendsPageData', () => {
         return apiResponse(accepted ? [] : [receivedRequest]);
       }
       if (url === '/users/friends/requests/sent') return apiResponse([]);
-      if (url.startsWith('/sports/profiles/user/')) return apiResponse([]);
-      if (url.startsWith('/users/')) return apiResponse(hana); // useUserInfo, pre-accept
+      if (url.startsWith('/users/')) return apiResponse({ ...hana, activeSportIds: [] }); // useUserInfo, pre-accept
       throw new Error(`unexpected GET ${url}`);
     });
     vi.spyOn(apiClient, 'put').mockImplementation(async () => {

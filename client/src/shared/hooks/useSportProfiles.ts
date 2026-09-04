@@ -1,22 +1,39 @@
-import { useAuthStore } from '@/app/authStore';
-import { useSportProfilesForUser } from './useSportProfilesForUser';
+import { useMemo } from 'react';
+import { sportProfileForId } from '@/shared/lib/sportProfileFromId';
 import type { SportProfile } from '@/shared/types/sport';
+import { useRawMySportProfiles } from './useRawMySportProfiles';
 
 /**
- * SPORT-1: real hook against `GET /api/sports/profiles/user/{userId}` for
- * the *current* authenticated user, replacing the mock array that used to
- * live here. Same `{ data, isLoading, isError }` shape as before
- * (client/CLAUDE.md's data layer convention) — HomeFeedPage/GroupsPage/
- * SportSwitcher don't change. Thin wrapper over `useSportProfilesForUser`
- * (extracted during FRIEND-1, which needs the same query for an arbitrary
- * selected user, not just the current one) — the mapping/filtering logic
- * lives there now, not duplicated here.
+ * The current authenticated user's sports, mapped to the display-only
+ * `SportProfile` — `HomeFeedPage` / `GroupsPage` / `SportSwitcher` / etc.
+ * consume this. Same `{ data, isLoading, isError }` shape as always
+ * (client/CLAUDE.md's data-layer convention).
+ *
+ * SPORT-11: reads `useRawMySportProfiles()` (caller-scoped
+ * `GET /api/sports/profiles`, A22) and shares the `sportId -> SportProfile`
+ * mapping with `useFriendsPageData` via `sportProfileForId`. Same silent-drop
+ * behaviour as before: a profile that is `isActive: false`, or whose
+ * `sportId` the live catalog doesn't resolve, is left out rather than
+ * crashing.
  */
 export function useSportProfiles(): {
   data: SportProfile[];
   isLoading: boolean;
   isError: boolean;
 } {
-  const userId = useAuthStore((state) => state.user?.id);
-  return useSportProfilesForUser(userId);
+  const query = useRawMySportProfiles();
+
+  const data = useMemo<SportProfile[]>(() => {
+    return (query.data ?? []).reduce<SportProfile[]>((profiles, profile) => {
+      if (profile.isActive) {
+        const mapped = sportProfileForId(profile.sportId);
+        if (mapped !== undefined) {
+          profiles.push(mapped);
+        }
+      }
+      return profiles;
+    }, []);
+  }, [query.data]);
+
+  return { data, isLoading: query.isLoading, isError: query.isError };
 }

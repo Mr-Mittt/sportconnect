@@ -135,7 +135,7 @@ const emptySessionsPage = page<unknown>([]);
 function mockGet(handlers: Record<string, unknown>) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
     if (url in handlers) return apiResponse(handlers[url]);
-    if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+    if (url === '/sports/profiles') return apiResponse(sportProfiles);
     if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
     if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
     if (url === '/sessions/mine' || url.startsWith('/sessions/group/')) {
@@ -357,7 +357,7 @@ describe('useGroupsPageData', () => {
         return apiResponse(page([group({ id: 1 })]));
       }
       if (url === '/posts/feed') return apiResponse(page([]));
-      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/sports/profiles') return apiResponse(sportProfiles);
       if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
       if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
       if (url === '/sessions/mine' || url.startsWith('/sessions/group/')) {
@@ -385,7 +385,7 @@ describe('useGroupsPageData', () => {
       }
       if (url === '/groups/user/user-1') return apiResponse(page([]));
       if (url === '/posts/feed') return apiResponse(page([]));
-      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/sports/profiles') return apiResponse(sportProfiles);
       if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
       if (url === '/sessions/mine' || url.startsWith('/sessions/group/')) {
         return apiResponse(emptySessionsPage);
@@ -413,7 +413,7 @@ describe('useGroupsPageData', () => {
         throw new Error('simulated load-more failure');
       }
       if (url === '/groups/user/user-1') return apiResponse(page([group({ id: 7 })]));
-      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/sports/profiles') return apiResponse(sportProfiles);
       if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
       if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
       if (url === '/sessions/mine' || url.startsWith('/sessions/group/')) {

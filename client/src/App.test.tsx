@@ -116,7 +116,7 @@ describe('App routing', () => {
     vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
     // FEED-1: the feed is real now (usePersonalFeed) — needs its own fixture,
     // separate from the auth bootstrap mock above. SPORT-1: sport profiles is
-    // real too (GET /sports/profiles/user/{userId}) — an empty array is fine
+    // real too (GET /sports/profiles) — an empty array is fine
     // here, this test only asserts the shell/feed render, not the switcher's cap.
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
       // SPORT-3: AppShell now always fetches GET /sports (useSportCatalog) — every apiClient.get
@@ -136,7 +136,7 @@ describe('App routing', () => {
           },
         };
       }
-      if (url === '/sports/profiles/user/1') {
+      if (url === '/sports/profiles') {
         return { data: { success: true, message: '', data: [], timestamp: '' } };
       }
       // NTF-3: AppShell now always fetches GET /notifications/unread-count
@@ -308,7 +308,7 @@ describe('App routing', () => {
           },
         };
       }
-      if (url === '/sports/profiles/user/1') {
+      if (url === '/sports/profiles') {
         // Non-empty — this test isn't about the zero-sport-profile page-access gate
         // (CLIENT-SESSION-7 follow-up); an empty fixture here would auto-open AddSportModal,
         // which aria-hides the rest of the page and breaks the getByRole queries below.
@@ -434,7 +434,7 @@ describe('App routing', () => {
           },
         };
       }
-      if (url === '/sports/profiles/user/1') {
+      if (url === '/sports/profiles') {
         // Non-empty — this test isn't about the zero-sport-profile page-access gate
         // (CLIENT-SESSION-7 follow-up); an empty fixture here would auto-open AddSportModal
         // and block the group-selection interaction this test actually exercises.

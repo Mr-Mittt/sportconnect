@@ -4,7 +4,7 @@ import { act, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
-import { sportProfilesQueryKey } from '@/shared/hooks/useSportProfilesForUser';
+import { sportProfilesQueryKey } from '@/shared/hooks/useRawMySportProfiles';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
 import { useUpdateSportProfile } from './useUpdateSportProfile';
 
@@ -78,7 +78,7 @@ describe('useUpdateSportProfile', () => {
 
   it('patches the matching entry in the sportProfiles cache in place', async () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-    queryClient.setQueryData(sportProfilesQueryKey('user-1'), [
+    queryClient.setQueryData(sportProfilesQueryKey, [
       profile({ id: 1, skillLevel: 'beginner' }),
       profile({ id: 2, sportId: 6 }),
     ]);
@@ -98,7 +98,7 @@ describe('useUpdateSportProfile', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     const cached = queryClient.getQueryData<UserSportProfileResponse[]>(
-      sportProfilesQueryKey('user-1'),
+      sportProfilesQueryKey,
     );
     expect(cached?.find((p) => p.id === 1)?.skillLevel).toBe('advanced');
     expect(cached).toHaveLength(2);

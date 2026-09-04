@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useFriendsPageStore } from '@/app/friendsPageStore';
-import { useSportProfilesForUser } from '@/shared/hooks/useSportProfilesForUser';
+import { sportProfileForId } from '@/shared/lib/sportProfileFromId';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useUserInfo } from './useUserInfo';
 import { useAcceptFriendRequest } from './hooks/useAcceptFriendRequest';
@@ -14,6 +14,7 @@ import { useSendFriendRequest } from './hooks/useSendFriendRequest';
 import { useUnfriend } from './hooks/useUnfriend';
 import { useUserSearch } from './hooks/useUserSearch';
 import type { FriendRequestRow, FriendSectionKey, FriendUser, SelectedPerson } from './types';
+import type { SportProfile } from '@/shared/types/sport';
 
 const SEARCH_DEBOUNCE_MS = 300;
 const MIN_SEARCH_LENGTH = 2; // matches the backend's own minimum (400s below it)
@@ -42,8 +43,11 @@ function matchesQuery(name: string, normalizedQuery: string): boolean {
  * the former, cancel for the latter) without a separate profile fetch beyond `useUserInfo`
  * for bio/coverUrl; only a genuine directory-search selection (not yet in any
  * of the three lists) falls back to the search result's own `friendshipStatus`
- * (typically `NONE`). `useUserInfo` itself is only enabled for a selection
- * that ISN'T already a known friend (friend rows already carry bio/coverUrl).
+ * (typically `NONE`). `useUserInfo` runs for every selection (SPORT-11: it now
+ * also carries the selected person's `activeSportIds` for the panel's sport
+ * pills — the only other-user sport data left after A22); for a known friend
+ * its core fields are ignored (the friend-list row wins) and it never gates a
+ * loading state.
  *
  * `query`/`isAddMode`/`selectedPersonId` live in `friendsPageStore`
  * (sessionStorage-persisted), not local `useState` — user-requested:
@@ -160,10 +164,34 @@ export function useFriendsPageData(
 
   const selectedFriend = friends.find((friend) => friend.id === selectedPersonId);
   const isKnownFriend = selectedFriend !== undefined;
-  const profileQuery = useUserInfo(isKnownFriend ? undefined : selectedPersonId);
-  const sportsQuery = useSportProfilesForUser(selectedPersonId);
+  // SPORT-11: `useUserInfo` now runs for every selection, known friends
+  // included — it's the only source of another user's sports since A22
+  // removed `GET /api/sports/profiles/user/{userId}`, and a friend-list row
+  // doesn't carry `activeSportIds` (U15 kept it off `UserResponse`). Core
+  // fields still prefer the friend-list row (`baseSelectedPerson` below), and
+  // `isSelectedPersonLoading` stays gated on `!isKnownFriend` so a friend's
+  // panel never shows a loading state.
+  const profileQuery = useUserInfo(selectedPersonId);
 
   const baseSelectedPerson: FriendUser | undefined = selectedFriend ?? profileQuery.data;
+
+  // SPORT-11: the selected person's sports, mapped from
+  // `UserInfoResponse.activeSportIds` (U15) — was `useSportProfilesForUser`
+  // against the removed endpoint. An id the live catalog doesn't resolve
+  // (not fetched yet, or deactivated app-wide) is dropped silently, same as
+  // the old mapping. `activeSportIds` absent (a backend that predates U15) →
+  // `[]`, so the pill row just renders nothing.
+  const selectedSports = useMemo<SportProfile[]>(
+    () =>
+      (profileQuery.data?.activeSportIds ?? []).reduce<SportProfile[]>((sports, sportId) => {
+        const mapped = sportProfileForId(sportId);
+        if (mapped !== undefined) {
+          sports.push(mapped);
+        }
+        return sports;
+      }, []),
+    [profileQuery.data],
+  );
   const selectedSearchResult = searchResults.find((result) => result.id === selectedPersonId);
 
   // A restored (or stale) selection is only judged once every list it could
@@ -328,8 +356,9 @@ export function useFriendsPageData(
     // `FriendsPage` strips the router state so a later user-caused disappearance
     // (accept then unfriend) can't re-raise `focusUnavailable`.
     focusResolved,
-    selectedSports: sportsQuery.data,
-    isSelectedSportsLoading: sportsQuery.isLoading,
+    selectedSports,
+    isSelectedSportsLoading:
+      !isKnownFriend && selectedPersonId !== undefined && profileQuery.isLoading,
 
     sendRequest: (userId: string) => sendMutation.mutate(userId),
     isSendingRequest: sendMutation.isPending,

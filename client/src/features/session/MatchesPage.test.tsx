@@ -129,7 +129,7 @@ function mockGet({
   sportProfiles?: unknown[];
 }) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-    if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfilesOverride);
+    if (url === '/sports/profiles') return apiResponse(sportProfilesOverride);
     if (url === '/groups/user/user-1') return apiResponse(pageResponse([]));
     if (url === '/sessions/mine') return apiResponse(pageResponse(mySessions));
     if (url === '/sessions/discover') return apiResponse(pageResponse(discoverSessions));

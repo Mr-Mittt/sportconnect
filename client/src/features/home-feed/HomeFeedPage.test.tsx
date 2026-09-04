@@ -257,7 +257,7 @@ const sessionFixtures: Session[] = [
  * Returns undefined for anything else so the caller can layer its own
  * per-test logic (e.g. a stateful /posts/feed) on top. */
 function staticGetResponse(url: string): { data: unknown } | undefined {
-  if (url === '/sports/profiles/user/user-1') {
+  if (url === '/sports/profiles') {
     return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
   }
   // SPORT-5: the "Add sport" pill re-reads the catalogue before opening anything, so every
@@ -670,7 +670,7 @@ describe('HomeFeedPage', () => {
     // The default fixture user is at the 3-profile cap, which disables "Add sport" — one
     // profile instead, so the modal can actually be opened.
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-      if (url === '/sports/profiles/user/user-1') {
+      if (url === '/sports/profiles') {
         return {
           data: { success: true, message: '', data: [sportProfileFixtures[0]], timestamp: '' },
         };

@@ -1,6 +1,6 @@
 # SPORT-11 · Move sport-profile reads to the caller-scoped endpoints
 
-**Status:** `TODO` (blocked on backend **U15**) · **Type:** Refactor (API contract change) · **Filed:** 2026-09-03 ·
+**Status:** `IN PROGRESS` (U15 merged 2026-09-04 — unblocked) · **Type:** Refactor (API contract change) · **Filed:** 2026-09-03 ·
 **Origin:** backend **A20** (`DONE`/merged) § "Client follow-ups" item 2 (owner-only gate on the
 profile-list read) **+ backend A22** (in progress) which reworks that endpoint's *URL* to be
 caller-scoped. A20 named this follow-up but it was never filed here; found and filed during A22's
@@ -23,6 +23,13 @@ already resolved client-side from `sportIdMap`). So a new backend field carries 
 **`UserInfoResponse.activeSportIds: number[]`** (filed as `user-impl` **U15**), served by the
 `GET /api/users/{userId}` call `FriendProfilePanel` *already makes* via `useUserInfo`. §2 below is
 rewritten to rewire onto that field. This ticket is now **blocked on U15 merging**.
+
+**Delta (implementation, 2026-09-04):** §2 above says `useUserInfo` is a call the panel "already
+makes" — that was only true for **non-friend** selections. FRIEND-2 disabled `useUserInfo` for a
+known friend (the friend-list row already carried its core fields). A friend-list row does **not**
+carry `activeSportIds` (U15 kept it off `UserResponse`), so this ticket enables `useUserInfo` for
+**every** selection, known friends included — it's now the sole source of the pill row. Core
+fields still prefer the friend-list row; the loading flags stay gated on `!isKnownFriend`.
 
 ## Why
 
@@ -116,3 +123,67 @@ Nothing else hits the single-sport path (`/user/{id}/sport/{sportId}`) — no ho
 - Storybook — `FriendProfilePanel` with sports (from `activeSportIds`) and with none.
 - `client/docs/E2E_OVERVIEW.md` — update the catalog for any e2e/visual spec whose URL stubs or
   assertions change (Friends flow at minimum — its user-info mock now carries `activeSportIds`).
+
+---
+
+## Implementation summary (2026-09-04)
+
+### Approved design (as built — one deviation, noted below)
+
+Pure client refactor — no new component, no visual change. Repoint the caller's own sport-profile
+reads onto A22's caller-scoped `GET /api/sports/profiles`, and rewire `FriendProfilePanel`'s
+sport-pill row onto U15's `UserInfoResponse.activeSportIds` instead of the removed
+`GET /api/sports/profiles/user/{userId}`.
+
+| Area | Change |
+|---|---|
+| `features/friends/types.ts` | `UserInfo` gains `activeSportIds: number[]` (1:1 with U15's `List<Long>`; never null, `[]` when none, order not guaranteed) |
+| `shared/lib/sportProfileFromId.ts` (new) | `sportProfileForId(sportId): SportProfile \| undefined` — the `sportId → SportKey → SportProfile` mapping (`sportKeyForId` / `getSportProfileConfig` / `sportIconUrlForId`), extracted so the self path and the friend path share one copy. `undefined` (caller drops it silently) when the live catalog doesn't resolve the id — unchanged from the pre-SPORT-11 behaviour |
+| `shared/hooks/useSportProfilesForUser.ts` → renamed `useRawMySportProfiles.ts` | `useRawSportProfilesForUser(userId)` → `useRawMySportProfiles()` — no param, `GET /api/sports/profiles`, `queryKey` is now the constant `['sportProfiles','me']`. Keeps an `enabled` gate on `authStore.user?.id` so it doesn't fire during the refresh-flow bootstrap (an anonymous `GET /api/sports/profiles` 401s); the id is no longer in the URL or the key. `useSportProfilesForUser` (the map-for-an-arbitrary-user hook) **deleted** — its only other caller was the friend path |
+| `shared/hooks/useSportProfiles.ts` | Folds the mapping in directly (via `useRawMySportProfiles()` + `sportProfileForId`). Public name/file kept — its 8 no-arg call sites are untouched |
+| `features/profile/useMySportProfilesRaw.ts` | Now a thin normalise over `useRawMySportProfiles()`; dropped the `authStore` user-id plumbing |
+| `useAddSportProfile` / `useUpdateSportProfile` | `sportProfilesQueryKey(userId)` → the `sportProfilesQueryKey` constant. Signatures unchanged — `userId` stays only as a readiness guard on the optimistic cache write (min blast radius: 5 page call sites of `useAddSportProfile(userId)` untouched) |
+| `features/friends/useFriendsPageData.ts` | Removed `useSportProfilesForUser(selectedPersonId)`. `useUserInfo(selectedPersonId)` now runs for **every** selection (was skipped for known friends) — it's the only source of another user's sports, and a friend-list row doesn't carry `activeSportIds`. Core fields still prefer the friend-list row (`baseSelectedPerson`), and `isSelectedPersonLoading` / `isSelectedSportsLoading` stay gated on `!isKnownFriend` so a friend's panel never shows a loading state. `selectedSports` derived from `profileQuery.data?.activeSportIds ?? []` mapped via `sportProfileForId` |
+| MSW `e2e/mocks/handlers/sport.ts` | `http.get('/api/sports/profiles/user/:userId')` → `http.get('/api/sports/profiles')`; added `requireAuth` (A22 made it `hasRole('USER')`); stale comments fixed |
+| MSW `e2e/mocks/handlers/friends.ts` | `KNOWN_USERS` entries gain `activeSportIds` (ids matching `sport.ts`'s `mockSportCatalog`); `GET /api/users/:userId` returns it on the `UserInfo` body |
+| `client/docs/E2E_OVERVIEW.md` | §5 Friends fixture note updated |
+
+### Deviation from the approved plan
+
+The plan said the friend-panel pills "keep working" by enabling `useUserInfo` for known friends —
+which is what was built. The user chose this over the alternative (only non-friend selections show
+pills) in the Phase 1 scope gate. One pre-existing unit test —
+`useFriendsPageData` *"resolves a friend-list selection to FRIENDS without calling GET /users/{id}"*
+— asserted the now-obsolete "no `/users/{id}` call for a friend" premise; rewritten to assert
+instead that a friend's **core fields** still come from the friend-list row (not the `/users/{id}`
+response) while `useUserInfo` fires for `activeSportIds`.
+
+### Non-obvious constraints
+
+- **`activeSportIds` absent → `[]`.** A backend that predates U15 returns no such key; the hook
+  treats `undefined` as `[]` (pill row renders nothing) so the client isn't broken in that window.
+  Both blockers (A22 PR #218, U15 PR #220) are merged on `origin/master`, so this is only a
+  belt-and-braces guard now — covered by a test.
+- **Known-friend sports show with no loading state.** `isSelectedSportsLoading` is `false` for a
+  known friend even while `useUserInfo` is still in flight; the panel's existing
+  `!isSportsLoading && sports.length > 0` guard hides the row until `activeSportIds` lands, then
+  shows it (a conditional `flex-wrap` row — no layout jank).
+- **`sportProfilesQueryKey` is now a value, not a function** — `['sportProfiles','me']`. Any future
+  cache read/write must use it as-is.
+
+### Verification
+
+- `npx tsc -b --noEmit` — clean.
+- `npx eslint` on every changed file — clean.
+- Vitest — the 16 directly-affected suites green (`useSportProfiles`, `useAddSportProfile`,
+  `sportProfileFromId` [new], `useMySportProfilesRaw`, `useUpdateSportProfile`,
+  `useSportProfileSettingsTabData`, `useUserInfo`, `useFriendsPageData` [+4 new cases],
+  `FriendsPage`, `App`, `useGroupsPageData`, `HomeFeedPage`, `useHomeFeedData`, `PostsTab`,
+  `ProfilePage`, `MatchesPage`). Full `vitest run` + a live browser walk of the Friends happy path
+  against a running backend — see the ticket's status line.
+
+### Visual-regression expectation
+
+No baselined surface touched — `FriendProfilePanel`'s markup is byte-identical (same props, same
+pill row). A failing `visual-regression` run is the Windows font-rendering noise floor, not a
+regression; no `update-baselines` dispatch needed.

@@ -321,7 +321,13 @@ relative to load time. A hardcoded broadcast expiry date drifting into the past 
 the "active" assumption) is a real bug this project has hit before — don't reintroduce it.
 
 Friends (FRIEND-1) — `friends.ts`'s own small `KNOWN_USERS` directory resolves `GET /users/:userId`
-and `GET /users/search` for every id these fixtures reference, plus the Add-mode-only stranger below:
+and `GET /users/search` for every id these fixtures reference, plus the Add-mode-only stranger below.
+**SPORT-11:** each `KNOWN_USERS` entry now carries `activeSportIds` (U15 — sport ids matching
+`sport.ts`'s `mockSportCatalog`, Badminton=1/Pickleball=3), and `GET /users/:userId` returns it on
+the `UserInfoResponse` body — that field, not the removed `GET /api/sports/profiles/user/:userId`,
+is what `FriendProfilePanel`'s sport-pill row is sourced from now (`useUserInfo` runs for every
+selection, known friends included). The caller's own sport reads moved to the caller-scoped
+`GET /api/sports/profiles` (A22) — `sport.ts`'s handler dropped its `/user/:userId` path segment.
 
 | Fixture | id | Notes |
 |---|---|---|

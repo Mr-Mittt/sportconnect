@@ -4171,6 +4171,20 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client SPORT-11 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-11_CALLER_SCOPED_SPORT_PROFILE_READS.md`):**
+  the client half of backend A20's owner-only gate + A22's path change. The caller's own
+  sport-profile read (`useRawSportProfilesForUser(userId)` → renamed `useRawMySportProfiles()`)
+  now calls A22's caller-scoped `GET /api/sports/profiles` — no id in the URL, single cache key
+  `['sportProfiles','me']` (was per-user); `useSportProfilesForUser` (the map-for-any-user hook)
+  deleted, its mapping folded into `useSportProfiles` and a shared `sportProfileForId` helper.
+  `FriendProfilePanel`'s sport-pill row is rewired onto `UserInfoResponse.activeSportIds` (U15) —
+  `useFriendsPageData` no longer fires any `/sports/profiles/...` request for another user, and
+  `useUserInfo` now runs for every selection (known friends included, since a friend-list row
+  carries no `activeSportIds`) purely to feed the pills; core fields still come from the
+  friend-list row. `activeSportIds` absent → `[]` (belt-and-braces; both A22 and U15 are merged).
+  MSW `sport.ts`/`friends.ts` handlers + ~14 `*.test.tsx` URL stubs updated; 4 new
+  `useFriendsPageData` cases + new `sportProfileFromId.test.ts`. `tsc -b` / `eslint` clean, Vitest
+  green. No baselined surface touched — no visual-regression baseline change.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

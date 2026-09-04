@@ -200,7 +200,7 @@ const mySessionsPage = {
 const emptySessionsPage = { ...mySessionsPage, content: [], totalElements: 0, numberOfElements: 0, empty: true };
 
 /**
- * Mocks GET /posts/feed with `feedPage`; GET /sports/profiles/user/{id},
+ * Mocks GET /posts/feed with `feedPage`; GET /sports/profiles,
  * GET /hashtags/trending, GET /posts/broadcast, and GET /groups/user/{id}
  * are stubbed for every test (SPORT-1/FEED-6/FEED-7's real hooks fire
  * alongside the feed query). `/posts/feed` only resolves once, like the old
@@ -218,7 +218,7 @@ function mockFeedAndSportProfiles(feedPage: PageResponse<Post>) {
       if (feedCallCount > 1) throw new Error('simulated network failure on refetch');
       return apiResponse(feedPage);
     }
-    if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+    if (url === '/sports/profiles') return apiResponse(sportProfiles);
     if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
     if (url === '/posts/broadcast') return apiResponse(broadcastsPage);
     if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
@@ -340,7 +340,7 @@ describe('useHomeFeedData', () => {
     let trendingCallCount = 0;
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
       if (url === '/posts/feed') return apiResponse(page([post({ id: 1 })]));
-      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/sports/profiles') return apiResponse(sportProfiles);
       if (url === '/hashtags/trending') {
         trendingCallCount += 1;
         if (trendingCallCount === 1) throw new Error('simulated trending failure');
@@ -366,7 +366,7 @@ describe('useHomeFeedData', () => {
     let broadcastCallCount = 0;
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
       if (url === '/posts/feed') return apiResponse(page([post({ id: 1 })]));
-      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/sports/profiles') return apiResponse(sportProfiles);
       if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
       if (url === '/posts/broadcast') {
         broadcastCallCount += 1;
@@ -395,7 +395,7 @@ describe('useHomeFeedData', () => {
         if (feedCallCount === 1) return apiResponse(page([post({ id: 1 })], { last: false }));
         throw new Error('simulated load-more failure');
       }
-      if (url === '/sports/profiles/user/user-1') return apiResponse(sportProfiles);
+      if (url === '/sports/profiles') return apiResponse(sportProfiles);
       if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
       if (url === '/posts/broadcast') return apiResponse(broadcastsPage);
       if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);

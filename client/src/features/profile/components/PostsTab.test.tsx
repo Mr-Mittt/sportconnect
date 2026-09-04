@@ -104,7 +104,7 @@ function mockGet(posts: Post[]) {
     if (url === '/posts/mine') {
       return { data: { success: true, message: '', data: page(posts), timestamp: '' } };
     }
-    if (url === '/sports/profiles/user/user-1') {
+    if (url === '/sports/profiles') {
       return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
     }
     if (url.startsWith('/posts/') && url.endsWith('/comments')) {
@@ -208,7 +208,7 @@ describe('PostsTab', () => {
       if (url === '/posts/mine') {
         return { data: { success: true, message: '', data: page([]), timestamp: '' } };
       }
-      if (url === '/sports/profiles/user/user-1') {
+      if (url === '/sports/profiles') {
         return { data: { success: true, message: '', data: [], timestamp: '' } };
       }
       throw new Error(`unexpected GET ${url}`);
@@ -274,7 +274,7 @@ describe('PostsTab', () => {
       if (url === '/posts/mine') {
         return { data: { success: true, message: '', data: page(myPosts()), timestamp: '' } };
       }
-      if (url === '/sports/profiles/user/user-1') {
+      if (url === '/sports/profiles') {
         return { data: { success: true, message: '', data: sportProfileFixtures, timestamp: '' } };
       }
       if (url === '/posts/hashtag/fridayrun') {
