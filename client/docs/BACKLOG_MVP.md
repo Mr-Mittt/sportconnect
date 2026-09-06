@@ -76,7 +76,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 6 | [CLIENT-SESSION-15](MVP/CLIENT-SESSION-15_SESSION_ATTRIBUTES_IN_CREATE_MODAL.md) | Session attributes in `CreateSessionModal`, pre-filled from the creator's sport profile (`#ref` nodes only) | `TODO` |
 | 7 | [CLIENT-SESSION-16](MVP/CLIENT-SESSION-16_SESSION_ATTRIBUTES_READ_ONLY_IN_DETAIL_MODAL.md) | Read-only session attributes (term/value, not disabled inputs) in `SessionDetailModal` | `TODO` |
 | 8 | [ADMIN-5](MVP/ADMIN-5_SESSION_ATTRIBUTE_SCHEMA_EDITOR.md) | Session attribute schema editor — second JSON textarea in the sport admin page (ADMIN-2 pattern) | `TODO` |
-| 9 | [SPORT-7](MVP/SPORT-7_ATTRIBUTE_FIELDS_ORDER_AND_LAYOUT.md) | `SportAttributesFields` — honor `order`, group-level layout (collapsible + responsive grid); helps the profile editor too | `TODO` |
+| 9 | [SPORT-7](MVP/SPORT-7_ATTRIBUTE_FIELDS_ORDER_AND_LAYOUT.md) | `SportAttributesFields` — **schema v3 (backend A19, scope change 2026-09-06)**: recurse the nested `groups` tree, order by array position (`order` field removed), path-keyed `attributes` I/O in the profile editor, drop `order` from `shared/types/sport.ts`; plus group-level layout (collapsible + responsive grid) | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against

@@ -1,6 +1,6 @@
 # A19 · Nested attribute groups + sibling-scoped keys (schema v3)
 
-**Status:** `TODO`
+**Status:** `IN PROGRESS`
 **Type:** Enhancement (Architecture)
 **Depends on:** none hard (extends the A9/A12/A13 profile-schema machinery, all `DONE`). **Must be
 sequenced before A17**, or A17 absorbs this ticket's path-reference change — A17's `#ref` grammar is
@@ -107,3 +107,94 @@ storage shape is decided.
 - IT in `server/src/test/java/com/sportconnect/integration/` — a v3 document round-trips the JSONB
   column; a nested-group `PUT` then member `GET` resolves; a migration smoke check that Badminton's
   stored schema and any profile rows are in the new shape.
+
+---
+
+## Implementation (2026-09-06)
+
+### Approved design (restated)
+
+Full design + rationale: `documentation/md/SPORT_ATTRIBUTE_SCHEMA_V3_DESIGN.md`. The six Phase-0
+decisions:
+
+1. **Storage** — `UserSportProfile.attributes` stays a flat `Map<String, Object>`; keys become full
+   `/`-separated paths (`gear/rackets/tension`). Chosen over a nested object because it keeps
+   `mergeAttributes` / `ProfileAttributeFilter.filter` / `.retainDefined` byte-for-byte unchanged
+   (they iterate `entrySet()` and never inspect key shape).
+2. **`order`** — removed from `SportAttributeGroup` / `SportAttributeDefinition` /
+   `SportAttributeField` and the three `Resolved*` twins. v3 children are a strict ordered array;
+   nothing in the backend ever sorted by `order`.
+3. **Path grammar** — `/` separator, full path only, no bare-key shorthand. The `^[a-z][a-zA-Z0-9_]*$`
+   key pattern can't contain `/`, so no escaping anywhere.
+4. **Sibling namespace** — one per parent, shared by child sub-group keys and child attribute keys.
+5. **A17** — carries the `#ref` reference-field change (path-qualified) and its dangling-path → 400
+   validation; A19 ships no schema field holding a path. Delta filed on A17.
+6. **Caps** — neither `MAX_SCHEMA_BYTES` (16KB) nor `MAX_ATTRIBUTES_BYTES` (4KB) moves. Path-keying
+   adds ~36 B to a maximal Badminton profile's top-level keys, against measured 715 B / 4096.
+
+### What was built
+
+**`sport-api` DTOs**
+- `SportAttributeGroup`: `+ List<SportAttributeGroup> groups` (optional, self-referential);
+  `- Integer order`. Javadoc rewritten — groups namespace children by path; `key` **and tree
+  position** immutable-by-policy.
+- `SportAttributeDefinition`, `SportAttributeField`: `- Integer order`.
+- `ResolvedSportAttributeGroup`: `+ List<ResolvedSportAttributeGroup> groups`; `- Integer order`.
+- `ResolvedSportAttributeDefinition`, `ResolvedSportAttributeField`: `- Integer order`.
+
+**`sport-impl`**
+- **New `SchemaPaths`** (package-private) — the one place the `/`-separated path is built.
+  `definedByPath(schema)` → `Map<path, DefinedAttribute>` (every declared leaf, `live` = own ∧ all
+  ancestors `isAvailable != false`); `availableByPath(schema)` → the `live` subset. Depth-first,
+  declaration order, full-depth `isAvailable` cascade (parent wins). Absorbs the two private
+  flat-tree builders that lived in `ProfileAttributeFilter`.
+- `ProfileAttributeFilter` — `filter` and `retainDefined` now call `SchemaPaths.availableByPath` /
+  `.definedByPath`; the `DefinedAttribute` record moved to `SchemaPaths`. Everything else
+  (`filterValue`, `definitionsByName`, `allowedValues`, the merge contract) unchanged.
+- `SportAttributeSchemaValidator` — `validate` walks the group tree recursively
+  (`validateGroupNode`). Each parent owns one `Set<String>` sibling namespace covering its
+  sub-groups **and** attributes; collision → `BadRequestException("Duplicate node key among
+  siblings: …")`. The sport-wide `groupKeys` / `attributeKeys` accumulators and the "must not be
+  relaxed" comment are gone. `validateAttribute` lost its `seenKeys` parameter.
+- `SportAttributeSchemaLabelResolver` — `resolveGroup` recurses into `group.getGroups()`; the three
+  `.order(...)` builder calls removed.
+- No change to `SportServiceImpl`, `SportController`, `SecurityConfig`,
+  `UserSportProfileServiceImpl`, or `SportAttributeValues`.
+
+**Migration** — `V061__sport_schema_v3_nested_groups.sql` (registered after V060). Scoped to
+`sports.name = 'Badminton'`, both statements idempotent:
+1. `UPDATE sports SET attributes_schema = '<v3 JSON>'` — the A15 document with every `order` key
+   removed (authoritative copy: `A19_BADMINTON_SCHEMA_V3.json` beside this ticket).
+2. `UPDATE user_sport_profiles … jsonb_object_agg(CASE key …)` — rekeys Badminton profile
+   attributes from bare leaf key to full path (`handedness → general/handedness`, etc.); skipped
+   for any row already holding a `/`-bearing key. ~0 rows pre-launch.
+
+### Divergence from the plan
+
+None functional. Removing the `@Builder` `order` field forced a mechanical sweep of every
+`.order(...)` call in the sport Spock specs and two server ITs (expected — the plan called these
+"reworked"). Two negative tests whose premise was "duplicate leaf key across groups" (now a
+**valid** v3 document) were rewritten to "duplicate key among siblings in one group"
+(`SportServiceImplSpec`, `SportAttributeSchemaIntegrationTest`).
+
+### Tests
+
+- `SportAttributeSchemaValidatorSpec` — same key legal under two different groups; same key legal at
+  different depths; same key illegal among siblings; duplicate top-level group keys still rejected;
+  sub-group key vs sibling attribute key collision rejected; group with sub-groups + attributes
+  together passes; arbitrary-depth tree passes.
+- `ProfileAttributeFilterSpec` — reworked onto path keys via a `g()` helper (prefixes `gear/`); new
+  cases: value at a nested path survives; unavailable ancestor group (grandparent or parent) hides
+  a depth-3 leaf marked available; a bare pre-v3 key no longer resolves under a nested schema;
+  `retainDefined` keeps a nested-path value under an `isAvailable:false` ancestor verbatim and
+  prunes an undefined nested path.
+- `SportAttributeSchemaLabelResolverSpec` — resolution recurses through nested sub-groups
+  (group + sub-group + leaf labels all resolved for `vi`).
+- `SportProfileAttributeWriteIntegrationTest` (`:server:test`) — existing null-delete / empty-string
+  / prune cases repointed to `gear/…` paths; new: write + re-read a value at `gear/rackets/tension`,
+  unknown sibling path dropped.
+- `SportAttributeSchemaIntegrationTest` (`:server:test`) — sibling-duplicate `PUT` rejected
+  atomically; new: nested-group `PUT` round-trips the JSONB column and a member `GET` with
+  `Accept-Language: vi` resolves the nested `groups` tree (labels + `min`).
+- `SportProfileResumeAndVisibilityIntegrationTest` (`:server:test`) — attribute assertions
+  repointed to `gear/…` paths.

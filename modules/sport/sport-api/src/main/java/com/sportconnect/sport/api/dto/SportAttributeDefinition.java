@@ -11,12 +11,15 @@ import java.util.Map;
 /**
  * One attribute a sport offers — a leaf in the schema tree (A9).
  *
- * <p>{@code key} is the identifier written into {@code UserSportProfile.attributes}, and is unique
- * across the <em>whole sport</em>, not merely within its group. That invariant is what lets the
- * stored profile map stay flat while the schema is a tree.
+ * <p>{@code key} is unique <em>among its siblings only</em> (v3/A19 relaxed v1's sport-wide
+ * uniqueness) — the same {@code tension} key is legal under two different groups. The identifier
+ * written into {@code UserSportProfile.attributes} is the attribute's full, {@code /}-separated path
+ * from the schema root ({@code gear/rackets/tension}), not the bare key; the stored map stays flat,
+ * keyed by path.
  *
- * <p>Keys are immutable by policy: renaming one silently orphans every stored value, so a "rename"
- * means adding a new attribute and switching the old one off.
+ * <p>Keys are immutable by policy: renaming one — or moving the attribute to a different group —
+ * silently orphans every stored value, so a "rename" means adding a new attribute and switching the
+ * old one off.
  */
 @Data
 @Builder
@@ -24,7 +27,7 @@ import java.util.Map;
 @AllArgsConstructor
 public class SportAttributeDefinition {
 
-    /** Unique across the entire sport. Must match {@code ^[a-z][a-zA-Z0-9_]*$}. */
+    /** Unique among sibling nodes (attributes and sub-groups of the same parent). Must match {@code ^[a-z][a-zA-Z0-9_]*$}. */
     private String key;
 
     /**
@@ -44,9 +47,6 @@ public class SportAttributeDefinition {
      * still returned. Nothing a user saved is destroyed by an admin switching a field off.
      */
     private Boolean isAvailable;
-
-    /** Display order within the parent group. Not validated for uniqueness or contiguity. */
-    private Integer order;
 
     /**
      * Optional. When present, must be valid for this node's own {@code type} and options. Forbidden

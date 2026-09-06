@@ -36,6 +36,16 @@ class UserSportProfileServiceImplSpec extends Specification {
                     attributeFilter)
 
     /**
+     * v3/A19: {@code UserSportProfile.attributes} is keyed by an attribute's full {@code /}-separated
+     * path. {@link #schemaWith} roots every key under the group {@code general}, so this prefixes each
+     * top-level map key with {@code "general/"} — applied to the request attributes, the stored
+     * attributes, and the expected maps alike. {@code null} passes through.
+     */
+    private static Map<String, Object> g(Map<String, Object> bare) {
+        bare == null ? null : bare.collectEntries { k, v -> [("general/" + k).toString(), v] }
+    }
+
+    /**
      * A9: a schema declaring the free-text keys these specs use. Needed because attributes are now
      * filtered against the sport's live schema on write - a key with no definition is dropped, so a
      * spec that wants an attribute to survive has to say the sport actually offers it.
@@ -43,12 +53,12 @@ class UserSportProfileServiceImplSpec extends Specification {
     private static SportAttributeSchema schemaWith(String... keys) {
         SportAttributeSchema.builder()
                 .groups([SportAttributeGroup.builder()
-                                 .key("general").label(["en": "General"]).isAvailable(true).order(1)
+                                 .key("general").label(["en": "General"]).isAvailable(true)
                                  .attributes(keys.toList().withIndex().collect { key, i ->
                                      SportAttributeDefinition.builder()
                                              .key(key).label(["en": key])
                                              .type(SportAttributeType.STRING)
-                                             .isAvailable(true).order(i + 1).build()
+                                             .isAvailable(true).build()
                                  })
                                  .build()])
                 .build()
@@ -74,7 +84,7 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .yearsOfExperience(3)
                 .preferredPosition("Forward")
                 .bio("Love playing basketball")
-                .attributes(["dominantHand": "left"])
+                .attributes(g(["dominantHand": "left"]))
                 .build()
 
         def sport = Sport.builder()
@@ -90,7 +100,7 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .yearsOfExperience(3)
                 .preferredPosition("Forward")
                 .bio("Love playing basketball")
-                .attributes(["dominantHand": "left"])
+                .attributes(g(["dominantHand": "left"]))
                 .isActive(true)
                 .build()
 
@@ -101,13 +111,13 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name(sport.name).isActive(true).build()
         1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.empty()
         1 * profileRepository.save(_) >> { UserSportProfile savedProfile ->
-            assert savedProfile.attributes == ["dominantHand": "left"]
+            assert savedProfile.attributes == g(["dominantHand": "left"])
             return profile
         }
         result.userId == userId
         result.sportId == sportId
         result.skillLevel == "Intermediate"
-        result.attributes == ["dominantHand": "left"]
+        result.attributes == g(["dominantHand": "left"])
     }
 
     def "createProfile should reject oversized attributes payload"() {
@@ -117,7 +127,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         def request = CreateUserSportProfileRequest.builder()
                 .sportId(sportId)
                 .skillLevel("Intermediate")
-                .attributes(["blob": "x" * 5000])
+                .attributes(g(["blob": "x" * 5000]))
                 .build()
 
         def sport = Sport.builder()
@@ -199,12 +209,12 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .sportId(sportId)
                 .skillLevel("Advanced")
                 .bio("back again")
-                .attributes(["dominantHand": "right"])
+                .attributes(g(["dominantHand": "right"]))
                 .build()
 
         def existing = UserSportProfile.builder()
                 .id(7L).userId(userId).sportId(sportId)
-                .skillLevel("Beginner").bio("stale").attributes(["dominantHand": "left"])
+                .skillLevel("Beginner").bio("stale").attributes(g(["dominantHand": "left"]))
                 .isActive(false)
                 .build()
 
@@ -221,7 +231,7 @@ class UserSportProfileServiceImplSpec extends Specification {
             p.isActive &&
             p.skillLevel == "Advanced" &&
             p.bio == "back again" &&
-            p.attributes == ["dominantHand": "right"]
+            p.attributes == g(["dominantHand": "right"])
         }) >> { UserSportProfile p -> p }
 
         and: "no second row is created for the same pair"
@@ -238,7 +248,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         def existing = UserSportProfile.builder()
                 .id(7L).userId(userId).sportId(sportId)
                 .skillLevel("Beginner").bio("stale").preferredPosition("Forward")
-                .attributes(["dominantHand": "left"])
+                .attributes(g(["dominantHand": "left"]))
                 .isActive(false)
                 .build()
 
@@ -249,7 +259,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Basketball").isActive(true).build()
         1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.of(existing)
         1 * profileRepository.save({ UserSportProfile p ->
-            p.skillLevel == null && p.bio == null && p.preferredPosition == null && p.attributes == [:]
+            p.skillLevel == null && p.bio == null && p.preferredPosition == null && p.attributes == g([:])
         }) >> { UserSportProfile p -> p }
     }
 
@@ -266,14 +276,14 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .bio("new bio")
                 .preferredPosition("Baseline")
                 .yearsOfExperience(9)
-                .attributes(["dominantHand": "right"])
+                .attributes(g(["dominantHand": "right"]))
                 .build()
 
         and: "the stored map has one still-defined key (dominantHand, offered by setup()) and one orphan"
         def existing = UserSportProfile.builder()
                 .id(7L).userId(userId).sportId(sportId)
                 .skillLevel("Beginner").bio("old bio").preferredPosition("Net").yearsOfExperience(2)
-                .attributes(["dominantHand": "left", "retiredKey": "orphan"])
+                .attributes(g(["dominantHand": "left", "retiredKey": "orphan"]))
                 .isActive(false)
                 .build()
 
@@ -292,12 +302,12 @@ class UserSportProfileServiceImplSpec extends Specification {
             p.bio == "old bio" &&
             p.preferredPosition == "Net" &&
             p.yearsOfExperience == 2 &&
-            p.attributes == ["dominantHand": "left"]
+            p.attributes == g(["dominantHand": "left"])
         }) >> { UserSportProfile p -> p }
 
         result.id == 7L
         result.skillLevel == "Beginner"
-        result.attributes == ["dominantHand": "left"]
+        result.attributes == g(["dominantHand": "left"])
     }
 
     def "createProfile with isResume=true throws when there is no profile to resume"() {
@@ -595,11 +605,11 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .userId(ownerId)
                 .sportId(sportId)
                 .skillLevel("Beginner")
-                .attributes(["dominantHand": "left"])
+                .attributes(g(["dominantHand": "left"]))
                 .build()
 
         def request = CreateUserSportProfileRequest.builder()
-                .attributes(["strokeStyle": "freestyle"])
+                .attributes(g(["strokeStyle": "freestyle"]))
                 .build()
 
         def sport = Sport.builder()
@@ -613,11 +623,11 @@ class UserSportProfileServiceImplSpec extends Specification {
         then:
         1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
         1 * profileRepository.save(_) >> { UserSportProfile savedProfile ->
-            assert savedProfile.attributes == ["dominantHand": "left", "strokeStyle": "freestyle"]
+            assert savedProfile.attributes == g(["dominantHand": "left", "strokeStyle": "freestyle"])
             return savedProfile
         }
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name(sport.name).isActive(true).build()
-        result.attributes == ["dominantHand": "left", "strokeStyle": "freestyle"]
+        result.attributes == g(["dominantHand": "left", "strokeStyle": "freestyle"])
     }
 
     def "updateProfile removes a stored attribute when the request sends it as an explicit null (A10 Part 1)"() {
@@ -627,10 +637,10 @@ class UserSportProfileServiceImplSpec extends Specification {
         def ownerId = UUID.randomUUID()
         def profile = UserSportProfile.builder()
                 .id(profileId).userId(ownerId).sportId(sportId)
-                .attributes(["dominantHand": "left", "strokeStyle": "freestyle"])
+                .attributes(g(["dominantHand": "left", "strokeStyle": "freestyle"]))
                 .build()
         def request = CreateUserSportProfileRequest.builder()
-                .attributes(["dominantHand": null])
+                .attributes(g(["dominantHand": null]))
                 .build()
 
         when:
@@ -640,10 +650,10 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Swimming").isActive(true).build()
         1 * profileRepository.save(_) >> { UserSportProfile p ->
-            assert p.attributes == ["strokeStyle": "freestyle"]
+            assert p.attributes == g(["strokeStyle": "freestyle"])
             return p
         }
-        result.attributes == ["strokeStyle": "freestyle"]
+        result.attributes == g(["strokeStyle": "freestyle"])
     }
 
     def "updateProfile stores an empty string rather than deleting when the request sends one (A10 Part 1)"() {
@@ -653,10 +663,10 @@ class UserSportProfileServiceImplSpec extends Specification {
         def ownerId = UUID.randomUUID()
         def profile = UserSportProfile.builder()
                 .id(profileId).userId(ownerId).sportId(sportId)
-                .attributes(["dominantHand": "left"])
+                .attributes(g(["dominantHand": "left"]))
                 .build()
         def request = CreateUserSportProfileRequest.builder()
-                .attributes(["dominantHand": ""])
+                .attributes(g(["dominantHand": ""]))
                 .build()
 
         when:
@@ -666,10 +676,10 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Swimming").isActive(true).build()
         1 * profileRepository.save(_) >> { UserSportProfile p ->
-            assert p.attributes == ["dominantHand": ""]
+            assert p.attributes == g(["dominantHand": ""])
             return p
         }
-        result.attributes == ["dominantHand": ""]
+        result.attributes == g(["dominantHand": ""])
     }
 
     def "updateProfile prunes a stored attribute the schema no longer defines, even with no attributes in the request (A10 Part 2)"() {
@@ -679,7 +689,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         def ownerId = UUID.randomUUID()
         def profile = UserSportProfile.builder()
                 .id(profileId).userId(ownerId).sportId(sportId).skillLevel("Beginner")
-                .attributes(["dominantHand": "left", "retiredKey": "orphan"])
+                .attributes(g(["dominantHand": "left", "retiredKey": "orphan"]))
                 .build()
         def request = CreateUserSportProfileRequest.builder().skillLevel("Intermediate").build()
 
@@ -693,10 +703,10 @@ class UserSportProfileServiceImplSpec extends Specification {
         // overrides setup()'s permissive stub.
         _ * sportService.getAttributeSchema(sportId) >> schemaWith("dominantHand")
         1 * profileRepository.save(_) >> { UserSportProfile p ->
-            assert p.attributes == ["dominantHand": "left"]
+            assert p.attributes == g(["dominantHand": "left"])
             return p
         }
-        result.attributes == ["dominantHand": "left"]
+        result.attributes == g(["dominantHand": "left"])
     }
 
     def "updateProfile prunes an orphan, adds a key, and deletes another - all in one call (A10 Parts 1 and 2)"() {
@@ -706,12 +716,12 @@ class UserSportProfileServiceImplSpec extends Specification {
         def ownerId = UUID.randomUUID()
         def profile = UserSportProfile.builder()
                 .id(profileId).userId(ownerId).sportId(sportId)
-                .attributes(["dominantHand": "left", "strokeStyle": "fly", "retiredKey": "orphan"])
+                .attributes(g(["dominantHand": "left", "strokeStyle": "fly", "retiredKey": "orphan"]))
                 .build()
         // setup()'s stub already offers dominantHand / strokeStyle / blob - and not retiredKey,
         // which is exactly the shape this case needs.
         def request = CreateUserSportProfileRequest.builder()
-                .attributes([blob: "added", dominantHand: null])
+                .attributes(g([blob: "added", dominantHand: null]))
                 .build()
 
         when:
@@ -722,10 +732,10 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Swimming").isActive(true).build()
         1 * profileRepository.save(_) >> { UserSportProfile p ->
             // retiredKey pruned (Part 2), dominantHand deleted (Part 1), blob added, strokeStyle untouched
-            assert p.attributes == ["strokeStyle": "fly", "blob": "added"]
+            assert p.attributes == g(["strokeStyle": "fly", "blob": "added"])
             return p
         }
-        result.attributes == ["strokeStyle": "fly", "blob": "added"]
+        result.attributes == g(["strokeStyle": "fly", "blob": "added"])
     }
 
     def "updateProfile against a sport whose schema offers no attributes wipes the stored map (A10)"() {
@@ -735,7 +745,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         def ownerId = UUID.randomUUID()
         def profile = UserSportProfile.builder()
                 .id(profileId).userId(ownerId).sportId(sportId)
-                .attributes(["dominantHand": "left"])
+                .attributes(g(["dominantHand": "left"]))
                 .build()
         def request = CreateUserSportProfileRequest.builder().skillLevel("Advanced").build()
 
@@ -749,10 +759,10 @@ class UserSportProfileServiceImplSpec extends Specification {
         // then: block so it takes precedence over setup()'s permissive stub.
         _ * sportService.getAttributeSchema(sportId) >> SportAttributeSchema.builder().build()
         1 * profileRepository.save(_) >> { UserSportProfile p ->
-            assert p.attributes == [:]
+            assert p.attributes == g([:])
             return p
         }
-        result.attributes == [:]
+        result.attributes == g([:])
     }
 
     def "updateProfile should reject oversized attributes payload"() {
@@ -768,7 +778,7 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .build()
 
         def request = CreateUserSportProfileRequest.builder()
-                .attributes(["blob": "x" * 5000])
+                .attributes(g(["blob": "x" * 5000]))
                 .build()
 
         when:

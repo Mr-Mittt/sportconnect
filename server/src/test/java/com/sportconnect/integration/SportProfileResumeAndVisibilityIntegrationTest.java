@@ -112,17 +112,16 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
     /** A minimal stored schema document — one group, each named key a live {@code STRING} attribute. */
     private static Map<String, Object> schemaWith(String... keys) {
         List<Map<String, Object>> attributes = new ArrayList<>();
-        int order = 1;
         for (String key : keys) {
             attributes.add(Map.of(
                     "key", key, "label", Map.of("en", key), "type", "STRING",
-                    "isAvailable", true, "order", order++));
+                    "isAvailable", true));
         }
         return Map.of(
                 "defaultLocale", "en",
                 "groups", List.of(Map.of(
                         "key", "gear", "label", Map.of("en", "Gear"),
-                        "isAvailable", true, "order", 1, "attributes", attributes)));
+                        "isAvailable", true, "attributes", attributes)));
     }
 
     private Long storedProfile(Long sport, boolean active, String skillLevel, Map<String, Object> attributes) {
@@ -145,12 +144,12 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
     void resume_keepsStoredScalarsAndPrunedAttributes_ignoringTheRequestBody() throws Exception {
         // legacyKey is not in schemaWith("racket", "grip") — an orphan from a since-deleted definition.
         Long profileId = storedProfile(sportId, false, "Intermediate",
-                Map.of("racket", "Yonex", "legacyKey", "orphan"));
+                Map.of("gear/racket", "Yonex", "gear/legacyKey", "orphan"));
         authenticateAs(ownerId);
 
         String body = "{\"sportId\":" + sportId + ",\"isResume\":true,"
                 + "\"skillLevel\":\"IGNORED\",\"bio\":\"IGNORED\",\"yearsOfExperience\":99,"
-                + "\"attributes\":{\"grip\":\"tight\"}}";
+                + "\"attributes\":{\"gear/grip\":\"tight\"}}";
 
         mockMvc.perform(post("/api/sports/profiles")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -162,18 +161,18 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
                 .andExpect(jsonPath("$.data.bio").value("stored bio"))
                 .andExpect(jsonPath("$.data.yearsOfExperience").value(4))
                 // attributes = retainDefined(stored): racket kept, orphan pruned, request's grip NOT merged
-                .andExpect(jsonPath("$.data.attributes.racket").value("Yonex"))
-                .andExpect(jsonPath("$.data.attributes.legacyKey").doesNotExist())
-                .andExpect(jsonPath("$.data.attributes.grip").doesNotExist());
+                .andExpect(jsonPath("$.data.attributes['gear/racket']").value("Yonex"))
+                .andExpect(jsonPath("$.data.attributes['gear/legacyKey']").doesNotExist())
+                .andExpect(jsonPath("$.data.attributes['gear/grip']").doesNotExist());
 
         // Same after a real re-read through the JSON column.
         mockMvc.perform(get("/api/sports/profiles/{id}", profileId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.isActive").value(true))
                 .andExpect(jsonPath("$.data.skillLevel").value("Intermediate"))
-                .andExpect(jsonPath("$.data.attributes.racket").value("Yonex"))
-                .andExpect(jsonPath("$.data.attributes.legacyKey").doesNotExist())
-                .andExpect(jsonPath("$.data.attributes.grip").doesNotExist());
+                .andExpect(jsonPath("$.data.attributes['gear/racket']").value("Yonex"))
+                .andExpect(jsonPath("$.data.attributes['gear/legacyKey']").doesNotExist())
+                .andExpect(jsonPath("$.data.attributes['gear/grip']").doesNotExist());
     }
 
     @Test
@@ -204,7 +203,7 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
 
     @Test
     void list_callerWithIncludeInactive_seesBothActiveAndSoftDeletedRows() throws Exception {
-        storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));
+        storedProfile(sportId, true, "Advanced", Map.of("gear/racket", "Li-Ning"));
         Long deletedId = storedProfile(sportId2, false, "Beginner", Map.of());
         authenticateAs(ownerId);
 
@@ -217,7 +216,7 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
 
     @Test
     void list_callerWithoutFlag_omitsSoftDeletedRows() throws Exception {
-        storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));
+        storedProfile(sportId, true, "Advanced", Map.of("gear/racket", "Li-Ning"));
         storedProfile(sportId2, false, "Beginner", Map.of());
         authenticateAs(ownerId);
 
@@ -231,7 +230,7 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
     void list_authenticated_returnsOnlyTheCallersOwnRows() throws Exception {
         // A22 removed the {userId} param: the endpoint is scoped to the principal, so there is no
         // "another user's list" to 403 on — the caller simply never sees rows that aren't theirs.
-        storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));          // ownerId
+        storedProfile(sportId, true, "Advanced", Map.of("gear/racket", "Li-Ning"));          // ownerId
         Long othersProfileId = storedProfileForUser(otherUserId, sportId2, true, "Beginner", Map.of());
         authenticateAs(otherUserId);
 
@@ -257,7 +256,7 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
 
     @Test
     void getForSport_callerWithProfile_is200() throws Exception {
-        storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));
+        storedProfile(sportId, true, "Advanced", Map.of("gear/racket", "Li-Ning"));
         authenticateAs(ownerId);
 
         mockMvc.perform(get("/api/sports/profiles/sport/{sportId}", sportId))
@@ -277,7 +276,7 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
     @Test
     void getForSport_readsTheCallersOwn_notAnotherUsers() throws Exception {
         // A profile exists for this sport, but it belongs to ownerId, not the caller.
-        storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));
+        storedProfile(sportId, true, "Advanced", Map.of("gear/racket", "Li-Ning"));
         authenticateAs(otherUserId);
 
         mockMvc.perform(get("/api/sports/profiles/sport/{sportId}", sportId))
@@ -288,7 +287,7 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
     void getForSport_anonymous_is401() throws Exception {
         // A22 added a SecurityConfig matcher for GET /api/sports/profiles/sport/* ahead of the
         // /api/sports/** permitAll ("/profiles/*"'s single "*" does not cover the two-segment path).
-        storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));
+        storedProfile(sportId, true, "Advanced", Map.of("gear/racket", "Li-Ning"));
 
         mockMvc.perform(get("/api/sports/profiles/sport/{sportId}", sportId).with(anonymous()))
                 .andExpect(status().isUnauthorized())
@@ -299,7 +298,7 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
 
     @Test
     void getById_owner_is200() throws Exception {
-        Long profileId = storedProfile(sportId, true, "Advanced", Map.of("racket", "Li-Ning"));
+        Long profileId = storedProfile(sportId, true, "Advanced", Map.of("gear/racket", "Li-Ning"));
         authenticateAs(ownerId);
 
         mockMvc.perform(get("/api/sports/profiles/{id}", profileId))

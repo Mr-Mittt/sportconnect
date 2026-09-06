@@ -158,4 +158,7 @@
     <!-- U13: user-impl's own outbox table (C3's OutboxEvent shape) — friend-request notification wiring -->
     <include file="db/changelog/changes/V060__create_user_outbox_events.sql" relativeToChangelogFile="false"/>
 
+    <!-- A19: sport attribute schema v3 — rewrite the seeded Badminton document without `order` and rekey its profile attributes to full paths -->
+    <include file="db/changelog/changes/V061__sport_schema_v3_nested_groups.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

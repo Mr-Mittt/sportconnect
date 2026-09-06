@@ -34,9 +34,10 @@ import java.util.regex.Pattern;
  * decision — an admin pasting a malformed tree needs to know about it, whereas a user's stale
  * client key is noise not worth failing a profile save over.
  *
- * <p>Hand-rolled rather than a JSON Schema library: the rule set is small and closed, and the most
- * important rule (sport-wide leaf-key uniqueness) is a cross-branch invariant that JSON Schema
- * expresses poorly.
+ * <p>Hand-rolled rather than a JSON Schema library: the rule set is small and closed, and the
+ * structural rules (the sibling-scoped key namespace, the {@code definitionRef} cascade, the
+ * inner-position primitive-only bound) are cross-branch invariants that JSON Schema expresses
+ * poorly.
  */
 @Component
 @RequiredArgsConstructor
@@ -102,34 +103,52 @@ class SportAttributeSchemaValidator {
         Map<String, SportAttributeDefinitionType> definitionsByName =
                 validateDefinitions(schema.getDefinitions(), defaultLocale);
 
-        Set<String> groupKeys = new HashSet<>();
-        // Accumulated across every group rather than reset per group: leaf keys are unique across
-        // the WHOLE sport. That is what lets the stored profile map stay flat while the schema is a
-        // tree, so it is the one rule here that must not be relaxed.
-        Set<String> attributeKeys = new HashSet<>();
-
+        // v3/A19: node keys are unique among SIBLINGS only, not across the whole sport, and within
+        // one parent the child sub-group keys and child attribute keys share a single namespace
+        // (so a node's full path — gear/rackets/tension — is unambiguous). The tree is walked
+        // recursively; each parent owns its own children's uniqueness. The root's siblings are the
+        // top-level group keys.
+        Set<String> rootKeys = new HashSet<>();
         for (SportAttributeGroup group : nullSafe(schema.getGroups())) {
-            validateKey(group.getKey(), "Group key");
-            if (!groupKeys.add(group.getKey())) {
-                throw new BadRequestException("Duplicate group key: " + group.getKey());
-            }
-            validateLabel(group.getLabel(), defaultLocale, "Group " + group.getKey());
-            for (SportAttributeDefinition attribute : nullSafe(group.getAttributes())) {
-                validateAttribute(attribute, attributeKeys, definitionsByName, defaultLocale);
-            }
+            validateGroupNode(group, rootKeys, definitionsByName, defaultLocale);
         }
 
         validateSize(schema);
     }
 
-    private void validateAttribute(SportAttributeDefinition attribute, Set<String> seenKeys,
+    /**
+     * Validates one group node and everything below it (v3/A19).
+     *
+     * <p>{@code siblingKeys} is the shared key namespace of this group's <em>parent</em> — this
+     * method adds its own key to it and rejects a collision with a sibling sub-group or attribute.
+     * It then builds a fresh namespace for its own children (sub-groups and attributes together) and
+     * recurses into each sub-group.
+     */
+    private void validateGroupNode(SportAttributeGroup group, Set<String> siblingKeys,
                                     Map<String, SportAttributeDefinitionType> definitionsByName,
                                     String defaultLocale) {
-        validateKey(attribute.getKey(), "Attribute key");
-        if (!seenKeys.add(attribute.getKey())) {
-            throw new BadRequestException(
-                    "Duplicate attribute key across the sport: " + attribute.getKey());
+        validateKey(group.getKey(), "Group key");
+        if (!siblingKeys.add(group.getKey())) {
+            throw new BadRequestException("Duplicate node key among siblings: " + group.getKey());
         }
+        validateLabel(group.getLabel(), defaultLocale, "Group " + group.getKey());
+
+        Set<String> childKeys = new HashSet<>();
+        for (SportAttributeDefinition attribute : nullSafe(group.getAttributes())) {
+            validateKey(attribute.getKey(), "Attribute key");
+            if (!childKeys.add(attribute.getKey())) {
+                throw new BadRequestException("Duplicate node key among siblings: " + attribute.getKey());
+            }
+            validateAttribute(attribute, definitionsByName, defaultLocale);
+        }
+        for (SportAttributeGroup child : nullSafe(group.getGroups())) {
+            validateGroupNode(child, childKeys, definitionsByName, defaultLocale);
+        }
+    }
+
+    private void validateAttribute(SportAttributeDefinition attribute,
+                                    Map<String, SportAttributeDefinitionType> definitionsByName,
+                                    String defaultLocale) {
         validateLabel(attribute.getLabel(), defaultLocale, "Attribute " + attribute.getKey());
         if (attribute.getType() == null) {
             throw new BadRequestException(

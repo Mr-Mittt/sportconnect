@@ -25,7 +25,7 @@ class SportAttributeSchemaLabelResolverSpec extends Specification {
         SportAttributeSchema.builder()
                 .defaultLocale(defaultLocale)
                 .groups([SportAttributeGroup.builder()
-                                 .key("gear").label(groupLabel).isAvailable(true).order(1)
+                                 .key("gear").label(groupLabel).isAvailable(true)
                                  .attributes([]).build()])
                 .build()
     }
@@ -84,13 +84,13 @@ class SportAttributeSchemaLabelResolverSpec extends Specification {
         def definition = SportAttributeDefinitionType.builder().name("Reference").fields([
                 SportAttributeField.builder().key("value")
                         .label(["en": "Value", "vi": "Giá trị"])
-                        .type(SportAttributeType.STRING).order(1).build()
+                        .type(SportAttributeType.STRING).build()
         ]).build()
         def schema = SportAttributeSchema.builder()
                 .defaultLocale("en")
                 .definitions([definition])
                 .groups([SportAttributeGroup.builder()
-                                 .key("gear").label(["en": "Gear", "vi": "Đồ nghề"]).isAvailable(true).order(1)
+                                 .key("gear").label(["en": "Gear", "vi": "Đồ nghề"]).isAvailable(true)
                                  .attributes([SportAttributeDefinition.builder()
                                                       .key("shuttlecock").label(["en": "Shuttlecock", "vi": "Cầu lông"])
                                                       .type(SportAttributeType.ENUM)
@@ -98,7 +98,7 @@ class SportAttributeSchemaLabelResolverSpec extends Specification {
                                                                         .value("nylon")
                                                                         .label(["en": "Nylon", "vi": "Nylon"])
                                                                         .build()])
-                                                      .isAvailable(true).order(1).build()])
+                                                      .isAvailable(true).build()])
                                  .build()])
                 .build()
 
@@ -117,11 +117,11 @@ class SportAttributeSchemaLabelResolverSpec extends Specification {
         def schema = SportAttributeSchema.builder()
                 .defaultLocale("en")
                 .groups([SportAttributeGroup.builder()
-                                 .key("gear").label(["en": "Gear"]).isAvailable(true).order(1)
+                                 .key("gear").label(["en": "Gear"]).isAvailable(true)
                                  .attributes([SportAttributeDefinition.builder()
                                                       .key("racket").label(["en": "Racket"])
                                                       .type(SportAttributeType.STRING)
-                                                      .isAvailable(true).order(2).defaultValue("Yonex")
+                                                      .isAvailable(true).defaultValue("Yonex")
                                                       .build()])
                                  .build()])
                 .build()
@@ -133,30 +133,54 @@ class SportAttributeSchemaLabelResolverSpec extends Specification {
         def group = result.groups[0]
         group.key == "gear"
         group.isAvailable == true
-        group.order == 1
         def attribute = group.attributes[0]
         attribute.key == "racket"
         attribute.type == SportAttributeType.STRING
         attribute.isAvailable == true
-        attribute.order == 2
         attribute.defaultValue == "Yonex"
+    }
+
+    def "resolves labels recursively through nested sub-groups (v3/A19)"() {
+        given:
+        def schema = SportAttributeSchema.builder()
+                .defaultLocale("en")
+                .groups([SportAttributeGroup.builder()
+                                 .key("gear").label(["en": "Gear", "vi": "Đồ nghề"]).isAvailable(true)
+                                 .attributes([])
+                                 .groups([SportAttributeGroup.builder()
+                                                  .key("rackets").label(["en": "Rackets", "vi": "Vợt"]).isAvailable(true)
+                                                  .attributes([SportAttributeDefinition.builder()
+                                                                       .key("tension").label(["en": "Tension", "vi": "Độ căng"])
+                                                                       .type(SportAttributeType.STRING)
+                                                                       .isAvailable(true).build()])
+                                                  .build()])
+                                 .build()])
+                .build()
+
+        when:
+        def result = resolver.resolve(schema, Locale.forLanguageTag("vi"))
+
+        then:
+        result.groups[0].label == "Đồ nghề"
+        result.groups[0].groups[0].label == "Vợt"
+        result.groups[0].groups[0].attributes[0].label == "Độ căng"
     }
 
     def "carries a NUMBER attribute's min/max through to the resolved tree (A16)"() {
         given:
         def spec = SportAttributeDefinitionType.builder().name("Spec").fields([
                 SportAttributeField.builder().key("gauge").label(["en": "Gauge"])
-                        .type(SportAttributeType.NUMBER).min(0.60d).max(0.75d).order(1).build()
+                        .type(SportAttributeType.NUMBER).min(0.60d).max(0.75d).build()
         ]).build()
         def schema = SportAttributeSchema.builder()
                 .defaultLocale("en")
                 .definitions([spec])
                 .groups([SportAttributeGroup.builder()
-                                 .key("gear").label(["en": "Gear"]).isAvailable(true).order(1)
+                                 .key("gear").label(["en": "Gear"]).isAvailable(true)
                                  .attributes([SportAttributeDefinition.builder()
                                                       .key("tension").label(["en": "Tension"])
                                                       .type(SportAttributeType.NUMBER).min(15.0d).max(35.0d)
-                                                      .isAvailable(true).order(1).build()])
+                                                      .isAvailable(true).build()])
                                  .build()])
                 .build()
 

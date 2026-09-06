@@ -3253,6 +3253,28 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `equipment.shoe.court`) are now live and load-bearing for the first time since A9 shipped
   unseeded. Unblocks client `SPORT-2` with real content to render against, and gives the postponed
   **A14** real `searchScope` values to design against once it resumes.
+- **Sport attribute schema v3 — nested groups (2026-09-06,
+  `documentation/md/SPORT_ATTRIBUTE_SCHEMA_V3_DESIGN.md`; ticket A19 backend, client SPORT-7
+  amended):** v2's `group` is flat and presentation-only — it can hold one level of `attributes[]`
+  and no sub-group. v3 gives `SportAttributeGroup` an optional self-referential `groups` list
+  (arbitrary depth, sub-groups + attributes mixed under one parent), relaxes node-key uniqueness
+  from **sport-wide** to **sibling-only** (child sub-group keys and child attribute keys share one
+  namespace per parent), and addresses every node by its full `/`-separated path from the schema
+  root (`gear/rackets/tension`) — no bare-key shorthand. `UserSportProfile.attributes` stays a
+  **flat** `Map<String, Object>`; only its keys become full paths, so `mergeAttributes` /
+  `ProfileAttributeFilter.filter` / `.retainDefined` are untouched (they iterate `entrySet()` and
+  never inspect key shape) — the recursive tree walk is isolated to a new `SchemaPaths` helper the
+  two schema-lookup maps and (later) A17 share. `order` is **removed** from every node (group /
+  definition / field + `Resolved*` twins): children are a strict ordered array in v3 and nothing in
+  the backend ever sorted by it; client SPORT-7's "honor `order`" becomes "honor array position".
+  `isAvailable` cascade made recursive (parent-wins, full-depth). Neither cap moves —
+  `MAX_ATTRIBUTES_BYTES` (4KB) was evaluated against path-keying and the overhead is ≈36 B on the
+  top-level keys of a maximal Badminton profile (measured 715 B / 4096). `V061` rewrites the one
+  seeded document (Badminton, A15) into clean v3 form and rekeys any Badminton profile rows
+  (`handedness → general/handedness`, etc.), idempotent, ~0 rows pre-launch. A19 introduces **no
+  schema field that holds a node path** — the `#ref` reference field and its dangling-path → 400
+  validation land with **A17**, which A19 must precede for exactly that reason (Delta filed on A17).
+  No controller / `SecurityConfig` / `SportServiceImpl` / `UserSportProfileServiceImpl` change.
 - **Client SPORT-2 (`DONE`, 2026-08-26, `client/docs/MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md`):**
   `SportAttributesFields` — the v2 schema-driven renderer for a user's per-sport attribute fields,
   built against A15's real Badminton content. Reworked `shared/types/sport.ts` from the v1 shape to

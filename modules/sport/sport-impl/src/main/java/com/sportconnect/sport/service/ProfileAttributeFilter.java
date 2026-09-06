@@ -2,7 +2,6 @@ package com.sportconnect.sport.service;
 
 import com.sportconnect.sport.api.dto.SportAttributeDefinition;
 import com.sportconnect.sport.api.dto.SportAttributeDefinitionType;
-import com.sportconnect.sport.api.dto.SportAttributeGroup;
 import com.sportconnect.sport.api.dto.SportAttributeOption;
 import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportAttributeType;
@@ -47,9 +46,10 @@ class ProfileAttributeFilter {
     /**
      * Keeps only the entries the schema currently accepts.
      *
-     * <p>An entry survives when its key is a live leaf in the tree, its own {@code isAvailable} is
-     * not {@code false}, its parent group's {@code isAvailable} is not {@code false}, and its value
-     * is valid for the declared type. Everything else is dropped.
+     * <p>An entry survives when its key is the full path of a live leaf in the tree, its own
+     * {@code isAvailable} is not {@code false}, no ancestor group's {@code isAvailable} is
+     * {@code false} (the cascade runs full depth — A19), and its value is valid for the declared
+     * type. Everything else is dropped.
      *
      * <p>A {@code null} schema (the sport offers no attributes) yields an empty map — every
      * supplied attribute is dropped, which is the correct behaviour for a sport whose admin has not
@@ -64,14 +64,14 @@ class ProfileAttributeFilter {
             return new LinkedHashMap<>();
         }
 
-        Map<String, SportAttributeDefinition> available = availableAttributesByKey(schema);
+        Map<String, SportAttributeDefinition> available = SchemaPaths.availableByPath(schema);
         Map<String, SportAttributeDefinitionType> definitions = definitionsByName(schema);
         Map<String, Object> accepted = new LinkedHashMap<>();
 
         for (Map.Entry<String, Object> entry : requested.entrySet()) {
             SportAttributeDefinition definition = available.get(entry.getKey());
             if (definition == null) {
-                // Unknown, or defined but switched off at either the attribute or the group level.
+                // Unknown path, or defined but switched off at the attribute or any ancestor group.
                 log.debug("Ignoring attribute {} — not an available attribute for this sport", entry.getKey());
                 continue;
             }
@@ -93,11 +93,11 @@ class ProfileAttributeFilter {
      * availability:
      *
      * <ul>
-     *   <li>a top-level key whose attribute is not defined anywhere in the schema tree — one
-     *       written before A9, or under a definition the admin has since deleted — is
-     *       <strong>dropped</strong>;</li>
+     *   <li>a path key whose attribute is not defined anywhere in the schema tree — one written
+     *       before A9, under a definition the admin has since deleted, or under the pre-v3 bare-key
+     *       shape — is <strong>dropped</strong>;</li>
      *   <li>a key under an attribute that <em>is</em> defined but is {@code isAvailable: false} (or
-     *       whose group is) is <strong>kept verbatim</strong>, not re-validated — soft delete
+     *       any ancestor group is) is <strong>kept verbatim</strong>, not re-validated — soft delete
      *       freezes a value, it does not destroy it (see {@code SportAttributeDefinition});</li>
      *   <li>a key under a live attribute is re-run through the same scalar/record validation
      *       {@link #filter} applies to an incoming value (this ticket's "2b"): an undeclared nested
@@ -120,12 +120,12 @@ class ProfileAttributeFilter {
             return new LinkedHashMap<>();
         }
 
-        Map<String, DefinedAttribute> defined = definedAttributesByKey(schema);
+        Map<String, SchemaPaths.DefinedAttribute> defined = SchemaPaths.definedByPath(schema);
         Map<String, SportAttributeDefinitionType> definitions = definitionsByName(schema);
         Map<String, Object> retained = new LinkedHashMap<>();
 
         for (Map.Entry<String, Object> entry : stored.entrySet()) {
-            DefinedAttribute defn = defined.get(entry.getKey());
+            SchemaPaths.DefinedAttribute defn = defined.get(entry.getKey());
             if (defn == null) {
                 log.debug("Pruning stored attribute {} — no longer defined by the schema", entry.getKey());
                 continue;
@@ -194,8 +194,8 @@ class ProfileAttributeFilter {
 
     /**
      * Builds the sport's {@code definitions} registry keyed by name, trusting it was already
-     * validated at write time — same posture as {@link #availableAttributesByKey}, which likewise
-     * does not re-check the schema it is handed.
+     * validated at write time — same posture as {@link SchemaPaths}, which likewise does not
+     * re-check the schema it is handed.
      */
     private Map<String, SportAttributeDefinitionType> definitionsByName(SportAttributeSchema schema) {
         Map<String, SportAttributeDefinitionType> byName = new HashMap<>();
@@ -208,77 +208,6 @@ class ProfileAttributeFilter {
             }
         }
         return byName;
-    }
-
-    /**
-     * Flattens the tree to the leaves a write may currently target.
-     *
-     * <p>An unavailable group is skipped wholesale rather than having its children examined: parent
-     * state wins, so a child's own {@code isAvailable: true} does not resurrect it under a retired
-     * group. Skipping the subtree here is what makes that rule hold everywhere, instead of each
-     * caller having to remember it.
-     *
-     * <p>{@code isAvailable} is read as "not explicitly false" so that a document omitting the flag
-     * behaves as available, matching how an admin would read a schema that simply does not mention
-     * it.
-     */
-    private Map<String, SportAttributeDefinition> availableAttributesByKey(SportAttributeSchema schema) {
-        Map<String, SportAttributeDefinition> byKey = new HashMap<>();
-        List<SportAttributeGroup> groups = schema.getGroups();
-        if (groups == null) {
-            return byKey;
-        }
-        for (SportAttributeGroup group : groups) {
-            if (Boolean.FALSE.equals(group.getIsAvailable())) {
-                continue;
-            }
-            List<SportAttributeDefinition> attributes = group.getAttributes();
-            if (attributes == null) {
-                continue;
-            }
-            for (SportAttributeDefinition attribute : attributes) {
-                if (Boolean.FALSE.equals(attribute.getIsAvailable()) || attribute.getKey() == null) {
-                    continue;
-                }
-                byKey.put(attribute.getKey(), attribute);
-            }
-        }
-        return byKey;
-    }
-
-    /**
-     * Every attribute the schema declares, keyed by leaf key, <strong>regardless of
-     * {@code isAvailable}</strong> — the "does a definition physically exist" view A10 Part 2's
-     * prune needs, as opposed to {@link #availableAttributesByKey}'s "may a write target this" view.
-     * {@link DefinedAttribute#live()} carries whether the attribute and its group are both still
-     * available, which is what tells {@link #retainDefined} whether to re-validate a stored value or
-     * keep it frozen.
-     */
-    private Map<String, DefinedAttribute> definedAttributesByKey(SportAttributeSchema schema) {
-        Map<String, DefinedAttribute> byKey = new HashMap<>();
-        List<SportAttributeGroup> groups = schema.getGroups();
-        if (groups == null) {
-            return byKey;
-        }
-        for (SportAttributeGroup group : groups) {
-            boolean groupLive = !Boolean.FALSE.equals(group.getIsAvailable());
-            List<SportAttributeDefinition> attributes = group.getAttributes();
-            if (attributes == null) {
-                continue;
-            }
-            for (SportAttributeDefinition attribute : attributes) {
-                if (attribute.getKey() == null) {
-                    continue;
-                }
-                boolean live = groupLive && !Boolean.FALSE.equals(attribute.getIsAvailable());
-                byKey.put(attribute.getKey(), new DefinedAttribute(attribute, live));
-            }
-        }
-        return byKey;
-    }
-
-    /** A schema-declared attribute plus whether it (and its group) are still {@code isAvailable}. */
-    private record DefinedAttribute(SportAttributeDefinition definition, boolean live) {
     }
 
     private Set<String> allowedValues(SportAttributeDefinition definition) {

@@ -2,9 +2,28 @@
 
 **Status:** `TODO`
 **Type:** New Feature
-**Depends on:** nothing hard (builds on the A9/A12/A13 profile-schema machinery, all `DONE`)
+**Depends on:** **A19 (`DONE` 2026-09-06) — hard.** A19 introduced schema v3: profile-schema keys
+are unique among siblings only, nodes address by full `/`-separated path
+(`gear/rackets/tension`), and a reusable `SchemaPaths` resolver was added. Everything in this
+ticket that says "profile attribute **key**" now means "profile attribute **path**".
 **Filed:** 2026-09-02, from a design session on letting sessions carry sport-specific structured
 attributes and pre-filling them from the creator's sport profile.
+
+## Delta 2026-09-06 (from A19 pickup) — `#ref` grammar is path-qualified
+
+A17 was filed against pre-v3 profile schemas, where a bare `profileAttributeKey` was unique
+sport-wide. A19 removed that. Reconcile at pickup:
+
+- **`#ref` value is a full path**: `{ "#ref": "gear/rackets/tension", ... }`, not a bare key.
+  Resolve it against the profile schema with `SchemaPaths` (the helper A19 added for exactly this),
+  not a flat key lookup.
+- **`#ref` "effective key" for the session-schema uniqueness rule** is the full referenced path.
+- **own-node key collision** is checked against the set of referenced profile **paths** plus the
+  session schema's own sibling namespace (own nodes follow v3's sibling-scoped key rule too).
+- **The dangling-`#ref` → 400 validation is this ticket's to build** — A19 deliberately shipped no
+  schema field that holds a node path, so `SchemaPaths`-based path-reference validation lands here.
+- A19's `SchemaPaths` also produces the available-view (full-depth `isAvailable` cascade); a `#ref`
+  must resolve to a node that view still contains.
 
 ## Phase 0 (before code)
 

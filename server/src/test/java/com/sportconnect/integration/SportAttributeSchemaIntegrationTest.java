@@ -92,19 +92,19 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
                         .key("gear")
                         .label(Map.of("en", "Gear"))
                         .isAvailable(true)
-                        .order(1)
+                        
                         .attributes(List.of(
                                 SportAttributeDefinition.builder()
                                         .key("racket").label(Map.of("en", "Racket"))
                                         .type(SportAttributeType.STRING)
-                                        .isAvailable(true).order(1).build(),
+                                        .isAvailable(true).build(),
                                 SportAttributeDefinition.builder()
                                         .key("shuttlecock").label(Map.of("en", "Shuttlecock"))
                                         .type(SportAttributeType.ENUM)
                                         .options(List.of(
                                                 SportAttributeOption.builder().value("feather").label(Map.of("en", "Feather")).build(),
                                                 SportAttributeOption.builder().value("nylon").label(Map.of("en", "Nylon")).build()))
-                                        .isAvailable(true).order(2).defaultValue("nylon").build()))
+                                        .isAvailable(true).defaultValue("nylon").build()))
                         .build()))
                 .build();
     }
@@ -162,27 +162,27 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
     }
 
     @Test
-    void adminPut_rejectsDuplicateLeafKeysAcrossGroups_withBadRequest() throws Exception {
+    void adminPut_rejectsDuplicateSiblingKeysWithinOneGroup_withBadRequest() throws Exception {
         authenticateAs(UUID.randomUUID(), "ADMIN");
 
+        // v3/A19: the same key is legal under two different groups, but not among siblings of the
+        // same parent. Here one group carries `racket` twice.
         SportAttributeGroup gear = SportAttributeGroup.builder()
-                .key("gear").label(Map.of("en", "Gear")).isAvailable(true).order(1)
-                .attributes(List.of(SportAttributeDefinition.builder()
-                        .key("racket").label(Map.of("en", "Racket")).type(SportAttributeType.STRING)
-                        .isAvailable(true).order(1).build()))
-                .build();
-        SportAttributeGroup other = SportAttributeGroup.builder()
-                .key("other").label(Map.of("en", "Other")).isAvailable(true).order(2)
-                .attributes(List.of(SportAttributeDefinition.builder()
-                        .key("racket").label(Map.of("en", "Racket again")).type(SportAttributeType.STRING)
-                        .isAvailable(true).order(1).build()))
+                .key("gear").label(Map.of("en", "Gear")).isAvailable(true)
+                .attributes(List.of(
+                        SportAttributeDefinition.builder()
+                                .key("racket").label(Map.of("en", "Racket")).type(SportAttributeType.STRING)
+                                .isAvailable(true).build(),
+                        SportAttributeDefinition.builder()
+                                .key("racket").label(Map.of("en", "Racket again")).type(SportAttributeType.STRING)
+                                .isAvailable(true).build()))
                 .build();
 
         mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(toJson(SportAttributeSchema.builder()
                                 .defaultLocale("en")
-                                .groups(List.of(gear, other)).build())))
+                                .groups(List.of(gear)).build())))
                 .andExpect(status().isBadRequest());
 
         evictSportCache();
@@ -191,6 +191,46 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
         mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
+    void adminPut_thenGet_roundTripsANestedGroupTree_andMemberGetResolvesIt() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        // gear -> (loose attribute shoeSize) + sub-group rackets -> attribute tension
+        SportAttributeSchema nested = SportAttributeSchema.builder()
+                .defaultLocale("en")
+                .groups(List.of(SportAttributeGroup.builder()
+                        .key("gear").label(Map.of("en", "Gear", "vi", "Đồ nghề")).isAvailable(true)
+                        .attributes(List.of(SportAttributeDefinition.builder()
+                                .key("shoeSize").label(Map.of("en", "Shoe size")).type(SportAttributeType.STRING)
+                                .isAvailable(true).build()))
+                        .groups(List.of(SportAttributeGroup.builder()
+                                .key("rackets").label(Map.of("en", "Rackets", "vi", "Vợt")).isAvailable(true)
+                                .attributes(List.of(SportAttributeDefinition.builder()
+                                        .key("tension").label(Map.of("en", "Tension", "vi", "Độ căng"))
+                                        .type(SportAttributeType.NUMBER).min(15.0).max(35.0)
+                                        .isAvailable(true).build()))
+                                .build()))
+                        .build()))
+                .build();
+
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(nested)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.groups[0].groups[0].key").value("rackets"))
+                .andExpect(jsonPath("$.data.groups[0].groups[0].attributes[0].key").value("tension"));
+
+        evictSportCache();
+
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId)
+                        .header("Accept-Language", "vi"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].key").value("shoeSize"))
+                .andExpect(jsonPath("$.data.groups[0].groups[0].label").value("Vợt"))
+                .andExpect(jsonPath("$.data.groups[0].groups[0].attributes[0].label").value("Độ căng"))
+                .andExpect(jsonPath("$.data.groups[0].groups[0].attributes[0].min").value(15.0));
     }
 
     @Test
@@ -269,41 +309,41 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
     private SportAttributeSchema v2SchemaWithDefinitions() {
         SportAttributeDefinitionType reference = SportAttributeDefinitionType.builder().name("Reference").fields(List.of(
                         SportAttributeField.builder().key("id").label(Map.of("en", "Id"))
-                                .type(SportAttributeType.STRING).isRequired(false).order(1).build(),
+                                .type(SportAttributeType.STRING).isRequired(false).build(),
                         SportAttributeField.builder().key("value").label(Map.of("en", "Value"))
-                                .type(SportAttributeType.STRING).isRequired(true).order(2).build()))
+                                .type(SportAttributeType.STRING).isRequired(true).build()))
                 .build();
         SportAttributeDefinitionType shoeSize = SportAttributeDefinitionType.builder().name("ShoeSize").fields(List.of(
                         SportAttributeField.builder().key("system").label(Map.of("en", "System"))
                                 .type(SportAttributeType.ENUM)
                                 .options(List.of(SportAttributeOption.builder().value("US").label(Map.of("en", "US")).build()))
-                                .isRequired(true).order(1).build(),
+                                .isRequired(true).build(),
                         SportAttributeField.builder().key("value").label(Map.of("en", "Value"))
-                                .type(SportAttributeType.STRING).isRequired(true).order(2).build()))
+                                .type(SportAttributeType.STRING).isRequired(true).build()))
                 .build();
         SportAttributeDefinitionType shoe = SportAttributeDefinitionType.builder().name("Shoe").fields(List.of(
                         SportAttributeField.builder().key("shoe").label(Map.of("en", "Shoe"))
                                 .type(SportAttributeType.DEFINITION).definitionRef("Reference")
-                                .isRequired(true).order(1).build(),
+                                .isRequired(true).build(),
                         SportAttributeField.builder().key("size").label(Map.of("en", "Size"))
                                 .type(SportAttributeType.DEFINITION).definitionRef("ShoeSize")
-                                .isRequired(false).order(2).build()))
+                                .isRequired(false).build()))
                 .build();
 
         return SportAttributeSchema.builder()
                 .defaultLocale("en")
                 .definitions(List.of(reference, shoeSize, shoe))
                 .groups(List.of(SportAttributeGroup.builder()
-                        .key("gear").label(Map.of("en", "Gear")).isAvailable(true).order(1)
+                        .key("gear").label(Map.of("en", "Gear")).isAvailable(true)
                         .attributes(List.of(
                                 SportAttributeDefinition.builder()
                                         .key("rackets").label(Map.of("en", "Rackets"))
                                         .type(SportAttributeType.DEFINITION_LIST).definitionRef("Reference")
-                                        .isAvailable(true).order(1).build(),
+                                        .isAvailable(true).build(),
                                 SportAttributeDefinition.builder()
                                         .key("footwear").label(Map.of("en", "Footwear"))
                                         .type(SportAttributeType.DEFINITION).definitionRef("Shoe")
-                                        .isAvailable(true).order(2).build()))
+                                        .isAvailable(true).build()))
                         .build()))
                 .build();
     }
@@ -335,11 +375,11 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
         authenticateAs(UUID.randomUUID(), "ADMIN");
 
         SportAttributeGroup gear = SportAttributeGroup.builder()
-                .key("gear").label(Map.of("en", "Gear")).isAvailable(true).order(1)
+                .key("gear").label(Map.of("en", "Gear")).isAvailable(true)
                 .attributes(List.of(SportAttributeDefinition.builder()
                         .key("footwear").label(Map.of("en", "Footwear"))
                         .type(SportAttributeType.DEFINITION).definitionRef("NoSuchDefinition")
-                        .isAvailable(true).order(1).build()))
+                        .isAvailable(true).build()))
                 .build();
 
         mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
@@ -386,12 +426,12 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
                         .key("gear")
                         .label(Map.of("en", "Gear", "vi", "Đồ nghề"))
                         .isAvailable(true)
-                        .order(1)
+                        
                         .attributes(List.of(SportAttributeDefinition.builder()
                                 .key("racket")
                                 .label(Map.of("en", "Racket", "vi", "Vợt"))
                                 .type(SportAttributeType.STRING)
-                                .isAvailable(true).order(1).build()))
+                                .isAvailable(true).build()))
                         .build()))
                 .build();
     }
@@ -438,7 +478,7 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
                 .defaultLocale("en")
                 .groups(List.of(SportAttributeGroup.builder()
                         // Only "vi" - the document's own defaultLocale ("en") has no entry.
-                        .key("gear").label(Map.of("vi", "Đồ nghề")).isAvailable(true).order(1)
+                        .key("gear").label(Map.of("vi", "Đồ nghề")).isAvailable(true)
                         .attributes(List.of())
                         .build()))
                 .build();
@@ -473,16 +513,16 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
         SportAttributeSchema schema = SportAttributeSchema.builder()
                 .defaultLocale("en")
                 .groups(List.of(SportAttributeGroup.builder()
-                        .key("gear").label(Map.of("en", "Gear")).isAvailable(true).order(1)
+                        .key("gear").label(Map.of("en", "Gear")).isAvailable(true)
                         .attributes(List.of(
                                 SportAttributeDefinition.builder()
                                         .key("tension").label(Map.of("en", "String tension"))
                                         .type(SportAttributeType.NUMBER).min(15.0).max(35.0)
-                                        .isAvailable(true).order(1).defaultValue(27).build(),
+                                        .isAvailable(true).defaultValue(27).build(),
                                 SportAttributeDefinition.builder()
                                         .key("strung").label(Map.of("en", "Strung"))
                                         .type(SportAttributeType.BOOLEAN)
-                                        .isAvailable(true).order(2).build()))
+                                        .isAvailable(true).build()))
                         .build()))
                 .build();
 
@@ -511,11 +551,11 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
         SportAttributeSchema schema = SportAttributeSchema.builder()
                 .defaultLocale("en")
                 .groups(List.of(SportAttributeGroup.builder()
-                        .key("gear").label(Map.of("en", "Gear")).isAvailable(true).order(1)
+                        .key("gear").label(Map.of("en", "Gear")).isAvailable(true)
                         .attributes(List.of(SportAttributeDefinition.builder()
                                 .key("tension").label(Map.of("en", "String tension"))
                                 .type(SportAttributeType.NUMBER).min(35.0).max(15.0)
-                                .isAvailable(true).order(1).build()))
+                                .isAvailable(true).build()))
                         .build()))
                 .build();
 

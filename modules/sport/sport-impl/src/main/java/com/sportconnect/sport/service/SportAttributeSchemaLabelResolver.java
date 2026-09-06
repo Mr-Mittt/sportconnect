@@ -88,17 +88,22 @@ public class SportAttributeSchemaLabelResolver {
                 .max(field.getMax())
                 .definitionRef(field.getDefinitionRef())
                 .isRequired(field.getIsRequired())
-                .order(field.getOrder())
                 .build();
     }
 
+    /**
+     * Recurses through nested sub-groups (v3/A19): a resolved group carries both its resolved
+     * {@code attributes} and its resolved child {@code groups}, to arbitrary depth.
+     */
     private ResolvedSportAttributeGroup resolveGroup(SportAttributeGroup group,
                                                        String exact, String language, String defaultLocale) {
         return ResolvedSportAttributeGroup.builder()
                 .key(group.getKey())
                 .label(resolveLabel(group.getLabel(), exact, language, defaultLocale))
                 .isAvailable(group.getIsAvailable())
-                .order(group.getOrder())
+                .groups(nullSafe(group.getGroups()).stream()
+                        .map(child -> resolveGroup(child, exact, language, defaultLocale))
+                        .collect(Collectors.toList()))
                 .attributes(nullSafe(group.getAttributes()).stream()
                         .map(attribute -> resolveAttribute(attribute, exact, language, defaultLocale))
                         .collect(Collectors.toList()))
@@ -115,7 +120,6 @@ public class SportAttributeSchemaLabelResolver {
                         .map(option -> resolveOption(option, exact, language, defaultLocale))
                         .collect(Collectors.toList()))
                 .isAvailable(attribute.getIsAvailable())
-                .order(attribute.getOrder())
                 .defaultValue(attribute.getDefaultValue())
                 .min(attribute.getMin())
                 .max(attribute.getMax())
