@@ -33,6 +33,4 @@ public class ResolvedSportAttributeField {
     private String definitionRef;
 
     private Boolean isRequired;
-
-    private Integer order;
 }

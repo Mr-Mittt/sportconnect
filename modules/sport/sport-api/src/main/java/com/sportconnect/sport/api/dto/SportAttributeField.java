@@ -65,7 +65,4 @@ public class SportAttributeField {
      * absent.
      */
     private Boolean isRequired;
-
-    /** Display order within the record. Not validated for uniqueness or contiguity. */
-    private Integer order;
 }

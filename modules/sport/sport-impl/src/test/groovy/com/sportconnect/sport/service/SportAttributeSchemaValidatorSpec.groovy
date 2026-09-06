@@ -39,7 +39,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
                 .type(type)
                 .options(options)
                 .isAvailable(true)
-                .order(1)
+                
                 .defaultValue(defaultValue)
                 .definitionRef(definitionRef)
                 .searchScope(searchScope)
@@ -56,7 +56,15 @@ class SportAttributeSchemaValidatorSpec extends Specification {
 
     private static SportAttributeGroup group(String key, List<SportAttributeDefinition> attributes) {
         SportAttributeGroup.builder()
-                .key(key).label(["en": key]).isAvailable(true).order(1).attributes(attributes).build()
+                .key(key).label(["en": key]).isAvailable(true).attributes(attributes).build()
+    }
+
+    /** A v3 group carrying nested sub-groups alongside (or instead of) its own attributes. */
+    private static SportAttributeGroup group(String key, List<SportAttributeDefinition> attributes,
+                                              List<SportAttributeGroup> groups) {
+        SportAttributeGroup.builder()
+                .key(key).label(["en": key]).isAvailable(true)
+                .attributes(attributes).groups(groups).build()
     }
 
     private static SportAttributeField field(String key, SportAttributeType type,
@@ -67,7 +75,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
                                               Double max = null) {
         SportAttributeField.builder()
                 .key(key).label(["en": key]).type(type).options(options)
-                .definitionRef(definitionRef).isRequired(isRequired).order(1)
+                .definitionRef(definitionRef).isRequired(isRequired)
                 .min(min).max(max).build()
     }
 
@@ -117,11 +125,41 @@ class SportAttributeSchemaValidatorSpec extends Specification {
         noExceptionThrown()
     }
 
-    def "duplicate leaf keys are rejected even across different groups"() {
-        given: "the invariant that matters most - the stored profile map is flat, so groups do not namespace keys"
+    def "the same leaf key is legal under two different groups (v3 sibling-scoped keys)"() {
+        given: "v3 relaxed v1's sport-wide uniqueness - a key need only be unique among its siblings"
         def schema = schemaOf([
                 group("gear", [attribute("racket", SportAttributeType.STRING)]),
                 group("other", [attribute("racket", SportAttributeType.STRING)])
+        ])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "the same leaf key is legal at different depths of the tree"() {
+        given:
+        def schema = schemaOf([
+                group("gear", [attribute("tension", SportAttributeType.STRING)],
+                        [group("rackets", [attribute("tension", SportAttributeType.STRING)])])
+        ])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "the same leaf key is illegal among siblings in one group"() {
+        given:
+        def schema = schemaOf([
+                group("gear", [
+                        attribute("racket", SportAttributeType.STRING),
+                        attribute("racket", SportAttributeType.STRING)
+                ])
         ])
 
         when:
@@ -132,7 +170,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
         e.message.contains("racket")
     }
 
-    def "duplicate group keys are rejected"() {
+    def "duplicate top-level group keys are rejected (root groups are siblings)"() {
         given:
         def schema = schemaOf([
                 group("gear", [attribute("racket", SportAttributeType.STRING)]),
@@ -144,6 +182,51 @@ class SportAttributeSchemaValidatorSpec extends Specification {
 
         then:
         thrown(BadRequestException)
+    }
+
+    def "a sub-group key colliding with a sibling attribute key is rejected"() {
+        given: "within one parent the child sub-group keys and child attribute keys share one namespace"
+        def schema = schemaOf([
+                group("gear", [attribute("rackets", SportAttributeType.STRING)],
+                        [group("rackets", [attribute("tension", SportAttributeType.STRING)])])
+        ])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains("rackets")
+    }
+
+    def "a group holding sub-groups and attributes together passes"() {
+        given:
+        def schema = schemaOf([
+                group("gear", [attribute("shoeSize", SportAttributeType.STRING)],
+                        [group("rackets", [attribute("tension", SportAttributeType.STRING)])])
+        ])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "an arbitrarily deep group tree passes"() {
+        given:
+        def schema = schemaOf([
+                group("a", null,
+                        [group("b", null,
+                                [group("c", null,
+                                        [group("d", [attribute("leaf", SportAttributeType.STRING)])])])])
+        ])
+
+        when:
+        validator.validate(schema)
+
+        then:
+        noExceptionThrown()
     }
 
     def "#type without options is rejected"() {
@@ -631,7 +714,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
         given: "the label carries only 'vi', but the schema's defaultLocale is 'en'"
         def schema = schemaOf([group("gear", [
                 SportAttributeDefinition.builder().key("racket").label(["vi": "Vợt"])
-                        .type(SportAttributeType.STRING).isAvailable(true).order(1).build()
+                        .type(SportAttributeType.STRING).isAvailable(true).build()
         ])])
 
         when:
@@ -647,7 +730,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
         given:
         def schema = schemaOf([group("gear", [
                 SportAttributeDefinition.builder().key("racket")
-                        .type(SportAttributeType.STRING).isAvailable(true).order(1).build()
+                        .type(SportAttributeType.STRING).isAvailable(true).build()
         ])])
 
         when:
@@ -661,7 +744,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
         given:
         def schema = schemaOf([group("gear", [
                 SportAttributeDefinition.builder().key("racket").label(["en": "Racket", (locale): "x"])
-                        .type(SportAttributeType.STRING).isAvailable(true).order(1).build()
+                        .type(SportAttributeType.STRING).isAvailable(true).build()
         ])])
 
         when:
@@ -711,7 +794,7 @@ class SportAttributeSchemaValidatorSpec extends Specification {
                         .type(SportAttributeType.ENUM)
                         .options([SportAttributeOption.builder().value("a")
                                           .label(["en": "A", "vi": "A"]).build()])
-                        .isAvailable(true).order(1).build()
+                        .isAvailable(true).build()
         ])])
 
         when:

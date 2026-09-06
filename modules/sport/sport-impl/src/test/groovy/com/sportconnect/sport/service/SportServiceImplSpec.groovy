@@ -302,9 +302,9 @@ class SportServiceImplSpec extends Specification {
         def sportId = 1L
         def stored = [
                 defaultLocale: "en",
-                groups       : [[key       : "gear", label: [en: "Gear"], isAvailable: true, order: 1,
+                groups       : [[key       : "gear", label: [en: "Gear"], isAvailable: true,
                                   attributes: [[key: "racket", label: [en: "Racket"], type: "STRING",
-                                                isAvailable: true, order: 1]]]]
+                                                isAvailable: true]]]]
         ]
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
                 .attributesSchema(stored).build()
@@ -349,11 +349,11 @@ class SportServiceImplSpec extends Specification {
         def sportId = 1L
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true).build()
         def schema = SportAttributeSchema.builder().defaultLocale("en").groups([
-                SportAttributeGroup.builder().key("gear").label(["en": "Gear"]).isAvailable(true).order(1)
+                SportAttributeGroup.builder().key("gear").label(["en": "Gear"]).isAvailable(true)
                         .attributes([SportAttributeDefinition.builder()
                                              .key("racket").label(["en": "Racket"])
                                              .type(SportAttributeType.STRING)
-                                             .isAvailable(true).order(1).build()])
+                                             .isAvailable(true).build()])
                         .build()
         ]).build()
 
@@ -371,19 +371,18 @@ class SportServiceImplSpec extends Specification {
     }
 
     def "replaceAttributeSchema rejects an invalid document without writing anything"() {
-        given: "duplicate leaf keys across groups - the invariant that keeps stored profiles flat"
+        given: "two attributes sharing a key WITHIN one group - illegal among siblings (v3/A19)"
         def sportId = 1L
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true).build()
-        def duplicate = { String groupKey ->
-            SportAttributeGroup.builder().key(groupKey).label(["en": groupKey]).isAvailable(true).order(1)
-                    .attributes([SportAttributeDefinition.builder()
-                                         .key("racket").label(["en": "Racket"])
-                                         .type(SportAttributeType.STRING)
-                                         .isAvailable(true).order(1).build()])
-                    .build()
+        def racket = { ->
+            SportAttributeDefinition.builder()
+                    .key("racket").label(["en": "Racket"])
+                    .type(SportAttributeType.STRING)
+                    .isAvailable(true).build()
         }
         def schema = SportAttributeSchema.builder().defaultLocale("en")
-                .groups([duplicate("gear"), duplicate("other")]).build()
+                .groups([SportAttributeGroup.builder().key("gear").label(["en": "gear"]).isAvailable(true)
+                                 .attributes([racket(), racket()]).build()]).build()
 
         when:
         sportService.replaceAttributeSchema(sportId, schema)
@@ -431,9 +430,9 @@ class SportServiceImplSpec extends Specification {
         def sportId = 1L
         def stored = [
                 defaultLocale: "en",
-                groups       : [[key       : "gear", label: [en: "Gear"], isAvailable: true, order: 1,
+                groups       : [[key       : "gear", label: [en: "Gear"], isAvailable: true,
                                   attributes: [[key: "racket", label: [en: "Racket"], type: "STRING",
-                                                isAvailable: true, order: 1]]]]
+                                                isAvailable: true]]]]
         ]
         def sport = Sport.builder().id(sportId).name("Tennis").isActive(false)
                 .attributesSchema(stored).build()

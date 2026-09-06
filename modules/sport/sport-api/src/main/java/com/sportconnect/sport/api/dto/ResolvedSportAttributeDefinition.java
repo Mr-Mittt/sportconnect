@@ -27,8 +27,6 @@ public class ResolvedSportAttributeDefinition {
 
     private Boolean isAvailable;
 
-    private Integer order;
-
     private Object defaultValue;
 
     /** Inclusive bounds for a {@code NUMBER} attribute (A16); {@code null} for every other type. */

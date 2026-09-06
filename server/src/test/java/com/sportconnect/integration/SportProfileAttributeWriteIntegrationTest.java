@@ -82,20 +82,23 @@ class SportProfileAttributeWriteIntegrationTest extends BaseIT {
         }
     }
 
-    /** A minimal stored schema document — one group, each named key a live {@code STRING} attribute. */
+    /**
+     * A minimal stored schema document — one group {@code gear}, each named key a live {@code STRING}
+     * attribute under it. v3/A19: the stored profile map is keyed by the full path, so a key
+     * {@code "racket"} here is written and read as {@code "gear/racket"}.
+     */
     private static Map<String, Object> schemaWith(String... keys) {
         List<Map<String, Object>> attributes = new ArrayList<>();
-        int order = 1;
         for (String key : keys) {
             attributes.add(Map.of(
                     "key", key, "label", Map.of("en", key), "type", "STRING",
-                    "isAvailable", true, "order", order++));
+                    "isAvailable", true));
         }
         return Map.of(
                 "defaultLocale", "en",
                 "groups", List.of(Map.of(
                         "key", "gear", "label", Map.of("en", "Gear"),
-                        "isAvailable", true, "order", 1, "attributes", attributes)));
+                        "isAvailable", true, "attributes", attributes)));
     }
 
     private Long storedProfileWith(Map<String, Object> attributes) {
@@ -107,48 +110,79 @@ class SportProfileAttributeWriteIntegrationTest extends BaseIT {
 
     @Test
     void put_withAttributeSetToJsonNull_removesThatStoredKey() throws Exception {
-        Long profileId = storedProfileWith(Map.of("racket", "Yonex", "grip", "wet"));
+        Long profileId = storedProfileWith(Map.of("gear/racket", "Yonex", "gear/grip", "wet"));
         authenticateAs(userId);
 
         mockMvc.perform(put("/api/sports/profiles/{id}", profileId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sportId\":" + sportId + ",\"skillLevel\":\"Advanced\","
-                                + "\"attributes\":{\"racket\":null}}"))
+                                + "\"attributes\":{\"gear/racket\":null}}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.attributes.grip").value("wet"))
-                .andExpect(jsonPath("$.data.attributes.racket").doesNotExist());
+                .andExpect(jsonPath("$.data.attributes['gear/grip']").value("wet"))
+                .andExpect(jsonPath("$.data.attributes['gear/racket']").doesNotExist());
 
         // Same result after a real re-read through the JSON column.
         mockMvc.perform(get("/api/sports/profiles/{id}", profileId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.attributes.grip").value("wet"))
-                .andExpect(jsonPath("$.data.attributes.racket").doesNotExist());
+                .andExpect(jsonPath("$.data.attributes['gear/grip']").value("wet"))
+                .andExpect(jsonPath("$.data.attributes['gear/racket']").doesNotExist());
     }
 
     @Test
     void put_withEmptyString_storesItRatherThanDeleting() throws Exception {
-        Long profileId = storedProfileWith(Map.of("racket", "Yonex"));
+        Long profileId = storedProfileWith(Map.of("gear/racket", "Yonex"));
         authenticateAs(userId);
 
         mockMvc.perform(put("/api/sports/profiles/{id}", profileId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sportId\":" + sportId + ",\"skillLevel\":\"Advanced\","
-                                + "\"attributes\":{\"racket\":\"\"}}"))
+                                + "\"attributes\":{\"gear/racket\":\"\"}}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.attributes.racket").value(""));
+                .andExpect(jsonPath("$.data.attributes['gear/racket']").value(""));
     }
 
     @Test
     void put_prunesAStoredKeyTheSchemaNoLongerDefines_evenWithNoAttributesInTheBody() throws Exception {
-        // legacyKey is not in schemaWith("racket", "grip") — an orphan from a since-deleted definition.
-        Long profileId = storedProfileWith(Map.of("racket", "Yonex", "legacyKey", "orphan"));
+        // gear/legacyKey is not in schemaWith("racket", "grip") — an orphan from a since-deleted definition.
+        Long profileId = storedProfileWith(Map.of("gear/racket", "Yonex", "gear/legacyKey", "orphan"));
         authenticateAs(userId);
 
         mockMvc.perform(put("/api/sports/profiles/{id}", profileId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sportId\":" + sportId + ",\"skillLevel\":\"Advanced\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.attributes.racket").value("Yonex"))
-                .andExpect(jsonPath("$.data.attributes.legacyKey").doesNotExist());
+                .andExpect(jsonPath("$.data.attributes['gear/racket']").value("Yonex"))
+                .andExpect(jsonPath("$.data.attributes['gear/legacyKey']").doesNotExist());
+    }
+
+    @Test
+    void put_thenGet_roundTripsAValueAtANestedGroupPath() throws Exception {
+        // gear -> sub-group rackets -> attribute tension (STRING). Stored key is the full path.
+        sportRepository.save(Sport.builder().id(sportId).name("Padel").isActive(true)
+                .attributesSchema(Map.of(
+                        "defaultLocale", "en",
+                        "groups", List.of(Map.of(
+                                "key", "gear", "label", Map.of("en", "Gear"), "isAvailable", true,
+                                "groups", List.of(Map.of(
+                                        "key", "rackets", "label", Map.of("en", "Rackets"), "isAvailable", true,
+                                        "attributes", List.of(Map.of(
+                                                "key", "tension", "label", Map.of("en", "Tension"),
+                                                "type", "STRING", "isAvailable", true))))))))
+                .build());
+        evictSportCache();
+        Long profileId = storedProfileWith(Map.of());
+        authenticateAs(userId);
+
+        mockMvc.perform(put("/api/sports/profiles/{id}", profileId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sportId\":" + sportId + ",\"skillLevel\":\"Advanced\","
+                                + "\"attributes\":{\"gear/rackets/tension\":\"27\",\"gear/rackets/unknown\":\"x\"}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.attributes['gear/rackets/tension']").value("27"))
+                .andExpect(jsonPath("$.data.attributes['gear/rackets/unknown']").doesNotExist());
+
+        mockMvc.perform(get("/api/sports/profiles/{id}", profileId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.attributes['gear/rackets/tension']").value("27"));
     }
 }
