@@ -4171,6 +4171,24 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client SPORT-9 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-9_NUMBER_AND_BOOLEAN_ATTRIBUTE_CONTROLS.md`):**
+  client half of backend A16 — `NUMBER`/`BOOLEAN` render cases added to `SportAttributesFields`'
+  two `switch (type)` blocks (top-level `AttributeField` and nested-record `DefinitionField`,
+  covering inner-position for free). `SportAttributeType` extended to a 7-member union; optional
+  `min`/`max` mirrored onto the raw and resolved definition/field types. `NUMBER` →
+  `<input type="number" step="any">`, `min`/`max` mirrored as input attrs, value bound as
+  `number | undefined` via `valueAsNumber` (never `NaN`/`''`). `BOOLEAN` → reuses the existing
+  `Switch` primitive (SPORT-10) rather than a second checkbox pattern. MSW's `resolveField`/
+  `resolveAttributeSchema` (`e2e/mocks/handlers/sport.ts`) thread `min`/`max` through for
+  correctness, even though no fixture uses them yet. 5 new Vitest cases + 4 new Storybook stories
+  (existing `DEFINITION`-hosting stories gained both types as definition fields for free via the
+  shared `referenceDefinition` fixture). No sport's live schema declares either type yet, so no
+  visible production change and no baselined surface touched — `visual-regression` unaffected.
+  `tsc -b`/`eslint` clean, Vitest green. **Also fixes a pre-existing Settings-tab bug found while
+  testing** (folded in, see the ticket's Delta): after Save the form stayed dirty forever whenever
+  the server normalised the value (empty attribute stripped, out-of-range `NUMBER` dropped) —
+  `useSportProfileSettingsTabData.save()` now re-baselines the draft from the mutation's returned
+  row, so `isDirty` / the Save button / the unsaved-changes guard clear correctly.
 - **Client SPORT-12 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-12_DEACTIVATE_REACTIVATE_UI_VISUAL_REGRESSION.md`):**
   new `visual-regression` coverage for SPORT-10's deactivate/reactivate chrome, which shipped with
   none — one new `e2e/visual/app-sport-reactivate.spec.ts` (cross-page surface, own file, same

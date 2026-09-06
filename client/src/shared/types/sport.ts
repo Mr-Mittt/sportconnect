@@ -76,12 +76,20 @@ export interface UserSportProfileResponse {
  * the next one to land must not redeclare these.
  */
 
-/** 1:1 with `SportAttributeType` — a closed 5-member union (v1's `STRING`/
- * `ENUM`/`LIST`, plus v2/A12's `DEFINITION`/`DEFINITION_LIST`). Backend calls
- * this out as client-visible — a renderer branching on it (SPORT-2) needs a
- * case per member. ADMIN-2 does not branch: it edits the document as opaque
- * JSON and lets the server validate, so a new member needs no change there. */
-export type SportAttributeType = 'STRING' | 'ENUM' | 'LIST' | 'DEFINITION' | 'DEFINITION_LIST';
+/** 1:1 with `SportAttributeType` — a closed 7-member union (v1's `STRING`/
+ * `ENUM`/`LIST`, v2/A12's `DEFINITION`/`DEFINITION_LIST`, v2/A16's `NUMBER`/
+ * `BOOLEAN`). Backend calls this out as client-visible — a renderer branching
+ * on it (SPORT-2, `NUMBER`/`BOOLEAN` added by SPORT-9) needs a case per
+ * member. ADMIN-2 does not branch: it edits the document as opaque JSON and
+ * lets the server validate, so a new member needs no change there. */
+export type SportAttributeType =
+  | 'STRING'
+  | 'NUMBER'
+  | 'BOOLEAN'
+  | 'ENUM'
+  | 'LIST'
+  | 'DEFINITION'
+  | 'DEFINITION_LIST';
 
 /** Server-side default cap on every `LIST`/`DEFINITION_LIST` value
  * (`SportAttributeValues.MAX_LIST_ITEMS`, v2 design §9.2) — not readable off
@@ -118,6 +126,13 @@ export interface SportAttributeField {
    * field (v2 design §6). Absent reads as `false`. */
   isRequired?: boolean | null;
   order?: number | null;
+  /** SPORT-9/A16: inclusive bounds, meaningful only on `NUMBER` — rejected server-side on every
+   * other type. Independent and optional; either, both, or neither may be set. A UX affordance
+   * only (mirrored as `<input>` `min`/`max`) — the server silently drops an out-of-range value on
+   * save rather than erroring (A3 merge semantics keep the field's previous value), so this never
+   * gates a hard client-side error. */
+  min?: number | null;
+  max?: number | null;
 }
 
 /** A named, reusable record shape declared once in a sport's schema and
@@ -157,6 +172,9 @@ export interface SportAttributeDefinition {
    * `"equipment.racket.badminton"` — only meaningful on `DEFINITION`/
    * `DEFINITION_LIST`. Absent means plain free text, no typeahead. */
   searchScope?: string | null;
+  /** SPORT-9/A16: see `SportAttributeField.min`/`.max` — same rules, one level up. */
+  min?: number | null;
+  max?: number | null;
 }
 
 export interface SportAttributeGroup {
@@ -205,6 +223,9 @@ export interface ResolvedSportAttributeField {
   definitionRef?: string | null;
   isRequired?: boolean | null;
   order?: number | null;
+  /** SPORT-9/A16: see `SportAttributeField.min`/`.max`. */
+  min?: number | null;
+  max?: number | null;
 }
 
 export interface ResolvedSportAttributeDefinitionType {
@@ -222,6 +243,9 @@ export interface ResolvedSportAttributeDefinition {
   defaultValue?: unknown;
   definitionRef?: string | null;
   searchScope?: string | null;
+  /** SPORT-9/A16: see `SportAttributeField.min`/`.max`. */
+  min?: number | null;
+  max?: number | null;
 }
 
 export interface ResolvedSportAttributeGroup {

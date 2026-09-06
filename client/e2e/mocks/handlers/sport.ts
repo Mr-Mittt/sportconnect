@@ -129,6 +129,9 @@ function resolveField(field: SportAttributeField, defaultLocale: string): Resolv
     definitionRef: field.definitionRef,
     isRequired: field.isRequired,
     order: field.order,
+    // SPORT-9/A16: min/max only meaningful on NUMBER, mirrored through unchanged otherwise.
+    min: field.min,
+    max: field.max,
   };
 }
 
@@ -156,6 +159,9 @@ function resolveAttributeSchema(schema: SportAttributeSchema): ResolvedSportAttr
         defaultValue: attribute.defaultValue,
         definitionRef: attribute.definitionRef,
         searchScope: attribute.searchScope,
+        // SPORT-9/A16: min/max only meaningful on NUMBER, mirrored through unchanged otherwise.
+        min: attribute.min,
+        max: attribute.max,
       }),
     ),
   }));

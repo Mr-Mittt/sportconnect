@@ -75,9 +75,16 @@ export function useSportProfileSettingsTabData(sportKeyOverride?: SportKey): {
     activeProfile !== undefined ? toSportProfileEditDraft(activeProfile) : emptyDraft(),
   );
 
-  // Re-seed whenever the active profile changes (a sport switch, or this profile's own id after a
-  // save) — adjusted during render (React's own documented pattern, same as `SportFieldsForm`'s
+  // Re-seed whenever the active *profile* changes — a sport switch (`activeProfile.id` changes) —
+  // adjusted during render (React's own documented pattern, same as `SportFieldsForm`'s
   // `seededFrom` and `PublicOnlyRoute`'s decision-locking) rather than an effect.
+  //
+  // A save does NOT change `id`, so it is re-seeded explicitly from the mutation's returned row
+  // in `save()` below — using the server's own response as the new baseline. Without that, the
+  // draft keeps the just-typed values while `activeProfile` moves to what the server actually
+  // stored, and any asymmetry (e.g. the server normalising away an empty attribute, or A16's
+  // silent drop of an out-of-range value) leaves `isDirty` stuck `true` forever after a
+  // successful save.
   const [seededFromId, setSeededFromId] = useState(activeProfile?.id);
   if (activeProfile?.id !== seededFromId) {
     setSeededFromId(activeProfile?.id);
@@ -95,7 +102,18 @@ export function useSportProfileSettingsTabData(sportKeyOverride?: SportKey): {
   const save = (options?: { onSuccess?: () => void }) => {
     if (activeProfile === undefined) return;
     const payload = buildSportProfileUpdatePayload(activeProfile, draft);
-    updateMutation.updateSportProfile({ profileId: activeProfile.id, payload }, options);
+    updateMutation.updateSportProfile(
+      { profileId: activeProfile.id, payload },
+      {
+        onSuccess: (updated) => {
+          // Re-baseline the draft to what the server actually stored — clears `isDirty` /
+          // the Save button / the unsaved-changes guard after a successful save, even when the
+          // server normalised the value (empty attribute stripped, out-of-range NUMBER dropped).
+          setDraft(toSportProfileEditDraft(updated));
+          options?.onSuccess?.();
+        },
+      },
+    );
   };
 
   const discard = () => {
