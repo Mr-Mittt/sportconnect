@@ -73,7 +73,11 @@ properties, env-overridable (`STOMP_RELAY_HOST`/`STOMP_RELAY_PORT`), defaulting 
 
 **`infra/docker-compose.dev.yml`**: `rabbitmq_stomp` plugin enabled via a mounted
 `infra/rabbitmq/enabled_plugins` file (overrides the `-management` image's baked-in one, which only
-lists `rabbitmq_management`), port `61613` exposed.
+lists `rabbitmq_management`), STOMP port exposed. The host-side publish is `8613:61613`, not
+`61613:61613` — on Windows a Hyper-V dynamic port reservation can steal `61613` so Docker fails to
+bind it; a host port below 49152 sidesteps that. `application-dev.yml` sets
+`app.stomp-relay.port: 8613` to match; the container port and the `application.yml`/prod default
+stay `61613`. Full rationale: `server/README.md` Troubleshooting.
 
 **Client** (`client/src/features/notifications/`, minimal per confirmed scope):
 - `types.ts` — `NotificationLiveUpdate`, 1:1 with the backend payload.

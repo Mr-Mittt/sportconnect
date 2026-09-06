@@ -146,34 +146,36 @@ published port on the left side of the `ports:` mapping in `infra/docker-compose
 update `application-dev.yml` to match if you do).
 
 **STOMP broker relay fails at startup: `TCP connection failure in session _system_: ... Connection
-refused: localhost/127.0.0.1:61613`, but RabbitMQ is up and `docker ps` shows `61613` published.**
+refused: localhost/127.0.0.1:8613`, but RabbitMQ is up and `docker ps` shows the port published.**
 Windows-only, and the misleading part is that every check you'd naturally run comes back healthy.
 
-`61613` is RabbitMQ's STOMP port (NTF-3's broker relay). What's actually happening: **Windows has
-reserved the port, so Docker cannot bind the host side of the mapping** — `docker ps` still prints
-`0.0.0.0:61613->61613/tcp` because that's the *requested* mapping, not proof it was established.
+The dev stack publishes RabbitMQ's STOMP port (NTF-3's broker relay) on **host port `8613`**, mapped
+to the container's `61613` (`infra/docker-compose.dev.yml`), and `application-dev.yml` points the
+relay at `8613`. The host port is deliberately *below* `49152`: on Windows, Hyper-V/WSL *dynamic*
+port reservations (default TCP dynamic range `49152–65535`) can grab a port in that range so Docker
+silently fails to bind the host side of the mapping — `docker ps` still prints
+`0.0.0.0:<port>->61613/tcp` because that's the *requested* mapping, not proof it was established.
+Below 49152 the conflict is structurally impossible. This is why the compose mapping is `8613`, not
+the STOMP-standard `61613`; the container-internal port and the `application.yml`/prod default are
+unchanged at `61613`.
 
-Confirm it in one command (PowerShell) — if 61613 is missing while 5672 is present, this is your
-problem:
+If you still hit a refused connection (something else is on `8613`, or you reverted the mapping to a
+port in the dynamic range), diagnose it in one PowerShell command — if the STOMP host port is
+missing while `5672` is present, this is a host-bind failure, not a broker problem:
 ```powershell
-Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 5672,61613 } |
+Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 5672,8613 } |
   Select-Object LocalAddress,LocalPort
 ```
-And to see the reservation itself:
+And to see the Windows reservations:
 ```powershell
 netsh interface ipv4 show excludedportrange protocol=tcp
 ```
-`61613` falling inside one of those ranges is the root cause. The ranges are Hyper-V/WSL *dynamic*
-reservations (no `*` marker = auto-assigned, not administered) and they **shift on reboot**, which
-is why this appears out of nowhere on a machine where STOMP worked yesterday. The default TCP
-dynamic port range is `49152–65535`, and 61613 sits inside it, so it is permanently eligible to be
-grabbed again.
 
-Things that look like fixes and are not:
+Things that look like fixes and are not, when the host bind is the problem:
 
 - **Restarting or recreating the RabbitMQ container** (`docker compose ... up -d --force-recreate
   rabbitmq`). The port is unavailable to Docker at the host level; recreating the container cannot
-  change that. Verified — a full recreate left 61613 with no host listener.
+  change that. Verified — a full recreate left `61613` with no host listener.
 - **Checking the plugin.** `rabbitmq-plugins list` shows `[E*] rabbitmq_stomp` and the log says
   `started STOMP TCP listener on [::]:61613`. Both are true and neither is the problem — the
   listener is fine *inside* the container.
@@ -183,41 +185,30 @@ Things that look like fixes and are not:
 - **Trusting `docker ps`.** It reports the mapping whether or not the host bind succeeded. This is
   the single most misleading signal in the whole diagnosis.
 
-**The fix (elevated PowerShell).** Stop the NAT service to release the dynamic ranges, then reserve
-61613 permanently so Hyper-V can never take it again:
+**If you reverted to a `61613` host mapping and want to keep it (elevated PowerShell).** Stop the
+NAT service to release the dynamic ranges, then reserve `61613` permanently so Hyper-V can never
+take it again:
 ```powershell
 net stop winnat
 netsh int ipv4 add excludedportrange protocol=tcp startport=61613 numberofports=1 store=persistent
 net start winnat
 ```
-Then `docker compose -f infra/docker-compose.dev.yml up -d --force-recreate rabbitmq`.
-
-Two caveats learned the hard way:
-
-- **The `add excludedportrange` step can still fail** with "The process cannot access the file
-  because it is being used by another process" even after stopping `winnat`. That failure is not
-  fatal to *unblocking today* — stopping `winnat` already releases the range, so the port becomes
-  usable immediately and a container recreate will pick it up. But without the persistent
-  reservation the problem **will** recur on a future reboot. Retry the `netsh` line on its own
-  (elevated, without stopping `winnat`) once the port is free; it tends to succeed then.
-- **A plain `docker compose up -d` will not re-establish the mapping** once the container already
-  exists — use `--force-recreate`.
+Then `docker compose -f infra/docker-compose.dev.yml up -d --force-recreate rabbitmq`. Note the
+`add excludedportrange` step can fail with "the process cannot access the file..." even after
+stopping `winnat`; stopping `winnat` alone still frees the port for today, but without the
+persistent reservation the problem recurs on a future reboot — retry the `netsh` line on its own
+once the port is free. A plain `docker compose up -d` will not re-establish the mapping once the
+container exists — use `--force-recreate`. The committed `8613` mapping avoids all of this.
 
 Verify the whole path end to end rather than just the socket, since a TCP connect proves less than
 a real handshake:
 ```powershell
-$c = New-Object System.Net.Sockets.TcpClient('127.0.0.1', 61613); $s = $c.GetStream()
+$c = New-Object System.Net.Sockets.TcpClient('127.0.0.1', 8613); $s = $c.GetStream()
 $f = "CONNECT`naccept-version:1.2`nhost:/`nlogin:guest`npasscode:guest`n`n" + [char]0
 $b = [Text.Encoding]::ASCII.GetBytes($f); $s.Write($b,0,$b.Length); $s.Flush()
 Start-Sleep -Milliseconds 700
 $buf = New-Object byte[] 1024; $n = $s.Read($buf,0,1024)
 [Text.Encoding]::ASCII.GetString($buf,0,$n); $c.Close()
 ```
-A healthy broker answers `CONNECTED ... server:RabbitMQ/...`.
-
-**The permanent alternative, if this keeps biting:** publish STOMP on a host port *below* 49152
-(e.g. `31613:61613` in `infra/docker-compose.dev.yml`) and set `STOMP_RELAY_PORT=31613`.
-`application.yml` already reads `${STOMP_RELAY_PORT:61613}`, so no committed config change is
-required beyond the compose mapping. Hyper-V's dynamic range never reaches below 49152, so the
-conflict becomes structurally impossible rather than merely reserved-against. CI is unaffected
-either way (Linux runners, no Hyper-V port reservations).
+A healthy broker answers `CONNECTED ... server:RabbitMQ/...`. CI is unaffected either way (Linux
+runners, no Hyper-V port reservations).
