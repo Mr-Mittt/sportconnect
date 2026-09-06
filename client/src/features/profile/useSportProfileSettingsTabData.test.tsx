@@ -154,6 +154,31 @@ describe('useSportProfileSettingsTabData', () => {
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
   });
 
+  it('re-baselines the draft to the server response after save, so isDirty clears even when the server normalised the value', async () => {
+    // The row comes back with the *old* value — the server dropped what the draft sent (A16's
+    // silent out-of-range drop / A3 merge semantics keeping the previous value).
+    mockGet([profile({ sportId: 5, yearsOfExperience: 2 })]);
+    vi.spyOn(apiClient, 'put').mockResolvedValueOnce({
+      data: {
+        success: true,
+        message: '',
+        data: profile({ sportId: 5, yearsOfExperience: 2 }),
+        timestamp: '',
+      },
+    });
+
+    const { result } = renderHook(() => useSportProfileSettingsTabData(), { wrapper });
+    await waitFor(() => expect(result.current.activeProfile).not.toBeUndefined());
+
+    act(() => result.current.setYearsOfExperience('999'));
+    expect(result.current.isDirty).toBe(true);
+
+    act(() => result.current.save());
+
+    await waitFor(() => expect(result.current.isDirty).toBe(false));
+    expect(result.current.draft.yearsOfExperience).toBe('2');
+  });
+
   it('discard resets the draft to the saved profile without changing activeProfile', async () => {
     mockGet([profile({ sportId: 5, yearsOfExperience: 7 })]);
 
