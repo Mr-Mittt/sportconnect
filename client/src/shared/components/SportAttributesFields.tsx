@@ -13,6 +13,7 @@ import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
+import { Switch } from '@/shared/ui/switch';
 
 export interface SportAttributesFieldsProps {
   /** A9/v2's resolved schema document for this sport, already fetched by the caller
@@ -54,6 +55,12 @@ function isEmptyValue(value: unknown): boolean {
  * a field with no stored value, once, as a real controlled value (not just a display illusion);
  * `LIST`/`DEFINITION_LIST` are capped at `MAX_LIST_ITEMS` client-side, since the server silently
  * drops the whole value over the cap instead of erroring.
+ *
+ * SPORT-9/A16: `NUMBER` stores a real `number` (never `''`/`NaN` — an empty/cleared field reports
+ * `undefined`) with `min`/`max` mirrored as `<input>` bounds when present; `BOOLEAN` stores a real
+ * `boolean` via the shared `Switch`. Both a UX affordance only — the server silently drops an
+ * out-of-range/wrong-type value on save (A3 merge semantics keep the field's previous value)
+ * rather than erroring, so neither type produces a client-side hard error.
  */
 export function SportAttributesFields({ schema, values, onChange }: SportAttributesFieldsProps) {
   useEffect(() => {
@@ -123,6 +130,37 @@ function AttributeField({ attribute, value, onChange, definitionsByName }: Attri
             id={fieldId}
             value={typeof value === 'string' ? value : ''}
             onChange={(event) => onChange(event.target.value)}
+          />
+        </div>
+      );
+
+    case 'NUMBER':
+      return (
+        <div>
+          <Label htmlFor={fieldId}>{attribute.label}</Label>
+          <Input
+            id={fieldId}
+            type="number"
+            step="any"
+            min={attribute.min ?? undefined}
+            max={attribute.max ?? undefined}
+            value={typeof value === 'number' ? value : ''}
+            onChange={(event) => {
+              const parsed = event.target.valueAsNumber;
+              onChange(Number.isNaN(parsed) ? undefined : parsed);
+            }}
+          />
+        </div>
+      );
+
+    case 'BOOLEAN':
+      return (
+        <div className="flex items-center justify-between gap-3">
+          <Label className="mb-0">{attribute.label}</Label>
+          <Switch
+            aria-label={attribute.label}
+            checked={typeof value === 'boolean' ? value : false}
+            onCheckedChange={onChange}
           />
         </div>
       );
@@ -301,6 +339,40 @@ function DefinitionField({ field, value, onChange, definitionsByName }: Definiti
             aria-required={isRequired}
             value={typeof value === 'string' ? value : ''}
             onChange={(event) => onChange(event.target.value)}
+          />
+          {showRequiredHint && <p className="mt-1 text-2xs text-text-danger">Required</p>}
+        </div>
+      );
+
+    case 'NUMBER':
+      return (
+        <div>
+          <Label htmlFor={fieldId}>{label}</Label>
+          <Input
+            id={fieldId}
+            type="number"
+            step="any"
+            min={field.min ?? undefined}
+            max={field.max ?? undefined}
+            aria-required={isRequired}
+            value={typeof value === 'number' ? value : ''}
+            onChange={(event) => {
+              const parsed = event.target.valueAsNumber;
+              onChange(Number.isNaN(parsed) ? undefined : parsed);
+            }}
+          />
+          {showRequiredHint && <p className="mt-1 text-2xs text-text-danger">Required</p>}
+        </div>
+      );
+
+    case 'BOOLEAN':
+      return (
+        <div className="flex items-center justify-between gap-3">
+          <Label className="mb-0">{label}</Label>
+          <Switch
+            aria-label={label}
+            checked={typeof value === 'boolean' ? value : false}
+            onCheckedChange={onChange}
           />
           {showRequiredHint && <p className="mt-1 text-2xs text-text-danger">Required</p>}
         </div>

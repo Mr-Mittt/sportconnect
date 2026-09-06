@@ -100,7 +100,9 @@ const badmintonSchema: ResolvedSportAttributeSchema = {
   ],
 };
 
-// One of each top-level type, for focused per-type interaction tests.
+// One of each top-level type, for focused per-type interaction tests. `weight`/`strung` and the
+// Reference definition's `gramWeight`/`inStock` (SPORT-9) exercise NUMBER/BOOLEAN both top-level
+// and as definition fields (incl. inner-position via `primary`/`items`).
 const simpleSchema: ResolvedSportAttributeSchema = {
   definitions: [
     {
@@ -108,6 +110,8 @@ const simpleSchema: ResolvedSportAttributeSchema = {
       fields: [
         { key: 'id', label: 'Item', type: 'STRING', isRequired: false, order: 1 },
         { key: 'value', label: 'Name', type: 'STRING', isRequired: true, order: 2 },
+        { key: 'gramWeight', label: 'Weight (g)', type: 'NUMBER', isRequired: false, order: 3, min: 0, max: 500 },
+        { key: 'inStock', label: 'In stock', type: 'BOOLEAN', isRequired: false, order: 4 },
       ],
     },
   ],
@@ -157,6 +161,16 @@ const simpleSchema: ResolvedSportAttributeSchema = {
           isAvailable: true,
           order: 5,
         },
+        {
+          key: 'weight',
+          label: 'Weight (kg)',
+          type: 'NUMBER',
+          isAvailable: true,
+          order: 6,
+          min: 0,
+          max: 200,
+        },
+        { key: 'strung', label: 'Strung', type: 'BOOLEAN', isAvailable: true, order: 7 },
       ],
     },
   ],
@@ -275,12 +289,56 @@ describe('SportAttributesFields', () => {
     expect(onChangeSpy).toHaveBeenCalledWith('tags', ['x']);
   });
 
+  it('renders a NUMBER field as a number input honoring min/max', () => {
+    render(<Harness schema={simpleSchema} />);
+    const input = screen.getByLabelText('Weight (kg)');
+    expect(input).toHaveAttribute('type', 'number');
+    expect(input).toHaveAttribute('min', '0');
+    expect(input).toHaveAttribute('max', '200');
+  });
+
+  it('fires onChange(key, number) for a NUMBER field, never a string', async () => {
+    const user = userEvent.setup();
+    const onChangeSpy = vi.fn();
+    render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
+    await user.type(screen.getByLabelText('Weight (kg)'), '25');
+    expect(onChangeSpy).toHaveBeenLastCalledWith('weight', 25);
+  });
+
+  it('an emptied NUMBER field reports undefined, never NaN or an empty string', async () => {
+    const user = userEvent.setup();
+    const onChangeSpy = vi.fn();
+    render(<Harness schema={simpleSchema} initialValues={{ weight: 25 }} onChangeSpy={onChangeSpy} />);
+    await user.clear(screen.getByLabelText('Weight (kg)'));
+    expect(onChangeSpy).toHaveBeenLastCalledWith('weight', undefined);
+  });
+
+  it('fires onChange(key, boolean) for a BOOLEAN field toggle', async () => {
+    const user = userEvent.setup();
+    const onChangeSpy = vi.fn();
+    render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
+    await user.click(screen.getByRole('switch', { name: 'Strung' }));
+    expect(onChangeSpy).toHaveBeenCalledWith('strung', true);
+  });
+
   it('fires onChange(key, record) for a DEFINITION nested field edit', async () => {
     const user = userEvent.setup();
     const onChangeSpy = vi.fn();
     render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
     await user.type(screen.getByLabelText('Name *'), 'A');
     expect(onChangeSpy).toHaveBeenLastCalledWith('primary', { value: 'A' });
+  });
+
+  it('NUMBER and BOOLEAN definition fields round-trip inside a DEFINITION record', async () => {
+    const user = userEvent.setup();
+    const onChangeSpy = vi.fn();
+    render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
+
+    await user.type(screen.getByLabelText('Weight (g)'), '50');
+    expect(onChangeSpy).toHaveBeenLastCalledWith('primary', { gramWeight: 50 });
+
+    await user.click(screen.getByRole('switch', { name: 'In stock' }));
+    expect(onChangeSpy).toHaveBeenLastCalledWith('primary', { gramWeight: 50, inStock: true });
   });
 
   it('adds a row for a DEFINITION_LIST field via Add', async () => {

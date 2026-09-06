@@ -2,11 +2,23 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ResolvedSportAttributeSchema } from '@/shared/types/sport';
 import { SportAttributesFields } from './SportAttributesFields';
 
+// SPORT-9: gramWeight/inStock give every DEFINITION-hosting story below a NUMBER + BOOLEAN
+// definition field (incl. inner-position) for free, without a separate one-off story.
 const referenceDefinition = {
   name: 'Reference',
   fields: [
     { key: 'id', label: 'Item', type: 'STRING' as const, isRequired: false, order: 1 },
     { key: 'value', label: 'Name', type: 'STRING' as const, isRequired: true, order: 2 },
+    {
+      key: 'gramWeight',
+      label: 'Weight (g)',
+      type: 'NUMBER' as const,
+      isRequired: false,
+      order: 3,
+      min: 0,
+      max: 500,
+    },
+    { key: 'inStock', label: 'In stock', type: 'BOOLEAN' as const, isRequired: false, order: 4 },
   ],
 };
 
@@ -50,6 +62,16 @@ const allFieldTypesSchema: ResolvedSportAttributeSchema = {
             { value: 'FOOTWORK', label: 'Footwork' },
           ],
         },
+        {
+          key: 'yearsPlaying',
+          label: 'Years playing',
+          type: 'NUMBER',
+          isAvailable: true,
+          order: 4,
+          min: 0,
+          max: 80,
+        },
+        { key: 'coached', label: 'Has a coach', type: 'BOOLEAN', isAvailable: true, order: 5 },
       ],
     },
     {
@@ -105,10 +127,12 @@ export const AllFieldTypes: Story = {
       handedness: 'Right',
       playstyle: 'BALANCE',
       strengths: ['SERVE', 'NET'],
-      primaryRacket: { id: null, value: 'Yonex Astrox 88D Pro' },
+      yearsPlaying: 6,
+      coached: true,
+      primaryRacket: { id: null, value: 'Yonex Astrox 88D Pro', gramWeight: 83, inStock: true },
       rackets: [
-        { id: null, value: 'Yonex Astrox 88D Pro' },
-        { id: 'eq_123', value: 'Yonex Astrox 99 Pro' },
+        { id: null, value: 'Yonex Astrox 88D Pro', gramWeight: 83, inStock: true },
+        { id: 'eq_123', value: 'Yonex Astrox 99 Pro', gramWeight: 90, inStock: false },
       ],
     },
   },
@@ -158,6 +182,93 @@ export const EnumField: Story = {
       ],
     },
     values: { playstyle: 'ATTACK' },
+  },
+};
+
+export const NumberFieldUnbounded: Story = {
+  args: {
+    schema: {
+      groups: [
+        {
+          key: 'general',
+          label: 'General',
+          isAvailable: true,
+          order: 1,
+          attributes: [
+            { key: 'yearsPlaying', label: 'Years playing', type: 'NUMBER', isAvailable: true, order: 1 },
+          ],
+        },
+      ],
+    },
+    values: { yearsPlaying: 6 },
+  },
+};
+
+/** `min`/`max` mirror onto the `<input>` as UX-affordance bounds only — the server silently drops
+ * an out-of-range value on save rather than erroring (A16), so this never produces a client-side
+ * hard error. */
+export const NumberFieldWithBounds: Story = {
+  args: {
+    schema: {
+      groups: [
+        {
+          key: 'gear',
+          label: 'Gear',
+          isAvailable: true,
+          order: 1,
+          attributes: [
+            {
+              key: 'stringTension',
+              label: 'String tension (lbs)',
+              type: 'NUMBER',
+              isAvailable: true,
+              order: 1,
+              min: 18,
+              max: 35,
+            },
+          ],
+        },
+      ],
+    },
+    values: { stringTension: 27.5 },
+  },
+};
+
+export const BooleanFieldUnchecked: Story = {
+  args: {
+    schema: {
+      groups: [
+        {
+          key: 'general',
+          label: 'General',
+          isAvailable: true,
+          order: 1,
+          attributes: [
+            { key: 'coached', label: 'Has a coach', type: 'BOOLEAN', isAvailable: true, order: 1 },
+          ],
+        },
+      ],
+    },
+    values: {},
+  },
+};
+
+export const BooleanFieldChecked: Story = {
+  args: {
+    schema: {
+      groups: [
+        {
+          key: 'general',
+          label: 'General',
+          isAvailable: true,
+          order: 1,
+          attributes: [
+            { key: 'coached', label: 'Has a coach', type: 'BOOLEAN', isAvailable: true, order: 1 },
+          ],
+        },
+      ],
+    },
+    values: { coached: true },
   },
 };
 
