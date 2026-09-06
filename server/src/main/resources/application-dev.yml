@@ -74,3 +74,9 @@ app:
   # cold-start bootstrap pull against /internal/sync/** authenticates locally without either
   # side needing this exported by hand.
   internal-service-secret: some-shared-dev-secret
+  # infra/docker-compose.dev.yml publishes RabbitMQ's STOMP plugin on host port 8613, not 61613
+  # (a Windows Hyper-V dynamic port reservation can steal 61613 — see server/README.md). The
+  # container-internal port and the application.yml / application-prod.yml default stay 61613;
+  # only the local dev relay target moves. host is still inherited from application.yml.
+  stomp-relay:
+    port: ${STOMP_RELAY_PORT:8613}

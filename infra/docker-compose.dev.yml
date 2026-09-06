@@ -27,7 +27,12 @@ services:
     ports:
       - "5672:5672"   # AMQP
       - "15672:15672" # Management UI (guest/guest)
-      - "61613:61613" # STOMP (NTF-3 live delivery) — plugin enabled via enabled_plugins below
+      - "8613:61613"  # STOMP (NTF-3 live delivery) — plugin enabled via enabled_plugins below.
+                      # Host port is 8613, NOT 61613: on Windows, Hyper-V/WSL dynamic port
+                      # reservations (range 49152–65535) can grab 61613 so Docker silently fails to
+                      # bind the host side. 8613 is below 49152, so the conflict is structurally
+                      # impossible. Container-internal port stays 61613; application-dev.yml sets
+                      # app.stomp-relay.port: 8613 to match. See server/README.md Troubleshooting.
     volumes:
       - sportconnect_dev_rabbitmq:/var/lib/rabbitmq
       # Overrides the -management image's baked-in enabled_plugins (which only lists
