@@ -23,10 +23,12 @@ export default defineConfig({
     // session. See the webServer entry below for the matching `--port`/`--strictPort`.
     baseURL: 'http://localhost:5174',
     trace: 'on-first-retry',
-    // Headed locally (visible browser window) for easier debugging; headless
-    // in CI, which has no display server — same CI-conditional pattern as
-    // retries/reuseExistingServer above.
-    headless: !!process.env.CI,
+    // Always headless — locally too. The e2e run is a routine Phase 5 gate on every
+    // client ticket (see `.claude/commands/workon.md`), not an occasional debugging
+    // session, so it should not steal window focus or depend on a display server.
+    // For an actual debugging session, pass `--headed` (or `--ui`) on the CLI, which
+    // overrides this.
+    headless: true,
   },
   projects: [
     {
