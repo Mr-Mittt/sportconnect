@@ -9,21 +9,18 @@ const schema: SportAttributeSchema = {
       key: 'gear',
       label: { en: 'Gear' },
       isAvailable: true,
-      order: 1,
       attributes: [
         {
           key: 'racketBrand',
           label: { en: 'Racket brand' },
           type: 'STRING',
           isAvailable: true,
-          order: 1,
         },
         {
           key: 'grip',
           label: { en: 'Grip' },
           type: 'ENUM',
           isAvailable: true,
-          order: 2,
           options: [
             { value: 'eastern', label: { en: 'Eastern' } },
             { value: 'western', label: { en: 'Western' } },

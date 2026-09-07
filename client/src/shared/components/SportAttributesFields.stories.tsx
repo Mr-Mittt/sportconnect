@@ -7,18 +7,17 @@ import { SportAttributesFields } from './SportAttributesFields';
 const referenceDefinition = {
   name: 'Reference',
   fields: [
-    { key: 'id', label: 'Item', type: 'STRING' as const, isRequired: false, order: 1 },
-    { key: 'value', label: 'Name', type: 'STRING' as const, isRequired: true, order: 2 },
+    { key: 'id', label: 'Item', type: 'STRING' as const, isRequired: false },
+    { key: 'value', label: 'Name', type: 'STRING' as const, isRequired: true },
     {
       key: 'gramWeight',
       label: 'Weight (g)',
       type: 'NUMBER' as const,
       isRequired: false,
-      order: 3,
       min: 0,
       max: 500,
     },
-    { key: 'inStock', label: 'In stock', type: 'BOOLEAN' as const, isRequired: false, order: 4 },
+    { key: 'inStock', label: 'In stock', type: 'BOOLEAN' as const, isRequired: false },
   ],
 };
 
@@ -29,21 +28,18 @@ const allFieldTypesSchema: ResolvedSportAttributeSchema = {
       key: 'general',
       label: 'General',
       isAvailable: true,
-      order: 1,
       attributes: [
         {
           key: 'handedness',
           label: 'Hand',
           type: 'STRING',
           isAvailable: true,
-          order: 1,
         },
         {
           key: 'playstyle',
           label: 'Playstyle',
           type: 'ENUM',
           isAvailable: true,
-          order: 2,
           options: [
             { value: 'ATTACK', label: 'Attack' },
             { value: 'BALANCE', label: 'Balance' },
@@ -55,7 +51,6 @@ const allFieldTypesSchema: ResolvedSportAttributeSchema = {
           label: 'Strengths',
           type: 'LIST',
           isAvailable: true,
-          order: 3,
           options: [
             { value: 'SERVE', label: 'Serve' },
             { value: 'NET', label: 'Net play' },
@@ -67,18 +62,16 @@ const allFieldTypesSchema: ResolvedSportAttributeSchema = {
           label: 'Years playing',
           type: 'NUMBER',
           isAvailable: true,
-          order: 4,
           min: 0,
           max: 80,
         },
-        { key: 'coached', label: 'Has a coach', type: 'BOOLEAN', isAvailable: true, order: 5 },
+        { key: 'coached', label: 'Has a coach', type: 'BOOLEAN', isAvailable: true },
       ],
     },
     {
       key: 'gear',
       label: 'Gear',
       isAvailable: true,
-      order: 2,
       attributes: [
         {
           key: 'primaryRacket',
@@ -86,7 +79,6 @@ const allFieldTypesSchema: ResolvedSportAttributeSchema = {
           type: 'DEFINITION',
           definitionRef: 'Reference',
           isAvailable: true,
-          order: 1,
         },
         {
           key: 'rackets',
@@ -94,7 +86,70 @@ const allFieldTypesSchema: ResolvedSportAttributeSchema = {
           type: 'DEFINITION_LIST',
           definitionRef: 'Reference',
           isAvailable: true,
-          order: 2,
+        },
+      ],
+    },
+  ],
+};
+
+// SPORT-7/A19: a group carrying its own attributes AND nested sub-groups, to two levels.
+const nestedGroupsSchema: ResolvedSportAttributeSchema = {
+  groups: [
+    {
+      key: 'general',
+      label: 'General',
+      isAvailable: true,
+      attributes: [
+        {
+          key: 'handedness',
+          label: 'Hand',
+          type: 'ENUM',
+          isAvailable: true,
+          options: [
+            { value: 'LEFT', label: 'Left' },
+            { value: 'RIGHT', label: 'Right' },
+          ],
+        },
+      ],
+    },
+    {
+      key: 'gear',
+      label: 'Gear',
+      isAvailable: true,
+      attributes: [{ key: 'bagBrand', label: 'Bag brand', type: 'STRING', isAvailable: true }],
+      groups: [
+        {
+          key: 'rackets',
+          label: 'Rackets',
+          isAvailable: true,
+          attributes: [
+            {
+              key: 'tension',
+              label: 'String tension (lbs)',
+              type: 'NUMBER',
+              isAvailable: true,
+              min: 15,
+              max: 35,
+            },
+            { key: 'brand', label: 'Brand', type: 'STRING', isAvailable: true },
+          ],
+          groups: [
+            {
+              key: 'grip',
+              label: 'Grip',
+              isAvailable: true,
+              attributes: [
+                { key: 'size', label: 'Grip size', type: 'STRING', isAvailable: true },
+                { key: 'overgrip', label: 'Uses an overgrip', type: 'BOOLEAN', isAvailable: true },
+              ],
+            },
+          ],
+        },
+        {
+          key: 'footwear',
+          label: 'Footwear',
+          isAvailable: true,
+          attributes: [{ key: 'shoeModel', label: 'Shoe model', type: 'STRING', isAvailable: true }],
         },
       ],
     },
@@ -124,17 +179,68 @@ export const AllFieldTypes: Story = {
   args: {
     schema: allFieldTypesSchema,
     values: {
-      handedness: 'Right',
-      playstyle: 'BALANCE',
-      strengths: ['SERVE', 'NET'],
-      yearsPlaying: 6,
-      coached: true,
-      primaryRacket: { id: null, value: 'Yonex Astrox 88D Pro', gramWeight: 83, inStock: true },
-      rackets: [
+      'general/handedness': 'Right',
+      'general/playstyle': 'BALANCE',
+      'general/strengths': ['SERVE', 'NET'],
+      'general/yearsPlaying': 6,
+      'general/coached': true,
+      'gear/primaryRacket': { id: null, value: 'Yonex Astrox 88D Pro', gramWeight: 83, inStock: true },
+      'gear/rackets': [
         { id: null, value: 'Yonex Astrox 88D Pro', gramWeight: 83, inStock: true },
         { id: 'eq_123', value: 'Yonex Astrox 99 Pro', gramWeight: 90, inStock: false },
       ],
     },
+  },
+};
+
+/** SPORT-7/A19: nested sub-groups render as indented collapsible sections, one level per depth;
+ * a group's own attributes render (in a responsive grid) above its sub-groups. */
+export const NestedGroups: Story = {
+  args: {
+    schema: nestedGroupsSchema,
+    values: {
+      'general/handedness': 'RIGHT',
+      'gear/bagBrand': 'Victor',
+      'gear/rackets/tension': 27,
+      'gear/rackets/brand': 'Yonex',
+      'gear/rackets/grip/size': 'G5',
+      'gear/rackets/grip/overgrip': true,
+      'gear/footwear/shoeModel': 'Power Cushion 65Z3',
+    },
+  },
+};
+
+/** A sub-group with `isAvailable: false` hides its whole subtree at any depth, even where a
+ * descendant's own `isAvailable` is `true` — parent wins, recursively (v3/A19). */
+export const NestedUnavailableSubtree: Story = {
+  args: {
+    schema: {
+      groups: [
+        {
+          key: 'gear',
+          label: 'Gear',
+          isAvailable: true,
+          attributes: [{ key: 'bagBrand', label: 'Bag brand', type: 'STRING', isAvailable: true }],
+          groups: [
+            {
+              key: 'rackets',
+              label: 'Rackets (retired)',
+              isAvailable: false,
+              attributes: [{ key: 'tension', label: 'Tension', type: 'NUMBER', isAvailable: true }],
+              groups: [
+                {
+                  key: 'grip',
+                  label: 'Grip',
+                  isAvailable: true,
+                  attributes: [{ key: 'size', label: 'Grip size', type: 'STRING', isAvailable: true }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    values: {},
   },
 };
 
@@ -146,12 +252,11 @@ export const StringField: Story = {
           key: 'general',
           label: 'General',
           isAvailable: true,
-          order: 1,
-          attributes: [{ key: 'note', label: 'Note', type: 'STRING', isAvailable: true, order: 1 }],
+          attributes: [{ key: 'note', label: 'Note', type: 'STRING', isAvailable: true }],
         },
       ],
     },
-    values: { note: 'Left-handed, plays doubles mostly.' },
+    values: { 'general/note': 'Left-handed, plays doubles mostly.' },
   },
 };
 
@@ -163,14 +268,12 @@ export const EnumField: Story = {
           key: 'general',
           label: 'General',
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'playstyle',
               label: 'Playstyle',
               type: 'ENUM',
               isAvailable: true,
-              order: 1,
               options: [
                 { value: 'ATTACK', label: 'Attack' },
                 { value: 'BALANCE', label: 'Balance' },
@@ -181,7 +284,7 @@ export const EnumField: Story = {
         },
       ],
     },
-    values: { playstyle: 'ATTACK' },
+    values: { 'general/playstyle': 'ATTACK' },
   },
 };
 
@@ -193,14 +296,13 @@ export const NumberFieldUnbounded: Story = {
           key: 'general',
           label: 'General',
           isAvailable: true,
-          order: 1,
           attributes: [
-            { key: 'yearsPlaying', label: 'Years playing', type: 'NUMBER', isAvailable: true, order: 1 },
+            { key: 'yearsPlaying', label: 'Years playing', type: 'NUMBER', isAvailable: true },
           ],
         },
       ],
     },
-    values: { yearsPlaying: 6 },
+    values: { 'general/yearsPlaying': 6 },
   },
 };
 
@@ -215,14 +317,12 @@ export const NumberFieldWithBounds: Story = {
           key: 'gear',
           label: 'Gear',
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'stringTension',
               label: 'String tension (lbs)',
               type: 'NUMBER',
               isAvailable: true,
-              order: 1,
               min: 18,
               max: 35,
             },
@@ -230,7 +330,7 @@ export const NumberFieldWithBounds: Story = {
         },
       ],
     },
-    values: { stringTension: 27.5 },
+    values: { 'gear/stringTension': 27.5 },
   },
 };
 
@@ -242,10 +342,7 @@ export const BooleanFieldUnchecked: Story = {
           key: 'general',
           label: 'General',
           isAvailable: true,
-          order: 1,
-          attributes: [
-            { key: 'coached', label: 'Has a coach', type: 'BOOLEAN', isAvailable: true, order: 1 },
-          ],
+          attributes: [{ key: 'coached', label: 'Has a coach', type: 'BOOLEAN', isAvailable: true }],
         },
       ],
     },
@@ -261,14 +358,11 @@ export const BooleanFieldChecked: Story = {
           key: 'general',
           label: 'General',
           isAvailable: true,
-          order: 1,
-          attributes: [
-            { key: 'coached', label: 'Has a coach', type: 'BOOLEAN', isAvailable: true, order: 1 },
-          ],
+          attributes: [{ key: 'coached', label: 'Has a coach', type: 'BOOLEAN', isAvailable: true }],
         },
       ],
     },
-    values: { coached: true },
+    values: { 'general/coached': true },
   },
 };
 
@@ -282,14 +376,12 @@ export const ListFieldAtCap: Story = {
           key: 'general',
           label: 'General',
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'tags',
               label: 'Tags',
               type: 'LIST',
               isAvailable: true,
-              order: 1,
               options: Array.from({ length: 11 }, (_unused, index) => ({
                 value: `tag${index}`,
                 label: `Tag ${index + 1}`,
@@ -299,7 +391,7 @@ export const ListFieldAtCap: Story = {
         },
       ],
     },
-    values: { tags: Array.from({ length: 10 }, (_unused, index) => `tag${index}`) },
+    values: { 'general/tags': Array.from({ length: 10 }, (_unused, index) => `tag${index}`) },
   },
 };
 
@@ -314,7 +406,6 @@ export const DefinitionField: Story = {
           key: 'gear',
           label: 'Gear',
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'primaryRacket',
@@ -322,13 +413,12 @@ export const DefinitionField: Story = {
               type: 'DEFINITION',
               definitionRef: 'Reference',
               isAvailable: true,
-              order: 1,
             },
           ],
         },
       ],
     },
-    values: { primaryRacket: { id: null, value: 'Yonex Astrox 88D Pro' } },
+    values: { 'gear/primaryRacket': { id: null, value: 'Yonex Astrox 88D Pro' } },
   },
 };
 
@@ -343,7 +433,6 @@ export const DefinitionFieldMissingRequired: Story = {
           key: 'gear',
           label: 'Gear',
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'primaryRacket',
@@ -351,13 +440,12 @@ export const DefinitionFieldMissingRequired: Story = {
               type: 'DEFINITION',
               definitionRef: 'Reference',
               isAvailable: true,
-              order: 1,
             },
           ],
         },
       ],
     },
-    values: { primaryRacket: {} },
+    values: { 'gear/primaryRacket': {} },
   },
 };
 
@@ -371,7 +459,6 @@ export const DefinitionListField: Story = {
           key: 'gear',
           label: 'Gear',
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'rackets',
@@ -379,14 +466,13 @@ export const DefinitionListField: Story = {
               type: 'DEFINITION_LIST',
               definitionRef: 'Reference',
               isAvailable: true,
-              order: 1,
             },
           ],
         },
       ],
     },
     values: {
-      rackets: [
+      'gear/rackets': [
         { id: null, value: 'Yonex Astrox 88D Pro' },
         { id: 'eq_123', value: 'Yonex Astrox 99 Pro' },
       ],
@@ -404,19 +490,13 @@ export const UnavailableSubtree: Story = {
           key: 'retired',
           label: 'Retired group',
           isAvailable: false,
-          order: 1,
-          attributes: [
-            { key: 'note', label: 'Note', type: 'STRING', isAvailable: true, order: 1 },
-          ],
+          attributes: [{ key: 'note', label: 'Note', type: 'STRING', isAvailable: true }],
         },
         {
           key: 'general',
           label: 'General',
           isAvailable: true,
-          order: 2,
-          attributes: [
-            { key: 'handedness', label: 'Hand', type: 'STRING', isAvailable: true, order: 1 },
-          ],
+          attributes: [{ key: 'handedness', label: 'Hand', type: 'STRING', isAvailable: true }],
         },
       ],
     },
@@ -433,16 +513,14 @@ export const UnknownTypeDegradation: Story = {
           key: 'general',
           label: 'General',
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'mystery',
               label: 'Mystery (future type)',
               type: 'FUTURE_TYPE' as ResolvedSportAttributeSchema['groups'][number]['attributes'][number]['type'],
               isAvailable: true,
-              order: 1,
             },
-            { key: 'handedness', label: 'Hand', type: 'STRING', isAvailable: true, order: 2 },
+            { key: 'handedness', label: 'Hand', type: 'STRING', isAvailable: true },
           ],
         },
       ],

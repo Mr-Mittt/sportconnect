@@ -57,6 +57,11 @@ export interface UserSportProfileResponse {
   skillLevel: string | null;
   yearsOfExperience: number | null;
   bio: string | null;
+  /** Flat `Record<string, unknown>`. v3/A19: keyed by each attribute's **full
+   * `/`-separated path** from the schema root (`gear/rackets`,
+   * `general/handedness`), not the bare leaf key. The map shape is unchanged —
+   * only the key convention. `SportAttributesFields` builds the path while
+   * walking the group tree. */
   attributes: Record<string, unknown> | null;
   isActive: boolean;
   createdAt: string;
@@ -125,7 +130,6 @@ export interface SportAttributeField {
   /** Missing/invalid ⇒ the whole enclosing record is dropped, not just this
    * field (v2 design §6). Absent reads as `false`. */
   isRequired?: boolean | null;
-  order?: number | null;
   /** SPORT-9/A16: inclusive bounds, meaningful only on `NUMBER` — rejected server-side on every
    * other type. Independent and optional; either, both, or neither may be set. A UX affordance
    * only (mirrored as `<input>` `min`/`max`) — the server silently drops an out-of-range value on
@@ -158,8 +162,6 @@ export interface SportAttributeDefinition {
    * but values already stored under this key stay readable — switching a field
    * off destroys nothing a user saved. */
   isAvailable?: boolean | null;
-  /** Display order within the parent group. Not validated for uniqueness or contiguity. */
-  order?: number | null;
   /** When present, must be valid for this node's own `type` and `options`.
    * Forbidden for `DEFINITION`/`DEFINITION_LIST` (v2 design §5.5) — a
    * prefilled record would read as the user's own data, not a placeholder. */
@@ -178,14 +180,20 @@ export interface SportAttributeDefinition {
 }
 
 export interface SportAttributeGroup {
-  /** Unique among groups. Matches `^[a-z][a-zA-Z0-9_]*$`. */
+  /** Sibling-unique (v3/A19) — unique only among its parent's child sub-groups
+   * and attributes, which share one namespace, not sport-wide. Matches
+   * `^[a-z][a-zA-Z0-9_]*$`. */
   key: string;
   label: Record<string, string>;
-  /** Soft delete that hides the *whole subtree* — children are not offered on
-   * profile writes even where their own `isAvailable` is true. Parent state wins. */
+  /** Soft delete that hides the *whole subtree* at every depth — children and
+   * descendant sub-groups are not offered on profile writes even where their
+   * own `isAvailable` is true. Parent state wins, recursively. */
   isAvailable?: boolean | null;
-  order?: number | null;
   attributes: SportAttributeDefinition[];
+  /** v3/A19: nested sub-groups. A group may carry `groups` and `attributes`
+   * together, to arbitrary depth (nesting is by containment, so no cycle and no
+   * depth counter). Absent/`null`/`[]` on a leaf group. */
+  groups?: SportAttributeGroup[] | null;
 }
 
 /** The whole raw document (admin-only path). `GET` returns `data: null` for a
@@ -222,7 +230,6 @@ export interface ResolvedSportAttributeField {
   options?: ResolvedSportAttributeOption[] | null;
   definitionRef?: string | null;
   isRequired?: boolean | null;
-  order?: number | null;
   /** SPORT-9/A16: see `SportAttributeField.min`/`.max`. */
   min?: number | null;
   max?: number | null;
@@ -239,7 +246,6 @@ export interface ResolvedSportAttributeDefinition {
   type: SportAttributeType;
   options?: ResolvedSportAttributeOption[] | null;
   isAvailable?: boolean | null;
-  order?: number | null;
   defaultValue?: unknown;
   definitionRef?: string | null;
   searchScope?: string | null;
@@ -262,8 +268,11 @@ export interface ResolvedSportAttributeGroup {
   key: string;
   label: string;
   isAvailable?: boolean | null;
-  order?: number | null;
   attributes: ResolvedSportAttributeDefinition[];
+  /** v3/A19: nested sub-groups, resolved twin of `SportAttributeGroup.groups`.
+   * Rendered recursively by `SportAttributesFields`, one indent level per depth.
+   * Absent/`null`/`[]` on a leaf group. */
+  groups?: ResolvedSportAttributeGroup[] | null;
 }
 
 /** The whole document `GET /api/sports/{sportId}/attribute-schema` returns —

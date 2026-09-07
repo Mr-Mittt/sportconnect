@@ -177,7 +177,6 @@ describe('logout from /admin (ADMIN-4)', () => {
         key: 'gear',
         label: { en: 'Gear' },
         isAvailable: true,
-        order: 1,
         attributes: [{ key: 'racketBrand', label: { en: 'Racket brand' }, type: 'STRING' }],
       },
     ],

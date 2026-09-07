@@ -30,15 +30,16 @@ function Harness({
   );
 }
 
-// Mirrors A15's real Badminton v2 content (design doc §4) closely enough to exercise groups,
-// isAvailable at both levels, ENUM, and DEFINITION_LIST-over-Reference/Shoe.
+// Mirrors A15's real Badminton content closely enough to exercise groups, isAvailable at both
+// levels, ENUM, and DEFINITION_LIST-over-Reference. v3/A19: no `order`, attribute I/O is
+// path-keyed (`general/handedness`, `gear/rackets`).
 const badmintonSchema: ResolvedSportAttributeSchema = {
   definitions: [
     {
       name: 'Reference',
       fields: [
-        { key: 'id', label: 'Item', type: 'STRING', isRequired: false, order: 1 },
-        { key: 'value', label: 'Name', type: 'STRING', isRequired: true, order: 2 },
+        { key: 'id', label: 'Item', type: 'STRING', isRequired: false },
+        { key: 'value', label: 'Name', type: 'STRING', isRequired: true },
       ],
     },
   ],
@@ -47,14 +48,12 @@ const badmintonSchema: ResolvedSportAttributeSchema = {
       key: 'general',
       label: 'General',
       isAvailable: true,
-      order: 1,
       attributes: [
         {
           key: 'handedness',
           label: 'Hand',
           type: 'ENUM',
           isAvailable: true,
-          order: 1,
           options: [
             { value: 'LEFT', label: 'Left hand' },
             { value: 'RIGHT', label: 'Right hand' },
@@ -65,7 +64,6 @@ const badmintonSchema: ResolvedSportAttributeSchema = {
           label: 'Playstyle',
           type: 'ENUM',
           isAvailable: true,
-          order: 2,
           options: [
             { value: 'ATTACK', label: 'Attack' },
             { value: 'BALANCE', label: 'Balance' },
@@ -77,7 +75,6 @@ const badmintonSchema: ResolvedSportAttributeSchema = {
       key: 'gear',
       label: 'Gear',
       isAvailable: true,
-      order: 2,
       attributes: [
         {
           key: 'rackets',
@@ -85,7 +82,6 @@ const badmintonSchema: ResolvedSportAttributeSchema = {
           type: 'DEFINITION_LIST',
           definitionRef: 'Reference',
           isAvailable: true,
-          order: 1,
         },
         {
           key: 'footwear',
@@ -93,7 +89,6 @@ const badmintonSchema: ResolvedSportAttributeSchema = {
           type: 'DEFINITION_LIST',
           definitionRef: 'Reference',
           isAvailable: true,
-          order: 2,
         },
       ],
     },
@@ -102,16 +97,17 @@ const badmintonSchema: ResolvedSportAttributeSchema = {
 
 // One of each top-level type, for focused per-type interaction tests. `weight`/`strung` and the
 // Reference definition's `gramWeight`/`inStock` (SPORT-9) exercise NUMBER/BOOLEAN both top-level
-// and as definition fields (incl. inner-position via `primary`/`items`).
+// and as definition fields (incl. inner-position via `primary`/`items`). Group key `g` ⇒ every
+// attribute path below is `g/<key>`.
 const simpleSchema: ResolvedSportAttributeSchema = {
   definitions: [
     {
       name: 'Reference',
       fields: [
-        { key: 'id', label: 'Item', type: 'STRING', isRequired: false, order: 1 },
-        { key: 'value', label: 'Name', type: 'STRING', isRequired: true, order: 2 },
-        { key: 'gramWeight', label: 'Weight (g)', type: 'NUMBER', isRequired: false, order: 3, min: 0, max: 500 },
-        { key: 'inStock', label: 'In stock', type: 'BOOLEAN', isRequired: false, order: 4 },
+        { key: 'id', label: 'Item', type: 'STRING', isRequired: false },
+        { key: 'value', label: 'Name', type: 'STRING', isRequired: true },
+        { key: 'gramWeight', label: 'Weight (g)', type: 'NUMBER', isRequired: false, min: 0, max: 500 },
+        { key: 'inStock', label: 'In stock', type: 'BOOLEAN', isRequired: false },
       ],
     },
   ],
@@ -120,15 +116,13 @@ const simpleSchema: ResolvedSportAttributeSchema = {
       key: 'g',
       label: 'Group',
       isAvailable: true,
-      order: 1,
       attributes: [
-        { key: 'note', label: 'Note', type: 'STRING', isAvailable: true, order: 1 },
+        { key: 'note', label: 'Note', type: 'STRING', isAvailable: true },
         {
           key: 'level',
           label: 'Level',
           type: 'ENUM',
           isAvailable: true,
-          order: 2,
           options: [
             { value: 'A', label: 'Alpha' },
             { value: 'B', label: 'Beta' },
@@ -139,7 +133,6 @@ const simpleSchema: ResolvedSportAttributeSchema = {
           label: 'Tags',
           type: 'LIST',
           isAvailable: true,
-          order: 3,
           options: [
             { value: 'x', label: 'X' },
             { value: 'y', label: 'Y' },
@@ -151,7 +144,6 @@ const simpleSchema: ResolvedSportAttributeSchema = {
           type: 'DEFINITION',
           definitionRef: 'Reference',
           isAvailable: true,
-          order: 4,
         },
         {
           key: 'items',
@@ -159,18 +151,16 @@ const simpleSchema: ResolvedSportAttributeSchema = {
           type: 'DEFINITION_LIST',
           definitionRef: 'Reference',
           isAvailable: true,
-          order: 5,
         },
         {
           key: 'weight',
           label: 'Weight (kg)',
           type: 'NUMBER',
           isAvailable: true,
-          order: 6,
           min: 0,
           max: 200,
         },
-        { key: 'strung', label: 'Strung', type: 'BOOLEAN', isAvailable: true, order: 7 },
+        { key: 'strung', label: 'Strung', type: 'BOOLEAN', isAvailable: true },
       ],
     },
   ],
@@ -185,6 +175,32 @@ describe('SportAttributesFields', () => {
     expect(screen.getByLabelText('Playstyle')).toBeInTheDocument();
     expect(screen.getByText('Rackets')).toBeInTheDocument();
     expect(screen.getByText('Footwear')).toBeInTheDocument();
+  });
+
+  it('renders groups and attributes in declared array order (v3/A19 — no order field)', () => {
+    const schema: ResolvedSportAttributeSchema = {
+      groups: [
+        {
+          key: 'zeta',
+          label: 'Zeta group',
+          isAvailable: true,
+          attributes: [
+            { key: 'second', label: 'Second field', type: 'STRING', isAvailable: true },
+            { key: 'first', label: 'First field', type: 'STRING', isAvailable: true },
+          ],
+        },
+        {
+          key: 'alpha',
+          label: 'Alpha group',
+          isAvailable: true,
+          attributes: [{ key: 'only', label: 'Only field', type: 'STRING', isAvailable: true }],
+        },
+      ],
+    };
+    render(<Harness schema={schema} />);
+    const text = document.body.textContent ?? '';
+    expect(text.indexOf('Zeta group')).toBeLessThan(text.indexOf('Alpha group'));
+    expect(text.indexOf('Second field')).toBeLessThan(text.indexOf('First field'));
   });
 
   it('hides a whole group (and its children) when the group isAvailable is false', () => {
@@ -218,6 +234,121 @@ describe('SportAttributesFields', () => {
     expect(screen.getByLabelText('Playstyle')).toBeInTheDocument();
   });
 
+  describe('nested sub-groups (v3/A19)', () => {
+    const nestedSchema: ResolvedSportAttributeSchema = {
+      groups: [
+        {
+          key: 'gear',
+          label: 'Gear',
+          isAvailable: true,
+          attributes: [{ key: 'bagBrand', label: 'Bag brand', type: 'STRING', isAvailable: true }],
+          groups: [
+            {
+              key: 'rackets',
+              label: 'Rackets',
+              isAvailable: true,
+              attributes: [
+                { key: 'tension', label: 'Tension', type: 'STRING', isAvailable: true },
+              ],
+              groups: [
+                {
+                  key: 'grip',
+                  label: 'Grip',
+                  isAvailable: true,
+                  attributes: [
+                    { key: 'size', label: 'Grip size', type: 'STRING', isAvailable: true },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    it('renders a sub-group section and its fields', () => {
+      render(<Harness schema={nestedSchema} />);
+      expect(screen.getByText('Gear')).toBeInTheDocument();
+      expect(screen.getByText('Rackets')).toBeInTheDocument();
+      expect(screen.getByText('Grip')).toBeInTheDocument();
+      expect(screen.getByLabelText('Bag brand')).toBeInTheDocument();
+      expect(screen.getByLabelText('Tension')).toBeInTheDocument();
+      expect(screen.getByLabelText('Grip size')).toBeInTheDocument();
+    });
+
+    it('fires onChange with the full /-separated path for a nested field', async () => {
+      const user = userEvent.setup();
+      const onChangeSpy = vi.fn();
+      render(<Harness schema={nestedSchema} onChangeSpy={onChangeSpy} />);
+      await user.type(screen.getByLabelText('Grip size'), 'G5');
+      expect(onChangeSpy).toHaveBeenLastCalledWith('gear/rackets/grip/size', 'G5');
+      await user.type(screen.getByLabelText('Bag brand'), 'V');
+      expect(onChangeSpy).toHaveBeenLastCalledWith('gear/bagBrand', 'V');
+    });
+
+    it('seeds a value from the caller at the full nested path', () => {
+      render(<Harness schema={nestedSchema} initialValues={{ 'gear/rackets/grip/size': 'G4' }} />);
+      expect(screen.getByLabelText('Grip size')).toHaveValue('G4');
+    });
+
+    it('an isAvailable:false ancestor group hides the entire subtree at every depth', () => {
+      const schema: ResolvedSportAttributeSchema = {
+        groups: [
+          {
+            ...nestedSchema.groups[0],
+            groups: [{ ...nestedSchema.groups[0].groups![0], isAvailable: false }],
+          },
+        ],
+      };
+      render(<Harness schema={schema} />);
+      expect(screen.getByText('Gear')).toBeInTheDocument();
+      expect(screen.getByLabelText('Bag brand')).toBeInTheDocument();
+      expect(screen.queryByText('Rackets')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Tension')).not.toBeInTheDocument();
+      expect(screen.queryByText('Grip')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Grip size')).not.toBeInTheDocument();
+    });
+
+    it('still renders a group whose only visible content is a sub-group', () => {
+      const schema: ResolvedSportAttributeSchema = {
+        groups: [
+          {
+            key: 'gear',
+            label: 'Gear',
+            isAvailable: true,
+            attributes: [],
+            groups: [
+              {
+                key: 'rackets',
+                label: 'Rackets',
+                isAvailable: true,
+                attributes: [
+                  { key: 'tension', label: 'Tension', type: 'STRING', isAvailable: true },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      render(<Harness schema={schema} />);
+      expect(screen.getByText('Gear')).toBeInTheDocument();
+      expect(screen.getByLabelText('Tension')).toBeInTheDocument();
+    });
+  });
+
+  it('collapses and re-expands a group section on trigger click', async () => {
+    const user = userEvent.setup();
+    render(<Harness schema={badmintonSchema} />);
+    expect(screen.getByLabelText('Hand')).toBeInTheDocument();
+
+    const trigger = screen.getByRole('button', { name: 'General' });
+    await user.click(trigger);
+    expect(screen.queryByLabelText('Hand')).not.toBeInTheDocument();
+
+    await user.click(trigger);
+    expect(screen.getByLabelText('Hand')).toBeInTheDocument();
+  });
+
   it('skips an attribute with an unknown type instead of crashing', () => {
     const schema: ResolvedSportAttributeSchema = {
       groups: [
@@ -225,7 +356,6 @@ describe('SportAttributesFields', () => {
           key: 'general',
           label: 'General',
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'mystery',
@@ -233,14 +363,12 @@ describe('SportAttributesFields', () => {
               // A schema-declared type this client build doesn't know about yet.
               type: 'FUTURE_TYPE' as ResolvedSportAttributeSchema['groups'][number]['attributes'][number]['type'],
               isAvailable: true,
-              order: 1,
             },
             {
               key: 'handedness',
               label: 'Hand',
               type: 'ENUM',
               isAvailable: true,
-              order: 2,
               options: [{ value: 'LEFT', label: 'Left' }],
             },
           ],
@@ -265,28 +393,28 @@ describe('SportAttributesFields', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('fires onChange(key, value) for a STRING field', async () => {
+  it('fires onChange(path, value) for a STRING field', async () => {
     const user = userEvent.setup();
     const onChangeSpy = vi.fn();
     render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
     await user.type(screen.getByLabelText('Note'), 'hi');
-    expect(onChangeSpy).toHaveBeenLastCalledWith('note', 'hi');
+    expect(onChangeSpy).toHaveBeenLastCalledWith('g/note', 'hi');
   });
 
-  it('fires onChange(key, value) for an ENUM field', async () => {
+  it('fires onChange(path, value) for an ENUM field', async () => {
     const user = userEvent.setup();
     const onChangeSpy = vi.fn();
     render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
     await user.selectOptions(screen.getByLabelText('Level'), 'B');
-    expect(onChangeSpy).toHaveBeenCalledWith('level', 'B');
+    expect(onChangeSpy).toHaveBeenCalledWith('g/level', 'B');
   });
 
-  it('fires onChange(key, value[]) for a LIST checkbox toggle', async () => {
+  it('fires onChange(path, value[]) for a LIST checkbox toggle', async () => {
     const user = userEvent.setup();
     const onChangeSpy = vi.fn();
     render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
     await user.click(screen.getByRole('checkbox', { name: 'X' }));
-    expect(onChangeSpy).toHaveBeenCalledWith('tags', ['x']);
+    expect(onChangeSpy).toHaveBeenCalledWith('g/tags', ['x']);
   });
 
   it('renders a NUMBER field as a number input honoring min/max', () => {
@@ -297,36 +425,38 @@ describe('SportAttributesFields', () => {
     expect(input).toHaveAttribute('max', '200');
   });
 
-  it('fires onChange(key, number) for a NUMBER field, never a string', async () => {
+  it('fires onChange(path, number) for a NUMBER field, never a string', async () => {
     const user = userEvent.setup();
     const onChangeSpy = vi.fn();
     render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
     await user.type(screen.getByLabelText('Weight (kg)'), '25');
-    expect(onChangeSpy).toHaveBeenLastCalledWith('weight', 25);
+    expect(onChangeSpy).toHaveBeenLastCalledWith('g/weight', 25);
   });
 
   it('an emptied NUMBER field reports undefined, never NaN or an empty string', async () => {
     const user = userEvent.setup();
     const onChangeSpy = vi.fn();
-    render(<Harness schema={simpleSchema} initialValues={{ weight: 25 }} onChangeSpy={onChangeSpy} />);
+    render(
+      <Harness schema={simpleSchema} initialValues={{ 'g/weight': 25 }} onChangeSpy={onChangeSpy} />,
+    );
     await user.clear(screen.getByLabelText('Weight (kg)'));
-    expect(onChangeSpy).toHaveBeenLastCalledWith('weight', undefined);
+    expect(onChangeSpy).toHaveBeenLastCalledWith('g/weight', undefined);
   });
 
-  it('fires onChange(key, boolean) for a BOOLEAN field toggle', async () => {
+  it('fires onChange(path, boolean) for a BOOLEAN field toggle', async () => {
     const user = userEvent.setup();
     const onChangeSpy = vi.fn();
     render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
     await user.click(screen.getByRole('switch', { name: 'Strung' }));
-    expect(onChangeSpy).toHaveBeenCalledWith('strung', true);
+    expect(onChangeSpy).toHaveBeenCalledWith('g/strung', true);
   });
 
-  it('fires onChange(key, record) for a DEFINITION nested field edit', async () => {
+  it('fires onChange(path, record) for a DEFINITION nested field edit', async () => {
     const user = userEvent.setup();
     const onChangeSpy = vi.fn();
     render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
     await user.type(screen.getByLabelText('Name *'), 'A');
-    expect(onChangeSpy).toHaveBeenLastCalledWith('primary', { value: 'A' });
+    expect(onChangeSpy).toHaveBeenLastCalledWith('g/primary', { value: 'A' });
   });
 
   it('NUMBER and BOOLEAN definition fields round-trip inside a DEFINITION record', async () => {
@@ -335,10 +465,10 @@ describe('SportAttributesFields', () => {
     render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
 
     await user.type(screen.getByLabelText('Weight (g)'), '50');
-    expect(onChangeSpy).toHaveBeenLastCalledWith('primary', { gramWeight: 50 });
+    expect(onChangeSpy).toHaveBeenLastCalledWith('g/primary', { gramWeight: 50 });
 
     await user.click(screen.getByRole('switch', { name: 'In stock' }));
-    expect(onChangeSpy).toHaveBeenLastCalledWith('primary', { gramWeight: 50, inStock: true });
+    expect(onChangeSpy).toHaveBeenLastCalledWith('g/primary', { gramWeight: 50, inStock: true });
   });
 
   it('adds a row for a DEFINITION_LIST field via Add', async () => {
@@ -346,7 +476,7 @@ describe('SportAttributesFields', () => {
     const onChangeSpy = vi.fn();
     render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
     await user.click(screen.getByRole('button', { name: 'Add' }));
-    expect(onChangeSpy).toHaveBeenCalledWith('items', [{}]);
+    expect(onChangeSpy).toHaveBeenCalledWith('g/items', [{}]);
   });
 
   it('removes a row for a DEFINITION_LIST field via its remove button', async () => {
@@ -355,12 +485,12 @@ describe('SportAttributesFields', () => {
     render(
       <Harness
         schema={simpleSchema}
-        initialValues={{ items: [{ value: 'A' }, { value: 'B' }] }}
+        initialValues={{ 'g/items': [{ value: 'A' }, { value: 'B' }] }}
         onChangeSpy={onChangeSpy}
       />,
     );
     await user.click(screen.getByRole('button', { name: 'Remove item 1' }));
-    expect(onChangeSpy).toHaveBeenCalledWith('items', [{ value: 'B' }]);
+    expect(onChangeSpy).toHaveBeenCalledWith('g/items', [{ value: 'B' }]);
   });
 
   it('disables unselected LIST checkboxes once MAX_LIST_ITEMS is reached', () => {
@@ -370,14 +500,12 @@ describe('SportAttributesFields', () => {
           key: 'g',
           label: 'Group',
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'tags',
               label: 'Tags',
               type: 'LIST',
               isAvailable: true,
-              order: 1,
               options: Array.from({ length: 11 }, (_unused, index) => ({
                 value: `v${index}`,
                 label: `V${index}`,
@@ -388,32 +516,30 @@ describe('SportAttributesFields', () => {
       ],
     };
     const tenSelected = Array.from({ length: 10 }, (_unused, index) => `v${index}`);
-    render(<Harness schema={manyOptionsSchema} initialValues={{ tags: tenSelected }} />);
+    render(<Harness schema={manyOptionsSchema} initialValues={{ 'g/tags': tenSelected }} />);
     expect(screen.getByRole('checkbox', { name: 'V10' })).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: 'V0' })).not.toBeDisabled();
   });
 
   it('disables Add once a DEFINITION_LIST reaches MAX_LIST_ITEMS rows', () => {
     const tenRows = Array.from({ length: 10 }, () => ({ value: 'x' }));
-    render(<Harness schema={simpleSchema} initialValues={{ items: tenRows }} />);
+    render(<Harness schema={simpleSchema} initialValues={{ 'g/items': tenRows }} />);
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
   });
 
-  it('seeds a defaultValue as a real controlled value on mount', () => {
+  it('seeds a defaultValue as a real controlled value on mount, keyed by the full path', () => {
     const schemaWithDefault: ResolvedSportAttributeSchema = {
       groups: [
         {
           key: 'g',
           label: 'Group',
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'level',
               label: 'Level',
               type: 'ENUM',
               isAvailable: true,
-              order: 1,
               defaultValue: 'B',
               options: [
                 { value: 'A', label: 'Alpha' },
@@ -426,24 +552,22 @@ describe('SportAttributesFields', () => {
     };
     const onChangeSpy = vi.fn();
     render(<Harness schema={schemaWithDefault} onChangeSpy={onChangeSpy} />);
-    expect(onChangeSpy).toHaveBeenCalledWith('level', 'B');
+    expect(onChangeSpy).toHaveBeenCalledWith('g/level', 'B');
   });
 
-  it('does not re-seed a defaultValue once the caller already has a value for that key', () => {
+  it('does not re-seed a defaultValue once the caller already has a value for that path', () => {
     const schemaWithDefault: ResolvedSportAttributeSchema = {
       groups: [
         {
           key: 'g',
           label: 'Group',
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'level',
               label: 'Level',
               type: 'ENUM',
               isAvailable: true,
-              order: 1,
               defaultValue: 'B',
               options: [
                 { value: 'A', label: 'Alpha' },
@@ -455,8 +579,46 @@ describe('SportAttributesFields', () => {
       ],
     };
     const onChangeSpy = vi.fn();
-    render(<Harness schema={schemaWithDefault} initialValues={{ level: 'A' }} onChangeSpy={onChangeSpy} />);
+    render(
+      <Harness
+        schema={schemaWithDefault}
+        initialValues={{ 'g/level': 'A' }}
+        onChangeSpy={onChangeSpy}
+      />,
+    );
     expect(onChangeSpy).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Level')).toHaveValue('A');
+  });
+
+  it('seeds a nested sub-group defaultValue at its full path', () => {
+    const schema: ResolvedSportAttributeSchema = {
+      groups: [
+        {
+          key: 'gear',
+          label: 'Gear',
+          isAvailable: true,
+          attributes: [],
+          groups: [
+            {
+              key: 'rackets',
+              label: 'Rackets',
+              isAvailable: true,
+              attributes: [
+                {
+                  key: 'tension',
+                  label: 'Tension',
+                  type: 'STRING',
+                  isAvailable: true,
+                  defaultValue: '27',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const onChangeSpy = vi.fn();
+    render(<Harness schema={schema} onChangeSpy={onChangeSpy} />);
+    expect(onChangeSpy).toHaveBeenCalledWith('gear/rackets/tension', '27');
   });
 });
