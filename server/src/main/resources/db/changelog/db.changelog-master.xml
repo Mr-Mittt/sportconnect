@@ -164,4 +164,7 @@
     <!-- A17: sports.session_attributes_schema — admin-managed per-sport SESSION attribute definition tree -->
     <include file="db/changelog/changes/V062__add_session_attributes_schema_to_sports.sql" relativeToChangelogFile="false"/>
 
+    <!-- A18: drop user_sport_profiles.preferred_position — sport-specific "position" belongs in the A9 attribute schema -->
+    <include file="db/changelog/changes/V063__drop_preferred_position_from_user_sport_profiles.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

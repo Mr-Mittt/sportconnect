@@ -1,6 +1,6 @@
 # A18 · Remove `user_sport_profiles.preferred_position`
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-07)
 **Type:** Enhancement (Architecture)
 **Depends on:** none. Coordinate with client **SPORT-8** (removes the field from the profile editor).
 **Filed:** 2026-09-02 — user decision: the fixed `preferred_position` column was a mistake. "Position"
@@ -35,3 +35,52 @@ can add later via ADMIN-2, not this ticket.
 
 Existing `UserSportProfileServiceImplSpec` / IT updated to drop the field; a migration smoke check
 that the column is gone.
+
+---
+
+## Implementation (2026-09-07)
+
+Straight execution of the plan — no divergence.
+
+### What was built
+
+- **`V063__drop_preferred_position_from_user_sport_profiles.sql`** — `ALTER TABLE
+  user_sport_profiles DROP COLUMN IF EXISTS preferred_position;`, registered after V062. No data
+  migration (nullable free text, pre-launch; dev DB had 47 profile rows, 1 non-null — test data).
+- **`UserSportProfile` entity** — removed the `@Column(name = "preferred_position", length = 100)`
+  field.
+- **`sport-api` DTOs** — removed `preferredPosition` (+ its `@Size(max = 100)`) from
+  `CreateUserSportProfileRequest` and removed the field from `UserSportProfileResponse`. Scrubbed the
+  term from the `isResume` Javadoc's scalar-column list.
+- **`UserSportProfileServiceImpl`** — removed all 5 sites: the reactivation-as-create setter, the
+  create builder, the `update` null-check block (`if (request.getPreferredPosition() != null) …`
+  gone entirely), the response builder, and the A20 pure-reactivation Javadoc's scalar list.
+- **`server/src/test/resources/schema.sql`** — dropped the `preferred_position VARCHAR(100)` column
+  from the H2 `user_sport_profiles` mirror.
+- **Tests** — `UserSportProfileServiceImplSpec` (create / stale-inheritance / A20 resume /
+  update-all-fields), `UserSportProfileSpec` (entity), and
+  `SportProfileResumeAndVisibilityIntegrationTest` had `preferredPosition` builder calls and
+  assertions removed; each test still proves its point via the remaining scalars (`skillLevel`,
+  `bio`, `yearsOfExperience`).
+
+`V003` is left untouched (historical migration). No `SecurityConfig`, `common`, controller, or
+endpoint change — a stale client still sending `preferredPosition` in a create/update body gets a
+harmless no-op (Jackson ignores unknown fields).
+
+### Client / cross-module
+
+- **Client:** none — SPORT-8 (merged PR #223, 2026-09-04) already removed every read/write of the
+  field from `client/src` and the MSW mocks. A18 completes the pair; the `UserSportProfileResponse`
+  DTO-shrink has no remaining consumer.
+- **Consumer census:** grep of all backend `modules` main source found `preferredPosition` only in
+  `sport-api` / `sport-impl` (all updated here); no repository `@Query` / JPQL / native SQL named the
+  column; no other domain reads it.
+- **Stale doc note:** A20's and A21's summaries list `preferredPosition` among the profile "scalar
+  columns" — accurate when written, now stale. A20 carries a Delta pointing here; A21/A3 are left as
+  historical record.
+
+### Tests run
+
+Green: `:modules:sport:sport-impl:test` (280), `:server:test` (175). `V063` applied cleanly against
+dev Postgres via `:server:bootRun` and the column verified gone from `information_schema`; Hibernate
+`ddl-auto: validate` passed against the updated entity.

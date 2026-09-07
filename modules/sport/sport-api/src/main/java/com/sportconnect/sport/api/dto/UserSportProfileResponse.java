@@ -21,7 +21,6 @@ public class UserSportProfileResponse {
     private String sportName;
     private String skillLevel;
     private Integer yearsOfExperience;
-    private String preferredPosition;
     private String bio;
     private Map<String, Object> attributes;
     private Boolean isActive;

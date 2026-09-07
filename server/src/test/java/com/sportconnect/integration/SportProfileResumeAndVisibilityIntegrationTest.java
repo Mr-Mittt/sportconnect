@@ -132,7 +132,7 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
             Map<String, Object> attributes) {
         return profileRepository.save(UserSportProfile.builder()
                 .userId(userId).sportId(sport).skillLevel(skillLevel).bio("stored bio")
-                .preferredPosition("Net").yearsOfExperience(4)
+                .yearsOfExperience(4)
                 .isActive(active)
                 .attributes(new HashMap<>(attributes))
                 .build()).getId();

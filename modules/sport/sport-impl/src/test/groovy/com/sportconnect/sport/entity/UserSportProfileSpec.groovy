@@ -45,7 +45,6 @@ class UserSportProfileSpec extends Specification {
                 .sportId(sportId)
                 .skillLevel("Advanced")
                 .yearsOfExperience(5)
-                .preferredPosition("Forward")
                 .bio("Passionate about the sport")
                 .isActive(true)
                 .build()
@@ -56,7 +55,6 @@ class UserSportProfileSpec extends Specification {
         profile.sportId == sportId
         profile.skillLevel == "Advanced"
         profile.yearsOfExperience == 5
-        profile.preferredPosition == "Forward"
         profile.bio == "Passionate about the sport"
         profile.isActive == true
     }

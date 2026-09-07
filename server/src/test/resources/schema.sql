@@ -89,7 +89,6 @@ CREATE TABLE IF NOT EXISTS user_sport_profiles (
     sport_id BIGINT NOT NULL,
     skill_level VARCHAR(50),
     years_of_experience INTEGER,
-    preferred_position VARCHAR(100),
     bio TEXT,
     attributes JSON,
     is_active BOOLEAN DEFAULT TRUE,
