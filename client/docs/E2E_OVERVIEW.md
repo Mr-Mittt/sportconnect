@@ -922,14 +922,15 @@ Dialog-scoped, same shape as `app-session-detail-modal.spec.ts` above. Parameter
 
 | State | Setup | Expects |
 |---|---|---|
-| `default` | Open "Create session" | Sport field visible, empty form. **CLIENT-SESSION-15:** Badminton is pre-selected and now has a session attribute schema (`defaultSessionAttributeSchemas()` in `sport.ts`), so the "Session detail" section renders `SportAttributesFields` (collapsed) instead of the old "Coming soon" placeholder |
-| `location-chosen` | Open, select Pickleball, LocationPicker search "Riverside" → pick `mockLocation`, fill title/duration/open-slot | Chosen location name visible. **CLIENT-SESSION-15:** Pickleball has no session schema, so the "Session detail" section is absent entirely; also, selecting Pickleball resets the whole form (scope change) — the fills happen after, so no visible effect here |
-| `no-sport-profiles` | `seedZeroSportProfilesOnNextLoad(mockSessionId)` before `seedAuthenticatedSession`, close MatchesPage's own auto-prompted "Add a sport" dialog first (not the state under test), then open Create session | "add a sport first" gate text visible (`CreateSessionModal`'s own internal empty-profile prompt, distinct from the page-level auto-prompt). Unaffected by CLIENT-SESSION-15 — the gate has no attributes section |
+| `default` | Open "Create session" | Sport field visible, empty form |
+| `location-chosen` | Open, select Pickleball, LocationPicker search "Riverside" → pick `mockLocation`, fill title/duration/open-slot | Chosen location name visible |
+| `no-sport-profiles` | `seedZeroSportProfilesOnNextLoad(mockSessionId)` before `seedAuthenticatedSession`, close MatchesPage's own auto-prompted "Add a sport" dialog first (not the state under test), then open Create session | "add a sport first" gate text visible (`CreateSessionModal`'s own internal empty-profile prompt, distinct from the page-level auto-prompt) |
 
 Same clock-freeze / blur-before-screenshot / `document.fonts.ready` sequence and known-Windows-noise
-caveat as `app-session-detail-modal.spec.ts` above. **CLIENT-SESSION-15 regenerated `create-session-default-*`
-and `create-session-location-chosen-*` (6 baselines); `create-session-no-sport-profiles-*` stayed
-byte-identical.**
+caveat as `app-session-detail-modal.spec.ts` above. **CLIENT-SESSION-15 added the "Session detail"
+session-attributes section to this modal but touched none of these baselines — the fixed-height
+dialog only frames "Session basic information"; "Session detail" is below the `overflow-y-auto`
+fold. Two `update-baselines` dispatches confirmed all 3 states byte-identical.**
 
 ### `e2e/visual/app-notification-bell.spec.ts` (CLIENT-NOTIF-2, `visual-regression` project)
 

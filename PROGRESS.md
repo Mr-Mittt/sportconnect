@@ -4268,9 +4268,9 @@ explicit go-ahead at each step (full story in A3's summary doc):
   New MSW `GET /api/sports/:id/session-attribute-schema` handler + Badminton seed (one `#ref` node,
   one `defaultValue` node; Pickleball none). Real backend confirmed accepting + server-filtering
   `POST /api/sessions` `attributes`. `tsc -b`/`eslint` clean; full suite **163 files / 1134 green**.
-  **Visual regression:** `create-session-default-*` + `create-session-location-chosen-*` (6
-  baselines) legitimately change — regenerate via the `client-ci` `update-baselines` dispatch;
-  `create-session-no-sport-profiles-*` and every other baseline stay byte-identical.
+  **Visual regression:** no baselined surface touched — the "Session detail" section sits below the
+  fixed-height dialog fold in `app-create-session-modal.spec.ts`; two `update-baselines` dispatches
+  confirmed all 108 baselines byte-identical (an earlier "6 change" prediction was wrong).
 - **Client CLIENT-SESSION-14 (`DONE`, 2026-09-07, `client/docs/MVP/CLIENT-SESSION-14_SESSION_ATTRIBUTE_SCHEMA_HOOK.md`):**
   scaffolding for the session-attribute client work (CLIENT-SESSION-15/16), no UI. New
   `shared/hooks/useSessionAttributeSchema(sportId)` — a 1:1 sibling of `useSportAttributeSchema`

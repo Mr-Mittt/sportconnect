@@ -163,10 +163,16 @@ scope-change section above.
 
 ### Visual-regression expectation
 
-`create-session-default-{375,768,1280}.png` and `create-session-location-chosen-{375,768,1280}.png`
-(`e2e/visual/app-create-session-modal.spec.ts`, **6 baselines**) **legitimately change** — the
-"Session detail" section now renders `SportAttributesFields` (Badminton, `default`) or is absent
-(Pickleball, `location-chosen`) instead of the "Coming soon" placeholder. Expected to fail until
-the `client-ci` `update-baselines` dispatch regenerates exactly those 6; `create-session-no-sport-profiles-*`
-(the zero-profile gate has no attributes section) and every other baseline must stay byte-identical.
-Not run locally (Windows font-rendering noise floor).
+**No baselined surface touched — no baseline change expected.** The initial prediction was that
+`create-session-default-*` / `create-session-location-chosen-*` would change; that was **wrong**.
+`app-create-session-modal.spec.ts` screenshots the **fixed-height** `CreateSessionModal` dialog,
+which shows only the top "Session basic information" section — the "Session detail" collapsible
+(where the attributes render) is inside the dialog's `overflow-y-auto` region, **below the fold**,
+and is never in frame. A failing local `visual-regression` run is the documented Windows
+font-rendering noise floor, not a regression.
+
+**Confirmed (2026-09-07):** two `client-ci` `update-baselines` dispatches were run for this branch;
+SHA-256 vs the committed set showed **all 108 baselines byte-identical** both times (0 CHANGED / 0
+NEW / 0 MISSING). Nothing was applied. The local 9/9 `app-create-session-modal` failures were
+verified as noise floor — `create-session-no-sport-profiles-*` (a state this ticket's code cannot
+reach) failed locally too, and CI rendered it identical.
