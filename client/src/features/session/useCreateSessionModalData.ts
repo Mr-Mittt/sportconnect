@@ -69,10 +69,13 @@ export function useCreateSessionModalData() {
   const onEffectiveSportChangeForCreate = (sportId: number | undefined) => {
     const next = sportId ?? null;
     setCreateFormSportId((prev) => {
-      if (next !== prev) {
-        // CLIENT-SESSION-15 scope change: a sport change resets the whole create form. The modal
-        // clears its own fields (render-phase, keyed on the effective sportId); the hook-owned
-        // pieces — the chosen location (sport-scoped) and the attributes draft — are cleared here.
+      // CLIENT-SESSION-15 scope change: a sport change resets the whole create form. The modal
+      // clears its own fields (render-phase, keyed on the sport *key*); the hook-owned pieces —
+      // the chosen location (sport-scoped) and the attributes draft — are cleared here. Only on a
+      // real sport -> *different* real sport: `sportId` briefly reports `undefined` whenever
+      // `sportIdForKey` sees the catalog store mid-refetch, and a null<->id flicker must not wipe
+      // a location the user already picked.
+      if (prev !== null && next !== null && prev !== next) {
         setSelectedLocationForCreate(null);
         setSessionAttributes({});
         setPrefilledForSport(null);

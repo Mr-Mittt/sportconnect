@@ -562,11 +562,16 @@ export function CreateSessionModal({
   // session schema, favourite locations and location search are all sport-scoped, so a half-filled
   // form must not carry from sport A into sport B). Render-phase state adjustment, the same
   // `seededFrom` pattern `useSportProfileSettingsTabData` / `SportFieldsForm` use — no effect, no
-  // extra render. The hook-owned pieces (chosen location, attributes draft) reset in parallel via
-  // `onEffectiveSportChange` below.
-  const [seededForSportId, setSeededForSportId] = useState(effectiveSportId);
-  if (effectiveSportId !== seededForSportId) {
-    setSeededForSportId(effectiveSportId);
+  // extra render. Keyed on `displaySport` (the sport *key* string, derived purely from
+  // `selectedSport`/`initialSport`), NOT `effectiveSportId` — the latter round-trips through
+  // `sportIdForKey`, which returns `undefined` whenever the catalog store is mid-refetch
+  // (`openCreateModal` refetches it), so keying on it made the reset thrash and wipe just-typed
+  // fields mid-flow. `SessionStartTimePicker` is re-keyed on the same value so its on-open
+  // "default to now + 1h" pre-fill actually re-runs for the new sport. The hook-owned pieces
+  // (chosen location, attributes draft) reset in parallel via `onEffectiveSportChange` below.
+  const [seededForSport, setSeededForSport] = useState(displaySport);
+  if (displaySport !== seededForSport) {
+    setSeededForSport(displaySport);
     setTitle('');
     setDescription('');
     setLocationNote('');
@@ -767,7 +772,14 @@ export function CreateSessionModal({
                       Starts at
                       <RequiredMark />
                     </span>
-                    <SessionStartTimePicker value={scheduledStart} onChange={setScheduledStart} />
+                    {/* Re-keyed on the sport so a Sport change (which resets `scheduledStart` to
+                        `''` above) re-mounts this and re-runs its on-open "default to now + 1h"
+                        pre-fill — otherwise the reset would leave "Starts at" permanently empty. */}
+                    <SessionStartTimePicker
+                      key={displaySport}
+                      value={scheduledStart}
+                      onChange={setScheduledStart}
+                    />
                     {hasAttemptedSubmit && scheduledStart === '' && (
                       <p className="mt-1 text-2xs text-text-danger">Start time is required.</p>
                     )}

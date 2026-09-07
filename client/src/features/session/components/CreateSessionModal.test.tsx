@@ -318,6 +318,11 @@ describe('CreateSessionModal', () => {
     expect(screen.getByLabelText(/^Session title/)).toHaveValue('');
     expect(screen.getByLabelText(/^Duration in minutes/)).toHaveValue(null);
     expect(screen.getByLabelText(/^Open slot/)).toHaveValue(null);
+    // "Starts at" re-pre-fills for the new sport (SessionStartTimePicker is re-keyed on the
+    // sport) — the reset clears `scheduledStart`, and without the re-key it would stay empty
+    // and silently fail "Start time is required" on submit (regression matches-journey caught).
+    expect(screen.getByLabelText('Hour')).not.toHaveValue('');
+    expect(screen.getByLabelText('Date')).not.toHaveValue('');
   });
 
   it('"Create session" is clickable even with required fields missing', () => {

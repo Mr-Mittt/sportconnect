@@ -135,6 +135,20 @@ modal's 25 render-only tests. The smaller change — a render-phase field reset 
 the same "reset as if reopened" with zero page changes and no test-infra churn. Recorded in the
 scope-change section above.
 
+**Two follow-up bugs the reset introduced, caught by the `matches-journey` e2e and fixed:**
+1. **Reset thrash.** The reset was first keyed on `effectiveSportId` (`= sportIdForKey(displaySport)`).
+   `sportIdForKey` returns `undefined` whenever the sport-catalog store is mid-refetch — and
+   `openCreateModal` refetches it — so `effectiveSportId` flickered `id → undefined → id` on
+   unrelated re-renders, firing the reset repeatedly and wiping fields the user had already typed.
+   Re-keyed on `displaySport` (the sport *key* string, pure `selectedSport`/`initialSport`
+   derivation, no async lookup). The hook's location/attributes clear is likewise guarded to
+   fire only on a real-id → *different*-real-id transition.
+2. **"Starts at" left empty.** `SessionStartTimePicker` pushes its "default to now + 1h" value up
+   via a **mount-only** effect. The reset sets `scheduledStart = ''`, and the picker never
+   re-mounted, so the pre-fill never came back → "Start time is required" on submit even though the
+   spec (and a real user) never touches that field after a sport change. Fixed by re-keying
+   `SessionStartTimePicker` on `displaySport` so its mount effect re-runs for the new sport.
+
 ### Consumer census (`client`)
 
 | Consumer | Disposition |
@@ -151,7 +165,11 @@ scope-change section above.
 
 - `pnpm exec tsc -b` — clean.
 - `pnpm lint` — 0 errors (2 pre-existing `SessionStartTimePicker.tsx` warnings, untouched).
-- `pnpm test` — **163 files / 1134 tests green** (was 1118 after SPORT-7).
+- `pnpm test` — full suite green (163 files; 1134 pre-e2e-fix, re-run after the reset-key fix).
+- `pnpm e2e` — `matches-journey` (the flow that drives `CreateSessionModal`'s sport-change +
+  submit) **passes** after the two reset fixes above; it caught both regressions. Full e2e run:
+  81 pass, 1 unrelated flake (`feed-groups-journey` step 1, feed pagination — passes 9/9 in
+  isolation).
 - **Real backend** (`:server:bootRun` on :8080): `POST /api/sessions` accepts `attributes` and
   server-filters them — Badminton has no session schema seeded on the dev DB, so a POST with
   `{"match/format":"Doubles","bogus/key":"x"}` stored `attributes: {}` (documented filter
