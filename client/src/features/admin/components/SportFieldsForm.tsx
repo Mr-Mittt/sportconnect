@@ -70,9 +70,8 @@ export function SportFieldsForm({
         onSave(payload);
       }}
     >
-      <h3 className="text-sm font-semibold text-text-primary">Sport fields</h3>
-
-      <div className="mt-3 space-y-3">
+      {/* ADMIN-5: the "Sport fields" heading is now the enclosing CollapsibleSection's toggle. */}
+      <div className="space-y-3">
         <div>
           <Label htmlFor="sport-name">Name</Label>
           <Input

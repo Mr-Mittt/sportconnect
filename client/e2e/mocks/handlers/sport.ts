@@ -12,6 +12,7 @@ import type {
   SportAttributeOption,
   SportAttributeSchema,
   SportResponse,
+  SessionAttributeSchema,
   UserSportProfileResponse,
 } from '../../../src/shared/types/sport.ts';
 import { mockSportProfiles, mockUser } from '../fixtures.ts';
@@ -161,6 +162,43 @@ function defaultSessionAttributeSchemas(): Record<number, ResolvedSportAttribute
   };
 }
 
+/**
+ * ADMIN-5 / A17: the *raw* admin session attribute schema per sport — the multi-locale document
+ * exactly as stored, `#ref` nodes not expanded (unlike `defaultSessionAttributeSchemas()` above,
+ * which is the member-facing *resolved* shape `useSessionAttributeSchema` consumes). Badminton (1)
+ * carries one `#ref` node pointing at its profile schema's `gear/racketBrand`, plus one own
+ * `ENUM` node. Pickleball (3) has none. Served by the admin `GET /api/sports/all/{id}/...`.
+ */
+function defaultSessionAttributeSchemasRaw(): Record<number, SessionAttributeSchema | null> {
+  return {
+    1: {
+      defaultLocale: 'en',
+      groups: [
+        {
+          key: 'match',
+          label: { en: 'Match details' },
+          isAvailable: true,
+          attributes: [
+            { '#ref': 'gear/racketBrand' },
+            {
+              key: 'format',
+              label: { en: 'Format' },
+              type: 'ENUM',
+              isAvailable: true,
+              options: [
+                { value: 'singles', label: { en: 'Singles' } },
+                { value: 'doubles', label: { en: 'Doubles' } },
+              ],
+              defaultValue: 'doubles',
+            },
+          ],
+        },
+      ],
+    },
+    3: null,
+  };
+}
+
 /** Mimics `SportAttributeSchemaLabelResolver` (A13) — the real backend resolves every
  * locale-map label to one string on the member-facing GET, never on the admin GET. Locale
  * resolution itself isn't exercised here (no test asserts non-English output); this always
@@ -240,6 +278,8 @@ interface SportSession {
    * userSportProfilesState below. */
   adminSportCatalogState: SportResponse[];
   attributeSchemaState: Record<number, SportAttributeSchema | null>;
+  /** ADMIN-5: raw admin session schema per sport, stateful so a PUT shows on the next GET. */
+  sessionAttributeSchemaState: Record<number, SessionAttributeSchema | null>;
 }
 
 // Stateful, same reasoning as groups.ts's userGroupsState — a profile
@@ -253,6 +293,7 @@ function defaultSportSession(): SportSession {
     nextProfileId: 100,
     adminSportCatalogState: defaultAdminSportCatalog(),
     attributeSchemaState: defaultAttributeSchemas(),
+    sessionAttributeSchemaState: defaultSessionAttributeSchemasRaw(),
   };
 }
 
@@ -387,6 +428,53 @@ export const sportHandlers: HttpHandler[] = [
     }
     session.attributeSchemaState[sportId] = body;
     return HttpResponse.json(apiResponse(body, 'Attribute schema updated successfully'));
+  }),
+
+  // ─── ADMIN-5 / A17 ─────────────────────────────────────────────────────────
+  // Admin-only raw session schema read — resolves regardless of active state (the admin twin of
+  // the active-only member `GET /api/sports/:sportId/session-attribute-schema` above). This is
+  // what the admin session-schema editor reads.
+  http.get('/api/sports/all/:sportId/session-attribute-schema', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = sportSessions.get(sessionIdFromRequest(request));
+    const sportId = Number(params.sportId);
+    if (!session.adminSportCatalogState.some((entry) => entry.id === sportId)) {
+      return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
+    }
+    return HttpResponse.json(
+      apiResponse(
+        session.sessionAttributeSchemaState[sportId] ?? null,
+        'Session attribute schema retrieved successfully',
+      ),
+    );
+  }),
+
+  http.put('/api/sports/:sportId/session-attribute-schema', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = sportSessions.get(sessionIdFromRequest(request));
+    const sportId = Number(params.sportId);
+    // findById server-side, not the active-only cache — an inactive sport IS writable.
+    if (!session.adminSportCatalogState.some((entry) => entry.id === sportId)) {
+      return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
+    }
+    const body = (await request.json()) as SessionAttributeSchema | null;
+    // Stand-ins for two of A17's validator rules — enough to exercise the "server rejected it,
+    // render the message verbatim" path without reimplementing the #ref resolver etc.
+    if (body && body.defaultLocale === undefined) {
+      return HttpResponse.json(
+        apiError('Session attribute schema must declare a defaultLocale'),
+        { status: 400 },
+      );
+    }
+    const groupKeys = (body?.groups ?? []).map((group) => group.key);
+    const duplicate = groupKeys.find((key, index) => groupKeys.indexOf(key) !== index);
+    if (duplicate !== undefined) {
+      return HttpResponse.json(apiError('Duplicate group key: ' + duplicate), { status: 400 });
+    }
+    session.sessionAttributeSchemaState[sportId] = body;
+    return HttpResponse.json(apiResponse(body, 'Session attribute schema updated successfully'));
   }),
 
   http.put('/api/sports/:sportId', async ({ request, params }) => {

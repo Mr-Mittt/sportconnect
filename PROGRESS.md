@@ -4249,6 +4249,29 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client ADMIN-5 (`DONE`, 2026-09-07, `client/docs/MVP/ADMIN-5_SESSION_ATTRIBUTE_SCHEMA_EDITOR.md`):**
+  the admin authoring surface for A17's session attribute schema. `AttributeSchemaEditor` made
+  generic (`<T extends object>`) and mounted a second time in `AdminSportsPage` for the raw session
+  document — admin `GET /api/sports/all/{id}/session-attribute-schema` + `PUT` via new siblings
+  `useSessionAttributeSchemaAdmin` / `useReplaceSessionAttributeSchema`, new
+  `adminKeys.sessionAttributeSchema` key, new `SessionAttributeSchema`/`SessionAttributeGroup`/
+  `SessionAttributeNode` types in `shared/types/sport.ts` (1:1 with the A17 DTOs, polymorphic
+  `#ref`-or-own node), 2 new MSW handlers. **Scope grew (user decision, at the Phase 1 gate):**
+  (1) all three detail-panel sections (Sport fields / Profile attributes / Session attributes) are
+  now collapsible via a shared `CollapsibleSection` — `CollapsibleContent forceMount` +
+  `data-[state=closed]:hidden` is load-bearing: Radix's default unmount-on-collapse would tear down
+  an editor's draft and fire its `onDirtyChange(false)`, silently discarding an edit and clearing
+  the `/admin` unsaved-changes guard; (2) a read-only pretty-printed pop-up viewer
+  (`SchemaViewerDialog`, no new dependency) on both schema editors, raw-text fallback when the
+  document does not parse. `AttributeSchemaEditor` dropped its own `<h3>` (title now the section
+  trigger); "Attributes" section renamed "Profile attributes". Guard now
+  `areFieldsDirty || isSchemaDirty || isSessionSchemaDirty`. 10 new Vitest cases across
+  `AdminSportsPage.test.tsx` / `AdminLayout.test.tsx`, `CollapsibleSection.stories.tsx` +
+  `AttributeSchemaEditor` `SessionSchema` story. `tsc -b`/`eslint` clean; full suite **1143 green**
+  (1 pre-existing unrelated flake in `features/chat/useChatConversation.test.tsx`, passes in
+  isolation). **Visual regression:** no `/admin` baseline exists — no baseline change expected; a
+  failing `visual-regression` run is the Windows noise floor. No `e2e/flows/` spec changed; the 2
+  new MSW handlers keep `admin-sports`/`admin-route-guard` green.
 - **Client CLIENT-SESSION-15 (`DONE`, 2026-09-07, `client/docs/MVP/CLIENT-SESSION-15_SESSION_ATTRIBUTES_IN_CREATE_MODAL.md`):**
   session attributes in `CreateSessionModal`. The (placeholder) "Session detail" collapsible now
   renders the sport's *session* attribute schema (A17) via the existing `SportAttributesFields`,

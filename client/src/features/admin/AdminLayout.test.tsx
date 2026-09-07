@@ -182,11 +182,27 @@ describe('logout from /admin (ADMIN-4)', () => {
     ],
   };
 
+  const badmintonSessionSchema = {
+    defaultLocale: 'en',
+    groups: [
+      {
+        key: 'match',
+        label: { en: 'Match details' },
+        isAvailable: true,
+        attributes: [{ '#ref': 'gear/racketBrand' }],
+      },
+    ],
+  };
+
   /** The sport catalogue + schema reads AdminSportsPage needs to render its forms. */
   function mockSportReads() {
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
       if (url === '/sports/all') return apiResponse([badminton]);
       if (url === '/sports/all/1/attribute-schema') return apiResponse(badmintonSchema);
+      // ADMIN-5: the session-schema editor reads this on the same page mount.
+      if (url === '/sports/all/1/session-attribute-schema') {
+        return apiResponse(badmintonSessionSchema);
+      }
       throw new Error(`unexpected GET ${url}`);
     });
   }
@@ -297,5 +313,28 @@ describe('logout from /admin (ADMIN-4)', () => {
 
     await waitFor(() => expect(useAuthStore.getState().user).toBeNull());
     expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+  });
+
+  it('warns on unsaved session-schema edits, even with the section collapsed (ADMIN-5)', async () => {
+    const user = userEvent.setup();
+    mockSportReads();
+    const postSpy = vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('offline'));
+
+    renderAt('/admin/sports/1');
+
+    const sessionTextarea = await screen.findByLabelText('Session schema document (JSON)');
+    await user.clear(sessionTextarea);
+    await user.click(sessionTextarea);
+    await user.paste('{"defaultLocale":"en","groups":[],"edited":true}');
+
+    // Collapse the section — the editor stays mounted (forceMount), so its dirty flag survives.
+    await user.click(screen.getByRole('button', { name: 'Session attributes' }));
+
+    postSpy.mockClear();
+    await user.click(screen.getByRole('button', { name: 'Log out' }));
+
+    expect(await screen.findByText('Unsaved changes')).toBeInTheDocument();
+    expect(logoutCalls(postSpy)).toHaveLength(0);
+    expect(useAuthStore.getState().user).not.toBeNull();
   });
 });

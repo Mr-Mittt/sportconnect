@@ -79,3 +79,30 @@ export const ServerRejected: Story = {
 export const Saved: Story = {
   args: { isSaved: true },
 };
+
+/** ADMIN-5: the same component mounted for the session schema — distinct `fieldId` (so two
+ * editors can share a page), label, Save text, and viewer title. The document shape here is
+ * `SessionAttributeSchema` (a `#ref` node plus an own node); the editor round-trips it as JSON
+ * and never reads a field off it. */
+export const SessionSchema: Story = {
+  args: {
+    schema: {
+      defaultLocale: 'en',
+      groups: [
+        {
+          key: 'match',
+          label: { en: 'Match details' },
+          isAvailable: true,
+          attributes: [
+            { '#ref': 'gear/racketBrand' },
+            { key: 'format', label: { en: 'Format' }, type: 'STRING', isAvailable: true },
+          ],
+        },
+      ],
+    } as unknown as SportAttributeSchema,
+    fieldId: 'session-attribute-schema',
+    fieldLabel: 'Session schema document (JSON)',
+    saveLabel: 'Save session attributes',
+    viewerTitle: 'Session attributes',
+  },
+};
