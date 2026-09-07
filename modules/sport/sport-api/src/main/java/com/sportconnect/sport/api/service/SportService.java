@@ -1,11 +1,14 @@
 package com.sportconnect.sport.api.service;
 
 import com.sportconnect.sport.api.dto.CreateSportRequest;
+import com.sportconnect.sport.api.dto.ResolvedSportAttributeSchema;
+import com.sportconnect.sport.api.dto.SessionAttributeSchema;
 import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UpdateSportRequest;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -133,4 +136,78 @@ public interface SportService {
      * @throws com.sportconnect.common.exception.ResourceNotFoundException if no sport has this id
      */
     SportAttributeSchema replaceAttributeSchema(Long sportId, SportAttributeSchema schema);
+
+    /**
+     * A17: the sport's <strong>session</strong> attribute schema, raw and for an admin caller — the
+     * counterpart of {@link #getAttributeSchemaForAdmin} for {@code sports.session_attributes_schema}.
+     * Resolves via the repository, so a deactivated sport returns its schema rather than 404 (the
+     * admin editor configures a sport before activating it).
+     *
+     * @param sportId the sport to read
+     * @return the parsed session schema, or {@code null} when the sport's sessions offer no attributes
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no sport has this id
+     */
+    SessionAttributeSchema getSessionAttributeSchemaForAdmin(Long sportId);
+
+    /**
+     * A17: replace a sport's whole session attribute schema. Admin-only; no partial update.
+     *
+     * <p>Validated in full and rejected atomically before anything is written. Validation needs the
+     * sport's <em>profile</em> schema too — every {@code #ref} node must resolve to a live, available
+     * profile attribute, and a session-local definition name must not collide with a profile
+     * definition name a {@code #ref} pulls in. Resolves the sport from the repository (an inactive
+     * sport's session schema stays editable) and evicts the sport cache on success.
+     *
+     * @param sportId the sport to write
+     * @param schema  the replacement document; {@code null} clears the session schema entirely
+     * @return the stored session schema, as read back
+     * @throws com.sportconnect.common.exception.BadRequestException if the document is invalid
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no sport has this id
+     */
+    SessionAttributeSchema replaceSessionAttributeSchema(Long sportId, SessionAttributeSchema schema);
+
+    /**
+     * A17: the sport's session attribute schema with every {@code #ref} expanded in place — for
+     * SESSION-23's write-time attribute filter, which is a near-clone of {@code ProfileAttributeFilter}
+     * and must never itself have to touch the profile schema.
+     *
+     * <p>Each {@code #ref} node is replaced by the full definition of the profile attribute it points
+     * at (labels still locale maps, not resolved); the returned {@link SportAttributeSchema}'s
+     * {@code definitions} registry is the union of the session-local registry and every profile
+     * definition a {@code #ref} pulled in. Own nodes are carried through unchanged. A {@code #ref}
+     * whose target profile attribute is no longer live/available is <strong>dropped</strong> (lenient
+     * — mirrors the profile write path); so is an own node whose {@code definitionRef} no longer
+     * resolves.
+     *
+     * <p>Active-only, like {@link #getAttributeSchema}: a deactivated sport is 404, not a schema.
+     *
+     * @param sportId the sport to read
+     * @return the {@code #ref}-expanded schema, or {@code null} when the sport's sessions offer no attributes
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no active sport has this id
+     */
+    SportAttributeSchema getSessionAttributeSchemaRaw(Long sportId);
+
+    /**
+     * A17: the sport's session attribute schema, {@code #ref}-expanded and locale-resolved for a
+     * member caller — what {@code GET /api/sports/{sportId}/session-attribute-schema} returns.
+     *
+     * <p>Produces the same {@link ResolvedSportAttributeSchema} shape the client already renders for
+     * the profile schema (SPORT-2), with two additional markers per node:
+     * {@code prefillable=true}/{@code prefillKey=<profile path>} on every node that came from a
+     * {@code #ref}, so the client knows which fields to seed from the session creator's own profile.
+     * Stale {@code #ref}s and dead own {@code definitionRef}s are dropped, same as
+     * {@link #getSessionAttributeSchemaRaw}.
+     *
+     * <p>Unlike the profile schema — whose resolution deliberately stays in the controller because
+     * {@link #getAttributeSchema} is on a hot write path — this resolves in the service: the member
+     * GET is its only caller and there is no per-write cost to avoid.
+     *
+     * <p>Active-only: a deactivated sport is 404.
+     *
+     * @param sportId the sport to read
+     * @param locale  the caller's resolved locale (from {@code Accept-Language})
+     * @return the resolved session schema, or {@code null} when the sport's sessions offer no attributes
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no active sport has this id
+     */
+    ResolvedSportAttributeSchema getResolvedSessionAttributeSchema(Long sportId, Locale locale);
 }

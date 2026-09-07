@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.sport.api.dto.CreateSportRequest
+import com.sportconnect.sport.api.dto.SessionAttributeGroup
+import com.sportconnect.sport.api.dto.SessionAttributeNode
+import com.sportconnect.sport.api.dto.SessionAttributeSchema
 import com.sportconnect.sport.api.dto.SportAttributeDefinition
 import com.sportconnect.sport.api.dto.SportAttributeGroup
 import com.sportconnect.sport.api.dto.SportAttributeSchema
@@ -23,10 +26,16 @@ class SportServiceImplSpec extends Specification {
     // nothing about whether the schema actually serialises.
     ObjectMapper objectMapper = new ObjectMapper()
     SportAttributeSchemaValidator schemaValidator = new SportAttributeSchemaValidator(objectMapper)
+    // A17: real, same reasoning as the profile validator above — these are pure rule engines.
+    SessionAttributeSchemaValidator sessionSchemaValidator = new SessionAttributeSchemaValidator(objectMapper)
+    SessionAttributeSchemaExpander sessionSchemaExpander = new SessionAttributeSchemaExpander()
+    SessionAttributeSchemaResolver sessionSchemaResolver =
+            new SessionAttributeSchemaResolver(sessionSchemaExpander, new SportAttributeSchemaLabelResolver())
 
     @Subject
     SportServiceImpl sportService =
-            new SportServiceImpl(sportRepository, sportLookupCache, schemaValidator, objectMapper)
+            new SportServiceImpl(sportRepository, sportLookupCache, schemaValidator,
+                    sessionSchemaValidator, sessionSchemaExpander, sessionSchemaResolver, objectMapper)
 
     def "createSport should create new sport successfully"() {
         given:
@@ -469,6 +478,163 @@ class SportServiceImplSpec extends Specification {
         then:
         1 * sportRepository.findById(sportId) >> Optional.empty()
         thrown(ResourceNotFoundException)
+    }
+
+    // --- A17: per-sport session attribute schema ---
+
+    private static Map storedProfileSchema() {
+        [
+                defaultLocale: "en",
+                groups       : [[key       : "gear", label: [en: "Gear"], isAvailable: true,
+                                 attributes: [[key: "tension", label: [en: "Tension"], type: "NUMBER", isAvailable: true]]]]
+        ]
+    }
+
+    private static SessionAttributeSchema sessionSchemaWithRef() {
+        SessionAttributeSchema.builder().defaultLocale("en").groups([
+                SessionAttributeGroup.builder().key("setup").label(["en": "Setup"]).isAvailable(true)
+                        .attributes([
+                                SessionAttributeNode.builder().key("ballsProvided").label(["en": "Balls provided?"])
+                                        .type(SportAttributeType.BOOLEAN).build(),
+                                SessionAttributeNode.builder().ref("gear/tension").build()
+                        ]).build()
+        ]).build()
+    }
+
+    def "replaceSessionAttributeSchema validates against the profile schema, stores and evicts"() {
+        given:
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
+                .attributesSchema(storedProfileSchema()).build()
+
+        when:
+        def result = sportService.replaceSessionAttributeSchema(sportId, sessionSchemaWithRef())
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * sportRepository.save(_) >> { Sport saved ->
+            assert saved.sessionAttributesSchema.groups[0].key == "setup"
+            return saved
+        }
+        1 * sportLookupCache.evictAll()
+        result.groups[0].attributes[1].ref == "gear/tension"
+    }
+
+    def "replaceSessionAttributeSchema rejects a dangling #ref without writing"() {
+        given:
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
+                .attributesSchema(storedProfileSchema()).build()
+        def bad = SessionAttributeSchema.builder().defaultLocale("en").groups([
+                SessionAttributeGroup.builder().key("setup").label(["en": "Setup"]).isAvailable(true)
+                        .attributes([SessionAttributeNode.builder().ref("gear/nope").build()]).build()
+        ]).build()
+
+        when:
+        sportService.replaceSessionAttributeSchema(sportId, bad)
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        0 * sportRepository.save(_)
+        0 * sportLookupCache.evictAll()
+        thrown(BadRequestException)
+    }
+
+    def "replaceSessionAttributeSchema clears the schema when given null"() {
+        given:
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
+                .sessionAttributesSchema([groups: []]).build()
+
+        when:
+        def result = sportService.replaceSessionAttributeSchema(sportId, null)
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        1 * sportRepository.save(_) >> { Sport saved ->
+            assert saved.sessionAttributesSchema == null
+            return saved
+        }
+        1 * sportLookupCache.evictAll()
+        result == null
+    }
+
+    def "getSessionAttributeSchemaForAdmin returns the document for a deactivated sport"() {
+        given:
+        def sportId = 1L
+        def stored = [defaultLocale: "en", groups: [[key: "setup", label: [en: "Setup"], isAvailable: true,
+                                                      attributes: [[key: "mode", label: [en: "Mode"], type: "STRING"]]]]]
+        def sport = Sport.builder().id(sportId).name("Tennis").isActive(false)
+                .sessionAttributesSchema(stored).build()
+
+        when:
+        def result = sportService.getSessionAttributeSchemaForAdmin(sportId)
+
+        then:
+        1 * sportRepository.findById(sportId) >> Optional.of(sport)
+        0 * sportLookupCache.getActiveSportsById()
+        result.groups[0].attributes[0].key == "mode"
+    }
+
+    def "getSessionAttributeSchemaRaw expands #refs and 404s a deactivated sport"() {
+        given:
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
+                .attributesSchema(storedProfileSchema())
+                .sessionAttributesSchema([
+                        defaultLocale: "en",
+                        groups       : [[key: "setup", label: [en: "Setup"], isAvailable: true,
+                                         attributes: [["#ref": "gear/tension"]]]]
+                ]).build()
+
+        when: "active - #ref expands to a plain NUMBER attribute keyed by the last path segment"
+        def expanded = sportService.getSessionAttributeSchemaRaw(sportId)
+
+        then:
+        1 * sportLookupCache.getActiveSportsById() >> [(sportId): sport]
+        expanded.groups[0].attributes[0].key == "tension"
+        expanded.groups[0].attributes[0].type == SportAttributeType.NUMBER
+
+        when: "deactivated - not in the active cache"
+        sportService.getSessionAttributeSchemaRaw(sportId)
+
+        then:
+        1 * sportLookupCache.getActiveSportsById() >> [:]
+        thrown(ResourceNotFoundException)
+    }
+
+    def "getResolvedSessionAttributeSchema marks the #ref node prefillable"() {
+        given:
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
+                .attributesSchema(storedProfileSchema())
+                .sessionAttributesSchema([
+                        defaultLocale: "en",
+                        groups       : [[key: "setup", label: [en: "Setup"], isAvailable: true,
+                                         attributes: [["#ref": "gear/tension"]]]]
+                ]).build()
+
+        when:
+        def resolved = sportService.getResolvedSessionAttributeSchema(sportId, Locale.forLanguageTag("en"))
+
+        then:
+        1 * sportLookupCache.getActiveSportsById() >> [(sportId): sport]
+        resolved.groups[0].attributes[0].key == "tension"
+        resolved.groups[0].attributes[0].prefillable
+        resolved.groups[0].attributes[0].prefillKey == "gear/tension"
+    }
+
+    def "getResolvedSessionAttributeSchema returns null when the sport's sessions offer no attributes"() {
+        given:
+        def sportId = 1L
+        def sport = Sport.builder().id(sportId).name("Badminton").isActive(true).build()
+
+        when:
+        def result = sportService.getResolvedSessionAttributeSchema(sportId, Locale.forLanguageTag("en"))
+
+        then:
+        1 * sportLookupCache.getActiveSportsById() >> [(sportId): sport]
+        result == null
     }
 
     def "updateSport rejects a rename onto a name another sport already holds"() {

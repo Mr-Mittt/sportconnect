@@ -161,4 +161,7 @@
     <!-- A19: sport attribute schema v3 — rewrite the seeded Badminton document without `order` and rekey its profile attributes to full paths -->
     <include file="db/changelog/changes/V061__sport_schema_v3_nested_groups.sql" relativeToChangelogFile="false"/>
 
+    <!-- A17: sports.session_attributes_schema — admin-managed per-sport SESSION attribute definition tree -->
+    <include file="db/changelog/changes/V062__add_session_attributes_schema_to_sports.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

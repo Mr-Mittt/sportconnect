@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.sport.api.dto.CreateSportRequest;
+import com.sportconnect.sport.api.dto.ResolvedSportAttributeSchema;
+import com.sportconnect.sport.api.dto.SessionAttributeSchema;
 import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UpdateSportRequest;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -29,6 +32,9 @@ public class SportServiceImpl implements SportService {
     private final SportRepository sportRepository;
     private final SportLookupCache sportLookupCache;
     private final SportAttributeSchemaValidator schemaValidator;
+    private final SessionAttributeSchemaValidator sessionSchemaValidator;
+    private final SessionAttributeSchemaExpander sessionSchemaExpander;
+    private final SessionAttributeSchemaResolver sessionSchemaResolver;
     private final ObjectMapper objectMapper;
 
     /**
@@ -308,5 +314,106 @@ public class SportServiceImpl implements SportService {
             return null;
         }
         return objectMapper.convertValue(stored, SportAttributeSchema.class);
+    }
+
+    // ---- A17: per-sport SESSION attribute schema ----
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Repository read, so an inactive sport returns its schema rather than 404 — the admin
+     * counterpart of {@link #getAttributeSchemaForAdmin}.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public SessionAttributeSchema getSessionAttributeSchemaForAdmin(Long sportId) {
+        Sport sport = sportRepository.findById(sportId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
+        return toSessionAttributeSchema(sport.getSessionAttributesSchema());
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Validated before written and rejected atomically (mirrors {@link #replaceAttributeSchema}).
+     * The validator also needs the sport's <em>profile</em> schema — every {@code #ref} resolves
+     * against it — so it is read off the same {@link Sport} row. Resolves via {@code findById} so an
+     * inactive sport's session schema stays editable; evicts the sport cache on success.
+     */
+    @Override
+    @Transactional
+    public SessionAttributeSchema replaceSessionAttributeSchema(Long sportId, SessionAttributeSchema schema) {
+        Sport sport = sportRepository.findById(sportId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
+
+        sessionSchemaValidator.validate(schema, toAttributeSchema(sport.getAttributesSchema()));
+
+        sport.setSessionAttributesSchema(schema == null
+                ? null
+                : objectMapper.convertValue(schema, new TypeReference<Map<String, Object>>() {
+                }));
+        Sport saved = sportRepository.save(sport);
+        sportLookupCache.evictAll();
+
+        log.info("Replaced session attribute schema for sport {}", sportId);
+        return toSessionAttributeSchema(saved.getSessionAttributesSchema());
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Active-only, via the sport cache (like {@link #getAttributeSchema}). The stored session
+     * document and the profile document both come off the one cached {@link Sport}, so this stays an
+     * in-memory hit; {@link SessionAttributeSchemaExpander} does the {@code #ref} inlining and the
+     * lenient drop of any that no longer resolve.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public SportAttributeSchema getSessionAttributeSchemaRaw(Long sportId) {
+        Sport sport = requireActiveSport(sportId);
+        SessionAttributeSchema sessionSchema = toSessionAttributeSchema(sport.getSessionAttributesSchema());
+        if (sessionSchema == null) {
+            return null;
+        }
+        return sessionSchemaExpander.expand(sessionSchema, toAttributeSchema(sport.getAttributesSchema())).schema();
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Active-only. Expands, locale-resolves and stamps {@code prefillable}/{@code prefillKey} in
+     * one call via {@link SessionAttributeSchemaResolver}. Unlike the profile schema this resolves
+     * here rather than in the controller — the member GET is the only caller and there is no hot
+     * write path to keep locale-free.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ResolvedSportAttributeSchema getResolvedSessionAttributeSchema(Long sportId, Locale locale) {
+        Sport sport = requireActiveSport(sportId);
+        SessionAttributeSchema sessionSchema = toSessionAttributeSchema(sport.getSessionAttributesSchema());
+        if (sessionSchema == null) {
+            return null;
+        }
+        return sessionSchemaResolver.resolve(sessionSchema, toAttributeSchema(sport.getAttributesSchema()), locale);
+    }
+
+    private Sport requireActiveSport(Long sportId) {
+        Sport sport = sportLookupCache.getActiveSportsById().get(sportId);
+        if (sport == null) {
+            throw new ResourceNotFoundException("Sport", "id", sportId);
+        }
+        return sport;
+    }
+
+    /**
+     * Converts the stored untyped session document into the typed DTO tree; {@code null} for a sport
+     * whose sessions offer no attributes. The one place {@code session_attributes_schema} becomes a
+     * typed {@link SessionAttributeSchema}, so a since-undeserialisable document fails here alone.
+     */
+    private SessionAttributeSchema toSessionAttributeSchema(Map<String, Object> stored) {
+        if (stored == null || stored.isEmpty()) {
+            return null;
+        }
+        return objectMapper.convertValue(stored, SessionAttributeSchema.class);
     }
 }
