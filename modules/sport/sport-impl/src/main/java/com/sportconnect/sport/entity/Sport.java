@@ -70,6 +70,20 @@ public class Sport {
     @Column(name = "attributes_schema", columnDefinition = "jsonb")
     private Map<String, Object> attributesSchema;
 
+    /**
+     * A17: the per-sport SESSION attribute schema — the admin-managed definition of which attributes
+     * a <em>session</em> (event) of this sport may carry, as opposed to {@link #attributesSchema},
+     * which describes a user's sport <em>profile</em>. {@code null} means this sport's sessions offer
+     * no attributes. Read and written through {@code SessionAttributeSchema} DTOs.
+     *
+     * <p>Untyped {@code Map} for the same reason as {@link #attributesSchema}: {@code Sport} is
+     * cache-loaded on the hot path, and a since-undeserialisable document must not take the whole
+     * catalogue load down with it. {@code null} is meaningful, so no {@code @Builder.Default}.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "session_attributes_schema", columnDefinition = "jsonb")
+    private Map<String, Object> sessionAttributesSchema;
+
     @Column(name = "is_active")
     @Builder.Default
     private Boolean isActive = true;

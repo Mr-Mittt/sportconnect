@@ -5,6 +5,7 @@ import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.sport.api.dto.CreateSportRequest;
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest;
 import com.sportconnect.sport.api.dto.ResolvedSportAttributeSchema;
+import com.sportconnect.sport.api.dto.SessionAttributeSchema;
 import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UpdateSportRequest;
@@ -208,6 +209,70 @@ public class SportController {
             @RequestBody(required = false) SportAttributeSchema schema) {
         SportAttributeSchema saved = sportService.replaceAttributeSchema(sportId, schema);
         return ResponseEntity.ok(ApiResponse.success("Attribute schema updated successfully", saved));
+    }
+
+    // Per-sport SESSION attribute schema (A17) — the endpoint layout mirrors the profile schema
+    // trio above exactly: member GET at /{sportId}/…, admin GET at /all/{sportId}/…, admin PUT at
+    // /{sportId}/… (no /all/ — a PUT has no member twin to disambiguate from).
+    @Operation(summary = "Get a sport's session attribute schema",
+            description = "The attribute definition tree used to render per-session fields when "
+                    + "creating a session of this sport. Every #ref is expanded from the sport's "
+                    + "profile schema and each such node is marked prefillable with the profile "
+                    + "path to seed it from. Labels resolved for the caller's Accept-Language. "
+                    + "Returns null data when the sport's sessions offer no attributes.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema returned"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Sport not found or not active")
+    })
+    @GetMapping("/{sportId}/session-attribute-schema")
+    // Same rationale as GET /{sportId}/attribute-schema: /api/sports/** is blanket-permitAll in
+    // SecurityConfig, so this @PreAuthorize is what protects the endpoint; isAuthenticated() rather
+    // than hasRole('USER') because an admin-only account may not also hold USER.
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<ResolvedSportAttributeSchema>> getSessionAttributeSchema(
+            @PathVariable Long sportId, Locale locale) {
+        ResolvedSportAttributeSchema resolved = sportService.getResolvedSessionAttributeSchema(sportId, locale);
+        return ResponseEntity.ok(ApiResponse.success("Session attribute schema retrieved successfully", resolved));
+    }
+
+    @Operation(summary = "Get a sport's session attribute schema, including for an inactive sport",
+            description = "Admin-only. The admin counterpart of "
+                    + "GET /api/sports/{sportId}/session-attribute-schema. Raw — every locale's "
+                    + "label map, #refs not expanded — so the editor (client ADMIN-5) shows exactly "
+                    + "what is stored. Returns null data when the sport's sessions offer no attributes.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema returned"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not an admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Sport not found")
+    })
+    @GetMapping("/all/{sportId}/session-attribute-schema")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<SessionAttributeSchema>> getSessionAttributeSchemaForAdmin(
+            @PathVariable Long sportId) {
+        SessionAttributeSchema schema = sportService.getSessionAttributeSchemaForAdmin(sportId);
+        return ResponseEntity.ok(ApiResponse.success("Session attribute schema retrieved successfully", schema));
+    }
+
+    @Operation(summary = "Replace a sport's session attribute schema",
+            description = "Admin-only. Replaces the whole document; no partial update. Rejected in "
+                    + "full if any #ref does not resolve to a live, available profile attribute, or "
+                    + "any other rule is broken.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema replaced"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Schema document is invalid"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not an admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Sport not found")
+    })
+    @PutMapping("/{sportId}/session-attribute-schema")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<SessionAttributeSchema>> replaceSessionAttributeSchema(
+            @PathVariable Long sportId,
+            @RequestBody(required = false) SessionAttributeSchema schema) {
+        SessionAttributeSchema saved = sportService.replaceSessionAttributeSchema(sportId, schema);
+        return ResponseEntity.ok(ApiResponse.success("Session attribute schema updated successfully", saved));
     }
 
     // User Sport Profile endpoints

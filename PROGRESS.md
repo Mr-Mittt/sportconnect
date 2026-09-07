@@ -3275,6 +3275,30 @@ explicit go-ahead at each step (full story in A3's summary doc):
   schema field that holds a node path** — the `#ref` reference field and its dangling-path → 400
   validation land with **A17**, which A19 must precede for exactly that reason (Delta filed on A17).
   No controller / `SecurityConfig` / `SportServiceImpl` / `UserSportProfileServiceImpl` change.
+- **Session attribute schema (A17 `DONE` 2026-09-06,
+  `documentation/md/SESSION_ATTRIBUTE_SCHEMA_DESIGN.md`; sport-impl backend, client CLIENT-SESSION-14
+  / ADMIN-5 already filed):** a **second** admin-managed attribute schema per sport, for *sessions*
+  (events) rather than user profiles — new nullable `sports.session_attributes_schema` JSONB (V062,
+  mirrors V059). A session group's `attributes[]` holds a `#ref`-or-own **polymorphic node**
+  (`SessionAttributeNode`, `@JsonProperty("#ref")`): a `#ref` points at a profile-schema attribute
+  by full v3 path and inherits its `type`/`options`/`definitionRef` (and that definition, from the
+  *profile* registry), overriding only `label`; an own node is a self-contained
+  `SportAttributeDefinition` whose `definitionRef` resolves against a **session-local** `definitions`
+  registry. `#ref` key in the session tree = last path segment; the full path is the resolved node's
+  new additive `prefillKey` (with `prefillable`) on `ResolvedSportAttributeDefinition`, so the
+  session-create form seeds it from the creator's profile. `SessionAttributeSchemaValidator` is
+  strict (`#ref` resolved via A19's `SchemaPaths.availableByPath` against the live+available profile
+  view, dangling/unavailable → 400; each `#ref` path globally unique; a session-local definition name
+  colliding with one a `#ref` pulls in → 400); `SessionAttributeSchemaExpander` inlines `#ref`s
+  (lenient-skipping stale ones — strict only at `PUT`, mirrors A9/A10) and produces the
+  `#ref`-expanded `SportAttributeSchema` **SESSION-23**'s write filter consumes; the member resolver
+  reuses `SportAttributeSchemaLabelResolver` unchanged plus a marker pass. Shared per-node/registry
+  rules extracted from `SportAttributeSchemaValidator` into `SchemaChecks` (profile validator slimmed,
+  behaviour byte-identical, spec unchanged). 3 endpoints mirror A9/A11 exactly — admin `PUT`
+  `/{sportId}/session-attribute-schema` + admin raw `GET /all/{sportId}/…` + member resolved `GET
+  /{sportId}/…` (`isAuthenticated()`, active-only); **no `SecurityConfig` change** (`/api/sports/**`
+  is blanket-permit, `@PreAuthorize` enforces). `order` dropped from both node kinds (A19). Green:
+  sport-impl (280) + `:server:test` (175, +9 IT) + full `build` + V062 on dev Postgres.
 - **Client SPORT-2 (`DONE`, 2026-08-26, `client/docs/MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md`):**
   `SportAttributesFields` — the v2 schema-driven renderer for a user's per-sport attribute fields,
   built against A15's real Badminton content. Reworked `shared/types/sport.ts` from the v1 shape to
