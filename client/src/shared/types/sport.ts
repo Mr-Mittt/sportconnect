@@ -211,6 +211,73 @@ export interface SportAttributeSchema {
   defaultLocale: string;
 }
 
+/* ── Session attribute schema — the raw admin document (A17,
+ * `modules/sport/sport-impl`). Parallel to `SportAttributeSchema` above (the
+ * *profile* schema) but describes which attributes a *session* of the sport may
+ * carry. Read/written only by the admin editor (ADMIN-5) via
+ * `GET /api/sports/all/{sportId}/session-attribute-schema` and its `PUT`; the
+ * member-facing `GET /api/sports/{sportId}/session-attribute-schema` returns a
+ * `ResolvedSportAttributeSchema` instead (see `useSessionAttributeSchema`).
+ * 1:1 with the `SessionAttributeSchema`/`SessionAttributeGroup`/`SessionAttributeNode`
+ * DTOs in `modules/sport/sport-api`. `GET` returns `data: null` for a sport
+ * whose sessions offer no attributes — a valid state, not an error. */
+
+/** One attribute node under a `SessionAttributeGroup` — one of two kinds,
+ * distinguished by whether `#ref` is set (A17):
+ * - **`#ref` node** (`#ref` non-null): a pointer at a profile-schema attribute
+ *   by its full `/`-separated path (`gear/rackets/tension`). `type`/`options`/
+ *   `definitionRef` are inherited from that profile attribute; only `label` may
+ *   be overridden. Every own-node field below must be null/absent.
+ * - **own node** (`#ref` null): a self-contained event-only attribute, shaped
+ *   exactly like `SportAttributeDefinition`, whose `definitionRef` resolves
+ *   against the session-local `SessionAttributeSchema.definitions`. */
+export interface SessionAttributeNode {
+  '#ref'?: string | null;
+  /** `#ref` node: optional locale→text override (`null` keeps the inherited
+   * label). Own node: the required label map, carrying the schema's
+   * `defaultLocale`. */
+  label?: Record<string, string> | null;
+  /** Own node only. Sibling-unique. */
+  key?: string | null;
+  /** Own node only. */
+  type?: SportAttributeType | null;
+  /** Own node only. Required and non-empty for `ENUM`/`LIST`. */
+  options?: SportAttributeOption[] | null;
+  /** Own node only. Soft delete. */
+  isAvailable?: boolean | null;
+  /** Own node only. Must be valid for `type`; forbidden for
+   * `DEFINITION`/`DEFINITION_LIST`. */
+  defaultValue?: unknown;
+  /** Own node only. Inclusive bounds, legal only when `type` is `NUMBER`. */
+  min?: number | null;
+  max?: number | null;
+  /** Own node only. Names a `SessionAttributeSchema.definitions` entry;
+   * required when `type` is `DEFINITION`/`DEFINITION_LIST`. */
+  definitionRef?: string | null;
+}
+
+export interface SessionAttributeGroup {
+  /** Sibling-unique (among the parent's sub-groups and own-node keys). */
+  key: string;
+  label: Record<string, string>;
+  /** Soft delete that hides the whole subtree; parent state wins. */
+  isAvailable?: boolean | null;
+  /** Nested sub-groups, arbitrary depth. Absent/`null`/`[]` on a leaf group. */
+  groups?: SessionAttributeGroup[] | null;
+  attributes: SessionAttributeNode[];
+}
+
+export interface SessionAttributeSchema {
+  /** Session-local registry of record shapes an *own* node may reference by
+   * name via `definitionRef`. A name here must not collide with a
+   * profile-schema definition pulled in by a `#ref`. Absent/empty when unused. */
+  definitions?: SportAttributeDefinitionType[] | null;
+  groups: SessionAttributeGroup[];
+  /** BCP 47 (e.g. `"en"`) — every labeled node's `label` map must carry an
+   * entry for this locale. Same contract as `SportAttributeSchema.defaultLocale`. */
+  defaultLocale: string;
+}
+
 /* ── Resolved twins — member-facing (SPORT-2). `label` is already resolved to
  * one display string for the caller's `Accept-Language` (A13) instead of the
  * raw locale map above. Served by `GET /api/sports/{sportId}/attribute-schema`.

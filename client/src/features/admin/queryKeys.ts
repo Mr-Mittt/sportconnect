@@ -8,4 +8,10 @@ export const adminKeys = {
    * different row sets for the same user. */
   sportsAll: () => [...adminKeys.all, 'sportsAll'] as const,
   attributeSchema: (sportId: number) => [...adminKeys.all, 'attributeSchema', sportId] as const,
+  /** ADMIN-5: one sport's raw *session* attribute schema (A17), read via the
+   * admin-only `GET /api/sports/all/{sportId}/session-attribute-schema`. A
+   * different key from `attributeSchema` above — sibling document, sibling
+   * endpoint, edited in its own textarea. */
+  sessionAttributeSchema: (sportId: number) =>
+    [...adminKeys.all, 'sessionAttributeSchema', sportId] as const,
 };
