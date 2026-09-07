@@ -62,6 +62,12 @@ export interface Session {
    * the Join/Accept/Decline/Cancel/Leave action on both the session card and SessionDetailModal:
    * null or LEFT -> Join, INVITED -> Accept/Decline, REQUESTED -> Cancel, JOINED -> Leave. */
   callerParticipation: SessionParticipant | null;
+  /** SESSION-23 (`modules/session`): this session's stored structured attributes, keyed by the
+   * `/`-separated path from the sport's session attribute schema (A17, `modules/sport/sport-impl`).
+   * Already filtered server-side against that schema, so every entry is schema-valid.
+   * `null`/absent when the session carries none. Read-only display is CLIENT-SESSION-16; the
+   * create-modal write surface is CLIENT-SESSION-15. */
+  attributes?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }

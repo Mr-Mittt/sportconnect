@@ -246,6 +246,16 @@ export interface ResolvedSportAttributeDefinition {
   /** SPORT-9/A16: see `SportAttributeField.min`/`.max`. */
   min?: number | null;
   max?: number | null;
+  /** A17 (`modules/sport/sport-impl`), populated on the **session** attribute schema resolution
+   * only (`GET /api/sports/{sportId}/session-attribute-schema`): `true` on a `#ref` node — one
+   * that mirrors one of the sport's profile attributes and can be seeded from the user's own
+   * profile. Absent/`null` on an "own" (event-only) node and on every profile-schema
+   * (`/attribute-schema`) resolution. Read by CLIENT-SESSION-15 to decide which fields to
+   * pre-fill. */
+  prefillable?: boolean | null;
+  /** A17, session schema only: when {@link prefillable} is `true`, the full `/`-separated path of
+   * the referenced profile attribute — the key to read from `profile.attributes[prefillKey]`. */
+  prefillKey?: string | null;
 }
 
 export interface ResolvedSportAttributeGroup {
