@@ -2,6 +2,11 @@
 
 **Status:** `DONE` (2026-09-03)
 **Type:** Enhancement (Architecture)
+
+> **Delta 2026-09-07 (A18):** `preferred_position` was dropped from `user_sport_profiles`. Every
+> mention of `preferredPosition` below as a profile "scalar column" is now stale — the scalar set is
+> `skillLevel`, `bio`, `yearsOfExperience`. The reactivation / resume semantics are otherwise
+> unchanged.
 **Depends on:** **A10** (hard — reuses its `ProfileAttributeFilter.retainDefined` prune; the
 request-merge / `null`-delete half of A10's pipeline is deliberately *not* used) · relates to **A7**
 (revises its reactivation decision)

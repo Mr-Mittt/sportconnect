@@ -32,9 +32,6 @@ public class CreateUserSportProfileRequest {
     @Min(value = 0, message = "Years of experience cannot be negative")
     private Integer yearsOfExperience;
 
-    @Size(max = 100, message = "Preferred position must not exceed 100 characters")
-    private String preferredPosition;
-
     @Size(max = 500, message = "Bio must not exceed 500 characters")
     private String bio;
 
@@ -55,8 +52,8 @@ public class CreateUserSportProfileRequest {
     /**
      * A20: when {@code true}, {@code POST /api/sports/profiles} performs a <strong>pure
      * reactivation</strong> of the caller's soft-deleted profile for {@link #sportId} — the stored
-     * scalar columns ({@code skillLevel}, {@code bio}, {@code preferredPosition},
-     * {@code yearsOfExperience}) are kept verbatim and the stored {@code attributes} map is only
+     * scalar columns ({@code skillLevel}, {@code bio}, {@code yearsOfExperience}) are kept verbatim
+     * and the stored {@code attributes} map is only
      * pruned to the sport's live schema (A10 {@code retainDefined}). Every other field on this
      * request is ignored.
      *

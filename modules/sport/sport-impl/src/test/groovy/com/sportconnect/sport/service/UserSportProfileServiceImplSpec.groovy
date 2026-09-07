@@ -82,7 +82,6 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .sportId(sportId)
                 .skillLevel("Intermediate")
                 .yearsOfExperience(3)
-                .preferredPosition("Forward")
                 .bio("Love playing basketball")
                 .attributes(g(["dominantHand": "left"]))
                 .build()
@@ -98,7 +97,6 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .sportId(sportId)
                 .skillLevel("Intermediate")
                 .yearsOfExperience(3)
-                .preferredPosition("Forward")
                 .bio("Love playing basketball")
                 .attributes(g(["dominantHand": "left"]))
                 .isActive(true)
@@ -247,7 +245,7 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         def existing = UserSportProfile.builder()
                 .id(7L).userId(userId).sportId(sportId)
-                .skillLevel("Beginner").bio("stale").preferredPosition("Forward")
+                .skillLevel("Beginner").bio("stale")
                 .attributes(g(["dominantHand": "left"]))
                 .isActive(false)
                 .build()
@@ -259,7 +257,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Basketball").isActive(true).build()
         1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.of(existing)
         1 * profileRepository.save({ UserSportProfile p ->
-            p.skillLevel == null && p.bio == null && p.preferredPosition == null && p.attributes == g([:])
+            p.skillLevel == null && p.bio == null && p.attributes == g([:])
         }) >> { UserSportProfile p -> p }
     }
 
@@ -274,7 +272,6 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .isResume(true)
                 .skillLevel("Advanced")
                 .bio("new bio")
-                .preferredPosition("Baseline")
                 .yearsOfExperience(9)
                 .attributes(g(["dominantHand": "right"]))
                 .build()
@@ -282,7 +279,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         and: "the stored map has one still-defined key (dominantHand, offered by setup()) and one orphan"
         def existing = UserSportProfile.builder()
                 .id(7L).userId(userId).sportId(sportId)
-                .skillLevel("Beginner").bio("old bio").preferredPosition("Net").yearsOfExperience(2)
+                .skillLevel("Beginner").bio("old bio").yearsOfExperience(2)
                 .attributes(g(["dominantHand": "left", "retiredKey": "orphan"]))
                 .isActive(false)
                 .build()
@@ -300,7 +297,6 @@ class UserSportProfileServiceImplSpec extends Specification {
             p.isActive &&
             p.skillLevel == "Beginner" &&
             p.bio == "old bio" &&
-            p.preferredPosition == "Net" &&
             p.yearsOfExperience == 2 &&
             p.attributes == g(["dominantHand": "left"])
         }) >> { UserSportProfile p -> p }
@@ -569,7 +565,6 @@ class UserSportProfileServiceImplSpec extends Specification {
                 .sportId(sportId)
                 .skillLevel("Intermediate")
                 .yearsOfExperience(3)
-                .preferredPosition("Midfielder")
                 .bio("Improved a lot")
                 .build()
 
@@ -586,7 +581,6 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * profileRepository.save(_) >> { UserSportProfile savedProfile ->
             assert savedProfile.skillLevel == "Intermediate"
             assert savedProfile.yearsOfExperience == 3
-            assert savedProfile.preferredPosition == "Midfielder"
             assert savedProfile.bio == "Improved a lot"
             return savedProfile
         }

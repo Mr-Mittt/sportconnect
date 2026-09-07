@@ -49,9 +49,6 @@ public class UserSportProfile {
     @Column(name = "years_of_experience")
     private Integer yearsOfExperience;
 
-    @Column(name = "preferred_position", length = 100)
-    private String preferredPosition;
-
     @Column(columnDefinition = "TEXT")
     private String bio;
 

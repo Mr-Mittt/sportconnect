@@ -3299,6 +3299,17 @@ explicit go-ahead at each step (full story in A3's summary doc):
   /{sportId}/…` (`isAuthenticated()`, active-only); **no `SecurityConfig` change** (`/api/sports/**`
   is blanket-permit, `@PreAuthorize` enforces). `order` dropped from both node kinds (A19). Green:
   sport-impl (280) + `:server:test` (175, +9 IT) + full `build` + V062 on dev Postgres.
+- **Remove `user_sport_profiles.preferred_position` (A18 `DONE` 2026-09-07):** the fixed
+  free-text column was a mistake — "position" is sport-specific (a football position, badminton
+  singles/doubles, nothing for running), so it belongs in the per-sport A9 attribute schema, not a
+  flat scalar. `V063` drops the column; `preferredPosition` removed from the `UserSportProfile`
+  entity, `CreateUserSportProfileRequest` (+ `@Size`) and `UserSportProfileResponse`, and all 5
+  `UserSportProfileServiceImpl` sites (create builder, reactivation-as-create setter, `update`
+  null-check block, response builder, A20 Javadoc). H2 `schema.sql` + Spock/IT specs updated. No
+  data migration (nullable free text, pre-launch). The client half — **SPORT-8** — merged before
+  this (PR #223), so the `UserSportProfileResponse` shrink has no live consumer; a stale client
+  still sending the field gets a harmless no-op. A20's summary carries a stale-scalar-list Delta.
+  Green: sport-impl (280) + `:server:test` (175) + V063 on dev Postgres (column verified gone).
 - **Client SPORT-2 (`DONE`, 2026-08-26, `client/docs/MVP/SPORT-2_SPORT_ATTRIBUTE_CONFIG.md`):**
   `SportAttributesFields` — the v2 schema-driven renderer for a user's per-sport attribute fields,
   built against A15's real Badminton content. Reworked `shared/types/sport.ts` from the v1 shape to

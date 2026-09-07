@@ -108,7 +108,6 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
             // last saved before deleting it. The id (and anything referencing it) is preserved.
             existing.setSkillLevel(request.getSkillLevel());
             existing.setYearsOfExperience(request.getYearsOfExperience());
-            existing.setPreferredPosition(request.getPreferredPosition());
             existing.setBio(request.getBio());
             existing.setAttributes(attributes);
             existing.setIsActive(true);
@@ -124,7 +123,6 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
                 .sportId(request.getSportId())
                 .skillLevel(request.getSkillLevel())
                 .yearsOfExperience(request.getYearsOfExperience())
-                .preferredPosition(request.getPreferredPosition())
                 .bio(request.getBio())
                 .attributes(attributes)
                 .isActive(true)
@@ -140,8 +138,8 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
      * "you had a profile here before — resume it" flow. Nothing from {@code request} is applied:
      *
      * <ul>
-     *   <li>the stored scalar columns ({@code skillLevel}, {@code bio}, {@code preferredPosition},
-     *       {@code yearsOfExperience}) are left exactly as they were before the soft delete;</li>
+     *   <li>the stored scalar columns ({@code skillLevel}, {@code bio}, {@code yearsOfExperience})
+     *       are left exactly as they were before the soft delete;</li>
      *   <li>the stored {@code attributes} map is run through A10's {@link
      *       ProfileAttributeFilter#retainDefined} only — keys with no live definition are pruned,
      *       {@code isAvailable:false} values are kept verbatim, live values re-validated — with
@@ -291,9 +289,6 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
         if (request.getYearsOfExperience() != null) {
             profile.setYearsOfExperience(request.getYearsOfExperience());
         }
-        if (request.getPreferredPosition() != null) {
-            profile.setPreferredPosition(request.getPreferredPosition());
-        }
         if (request.getBio() != null) {
             profile.setBio(request.getBio());
         }
@@ -417,7 +412,6 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
                 .sportName(sportName)
                 .skillLevel(profile.getSkillLevel())
                 .yearsOfExperience(profile.getYearsOfExperience())
-                .preferredPosition(profile.getPreferredPosition())
                 .bio(profile.getBio())
                 .attributes(profile.getAttributes())
                 .isActive(profile.getIsActive())
