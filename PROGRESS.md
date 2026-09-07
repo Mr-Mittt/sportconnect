@@ -4249,6 +4249,28 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client CLIENT-SESSION-15 (`DONE`, 2026-09-07, `client/docs/MVP/CLIENT-SESSION-15_SESSION_ATTRIBUTES_IN_CREATE_MODAL.md`):**
+  session attributes in `CreateSessionModal`. The (placeholder) "Session detail" collapsible now
+  renders the sport's *session* attribute schema (A17) via the existing `SportAttributesFields`,
+  or is hidden entirely when the sport has none. The query hooks stay out of the presentational
+  modal — `useCreateSessionModalData` (the existing query boundary) owns
+  `useSessionAttributeSchema(createFormSportId)` + `useRawMySportProfiles()` + the attributes draft
+  and passes 3 props down (forwarded by all 5 host pages). New `sessionAttributePrefill.ts`:
+  `buildSessionAttributePrefill` seeds every `prefillable` (`#ref`) node from
+  `profile.attributes[prefillKey]` (a full `/`-path post-SPORT-7 — direct read) at the session
+  node's own path, but only when the stored value passes a per-kind shape check (guards against
+  profile/session schema drift); `defaultValue` seeding is left to `SportAttributesFields`. Pre-fill
+  is a render-phase state adjustment (not an effect); `submitCreate` folds the draft — trimmed to
+  the current schema's paths — into the create payload as `attributes` (omitted when empty).
+  **Scope change (user decision):** a Sport change now resets the *whole* modal — a render-phase
+  field reset (`seededFrom` pattern) in `CreateSessionModal` plus `useCreateSessionModalData`
+  clearing the chosen location + attributes draft; no `key` change, no host-page wiring change.
+  New MSW `GET /api/sports/:id/session-attribute-schema` handler + Badminton seed (one `#ref` node,
+  one `defaultValue` node; Pickleball none). Real backend confirmed accepting + server-filtering
+  `POST /api/sessions` `attributes`. `tsc -b`/`eslint` clean; full suite **163 files / 1134 green**.
+  **Visual regression:** no baselined surface touched — the "Session detail" section sits below the
+  fixed-height dialog fold in `app-create-session-modal.spec.ts`; two `update-baselines` dispatches
+  confirmed all 108 baselines byte-identical (an earlier "6 change" prediction was wrong).
 - **Client CLIENT-SESSION-14 (`DONE`, 2026-09-07, `client/docs/MVP/CLIENT-SESSION-14_SESSION_ATTRIBUTE_SCHEMA_HOOK.md`):**
   scaffolding for the session-attribute client work (CLIENT-SESSION-15/16), no UI. New
   `shared/hooks/useSessionAttributeSchema(sportId)` — a 1:1 sibling of `useSportAttributeSchema`

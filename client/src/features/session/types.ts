@@ -39,6 +39,12 @@ export interface CreateSessionPayload {
    * joins. The caller's own id and duplicates are silently deduped backend-side. Omitted/empty
    * -> no invitees. */
   inviteeIds?: string[];
+  /** CLIENT-SESSION-15 / SESSION-23: sport-specific structured attributes, keyed by each
+   * attribute's full `/`-separated path from the sport's *session* attribute schema (A17).
+   * Server-filtered against that schema — unknown keys, wrong-shaped values, and writes to a
+   * switched-off attribute are dropped silently; the surviving map is stored wholesale. Omitted
+   * -> the session carries no attributes. */
+  attributes?: Record<string, unknown>;
 }
 
 export interface UpdateSessionPayload {

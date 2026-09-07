@@ -1006,6 +1006,9 @@ export function GroupsPage() {
           onSubmit={createSessionModalData.submitCreate}
           isSubmitting={createSessionModalData.isCreating}
           isError={createSessionModalData.isCreateError}
+          sessionAttributeSchema={createSessionModalData.sessionAttributeSchema}
+          sessionAttributeValues={createSessionModalData.sessionAttributeValues}
+          onSessionAttributeChange={createSessionModalData.onSessionAttributeChange}
           availableSports={availableSports}
           resumableProfiles={resumableProfiles}
           onAddSport={addSportMutation.mutate}

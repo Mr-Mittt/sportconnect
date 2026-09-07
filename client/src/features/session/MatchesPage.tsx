@@ -222,6 +222,9 @@ export function MatchesPage() {
         onSubmit={data.submitCreate}
         isSubmitting={data.isCreating}
         isError={data.isCreateError}
+        sessionAttributeSchema={data.sessionAttributeSchema}
+        sessionAttributeValues={data.sessionAttributeValues}
+        onSessionAttributeChange={data.onSessionAttributeChange}
         availableSports={availableSports}
         resumableProfiles={resumableProfiles}
         onAddSport={addSportMutation.mutate}
