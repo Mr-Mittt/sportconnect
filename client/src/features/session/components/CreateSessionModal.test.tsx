@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
-import type { SportKey, SportProfile } from '@/shared/types/sport';
+import type {
+  ResolvedSportAttributeSchema,
+  SportKey,
+  SportProfile,
+} from '@/shared/types/sport';
 import { CreateSessionModal } from './CreateSessionModal';
 
 const friends: FriendUser[] = [
@@ -85,6 +89,9 @@ const baseProps = {
   onSubmit: () => {},
   isSubmitting: false,
   isError: false,
+  sessionAttributeSchema: null as ResolvedSportAttributeSchema | null,
+  sessionAttributeValues: {} as Record<string, unknown>,
+  onSessionAttributeChange: () => {},
   availableSports: [] as SportKey[],
   onAddSport: () => {},
   isAddingSport: false,
@@ -177,17 +184,63 @@ describe('CreateSessionModal', () => {
     expect(screen.getByLabelText(/^Sport/)).toHaveValue('football');
   });
 
-  it('"Session basic information" is open by default, "Session detail" is collapsed', () => {
+  it('"Session basic information" is open by default; "Session detail" is absent when the sport has no session schema', () => {
     render(<CreateSessionModal {...baseProps} />);
     expect(screen.getByLabelText(/^Sport/)).toBeVisible();
-    expect(screen.queryByText('Coming soon.')).not.toBeInTheDocument();
+    // CLIENT-SESSION-15: no session schema -> the whole "Session detail" section is not rendered.
+    expect(screen.queryByRole('button', { name: 'Session detail' })).not.toBeInTheDocument();
   });
 
-  it('expanding "Session detail" shows its placeholder', async () => {
-    const user = userEvent.setup();
-    render(<CreateSessionModal {...baseProps} />);
-    await user.click(screen.getByRole('button', { name: 'Session detail' }));
-    expect(screen.getByText('Coming soon.')).toBeInTheDocument();
+  describe('Session detail — session attributes (CLIENT-SESSION-15)', () => {
+    const schema: ResolvedSportAttributeSchema = {
+      groups: [
+        {
+          key: 'match',
+          label: 'Match details',
+          isAvailable: true,
+          attributes: [
+            { key: 'racketBrand', label: 'Racket brand', type: 'STRING', isAvailable: true },
+            { key: 'format', label: 'Format', type: 'STRING', isAvailable: true },
+          ],
+        },
+      ],
+    };
+
+    it('renders SportAttributesFields under "Session detail" when a session schema is present', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} sessionAttributeSchema={schema} />);
+      await user.click(screen.getByRole('button', { name: 'Session detail' }));
+      expect(screen.getByLabelText('Racket brand')).toBeInTheDocument();
+      expect(screen.getByLabelText('Format')).toBeInTheDocument();
+    });
+
+    it('shows a pre-filled attribute value from sessionAttributeValues', async () => {
+      const user = userEvent.setup();
+      render(
+        <CreateSessionModal
+          {...baseProps}
+          sessionAttributeSchema={schema}
+          sessionAttributeValues={{ 'match/racketBrand': 'Yonex' }}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Session detail' }));
+      expect(screen.getByLabelText('Racket brand')).toHaveValue('Yonex');
+    });
+
+    it('fires onSessionAttributeChange with the node path when an attribute is edited', async () => {
+      const user = userEvent.setup();
+      const onSessionAttributeChange = vi.fn();
+      render(
+        <CreateSessionModal
+          {...baseProps}
+          sessionAttributeSchema={schema}
+          onSessionAttributeChange={onSessionAttributeChange}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Session detail' }));
+      await user.type(screen.getByLabelText('Format'), 'D');
+      expect(onSessionAttributeChange).toHaveBeenLastCalledWith('match/format', 'D');
+    });
   });
 
   it('the "Choose location" trigger is enabled from the start (Sport always prefills when the caller has any profile)', () => {
@@ -248,6 +301,23 @@ describe('CreateSessionModal', () => {
 
     await user.selectOptions(screen.getByLabelText(/^Sport/), 'tennis');
     expect(onEffectiveSportChange).toHaveBeenLastCalledWith(2);
+  });
+
+  it('changing the Sport resets every field in the form (CLIENT-SESSION-15 scope change)', async () => {
+    const user = userEvent.setup();
+    render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
+
+    await user.type(screen.getByLabelText(/^Session title/), 'Sunday game');
+    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Open slot/), '8');
+    expect(screen.getByLabelText(/^Session title/)).toHaveValue('Sunday game');
+
+    await user.selectOptions(screen.getByLabelText(/^Sport/), 'tennis');
+
+    expect(screen.getByLabelText(/^Sport/)).toHaveValue('tennis');
+    expect(screen.getByLabelText(/^Session title/)).toHaveValue('');
+    expect(screen.getByLabelText(/^Duration in minutes/)).toHaveValue(null);
+    expect(screen.getByLabelText(/^Open slot/)).toHaveValue(null);
   });
 
   it('"Create session" is clickable even with required fields missing', () => {

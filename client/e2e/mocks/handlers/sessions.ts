@@ -221,6 +221,9 @@ export const sessionHandlers: HttpHandler[] = [
       initialSlot?: number;
       autoApprove?: boolean;
       inviteeIds?: string[];
+      // CLIENT-SESSION-15 / SESSION-23: path-keyed session attributes. The real backend filters
+      // these against the sport's session schema; this mock stores what it's sent.
+      attributes?: Record<string, unknown>;
     };
     if (!body.locationId || !body.scheduledStart || body.capacity === undefined || !body.feeType) {
       return HttpResponse.json(apiError('Validation failed'), { status: 400 });
@@ -255,6 +258,7 @@ export const sessionHandlers: HttpHandler[] = [
       feeAmountVnd: body.feeType === 'FIXED' ? (body.feeAmountVnd ?? null) : null,
       initialSlot,
       autoApprove: body.autoApprove ?? false,
+      attributes: body.attributes ?? null,
       likeCount: 0,
       isLikedByCurrentUser: false,
       // Creator auto-join isn't simulated (see the comment above) — no row exists yet either way.

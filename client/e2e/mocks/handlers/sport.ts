@@ -122,6 +122,45 @@ function defaultAttributeSchemas(): Record<number, SportAttributeSchema | null> 
   };
 }
 
+/**
+ * CLIENT-SESSION-15 / A17: the *session* attribute schema per sport, served already resolved
+ * (matches what `useSessionAttributeSchema` consumes). Badminton (1) has one `prefillable`
+ * (`#ref`) node whose `prefillKey` points at its profile schema's `gear/racketBrand`, plus one
+ * "own" node with a `defaultValue`. Pickleball (3) exercises the "no session schema -> section
+ * hidden" branch.
+ */
+function defaultSessionAttributeSchemas(): Record<number, ResolvedSportAttributeSchema | null> {
+  return {
+    1: {
+      groups: [
+        {
+          key: 'match',
+          label: 'Match details',
+          isAvailable: true,
+          attributes: [
+            {
+              key: 'racketBrand',
+              label: 'Racket brand',
+              type: 'STRING',
+              isAvailable: true,
+              prefillable: true,
+              prefillKey: 'gear/racketBrand',
+            },
+            {
+              key: 'format',
+              label: 'Format',
+              type: 'STRING',
+              isAvailable: true,
+              defaultValue: 'Doubles',
+            },
+          ],
+        },
+      ],
+    },
+    3: null,
+  };
+}
+
 /** Mimics `SportAttributeSchemaLabelResolver` (A13) — the real backend resolves every
  * locale-map label to one string on the member-facing GET, never on the admin GET. Locale
  * resolution itself isn't exercised here (no test asserts non-English output); this always
@@ -298,6 +337,28 @@ export const sportHandlers: HttpHandler[] = [
       apiResponse(
         rawSchema === null ? null : resolveAttributeSchema(rawSchema),
         'Attribute schema retrieved successfully',
+      ),
+    );
+  }),
+
+  // CLIENT-SESSION-15 / A17: the member-facing *session* attribute schema — already resolved
+  // (one string per label) and carrying the `prefillable` / `prefillKey` markers on `#ref`
+  // nodes. Active-only + 404 for an unknown/inactive sport, same as its profile-schema sibling
+  // above. Served pre-resolved from the fixture (the raw `#ref` -> resolved translation is the
+  // real backend's job, not modelled here).
+  http.get('/api/sports/:sportId/session-attribute-schema', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = sportSessions.get(sessionIdFromRequest(request));
+    const sportId = Number(params.sportId);
+    const sport = session.adminSportCatalogState.find((entry) => entry.id === sportId);
+    if (!sport || !sport.isActive) {
+      return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
+    }
+    return HttpResponse.json(
+      apiResponse(
+        defaultSessionAttributeSchemas()[sportId] ?? null,
+        'Session attribute schema retrieved successfully',
       ),
     );
   }),

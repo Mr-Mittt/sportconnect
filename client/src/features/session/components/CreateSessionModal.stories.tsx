@@ -100,6 +100,9 @@ const meta = {
     onSubmit: () => {},
     isSubmitting: false,
     isError: false,
+    sessionAttributeSchema: null,
+    sessionAttributeValues: {},
+    onSessionAttributeChange: () => {},
     availableSports: [],
     onAddSport: () => {},
     isAddingSport: false,
@@ -150,5 +153,42 @@ export const NoSportProfilesYet: Story = {
   args: {
     sportsByKey: {} as Record<SportKey, SportProfile>,
     availableSports: Object.keys(sportsByKey),
+  },
+};
+
+/** CLIENT-SESSION-15: the "Session detail" section renders the sport's session attribute schema
+ * (A17). `racketBrand` is a `prefillable` (#ref) node shown here already seeded from the creator's
+ * profile; `format` is an "own" node on its `defaultValue`. The whole section is hidden when
+ * `sessionAttributeSchema` is `null` (every other story). */
+export const WithSessionAttributes: Story = {
+  args: {
+    activeSport: 'basketball',
+    sessionAttributeSchema: {
+      groups: [
+        {
+          key: 'match',
+          label: 'Match details',
+          isAvailable: true,
+          attributes: [
+            {
+              key: 'racketBrand',
+              label: 'Racket brand',
+              type: 'STRING',
+              isAvailable: true,
+              prefillable: true,
+              prefillKey: 'gear/racketBrand',
+            },
+            {
+              key: 'format',
+              label: 'Format',
+              type: 'STRING',
+              isAvailable: true,
+              defaultValue: 'Doubles',
+            },
+          ],
+        },
+      ],
+    },
+    sessionAttributeValues: { 'match/racketBrand': 'Yonex Astrox 88D', 'match/format': 'Doubles' },
   },
 };

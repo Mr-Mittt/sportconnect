@@ -262,7 +262,7 @@ The single logged-in test user, unless a spec explicitly overrides via an admin-
 | `mockUser` | Jordan Lee, `jordan@example.com` | `id: '11111111-...'` |
 | `mockAdminUser` | Alex Admin, `admin@example.com` | **ADMIN-1:** `id: '22222222-...'`, `roles: ['USER', 'ADMIN']` — the only fixture holding ADMIN. Deliberately holds USER too, matching how a real admin is provisioned (registration grants USER, ADMIN is added on top) |
 | `mockPassword` | `password123` | Shared by both accounts — they differ only by email and roles |
-| `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. **SPORT-5:** specs no longer assert `aria-disabled` for this state; they assert the dialog it now opens. The fixture still supplies the "every available sport already held" condition both depend on. **PROFILE-8:** Badminton is the only one with an attribute schema (see `defaultAttributeSchemas()` in `sport.ts`); `PUT /api/sports/profiles/:profileId` (new this ticket) merges a saved `attributes` object into the existing one rather than replacing it, mirroring the real service. **SPORT-7:** that schema is now v3 (nested `groups`) — a loose `gear/racketBrand` STRING plus a nested `gear/rackets/stringTension` NUMBER sub-group; attribute values are path-keyed |
+| `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. **SPORT-5:** specs no longer assert `aria-disabled` for this state; they assert the dialog it now opens. The fixture still supplies the "every available sport already held" condition both depend on. **PROFILE-8:** Badminton is the only one with an attribute schema (see `defaultAttributeSchemas()` in `sport.ts`); `PUT /api/sports/profiles/:profileId` (new this ticket) merges a saved `attributes` object into the existing one rather than replacing it, mirroring the real service. **SPORT-7:** that schema is now v3 (nested `groups`) — a loose `gear/racketBrand` STRING plus a nested `gear/rackets/stringTension` NUMBER sub-group; attribute values are path-keyed. **CLIENT-SESSION-15:** Badminton also has a *session* attribute schema (`defaultSessionAttributeSchemas()` / `GET /api/sports/1/session-attribute-schema`) — a `prefillable` `#ref` node (`prefillKey: gear/racketBrand`) + one own node with a `defaultValue`; Pickleball has none |
 
 Posts (all owned by `mockUser` unless noted) — `sportId` 1 = Badminton, 3 = Pickleball
 (SPORT-3 — was 5 = Soccer/6 = Basketball before the real catalog shrank to 2 sports, A6):
@@ -922,12 +922,14 @@ Dialog-scoped, same shape as `app-session-detail-modal.spec.ts` above. Parameter
 
 | State | Setup | Expects |
 |---|---|---|
-| `default` | Open "Create session" | Sport field visible, empty form |
-| `location-chosen` | Open, select Pickleball, LocationPicker search "Riverside" → pick `mockLocation`, fill title/duration/open-slot | Chosen location name visible |
-| `no-sport-profiles` | `seedZeroSportProfilesOnNextLoad(mockSessionId)` before `seedAuthenticatedSession`, close MatchesPage's own auto-prompted "Add a sport" dialog first (not the state under test), then open Create session | "add a sport first" gate text visible (`CreateSessionModal`'s own internal empty-profile prompt, distinct from the page-level auto-prompt) |
+| `default` | Open "Create session" | Sport field visible, empty form. **CLIENT-SESSION-15:** Badminton is pre-selected and now has a session attribute schema (`defaultSessionAttributeSchemas()` in `sport.ts`), so the "Session detail" section renders `SportAttributesFields` (collapsed) instead of the old "Coming soon" placeholder |
+| `location-chosen` | Open, select Pickleball, LocationPicker search "Riverside" → pick `mockLocation`, fill title/duration/open-slot | Chosen location name visible. **CLIENT-SESSION-15:** Pickleball has no session schema, so the "Session detail" section is absent entirely; also, selecting Pickleball resets the whole form (scope change) — the fills happen after, so no visible effect here |
+| `no-sport-profiles` | `seedZeroSportProfilesOnNextLoad(mockSessionId)` before `seedAuthenticatedSession`, close MatchesPage's own auto-prompted "Add a sport" dialog first (not the state under test), then open Create session | "add a sport first" gate text visible (`CreateSessionModal`'s own internal empty-profile prompt, distinct from the page-level auto-prompt). Unaffected by CLIENT-SESSION-15 — the gate has no attributes section |
 
 Same clock-freeze / blur-before-screenshot / `document.fonts.ready` sequence and known-Windows-noise
-caveat as `app-session-detail-modal.spec.ts` above.
+caveat as `app-session-detail-modal.spec.ts` above. **CLIENT-SESSION-15 regenerated `create-session-default-*`
+and `create-session-location-chosen-*` (6 baselines); `create-session-no-sport-profiles-*` stayed
+byte-identical.**
 
 ### `e2e/visual/app-notification-bell.spec.ts` (CLIENT-NOTIF-2, `visual-regression` project)
 

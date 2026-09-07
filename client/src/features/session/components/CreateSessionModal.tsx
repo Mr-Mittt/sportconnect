@@ -7,7 +7,7 @@ import { LocationPicker } from '@/features/location/components/LocationPicker';
 import { FEE_TYPE_LABEL } from '@/shared/lib/feeType';
 import type { Location } from '@/shared/types/location';
 import type { FeeType } from '@/shared/types/session';
-import type { SportKey, SportProfile } from '@/shared/types/sport';
+import type { ResolvedSportAttributeSchema, SportKey, SportProfile } from '@/shared/types/sport';
 import { IconX } from '@tabler/icons-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
@@ -25,6 +25,7 @@ import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
 import { AddSportFields, type AddSportProfileSubmission } from '@/shared/components/AddSportFields';
+import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import type { CreateSessionPayload } from '../types';
 import { SessionStartTimePicker } from './SessionStartTimePicker';
@@ -398,6 +399,14 @@ interface CreateSessionModalProps {
   isSubmitting: boolean;
   isError: boolean;
 
+  /** CLIENT-SESSION-15: the chosen sport's resolved *session* attribute schema (A17), or `null`
+   * when it has none — the "Session detail" section renders `SportAttributesFields` from it, or
+   * is hidden entirely. All three are owned by `useCreateSessionModalData` (the query boundary),
+   * not this presentational component. */
+  sessionAttributeSchema: ResolvedSportAttributeSchema | null;
+  sessionAttributeValues: Record<string, unknown>;
+  onSessionAttributeChange: (key: string, value: unknown) => void;
+
   /** CLIENT-SESSION-7 follow-up: when the caller has zero sport profiles (`sportsByKey` empty),
    * this form is replaced by an inline "add a sport first" prompt (`AddSportFields`) instead of
    * closing this Dialog and opening a second one — see that component's own doc comment for why.
@@ -496,6 +505,9 @@ export function CreateSessionModal({
   onSubmit,
   isSubmitting,
   isError,
+  sessionAttributeSchema,
+  sessionAttributeValues,
+  onSessionAttributeChange,
   availableSports,
   resumableProfiles,
   onAddSport,
@@ -544,6 +556,32 @@ export function CreateSessionModal({
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   const effectiveSportId = displaySport !== '' ? sportIdForKey(displaySport) : undefined;
+
+  // CLIENT-SESSION-15 (scope change, user decision): a Sport change resets the whole form — every
+  // field goes back to its default, as if the modal had been reopened for the new sport (the
+  // session schema, favourite locations and location search are all sport-scoped, so a half-filled
+  // form must not carry from sport A into sport B). Render-phase state adjustment, the same
+  // `seededFrom` pattern `useSportProfileSettingsTabData` / `SportFieldsForm` use — no effect, no
+  // extra render. The hook-owned pieces (chosen location, attributes draft) reset in parallel via
+  // `onEffectiveSportChange` below.
+  const [seededForSportId, setSeededForSportId] = useState(effectiveSportId);
+  if (effectiveSportId !== seededForSportId) {
+    setSeededForSportId(effectiveSportId);
+    setTitle('');
+    setDescription('');
+    setLocationNote('');
+    setScheduledStart('');
+    setDurationMinutes('');
+    setTakenSlots('');
+    setOpenSlots('');
+    setFeeType('FREE');
+    setFeeAmountVnd('');
+    setSelectedInvitees([]);
+    setAutoApprove(false);
+    setHasAttemptedSubmit(false);
+    setIsBasicInfoOpen(true);
+    setIsDetailOpen(false);
+  }
 
   // CLIENT-SESSION-5: report the effective sportId up on every change (including the initial
   // pre-selected value) so the parent can scope the favorites dropdown's query — this field
@@ -839,14 +877,23 @@ export function CreateSessionModal({
               </CollapsibleContent>
             </Collapsible>
 
-            <Collapsible open={isDetailOpen} onOpenChange={setIsDetailOpen} className="border-hairline-t border-border pt-3">
-              <CollapsibleTrigger className="border-hairline-b justify-center gap-1.5 border-border px-1.75 py-1.5">
-                <span className="text-2xs font-medium text-text-secondary">Session detail</span>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pt-3">
-                <p className="text-2sm text-text-muted">Coming soon.</p>
-              </CollapsibleContent>
-            </Collapsible>
+            {/* CLIENT-SESSION-15: sport-specific session attributes (A17 schema), pre-filled from
+                the creator's profile for `prefillable` (#ref) nodes by `useCreateSessionModalData`.
+                Hidden entirely when the chosen sport has no session schema. */}
+            {sessionAttributeSchema !== null && (
+              <Collapsible open={isDetailOpen} onOpenChange={setIsDetailOpen} className="border-hairline-t border-border pt-3">
+                <CollapsibleTrigger className="border-hairline-b justify-center gap-1.5 border-border px-1.75 py-1.5">
+                  <span className="text-2xs font-medium text-text-secondary">Session detail</span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-3">
+                  <SportAttributesFields
+                    schema={sessionAttributeSchema}
+                    values={sessionAttributeValues}
+                    onChange={onSessionAttributeChange}
+                  />
+                </CollapsibleContent>
+              </Collapsible>
+            )}
 
             {isError && (
               <p role="alert" className="text-2sm text-text-danger">

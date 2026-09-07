@@ -254,6 +254,9 @@ export function FriendsPage() {
           onSubmit={createSessionModalData.submitCreate}
           isSubmitting={createSessionModalData.isCreating}
           isError={createSessionModalData.isCreateError}
+          sessionAttributeSchema={createSessionModalData.sessionAttributeSchema}
+          sessionAttributeValues={createSessionModalData.sessionAttributeValues}
+          onSessionAttributeChange={createSessionModalData.onSessionAttributeChange}
           availableSports={availableSports}
           onAddSport={addSportMutation.mutate}
           isAddingSport={addSportMutation.isPending}
