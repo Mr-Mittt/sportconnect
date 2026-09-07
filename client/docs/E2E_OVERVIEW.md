@@ -999,9 +999,9 @@ every other spec's mockUser-authored fixtures already show) → waits for `docum
 screenshot compared against `e2e/visual/__screenshots__/profile-{state}-{width}.png`. Same
 known-Windows-noise caveat as every spec above: `pnpm test:visual` on a Windows host diffs these
 wholesale on font-rendering noise — the committed baselines are Linux-rendered via the `client-ci`
-`update-baselines` dispatch. All 12 are CI-current as of SPORT-8 (which regenerated the 3
-`profile-settings-*` after removing the "Preferred position" field; the other 9 were confirmed
-byte-identical against that same artifact).
+`update-baselines` dispatch. All 12 are CI-current as of SPORT-7 (which regenerated the 3
+`profile-settings-*` for schema v3's collapsible groups + nested `Rackets` sub-group; the other 9
+were confirmed byte-identical against that same artifact).
 
 ### `e2e/visual/app-sport-reactivate.spec.ts` (SPORT-12, `visual-regression` project)
 

@@ -167,6 +167,14 @@ its dialog/switcher baselines don't mount the component, so all 21 stay byte-ide
 cannot be regenerated on a Windows host; a local `visual-regression` run is the documented
 font-rendering noise floor.
 
+**Executed (2026-09-07):** `client-ci` `update-baselines` dispatch run on Linux; `visual-baselines`
+artifact applied via `/updatebaseline`. SHA-256 against the committed set confirmed **exactly the 3
+predicted files changed** (`profile-settings-{375,768,1280}.png`); the other **105 baselines came
+back byte-identical** — no unintended drift, and the local Windows diffs on those were pure noise
+floor. Human eyeball of `profile-settings-1280.png` / `-375.png`: the "Gear" group now carries a
+collapse chevron, "Racket brand" sits under it, and an indented "Rackets" sub-group with its own
+chevron holds "String tension (lbs)" — the v3 nesting, nothing else moved. Committed `1a5adcc`.
+
 ### Delta for CLIENT-SESSION-15 / CLIENT-SESSION-16 (`client`)
 
 `SportAttributesFields` now renders the v3 nested tree and is **path-keyed** — a caller's `values`

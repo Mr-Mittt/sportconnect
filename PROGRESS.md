@@ -4277,10 +4277,11 @@ explicit go-ahead at each step (full story in A3's summary doc):
   MSW `resolveAttributeSchema` recursion + `order` drop; the mock Badminton schema gains a real
   nested `gear/rackets` sub-group. Picked up ahead of CLIENT-SESSION-15 (queue reorder, user
   decision). `tsc -b`/`eslint` clean; Vitest green (`SportAttributesFields` 29 cases). **Visual
-  regression:** `profile-settings-{375,768,1280}.png` legitimately change (grid + collapsible
-  chevrons + the nested sub-group section) — regenerate via the `client-ci` `update-baselines`
-  dispatch; every other baseline (incl. `app-sport-reactivate`'s 21, which screenshot the
-  no-schema Pickleball tab or non-mounting dialogs) stays byte-identical.
+  regression:** `profile-settings-{375,768,1280}.png` regenerated via the `client-ci`
+  `update-baselines` dispatch (grid + collapsible chevrons + the nested `Rackets` sub-group);
+  SHA-256 confirmed exactly those 3 changed, the other 105 byte-identical (incl.
+  `app-sport-reactivate`'s 21, which screenshot the no-schema Pickleball tab or non-mounting
+  dialogs).
 - **Client SPORT-9 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-9_NUMBER_AND_BOOLEAN_ATTRIBUTE_CONTROLS.md`):**
   client half of backend A16 — `NUMBER`/`BOOLEAN` render cases added to `SportAttributesFields`'
   two `switch (type)` blocks (top-level `AttributeField` and nested-record `DefinitionField`,
