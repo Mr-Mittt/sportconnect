@@ -150,9 +150,23 @@ regression; no baseline changes and none can be regenerated on a Windows host.
 
 ### E2E
 
-No `e2e/flows/` spec was added or changed (ticket scope: Vitest only). The two new MSW handlers
-were added to `e2e/mocks/handlers/sport.ts` so the page's new session-schema query resolves under
-MSW — `admin-sports.spec.ts` and `admin-route-guard.spec.ts` keep passing unchanged
-(`getByLabel('Schema document (JSON)')` stays unique; sections default open). `E2E_OVERVIEW.md`
-needs no catalog change — no spec file changed — though its handler note for
-`e2e/mocks/handlers/sport.ts` now also covers the session-schema admin GET/PUT.
+Ticket scope was Vitest only, but the shared `AdminSportsPage` is driven through a real browser by
+`admin-sports.spec.ts` / `admin-route-guard.spec.ts`, so those were run. **Three specs in
+`admin-sports.spec.ts` broke** and were fixed:
+
+- `page.getByLabel('Schema document (JSON)')` does **substring** matching in Playwright, so it now
+  resolved to *two* textareas ("Session schema document (JSON)" contains it) → strict-mode
+  violation. The Vitest suite did not catch this because RTL's `getByLabelText` is **exact** by
+  default. Fix: `getByLabel('Schema document (JSON)', { exact: true })` at the 3 call sites
+  (lines 50, 68, 85). Behaviour of the tests is unchanged — still the profile editor only — so no
+  `E2E_OVERVIEW.md` catalog change; its `e2e/mocks/handlers/sport.ts` handler note now also covers
+  the session-schema admin GET/PUT.
+
+After the fix: `admin-sports.spec.ts` + `admin-route-guard.spec.ts` **10/10 green**; full `e2e`
+project re-run to confirm the additive `e2e/mocks/handlers/sport.ts` change (new state field + 2
+handlers) did not disturb other specs.
+
+**Process note:** the first close-out asserted "existing e2e stays green" without running
+Playwright — a real gap. `/workon` Phase 5's "always run e2e when the ticket touches a
+browser-exercised surface" is why the step exists; skipping it because the *ticket* scoped tests to
+Vitest was the wrong call when the change edits a page three e2e specs cover.

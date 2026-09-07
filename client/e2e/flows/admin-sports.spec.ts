@@ -47,7 +47,7 @@ test('Admin sports — an admin edits and saves the attribute schema', async ({ 
   await logInAsAdmin(page);
   await page.goto('/admin/sports/1');
 
-  const textarea = page.getByLabel('Schema document (JSON)');
+  const textarea = page.getByLabel('Schema document (JSON)', { exact: true });
   await expect(textarea).toContainText('racketBrand');
 
   await textarea.fill('{"defaultLocale":"en","groups":[]}');
@@ -65,7 +65,7 @@ test('Admin sports — invalid JSON is rejected locally before any request', asy
     if (request.method() === 'PUT') requests.push(request.url());
   });
 
-  await page.getByLabel('Schema document (JSON)').fill('{ not json');
+  await page.getByLabel('Schema document (JSON)', { exact: true }).fill('{ not json');
   await page.getByRole('button', { name: 'Save attributes' }).click();
 
   await expect(page.getByRole('alert')).toContainText('Invalid JSON');
@@ -82,7 +82,7 @@ test('Admin sports — a deactivated sport is editable like any other (A11)', as
   await expect(page.getByLabel('Name')).toHaveValue('Tennis');
   await expect(page.getByRole('checkbox', { name: 'Active' })).not.toBeChecked();
 
-  const textarea = page.getByLabel('Schema document (JSON)');
+  const textarea = page.getByLabel('Schema document (JSON)', { exact: true });
   await expect(textarea).toBeVisible();
 
   await textarea.fill('{"defaultLocale":"en","groups":[]}');
