@@ -35,7 +35,6 @@ const badmintonSchema: SportAttributeSchema = {
       key: 'gear',
       label: { en: 'Gear' },
       isAvailable: true,
-      order: 1,
       attributes: [{ key: 'racketBrand', label: { en: 'Racket brand' }, type: 'STRING' }],
     },
   ],

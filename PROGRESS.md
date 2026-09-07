@@ -4263,6 +4263,25 @@ explicit go-ahead at each step (full story in A3's summary doc):
   shared type. All three additions are optional, so every existing consumer is compatible as-is. 5
   new Vitest cases, no components/stories/MSW/E2E. `tsc -b` + `eslint` clean, full Vitest suite
   1110 green. No baselined surface touched — `visual-regression` unaffected.
+- **Client SPORT-7 (`DONE`, 2026-09-07, `client/docs/MVP/SPORT-7_ATTRIBUTE_FIELDS_ORDER_AND_LAYOUT.md`):**
+  client half of backend **A19** (schema v3). `SportAttributesFields` reworked: (1) groups/attributes
+  render in **array order** — `order?` removed from all six `shared/types/sport.ts` schema
+  interfaces; (2) **nested groups** — `SportAttributeGroup`/`ResolvedSportAttributeGroup` gain a
+  self-referential `groups?`, rendered by a recursive `GroupSection` (each a `Collapsible`,
+  `defaultOpen`, heading wraps the trigger for the WAI-ARIA accordion pattern; depth ≥ 1 indented
+  with a left border); `isAvailable` parent-wins at every depth; (3) a group's own primitive fields
+  flow in a `grid-cols-1 sm:grid-cols-2` grid, DEFINITION/DEFINITION_LIST `sm:col-span-2`; (4)
+  **path-keyed I/O** — `values`/`onChange` key by each attribute's full `/`-separated path from the
+  schema root (`gear/rackets/tension`), built while walking the tree; `defaultValue` seeding
+  recurses. `UserSportProfileResponse.attributes` map shape unchanged, only the key convention.
+  MSW `resolveAttributeSchema` recursion + `order` drop; the mock Badminton schema gains a real
+  nested `gear/rackets` sub-group. Picked up ahead of CLIENT-SESSION-15 (queue reorder, user
+  decision). `tsc -b`/`eslint` clean; Vitest green (`SportAttributesFields` 29 cases). **Visual
+  regression:** `profile-settings-{375,768,1280}.png` regenerated via the `client-ci`
+  `update-baselines` dispatch (grid + collapsible chevrons + the nested `Rackets` sub-group);
+  SHA-256 confirmed exactly those 3 changed, the other 105 byte-identical (incl.
+  `app-sport-reactivate`'s 21, which screenshot the no-schema Pickleball tab or non-mounting
+  dialogs).
 - **Client SPORT-9 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-9_NUMBER_AND_BOOLEAN_ATTRIBUTE_CONTROLS.md`):**
   client half of backend A16 — `NUMBER`/`BOOLEAN` render cases added to `SportAttributesFields`'
   two `switch (type)` blocks (top-level `AttributeField` and nested-record `DefinitionField`,

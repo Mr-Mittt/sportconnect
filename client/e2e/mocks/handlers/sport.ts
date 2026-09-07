@@ -8,6 +8,7 @@ import type {
   ResolvedSportAttributeOption,
   ResolvedSportAttributeSchema,
   SportAttributeField,
+  SportAttributeGroup,
   SportAttributeOption,
   SportAttributeSchema,
   SportResponse,
@@ -76,8 +77,10 @@ function defaultAdminSportCatalog(): SportResponse[] {
   ];
 }
 
-// Schema v2 document shape (A12/A13). Only Badminton starts with one — Pickleball exercises
-// the "sport has no schema yet, GET returns data: null" branch.
+// Schema v3 document shape (A19 — nested `groups`, no `order`; A12/A13 registry + localized
+// labels unchanged). Only Badminton starts with one — Pickleball exercises the "sport has no
+// schema yet, GET returns data: null" branch. The `gear` group carries a loose `racketBrand`
+// attribute *and* a nested `rackets` sub-group, so a GET exercises real recursion.
 function defaultAttributeSchemas(): Record<number, SportAttributeSchema | null> {
   return {
     1: {
@@ -87,14 +90,29 @@ function defaultAttributeSchemas(): Record<number, SportAttributeSchema | null> 
           key: 'gear',
           label: { en: 'Gear' },
           isAvailable: true,
-          order: 1,
           attributes: [
             {
               key: 'racketBrand',
               label: { en: 'Racket brand' },
               type: 'STRING',
               isAvailable: true,
-              order: 1,
+            },
+          ],
+          groups: [
+            {
+              key: 'rackets',
+              label: { en: 'Rackets' },
+              isAvailable: true,
+              attributes: [
+                {
+                  key: 'stringTension',
+                  label: { en: 'String tension (lbs)' },
+                  type: 'NUMBER',
+                  isAvailable: true,
+                  min: 15,
+                  max: 35,
+                },
+              ],
             },
           ],
         },
@@ -128,10 +146,37 @@ function resolveField(field: SportAttributeField, defaultLocale: string): Resolv
     options: field.options?.map((option) => resolveOption(option, defaultLocale)),
     definitionRef: field.definitionRef,
     isRequired: field.isRequired,
-    order: field.order,
     // SPORT-9/A16: min/max only meaningful on NUMBER, mirrored through unchanged otherwise.
     min: field.min,
     max: field.max,
+  };
+}
+
+// A19/v3: recurse the nested `groups` tree; display order is array position, so no `order`.
+function resolveGroup(
+  group: SportAttributeGroup,
+  defaultLocale: string,
+): ResolvedSportAttributeGroup {
+  return {
+    key: group.key,
+    label: resolveLabel(group.label, defaultLocale),
+    isAvailable: group.isAvailable,
+    attributes: group.attributes.map(
+      (attribute): ResolvedSportAttributeDefinition => ({
+        key: attribute.key,
+        label: resolveLabel(attribute.label, defaultLocale),
+        type: attribute.type,
+        options: attribute.options?.map((option) => resolveOption(option, defaultLocale)),
+        isAvailable: attribute.isAvailable,
+        defaultValue: attribute.defaultValue,
+        definitionRef: attribute.definitionRef,
+        searchScope: attribute.searchScope,
+        // SPORT-9/A16: min/max only meaningful on NUMBER, mirrored through unchanged otherwise.
+        min: attribute.min,
+        max: attribute.max,
+      }),
+    ),
+    groups: group.groups?.map((subGroup) => resolveGroup(subGroup, defaultLocale)),
   };
 }
 
@@ -143,28 +188,9 @@ function resolveAttributeSchema(schema: SportAttributeSchema): ResolvedSportAttr
       fields: definitionType.fields.map((field) => resolveField(field, defaultLocale)),
     }),
   );
-  const groups: ResolvedSportAttributeGroup[] = schema.groups.map((group) => ({
-    key: group.key,
-    label: resolveLabel(group.label, defaultLocale),
-    isAvailable: group.isAvailable,
-    order: group.order,
-    attributes: group.attributes.map(
-      (attribute): ResolvedSportAttributeDefinition => ({
-        key: attribute.key,
-        label: resolveLabel(attribute.label, defaultLocale),
-        type: attribute.type,
-        options: attribute.options?.map((option) => resolveOption(option, defaultLocale)),
-        isAvailable: attribute.isAvailable,
-        order: attribute.order,
-        defaultValue: attribute.defaultValue,
-        definitionRef: attribute.definitionRef,
-        searchScope: attribute.searchScope,
-        // SPORT-9/A16: min/max only meaningful on NUMBER, mirrored through unchanged otherwise.
-        min: attribute.min,
-        max: attribute.max,
-      }),
-    ),
-  }));
+  const groups: ResolvedSportAttributeGroup[] = schema.groups.map((group) =>
+    resolveGroup(group, defaultLocale),
+  );
   return { definitions, groups };
 }
 
