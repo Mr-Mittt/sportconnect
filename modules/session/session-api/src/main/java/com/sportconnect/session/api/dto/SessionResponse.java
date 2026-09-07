@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -88,6 +89,14 @@ public class SessionResponse {
     private Long likeCount;
 
     private Boolean isLikedByCurrentUser;
+
+    /** SESSION-23 — this session's stored structured attributes, keyed by attribute path from the
+     * sport's session attribute schema (A17). Already filtered against that schema at write time,
+     * so every entry here is one the schema accepted. {@code null} if the session carries none;
+     * an empty map if they were explicitly cleared. Rendering is the client's job
+     * (CLIENT-SESSION-15/16), pairing each path with its label via the resolved schema
+     * (CLIENT-SESSION-14). */
+    private Map<String, Object> attributes;
 
     private LocalDateTime createdAt;
 

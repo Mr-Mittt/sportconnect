@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [A14](MVP/A14_ATTRIBUTE_VALUE_SUGGESTIONS_AND_SEARCH_SCOPE.md) | Attribute-value suggestions + `searchScope` — typeahead pooled from what users already typed, so free text converges *before* an Equipment catalogue exists; results carry an optional `id` from day one so the client never changes when it does. **Postponed at 2026-08-25 pickup** — the aggregation strategy needs more design investigation before implementation (see the ticket's own Investigation notes) | `TODO` |
+| 2 | [A23](MVP/A23_EXTRACT_ATTRIBUTE_FRAMEWORK_TO_SHARED_MODULE.md) | Extract the attribute-schema framework (neutral DTO tree + `SportAttributeValues`/`SchemaPaths`/`SchemaChecks` + the drop-invalid value filter) into a shared home + an ADR — removes the SESSION-23 clone and stops a third consumer forcing `sport-api` surface it doesn't own | `TODO` |
 
 ---
 

@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -64,4 +65,11 @@ public class CreateSessionRequest {
      * that user calls joinSession (resolves straight to JOINED). The caller's own id and
      * duplicates are silently ignored, not rejected. */
     private List<UUID> inviteeIds;
+
+    /** SESSION-23 — sport-specific structured attributes, keyed by the attribute path from the
+     * sport's session attribute schema (A17). Filtered on the server against that schema: unknown
+     * keys, wrong-shaped values, and writes to a switched-off attribute are dropped silently; the
+     * surviving map is stored wholesale. Omitted → the session carries no attributes. Fails with
+     * 400 only if the filtered map still serializes to more than 4KB. */
+    private Map<String, Object> attributes;
 }

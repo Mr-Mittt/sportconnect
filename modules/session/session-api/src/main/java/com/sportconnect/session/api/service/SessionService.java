@@ -24,6 +24,12 @@ public interface SessionService {
      * groupId non-null → requires GroupService.canManageMembers; sportId inherited from the
      * group if omitted. In both cases locationId must resolve to a Location whose sportId
      * matches the session's resolved sportId — a BadRequestException otherwise.
+     *
+     * <p>SESSION-23: when {@code request.attributes} is non-null it is filtered against the sport's
+     * session attribute schema ({@code SportService.getSessionAttributeSchemaRaw}) — unknown /
+     * wrong-typed / switched-off entries are dropped silently — and the surviving map is stored
+     * wholesale; a filtered map over 4KB serialized fails with a BadRequestException. Omitting
+     * {@code attributes} stores none and skips the schema lookup entirely.
      */
     SessionResponse createSession(UUID userId, CreateSessionRequest request);
 
@@ -39,7 +45,14 @@ public interface SessionService {
 
     Page<SessionResponse> getSessionsCreatedByUser(UUID userId, Pageable pageable);
 
-    /** Standalone → creator-only. Group-linked → owner/admin via canManageMembers. */
+    /**
+     * Standalone → creator-only. Group-linked → owner/admin via canManageMembers.
+     *
+     * <p>SESSION-23: {@code request.attributes} has replace semantics — a non-null map is filtered
+     * (as in {@link #createSession}) and stored wholesale, an explicit empty map clears the stored
+     * attributes, and a null/omitted map leaves them untouched (and never fetches the schema, so a
+     * non-attribute edit on a session whose sport was since deactivated still succeeds).
+     */
     SessionResponse updateSession(Long sessionId, UUID userId, UpdateSessionRequest request);
 
     /**

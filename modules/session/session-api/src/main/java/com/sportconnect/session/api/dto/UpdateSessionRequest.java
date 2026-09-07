@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /** Partial update — only non-null fields are applied. */
 @Data
@@ -44,4 +45,10 @@ public class UpdateSessionRequest {
 
     @Min(value = 0, message = "initialSlot must be >= 0")
     private Integer initialSlot;
+
+    /** SESSION-23 — replace-semantics: a non-null map is filtered against the sport's session
+     * attribute schema (A17) and stored wholesale, replacing whatever was there. {@code null}
+     * (or omitted) leaves the stored attributes untouched; an explicit empty map clears them.
+     * Same server-side filtering and 4KB cap as {@code CreateSessionRequest.attributes}. */
+    private Map<String, Object> attributes;
 }

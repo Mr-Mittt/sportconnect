@@ -3758,6 +3758,27 @@ explicit go-ahead at each step (full story in A3's summary doc):
   and **NOTIF-4** filed as a new `CANDIDATE` — fan-out currently notifies participants whose account
   is deactivated, since nothing filters recipients by `isActive`; cross-cutting across every
   trigger, and related to user-impl's U12.
+- **SESSION-23 (`DONE`, 2026-09-07,
+  `modules/session/docs/MVP/SESSION-23_SESSION_ATTRIBUTES.md`):** per-session structured attributes
+  — `V064` adds nullable `sessions.attributes JSONB`; `attributes` (a path-keyed `Map<String,Object>`)
+  on `CreateSessionRequest` / `UpdateSessionRequest` / `SessionResponse`. On write it's filtered
+  against the sport's session attribute schema via `SportService.getSessionAttributeSchemaRaw`
+  (A17's `#ref`-expanded raw doc) with **replace semantics** — unknown / wrong-typed / switched-off
+  entries dropped silently, the surviving map stored wholesale (no merge, so no A10-style
+  "can't-delete-a-key" gap); a filtered map over 4KB serialized → 400. `updateSession` only touches
+  the schema when `attributes` is non-null, so a plain title/time edit on a session whose sport was
+  later deactivated still works; supplying `attributes` for an inactive sport 404s by design.
+  **Reuse-vs-clone decided at pickup:** `ProfileAttributeFilter` / `SchemaPaths` /
+  `SportAttributeValues` are package-private in `sport-impl` and unreachable from `session-impl`, and
+  the ticket's "reuse" and "near-clone" lines conflicted — resolved by **cloning** the
+  value-validation logic into `session-impl` (`SessionAttributeFilter` + `SessionAttributeValues` +
+  a trimmed `SessionSchemaPaths`), consistent with the `SessionGate`/`PostGate` "same shape, no
+  shared logic" precedent, and filing the de-dup as **sport `A23`** + **common `C5`** (paired:
+  `C5` = ADR on the shared home, `A23` = the sport/session repoint that deletes the clone).
+  `schema.sql` gained a `locations` table — the first session IT to return a `SessionResponse`,
+  whose mapper does a real `LocationService.getLocationsByIds`. Client consumers CLIENT-SESSION-14/15/16
+  already filed. Green: `:modules:session:session-impl:test`, `:server:test --rerun-tasks` (179, incl.
+  `SessionAttributesIntegrationTest`), `V064` applied against dev Postgres.
 - **SESSION-21 (`DONE`, 2026-08-19,
   `modules/session/docs/MVP/SESSION-21_SYSTEM_COMMENTS_IN_SESSION_THREAD.md`):** system comments in
   a session's discussion thread — server-written entries at the three moments that already emit

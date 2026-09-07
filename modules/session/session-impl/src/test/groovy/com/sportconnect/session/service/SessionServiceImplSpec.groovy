@@ -34,12 +34,17 @@ import com.sportconnect.social.post.api.dto.CommentResponse
 import com.sportconnect.social.post.api.dto.CreateCommentRequest
 import com.sportconnect.social.post.api.service.CommentService
 import com.sportconnect.social.post.api.service.PostService
+import com.sportconnect.sport.api.dto.SportAttributeDefinition
+import com.sportconnect.sport.api.dto.SportAttributeGroup
+import com.sportconnect.sport.api.dto.SportAttributeSchema
+import com.sportconnect.sport.api.dto.SportAttributeType
 import com.sportconnect.sport.api.dto.SportResponse
 import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.api.service.UserSportProfileService
 import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserService
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import spock.lang.Specification
@@ -61,12 +66,17 @@ class SessionServiceImplSpec extends Specification {
     SessionGate sessionGate = Mock()
     SessionOutboxEventRepository sessionOutboxEventRepository = Mock()
     SessionOutboxWriter sessionOutboxWriter = Mock()
+    // SESSION-23: real filter + mapper — the filter is pure logic with its own spec, and the
+    // size check needs a real serializer. Existing create/update tests pass no attributes, so
+    // sportService.getSessionAttributeSchemaRaw is never hit; the attributes-path tests stub it.
+    SessionAttributeFilter sessionAttributeFilter = new SessionAttributeFilter()
+    ObjectMapper objectMapper = new ObjectMapper()
 
     @Subject
     SessionServiceImpl sessionService = new SessionServiceImpl(
             sessionRepository, sessionParticipantRepository, groupService, locationService, userService,
             sportService, userSportProfileService, postService, commentService, sessionGate,
-            sessionOutboxEventRepository, sessionOutboxWriter)
+            sessionOutboxEventRepository, sessionOutboxWriter, sessionAttributeFilter, objectMapper)
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
     def tennisLocation = LocationResponse.builder().id(2L).sportId(2L).name("Tennis Court").build()
@@ -326,6 +336,131 @@ class SessionServiceImplSpec extends Specification {
         1 * locationService.getLocation(2L) >> tennisLocation
         thrown(BadRequestException)
         0 * sessionRepository.save(_)
+    }
+
+    // --- SESSION-23: session attributes ---
+
+    /** One live STRING attribute at path {@code match/note}. */
+    private static SportAttributeSchema sessionSchema() {
+        SportAttributeSchema.builder().groups([
+                SportAttributeGroup.builder().key("match").label(["en": "Match"]).isAvailable(true)
+                        .attributes([
+                                SportAttributeDefinition.builder().key("note").label(["en": "Note"])
+                                        .type(SportAttributeType.STRING).isAvailable(true).build()
+                        ]).build()
+        ]).build()
+    }
+
+    def "createSession filters submitted attributes against the sport session schema and persists the survivors"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .attributes(["match/note": "bring water", "match/unknown": "x"])
+                .build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
+                .status(SessionStatus.SCHEDULED).attributes(["match/note": "bring water"]).build()
+
+        when:
+        def result = sessionService.createSession(userId, request)
+
+        then:
+        1 * sportService.getSessionAttributeSchemaRaw(1L) >> sessionSchema()
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.attributes == ["match/note": "bring water"] }) >> saved
+        interaction { stubBatchEnrichment() }
+        result.attributes == ["match/note": "bring water"]
+    }
+
+    def "createSession without attributes never fetches the session schema and leaves attributes null"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        0 * sportService.getSessionAttributeSchemaRaw(_)
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.attributes == null }) >> saved
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession rejects attributes whose filtered form exceeds the 4KB cap"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .attributes(["match/note": "x" * 5000])
+                .build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * sportService.getSessionAttributeSchemaRaw(1L) >> sessionSchema()
+        1 * locationService.getLocation(1L) >> basketballLocation
+        thrown(BadRequestException)
+        0 * sessionRepository.save(_)
+    }
+
+    def "updateSession replaces the stored attributes map wholesale, not merged"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .attributes(["match/note": "old", "match/gone": "y"]).build()
+        def request = UpdateSessionRequest.builder().attributes(["match/note": "new"]).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sportService.getSessionAttributeSchemaRaw(1L) >> sessionSchema()
+        1 * sessionRepository.save({ Session s -> s.attributes == ["match/note": "new"] }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession with null attributes leaves the stored map untouched and never fetches the schema"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .attributes(["match/note": "keep"]).build()
+        def request = UpdateSessionRequest.builder().title("New title").build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        0 * sportService.getSessionAttributeSchemaRaw(_)
+        1 * sessionRepository.save({ Session s -> s.attributes == ["match/note": "keep"] }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession with an explicit empty attributes map clears them"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .attributes(["match/note": "old"]).build()
+        def request = UpdateSessionRequest.builder().attributes([:]).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sportService.getSessionAttributeSchemaRaw(1L) >> sessionSchema()
+        1 * sessionRepository.save({ Session s -> s.attributes == [:] }) >> session
+        interaction { stubBatchEnrichment() }
     }
 
     def "getGroupSessions delegates private-group visibility to GroupService.getGroup"() {
