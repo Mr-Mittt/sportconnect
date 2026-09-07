@@ -4249,6 +4249,20 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client CLIENT-SESSION-14 (`DONE`, 2026-09-07, `client/docs/MVP/CLIENT-SESSION-14_SESSION_ATTRIBUTE_SCHEMA_HOOK.md`):**
+  scaffolding for the session-attribute client work (CLIENT-SESSION-15/16), no UI. New
+  `shared/hooks/useSessionAttributeSchema(sportId)` — a 1:1 sibling of `useSportAttributeSchema`
+  (same `{ data, isLoading, isError }` shape, same disabled-query guard) hitting A17's
+  (`modules/sport/sport-impl`) member endpoint `GET /api/sports/{sportId}/session-attribute-schema`,
+  query key `['sessionAttributeSchema', sportId]`; `data: null` (not error) when the sport offers
+  no session schema. `Session.attributes?: Record<string, unknown> | null` added to
+  `shared/types/session.ts` (mirrors `SessionResponse.attributes` from SESSION-23, `modules/session`).
+  **Scope change at pickup (user decision):** also added optional `prefillable?`/`prefillKey?` to
+  `ResolvedSportAttributeDefinition` in `shared/types/sport.ts` — the two fields A17 added to the
+  backend DTO for `#ref` nodes — done here as type scaffolding so CLIENT-SESSION-15 touches no
+  shared type. All three additions are optional, so every existing consumer is compatible as-is. 5
+  new Vitest cases, no components/stories/MSW/E2E. `tsc -b` + `eslint` clean, full Vitest suite
+  1110 green. No baselined surface touched — `visual-regression` unaffected.
 - **Client SPORT-9 (`DONE`, 2026-09-04, `client/docs/MVP/SPORT-9_NUMBER_AND_BOOLEAN_ATTRIBUTE_CONTROLS.md`):**
   client half of backend A16 — `NUMBER`/`BOOLEAN` render cases added to `SportAttributesFields`'
   two `switch (type)` blocks (top-level `AttributeField` and nested-record `DefinitionField`,
