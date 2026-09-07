@@ -170,3 +170,29 @@ handlers) did not disturb other specs.
 Playwright — a real gap. `/workon` Phase 5's "always run e2e when the ticket touches a
 browser-exercised surface" is why the step exists; skipping it because the *ticket* scoped tests to
 Vitest was the wrong call when the change edits a page three e2e specs cover.
+
+### Phase 5 e2e-grep checklist (for the next ticket)
+
+Before committing a client ticket, regardless of what the ticket's Tests section says:
+
+1. **Grep `e2e/` for every component/page/hook in the diff.** If it returns a spec file, that
+   surface is browser-covered — run its Playwright project (`pnpm e2e` for the whole project, or
+   `pnpm exec playwright test --project=e2e <files>`). "The ticket only scoped Vitest" waives *new*
+   tests, never *existing* ones.
+   ```bash
+   git diff --name-only | grep -oE '[A-Za-z]+\.(tsx?|ts)' | sed 's/\.[^.]*$//' | sort -u \
+     | while read n; do grep -rl "$n" client/e2e/flows client/e2e/visual 2>/dev/null; done | sort -u
+   ```
+2. **Any new/renamed label, button text, `aria-label`, or role name → grep `e2e/` for the string it
+   resembles.** Playwright `getByLabel` / `getByText` / `getByRole({name})` default to
+   **substring + whitespace-normalized** matching; RTL (`getByLabelText`, …) defaults to **exact**.
+   A new name that *contains* an existing one (here: `"Session schema document (JSON)"` ⊃
+   `"Schema document (JSON)"`) passes every Vitest test and trips Playwright strict-mode on the
+   old locator. Fix in the same commit: make the sibling names non-overlapping, or add
+   `{ exact: true }` to the existing e2e locator.
+3. **Never write an e2e result you didn't run.** If Playwright wasn't run, the summary says
+   "e2e not run — <reason>", the same discipline the "Visual-regression expectation" line already
+   forces.
+4. A green Vitest run over a shared component is necessary, not sufficient — RTL and Playwright also
+   disagree on hidden-element visibility and `forceMount`ed content. The full-pipeline run is the
+   step that catches those.
