@@ -18,9 +18,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -111,6 +114,17 @@ public class Session {
     @Column(name = "auto_approve", nullable = false)
     @Builder.Default
     private Boolean autoApprove = false;
+
+    /** SESSION-23 — structured, sport-specific attributes for this session (e.g. "Balls provided?",
+     * skill band). Keyed by the {@code /}-separated attribute path from the sport's session
+     * attribute schema (A17). Written with replace semantics: {@code SessionServiceImpl} filters
+     * each submitted map against that schema (dropping unknown/invalid/switched-off entries) and
+     * stores the result wholesale — never merged onto the previous value. {@code null} = this
+     * session carries no attributes; an empty map = every attribute was cleared. No DB-level FK to
+     * the schema; the schema lives in the sport domain and is reached via {@code SportService}. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "attributes", columnDefinition = "jsonb")
+    private Map<String, Object> attributes;
 
     @Column(name = "cancel_reason", length = 500)
     private String cancelReason;

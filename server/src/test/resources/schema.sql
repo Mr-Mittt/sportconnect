@@ -276,6 +276,25 @@ CREATE TABLE IF NOT EXISTS comment_likes (
     UNIQUE (comment_id, user_id)
 );
 
+-- locations (LOC-1, V030) — the sport-scoped venue directory Session.location_id points at.
+-- Added when SESSION-23's IT first drove PUT /api/sessions end to end: that endpoint returns a
+-- SessionResponse, whose mapper batch-resolves location_id via LocationService.getLocationsByIds
+-- (a real locations query) — the earlier session ITs only hit void/comment endpoints and never
+-- needed this table. GEOMETRY(Point, 4326) rather than Postgres GEOGRAPHY, same substitution the
+-- users/posts tables above make; no GIST index (H2).
+CREATE TABLE IF NOT EXISTS locations (
+    id BIGSERIAL PRIMARY KEY,
+    sport_id BIGINT NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    address VARCHAR(500),
+    location GEOMETRY(Point, 4326),
+    source_maps_url VARCHAR(1000),
+    claimed_by_vendor_id BIGINT,
+    created_by UUID NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create sessions / session_participants tables (needed once a real @SpringBootTest first
 -- exercised PostGate's SESSION_POST case for real — SESSION-10/A17,
 -- documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md §7's supersession note). Cross-domain columns
@@ -304,6 +323,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     cancel_reason VARCHAR(500),
     cancelled_by UUID,
     cancelled_at TIMESTAMP,
+    -- SESSION-23 (V064): per-session structured attributes. H2 JSON rather than Postgres JSONB,
+    -- the same substitution this file already makes for user_sport_profiles.attributes.
+    attributes JSON,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
     CONSTRAINT unique_group_session_start UNIQUE (group_id, scheduled_start)

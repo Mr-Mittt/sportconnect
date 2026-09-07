@@ -1,5 +1,7 @@
 package com.sportconnect.session.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.group.api.dto.GroupResponse;
@@ -36,6 +38,7 @@ import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import com.sportconnect.social.post.api.dto.PostLikeInfoResponse;
 import com.sportconnect.social.post.api.service.CommentService;
 import com.sportconnect.social.post.api.service.PostService;
+import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
@@ -82,6 +85,12 @@ public class SessionServiceImpl implements SessionService {
     private final SessionGate sessionGate;
     private final SessionOutboxEventRepository sessionOutboxEventRepository;
     private final SessionOutboxWriter sessionOutboxWriter;
+    private final SessionAttributeFilter sessionAttributeFilter;
+    private final ObjectMapper objectMapper;
+
+    /** SESSION-23 — same serialized-size ceiling profile attributes use
+     * ({@code UserSportProfileServiceImpl.MAX_ATTRIBUTES_BYTES}); checked against the filtered map. */
+    private static final int MAX_ATTRIBUTES_BYTES = 4096;
 
     @Override
     @Transactional
@@ -130,6 +139,10 @@ public class SessionServiceImpl implements SessionService {
         Long feeAmountVnd = resolveFeeAmountVnd(request.getFeeType(), request.getFeeAmountVnd());
         boolean autoApprove = Boolean.TRUE.equals(request.getAutoApprove());
         int initialSlot = request.getInitialSlot() != null ? request.getInitialSlot() : 0;
+        // SESSION-23: filter the submitted attributes against the sport's session schema (replace
+        // semantics — the filtered map is the whole stored value). Null when none were supplied,
+        // which also short-circuits the schema fetch for a session whose sport carries no schema.
+        Map<String, Object> attributes = resolveAttributes(request.getAttributes(), sportId);
 
         // SESSION-10/A17: the companion SESSION_POST is created first, inline in this same
         // @Transactional method, so a failure here rolls back the whole session creation instead
@@ -155,6 +168,7 @@ public class SessionServiceImpl implements SessionService {
                 .feeAmountVnd(feeAmountVnd)
                 .autoApprove(autoApprove)
                 .initialSlot(initialSlot)
+                .attributes(attributes)
                 .build();
 
         Session saved = sessionRepository.save(session);
@@ -262,12 +276,63 @@ public class SessionServiceImpl implements SessionService {
         if (request.getInitialSlot() != null) {
             session.setInitialSlot(request.getInitialSlot());
         }
+        // SESSION-23: replace semantics — a non-null map is filtered and stored wholesale; a null
+        // (or omitted) map leaves the stored attributes untouched, so a plain title/time edit
+        // never fetches the schema (and so never 404s on a since-deactivated sport). An explicit
+        // empty map filters to empty and clears them.
+        if (request.getAttributes() != null) {
+            session.setAttributes(resolveAttributes(request.getAttributes(), session.getSportId()));
+        }
         // Re-resolved unconditionally so the FIXED/feeAmountVnd invariant holds regardless of
         // which fee field (if either) this request touched — catches "switched to FIXED without
         // an amount" and clears a stale amount when switching away from FIXED.
         session.setFeeAmountVnd(resolveFeeAmountVnd(session.getFeeType(), session.getFeeAmountVnd()));
 
         return toResponse(sessionRepository.save(session), userId);
+    }
+
+    /**
+     * SESSION-23 — turns a caller-supplied session attribute map into the map to persist.
+     *
+     * <p>Flow: {@code null} request → {@code null} (nothing supplied; the caller stores that as-is,
+     * and the sport's session schema is never fetched). Otherwise fetch the sport's
+     * {@code #ref}-expanded session schema via {@link SportService#getSessionAttributeSchemaRaw},
+     * run the submitted map through {@link SessionAttributeFilter} (unknown / wrong-typed /
+     * switched-off entries dropped silently), then enforce the 4KB serialized cap on what survives.
+     *
+     * <p><b>Deactivated sport:</b> {@code getSessionAttributeSchemaRaw} is active-only and throws
+     * {@code ResourceNotFoundException} for an inactive sport. That propagates here by design — a
+     * caller only reaches this method by actively supplying attributes, and submitting structured
+     * attributes against a dead sport's schema has no meaning, the same stance {@code createSession}
+     * already takes on a caller-supplied inactive {@code sportId}. A create/update that supplies no
+     * attributes never calls this and is unaffected.
+     *
+     * @return the filtered map to store (possibly empty — an explicit clear), or {@code null} when
+     *         nothing was supplied
+     */
+    private Map<String, Object> resolveAttributes(Map<String, Object> requested, Long sportId) {
+        if (requested == null) {
+            return null;
+        }
+        SportAttributeSchema schema = sportService.getSessionAttributeSchemaRaw(sportId);
+        Map<String, Object> filtered = sessionAttributeFilter.filter(requested, schema);
+        validateAttributesSize(filtered);
+        return filtered;
+    }
+
+    /** Rejects a session-attributes map whose JSON serialization exceeds {@link #MAX_ATTRIBUTES_BYTES};
+     * mirrors {@code UserSportProfileServiceImpl.validateAttributesSize}. Checked against the already
+     * filtered map, so an oversized payload that is mostly junk still fails rather than being
+     * silently trimmed to fit. */
+    private void validateAttributesSize(Map<String, Object> attributes) {
+        try {
+            byte[] json = objectMapper.writeValueAsBytes(attributes);
+            if (json.length > MAX_ATTRIBUTES_BYTES) {
+                throw new BadRequestException("Session attributes exceed the maximum allowed size (4KB)");
+            }
+        } catch (JsonProcessingException e) {
+            throw new BadRequestException("Invalid session attributes");
+        }
     }
 
     /** Enforces "feeAmountVnd is meaningful only when feeType is FIXED": returns candidateAmount
@@ -743,6 +808,8 @@ public class SessionServiceImpl implements SessionService {
                                 .map(PostLikeInfoResponse::getLikeCount).orElse(0L))
                         .isLikedByCurrentUser(Optional.ofNullable(postLikeInfo.get(session.getPostId()))
                                 .map(PostLikeInfoResponse::getIsLikedByCurrentUser).orElse(false))
+                        // SESSION-23 — column on the already-loaded entity; no extra query, no N+1.
+                        .attributes(session.getAttributes())
                         .createdAt(session.getCreatedAt())
                         .updatedAt(session.getUpdatedAt())
                         .build())

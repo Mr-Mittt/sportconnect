@@ -19,6 +19,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 1 | [C5](MVP/C5_SHARED_ATTRIBUTE_FRAMEWORK_HOME.md) | A shared home for the attribute-schema framework — ADR to pick the target (`common` vs a new `modules/attributes` vs public `sport-*`), then stand up the neutral DTO tree + validation/filter logic. **Paired with sport `A23`** (the sport/session repoint + SESSION-23 clone removal) | `TODO` |
 
 ---
 
