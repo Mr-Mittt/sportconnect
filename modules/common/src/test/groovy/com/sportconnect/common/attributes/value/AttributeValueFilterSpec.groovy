@@ -113,6 +113,14 @@ class AttributeValueFilterSpec extends Specification {
         AttributeValueFilter.filter(g([racket: "Yonex", rackettt: "typo"]), schema()) == g([racket: "Yonex"])
     }
 
+    def "iteration order of the surviving entries follows the request, not the schema"() {
+        when: "keys submitted in an order that is not the schema's declaration order"
+        def result = AttributeValueFilter.filter(g([shots: ["smash"], racket: "Yonex", shuttlecock: "nylon"]), schema())
+
+        then:
+        new ArrayList<>(result.keySet()) == ["gear/shots", "gear/racket", "gear/shuttlecock"]
+    }
+
     @Unroll
     def "a value invalid for its type is dropped rather than rejected: #description"() {
         expect:
