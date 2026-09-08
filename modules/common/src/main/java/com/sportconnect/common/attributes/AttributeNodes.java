@@ -55,4 +55,24 @@ public final class AttributeNodes {
             case RefAttribute a -> null;
         };
     }
+
+    /**
+     * The name of the record shape a {@code DEFINITION}/{@code DEFINITION_LIST} node references in
+     * the schema's {@code definitions} registry, or {@code null} for every other kind (including a
+     * {@link RefAttribute}, whose {@code definitionRef} is inherited from its base target on
+     * expansion). Used by C9's pair validator/expander to pull a base definition — and its reachable
+     * closure — into the merged registry.
+     */
+    public static String definitionRefOf(AttributeNode node) {
+        return switch (node) {
+            case DefinitionAttribute a -> a.getDefinitionRef();
+            case DefinitionListAttribute a -> a.getDefinitionRef();
+            case StringAttribute a -> null;
+            case NumberAttribute a -> null;
+            case BooleanAttribute a -> null;
+            case EnumAttribute a -> null;
+            case ListAttribute a -> null;
+            case RefAttribute a -> null;
+        };
+    }
 }

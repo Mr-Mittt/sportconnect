@@ -19,8 +19,12 @@ import java.util.regex.Pattern;
  *
  * <p>All-or-nothing: the first violation throws {@link BadRequestException}, naming the offending
  * node.
+ *
+ * <p><strong>Visibility:</strong> {@code public} only so the sibling {@code pair} package (C9's
+ * derived-schema validator) can reuse the exact same leaf rules over a derived schema's own nodes —
+ * it is framework-internal, not a supported API for consumers outside {@code common.attributes}.
  */
-final class LeafChecks {
+public final class LeafChecks {
 
     /** Safe as both a JSON object key and a client form field name, so no layer needs escaping rules. */
     static final Pattern KEY_PATTERN = Pattern.compile("^[a-z][a-zA-Z0-9_]*$");
@@ -29,7 +33,7 @@ final class LeafChecks {
     static final Pattern DEFINITION_NAME_PATTERN = Pattern.compile("^[A-Z][a-zA-Z0-9]*$");
 
     /** BCP 47 language tag, permissively — catches typos like {@code "vi_VN"} without a subtag registry. */
-    static final Pattern LOCALE_PATTERN = Pattern.compile("^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{1,8})*$");
+    public static final Pattern LOCALE_PATTERN = Pattern.compile("^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{1,8})*$");
 
     /** 16KB — a schema carries labels and option lists, not just values. Admin-only write. */
     static final int MAX_SCHEMA_BYTES = 16384;
@@ -37,14 +41,14 @@ final class LeafChecks {
     private LeafChecks() {
     }
 
-    static void validateDefaultLocale(String defaultLocale) {
+    public static void validateDefaultLocale(String defaultLocale) {
         if (defaultLocale == null || !LOCALE_PATTERN.matcher(defaultLocale).matches()) {
             throw new BadRequestException("Schema defaultLocale must match " + LOCALE_PATTERN.pattern()
                     + " but was: " + defaultLocale);
         }
     }
 
-    static void validateKey(String key, String what) {
+    public static void validateKey(String key, String what) {
         if (key == null || !KEY_PATTERN.matcher(key).matches()) {
             throw new BadRequestException(what + " must match " + KEY_PATTERN.pattern() + " but was: " + key);
         }
@@ -56,7 +60,7 @@ final class LeafChecks {
      * caught here at {@code PUT} time, never at render time. Every locale key present is checked
      * against {@link #LOCALE_PATTERN}, not just the default one.
      */
-    static void validateLabel(Map<String, String> label, String defaultLocale, String context) {
+    public static void validateLabel(Map<String, String> label, String defaultLocale, String context) {
         if (label == null || label.isEmpty()) {
             throw new BadRequestException(context + " must declare a label for locale " + defaultLocale);
         }
@@ -96,7 +100,7 @@ final class LeafChecks {
      * Serialised-byte cap, via the framework's own strict mapper. {@code subject} names the document
      * in the message so a derived-schema caller (C9) can keep its own wording.
      */
-    static void validateSize(Object schema, String subject) {
+    public static void validateSize(Object schema, String subject) {
         try {
             byte[] json = AttributeJson.mapper().writeValueAsBytes(schema);
             if (json.length > MAX_SCHEMA_BYTES) {
@@ -107,7 +111,7 @@ final class LeafChecks {
         }
     }
 
-    static <T> List<T> nullSafe(List<T> list) {
+    public static <T> List<T> nullSafe(List<T> list) {
         return list == null ? List.of() : list;
     }
 }

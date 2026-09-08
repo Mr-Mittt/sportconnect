@@ -29,14 +29,18 @@ import java.util.Set;
  * {@code A → B → A} needs {@code B} (inner, referenced by {@code A}) to point back at {@code A}, but
  * an inner definition may hold only primitives, so {@code B} fails this pass directly. A
  * self-reference {@code A → A} puts {@code A} in both positions — the same contradiction.
+ *
+ * <p><strong>Visibility:</strong> {@code public} only so the sibling {@code pair} package (C9) can
+ * validate a derived schema's own {@code definitions} registry by the identical 3-pass rule —
+ * framework-internal, not a supported API outside {@code common.attributes}.
  */
-final class DefinitionRegistryValidator {
+public final class DefinitionRegistryValidator {
 
     private DefinitionRegistryValidator() {
     }
 
-    static Map<String, AttributeDefinitionType> validate(List<AttributeDefinitionType> definitions,
-                                                         String defaultLocale) {
+    public static Map<String, AttributeDefinitionType> validate(List<AttributeDefinitionType> definitions,
+                                                                String defaultLocale) {
         Map<String, AttributeDefinitionType> byName = new LinkedHashMap<>();
         for (AttributeDefinitionType definition : LeafChecks.nullSafe(definitions)) {
             if (definition.getName() == null

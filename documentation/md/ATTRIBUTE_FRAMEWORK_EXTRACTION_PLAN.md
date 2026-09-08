@@ -1,8 +1,10 @@
 # Attribute-schema framework — extraction plan
 
-**Status:** in progress — **C5–C8 `DONE` 2026-09-08** (C5: ADR + DTO tree; C6: `validate/`;
-C7: `path/` + `value/` filter; C8: `resolve/` locale resolver); **C9 next** (base×derived pair —
-the last common ticket; unblocks sport A23)
+**Status:** in progress — **C5–C9 `DONE` 2026-09-08** (C5: ADR + DTO tree; C6: `validate/`;
+C7: `path/` + `value/` filter; C8: `resolve/` locale resolver; C9: `pair/` base×derived
+validator/expander/resolver + the D9 `#ref` semantics change). The whole `common` half is done;
+**sport A23 next** (repoint `sport-*`/`session-*`, delete the old framework + the SESSION-23 clone,
+rewrite the seeded Badminton session schema for D9)
 **Owner tickets:** common `C5`–`C9`, sport `A23`, client `CLIENT-SESSION-17`
 **Decision record:** `documentation/md/adr/ATTRIBUTE_FRAMEWORK_EXTRACTION_ADR.md`
 **Supersedes the "do it as two tickets" framing in** `modules/common/docs/MVP/C5_*.md` /
@@ -137,7 +139,7 @@ rename) is a bug in the port, not the spec.
 | **C6** ✅ | `modules/common` | Single-schema `validate/`: per-type validators (exhaustive `switch`) + `AttributeSchemaValidator` (label/locale/key/size + 3-pass `definitions` registry + inner-position cycle rule) + `value/AttributeValues.isValid`. Rejects `RefAttribute`. — *done 2026-09-08; 122 spec cases green.* | C5 |
 | **C7** ✅ | `modules/common` | `path/AttributePaths` (flatten + full-depth `isAvailable` cascade), `value/AttributeValues` record cascade + dispatcher, `value/AttributeValueFilter` (`filter` + generalized `retainDefined` + `DEFINITION_LIST` iteration), `AttributeNodes` helper. — *done 2026-09-08; `ProfileAttributeFilterSpec` ported, 237 common tests green.* | C5, C6 |
 | **C8** ✅ | `modules/common` | `resolve/AttributeSchemaResolver` (public static) — `switch` over the sealed sets → flat `ResolvedAttribute*`; exact→language→`defaultLocale` fallback. — *done 2026-09-08; `SportAttributeSchemaLabelResolverSpec` ported, 252 common tests green.* | C5 |
-| **C9** | `modules/common` | `pair/`: `RefAttribute` validation (D9), `DerivedSchemaExpander` (inline `#ref` as data source, lenient-drop stale, merge `definitions`, carry `cardinality`), `DerivedSchemaResolver` (stamp `prefillable`/`prefillKey`/`cardinality`). | C6, C7, C8 |
+| **C9** ✅ | `modules/common` | `pair/`: `DerivedSchemaValidator` (D9 `RefAttribute` contract), `DerivedSchemaExpander` (inline `#ref` as data source, lenient-drop stale, merge `definitions` closure, carry `cardinality` in an `ExpandedSchema.refExpansionsByPath` map — **not** on the node; base `defaultValue` deliberately **not** carried), `DerivedSchemaResolver` (stamp `prefillable`/`prefillKey`/`cardinality`). Widened `LeafChecks`/`NodeValidators`/`DefinitionRegistryValidator` to `public` for `pair/` reuse; added `AttributeNodes.definitionRefOf`. — *done 2026-09-08; both session specs ported + D9 cardinality cases, 293 common tests green.* | C6, C7, C8 |
 | **A23** | `modules/sport` | Repoint `sport-impl` + `session-impl` onto `common.attributes`; delete `sport-api` DTO tree + `sport-impl` logic + the `session-impl` clone; rewrite every `def.getType()` / `def.getMin()` site as a pattern switch; rewrite the seeded Badminton session schema for D9; repoint `SportService` `-api` signatures; full client census. | C9 |
 | **CLIENT-SESSION-17** | `client` | Part A: migrate `shared/types/sport.ts` to a discriminated union + per-type render components. Part B: `#ref` single/multi-select from profile values. | A23 |
 

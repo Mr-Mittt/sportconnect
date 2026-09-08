@@ -42,6 +42,11 @@ either clones (drift risk) or forces `sport-api` public surface it does not own.
 3. **Repoint `session-impl`** onto `common.attributes` and **delete the SESSION-23 clone**
    (`SessionAttributeFilter`, `SessionAttributeValues`, `SessionSchemaPaths` +
    `SessionAttributeFilterSpec`).
+   - *C9 note (2026-09-08):* the `SessionAttributeFilterSpec` (243 ln) coverage check the plan
+     doc §8 asks for is **done** — every case is covered by C7's
+     `AttributeValueFilterSpec`; the one assertion that was unique to it (surviving-entry
+     iteration order follows the request) was added to `AttributeValueFilterSpec` in C9. Nothing
+     unique is lost on deletion.
 4. **Delete the old framework** from `sport-api` (the whole DTO tree) and `sport-impl`
    (`SchemaChecks`, `SchemaPaths`, `SportAttributeValues`, `ProfileAttributeFilter`,
    `SportAttributeSchemaValidator`, `SportAttributeSchemaLabelResolver`,

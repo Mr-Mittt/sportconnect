@@ -26,8 +26,12 @@ import java.util.Set;
  * branches are gone: with the sealed DTO model an {@code options}/{@code min}/{@code definitionRef}
  * on the wrong kind is unrepresentable and fails at parse (extraction plan D8), so only the rules
  * that need a <em>value</em> or a cross-reference remain here.
+ *
+ * <p><strong>Visibility:</strong> {@code public} only so the sibling {@code pair} package (C9) can
+ * run these exact own-node rules over a derived schema's non-{@code #ref} nodes — framework-internal,
+ * not a supported API outside {@code common.attributes}.
  */
-final class NodeValidators {
+public final class NodeValidators {
 
     private NodeValidators() {
     }
@@ -37,8 +41,8 @@ final class NodeValidators {
      * rejected outright — {@code #ref} is only valid in a derived schema (C9). Key and
      * sibling-uniqueness are checked by the caller's tree walk before this runs.
      */
-    static void validateOwnNode(AttributeNode node, Map<String, AttributeDefinitionType> definitions,
-                                String defaultLocale) {
+    public static void validateOwnNode(AttributeNode node, Map<String, AttributeDefinitionType> definitions,
+                                       String defaultLocale) {
         String ctx = "Attribute " + node.getKey();
         switch (node) {
             case RefAttribute ignored -> throw new BadRequestException(
