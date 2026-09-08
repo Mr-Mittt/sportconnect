@@ -97,14 +97,23 @@ knowing about "session" — it only knows "a schema" and "a schema that referenc
 `AttributeNode` is a `sealed interface` permitting `StringAttribute`, `NumberAttribute` (the only
 one with `min`/`max`), `BooleanAttribute`, `EnumAttribute` + `ListAttribute` (the only ones with
 `options`), `DefinitionAttribute` + `DefinitionListAttribute` (the only ones with `definitionRef`/
-`searchScope`), and `RefAttribute` (`ref` + `cardinality`). `defaultValue` is typed per subtype.
-`AttributeField` gets the same treatment (6 subtypes; no `DEFINITION_LIST`, no ref).
+`searchScope`), and `RefAttribute` (`ref` + `cardinality`). `AttributeField` gets the same
+treatment (6 subtypes; no `DEFINITION_LIST`, no ref).
 
 This replaces the flat `SportAttributeDefinition` god-class where a `STRING` node carried
 `options`/`min`/`max`/`definitionRef`/`searchScope`, all `null`, all kept absent by one procedural
-`switch`. With the hierarchy, each kind has its own validator / value-checker / resolver, dispatched
-by a `Map<AttributeType, …>` registry (`C6`–`C8`). A future type is a new subtype + three small
-classes + one registry line — nothing existing is edited.
+`switch`. With the hierarchy, each kind has its own validator / value-checker / resolver.
+
+**Dispatch (settled C6):** an **exhaustive `switch` over the sealed interface**, not a
+`Map<…, …>` registry of classes — Java's exhaustiveness check on a sealed type gives the same
+"add a subtype → compile error until you handle it" guarantee with far less code. A future type is
+a new subtype plus the `switch` cases the compiler forces.
+
+**`defaultValue` typing (amended C6):** typed `Object` on the value-bearing subtypes, not
+per-subtype (`String`/`Number`/…). A typed field lets Jackson coerce scalars (`"27"` → `27`,
+`42` → `"42"`), which diverges from the value validator's `instanceof` checks and the sport
+framework's behaviour. `AttributeValues.isValid` is the single arbiter of default validity, exactly
+as before.
 
 ## Decision 6 — Resolved tree: flat
 

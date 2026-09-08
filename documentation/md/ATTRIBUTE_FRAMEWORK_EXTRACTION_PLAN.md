@@ -1,7 +1,7 @@
 # Attribute-schema framework — extraction plan
 
-**Status:** in progress — **C5 `DONE` 2026-09-08** (ADR + DTO tree + `AttributeJson` + 6 parity
-specs); C6 next
+**Status:** in progress — **C5 + C6 `DONE` 2026-09-08** (C5: ADR + DTO tree + `AttributeJson`;
+C6: single-schema `validate/` + `AttributeValues.isValid`); C7 next
 **Owner tickets:** common `C5`–`C9`, sport `A23`, client `CLIENT-SESSION-17`
 **Decision record:** `documentation/md/adr/ATTRIBUTE_FRAMEWORK_EXTRACTION_ADR.md`
 **Supersedes the "do it as two tickets" framing in** `modules/common/docs/MVP/C5_*.md` /
@@ -29,7 +29,7 @@ package-private in `sport-impl`, so a new consumer either **clones** (drift risk
 | D2 | **`common.attributes` is Spring-free** — plain classes / static factories, no `@Component`, a package-private `ObjectMapper` for the size check. Consumers wrap in their own `@Component` façades if they want injection. |
 | D3 | **Domain-neutral vocabulary.** `common.attributes` knows nothing of "sport" / "profile" / "session". It offers two shapes: validate/resolve/filter **a single schema**, and validate/expand/resolve **a `(base, derived)` pair**. |
 | D4 | **One `AttributeSchema` type serves both roles.** There is no `DerivedAttributeSchema`. A schema used as a *derived* schema is just an `AttributeSchema` whose tree may contain `RefAttribute` nodes; the pair-ness lives in the validator/expander/resolver **API**, not the DTO. |
-| D5 | **Raw tree = sealed per-type hierarchy** (`AttributeNode` permits `StringAttribute` … `RefAttribute`; `AttributeField` permits `StringField` … `DefinitionField`). Each subtype carries only its own fields; each has its own validator / value-checker / resolver, registry-dispatched. A new type later = new subtype + 3 small classes + one registry line; nothing existing is edited. |
+| D5 | **Raw tree = sealed per-type hierarchy** (`AttributeNode` permits `StringAttribute` … `RefAttribute`; `AttributeField` permits `StringField` … `DefinitionField`). Each subtype carries only its own fields; each has its own validator / value-checker / resolver, dispatched by an **exhaustive `switch` over the sealed set** (adopted C6 in place of the "N classes + registry" sketch — same compile-time open/closed guarantee, less ceremony). A new type later = new subtype + `switch` cases the compiler forces you to add. **Amended C6:** `defaultValue` on the value-bearing node subtypes is typed `Object`, not per-subtype (`String`/`Number`/…) — Jackson scalar coercion (`"27"`→`27`, `42`→`"42"`) on a typed field diverged from the value validator's `instanceof` checks and made parity cases unrepresentable. The value validator (`AttributeValues.isValid`) is the single arbiter, exactly as in the sport framework. |
 | D6 | **Resolved tree = flat DTO.** `ResolvedAttributeNode` keeps a `type` discriminator + `cardinality` + nullable per-type fields. The resolved tree is a write-once, read-once, immediately-serialized projection; the client narrows it into a discriminated union itself (`CLIENT-SESSION-17` Part A). C8's resolver dispatch is still per-type; only its *output* is flat. Asymmetry is deliberate — see ADR. |
 | D7 | **Wire-compatible** (revised 2026-09-08 from "byte-identical" — field order and `type`-as-metadata make a strict byte match the wrong bar). The testable contract: every currently-accepted schema JSON still **parses**; re-serialisation **renames no field, drops no field, changes no value**; field order is pinned (`@JsonPropertyOrder`) to today's where it can be. Jackson `@JsonTypeInfo(use = NAME, include = As.PROPERTY, property = "type")` on the sealed `AttributeNode` — `type` is type-metadata Jackson owns, so subtypes carry **no** `type` field (Java code discriminates by `switch` pattern-match). Wire `type` values: `STRING`…`DEFINITION_LIST` + `REF` for `RefAttribute` (a `@JsonSubTypes` name only — **not** an `AttributeType` enum member). `#ref` stays the JSON key `#ref` (`@JsonProperty`). The **one** shape that does change is the `#ref` node — governed by D9, and only derived schemas have `#ref`. |
 | D8 | **Per-subtype unknown fields rejected at parse** (`@JsonIgnoreProperties(ignoreUnknown = false)` / `FAIL_ON_UNKNOWN_PROPERTIES`) — a `min` on a `STRING` node fails one layer earlier than today; same documents rejected. A readable message is preserved via `GlobalExceptionHandler`. |
@@ -133,7 +133,7 @@ rename) is a bug in the port, not the spec.
 | Ticket | Backlog | Scope | Depends |
 |---|---|---|---|
 | **C5** ✅ | `modules/common` | This doc + the ADR + the whole DTO tree (§4 `C5` rows) + Jackson polymorphism (D7/D8) + round-trip / wire-parity tests. **No business logic.** — *done 2026-09-08; `AttributeSchemaJsonSpec` green.* | — |
-| **C6** | `modules/common` | Single-schema `validate/`: per-type validators + registry + `AttributeSchemaValidator` (label/locale/key/size + 3-pass `definitions` registry + inner-position cycle rule). Rejects `RefAttribute`. | C5 |
+| **C6** ✅ | `modules/common` | Single-schema `validate/`: per-type validators (exhaustive `switch`) + `AttributeSchemaValidator` (label/locale/key/size + 3-pass `definitions` registry + inner-position cycle rule) + `value/AttributeValues.isValid`. Rejects `RefAttribute`. — *done 2026-09-08; 122 spec cases green.* | C5 |
 | **C7** | `modules/common` | Single-schema `path/` + `value/`: `AttributePaths`, per-type value-checkers, `AttributeValues`, `AttributeValueFilter` (`filter` + generalized `retainDefined` + `DEFINITION_LIST` iteration). | C5 |
 | **C8** | `modules/common` | Single-schema `resolve/`: per-type node resolvers + `AttributeSchemaResolver` (locale fallback). | C5 |
 | **C9** | `modules/common` | `pair/`: `RefAttribute` validation (D9), `DerivedSchemaExpander` (inline `#ref` as data source, lenient-drop stale, merge `definitions`, carry `cardinality`), `DerivedSchemaResolver` (stamp `prefillable`/`prefillKey`/`cardinality`). | C6, C7, C8 |
@@ -165,8 +165,8 @@ subtypes), `SportAttributeDefinitionType`, `SportAttributeOption`, `SportAttribu
 |---|---|---|---|
 | `SportAttributeSchemaValidatorSpec` | 957 | C6 | Split into per-type validator specs + an `AttributeSchemaValidator` integration spec. Every accept/reject case preserved. |
 | `ProfileAttributeFilterSpec` | 608 | C7 | `filter` + `retainDefined` cases; `retainDefined` now generalized (no profile framing). |
-| `SportAttributeValuesSpec` | *(grep)* | C7 | `isValid` / record cascade / dispatcher. |
-| `SchemaPathsSpec` | *(grep)* | C7 | path flatten + cascade. |
+| ~~`SportAttributeValuesSpec`~~ | — | — | **Does not exist** (confirmed 2026-09-08). `SportAttributeValues` is covered indirectly: the `defaultValue` cases in `SportAttributeSchemaValidatorSpec` exercise `isValid`; `ProfileAttributeFilterSpec` exercises `isValid`/`isValidRecord`/`filterScalarOrRecord`. C6 builds `AttributeValues.isValid` + `withinBounds` (exercised by ported validator `defaultValue` cases); C7 writes a fresh `AttributeValuesSpec` for the record/dispatcher layer + ports `ProfileAttributeFilterSpec`. |
+| ~~`SchemaPathsSpec`~~ | — | — | **Does not exist**. `SchemaPaths` is covered indirectly by `ProfileAttributeFilterSpec` (via `availableByPath`/`definedByPath`). C7 writes a fresh `AttributePathsSpec`. |
 | `SportAttributeSchemaLabelResolverSpec` | 196 | C8 | locale fallback. |
 | `SessionAttributeSchemaValidatorSpec` | 292 | C9 | **plus** new cases: `RefAttribute` missing `key` → reject, missing `cardinality` → reject, `cardinality` not in enum → reject, all 4 base-type × cardinality combos → accept. |
 | `SessionAttributeSchemaResolverSpec` | 231 | C9 | **plus** `cardinality` carried onto the resolved node; `prefillKey` = choice-list source. |

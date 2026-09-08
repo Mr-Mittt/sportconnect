@@ -31,6 +31,6 @@ public final class EnumAttribute implements AttributeNode {
     /** Required and non-empty. */
     private List<AttributeOption> options;
 
-    /** Optional placeholder; must equal one of {@link #options}' values. */
-    private String defaultValue;
+    /** Optional placeholder; must equal one of {@link #options}' values. {@code Object} so a non-string is rejected, not coerced. */
+    private Object defaultValue;
 }
