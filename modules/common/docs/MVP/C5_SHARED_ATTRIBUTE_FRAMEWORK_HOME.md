@@ -1,55 +1,137 @@
-# C5 · A shared home for the attribute-schema framework
+# C5 · Attribute framework — ADR + neutral DTO tree
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-08)
 **Type:** Refactor / architecture
-**Depends on:** nothing hard. **Paired with sport `A23`** — same body of work seen from the two
-ends: `A23` removes the framework from `sport-*` and repoints sport/session consumers; this ticket
-decides the shared home, writes the ADR, and stands up the neutral module/package. Do them together
-(one PR) or C5 first.
-**Filed:** 2026-09-07, from SESSION-23 pickup. SESSION-23 needed the attribute value-validation
-logic (`ProfileAttributeFilter` / `SchemaPaths` / `SportAttributeValues`, all package-private in
-`com.sportconnect.sport.service`) plus the `sport-api` attribute DTO tree from `session-impl`, and
-there was no shared home — so it **cloned** the minimal logic as a deliberate, deletable bridge.
-Sessions are the second consumer; groups / facilities / equipment are expected next.
+**Plan:** `documentation/md/ATTRIBUTE_FRAMEWORK_EXTRACTION_PLAN.md` — the master doc for the whole
+move (decisions, rename map, package layout, spec-parity matrix, consumer checklist). **Read it
+first.** Every ticket below links back to it.
+**Filed:** 2026-09-07, from SESSION-23 pickup (which cloned 404 lines of value logic into
+`session-impl` for want of a shared home).
+**Rescoped:** 2026-09-08, at `/workon common mvp C5` pickup — the original "stand up the whole
+framework" scope was ~5 sessions, so it was split into **C5 (this) + C6 + C7 + C8 + C9**. C5 now
+ships only the decision record and the DTO tree; the logic lands in C6–C9. See the plan doc §6.
 
-## The decision this ticket owns
+## What C5 ships
 
-Write **`documentation/md/adr/ATTRIBUTE_FRAMEWORK_EXTRACTION_ADR.md`** choosing the home:
+1. **`documentation/md/adr/ATTRIBUTE_FRAMEWORK_EXTRACTION_ADR.md`** — the decision record:
+   - **Home = `modules/common`**, package `com.sportconnect.common.attributes`. Explicitly
+     override the "`common` holds shared *shape*, not shared *logic*" rule from `CLAUDE.md` / the
+     `C2` ResourceGate ADR — record *why* the attribute framework is the right exception (pure,
+     dependency-free functions; a fourth `common` primitive). Record the two rejected homes
+     (new `modules/attributes`; public `sport-*`) and why.
+   - The **raw = sealed hierarchy / resolved = flat** asymmetry (plan doc D5/D6) and why.
+   - The **wire-byte-identical** constraint (D7) and the **parse-time unknown-field strictness**
+     (D8).
+   - The **`#ref` semantics change** (D9): `RefAttribute` = a data-source pointer with a required
+     explicit `key` + required `cardinality` (`SINGLE`/`LIST`), not a mirror. Note it is breaking
+     for the one seeded document and that `A23` migrates it.
+   - The **rename map** (plan doc §3) and that the client mirror changes in `CLIENT-SESSION-17`.
 
-1. **`modules/common`** — a new `com.sportconnect.common.attributes` package holding the neutral
-   DTO tree + the pure validation/filter logic. **Tension to resolve in the ADR:** CLAUDE.md and
-   the `ResourceGate` ADR (`C2`) state that `common` carries shared *shape*, not shared *logic*.
-   The attribute framework is real logic (type validation, the required-field cascade, bounds,
-   path flattening). Overriding that principle is exactly an ADR-level call — make it explicitly or
-   reject this option explicitly.
-2. **A new `modules/attributes`** (`attributes-api` + `attributes-impl`) — a domain-neutral module,
-   depended on by `sport-impl`, `session-impl`, and future consumers. Keeps `common` pure; costs a
-   new module in the build graph.
-3. **Keep it in `sport-*`, make the classes public** — smallest diff, but bakes "attributes are a
-   sport concept" into every future consumer's imports. (SESSION-23 rejected this at pickup.)
+2. **The DTO tree** in `com.sportconnect.common.attributes` (plan doc §4, the `C5` rows):
+   - enums `AttributeType` (7 members, unchanged) + `Cardinality` (`SINGLE`, `LIST`, new);
+   - `AttributeSchema`, `AttributeGroup`, `AttributeDefinitionType`, `AttributeOption`;
+   - `node/` — sealed `AttributeNode` + `StringAttribute`, `NumberAttribute` (only it: `min`/`max`),
+     `BooleanAttribute`, `EnumAttribute` + `ListAttribute` (only these: `options`),
+     `DefinitionAttribute` + `DefinitionListAttribute` (only these: `definitionRef`/`searchScope`),
+     `RefAttribute` (`ref` + `cardinality` + optional `label`). `defaultValue` typed per subtype;
+   - `field/` — sealed `AttributeField` + `StringField`, `NumberField`, `BooleanField`, `EnumField`,
+     `ListField`, `DefinitionField` (no `DEFINITION_LIST` / ref field);
+   - `resolved/` — **flat** `ResolvedAttributeSchema`, `ResolvedAttributeGroup`,
+     `ResolvedAttributeNode` (`type` + nullable per-type fields + `cardinality` +
+     `prefillable`/`prefillKey`), `ResolvedAttributeDefinitionType`, `ResolvedAttributeField`,
+     `ResolvedAttributeOption`;
+   - `json/` — the `@JsonTypeInfo(use = NAME, include = EXISTING_PROPERTY, property = "type")`
+     config / mix-ins and a shared `ObjectMapper` factory; `#ref` pinned via `@JsonProperty`.
 
-The ADR also records: the rename map (`SportAttributeSchema` → neutral name, `SportAttributeType`,
-`SportAttributeField`, `SportAttributeDefinitionType`, `SportAttributeOption`,
-`ResolvedSportAttributeSchema` + resolved sub-DTOs, `SessionAttributeSchema/Group/Node`), whether
-the `#ref`/`prefill` session-schema concepts fold into the neutral tree, and whether the client's
-hand-mirrored types change (they mirror this tree for `SPORT-2` / `CLIENT-SESSION-14`).
+3. **Round-trip / wire-parity tests only — no business logic.** Spock specs that:
+   - every currently-accepted schema JSON (the seeded Badminton profile schema, the
+     `client/e2e/mocks` session-schema fixtures, a hand-built fixture covering all 7 types +
+     nested groups + `definitions` + a `DEFINITION` field) deserialises into the new tree and
+     re-serialises **byte-identical**;
+   - an unknown field for a subtype (`min` on a `STRING` node) fails to parse (D8);
+   - a `RefAttribute` JSON (`{"key":"x","#ref":"a/b","type":"…"? no}` — settle the exact shape in
+     Design) round-trips, carrying `cardinality`.
 
-## What ships (once the ADR lands)
+## Explicitly out of scope (C5)
 
-- The chosen module/package, with the neutral DTO tree + `SportAttributeValues` (→ neutral name),
-  `SchemaPaths`, `SchemaChecks`, and the drop-invalid value **filter** core. Behaviour
-  byte-identical — this is a move + rename + de-dupe, not a redesign.
-- `A23` does the sport/session repoint and deletes the SESSION-23 clone.
+- **All business logic** — validation (C6), paths + value filter + `retainDefined` (C7),
+  locale resolution (C8), the base×derived pair + `#ref` resolution (C9).
+- Touching `sport-*`, `session-*`, or the client — `common.attributes` is pure addition and briefly
+  unused until `A23`. No `-api` signature change, no wire change, so **no consumer census here** —
+  that is `A23`'s (plan doc §9).
+- Renaming the wire-visible `#ref` / `prefillable` / `prefillKey` fields.
+- `A14` value-suggestions / `searchScope` work.
 
-## Consumer census (at pickup, before moving anything)
+## Acceptance
 
-Every moved type is a shared-DTO change. Enumerate first: all backend modules (`grep` the type
-names — `sport-impl`, `sport-api`, `session-impl`, `session-api`, `server` ITs), the **client**
-(`client/src` + `client/e2e/mocks` + `*.test.tsx` — it hand-mirrors the tree, nothing links them),
-and every `-api` method signature that names a moved type (`SportService.getSessionAttributeSchemaRaw`
-and siblings). List each as compatible / updated-here / deferred.
+- The ADR exists and makes the D1/D6/D7/D8/D9 calls explicitly.
+- `./gradlew :modules:common:test` green, including the new round-trip specs.
+- `./gradlew build` green (nothing else depends on the new package yet, so this just proves the
+  package compiles inside `common`).
+- C6–C9 exist as filed `TODO` tickets in `modules/common/docs/BACKLOG_MVP.md`.
+- The plan doc §7/§8 checklists are complete (every existing class + spec accounted for).
 
-## Out of scope
+---
 
-Any new attribute capability. `A14`'s value-suggestions/`searchScope` work. Client rendering
-(`CLIENT-SESSION-*`).
+## Implementation summary (2026-09-08)
+
+**What was built** — `com.sportconnect.common.attributes`, pure addition, no consumer touched:
+
+| Area | Files |
+|---|---|
+| Enums | `AttributeType` (7 kinds, unchanged), `Cardinality` (`SINGLE`/`LIST`, new) |
+| Containers | `AttributeSchema`, `AttributeGroup`, `AttributeDefinitionType`, `AttributeOption` |
+| `node/` | sealed `AttributeNode` + `StringAttribute`, `NumberAttribute` (only: `min`/`max`), `BooleanAttribute`, `EnumAttribute` + `ListAttribute` (only: `options`), `DefinitionAttribute` + `DefinitionListAttribute` (only: `definitionRef`/`searchScope`), `RefAttribute` (`#ref` + `cardinality`) |
+| `field/` | sealed `AttributeField` + `StringField`, `NumberField` (only: `min`/`max`), `BooleanField`, `EnumField` + `ListField` (only: `options`), `DefinitionField` (only: `definitionRef`) |
+| `resolved/` | flat `ResolvedAttributeSchema`, `ResolvedAttributeGroup`, `ResolvedAttributeNode` (+ `cardinality`/`prefillable`/`prefillKey`), `ResolvedAttributeDefinitionType`, `ResolvedAttributeField`, `ResolvedAttributeOption` |
+| `json/` | `AttributeJson` — a strict, Spring-free `ObjectMapper` (`FAIL_ON_UNKNOWN_PROPERTIES` on, `NON_NULL` inclusion) |
+
+Plus the ADR (`documentation/md/adr/ATTRIBUTE_FRAMEWORK_EXTRACTION_ADR.md`) and the master plan
+(`documentation/md/ATTRIBUTE_FRAMEWORK_EXTRACTION_PLAN.md`, D1–D11 + §3 rename map + §4 layout +
+§7/§8/§9 checklists). C6–C9 + the reworked A23 + CLIENT-SESSION-17 all filed.
+
+**Design as approved, with two noted specifics:**
+- **DTO style:** sealed `interface` + `final class` subtypes, each `@Data @Builder
+  @NoArgsConstructor @AllArgsConstructor @JsonInclude(NON_NULL)` — matches the repo and the old
+  `SessionAttributeNode`. Deserialisation uses the no-arg ctor + setters (`@Builder` is for our own
+  construction).
+- **Discriminator:** `@JsonTypeInfo(use = NAME, include = As.PROPERTY, property = "type")` — `type`
+  is Jackson metadata, **no subtype has a `type` field**; callers `switch` on the sealed set. Wire
+  `type` values `STRING`…`DEFINITION_LIST` + `"REF"` (a `@JsonSubTypes` name, not an
+  `AttributeType` member). `#ref` pinned via `@JsonProperty`.
+- **D7 softened** (was in the approved Phase 3 plan): "byte-identical" → "wire-compatible" —
+  parses, renames/drops nothing, changes no value; field order pinned where practical. Plan doc D7
+  updated.
+- **`NumberAttribute.defaultValue` typed `Number`, not `Double`** — so a JSON integer literal
+  (`"defaultValue": 175`) round-trips as `175`, not `175.0`. `min`/`max` stay `Double` (already
+  were, so `19` → `19.0` is pre-existing, not a regression).
+
+**Tests** — `AttributeSchemaJsonSpec` (6):
+1. real seeded Badminton **v3 profile schema** (`A19_BADMINTON_SCHEMA_V3.json`, copied to
+   `src/test/resources/attributes/`) → parses, structure asserted, re-serialise→re-parse stable,
+   **zero field-name delta** vs the original JSON;
+2. comprehensive fixture — every node + field kind, nested groups, a `DEFINITION` field, an
+   `isAvailable:false` node → same stability + lossless assertions;
+3. NUMBER integer `defaultValue` → stays `175`;
+4. derived-schema fixture with two `RefAttribute` nodes (`SINGLE` + `LIST`, one with a label
+   override) → `#ref` key and `"type":"REF"` survive, stable;
+5. `min` on a `STRING` node → `UnrecognizedPropertyException` at parse (D8);
+6. unknown top-level field → rejected.
+
+**Verification:**
+- `./gradlew :modules:common:test` — green, 26 (4 pre-existing suites + 6 new).
+- `./gradlew :server:test` — 179 run, 9 failed: all `AmqpIOException` in
+  `SessionEventsConsumerIntegrationTest` / `UserFriendEventsConsumerIntegrationTest` (RabbitMQ
+  consumers). **Both classes pass in isolation** → parallel-load broker-contention flake, not a
+  regression. C5 adds no Spring bean, entity, or wiring, so it cannot affect AMQP.
+- `./gradlew assemble` — all modules compile.
+- `:server:bootRun` not run — C5 adds no beans/endpoints/entities; `:server:test`'s 170 passing
+  `@SpringBootTest` contexts cover wiring.
+- N+1: N/A — no repository/service calls in C5.
+
+**Not done here (by design):** all business logic (C6–C9), any `sport-*`/`session-*`/client change
+(A23 / CLIENT-SESSION-17), the consumer census (A23, plan §9).
+
+---
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)

@@ -20,7 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [A14](MVP/A14_ATTRIBUTE_VALUE_SUGGESTIONS_AND_SEARCH_SCOPE.md) | Attribute-value suggestions + `searchScope` — typeahead pooled from what users already typed, so free text converges *before* an Equipment catalogue exists; results carry an optional `id` from day one so the client never changes when it does. **Postponed at 2026-08-25 pickup** — the aggregation strategy needs more design investigation before implementation (see the ticket's own Investigation notes) | `TODO` |
-| 2 | [A23](MVP/A23_EXTRACT_ATTRIBUTE_FRAMEWORK_TO_SHARED_MODULE.md) | Extract the attribute-schema framework (neutral DTO tree + `SportAttributeValues`/`SchemaPaths`/`SchemaChecks` + the drop-invalid value filter) into a shared home + an ADR — removes the SESSION-23 clone and stops a third consumer forcing `sport-api` surface it doesn't own | `TODO` |
+| 2 | [A23](MVP/A23_EXTRACT_ATTRIBUTE_FRAMEWORK_TO_SHARED_MODULE.md) | Repoint `sport-*` + `session-*` onto `com.sportconnect.common.attributes` (built by common `C5`–`C9`); delete the old `sport-api` DTO tree + `sport-impl` logic + the SESSION-23 clone; rewrite `def.getType()`/`getMin()` reads as pattern switches; rewrite the seeded Badminton *session* schema for the new `#ref` `key`+`cardinality` contract. **Hard-blocked on common `C9`.** Master plan: `documentation/md/ATTRIBUTE_FRAMEWORK_EXTRACTION_PLAN.md` (§9 = this ticket's census) | `TODO` |
 
 ---
 

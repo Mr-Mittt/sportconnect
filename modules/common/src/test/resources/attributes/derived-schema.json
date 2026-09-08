@@ -1,0 +1,28 @@
+{
+  "defaultLocale": "en",
+  "definitions": [
+    {
+      "name": "MatchNote",
+      "fields": [
+        { "key": "text", "label": { "en": "Note" }, "type": "STRING", "isRequired": true }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "key": "session",
+      "label": { "en": "Session detail" },
+      "isAvailable": true,
+      "attributes": [
+        { "type": "REF", "#ref": "gear/shuttlecocks", "key": "shuttlecock", "cardinality": "SINGLE" },
+        { "type": "REF", "#ref": "gear/rackets", "key": "rackets", "cardinality": "LIST", "label": { "en": "Rackets in play" } },
+        {
+          "key": "competitive", "label": { "en": "Competitive?" }, "type": "BOOLEAN", "isAvailable": true, "defaultValue": false
+        },
+        {
+          "key": "notes", "label": { "en": "Notes" }, "type": "DEFINITION_LIST", "definitionRef": "MatchNote", "isAvailable": true
+        }
+      ]
+    }
+  ]
+}
