@@ -1,7 +1,7 @@
 # Attribute-schema framework — extraction plan
 
-**Status:** in progress — **C5 + C6 `DONE` 2026-09-08** (C5: ADR + DTO tree + `AttributeJson`;
-C6: single-schema `validate/` + `AttributeValues.isValid`); C7 next
+**Status:** in progress — **C5 + C6 + C7 `DONE` 2026-09-08** (C5: ADR + DTO tree; C6: single-schema
+`validate/`; C7: `path/` + `value/` filter); C8 next
 **Owner tickets:** common `C5`–`C9`, sport `A23`, client `CLIENT-SESSION-17`
 **Decision record:** `documentation/md/adr/ATTRIBUTE_FRAMEWORK_EXTRACTION_ADR.md`
 **Supersedes the "do it as two tickets" framing in** `modules/common/docs/MVP/C5_*.md` /
@@ -134,7 +134,7 @@ rename) is a bug in the port, not the spec.
 |---|---|---|---|
 | **C5** ✅ | `modules/common` | This doc + the ADR + the whole DTO tree (§4 `C5` rows) + Jackson polymorphism (D7/D8) + round-trip / wire-parity tests. **No business logic.** — *done 2026-09-08; `AttributeSchemaJsonSpec` green.* | — |
 | **C6** ✅ | `modules/common` | Single-schema `validate/`: per-type validators (exhaustive `switch`) + `AttributeSchemaValidator` (label/locale/key/size + 3-pass `definitions` registry + inner-position cycle rule) + `value/AttributeValues.isValid`. Rejects `RefAttribute`. — *done 2026-09-08; 122 spec cases green.* | C5 |
-| **C7** | `modules/common` | Single-schema `path/` + `value/`: `AttributePaths`, per-type value-checkers, `AttributeValues`, `AttributeValueFilter` (`filter` + generalized `retainDefined` + `DEFINITION_LIST` iteration). | C5 |
+| **C7** ✅ | `modules/common` | `path/AttributePaths` (flatten + full-depth `isAvailable` cascade), `value/AttributeValues` record cascade + dispatcher, `value/AttributeValueFilter` (`filter` + generalized `retainDefined` + `DEFINITION_LIST` iteration), `AttributeNodes` helper. — *done 2026-09-08; `ProfileAttributeFilterSpec` ported, 237 common tests green.* | C5, C6 |
 | **C8** | `modules/common` | Single-schema `resolve/`: per-type node resolvers + `AttributeSchemaResolver` (locale fallback). | C5 |
 | **C9** | `modules/common` | `pair/`: `RefAttribute` validation (D9), `DerivedSchemaExpander` (inline `#ref` as data source, lenient-drop stale, merge `definitions`, carry `cardinality`), `DerivedSchemaResolver` (stamp `prefillable`/`prefillKey`/`cardinality`). | C6, C7, C8 |
 | **A23** | `modules/sport` | Repoint `sport-impl` + `session-impl` onto `common.attributes`; delete `sport-api` DTO tree + `sport-impl` logic + the `session-impl` clone; rewrite every `def.getType()` / `def.getMin()` site as a pattern switch; rewrite the seeded Badminton session schema for D9; repoint `SportService` `-api` signatures; full client census. | C9 |

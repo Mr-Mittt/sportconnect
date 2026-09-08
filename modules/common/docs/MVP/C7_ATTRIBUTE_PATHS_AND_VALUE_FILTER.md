@@ -1,6 +1,6 @@
 # C7 · Attribute framework — paths + value filter
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-08)
 **Type:** Refactor / architecture
 **Plan:** `documentation/md/ATTRIBUTE_FRAMEWORK_EXTRACTION_PLAN.md` (§3, §5, §6, §8). Read it first.
 **Depends on:** **C5** (DTO tree) + **C6** (which builds `value/AttributeValues.isValid` + the
@@ -54,6 +54,45 @@ core is C6's) and `AttributePathsSpec` (flatten + cascade). Add per-`ValueChecke
 ## Out of scope
 
 Validation of the schema document itself (C6). Locale resolution (C8). `#ref` / pair (C9).
+
+---
+
+## Implementation summary (2026-09-08)
+
+**Approved design (Phase 3), restated:** verbatim port of `SchemaPaths` → `path/AttributePaths`,
+the record/dispatcher layers of `SportAttributeValues` → `value/AttributeValues` (`isValid`
+primitive core already in C6), and `ProfileAttributeFilter` → `value/AttributeValueFilter`
+(`filter` + generalized `retainDefined` + `DEFINITION_LIST` iteration). Behaviour parity (D11);
+`retainDefined` loses its "profile" framing (D10).
+
+**What was built:**
+
+| File | Role |
+|---|---|
+| `AttributeNodes` (root pkg, **public**) | `isAvailable(AttributeNode)` / `typeOf(AttributeNode)` — the two facts the sealed `AttributeNode` interface doesn't expose (own subtypes have them, `RefAttribute` returns `null`). One `switch` instead of every walk repeating it. **Not in the Phase-3 sketch** — added because both `AttributePaths` and `AttributeValueFilter` need per-subtype `isAvailable`. |
+| `path/AttributePaths` (**public**) | `definedByPath` / `availableByPath` / `record DefinedAttribute(AttributeNode, boolean live)` + `SEPARATOR`. Full-depth `isAvailable` cascade, parent wins. Verbatim `SchemaPaths`. |
+| `value/AttributeValues` (+=) | `isValidRecord` (required-field cascade, recurses for `DEFINITION` fields), `filterScalarOrRecord` (dispatcher; `DEFINITION_LIST` throws — caller iterates), `asRecord`, pkg-private `FieldShape`/`shapeOf` (per-sealed-`AttributeField`-subtype `(type, allowed, min, max, definitionRef)`). |
+| `value/AttributeValueFilter` (**public**) | `filter` (drop-invalid on a write), `retainDefined` (re-filter a stored map — undefined key pruned, soft-deleted key kept verbatim, live key re-validated), private `filterValue` (`switch` over the node subtype; `DEFINITION_LIST` handled inline — per-element `DEFINITION` validation, cap on *submitted* length, empty result list stored; `RefAttribute` → drop). **Never throws.** |
+
+**Key points / divergences:**
+- **`AttributeNodes` helper added** (see table) — the only structural addition beyond the Phase-3
+  plan. Small, public, reused by C8/C9/A23.
+- **`RefAttribute` in the filter** → dropped (returns `null`), never throws — it can't appear in a
+  C6-validated single schema, and C9 filters only expanded ref-free schemas.
+- Per-subtype `(type, min, max, definitionRef)` extraction is an exhaustive `switch` in each
+  consumer, same pattern as C6.
+
+**Verification:**
+- `./gradlew :modules:common:test` — green, **237** (148 after C6 + `AttributePathsSpec` 11 +
+  `AttributeValueFilterSpec` 60 + `AttributeValuesSpec` +18).
+- `./gradlew :server:test` — 179 run, 9 failed: all `AmqpIOException` in
+  `SessionEventsConsumerIntegrationTest` / `UserFriendEventsConsumerIntegrationTest` (RabbitMQ
+  consumers). **Both classes pass in isolation** → parallel-load broker-contention flake, same
+  signature as the C5 run. C7 adds no Spring bean/entity/wiring, so it cannot affect AMQP.
+- N+1: N/A — pure library, no queries. `:server:bootRun` not run — no beans/wiring/entities.
+
+**Not done (by design):** locale resolution (C8); base×derived pair + `#ref` resolution (C9); any
+`sport-*`/`session-*`/client change (A23).
 
 ---
 
