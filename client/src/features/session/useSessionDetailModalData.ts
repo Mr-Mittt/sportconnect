@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
+import { useSessionAttributeSchema } from '@/shared/hooks/useSessionAttributeSchema';
 import { useApproveParticipant } from './hooks/useApproveParticipant';
 import { useCancelSession } from './hooks/useCancelSession';
 import { useLikeSession } from './hooks/useLikeSession';
@@ -66,6 +67,13 @@ export function useSessionDetailModalData(sessionId: number | null) {
   // CLIENT-SESSION-8: the detail dialog's Discussion section.
   const sessionCommentsData = useSessionCommentsData(sessionId ?? undefined, isDetailOpen);
 
+  // CLIENT-SESSION-16: the resolved session attribute schema for this session's sport, so the
+  // modal can render the session's stored `attributes` read-only. `null` (not an error) when the
+  // sport's sessions carry no attributes; also `null` while the session query is still resolving
+  // its `sportId`. `SessionAttributesSummary` renders nothing when there is nothing to show, so
+  // the modal mounts it unconditionally.
+  const sessionAttributeSchema = useSessionAttributeSchema(sessionQuery.data?.sportId).data;
+
   return {
     /**
      * CLIENT-MODAL-1: clears the join/leave/cancel failures before the dialog closes.
@@ -86,6 +94,7 @@ export function useSessionDetailModalData(sessionId: number | null) {
     selectedSession: sessionQuery.data,
     isSessionLoading: sessionQuery.isLoading,
     isSessionError: sessionQuery.isError,
+    sessionAttributeSchema,
     participants: participantsQuery.data?.content ?? [],
     isParticipantsLoading: participantsQuery.isLoading,
     isParticipantsError: participantsQuery.isError,

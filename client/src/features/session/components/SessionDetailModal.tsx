@@ -25,12 +25,17 @@ import { getParticipationAction, type ParticipationActionKind } from '@/shared/l
 import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
 import { formatSessionHeaderDateTime, formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
-import type { SportKey, SportProfile } from '@/shared/types/sport';
+import type {
+  ResolvedSportAttributeSchema,
+  SportKey,
+  SportProfile,
+} from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import type { Session, SessionParticipant } from '../types';
+import { SessionAttributesSummary } from './SessionAttributesSummary';
 import { SessionCommentComposer } from './SessionCommentComposer';
 import { SessionCommentSection } from './SessionCommentSection';
 
@@ -57,6 +62,13 @@ interface SessionDetailModalProps {
    * (the viewer has no profile for that sport, or the catalog hasn't resolved it) hides the chip
    * — same "sport !== undefined &&" precedent SessionCard already established, not a new one. */
   sportsByKey: Record<SportKey, SportProfile>;
+
+  /** CLIENT-SESSION-16: the resolved session attribute schema (A17) for `session.sportId`, from
+   * the page-data hook's `useSessionAttributeSchema`. `null` when the sport's sessions carry no
+   * attributes or the session query hasn't resolved yet. Paired with `session.attributes` to
+   * render a read-only term/value summary; `SessionAttributesSummary` renders nothing when there
+   * is nothing to show, so this needs no separate visibility gate. */
+  sessionAttributeSchema?: ResolvedSportAttributeSchema | null;
 
   onJoin: () => void;
   isJoining: boolean;
@@ -233,6 +245,7 @@ export function SessionDetailModal({
   isParticipantsError,
   currentUserId,
   sportsByKey,
+  sessionAttributeSchema,
   onJoin,
   isJoining,
   isJoinError,
@@ -372,6 +385,16 @@ export function SessionDetailModal({
                 <IconCoin className="size-4 shrink-0 text-text-muted" aria-hidden="true" />
                 {formatFeeDisplay(session.feeType, session.feeAmountVnd)}
               </div>
+
+              {/* CLIENT-SESSION-16: read-only view of the session's stored sport-specific
+                  attributes (A17). Renders nothing when the session has none, the sport has no
+                  session schema, or every field filters out. */}
+              {sessionAttributeSchema != null && session.attributes != null && (
+                <SessionAttributesSummary
+                  schema={sessionAttributeSchema}
+                  values={session.attributes}
+                />
+              )}
 
               {session.status === 'CANCELLED' && (
                 <div className="border-hairline rounded-lg border-border bg-surface-1 p-2.5 text-2sm text-text-secondary">

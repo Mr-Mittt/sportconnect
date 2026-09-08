@@ -1041,6 +1041,7 @@ export function GroupsPage() {
           onClose={discoverModalData.closeDetail}
           session={discoverModalData.selectedSession}
           sportsByKey={sportsByKey}
+          sessionAttributeSchema={discoverModalData.sessionAttributeSchema}
           isLoading={discoverModalData.isSessionLoading}
           isError={discoverModalData.isSessionError}
           participants={discoverModalData.participants}
