@@ -51,11 +51,12 @@ public class Sport {
     private Integer maxPlayers;
 
     /**
-     * A9: the sport's attribute definition tree (version/groups/attributes), or {@code null} when
-     * the sport offers no attributes at all. Read and written through {@code SportAttributeSchema}
-     * DTOs; the typed shape lives at the API boundary, not here.
+     * A9: the sport's attribute definition tree (groups/attributes), or {@code null} when the sport
+     * offers no attributes at all. Read and written through the common
+     * {@code com.sportconnect.common.attributes.AttributeSchema} tree (since A23); the typed shape
+     * lives at the API boundary, not here.
      *
-     * <p>Deliberately an untyped {@code Map} rather than the {@code SportAttributeSchema} DTO.
+     * <p>Deliberately an untyped {@code Map} rather than the typed {@code AttributeSchema}.
      * {@code Sport} is loaded on the hot path by {@code SportLookupCache.getActiveSportsById()}; a
      * strongly-typed field would make a document that no longer deserialises (an attribute type
      * added or retired since it was written) throw while loading <em>the whole sport catalogue</em>,
@@ -74,7 +75,8 @@ public class Sport {
      * A17: the per-sport SESSION attribute schema — the admin-managed definition of which attributes
      * a <em>session</em> (event) of this sport may carry, as opposed to {@link #attributesSchema},
      * which describes a user's sport <em>profile</em>. {@code null} means this sport's sessions offer
-     * no attributes. Read and written through {@code SessionAttributeSchema} DTOs.
+     * no attributes. Read and written through the common {@code AttributeSchema} tree (since A23) —
+     * a <em>derived</em> schema whose nodes may be {@code #ref} pointers into {@link #attributesSchema}.
      *
      * <p>Untyped {@code Map} for the same reason as {@link #attributesSchema}: {@code Sport} is
      * cache-loaded on the hot path, and a since-undeserialisable document must not take the whole

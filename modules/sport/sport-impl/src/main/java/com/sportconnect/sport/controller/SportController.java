@@ -1,18 +1,17 @@
 package com.sportconnect.sport.controller;
 
+import com.sportconnect.common.attributes.AttributeSchema;
+import com.sportconnect.common.attributes.resolve.AttributeSchemaResolver;
+import com.sportconnect.common.attributes.resolved.ResolvedAttributeSchema;
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.sport.api.dto.CreateSportRequest;
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest;
-import com.sportconnect.sport.api.dto.ResolvedSportAttributeSchema;
-import com.sportconnect.sport.api.dto.SessionAttributeSchema;
-import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UpdateSportRequest;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.sport.api.service.UserSportProfileService;
-import com.sportconnect.sport.service.SportAttributeSchemaLabelResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,7 +43,6 @@ public class SportController {
 
     private final SportService sportService;
     private final UserSportProfileService profileService;
-    private final SportAttributeSchemaLabelResolver labelResolver;
 
     @Operation(summary = "Create a sport", description = "Admin-only.")
     @ApiResponses({
@@ -155,15 +153,16 @@ public class SportController {
     // hasRole('USER') because the admin editor (client ADMIN-2) reads this too, and nothing in the
     // codebase grants ADMIN, so an admin-only account may not also hold USER.
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<ResolvedSportAttributeSchema>> getAttributeSchema(
+    public ResponseEntity<ApiResponse<ResolvedAttributeSchema>> getAttributeSchema(
             @PathVariable Long sportId, Locale locale) {
         // A13: resolution happens here, on the way out of this GET only — never inside
         // SportService.getAttributeSchema, which UserSportProfileServiceImpl also calls on every
         // profile write to filter submitted attributes, a path that never touches labels. `locale`
         // is resolved by Spring's default LocaleResolver (AcceptHeaderLocaleResolver) from the
-        // request's Accept-Language header — no manual header parsing needed.
-        SportAttributeSchema schema = sportService.getAttributeSchema(sportId);
-        ResolvedSportAttributeSchema resolved = labelResolver.resolve(schema, locale);
+        // request's Accept-Language header — no manual header parsing needed. Since A23 the resolver
+        // is common's static AttributeSchemaResolver (C8).
+        AttributeSchema schema = sportService.getAttributeSchema(sportId);
+        ResolvedAttributeSchema resolved = AttributeSchemaResolver.resolve(schema, locale);
         return ResponseEntity.ok(ApiResponse.success("Attribute schema retrieved successfully", resolved));
     }
 
@@ -187,8 +186,8 @@ public class SportController {
     // (client SPORT-2) reads it.
     @GetMapping("/all/{sportId}/attribute-schema")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<SportAttributeSchema>> getAttributeSchemaForAdmin(@PathVariable Long sportId) {
-        SportAttributeSchema schema = sportService.getAttributeSchemaForAdmin(sportId);
+    public ResponseEntity<ApiResponse<AttributeSchema>> getAttributeSchemaForAdmin(@PathVariable Long sportId) {
+        AttributeSchema schema = sportService.getAttributeSchemaForAdmin(sportId);
         return ResponseEntity.ok(ApiResponse.success("Attribute schema retrieved successfully", schema));
     }
 
@@ -204,10 +203,10 @@ public class SportController {
     })
     @PutMapping("/{sportId}/attribute-schema")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<SportAttributeSchema>> replaceAttributeSchema(
+    public ResponseEntity<ApiResponse<AttributeSchema>> replaceAttributeSchema(
             @PathVariable Long sportId,
-            @RequestBody(required = false) SportAttributeSchema schema) {
-        SportAttributeSchema saved = sportService.replaceAttributeSchema(sportId, schema);
+            @RequestBody(required = false) AttributeSchema schema) {
+        AttributeSchema saved = sportService.replaceAttributeSchema(sportId, schema);
         return ResponseEntity.ok(ApiResponse.success("Attribute schema updated successfully", saved));
     }
 
@@ -230,9 +229,9 @@ public class SportController {
     // SecurityConfig, so this @PreAuthorize is what protects the endpoint; isAuthenticated() rather
     // than hasRole('USER') because an admin-only account may not also hold USER.
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<ResolvedSportAttributeSchema>> getSessionAttributeSchema(
+    public ResponseEntity<ApiResponse<ResolvedAttributeSchema>> getSessionAttributeSchema(
             @PathVariable Long sportId, Locale locale) {
-        ResolvedSportAttributeSchema resolved = sportService.getResolvedSessionAttributeSchema(sportId, locale);
+        ResolvedAttributeSchema resolved = sportService.getResolvedSessionAttributeSchema(sportId, locale);
         return ResponseEntity.ok(ApiResponse.success("Session attribute schema retrieved successfully", resolved));
     }
 
@@ -249,9 +248,9 @@ public class SportController {
     })
     @GetMapping("/all/{sportId}/session-attribute-schema")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<SessionAttributeSchema>> getSessionAttributeSchemaForAdmin(
+    public ResponseEntity<ApiResponse<AttributeSchema>> getSessionAttributeSchemaForAdmin(
             @PathVariable Long sportId) {
-        SessionAttributeSchema schema = sportService.getSessionAttributeSchemaForAdmin(sportId);
+        AttributeSchema schema = sportService.getSessionAttributeSchemaForAdmin(sportId);
         return ResponseEntity.ok(ApiResponse.success("Session attribute schema retrieved successfully", schema));
     }
 
@@ -268,10 +267,10 @@ public class SportController {
     })
     @PutMapping("/{sportId}/session-attribute-schema")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<SessionAttributeSchema>> replaceSessionAttributeSchema(
+    public ResponseEntity<ApiResponse<AttributeSchema>> replaceSessionAttributeSchema(
             @PathVariable Long sportId,
-            @RequestBody(required = false) SessionAttributeSchema schema) {
-        SessionAttributeSchema saved = sportService.replaceSessionAttributeSchema(sportId, schema);
+            @RequestBody(required = false) AttributeSchema schema) {
+        AttributeSchema saved = sportService.replaceSessionAttributeSchema(sportId, schema);
         return ResponseEntity.ok(ApiResponse.success("Session attribute schema updated successfully", saved));
     }
 

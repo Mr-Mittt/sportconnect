@@ -2,6 +2,8 @@ package com.sportconnect.session.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sportconnect.common.attributes.AttributeSchema;
+import com.sportconnect.common.attributes.value.AttributeValueFilter;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.group.api.dto.GroupResponse;
@@ -38,7 +40,6 @@ import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import com.sportconnect.social.post.api.dto.PostLikeInfoResponse;
 import com.sportconnect.social.post.api.service.CommentService;
 import com.sportconnect.social.post.api.service.PostService;
-import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
@@ -85,7 +86,6 @@ public class SessionServiceImpl implements SessionService {
     private final SessionGate sessionGate;
     private final SessionOutboxEventRepository sessionOutboxEventRepository;
     private final SessionOutboxWriter sessionOutboxWriter;
-    private final SessionAttributeFilter sessionAttributeFilter;
     private final ObjectMapper objectMapper;
 
     /** SESSION-23 — same serialized-size ceiling profile attributes use
@@ -297,7 +297,7 @@ public class SessionServiceImpl implements SessionService {
      * <p>Flow: {@code null} request → {@code null} (nothing supplied; the caller stores that as-is,
      * and the sport's session schema is never fetched). Otherwise fetch the sport's
      * {@code #ref}-expanded session schema via {@link SportService#getSessionAttributeSchemaRaw},
-     * run the submitted map through {@link SessionAttributeFilter} (unknown / wrong-typed /
+     * run the submitted map through common {@link AttributeValueFilter} (unknown / wrong-typed /
      * switched-off entries dropped silently), then enforce the 4KB serialized cap on what survives.
      *
      * <p><b>Deactivated sport:</b> {@code getSessionAttributeSchemaRaw} is active-only and throws
@@ -314,8 +314,8 @@ public class SessionServiceImpl implements SessionService {
         if (requested == null) {
             return null;
         }
-        SportAttributeSchema schema = sportService.getSessionAttributeSchemaRaw(sportId);
-        Map<String, Object> filtered = sessionAttributeFilter.filter(requested, schema);
+        AttributeSchema schema = sportService.getSessionAttributeSchemaRaw(sportId);
+        Map<String, Object> filtered = AttributeValueFilter.filter(requested, schema);
         validateAttributesSize(filtered);
         return filtered;
     }

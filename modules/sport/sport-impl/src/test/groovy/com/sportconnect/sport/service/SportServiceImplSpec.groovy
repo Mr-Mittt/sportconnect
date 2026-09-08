@@ -1,16 +1,16 @@
 package com.sportconnect.sport.service
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import com.sportconnect.common.attributes.AttributeGroup
+import com.sportconnect.common.attributes.AttributeSchema
+import com.sportconnect.common.attributes.AttributeType
+import com.sportconnect.common.attributes.Cardinality
+import com.sportconnect.common.attributes.node.BooleanAttribute
+import com.sportconnect.common.attributes.node.NumberAttribute
+import com.sportconnect.common.attributes.node.RefAttribute
+import com.sportconnect.common.attributes.node.StringAttribute
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.sport.api.dto.CreateSportRequest
-import com.sportconnect.sport.api.dto.SessionAttributeGroup
-import com.sportconnect.sport.api.dto.SessionAttributeNode
-import com.sportconnect.sport.api.dto.SessionAttributeSchema
-import com.sportconnect.sport.api.dto.SportAttributeDefinition
-import com.sportconnect.sport.api.dto.SportAttributeGroup
-import com.sportconnect.sport.api.dto.SportAttributeSchema
-import com.sportconnect.sport.api.dto.SportAttributeType
 import com.sportconnect.sport.api.dto.UpdateSportRequest
 import com.sportconnect.sport.entity.Sport
 import com.sportconnect.sport.repository.SportRepository
@@ -21,21 +21,13 @@ class SportServiceImplSpec extends Specification {
 
     SportRepository sportRepository = Mock()
     SportLookupCache sportLookupCache = Mock()
-    // A9: both real rather than Mock(). The validator is a pure function whose whole value is the
-    // rules it enforces, and a mocked ObjectMapper would make the stored-document round trip prove
-    // nothing about whether the schema actually serialises.
-    ObjectMapper objectMapper = new ObjectMapper()
-    SportAttributeSchemaValidator schemaValidator = new SportAttributeSchemaValidator(objectMapper)
-    // A17: real, same reasoning as the profile validator above — these are pure rule engines.
-    SessionAttributeSchemaValidator sessionSchemaValidator = new SessionAttributeSchemaValidator(objectMapper)
-    SessionAttributeSchemaExpander sessionSchemaExpander = new SessionAttributeSchemaExpander()
-    SessionAttributeSchemaResolver sessionSchemaResolver =
-            new SessionAttributeSchemaResolver(sessionSchemaExpander, new SportAttributeSchemaLabelResolver())
 
+    // A23: validation / expansion / resolution now live in common as Spring-free static entry points
+    // (AttributeSchemaValidator, DerivedSchema{Validator,Expander,Resolver}, AttributeSchemaResolver),
+    // so SportServiceImpl no longer takes them — or an ObjectMapper — as constructor dependencies.
+    // The stored-document round trip goes through the framework's own strict AttributeJson mapper.
     @Subject
-    SportServiceImpl sportService =
-            new SportServiceImpl(sportRepository, sportLookupCache, schemaValidator,
-                    sessionSchemaValidator, sessionSchemaExpander, sessionSchemaResolver, objectMapper)
+    SportServiceImpl sportService = new SportServiceImpl(sportRepository, sportLookupCache)
 
     def "createSport should create new sport successfully"() {
         given:
@@ -325,7 +317,7 @@ class SportServiceImplSpec extends Specification {
         1 * sportLookupCache.getActiveSportsById() >> [(sportId): sport]
         result.groups[0].key == "gear"
         result.groups[0].attributes[0].key == "racket"
-        result.groups[0].attributes[0].type == SportAttributeType.STRING
+        result.groups[0].attributes[0] instanceof StringAttribute
     }
 
     def "getAttributeSchema returns null when the sport offers no attributes"() {
@@ -357,11 +349,10 @@ class SportServiceImplSpec extends Specification {
         given:
         def sportId = 1L
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true).build()
-        def schema = SportAttributeSchema.builder().defaultLocale("en").groups([
-                SportAttributeGroup.builder().key("gear").label(["en": "Gear"]).isAvailable(true)
-                        .attributes([SportAttributeDefinition.builder()
+        def schema = AttributeSchema.builder().defaultLocale("en").groups([
+                AttributeGroup.builder().key("gear").label(["en": "Gear"]).isAvailable(true)
+                        .attributes([StringAttribute.builder()
                                              .key("racket").label(["en": "Racket"])
-                                             .type(SportAttributeType.STRING)
                                              .isAvailable(true).build()])
                         .build()
         ]).build()
@@ -384,13 +375,12 @@ class SportServiceImplSpec extends Specification {
         def sportId = 1L
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true).build()
         def racket = { ->
-            SportAttributeDefinition.builder()
+            StringAttribute.builder()
                     .key("racket").label(["en": "Racket"])
-                    .type(SportAttributeType.STRING)
                     .isAvailable(true).build()
         }
-        def schema = SportAttributeSchema.builder().defaultLocale("en")
-                .groups([SportAttributeGroup.builder().key("gear").label(["en": "gear"]).isAvailable(true)
+        def schema = AttributeSchema.builder().defaultLocale("en")
+                .groups([AttributeGroup.builder().key("gear").label(["en": "gear"]).isAvailable(true)
                                  .attributes([racket(), racket()]).build()]).build()
 
         when:
@@ -490,13 +480,14 @@ class SportServiceImplSpec extends Specification {
         ]
     }
 
-    private static SessionAttributeSchema sessionSchemaWithRef() {
-        SessionAttributeSchema.builder().defaultLocale("en").groups([
-                SessionAttributeGroup.builder().key("setup").label(["en": "Setup"]).isAvailable(true)
+    private static AttributeSchema sessionSchemaWithRef() {
+        AttributeSchema.builder().defaultLocale("en").groups([
+                AttributeGroup.builder().key("setup").label(["en": "Setup"]).isAvailable(true)
                         .attributes([
-                                SessionAttributeNode.builder().key("ballsProvided").label(["en": "Balls provided?"])
-                                        .type(SportAttributeType.BOOLEAN).build(),
-                                SessionAttributeNode.builder().ref("gear/tension").build()
+                                BooleanAttribute.builder().key("ballsProvided").label(["en": "Balls provided?"])
+                                        .isAvailable(true).build(),
+                                RefAttribute.builder().key("tension").ref("gear/tension")
+                                        .cardinality(Cardinality.SINGLE).build()
                         ]).build()
         ]).build()
     }
@@ -525,9 +516,10 @@ class SportServiceImplSpec extends Specification {
         def sportId = 1L
         def sport = Sport.builder().id(sportId).name("Badminton").isActive(true)
                 .attributesSchema(storedProfileSchema()).build()
-        def bad = SessionAttributeSchema.builder().defaultLocale("en").groups([
-                SessionAttributeGroup.builder().key("setup").label(["en": "Setup"]).isAvailable(true)
-                        .attributes([SessionAttributeNode.builder().ref("gear/nope").build()]).build()
+        def bad = AttributeSchema.builder().defaultLocale("en").groups([
+                AttributeGroup.builder().key("setup").label(["en": "Setup"]).isAvailable(true)
+                        .attributes([RefAttribute.builder().key("nope").ref("gear/nope")
+                                             .cardinality(Cardinality.SINGLE).build()]).build()
         ]).build()
 
         when:
@@ -584,16 +576,17 @@ class SportServiceImplSpec extends Specification {
                 .sessionAttributesSchema([
                         defaultLocale: "en",
                         groups       : [[key: "setup", label: [en: "Setup"], isAvailable: true,
-                                         attributes: [["#ref": "gear/tension"]]]]
+                                         attributes: [[type: "REF", key: "tension", "#ref": "gear/tension",
+                                                       cardinality: "SINGLE"]]]]
                 ]).build()
 
-        when: "active - #ref expands to a plain NUMBER attribute keyed by the last path segment"
+        when: "active - #ref expands to a plain NUMBER attribute keyed by the #ref's explicit key"
         def expanded = sportService.getSessionAttributeSchemaRaw(sportId)
 
         then:
         1 * sportLookupCache.getActiveSportsById() >> [(sportId): sport]
         expanded.groups[0].attributes[0].key == "tension"
-        expanded.groups[0].attributes[0].type == SportAttributeType.NUMBER
+        expanded.groups[0].attributes[0] instanceof NumberAttribute
 
         when: "deactivated - not in the active cache"
         sportService.getSessionAttributeSchemaRaw(sportId)
@@ -611,7 +604,8 @@ class SportServiceImplSpec extends Specification {
                 .sessionAttributesSchema([
                         defaultLocale: "en",
                         groups       : [[key: "setup", label: [en: "Setup"], isAvailable: true,
-                                         attributes: [["#ref": "gear/tension"]]]]
+                                         attributes: [[type: "REF", key: "tension", "#ref": "gear/tension",
+                                                       cardinality: "SINGLE"]]]]
                 ]).build()
 
         when:

@@ -2,11 +2,12 @@ package com.sportconnect.sport.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sportconnect.common.attributes.AttributeSchema;
+import com.sportconnect.common.attributes.value.AttributeValueFilter;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest;
-import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
@@ -35,7 +36,6 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
     private final SportService sportService;
     private final SportLookupCache sportLookupCache;
     private final ObjectMapper objectMapper;
-    private final ProfileAttributeFilter attributeFilter;
 
     /**
      * Creates a new sport profile for the caller.
@@ -85,10 +85,10 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
 
         // A9: keep only what the sport currently offers. Unknown keys, values of the wrong shape,
         // and writes aimed at a switched-off attribute are dropped silently rather than rejected -
-        // see ProfileAttributeFilter for why this half is lenient while the admin schema write is
-        // strict. Size is still enforced below and still fails loudly, because an oversized payload
-        // has no sensible partial answer: deciding which keys to discard would be arbitrary.
-        Map<String, Object> attributes = new HashMap<>(attributeFilter.filter(
+        // see common AttributeValueFilter for why this half is lenient while the admin schema write
+        // is strict. Size is still enforced below and still fails loudly, because an oversized
+        // payload has no sensible partial answer: deciding which keys to discard would be arbitrary.
+        Map<String, Object> attributes = new HashMap<>(AttributeValueFilter.filter(
                 request.getAttributes(), sportService.getAttributeSchema(request.getSportId())));
         validateAttributesSize(attributes);
 
@@ -141,7 +141,7 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
      *   <li>the stored scalar columns ({@code skillLevel}, {@code bio}, {@code yearsOfExperience})
      *       are left exactly as they were before the soft delete;</li>
      *   <li>the stored {@code attributes} map is run through A10's {@link
-     *       ProfileAttributeFilter#retainDefined} only — keys with no live definition are pruned,
+     *       AttributeValueFilter#retainDefined} only — keys with no live definition are pruned,
      *       {@code isAvailable:false} values are kept verbatim, live values re-validated — with
      *       <em>no</em> merge of the request's attributes and no {@code null}-delete handling;</li>
      *   <li>{@code isActive} is flipped back to {@code true}.</li>
@@ -164,9 +164,9 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
             throw new BadRequestException("User already has a profile for sport: " + sport.getName());
         }
 
-        SportAttributeSchema schema = sportService.getAttributeSchema(request.getSportId());
+        AttributeSchema schema = sportService.getAttributeSchema(request.getSportId());
         Map<String, Object> pruned =
-                new HashMap<>(attributeFilter.retainDefined(existing.getAttributes(), schema));
+                new HashMap<>(AttributeValueFilter.retainDefined(existing.getAttributes(), schema));
         validateAttributesSize(pruned);
 
         existing.setAttributes(pruned);
@@ -298,7 +298,7 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
         // honour an explicit null as a delete marker (Part 1). An absent key still means "leave it
         // alone". The schema lookup is a SportLookupCache hit; the sport is already known active
         // from requireActiveSportById above, though the document itself may still be null.
-        SportAttributeSchema schema = sportService.getAttributeSchema(profile.getSportId());
+        AttributeSchema schema = sportService.getAttributeSchema(profile.getSportId());
         Map<String, Object> mergedAttributes =
                 mergeAttributes(profile.getAttributes(), request.getAttributes(), schema);
         validateAttributesSize(mergedAttributes);
@@ -359,10 +359,10 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
      * schema (A10). Three steps:
      *
      * <ol>
-     *   <li>the stored map is re-filtered by {@link ProfileAttributeFilter#retainDefined} — keys the
+     *   <li>the stored map is re-filtered by {@link AttributeValueFilter#retainDefined} — keys the
      *       schema no longer defines are pruned, {@code isAvailable: false} values are kept verbatim,
      *       live values are re-validated ("2b");</li>
-     *   <li>the request map is filtered by {@link ProfileAttributeFilter#filter} (A9's lenient
+     *   <li>the request map is filtered by {@link AttributeValueFilter#filter} (A9's lenient
      *       drop-what-does-not-fit) and merged on top by top-level key;</li>
      *   <li>any key the raw request carries with an explicit {@code null} is removed from the result
      *       — the delete marker (Part 1). {@code filter} has already dropped those entries, so this
@@ -380,10 +380,10 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
      */
     private Map<String, Object> mergeAttributes(Map<String, Object> stored,
                                                 Map<String, Object> requested,
-                                                SportAttributeSchema schema) {
-        Map<String, Object> result = new HashMap<>(attributeFilter.retainDefined(stored, schema));
+                                                AttributeSchema schema) {
+        Map<String, Object> result = new HashMap<>(AttributeValueFilter.retainDefined(stored, schema));
         if (requested != null) {
-            result.putAll(attributeFilter.filter(requested, schema));
+            result.putAll(AttributeValueFilter.filter(requested, schema));
             for (Map.Entry<String, Object> entry : requested.entrySet()) {
                 if (entry.getValue() == null) {
                     result.remove(entry.getKey());
