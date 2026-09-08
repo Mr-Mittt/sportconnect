@@ -3,9 +3,9 @@
 **Status:** `TODO`
 **Type:** Refactor / architecture
 **Plan:** `documentation/md/ATTRIBUTE_FRAMEWORK_EXTRACTION_PLAN.md` (§3, §5, §6, §8). Read it first.
-**Depends on:** **C5** (DTO tree). C6 is *not* a hard dep, but `C6`'s `defaultValue` check calls
-`AttributeValues.isValid` — if C6 lands first it inlines a stub that C7 replaces, or the two land
-together. Decide at whichever is picked up second.
+**Depends on:** **C5** (DTO tree) + **C6** (which builds `value/AttributeValues.isValid` + the
+primitive `withinBounds` / option helpers — see C6's scope-refinement note, 2026-09-08). C7 adds
+the record + dispatcher + filter + paths layers on top.
 **Filed:** 2026-09-08, from the C5 split.
 
 ## What C7 ships
@@ -46,9 +46,10 @@ Ports `SchemaPaths` (96 ln), `SportAttributeValues` (208 ln) and `ProfileAttribu
 
 ## Spec parity
 
-Port **`ProfileAttributeFilterSpec`** (608), **`SportAttributeValuesSpec`**, **`SchemaPathsSpec`**
-(plan doc §8). `retainDefined` cases carry over minus the profile framing. Add per-`ValueChecker`
-unit specs.
+Port **`ProfileAttributeFilterSpec`** (608) — `retainDefined` cases carry over minus the profile
+framing. `SportAttributeValuesSpec` / `SchemaPathsSpec` **do not exist** (confirmed 2026-09-08,
+plan doc §8) — write fresh `AttributeValuesSpec` (record cascade / dispatcher; `isValid` primitive
+core is C6's) and `AttributePathsSpec` (flatten + cascade). Add per-`ValueChecker` unit specs.
 
 ## Out of scope
 

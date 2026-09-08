@@ -31,6 +31,10 @@ public final class ListAttribute implements AttributeNode {
     /** Required and non-empty. */
     private List<AttributeOption> options;
 
-    /** Optional placeholder; every element must be one of {@link #options}' values. */
-    private List<String> defaultValue;
+    /**
+     * Optional placeholder; every element must be one of {@link #options}' values. {@code Object}
+     * (not {@code List<String>}) so a non-list value — or a list with a non-string element — is
+     * rejected by the value validator, not coerced or refused at parse.
+     */
+    private Object defaultValue;
 }

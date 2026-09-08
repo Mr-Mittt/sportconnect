@@ -9,8 +9,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * A free-text ({@code STRING}) attribute node. Its {@code defaultValue}, if present, is a plain
- * {@code String}.
+ * A free-text ({@code STRING}) attribute node.
  */
 @Data
 @Builder
@@ -26,6 +25,10 @@ public final class StringAttribute implements AttributeNode {
     /** Soft delete. When {@code false} the attribute is not offered on writes; stored values remain readable. */
     private Boolean isAvailable;
 
-    /** Optional placeholder; must be a {@code String} the write path would accept. */
-    private String defaultValue;
+    /**
+     * Optional placeholder. Typed {@code Object} (not {@code String}) so the value validator's
+     * {@code instanceof} check — not Jackson's scalar coercion — decides validity, matching the
+     * sport framework exactly (a JSON {@code 42} here is rejected, never coerced to {@code "42"}).
+     */
+    private Object defaultValue;
 }

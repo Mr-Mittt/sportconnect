@@ -3312,10 +3312,14 @@ explicit go-ahead at each step (full story in A3's summary doc):
   requiring an explicit `key` + `SINGLE`/`LIST` `cardinality`, not a mirror) → sport **A23** (repoint
   `sport-*`/`session-*`, delete the old code + the SESSION-23 clone, rewrite the seeded Badminton
   session schema) → client **CLIENT-SESSION-17** (discriminated-union mirror + `#ref` single/
-  multi-select UI). **C5 `DONE` 2026-09-08** — ADR landed + the DTO tree shipped in
-  `com.sportconnect.common.attributes` (sealed `AttributeNode`/`AttributeField`, flat
-  `ResolvedAttribute*`, `AttributeJson` strict mapper), 6 round-trip parity specs green, pure
-  addition (no consumer touched). C6 next.
+  multi-select UI). **C5 + C6 `DONE` 2026-09-08.** C5: ADR + the DTO tree
+  (`com.sportconnect.common.attributes`, sealed `AttributeNode`/`AttributeField`, flat
+  `ResolvedAttribute*`, `AttributeJson` strict mapper), 6 round-trip parity specs. C6: the
+  single-schema `validate/` package (`AttributeSchemaValidator` public-static + pkg-private leaf/
+  node/field/definition-registry validators as exhaustive `switch`es over the sealed sets) +
+  `value/AttributeValues.isValid` primitive core; `SportAttributeSchemaValidatorSpec` ported (122
+  cases, incl. a "rejected at parse" `@Unroll` for what the sealed model makes unrepresentable).
+  Both pure addition. C7 next (paths + value filter).
 - **Remove `user_sport_profiles.preferred_position` (A18 `DONE` 2026-09-07):** the fixed
   free-text column was a mistake — "position" is sport-specific (a football position, badminton
   singles/doubles, nothing for running), so it belongs in the per-sport A9 attribute schema, not a

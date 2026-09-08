@@ -27,10 +27,12 @@ public final class NumberAttribute implements AttributeNode {
     private Boolean isAvailable;
 
     /**
-     * Optional placeholder. Typed {@code Number} (not {@code Double}) so a JSON integer literal
-     * round-trips as an integer rather than widening to {@code 19.0}.
+     * Optional placeholder. Typed {@code Object} (not {@code Number}) so a JSON integer literal
+     * round-trips as an integer (not widened to {@code 19.0}) <em>and</em> a JSON string like
+     * {@code "27"} stays a {@code String} for the value validator to reject — matching the sport
+     * framework, rather than letting Jackson coerce it to a number.
      */
-    private Number defaultValue;
+    private Object defaultValue;
 
     /** Optional inclusive lower bound. */
     private Double min;

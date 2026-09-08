@@ -9,8 +9,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * A true/false ({@code BOOLEAN}) attribute node. Its {@code defaultValue}, if present, is a
- * {@code Boolean}.
+ * A true/false ({@code BOOLEAN}) attribute node.
  */
 @Data
 @Builder
@@ -26,6 +25,10 @@ public final class BooleanAttribute implements AttributeNode {
     /** Soft delete. See {@link StringAttribute#getIsAvailable()}. */
     private Boolean isAvailable;
 
-    /** Optional placeholder. */
-    private Boolean defaultValue;
+    /**
+     * Optional placeholder. Typed {@code Object} (not {@code Boolean}) so the value validator's
+     * {@code instanceof} check decides validity — a JSON {@code "true"} or {@code 1} here is
+     * rejected, not coerced.
+     */
+    private Object defaultValue;
 }

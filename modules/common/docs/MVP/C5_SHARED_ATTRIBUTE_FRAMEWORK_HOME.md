@@ -132,6 +132,17 @@ Plus the ADR (`documentation/md/adr/ATTRIBUTE_FRAMEWORK_EXTRACTION_ADR.md`) and 
 **Not done here (by design):** all business logic (C6–C9), any `sport-*`/`session-*`/client change
 (A23 / CLIENT-SESSION-17), the consumer census (A23, plan §9).
 
+## Delta — 2026-09-08 (from C6)
+
+C5 shipped `defaultValue` typed per subtype (`StringAttribute.defaultValue: String`,
+`NumberAttribute: Number`, `BooleanAttribute: Boolean`, `EnumAttribute: String`,
+`ListAttribute: List<String>`). **C6 changed all five to `Object`** — a typed field let Jackson
+coerce scalars (`"27"` → `27`, `42` → `"42"`, `"true"` → `true`), which silently accepted defaults
+the sport framework's `SportAttributeValues.isValid` rejects and made those parity cases
+unconstructable. `AttributeValues.isValid` (built in C6) is now the single arbiter, matching sport
+exactly. The C5 round-trip specs are unaffected (an `Object` field still deserialises `175` as an
+`Integer` and re-serialises it as `175`). Plan doc D5 + ADR D5 updated.
+
 ---
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
