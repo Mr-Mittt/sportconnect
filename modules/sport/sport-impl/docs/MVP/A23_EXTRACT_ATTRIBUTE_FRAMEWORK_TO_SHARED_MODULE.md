@@ -1,18 +1,21 @@
-# A23 · Extract the attribute-schema framework into a shared home
+# A23 · Repoint sport + session onto `common.attributes`; delete the clone
 
 **Status:** `TODO`
 **Type:** Refactor / architecture
-**Depends on:** nothing hard. Best done before a third domain grows its own attribute surface.
-**Paired with common `C5`** — same body of work from the other end: `C5` owns the ADR (which shared
-home) + standing up the neutral module/package; this ticket removes the framework from `sport-*`,
-repoints sport/session consumers, and deletes the SESSION-23 clone. Do them together (one PR) or
-`C5` first.
+**Plan:** `documentation/md/ATTRIBUTE_FRAMEWORK_EXTRACTION_PLAN.md` — the master doc. §7 is the
+class-move inventory, §8 the spec-parity matrix, **§9 is this ticket's consumer-repoint
+checklist**. Read it first.
+**Depends on:** **common `C9`** (hard) — which depends on `C5`→`C8`. The whole neutral framework
+(`com.sportconnect.common.attributes`: DTO tree + validator + paths/filter + resolver + base×derived
+pair, with the new `#ref` `key`+`cardinality` semantics) must be built and green before A23 starts.
 **Filed:** 2026-09-07, from SESSION-23 pickup — that ticket needed
 `ProfileAttributeFilter` / `SchemaPaths` / `SportAttributeValues` (all package-private in
 `com.sportconnect.sport.service`) and the `sport-api` attribute DTO tree from `session-impl`, and
 there was no shared home. SESSION-23 **cloned** the minimal value-validation logic into
-`session-impl` as a deliberate, deletable bridge (matching the `SessionGate`/`PostGate`
-"same shape, no shared logic" precedent). This ticket removes that duplication.
+`session-impl` as a deliberate, deletable bridge. This ticket removes that duplication.
+**Rescoped:** 2026-09-08 — the original C5/A23 pair was split into common `C5`–`C9` + this ticket
++ client `CLIENT-SESSION-17`. A23 is now purely the *consumer* side: `common.attributes` is built
+by C5–C9; A23 switches `sport-*` + `session-*` over to it and deletes the old code.
 
 ## Why
 
@@ -25,36 +28,47 @@ either clones (drift risk) or forces `sport-api` public surface it does not own.
 
 ## What ships
 
-1. **An ADR** — `documentation/md/adr/ATTRIBUTE_FRAMEWORK_EXTRACTION_ADR.md` — deciding the shared
-   home and the naming. Candidates weighed at filing:
-   - a new `modules/attributes` (`attributes-api` + `attributes-impl`) domain-neutral module, **or**
-   - `modules/common` (rejected lean at filing: CLAUDE.md / the ResourceGate ADR say `common`
-     holds shared *shape*, not shared *logic* — overriding that is itself an ADR-level call), **or**
-   - keep it in `sport-*` but make the needed classes public (smallest, but bakes "attributes are a
-     sport concept" into every future consumer).
-   The ADR also records the rename map (`SportAttributeSchema` → neutral name, etc.) and whether
-   the client's mirrored types change.
-2. **Move the neutral DTO tree** out of `sport-api`: `SportAttributeSchema`, `SportAttributeGroup`,
-   `SportAttributeDefinition`, `SportAttributeDefinitionType`, `SportAttributeField`,
-   `SportAttributeType`, `SportAttributeOption`, `ResolvedSportAttributeSchema` (+ the resolved
-   sub-DTOs), `SessionAttributeSchema`/`Group`/`Node` (or fold these into the neutral tree).
-3. **Move the shared logic**: `SportAttributeValues` (type/record/bounds validation),
-   `SchemaPaths` (path flattening + `isAvailable` cascade), `SchemaChecks` (per-node/per-definition
-   rules), and the drop-invalid value **filter** (`ProfileAttributeFilter.filter`'s core, minus the
-   A10 `retainDefined` profile-only half — decide whether that generalizes too).
-4. **Repoint consumers**: `sport-impl` (`SportAttributeSchemaValidator`, session-schema
-   validator/expander/resolver, `ProfileAttributeFilter`, `UserSportProfileServiceImpl`),
-   `session-impl` (delete the SESSION-23 clone, use the shared filter), and any `-api` method
-   signatures that name a moved type (`SportService.getSessionAttributeSchemaRaw` etc.).
+1. **Repoint `sport-impl`** onto `com.sportconnect.common.attributes`:
+   `SportAttributeSchemaValidator` → `AttributeSchemaValidator`; `ProfileAttributeFilter` →
+   `AttributeValueFilter`; `SessionAttributeSchema{Validator,Expander,Resolver}` → the `pair/`
+   classes; `SportAttributeSchemaLabelResolver` → `AttributeSchemaResolver`;
+   `UserSportProfileServiceImpl` (profile write filter + `retainDefined` + size);
+   `SportLookupCache` (caches the raw schema); `SportServiceImpl` (schema get/put/raw/resolved).
+   Every `def.getType()` / `def.getMin()` / `def.getOptions()` read becomes a **pattern switch**
+   over the sealed `AttributeNode` hierarchy — this is the bulk of the work (plan doc §9).
+2. **Repoint `sport-api`** method signatures naming a moved type — `getAttributeSchema`,
+   `getAttributeSchemaForAdmin`, `replaceAttributeSchema`, `getSessionAttributeSchemaForAdmin`,
+   `replaceSessionAttributeSchema`, `getSessionAttributeSchemaRaw`, `getResolvedSessionAttributeSchema`.
+3. **Repoint `session-impl`** onto `common.attributes` and **delete the SESSION-23 clone**
+   (`SessionAttributeFilter`, `SessionAttributeValues`, `SessionSchemaPaths` +
+   `SessionAttributeFilterSpec`).
+4. **Delete the old framework** from `sport-api` (the whole DTO tree) and `sport-impl`
+   (`SchemaChecks`, `SchemaPaths`, `SportAttributeValues`, `ProfileAttributeFilter`,
+   `SportAttributeSchemaValidator`, `SportAttributeSchemaLabelResolver`,
+   `SessionAttributeSchema{Validator,Expander,Resolver}`, `SessionAttributeNodes`).
+5. **Rewrite the seeded Badminton *session* schema** so every `#ref` node carries `key` +
+   `cardinality` (plan doc D9 — breaking). Migration, or a documented admin re-PUT like `A15`. The
+   profile schema is unaffected (no `#ref`).
+6. **Rewrite the Spock/IT specs** that build `…Definition.builder().type(NUMBER).min(0)` to the
+   new subtype builders, and the `server` ITs (`SessionAttributeSchemaIntegrationTest`,
+   `SessionAttributesIntegrationTest`, `SportAttributeSchemaIntegrationTest`).
 
-## Consumer census (do this properly at pickup)
+## Consumer census
 
-Every moved type is a shared-DTO change. Enumerate before moving: all backend modules (`grep` the
-type names), the **client** (`client/src` hand-mirrors this tree for SPORT-2 / CLIENT-SESSION-14 —
-nothing links them), and any `-api` interface method that returns/accepts one. List each as
-compatible / updated-here / deferred.
+**Do it against plan doc §9 at pickup** — that checklist is seeded from the 2026-09-08 census.
+List each consumer as compatible / updated-here / deferred (never "probably fine"). Includes the
+**client** — but client rendering is already filed as **`CLIENT-SESSION-17`** (hard-blocked on this
+ticket), so the client entry is "deferred → CLIENT-SESSION-17" unless A23 finds something that
+ticket doesn't cover.
+
+## Behaviour parity
+
+Single-schema (profile) path: **byte-identical** — every profile-side outcome unchanged, specs
+green with subtype-builder + import changes only. Derived (session) path: changes **by design**
+for `#ref` (plan doc D9) — `key` + `cardinality` now required; the seeded schema and the session
+specs move to the new contract. Nothing else about the session path changes.
 
 ## Out of scope
 
-Any new attribute *capability*. This is a move + rename + de-dupe only — behaviour byte-identical,
-every existing Spock/IT spec green with only import/name changes.
+Any new attribute *capability* beyond D9's `#ref` change. Building `common.attributes` itself
+(C5–C9). Client rendering (`CLIENT-SESSION-17`).

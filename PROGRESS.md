@@ -3299,6 +3299,23 @@ explicit go-ahead at each step (full story in A3's summary doc):
   /{sportId}/…` (`isAuthenticated()`, active-only); **no `SecurityConfig` change** (`/api/sports/**`
   is blanket-permit, `@PreAuthorize` enforces). `order` dropped from both node kinds (A19). Green:
   sport-impl (280) + `:server:test` (175, +9 IT) + full `build` + V062 on dev Postgres.
+- **Attribute framework extraction (planned 2026-09-08,
+  `documentation/md/ATTRIBUTE_FRAMEWORK_EXTRACTION_PLAN.md` + ADR
+  `documentation/md/adr/ATTRIBUTE_FRAMEWORK_EXTRACTION_ADR.md`):** the attribute-schema framework
+  (DTOs in `sport-api`, logic package-private in `sport-impl`) becomes a domain-neutral primitive
+  in `com.sportconnect.common.attributes` — driven by SESSION-23 having had to clone 404 lines into
+  `session-impl`. Sequenced as common **C5** (ADR + DTO tree: sealed per-type `AttributeNode`/
+  `AttributeField` hierarchies replacing the flat god-DTO, flat `ResolvedAttribute*`, Jackson
+  `@JsonTypeInfo` wire-byte-identical, `Cardinality` enum, `RefAttribute`) → **C6** (single-schema
+  validator) → **C7** (paths + value filter, `retainDefined` generalized) → **C8** (locale resolver)
+  → **C9** (base×derived pair + a real `#ref` semantics change: `#ref` = a *data-source* pointer
+  requiring an explicit `key` + `SINGLE`/`LIST` `cardinality`, not a mirror) → sport **A23** (repoint
+  `sport-*`/`session-*`, delete the old code + the SESSION-23 clone, rewrite the seeded Badminton
+  session schema) → client **CLIENT-SESSION-17** (discriminated-union mirror + `#ref` single/
+  multi-select UI). **C5 `DONE` 2026-09-08** — ADR landed + the DTO tree shipped in
+  `com.sportconnect.common.attributes` (sealed `AttributeNode`/`AttributeField`, flat
+  `ResolvedAttribute*`, `AttributeJson` strict mapper), 6 round-trip parity specs green, pure
+  addition (no consumer touched). C6 next.
 - **Remove `user_sport_profiles.preferred_position` (A18 `DONE` 2026-09-07):** the fixed
   free-text column was a mistake — "position" is sport-specific (a football position, badminton
   singles/doubles, nothing for running), so it belongs in the per-sport A9 attribute schema, not a

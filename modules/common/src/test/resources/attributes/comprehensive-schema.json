@@ -1,0 +1,76 @@
+{
+  "defaultLocale": "en",
+  "definitions": [
+    {
+      "name": "Reference",
+      "fields": [
+        { "key": "id", "label": { "en": "Item" }, "type": "STRING", "isRequired": false },
+        { "key": "value", "label": { "en": "Name" }, "type": "STRING", "isRequired": true }
+      ]
+    },
+    {
+      "name": "Grip",
+      "fields": [
+        { "key": "brand", "label": { "en": "Brand" }, "type": "DEFINITION", "definitionRef": "Reference", "isRequired": true },
+        { "key": "thickness", "label": { "en": "Thickness (mm)" }, "type": "NUMBER", "isRequired": false, "min": 0.5, "max": 2.0 },
+        { "key": "overgrip", "label": { "en": "Overgrip?" }, "type": "BOOLEAN", "isRequired": false },
+        {
+          "key": "colour", "label": { "en": "Colour" }, "type": "ENUM", "isRequired": false,
+          "options": [
+            { "value": "white", "label": { "en": "White" } },
+            { "value": "black", "label": { "en": "Black" } }
+          ]
+        },
+        {
+          "key": "tags", "label": { "en": "Tags" }, "type": "LIST", "isRequired": false,
+          "options": [
+            { "value": "tacky", "label": { "en": "Tacky" } },
+            { "value": "dry", "label": { "en": "Dry" } }
+          ]
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "key": "general",
+      "label": { "en": "General", "vi": "Chung" },
+      "isAvailable": true,
+      "attributes": [
+        { "key": "nickname", "label": { "en": "Nickname" }, "type": "STRING", "isAvailable": true, "defaultValue": "Ace" },
+        { "key": "reach", "label": { "en": "Reach (cm)" }, "type": "NUMBER", "isAvailable": true, "min": 120.0, "max": 230.0, "defaultValue": 175 },
+        { "key": "leftHanded", "label": { "en": "Left handed?" }, "type": "BOOLEAN", "isAvailable": true, "defaultValue": false },
+        {
+          "key": "playstyle", "label": { "en": "Playstyle" }, "type": "ENUM", "isAvailable": true, "defaultValue": "balance",
+          "options": [
+            { "value": "attack", "label": { "en": "Attack" } },
+            { "value": "balance", "label": { "en": "Balance" } }
+          ]
+        },
+        {
+          "key": "surfaces", "label": { "en": "Surfaces" }, "type": "LIST", "isAvailable": false,
+          "options": [
+            { "value": "wood", "label": { "en": "Wood" } },
+            { "value": "synthetic", "label": { "en": "Synthetic" } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "gear",
+      "label": { "en": "Gear" },
+      "isAvailable": true,
+      "groups": [
+        {
+          "key": "rackets",
+          "label": { "en": "Rackets" },
+          "isAvailable": true,
+          "attributes": [
+            { "key": "primary", "label": { "en": "Primary racket" }, "type": "DEFINITION", "definitionRef": "Reference", "searchScope": "equipment.racket", "isAvailable": true },
+            { "key": "grips", "label": { "en": "Grips" }, "type": "DEFINITION_LIST", "definitionRef": "Grip", "isAvailable": true }
+          ]
+        }
+      ]
+    }
+  ]
+}
