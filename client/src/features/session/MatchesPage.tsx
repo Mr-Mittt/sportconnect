@@ -237,6 +237,7 @@ export function MatchesPage() {
         onClose={closeDetail}
         session={data.selectedSession}
         sportsByKey={data.sportsByKey}
+        sessionAttributeSchema={data.sessionAttributeSchema}
         isLoading={data.isSessionLoading}
         isError={data.isSessionError}
         participants={data.participants}

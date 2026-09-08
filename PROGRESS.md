@@ -4249,6 +4249,29 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client CLIENT-SESSION-16 (`DONE`, 2026-09-08, `client/docs/MVP/CLIENT-SESSION-16_SESSION_ATTRIBUTES_READ_ONLY_IN_DETAIL_MODAL.md`):**
+  read-only view of a session's stored `attributes` in `SessionDetailModal`. New self-contained
+  `SessionAttributesSummary` (`{ schema, values }`, presentational) walks the resolved session
+  attribute schema (A17) in array order and emits a term/value `<dl>` — `STRING`/`NUMBER` plain,
+  `BOOLEAN` → Yes/No, `ENUM` → the option's label (never the raw value), `LIST` → chips,
+  `DEFINITION`/`DEFINITION_LIST` → nested `<dl>`; skips empty values, `isAvailable:false`
+  nodes/subtrees, and unknown types; returns `null` when nothing survives so the modal mounts it
+  unconditionally. Chosen over a `readOnly` flag on the ~400-line editable `SportAttributesFields`
+  (confirmed at pickup). `useSessionDetailModalData` gains
+  `useSessionAttributeSchema(sessionQuery.data?.sportId)` (disabled until a session id resolves, so
+  no extra request on a plain page); the value threads through `useMatchesPageData` /
+  `useDiscoverModalData` / `AppShell` to a new optional `sessionAttributeSchema` prop on
+  `SessionDetailModal`, rendered after the fee line when both schema and `session.attributes` are
+  present. 6 modal call sites each get one prop line. No new types, no store change. 12 new Vitest
+  cases (`SessionAttributesSummary.test.tsx` ×9 + `SessionDetailModal.test.tsx` ×3),
+  `SessionAttributesSummary.stories.tsx` (AllTypes / Partial / Empty). `tsc -b` + `eslint` clean;
+  full Vitest suite 1156 green.
+  **E2E:** `matches-journey` green; one `feed-groups-journey.spec.ts:473` failure is a pre-existing
+  parallel-load flake (passes in isolation; never opens a session detail modal). No `e2e/flows/`
+  spec changed. **Visual regression:** no baselined surface touched — no `e2e` session fixture sets
+  `attributes` and `mockSession` (Pickleball) has no session schema, so the summary never renders;
+  stash-and-rerun of `app-session-detail-modal.spec.ts` produced the same ~3.8k–4.8k-px noise-floor
+  diffs with the change stashed as applied.
 - **Client ADMIN-5 (`DONE`, 2026-09-07, `client/docs/MVP/ADMIN-5_SESSION_ATTRIBUTE_SCHEMA_EDITOR.md`):**
   the admin authoring surface for A17's session attribute schema. `AttributeSchemaEditor` made
   generic (`<T extends object>`) and mounted a second time in `AdminSportsPage` for the raw session

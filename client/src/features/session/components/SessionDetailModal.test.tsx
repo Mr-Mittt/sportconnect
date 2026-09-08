@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { Comment } from '@/features/feed/types';
@@ -488,5 +488,48 @@ describe('SessionDetailModal', () => {
     render(<SessionDetailModal {...baseProps} isJoining />);
     expect(screen.getByRole('button', { name: 'Joining…' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Join' })).not.toBeInTheDocument();
+  });
+
+  // CLIENT-SESSION-16: read-only session attribute summary.
+  const attributeSchema = {
+    groups: [
+      {
+        key: 'match',
+        label: 'Match details',
+        isAvailable: true,
+        attributes: [{ key: 'format', label: 'Format', type: 'STRING' as const, isAvailable: true }],
+      },
+    ],
+  };
+
+  it('renders the read-only session attribute summary when a schema and stored attributes are both present', () => {
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ attributes: { 'match/format': 'Doubles' } })}
+        sessionAttributeSchema={attributeSchema}
+      />,
+    );
+    const section = screen.getByRole('region', { name: 'Session detail' });
+    expect(within(section).getByText('Format')).toBeInTheDocument();
+    expect(within(section).getByText('Doubles')).toBeInTheDocument();
+    // Read-only — no field controls inside it.
+    expect(within(section).queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('omits the summary when the sport has no session schema', () => {
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ attributes: { 'match/format': 'Doubles' } })}
+        sessionAttributeSchema={null}
+      />,
+    );
+    expect(screen.queryByRole('region', { name: 'Session detail' })).not.toBeInTheDocument();
+  });
+
+  it('omits the summary when the session carries no attributes', () => {
+    render(<SessionDetailModal {...baseProps} sessionAttributeSchema={attributeSchema} />);
+    expect(screen.queryByRole('region', { name: 'Session detail' })).not.toBeInTheDocument();
   });
 });
