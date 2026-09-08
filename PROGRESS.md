@@ -3312,15 +3312,16 @@ explicit go-ahead at each step (full story in A3's summary doc):
   requiring an explicit `key` + `SINGLE`/`LIST` `cardinality`, not a mirror) → sport **A23** (repoint
   `sport-*`/`session-*`, delete the old code + the SESSION-23 clone, rewrite the seeded Badminton
   session schema) → client **CLIENT-SESSION-17** (discriminated-union mirror + `#ref` single/
-  multi-select UI). **C5 + C6 + C7 `DONE` 2026-09-08.** C5: ADR + the DTO tree
-  (`com.sportconnect.common.attributes`, sealed `AttributeNode`/`AttributeField`, flat
-  `ResolvedAttribute*`, `AttributeJson` strict mapper). C6: the single-schema `validate/` package
-  (`AttributeSchemaValidator` public-static + pkg-private validators as exhaustive `switch`es over
-  the sealed sets) + `value/AttributeValues.isValid`. C7: `path/AttributePaths` (flatten +
-  full-depth `isAvailable` cascade), `value/AttributeValues` record cascade + dispatcher,
+  multi-select UI). **C5–C8 `DONE` 2026-09-08** (all pure addition; 252 common tests green). C5:
+  ADR + the DTO tree (`com.sportconnect.common.attributes`, sealed `AttributeNode`/`AttributeField`,
+  flat `ResolvedAttribute*`, `AttributeJson` strict mapper). C6: single-schema `validate/`
+  (`AttributeSchemaValidator` + pkg-private validators as exhaustive `switch`es over the sealed
+  sets) + `value/AttributeValues.isValid`. C7: `path/AttributePaths` (flatten + full-depth
+  `isAvailable` cascade), `value/AttributeValues` record cascade + dispatcher,
   `value/AttributeValueFilter` (`filter` + generalized `retainDefined` + `DEFINITION_LIST`
-  iteration, never throws), `AttributeNodes` helper. All pure addition; 237 common tests green.
-  C8 next (locale resolver).
+  iteration, never throws), `AttributeNodes` helper. C8: `resolve/AttributeSchemaResolver` —
+  raw multi-locale → flat `ResolvedAttributeSchema`, exact→language→`defaultLocale` fallback.
+  **C9 next** (base×derived pair — last common ticket, unblocks sport A23).
 - **Remove `user_sport_profiles.preferred_position` (A18 `DONE` 2026-09-07):** the fixed
   free-text column was a mistake — "position" is sport-specific (a football position, badminton
   singles/doubles, nothing for running), so it belongs in the per-sport A9 attribute schema, not a
