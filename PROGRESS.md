@@ -3330,6 +3330,16 @@ explicit go-ahead at each step (full story in A3's summary doc):
   cardinality}>`; does **not** carry the base `defaultValue` — under D9 a `#ref` is a choice-list
   source, not a default), `DerivedSchemaResolver` (stamp `prefillable`/`prefillKey`/`cardinality`
   onto the resolved node). Ported both session Spock specs + D9 cardinality cases.
+  **Sport `A23` `DONE` 2026-09-08** — the consumer side: `sport-api`/`sport-impl`/`session-impl`
+  repointed onto `common.attributes`; the 16-file `sport-api` DTO tree + 9 `sport-impl` logic
+  classes + the 3-file SESSION-23 clone (and their now-duplicate specs) **deleted**; `SportService`
+  keeps its 7 attribute method names with `AttributeSchema`/`ResolvedAttributeSchema` types;
+  `SportServiceImpl` routes stored-JSONB (de)serialisation through the strict `AttributeJson`
+  mapper; validate/expand/resolve/filter are all common static calls. D9 breaking change: the stale
+  dev Badminton *session* schema needs an admin re-PUT with explicit `key`+`cardinality` on its
+  `#ref` (no migration — pre-launch). Backend-only; the client mirror is **CLIENT-SESSION-17**
+  (still open). Green: sport-impl 91 · session-impl 136 · `:server:test` 173 (+6 pre-existing
+  RabbitMQ flakes) · `assemble` · live profile-schema round-trip against real Postgres.
 - **Remove `user_sport_profiles.preferred_position` (A18 `DONE` 2026-09-07):** the fixed
   free-text column was a mistake — "position" is sport-specific (a football position, badminton
   singles/doubles, nothing for running), so it belongs in the per-sport A9 attribute schema, not a

@@ -1,13 +1,16 @@
 package com.sportconnect.sport.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sportconnect.common.attributes.AttributeSchema;
+import com.sportconnect.common.attributes.json.AttributeJson;
+import com.sportconnect.common.attributes.pair.DerivedSchemaExpander;
+import com.sportconnect.common.attributes.pair.DerivedSchemaValidator;
+import com.sportconnect.common.attributes.pair.DerivedSchemaResolver;
+import com.sportconnect.common.attributes.resolved.ResolvedAttributeSchema;
+import com.sportconnect.common.attributes.validate.AttributeSchemaValidator;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.sport.api.dto.CreateSportRequest;
-import com.sportconnect.sport.api.dto.ResolvedSportAttributeSchema;
-import com.sportconnect.sport.api.dto.SessionAttributeSchema;
-import com.sportconnect.sport.api.dto.SportAttributeSchema;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UpdateSportRequest;
 import com.sportconnect.sport.api.service.SportService;
@@ -29,13 +32,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SportServiceImpl implements SportService {
 
+    private static final TypeReference<Map<String, Object>> STORED_SCHEMA =
+            new TypeReference<Map<String, Object>>() {
+            };
+
     private final SportRepository sportRepository;
     private final SportLookupCache sportLookupCache;
-    private final SportAttributeSchemaValidator schemaValidator;
-    private final SessionAttributeSchemaValidator sessionSchemaValidator;
-    private final SessionAttributeSchemaExpander sessionSchemaExpander;
-    private final SessionAttributeSchemaResolver sessionSchemaResolver;
-    private final ObjectMapper objectMapper;
 
     /**
      * {@inheritDoc}
@@ -242,17 +244,17 @@ public class SportServiceImpl implements SportService {
      * calls this on every write — pays an in-memory lookup instead of a query.
      *
      * <p>The stored column is an untyped map (see {@code Sport.attributesSchema} for why); this is
-     * the one place it becomes a typed {@code SportAttributeSchema}, so a document that no longer
+     * the one place it becomes a typed {@link AttributeSchema}, so a document that no longer
      * deserialises fails here alone and cannot take the whole cached catalogue down with it.
      */
     @Override
     @Transactional(readOnly = true)
-    public SportAttributeSchema getAttributeSchema(Long sportId) {
+    public AttributeSchema getAttributeSchema(Long sportId) {
         Sport sport = sportLookupCache.getActiveSportsById().get(sportId);
         if (sport == null) {
             throw new ResourceNotFoundException("Sport", "id", sportId);
         }
-        return toAttributeSchema(sport.getAttributesSchema());
+        return parseStoredSchema(sport.getAttributesSchema());
     }
 
     /**
@@ -262,21 +264,21 @@ public class SportServiceImpl implements SportService {
      * {@link #replaceAttributeSchema} — the point of this method is that an admin can read back
      * exactly what that one is allowed to write, including for a deactivated sport.
      *
-     * <p>Shares {@link #toAttributeSchema} with {@link #getAttributeSchema}, so a document that no
+     * <p>Shares {@link #parseStoredSchema} with {@link #getAttributeSchema}, so a document that no
      * longer deserialises fails here the same way and still cannot take the cached catalogue down.
      */
     @Override
     @Transactional(readOnly = true)
-    public SportAttributeSchema getAttributeSchemaForAdmin(Long sportId) {
+    public AttributeSchema getAttributeSchemaForAdmin(Long sportId) {
         Sport sport = sportRepository.findById(sportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
-        return toAttributeSchema(sport.getAttributesSchema());
+        return parseStoredSchema(sport.getAttributesSchema());
     }
 
     /**
      * {@inheritDoc}
      *
-     * <p>Validates first, writes second: {@link SportAttributeSchemaValidator} throws on the first
+     * <p>Validates first, writes second: common {@link AttributeSchemaValidator} throws on the first
      * violation, so an invalid document never reaches {@code save()} and never half-applies.
      *
      * <p>Resolves the sport with {@code findById} rather than the active-only cache, matching
@@ -286,34 +288,41 @@ public class SportServiceImpl implements SportService {
      */
     @Override
     @Transactional
-    public SportAttributeSchema replaceAttributeSchema(Long sportId, SportAttributeSchema schema) {
+    public AttributeSchema replaceAttributeSchema(Long sportId, AttributeSchema schema) {
         Sport sport = sportRepository.findById(sportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
 
-        schemaValidator.validate(schema);
+        AttributeSchemaValidator.validate(schema);
 
-        sport.setAttributesSchema(schema == null
-                ? null
-                : objectMapper.convertValue(schema, new TypeReference<Map<String, Object>>() {
-                }));
+        sport.setAttributesSchema(toStored(schema));
         Sport saved = sportRepository.save(sport);
         sportLookupCache.evictAll();
 
         log.info("Replaced attribute schema for sport {}", sportId);
-        return toAttributeSchema(saved.getAttributesSchema());
+        return parseStoredSchema(saved.getAttributesSchema());
     }
 
     /**
-     * Converts the stored untyped document into the typed DTO tree.
+     * Converts the stored untyped JSONB document into the typed, domain-neutral
+     * {@link AttributeSchema} tree — via the framework's strict {@link AttributeJson#mapper()}
+     * (extraction plan D7/D8), so a misplaced field on a stored document fails at parse rather than
+     * slipping past. Serves both the profile ({@code attributes_schema}) and the session
+     * ({@code session_attributes_schema}) columns: since A23 one DTO type carries both roles.
      *
      * <p>Returns {@code null} for a sport with no schema, which callers treat as "offers no
-     * attributes" rather than as an error.
+     * attributes" rather than as an error. The one place a stored document becomes typed, so a
+     * since-undeserialisable one fails here alone and cannot take the whole cached catalogue down.
      */
-    private SportAttributeSchema toAttributeSchema(Map<String, Object> stored) {
+    private AttributeSchema parseStoredSchema(Map<String, Object> stored) {
         if (stored == null || stored.isEmpty()) {
             return null;
         }
-        return objectMapper.convertValue(stored, SportAttributeSchema.class);
+        return AttributeJson.mapper().convertValue(stored, AttributeSchema.class);
+    }
+
+    /** The inverse of {@link #parseStoredSchema} — a typed schema to the untyped JSONB map, or {@code null} to clear. */
+    private Map<String, Object> toStored(AttributeSchema schema) {
+        return schema == null ? null : AttributeJson.mapper().convertValue(schema, STORED_SCHEMA);
     }
 
     // ---- A17: per-sport SESSION attribute schema ----
@@ -326,37 +335,35 @@ public class SportServiceImpl implements SportService {
      */
     @Override
     @Transactional(readOnly = true)
-    public SessionAttributeSchema getSessionAttributeSchemaForAdmin(Long sportId) {
+    public AttributeSchema getSessionAttributeSchemaForAdmin(Long sportId) {
         Sport sport = sportRepository.findById(sportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
-        return toSessionAttributeSchema(sport.getSessionAttributesSchema());
+        return parseStoredSchema(sport.getSessionAttributesSchema());
     }
 
     /**
      * {@inheritDoc}
      *
      * <p>Validated before written and rejected atomically (mirrors {@link #replaceAttributeSchema}).
-     * The validator also needs the sport's <em>profile</em> schema — every {@code #ref} resolves
-     * against it — so it is read off the same {@link Sport} row. Resolves via {@code findById} so an
-     * inactive sport's session schema stays editable; evicts the sport cache on success.
+     * Common {@link DerivedSchemaValidator} needs the sport's <em>profile</em> schema as the base —
+     * every {@code #ref} resolves against it — so it is read off the same {@link Sport} row.
+     * Resolves via {@code findById} so an inactive sport's session schema stays editable; evicts the
+     * sport cache on success.
      */
     @Override
     @Transactional
-    public SessionAttributeSchema replaceSessionAttributeSchema(Long sportId, SessionAttributeSchema schema) {
+    public AttributeSchema replaceSessionAttributeSchema(Long sportId, AttributeSchema schema) {
         Sport sport = sportRepository.findById(sportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
 
-        sessionSchemaValidator.validate(schema, toAttributeSchema(sport.getAttributesSchema()));
+        DerivedSchemaValidator.validate(parseStoredSchema(sport.getAttributesSchema()), schema);
 
-        sport.setSessionAttributesSchema(schema == null
-                ? null
-                : objectMapper.convertValue(schema, new TypeReference<Map<String, Object>>() {
-                }));
+        sport.setSessionAttributesSchema(toStored(schema));
         Sport saved = sportRepository.save(sport);
         sportLookupCache.evictAll();
 
         log.info("Replaced session attribute schema for sport {}", sportId);
-        return toSessionAttributeSchema(saved.getSessionAttributesSchema());
+        return parseStoredSchema(saved.getSessionAttributesSchema());
     }
 
     /**
@@ -364,37 +371,38 @@ public class SportServiceImpl implements SportService {
      *
      * <p>Active-only, via the sport cache (like {@link #getAttributeSchema}). The stored session
      * document and the profile document both come off the one cached {@link Sport}, so this stays an
-     * in-memory hit; {@link SessionAttributeSchemaExpander} does the {@code #ref} inlining and the
+     * in-memory hit; common {@link DerivedSchemaExpander} does the {@code #ref} inlining and the
      * lenient drop of any that no longer resolve.
      */
     @Override
     @Transactional(readOnly = true)
-    public SportAttributeSchema getSessionAttributeSchemaRaw(Long sportId) {
+    public AttributeSchema getSessionAttributeSchemaRaw(Long sportId) {
         Sport sport = requireActiveSport(sportId);
-        SessionAttributeSchema sessionSchema = toSessionAttributeSchema(sport.getSessionAttributesSchema());
+        AttributeSchema sessionSchema = parseStoredSchema(sport.getSessionAttributesSchema());
         if (sessionSchema == null) {
             return null;
         }
-        return sessionSchemaExpander.expand(sessionSchema, toAttributeSchema(sport.getAttributesSchema())).schema();
+        return DerivedSchemaExpander.expand(parseStoredSchema(sport.getAttributesSchema()), sessionSchema).schema();
     }
 
     /**
      * {@inheritDoc}
      *
-     * <p>Active-only. Expands, locale-resolves and stamps {@code prefillable}/{@code prefillKey} in
-     * one call via {@link SessionAttributeSchemaResolver}. Unlike the profile schema this resolves
-     * here rather than in the controller — the member GET is the only caller and there is no hot
-     * write path to keep locale-free.
+     * <p>Active-only. Expands, locale-resolves and stamps
+     * {@code prefillable}/{@code prefillKey}/{@code cardinality} in one call via common
+     * {@link DerivedSchemaResolver}. Unlike the profile schema this resolves here rather than in the
+     * controller — the member GET is the only caller and there is no hot write path to keep
+     * locale-free.
      */
     @Override
     @Transactional(readOnly = true)
-    public ResolvedSportAttributeSchema getResolvedSessionAttributeSchema(Long sportId, Locale locale) {
+    public ResolvedAttributeSchema getResolvedSessionAttributeSchema(Long sportId, Locale locale) {
         Sport sport = requireActiveSport(sportId);
-        SessionAttributeSchema sessionSchema = toSessionAttributeSchema(sport.getSessionAttributesSchema());
+        AttributeSchema sessionSchema = parseStoredSchema(sport.getSessionAttributesSchema());
         if (sessionSchema == null) {
             return null;
         }
-        return sessionSchemaResolver.resolve(sessionSchema, toAttributeSchema(sport.getAttributesSchema()), locale);
+        return DerivedSchemaResolver.resolve(parseStoredSchema(sport.getAttributesSchema()), sessionSchema, locale);
     }
 
     private Sport requireActiveSport(Long sportId) {
@@ -403,17 +411,5 @@ public class SportServiceImpl implements SportService {
             throw new ResourceNotFoundException("Sport", "id", sportId);
         }
         return sport;
-    }
-
-    /**
-     * Converts the stored untyped session document into the typed DTO tree; {@code null} for a sport
-     * whose sessions offer no attributes. The one place {@code session_attributes_schema} becomes a
-     * typed {@link SessionAttributeSchema}, so a since-undeserialisable document fails here alone.
-     */
-    private SessionAttributeSchema toSessionAttributeSchema(Map<String, Object> stored) {
-        if (stored == null || stored.isEmpty()) {
-            return null;
-        }
-        return objectMapper.convertValue(stored, SessionAttributeSchema.class);
     }
 }

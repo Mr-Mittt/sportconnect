@@ -1,5 +1,8 @@
 package com.sportconnect.session.service
 
+import com.sportconnect.common.attributes.AttributeGroup
+import com.sportconnect.common.attributes.AttributeSchema
+import com.sportconnect.common.attributes.node.StringAttribute
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.NotFoundException
@@ -34,10 +37,6 @@ import com.sportconnect.social.post.api.dto.CommentResponse
 import com.sportconnect.social.post.api.dto.CreateCommentRequest
 import com.sportconnect.social.post.api.service.CommentService
 import com.sportconnect.social.post.api.service.PostService
-import com.sportconnect.sport.api.dto.SportAttributeDefinition
-import com.sportconnect.sport.api.dto.SportAttributeGroup
-import com.sportconnect.sport.api.dto.SportAttributeSchema
-import com.sportconnect.sport.api.dto.SportAttributeType
 import com.sportconnect.sport.api.dto.SportResponse
 import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.SportService
@@ -69,14 +68,13 @@ class SessionServiceImplSpec extends Specification {
     // SESSION-23: real filter + mapper — the filter is pure logic with its own spec, and the
     // size check needs a real serializer. Existing create/update tests pass no attributes, so
     // sportService.getSessionAttributeSchemaRaw is never hit; the attributes-path tests stub it.
-    SessionAttributeFilter sessionAttributeFilter = new SessionAttributeFilter()
     ObjectMapper objectMapper = new ObjectMapper()
 
     @Subject
     SessionServiceImpl sessionService = new SessionServiceImpl(
             sessionRepository, sessionParticipantRepository, groupService, locationService, userService,
             sportService, userSportProfileService, postService, commentService, sessionGate,
-            sessionOutboxEventRepository, sessionOutboxWriter, sessionAttributeFilter, objectMapper)
+            sessionOutboxEventRepository, sessionOutboxWriter, objectMapper)
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
     def tennisLocation = LocationResponse.builder().id(2L).sportId(2L).name("Tennis Court").build()
@@ -341,12 +339,12 @@ class SessionServiceImplSpec extends Specification {
     // --- SESSION-23: session attributes ---
 
     /** One live STRING attribute at path {@code match/note}. */
-    private static SportAttributeSchema sessionSchema() {
-        SportAttributeSchema.builder().groups([
-                SportAttributeGroup.builder().key("match").label(["en": "Match"]).isAvailable(true)
+    private static AttributeSchema sessionSchema() {
+        AttributeSchema.builder().groups([
+                AttributeGroup.builder().key("match").label(["en": "Match"]).isAvailable(true)
                         .attributes([
-                                SportAttributeDefinition.builder().key("note").label(["en": "Note"])
-                                        .type(SportAttributeType.STRING).isAvailable(true).build()
+                                StringAttribute.builder().key("note").label(["en": "Note"])
+                                        .isAvailable(true).build()
                         ]).build()
         ]).build()
     }

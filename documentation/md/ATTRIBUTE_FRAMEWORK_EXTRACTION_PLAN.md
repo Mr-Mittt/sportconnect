@@ -1,10 +1,11 @@
 # Attribute-schema framework — extraction plan
 
-**Status:** in progress — **C5–C9 `DONE` 2026-09-08** (C5: ADR + DTO tree; C6: `validate/`;
-C7: `path/` + `value/` filter; C8: `resolve/` locale resolver; C9: `pair/` base×derived
-validator/expander/resolver + the D9 `#ref` semantics change). The whole `common` half is done;
-**sport A23 next** (repoint `sport-*`/`session-*`, delete the old framework + the SESSION-23 clone,
-rewrite the seeded Badminton session schema for D9)
+**Status:** **C5–C9 + A23 `DONE` 2026-09-08.** The framework lives in
+`com.sportconnect.common.attributes`; `sport-*`/`session-*` are repointed onto it and the old
+framework + the SESSION-23 clone are deleted. The one open follow-up is **client
+`CLIENT-SESSION-17`** (discriminated-union mirror + `#ref` single/multi-select UI). Dev must re-PUT
+the Badminton *session* schema in the D9 `#ref` format (`key` + `cardinality`) — no migration,
+pre-launch (see the A23 ticket for the JSON).
 **Owner tickets:** common `C5`–`C9`, sport `A23`, client `CLIENT-SESSION-17`
 **Decision record:** `documentation/md/adr/ATTRIBUTE_FRAMEWORK_EXTRACTION_ADR.md`
 **Supersedes the "do it as two tickets" framing in** `modules/common/docs/MVP/C5_*.md` /
@@ -140,7 +141,7 @@ rename) is a bug in the port, not the spec.
 | **C7** ✅ | `modules/common` | `path/AttributePaths` (flatten + full-depth `isAvailable` cascade), `value/AttributeValues` record cascade + dispatcher, `value/AttributeValueFilter` (`filter` + generalized `retainDefined` + `DEFINITION_LIST` iteration), `AttributeNodes` helper. — *done 2026-09-08; `ProfileAttributeFilterSpec` ported, 237 common tests green.* | C5, C6 |
 | **C8** ✅ | `modules/common` | `resolve/AttributeSchemaResolver` (public static) — `switch` over the sealed sets → flat `ResolvedAttribute*`; exact→language→`defaultLocale` fallback. — *done 2026-09-08; `SportAttributeSchemaLabelResolverSpec` ported, 252 common tests green.* | C5 |
 | **C9** ✅ | `modules/common` | `pair/`: `DerivedSchemaValidator` (D9 `RefAttribute` contract), `DerivedSchemaExpander` (inline `#ref` as data source, lenient-drop stale, merge `definitions` closure, carry `cardinality` in an `ExpandedSchema.refExpansionsByPath` map — **not** on the node; base `defaultValue` deliberately **not** carried), `DerivedSchemaResolver` (stamp `prefillable`/`prefillKey`/`cardinality`). Widened `LeafChecks`/`NodeValidators`/`DefinitionRegistryValidator` to `public` for `pair/` reuse; added `AttributeNodes.definitionRefOf`. — *done 2026-09-08; both session specs ported + D9 cardinality cases, 293 common tests green.* | C6, C7, C8 |
-| **A23** | `modules/sport` | Repoint `sport-impl` + `session-impl` onto `common.attributes`; delete `sport-api` DTO tree + `sport-impl` logic + the `session-impl` clone; rewrite every `def.getType()` / `def.getMin()` site as a pattern switch; rewrite the seeded Badminton session schema for D9; repoint `SportService` `-api` signatures; full client census. | C9 |
+| **A23** ✅ | `modules/sport` | Repointed `sport-impl` + `session-impl` onto `common.attributes`; deleted the `sport-api` DTO tree (16 files) + `sport-impl` logic (9 classes) + the `session-impl` clone (3) + their ported specs. `SportService` `-api` keeps its 7 attribute method names, types → `AttributeSchema`/`ResolvedAttributeSchema`. `SportServiceImpl` drops 4 beans + its `ObjectMapper`; stored JSONB routes through `AttributeJson.mapper()`; validate/expand/resolve/filter are common static calls. D9: dev Badminton *session* schema needs an admin re-PUT (JSON in the ticket; no migration). Client deferred → `CLIENT-SESSION-17`. — *done 2026-09-08; sport-impl 91 · session-impl 136 · `:server:test` 173 (+6 pre-existing RabbitMQ flakes) · `assemble` · live smoke.* | C9 |
 | **CLIENT-SESSION-17** | `client` | Part A: migrate `shared/types/sport.ts` to a discriminated union + per-type render components. Part B: `#ref` single/multi-select from profile values. | A23 |
 
 ## 7. Class-move inventory (checklist)
@@ -180,7 +181,12 @@ Every existing spec file must be accounted for in this table before A23 deletes 
 
 ## 9. Consumer-repoint checklist (A23)
 
-Enumerate at A23 pickup; seed list from the 2026-09-08 census:
+**Resolved 2026-09-08 (A23 done).** Every item below was **updated in A23** except:
+`SportLookupCache` (compatible as-is — caches the `Sport` entity's raw `Map` columns, parsing is
+in `SportServiceImpl`); `session-api` Javadoc (prose only, left as-is); the **client** row
+(deferred → `CLIENT-SESSION-17`, still open). The seeded Badminton **session** schema was **not**
+in a migration, so it's a documented dev admin re-PUT in the D9 format (JSON in the A23 ticket) —
+no migration, pre-launch. The original enumeration follows for the record:
 
 - **`sport-impl`:** `SportServiceImpl` (schema get/put/raw/resolved), `UserSportProfileServiceImpl`
   (profile write filter + `retainDefined` + size), `SportLookupCache` (caches the raw schema),

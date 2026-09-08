@@ -1,6 +1,10 @@
 package com.sportconnect.integration;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.sportconnect.common.attributes.AttributeGroup;
+import com.sportconnect.common.attributes.AttributeSchema;
+import com.sportconnect.common.attributes.json.AttributeJson;
+import com.sportconnect.common.attributes.node.StringAttribute;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
@@ -10,10 +14,6 @@ import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.social.post.api.dto.PostType;
 import com.sportconnect.social.post.entity.Post;
 import com.sportconnect.social.post.repository.PostRepository;
-import com.sportconnect.sport.api.dto.SessionAttributeGroup;
-import com.sportconnect.sport.api.dto.SessionAttributeNode;
-import com.sportconnect.sport.api.dto.SessionAttributeSchema;
-import com.sportconnect.sport.api.dto.SportAttributeType;
 import com.sportconnect.sport.entity.Sport;
 import com.sportconnect.sport.repository.SportRepository;
 import com.sportconnect.user.entity.User;
@@ -99,17 +99,17 @@ class SessionAttributesIntegrationTest extends RedisBaseIT {
         // rather than through the admin PUT endpoint: a MockMvc call in @BeforeEach would fix this
         // method's authenticated identity as the admin for the rest of the test (BaseIT's
         // "first request wins" note), and this class needs to act as the session's creator.
-        SessionAttributeSchema schema = SessionAttributeSchema.builder()
+        AttributeSchema schema = AttributeSchema.builder()
                 .defaultLocale("en")
-                .groups(List.of(SessionAttributeGroup.builder()
+                .groups(List.of(AttributeGroup.builder()
                         .key("setup").label(Map.of("en", "Setup")).isAvailable(true)
                         .attributes(List.of(
-                                SessionAttributeNode.builder()
+                                StringAttribute.builder()
                                         .key("notes").label(Map.of("en", "Notes"))
-                                        .type(SportAttributeType.STRING).isAvailable(true).build(),
-                                SessionAttributeNode.builder()
+                                        .isAvailable(true).build(),
+                                StringAttribute.builder()
                                         .key("private").label(Map.of("en", "Private"))
-                                        .type(SportAttributeType.STRING).isAvailable(false).build()))
+                                        .isAvailable(false).build()))
                         .build()))
                 .build();
 
@@ -118,7 +118,7 @@ class SessionAttributesIntegrationTest extends RedisBaseIT {
                 .description("session attributes IT")
                 .isActive(true)
                 .build();
-        sport.setSessionAttributesSchema(objectMapper.convertValue(schema, new TypeReference<Map<String, Object>>() {}));
+        sport.setSessionAttributesSchema(AttributeJson.mapper().convertValue(schema, new TypeReference<Map<String, Object>>() {}));
         sportId = sportRepository.save(sport).getId();
         evictSportCache();
 

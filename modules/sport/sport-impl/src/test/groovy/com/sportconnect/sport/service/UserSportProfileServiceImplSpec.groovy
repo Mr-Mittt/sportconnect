@@ -1,14 +1,13 @@
 package com.sportconnect.sport.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.sportconnect.common.attributes.AttributeGroup
+import com.sportconnect.common.attributes.AttributeSchema
+import com.sportconnect.common.attributes.node.StringAttribute
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest
-import com.sportconnect.sport.api.dto.SportAttributeDefinition
-import com.sportconnect.sport.api.dto.SportAttributeGroup
-import com.sportconnect.sport.api.dto.SportAttributeSchema
-import com.sportconnect.sport.api.dto.SportAttributeType
 import com.sportconnect.sport.api.dto.SportResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.entity.Sport
@@ -25,15 +24,14 @@ class UserSportProfileServiceImplSpec extends Specification {
     // lookup needing a boolean rather than a throw reads SportLookupCache directly.
     SportLookupCache sportLookupCache = Mock()
     ObjectMapper objectMapper = new ObjectMapper()
-    // A9: deliberately the real collaborator, not a Mock(). It is a pure function with no
-    // dependencies, and mocking it would make every attribute assertion below prove only that the
-    // mock was told what to return - exactly the class of test that let A7's bug survive.
-    ProfileAttributeFilter attributeFilter = new ProfileAttributeFilter()
+    // A23: the value filter is now common's Spring-free static AttributeValueFilter — not a
+    // constructor dependency. It is still exercised for real (no mock), same reasoning as before:
+    // mocking it would make every attribute assertion below prove only that the mock was told what
+    // to return, exactly the class of test that let A7's bug survive.
 
     @Subject
     UserSportProfileServiceImpl profileService =
-            new UserSportProfileServiceImpl(profileRepository, sportService, sportLookupCache, objectMapper,
-                    attributeFilter)
+            new UserSportProfileServiceImpl(profileRepository, sportService, sportLookupCache, objectMapper)
 
     /**
      * v3/A19: {@code UserSportProfile.attributes} is keyed by an attribute's full {@code /}-separated
@@ -50,14 +48,13 @@ class UserSportProfileServiceImplSpec extends Specification {
      * filtered against the sport's live schema on write - a key with no definition is dropped, so a
      * spec that wants an attribute to survive has to say the sport actually offers it.
      */
-    private static SportAttributeSchema schemaWith(String... keys) {
-        SportAttributeSchema.builder()
-                .groups([SportAttributeGroup.builder()
+    private static AttributeSchema schemaWith(String... keys) {
+        AttributeSchema.builder()
+                .groups([AttributeGroup.builder()
                                  .key("general").label(["en": "General"]).isAvailable(true)
                                  .attributes(keys.toList().withIndex().collect { key, i ->
-                                     SportAttributeDefinition.builder()
+                                     StringAttribute.builder()
                                              .key(key).label(["en": key])
-                                             .type(SportAttributeType.STRING)
                                              .isAvailable(true).build()
                                  })
                                  .build()])
@@ -751,7 +748,7 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Football").isActive(true).build()
         // an empty schema document - the sport has one, but it declares nothing. Declared in the
         // then: block so it takes precedence over setup()'s permissive stub.
-        _ * sportService.getAttributeSchema(sportId) >> SportAttributeSchema.builder().build()
+        _ * sportService.getAttributeSchema(sportId) >> AttributeSchema.builder().build()
         1 * profileRepository.save(_) >> { UserSportProfile p ->
             assert p.attributes == g([:])
             return p

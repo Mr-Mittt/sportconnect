@@ -1,12 +1,12 @@
 package com.sportconnect.integration;
 
-import com.sportconnect.sport.api.dto.SessionAttributeGroup;
-import com.sportconnect.sport.api.dto.SessionAttributeNode;
-import com.sportconnect.sport.api.dto.SessionAttributeSchema;
-import com.sportconnect.sport.api.dto.SportAttributeDefinition;
-import com.sportconnect.sport.api.dto.SportAttributeGroup;
-import com.sportconnect.sport.api.dto.SportAttributeSchema;
-import com.sportconnect.sport.api.dto.SportAttributeType;
+import com.sportconnect.common.attributes.AttributeGroup;
+import com.sportconnect.common.attributes.AttributeSchema;
+import com.sportconnect.common.attributes.Cardinality;
+import com.sportconnect.common.attributes.node.BooleanAttribute;
+import com.sportconnect.common.attributes.node.NumberAttribute;
+import com.sportconnect.common.attributes.node.RefAttribute;
+import com.sportconnect.common.attributes.node.StringAttribute;
 import com.sportconnect.sport.entity.Sport;
 import com.sportconnect.sport.repository.SportRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -70,36 +70,36 @@ class SessionAttributeSchemaIntegrationTest extends BaseIT {
     }
 
     /** gear -> rackets -> tension (NUMBER, 15..35), plus a loose gear/shoeSize. */
-    private SportAttributeSchema profileSchema() {
-        return SportAttributeSchema.builder()
+    private AttributeSchema profileSchema() {
+        return AttributeSchema.builder()
                 .defaultLocale("en")
-                .groups(List.of(SportAttributeGroup.builder()
+                .groups(List.of(AttributeGroup.builder()
                         .key("gear").label(Map.of("en", "Gear")).isAvailable(true)
-                        .attributes(List.of(SportAttributeDefinition.builder()
-                                .key("shoeSize").label(Map.of("en", "Shoe size")).type(SportAttributeType.STRING)
+                        .attributes(List.of(StringAttribute.builder()
+                                .key("shoeSize").label(Map.of("en", "Shoe size"))
                                 .isAvailable(true).build()))
-                        .groups(List.of(SportAttributeGroup.builder()
+                        .groups(List.of(AttributeGroup.builder()
                                 .key("rackets").label(Map.of("en", "Rackets")).isAvailable(true)
-                                .attributes(List.of(SportAttributeDefinition.builder()
+                                .attributes(List.of(NumberAttribute.builder()
                                         .key("tension").label(Map.of("en", "Tension", "vi", "Độ căng"))
-                                        .type(SportAttributeType.NUMBER).min(15.0).max(35.0)
+                                        .min(15.0).max(35.0)
                                         .isAvailable(true).build()))
                                 .build()))
                         .build()))
                 .build();
     }
 
-    /** setup -> (own BOOLEAN ballsProvided) + (#ref gear/rackets/tension). */
-    private SessionAttributeSchema sessionSchema() {
-        return SessionAttributeSchema.builder()
+    /** setup -> (own BOOLEAN ballsProvided) + (#ref gear/rackets/tension, SINGLE). */
+    private AttributeSchema sessionSchema() {
+        return AttributeSchema.builder()
                 .defaultLocale("en")
-                .groups(List.of(SessionAttributeGroup.builder()
+                .groups(List.of(AttributeGroup.builder()
                         .key("setup").label(Map.of("en", "Setup", "vi", "Chuẩn bị")).isAvailable(true)
                         .attributes(List.of(
-                                SessionAttributeNode.builder()
-                                        .key("ballsProvided").label(Map.of("en", "Balls provided?"))
-                                        .type(SportAttributeType.BOOLEAN).build(),
-                                SessionAttributeNode.builder().ref("gear/rackets/tension").build()))
+                                BooleanAttribute.builder()
+                                        .key("ballsProvided").label(Map.of("en", "Balls provided?")).build(),
+                                RefAttribute.builder().key("tension").ref("gear/rackets/tension")
+                                        .cardinality(Cardinality.SINGLE).build()))
                         .build()))
                 .build();
     }
@@ -188,7 +188,11 @@ class SessionAttributeSchemaIntegrationTest extends BaseIT {
         mockMvc.perform(get("/api/sports/all/{sportId}/session-attribute-schema", sportId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.groups[0].attributes[1].['#ref']").value("gear/rackets/tension"))
-                .andExpect(jsonPath("$.data.groups[0].attributes[1].type").doesNotExist());
+                // Since A23 the raw #ref node carries its wire discriminator "REF" and its cardinality;
+                // it is still unexpanded (no inherited NUMBER type, no min).
+                .andExpect(jsonPath("$.data.groups[0].attributes[1].type").value("REF"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[1].cardinality").value("SINGLE"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[1].min").doesNotExist());
     }
 
     @Test
@@ -196,11 +200,12 @@ class SessionAttributeSchemaIntegrationTest extends BaseIT {
         putProfileSchema();
         authenticateAs(UUID.randomUUID(), "ADMIN");
 
-        SessionAttributeSchema bad = SessionAttributeSchema.builder()
+        AttributeSchema bad = AttributeSchema.builder()
                 .defaultLocale("en")
-                .groups(List.of(SessionAttributeGroup.builder()
+                .groups(List.of(AttributeGroup.builder()
                         .key("setup").label(Map.of("en", "Setup")).isAvailable(true)
-                        .attributes(List.of(SessionAttributeNode.builder().ref("gear/rackets/nope").build()))
+                        .attributes(List.of(RefAttribute.builder().key("nope").ref("gear/rackets/nope")
+                                .cardinality(Cardinality.SINGLE).build()))
                         .build()))
                 .build();
 
