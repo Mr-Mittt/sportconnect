@@ -202,7 +202,7 @@ e2e/
     post-deep-link.spec.ts
     group-chat.spec.ts        # CHAT-10
     direct-chat.spec.ts       # CHAT-10
-    matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9
+    matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9/CLIENT-SESSION-17
     notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
@@ -262,7 +262,7 @@ The single logged-in test user, unless a spec explicitly overrides via an admin-
 | `mockUser` | Jordan Lee, `jordan@example.com` | `id: '11111111-...'` |
 | `mockAdminUser` | Alex Admin, `admin@example.com` | **ADMIN-1:** `id: '22222222-...'`, `roles: ['USER', 'ADMIN']` — the only fixture holding ADMIN. Deliberately holds USER too, matching how a real admin is provisioned (registration grants USER, ADMIN is added on top) |
 | `mockPassword` | `password123` | Shared by both accounts — they differ only by email and roles |
-| `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. **SPORT-5:** specs no longer assert `aria-disabled` for this state; they assert the dialog it now opens. The fixture still supplies the "every available sport already held" condition both depend on. **PROFILE-8:** Badminton is the only one with an attribute schema (see `defaultAttributeSchemas()` in `sport.ts`); `PUT /api/sports/profiles/:profileId` (new this ticket) merges a saved `attributes` object into the existing one rather than replacing it, mirroring the real service. **SPORT-7:** that schema is now v3 (nested `groups`) — a loose `gear/racketBrand` STRING plus a nested `gear/rackets/stringTension` NUMBER sub-group; attribute values are path-keyed. **CLIENT-SESSION-15:** Badminton also has a *session* attribute schema (`defaultSessionAttributeSchemas()` / `GET /api/sports/1/session-attribute-schema`) — a `prefillable` `#ref` node (`prefillKey: gear/racketBrand`) + one own node with a `defaultValue`; Pickleball has none |
+| `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. **SPORT-5:** specs no longer assert `aria-disabled` for this state; they assert the dialog it now opens. The fixture still supplies the "every available sport already held" condition both depend on. **PROFILE-8:** Badminton is the only one with an attribute schema (see `defaultAttributeSchemas()` in `sport.ts`); `PUT /api/sports/profiles/:profileId` (new this ticket) merges a saved `attributes` object into the existing one rather than replacing it, mirroring the real service. **SPORT-7:** that schema is now v3 (nested `groups`) — a loose `gear/racketBrand` STRING plus a nested `gear/rackets/stringTension` NUMBER sub-group; attribute values are path-keyed. **CLIENT-SESSION-15 / CLIENT-SESSION-17:** Badminton also has a *session* attribute schema (`defaultSessionAttributeSchemas()` / `GET /api/sports/1/session-attribute-schema`) — post-A23 it carries **two `#ref` nodes** each with a `cardinality`: `racketModel` (`LIST`, `prefillKey: gear/racketModels`) and `racketBrand` (`SINGLE`, `prefillKey: gear/racketBrand`), plus one own node with a `defaultValue`; Pickleball has none. The Badminton profile fixture stocks `attributes.gear/racketModels` with two entries (choices for the `LIST` `#ref`) and leaves `gear/racketBrand` empty (so the `SINGLE` `#ref` shows the "Other… only" state) — neither key is in the *profile* attribute schema, so the profile Settings tab doesn't render them |
 
 Posts (all owned by `mockUser` unless noted) — `sportId` 1 = Badminton, 3 = Pickleball
 (SPORT-3 — was 5 = Soccer/6 = Basketball before the real catalog shrank to 2 sports, A6):
@@ -615,7 +615,7 @@ path other specs already exercise incidentally.
 | `loading a shared post link directly renders the post + comments, even outside the feed's first page` | `seedPaginatedFeedOnNextLoad(mockSessionId)` (21-post fixture) → direct `seedAuthenticatedSession(page, '/posts/1020')` (post **1020**, index 20 — only reachable via "Load more" on page 0) → dialog renders the right post/comments on a cold load; closing returns to `/` with the normal Home Feed visible | Drives the real "shared link, not logged in yet" flow end-to-end (redirect to `/login`, bounce back) — the same generic mechanism AUTH-8's step 7 already covers, not something FEED-12 built itself. Proves the dialog doesn't depend on the feed having paginated the post into view first. |
 | `opening comments from the feed updates the URL, and closing returns to it` | Click a post's "View comments" from `/` → URL becomes `/posts/{id}` → Close → URL back to `/` | Confirms the in-feed path is also URL-addressable now (`navigate` push on open, `replace` on close), not just the direct-load path above |
 
-### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/…/CLIENT-SESSION-9, SPORT-10, one `test()` with 10 steps + steps 3b/3c/5b + 1 separate `test()`)
+### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/…/CLIENT-SESSION-9, CLIENT-SESSION-17, SPORT-10, one `test()` with 10 steps + steps 3b/3c/5b + 2 separate `test()`s)
 
 `/matches` (real page, replacing `ComingSoonPage`) — list/create/join/leave/cancel, plus
 CLIENT-SESSION-4's invite/auto-approve fields and approval queue, plus CLIENT-SESSION-5's
@@ -632,7 +632,9 @@ Fixtures: `mockSession` (standalone, created by the test user, `participantCount
 user is `group_owner` — `canManage` true), `mockDiscoverableSession` ("Weekend 5-a-side",
 standalone, created by someone else, Badminton (SPORT-3: was Soccer) — a sport the test user holds an active profile for —
 the only fixture eligible for `GET /sessions/discover`; every other session fixture is either
-self-created or `GROUP_RECURRING`), `mockFriend` (the invite-friend field's search target), and
+self-created or `GROUP_RECURRING`; **CLIENT-SESSION-17: carries `attributes` with two `#ref` values
+(`match/racketModel` LIST, `match/racketBrand` SINGLE) + one own node (`match/format`) so step 9 and
+the `not-joined` visual state exercise `SessionAttributesSummary`**), `mockFriend` (the invite-friend field's search target), and
 `mockSessionJoinRequest`/`mockSecondSessionJoinRequest` (two pre-seeded `REQUESTED` rows on
 `mockOwnedGroupSession` — same "pre-seed the other person's row" precedent as
 `group-invitations.spec.ts`'s `mockGroupJoinRequest`, since this mock server has no second live
@@ -640,7 +642,9 @@ authenticated identity to actually request-join as). All session fixtures carry
 `autoApprove: true` (real SESSION-6 backfilled every pre-existing session this way; only a
 genuinely new session created mid-test defaults to `false`). The create step searches the
 pre-seeded `mockLocation` rather than exercising `LocationPicker`'s paste-a-link/resolve flow —
-that's covered by `LocationPicker`'s own component/Storybook tests, not e2e. Favorites start empty
+that's covered by `LocationPicker`'s own component/Storybook tests, not e2e. (`locations.ts`'s
+default state also carries `mockBadmintonLocation` (sportId 1) — `/api/locations/search` filters
+by `sportId`, and the CLIENT-SESSION-17 `#ref`-payload test must create a Badminton session.) Favorites start empty
 each run (`mocks/handlers/locations.ts`'s `favoriteLocationIds`) — step 8 exercises the full
 favorite/unfavorite round trip itself rather than relying on a pre-seeded favorite, since a
 single-user mock can simulate that action directly (unlike step 7's REQUESTED rows). Steps 1-8
@@ -661,7 +665,7 @@ steps 9-10 are what's actually new.
 | 6. create | "Create session" → pick Pickleball → "Choose location" (opens the favorites dropdown) → "Choose a location…" → search "Riverside" → select `mockLocation` → fill start time/title → invite `mockFriend` (badge appears) → check "Auto approve join request" (warning appears) → submit → dialog closes, new session appears in the list | SPORT-3: renamed from Basketball. Two dialogs/a dropdown all open in sequence (`CreateSessionModal`, its `LocationFavoritesDropdown`, and the nested `LocationPicker`) — the dropdown's own menu items are queried via `page.getByRole('menuitem', ...)`, not scoped to `createDialog`, since `DropdownMenuContent` portals as a DOM sibling of the Dialog, not a descendant |
 | 7. approval queue | Open `mockOwnedGroupSession`'s ("Ladder night") detail → "Waiting for approval (2)" shows both requesters → Approve one (moves into Players) → Reject the other with a reason → section disappears | Only renders for `canManage`; reject reveals an inline optional-reason box, not a second dialog. CLIENT-SESSION-10 renamed the "Participants" section to "Players" |
 | 8. favorite a location, then pick it from the favorites dropdown | Open a new create form → dropdown shows "No favorites yet." → open `LocationPicker`, search "Riverside" → click the heart on `mockLocation`'s row (aria-label flips to "Unfavorite …") → select it → reopen the dropdown → the just-favorited location now lists instead of the empty state → selecting it sets the location again | Confirms `LocationFavoritesDropdown`'s real Radix `DropdownMenu` (`modal={false}`) actually works nested inside the Dialog — CLIENT-SESSION-2 had reverted an earlier attempt after it appeared broken live; CLIENT-SESSION-5 found and fixed the real cause (see its summary doc) |
-| 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverSessions`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED` row for, same exclusion rule as the real backend |
+| 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → **CLIENT-SESSION-17: the read-only "Session detail" `region` shows the stored `#ref` values** (`LIST` `#ref` `match/racketModel` as chips "Yonex Astrox 99" / "Li-Ning Axforce 90", `SINGLE` `#ref` `match/racketBrand` as plain "Yonex", own node `match/format` as "Doubles") → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverSessions`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED` row for. The `#ref` assertions prove `SessionAttributesSummary` maps a `#ref` node's stored shape onto the right render type by `cardinality`, not its inherited scalar `type` — `mockDiscoverableSession` now carries `attributes` |
 | 10. search filters Discover; the panel toggle hides/shows My sessions | Typing a non-matching string into the search box shows "No sessions match your search." in Discover; the "Hide my sessions"/"Show my sessions" button toggles the whole `region` "My sessions" | Search is client-side only (`useMatchesPageData`'s `discoverSessions` memo), not a new backend query |
 
 **Separate test — SPORT-10 §2e reactivate nudge ("Yes" path):**
@@ -669,6 +673,12 @@ steps 9-10 are what's actually new.
 | Test | What it checks | Notes |
 |---|---|---|
 | Matches — a deactivated sport pill nudge, "Yes" reactivates it | `seedSoftDeletedSportProfileOnNextLoad(mockSessionId)` → the muted "Pickleball" Sport-filter pill → click → `ReactivateSportNudgeDialog` ("This sport profile is down…") → **Yes** → `POST /api/sports/profiles {isResume:true}`, dialog closes, the muted "Reactivate Pickleball" pill is gone and Pickleball is a normal pill | §2e. The `feed-groups-journey` nudge test covers **Later**; this covers **Yes** on a second non-profile page |
+
+**Separate test — CLIENT-SESSION-17 `#ref` session attributes:**
+
+| Test | What it checks | Notes |
+|---|---|---|
+| Matches — Session detail `#ref` attributes render, and land in the create payload | Open Create session → pick **Badminton** (Pickleball has no session schema) → expand "Session detail" → the `LIST` `#ref` ("Racket models you might bring") renders one checkbox per profile entry (`gear/racketModels` = 2; check `Yonex Astrox 99`) → the `SINGLE` `#ref` ("Racket brand") has nothing on the profile so shows only a dropdown ending in "Other…" + a hint → click the LIST `#ref`'s "Other…" → nested `Add — …` `Dialog` → type "Victor Thruster" → **Add** → it's a checked, selectable draft → fill title / a Badminton location (`mockBadmintonLocation`) / duration / open slot → **Create** → intercepted `POST /api/sessions` body's `attributes` **==** `{ 'match/racketModel': ['Yonex Astrox 99', 'Victor Thruster'], 'match/format': 'Doubles' }` | CLIENT-SESSION-17 Part B. Its own `test()` (own page + 30s budget). Proves the whole path: `RefField` (choices from `profile.attributes` at `prefillKey`) → nested Radix "Other…" `Dialog` → `useCreateSessionModalData.refDraftOptions` (session-local) → `submitCreate`'s `pickPaths(sessionAttributes, collectSchemaPaths(schema))` → the POST payload. Also the regression guard for the CLIENT-SESSION-16 `useMatchesPageData` `sessionAttributeSchema` spread-shadowing bug this ticket fixed (no RTL test renders `MatchesPage`). Needs `mockBadmintonLocation` — `/api/locations/search` filters by `sportId` |
 
 ### `e2e/flows/notification-bell.spec.ts` (CLIENT-NOTIF-1 + CLIENT-NOTIF-5 + FRIEND-2, five `test()`s — a 4-step journey + four regression/navigation cases)
 
@@ -883,7 +893,7 @@ Windows noise) → waits for `document.fonts.ready` → full-page screenshot com
 `e2e/visual/__screenshots__/groups-{state}-{width}.png`. Same known-Windows-noise caveat as
 `app-home-feed.spec.ts` above.
 
-### `e2e/visual/app-session-detail-modal.spec.ts` (CLIENT-SESSION-12, `visual-regression` project)
+### `e2e/visual/app-session-detail-modal.spec.ts` (CLIENT-SESSION-12 / CLIENT-SESSION-17, `visual-regression` project)
 
 Dialog-scoped (`page.getByRole('dialog')`, not full-page — same reasoning as `app-post-modal.spec.ts`,
 the dimmed backdrop is already covered by Matches/Home Feed/Groups' own full-page specs).
@@ -891,7 +901,7 @@ Parameterized: 3 breakpoints × 7 states = **21 test instances**, `session detai
 
 | State | Setup | Expects |
 |---|---|---|
-| `not-joined` | `mockDiscoverableSession` ("Weekend 5-a-side"), View details | "Join" button visible |
+| `not-joined` | `mockDiscoverableSession` ("Weekend 5-a-side"), View details | "Join" button visible. **CLIENT-SESSION-17:** the fixture now carries `attributes` (two `#ref` values + one own node), so this state also frames the read-only "Session detail" summary — its 3 baselines were regenerated via `/updatebaseline` (2026-09-09) and are current |
 | `already-joined` | `mockGroupSession` ("Friday 5-a-side"), joined live via the card's own Join button, View details | "Leave" button visible |
 | `invited` | `mockInvitedSession` ("Tuesday drop-in", **new fixture** — mockUser's own pre-seeded `INVITED` row), View details | "Accept" and "Decline" buttons visible |
 | `requested` | `mockRequestedSession` ("Wednesday scrimmage", **new fixture** — mockUser's own pre-seeded `REQUESTED` row), View details | "Cancel" button visible |
@@ -915,22 +925,29 @@ noise) → waits for `document.fonts.ready` → dialog screenshot compared again
 `e2e/visual/__screenshots__/session-detail-{state}-{width}.png`. Same known-Windows-noise caveat as
 `app-home-feed.spec.ts` above.
 
-### `e2e/visual/app-create-session-modal.spec.ts` (CLIENT-SESSION-12, `visual-regression` project)
+### `e2e/visual/app-create-session-modal.spec.ts` (CLIENT-SESSION-12 / CLIENT-SESSION-17, `visual-regression` project)
 
 Dialog-scoped, same shape as `app-session-detail-modal.spec.ts` above. Parameterized: 3 breakpoints
-× 3 states = **9 test instances**, `create session modal — ${state} @ ${width}px`.
+× 4 states = **12 test instances**, `create session modal — ${state} @ ${width}px`.
 
 | State | Setup | Expects |
 |---|---|---|
 | `default` | Open "Create session" | Sport field visible, empty form |
 | `location-chosen` | Open, select Pickleball, LocationPicker search "Riverside" → pick `mockLocation`, fill title/duration/open-slot | Chosen location name visible |
 | `no-sport-profiles` | `seedZeroSportProfilesOnNextLoad(mockSessionId)` before `seedAuthenticatedSession`, close MatchesPage's own auto-prompted "Add a sport" dialog first (not the state under test), then open Create session | "add a sport first" gate text visible (`CreateSessionModal`'s own internal empty-profile prompt, distinct from the page-level auto-prompt) |
+| `session-detail-ref` (**new, CLIENT-SESSION-17**) | Open, select **Badminton** (Pickleball has no session schema), expand "Session detail" | The two `#ref` controls render — a `LIST` multi-select with the profile-derived checkboxes (`Yonex Astrox 99` visible) and a `SINGLE` control in its "Nothing on your profile to pick from" empty state |
 
 Same clock-freeze / blur-before-screenshot / `document.fonts.ready` sequence and known-Windows-noise
 caveat as `app-session-detail-modal.spec.ts` above. **CLIENT-SESSION-15 added the "Session detail"
-session-attributes section to this modal but touched none of these baselines — the fixed-height
+session-attributes section to this modal but touched none of the first 3 baselines — the fixed-height
 dialog only frames "Session basic information"; "Session detail" is below the `overflow-y-auto`
-fold. Two `update-baselines` dispatches confirmed all 3 states byte-identical.**
+fold. CLIENT-SESSION-17 adds the `session-detail-ref` state. Clicking the "Session detail" toggle only
+scrolls the toggle itself into view, so the state then calls `scrollIntoViewIfNeeded()` on the
+lower (`SINGLE`) `#ref` control's empty-state hint to bring both expanded controls into frame —
+same "`toBeVisible()` passes below the fold" reason as `app-notification-bell.spec.ts`'s
+`with-load-more` state. Its 3 baselines (`create-session-session-detail-ref-{375,768,1280}.png`)
+were generated by an `update-baselines` dispatch and applied via `/updatebaseline` (2026-09-09);
+the other 9 stayed byte-identical.**
 
 ### `e2e/visual/app-notification-bell.spec.ts` (CLIENT-NOTIF-2, `visual-regression` project)
 

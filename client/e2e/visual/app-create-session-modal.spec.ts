@@ -81,4 +81,32 @@ for (const width of breakpoints) {
 
     await expect(dialog).toHaveScreenshot(`create-session-no-sport-profiles-${width}.png`);
   });
+
+  test(`create session modal — session detail (#ref attributes) @ ${width}px`, async ({ page }) => {
+    await page.clock.setFixedTime(FROZEN_TIME);
+    await page.setViewportSize({ width, height: 900 });
+    await seedAuthenticatedSession(page, '/matches');
+
+    await page.getByRole('button', { name: 'Create session' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Create your session' });
+    // CLIENT-SESSION-17: Badminton's session schema has two `#ref` nodes — a LIST multi-select
+    // sourced from the creator's profile (`gear/racketModels`) and a SINGLE control whose profile
+    // path is empty (the "Other… only" state). Pickleball (the other states above) has no session
+    // schema, so this is the only state that renders `RefField`.
+    await dialog.getByLabel(/^Sport/).selectOption('badminton');
+    await dialog.getByRole('button', { name: 'Session detail' }).click();
+    const singleRefHint = dialog.getByText('Nothing on your profile to pick from');
+    await expect(dialog.getByLabel('Yonex Astrox 99')).toBeVisible();
+    await expect(singleRefHint).toBeVisible();
+    // The modal body is its own internal scroll container (fixed-height dialog,
+    // overflow-y-auto) — clicking the "Session detail" toggle only scrolls the
+    // toggle itself into view, leaving the two expanded `#ref` controls below the
+    // fold. `toBeVisible()` passes on out-of-viewport elements, so without this
+    // the screenshot the state exists to cover wouldn't actually frame them.
+    await singleRefHint.scrollIntoViewIfNeeded();
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
+    await page.evaluate('document.fonts.ready');
+
+    await expect(dialog).toHaveScreenshot(`create-session-session-detail-ref-${width}.png`);
+  });
 }

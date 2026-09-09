@@ -1,7 +1,7 @@
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import type { Location } from '../../../src/shared/types/location.ts';
-import { mockLocation, mockUser } from '../fixtures.ts';
+import { mockBadmintonLocation, mockLocation, mockUser } from '../fixtures.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
@@ -50,7 +50,7 @@ interface LocationsSession {
 // to hold up in e2e, even though this ticket's own journey only exercises
 // searching the pre-seeded mockLocation.
 function defaultLocationsSession(): LocationsSession {
-  return { locationsState: [mockLocation], nextLocationId: 100, favoriteLocationIds: [] };
+  return { locationsState: [mockLocation, mockBadmintonLocation], nextLocationId: 100, favoriteLocationIds: [] };
 }
 
 const locationsSessions = createSessionStore(defaultLocationsSession);

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -350,7 +350,7 @@ describe('SportAttributesFields', () => {
   });
 
   it('skips an attribute with an unknown type instead of crashing', () => {
-    const schema: ResolvedSportAttributeSchema = {
+    const schema = {
       groups: [
         {
           key: 'general',
@@ -361,7 +361,7 @@ describe('SportAttributesFields', () => {
               key: 'mystery',
               label: 'Mystery',
               // A schema-declared type this client build doesn't know about yet.
-              type: 'FUTURE_TYPE' as ResolvedSportAttributeSchema['groups'][number]['attributes'][number]['type'],
+              type: 'FUTURE_TYPE',
               isAvailable: true,
             },
             {
@@ -374,7 +374,7 @@ describe('SportAttributesFields', () => {
           ],
         },
       ],
-    };
+    } as unknown as ResolvedSportAttributeSchema;
     render(<Harness schema={schema} />);
     expect(screen.queryByText('Mystery')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Hand')).toBeInTheDocument();
@@ -620,5 +620,166 @@ describe('SportAttributesFields', () => {
     const onChangeSpy = vi.fn();
     render(<Harness schema={schema} onChangeSpy={onChangeSpy} />);
     expect(onChangeSpy).toHaveBeenCalledWith('gear/rackets/tension', '27');
+  });
+});
+
+// CLIENT-SESSION-17 Part B — `#ref` nodes render as single-/multi-select sourced from the
+// creator's profile, with an "Other…" modal for a value not on the profile.
+describe('#ref nodes', () => {
+  function RefHarness({
+    node,
+    profile,
+    initialValues = {},
+    definitions,
+  }: {
+    node: Record<string, unknown>;
+    profile: Record<string, unknown> | null;
+    initialValues?: Record<string, unknown>;
+    definitions?: unknown[];
+  }) {
+    const [values, setValues] = useState<Record<string, unknown>>(initialValues);
+    const [drafts, setDrafts] = useState<Record<string, unknown[]>>({});
+    const schema = {
+      definitions,
+      groups: [{ key: 'match', label: 'Match', isAvailable: true, attributes: [node] }],
+    } as unknown as ResolvedSportAttributeSchema;
+    return (
+      <SportAttributesFields
+        schema={schema}
+        values={values}
+        onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
+        refChoiceSource={profile}
+        refDraftOptions={drafts}
+        onAddRefDraftOption={(path, value) =>
+          setDrafts((prev) => ({ ...prev, [path]: [...(prev[path] ?? []), value] }))
+        }
+      />
+    );
+  }
+
+  const singleNode = {
+    key: 'mainRacket',
+    label: 'Main racket',
+    type: 'STRING',
+    isAvailable: true,
+    cardinality: 'SINGLE',
+    prefillable: true,
+    prefillKey: 'gear/mainRacket',
+  };
+  const listNode = {
+    key: 'racketBrand',
+    label: 'Racket brand',
+    type: 'STRING',
+    isAvailable: true,
+    cardinality: 'LIST',
+    prefillable: true,
+    prefillKey: 'gear/racketBrand',
+  };
+
+  it('SINGLE renders a <select> of the creator profile value(s) plus an "Other…" option', () => {
+    render(<RefHarness node={singleNode} profile={{ 'gear/mainRacket': 'Yonex Astrox 99' }} />);
+    const select = screen.getByLabelText('Main racket') as HTMLSelectElement;
+    const optionLabels = Array.from(select.options).map((o) => o.textContent);
+    expect(optionLabels).toEqual(['Select…', 'Yonex Astrox 99', 'Other…']);
+  });
+
+  it('SINGLE writes the picked value under the node path', async () => {
+    const user = userEvent.setup();
+    render(<RefHarness node={singleNode} profile={{ 'gear/mainRacket': 'Yonex Astrox 99' }} />);
+    await user.selectOptions(screen.getByLabelText('Main racket'), 'Yonex Astrox 99');
+    expect((screen.getByLabelText('Main racket') as HTMLSelectElement).value).toBe('Yonex Astrox 99');
+  });
+
+  it('LIST renders one checkbox per profile entry and toggles membership', async () => {
+    const user = userEvent.setup();
+    render(
+      <RefHarness node={listNode} profile={{ 'gear/racketBrand': ['Yonex', 'Li-Ning'] }} />,
+    );
+    const yonex = screen.getByLabelText('Yonex');
+    const liNing = screen.getByLabelText('Li-Ning');
+    expect(yonex).not.toBeChecked();
+    await user.click(yonex);
+    await user.click(liNing);
+    expect(yonex).toBeChecked();
+    expect(liNing).toBeChecked();
+    await user.click(yonex);
+    expect(yonex).not.toBeChecked();
+  });
+
+  it('shows a hint and only "Other…" when the profile has nothing at the prefill path', () => {
+    render(<RefHarness node={singleNode} profile={{}} />);
+    expect(screen.getByText(/Nothing on your profile to pick from/)).toBeInTheDocument();
+    const select = screen.getByLabelText('Main racket') as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Select…', 'Other…']);
+  });
+
+  it('"Other…" opens a modal; submitting adds the value as a selectable draft and selects it', async () => {
+    const user = userEvent.setup();
+    render(<RefHarness node={listNode} profile={{ 'gear/racketBrand': ['Yonex'] }} />);
+    await user.click(screen.getByRole('button', { name: 'Other…' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Value'), 'Victor');
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }));
+    // draft is now a checked option in the list, alongside the profile-derived one
+    expect(screen.getByLabelText('Victor')).toBeChecked();
+    expect(screen.getByLabelText('Yonex')).toBeInTheDocument();
+    // and it stays after being unchecked (accumulated draft, not just the current value)
+    await user.click(screen.getByLabelText('Victor'));
+    expect(screen.getByLabelText('Victor')).not.toBeChecked();
+    expect(screen.getByLabelText('Victor')).toBeInTheDocument();
+  });
+
+  it('SINGLE with a record (DEFINITION_LIST) base still renders a <select> (one-line summaries) + "Other…"', () => {
+    const recordSingleNode = {
+      key: 'racket',
+      label: 'Racket',
+      type: 'DEFINITION_LIST',
+      isAvailable: true,
+      cardinality: 'SINGLE',
+      prefillable: true,
+      prefillKey: 'gear/rackets',
+      definitionRef: 'Racket',
+    };
+    render(
+      <RefHarness
+        node={recordSingleNode}
+        definitions={[
+          {
+            name: 'Racket',
+            fields: [
+              { key: 'brand', label: 'Brand', type: 'STRING' },
+              { key: 'weight', label: 'Weight', type: 'STRING' },
+            ],
+          },
+        ]}
+        profile={{
+          'gear/rackets': [
+            { brand: 'Yonex', weight: '4U' },
+            { brand: 'Li-Ning', weight: '3U' },
+          ],
+        }}
+      />,
+    );
+    const select = screen.getByLabelText('Racket') as HTMLSelectElement;
+    expect(select.tagName).toBe('SELECT');
+    const labels = Array.from(select.options).map((o) => o.textContent);
+    expect(labels[0]).toBe('Select…');
+    expect(labels[labels.length - 1]).toBe('Other…');
+    expect(labels).toEqual(expect.arrayContaining(['Yonex · 4U', 'Li-Ning · 3U']));
+  });
+
+  it('is skipped entirely when no choice source is wired (profile-editor context)', () => {
+    render(
+      <SportAttributesFields
+        schema={
+          {
+            groups: [{ key: 'match', label: 'Match', isAvailable: true, attributes: [singleNode] }],
+          } as unknown as ResolvedSportAttributeSchema
+        }
+        values={{}}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.queryByText('Main racket')).not.toBeInTheDocument();
   });
 });

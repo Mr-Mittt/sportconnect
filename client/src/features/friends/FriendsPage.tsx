@@ -257,6 +257,9 @@ export function FriendsPage() {
           sessionAttributeSchema={createSessionModalData.sessionAttributeSchema}
           sessionAttributeValues={createSessionModalData.sessionAttributeValues}
           onSessionAttributeChange={createSessionModalData.onSessionAttributeChange}
+          refChoiceSource={createSessionModalData.refChoiceSource}
+          refDraftOptions={createSessionModalData.refDraftOptions}
+          onAddRefDraftOption={createSessionModalData.onAddRefDraftOption}
           availableSports={availableSports}
           onAddSport={addSportMutation.mutate}
           isAddingSport={addSportMutation.isPending}

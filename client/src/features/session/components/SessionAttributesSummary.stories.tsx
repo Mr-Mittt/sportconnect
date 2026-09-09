@@ -108,3 +108,45 @@ export const Partial: Story = {
 export const Empty: Story = {
   args: { schema, values: {} },
 };
+
+/** CLIENT-SESSION-17: a `#ref` node's stored value shape follows its `cardinality`, not its
+ * inherited scalar `type` — a `SINGLE` `#ref` stores one value (shown plain), a `LIST` `#ref`
+ * stores an array (shown as chips). `SessionAttributesSummary` maps the `#ref` node onto the
+ * matching own-node render type. */
+export const RefValues: Story = {
+  args: {
+    schema: {
+      groups: [
+        {
+          key: 'match',
+          label: 'Match details',
+          isAvailable: true,
+          attributes: [
+            {
+              key: 'mainRacket',
+              label: 'Main racket',
+              type: 'STRING',
+              isAvailable: true,
+              cardinality: 'SINGLE',
+              prefillable: true,
+              prefillKey: 'gear/mainRacket',
+            },
+            {
+              key: 'racketModels',
+              label: 'Racket models',
+              type: 'STRING',
+              isAvailable: true,
+              cardinality: 'LIST',
+              prefillable: true,
+              prefillKey: 'gear/racketModels',
+            },
+          ],
+        },
+      ],
+    } as unknown as ResolvedSportAttributeSchema,
+    values: {
+      'match/mainRacket': 'Yonex Astrox 99',
+      'match/racketModels': ['Yonex Astrox 99', 'Li-Ning Axforce 90', 'Victor Thruster'],
+    },
+  },
+};

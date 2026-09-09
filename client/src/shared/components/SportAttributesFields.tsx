@@ -1,21 +1,22 @@
-import { IconPlus, IconTrash } from '@tabler/icons-react';
-import { useEffect, useId, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import type {
   ResolvedSportAttributeDefinition,
   ResolvedSportAttributeDefinitionType,
-  ResolvedSportAttributeField,
   ResolvedSportAttributeGroup,
-  ResolvedSportAttributeOption,
   ResolvedSportAttributeSchema,
 } from '@/shared/types/sport';
-import { MAX_LIST_ITEMS } from '@/shared/types/sport';
+import { isRefAttribute } from '@/shared/types/sport';
+import { assertNever } from '@/shared/lib/assertNever';
 import { cn } from '@/shared/lib/utils';
-import { Button } from '@/shared/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
-import { Input } from '@/shared/ui/input';
-import { Label } from '@/shared/ui/label';
-import { Select } from '@/shared/ui/select';
-import { Switch } from '@/shared/ui/switch';
+import { BooleanField } from './attributeFields/BooleanField';
+import { DefinitionField } from './attributeFields/DefinitionField';
+import { DefinitionListField } from './attributeFields/DefinitionListField';
+import { EnumField } from './attributeFields/EnumField';
+import { ListField } from './attributeFields/ListField';
+import { NumberField } from './attributeFields/NumberField';
+import { RefField } from './attributeFields/RefField';
+import { StringField } from './attributeFields/StringField';
 
 export interface SportAttributesFieldsProps {
   /** A9/v2's resolved schema document for this sport, already fetched by the caller
@@ -32,6 +33,18 @@ export interface SportAttributesFieldsProps {
    * nested field path inside a `DEFINITION`/`DEFINITION_LIST`, which is composed locally and
    * reported as one call with the enclosing attribute's path. */
   onChange: (key: string, value: unknown) => void;
+  /**
+   * CLIENT-SESSION-17 Part B — the creator's own `profile.attributes` for this sport. Enables
+   * `#ref` (`prefillable`) node rendering: a `#ref` node's choices are the value(s) stored here at
+   * its `prefillKey`. Only the session-create context passes it; the profile editor leaves it
+   * `undefined` (its schema has no `#ref` nodes), and a `#ref` node encountered without a choice
+   * source renders nothing.
+   */
+  refChoiceSource?: Record<string, unknown> | null;
+  /** CLIENT-SESSION-17 Part B — accumulated "Other…" draft values per `#ref` node path. */
+  refDraftOptions?: Record<string, unknown[]>;
+  /** CLIENT-SESSION-17 Part B — records a new "Other…" draft value for a `#ref` node path. */
+  onAddRefDraftOption?: (path: string, value: unknown) => void;
 }
 
 function isGroupAvailable(group: ResolvedSportAttributeGroup): boolean {
@@ -58,18 +71,21 @@ function joinPath(prefix: string, key: string): string {
   return prefix === '' ? key : `${prefix}/${key}`;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isEmptyValue(value: unknown): boolean {
-  return value === undefined || value === null || value === '';
-}
+const KNOWN_TYPES = new Set<string>([
+  'STRING',
+  'NUMBER',
+  'BOOLEAN',
+  'ENUM',
+  'LIST',
+  'DEFINITION',
+  'DEFINITION_LIST',
+]);
 
 /**
  * SPORT-2/SPORT-7: renders a user's per-sport attribute fields from A9's server-driven schema.
  * Presentational and controlled — see `SportAttributesFieldsProps`. Hosted by PROFILE-4's
- * `SportProfileSettingsTab`; verified standalone via Storybook/Vitest.
+ * `SportProfileSettingsTab` (profile schema) and CLIENT-SESSION-15's `CreateSessionModal`
+ * "Session detail" section (session schema).
  *
  * Rules honoured here (from the v2/v3 schema design docs, not re-derived elsewhere):
  * `isAvailable: false` hides a node and its whole subtree at every depth (parent wins); an unknown
@@ -78,24 +94,27 @@ function isEmptyValue(value: unknown): boolean {
  * illusion); `LIST`/`DEFINITION_LIST` are capped at `MAX_LIST_ITEMS` client-side, since the server
  * silently drops the whole value over the cap instead of erroring.
  *
- * SPORT-7/A19 (v3):
- * - **Array-position order** — groups and attributes render in declared array order; the removed
- *   `order` field is not consulted.
- * - **Nested groups** — `schema.groups` is a tree; each (sub-)group renders as a collapsible
- *   section (default expanded), one indent level deeper per depth. `groupHasVisibleContent`
- *   recurses so a group with no direct attributes but a visible sub-group still shows.
- * - **Responsive layout** — a group's own primitive fields flow in a 1-col -> 2-col grid at `sm`;
- *   `DEFINITION`/`DEFINITION_LIST` stay full-width. Sub-groups always stack below the grid.
- * - **Path-keyed I/O** — `values` and `onChange` key by each attribute's full `/`-separated path
- *   from the schema root, built while walking the tree.
+ * CLIENT-SESSION-17 Part A: the per-type `switch` here is now a dispatch to one component per
+ * `SportAttributeType` arm (`attributeFields/`), with `assertNever` for compile-time exhaustiveness
+ * and a runtime `KNOWN_TYPES` guard preserving the "unknown type → skip" behaviour. Part B: a
+ * `#ref` (`prefillable`) node renders through `RefField` (single-/multi-select sourced from
+ * `refChoiceSource`) instead of switching on its inherited `type`.
  *
- * SPORT-9/A16: `NUMBER` stores a real `number` (never `''`/`NaN` — an empty/cleared field reports
- * `undefined`) with `min`/`max` mirrored as `<input>` bounds when present; `BOOLEAN` stores a real
- * `boolean` via the shared `Switch`. Both a UX affordance only — the server silently drops an
- * out-of-range/wrong-type value on save (A3 merge semantics keep the field's previous value)
- * rather than erroring, so neither type produces a client-side hard error.
+ * SPORT-7/A19 (v3): array-position order; nested groups as collapsible sections; responsive
+ * 1→2-col grid for a group's own primitive fields (`DEFINITION`/`DEFINITION_LIST` full-width);
+ * path-keyed `values`/`onChange`.
+ *
+ * SPORT-9/A16: `NUMBER` stores a real `number` (empty → `undefined`) with `min`/`max` mirrored as
+ * `<input>` bounds; `BOOLEAN` stores a real `boolean` via the shared `Switch`.
  */
-export function SportAttributesFields({ schema, values, onChange }: SportAttributesFieldsProps) {
+export function SportAttributesFields({
+  schema,
+  values,
+  onChange,
+  refChoiceSource,
+  refDraftOptions,
+  onAddRefDraftOption,
+}: SportAttributesFieldsProps) {
   useEffect(() => {
     const seedDefaults = (groups: ResolvedSportAttributeGroup[], prefix: string) => {
       for (const group of groups) {
@@ -137,6 +156,9 @@ export function SportAttributesFields({ schema, values, onChange }: SportAttribu
           values={values}
           onChange={onChange}
           definitionsByName={definitionsByName}
+          refChoiceSource={refChoiceSource}
+          refDraftOptions={refDraftOptions}
+          onAddRefDraftOption={onAddRefDraftOption}
         />
       ))}
     </div>
@@ -151,6 +173,9 @@ interface GroupSectionProps {
   values: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
   definitionsByName: Map<string, ResolvedSportAttributeDefinitionType>;
+  refChoiceSource?: Record<string, unknown> | null;
+  refDraftOptions?: Record<string, unknown[]>;
+  onAddRefDraftOption?: (path: string, value: unknown) => void;
 }
 
 /** One (sub-)group as a collapsible section. Own attributes render first in a responsive grid,
@@ -163,6 +188,9 @@ function GroupSection({
   values,
   onChange,
   definitionsByName,
+  refChoiceSource,
+  refDraftOptions,
+  onAddRefDraftOption,
 }: GroupSectionProps) {
   const visibleAttributes = group.attributes.filter(isAttributeVisible);
   const visibleSubGroups = (group.groups ?? []).filter(groupHasVisibleContent);
@@ -191,6 +219,9 @@ function GroupSection({
                   value={values[attributePath]}
                   onChange={(value) => onChange(attributePath, value)}
                   definitionsByName={definitionsByName}
+                  refChoiceSource={refChoiceSource}
+                  refDraftOptions={refDraftOptions}
+                  onAddRefDraftOption={onAddRefDraftOption}
                 />
               );
             })}
@@ -205,6 +236,9 @@ function GroupSection({
             values={values}
             onChange={onChange}
             definitionsByName={definitionsByName}
+            refChoiceSource={refChoiceSource}
+            refDraftOptions={refDraftOptions}
+            onAddRefDraftOption={onAddRefDraftOption}
           />
         ))}
       </CollapsibleContent>
@@ -219,80 +253,83 @@ interface AttributeFieldProps {
   value: unknown;
   onChange: (value: unknown) => void;
   definitionsByName: Map<string, ResolvedSportAttributeDefinitionType>;
+  refChoiceSource?: Record<string, unknown> | null;
+  refDraftOptions?: Record<string, unknown[]>;
+  onAddRefDraftOption?: (path: string, value: unknown) => void;
 }
 
-function AttributeField({ attribute, path, value, onChange, definitionsByName }: AttributeFieldProps) {
+function AttributeField({
+  attribute,
+  path,
+  value,
+  onChange,
+  definitionsByName,
+  refChoiceSource,
+  refDraftOptions,
+  onAddRefDraftOption,
+}: AttributeFieldProps) {
   const fieldId = `sport-attribute-${path}`;
   // DEFINITION/DEFINITION_LIST render as indented sub-sections — never squeezed into a grid
   // column half.
   const fullWidth = attribute.type === 'DEFINITION' || attribute.type === 'DEFINITION_LIST';
 
   const control = ((): ReactNode => {
+    // A schema-declared type this client build doesn't know — degrade, don't crash. Checked
+    // before the union is trusted (the wire is cast, not validated, at the hook boundary).
+    if (!KNOWN_TYPES.has(attribute.type as string)) return null;
+
+    if (isRefAttribute(attribute)) {
+      // `#ref` needs the creator's profile as its choice source — only the session-create context
+      // wires it. Absent → skip the node (the profile editor's schema has none anyway).
+      if (refChoiceSource === undefined) return null;
+      return (
+        <RefField
+          node={attribute}
+          fieldId={fieldId}
+          value={value}
+          onChange={onChange}
+          choiceSource={refChoiceSource}
+          draftOptions={refDraftOptions?.[path] ?? []}
+          onAddDraftOption={(draft) => onAddRefDraftOption?.(path, draft)}
+          definitionsByName={definitionsByName}
+        />
+      );
+    }
+
     switch (attribute.type) {
       case 'STRING':
         return (
-          <div>
-            <Label htmlFor={fieldId}>{attribute.label}</Label>
-            <Input
-              id={fieldId}
-              value={typeof value === 'string' ? value : ''}
-              onChange={(event) => onChange(event.target.value)}
-            />
-          </div>
+          <StringField fieldId={fieldId} label={attribute.label} value={value} onChange={onChange} />
         );
-
       case 'NUMBER':
         return (
-          <div>
-            <Label htmlFor={fieldId}>{attribute.label}</Label>
-            <Input
-              id={fieldId}
-              type="number"
-              step="any"
-              min={attribute.min ?? undefined}
-              max={attribute.max ?? undefined}
-              value={typeof value === 'number' ? value : ''}
-              onChange={(event) => {
-                const parsed = event.target.valueAsNumber;
-                onChange(Number.isNaN(parsed) ? undefined : parsed);
-              }}
-            />
-          </div>
+          <NumberField
+            attribute={attribute}
+            fieldId={fieldId}
+            label={attribute.label}
+            value={value}
+            onChange={onChange}
+          />
         );
-
       case 'BOOLEAN':
         return (
-          <div className="flex items-center justify-between gap-3">
-            <Label className="mb-0">{attribute.label}</Label>
-            <Switch
-              aria-label={attribute.label}
-              checked={typeof value === 'boolean' ? value : false}
-              onCheckedChange={onChange}
-            />
-          </div>
+          <BooleanField
+            fieldId={fieldId}
+            label={attribute.label}
+            value={value}
+            onChange={onChange}
+          />
         );
-
       case 'ENUM':
         return (
-          <div>
-            <Label htmlFor={fieldId}>{attribute.label}</Label>
-            <Select
-              id={fieldId}
-              value={typeof value === 'string' ? value : ''}
-              onChange={(event) => onChange(event.target.value)}
-            >
-              <option value="" disabled>
-                Select…
-              </option>
-              {(attribute.options ?? []).map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <EnumField
+            attribute={attribute}
+            fieldId={fieldId}
+            label={attribute.label}
+            value={value}
+            onChange={onChange}
+          />
         );
-
       case 'LIST':
         return (
           <ListField
@@ -303,28 +340,15 @@ function AttributeField({ attribute, path, value, onChange, definitionsByName }:
             onChange={onChange}
           />
         );
-
-      case 'DEFINITION': {
-        const definitionType =
-          attribute.definitionRef != null
-            ? definitionsByName.get(attribute.definitionRef)
-            : undefined;
-        if (definitionType === undefined) return null;
+      case 'DEFINITION':
         return (
-          <fieldset className="border-hairline flex flex-col gap-3 rounded-lg border-border p-3">
-            <legend className="px-1 text-2sm font-medium text-text-secondary">
-              {attribute.label}
-            </legend>
-            <DefinitionFields
-              definitionType={definitionType}
-              record={isRecord(value) ? value : {}}
-              onChange={onChange}
-              definitionsByName={definitionsByName}
-            />
-          </fieldset>
+          <DefinitionField
+            attribute={attribute}
+            value={value}
+            onChange={onChange}
+            definitionsByName={definitionsByName}
+          />
         );
-      }
-
       case 'DEFINITION_LIST': {
         const definitionType =
           attribute.definitionRef != null
@@ -341,12 +365,8 @@ function AttributeField({ attribute, path, value, onChange, definitionsByName }:
           />
         );
       }
-
-      // A schema-declared type this client doesn't yet know — degrade, don't crash. The schema is
-      // admin-authored data driving client rendering; a client older than a newly-added type must
-      // skip it silently.
       default:
-        return null;
+        return assertNever(attribute);
     }
   })();
 
@@ -355,275 +375,4 @@ function AttributeField({ attribute, path, value, onChange, definitionsByName }:
   if (control === null) return null;
 
   return <div className={cn('min-w-0', fullWidth && 'sm:col-span-2')}>{control}</div>;
-}
-
-interface ListFieldProps {
-  fieldId: string;
-  label: string;
-  options: ResolvedSportAttributeOption[];
-  selected: string[];
-  onChange: (value: string[]) => void;
-}
-
-function ListField({ fieldId, label, options, selected, onChange }: ListFieldProps) {
-  const atCap = selected.length >= MAX_LIST_ITEMS;
-  return (
-    <fieldset>
-      <legend className="mb-1.5 text-xs font-medium text-text-secondary">{label}</legend>
-      <div id={fieldId} className="flex flex-col gap-1.5">
-        {options.map((option) => {
-          const checked = selected.includes(option.value);
-          const disabled = !checked && atCap;
-          return (
-            <label
-              key={option.value}
-              className="flex items-center gap-2 text-sm text-text-primary has-disabled:text-text-muted"
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                disabled={disabled}
-                onChange={(event) => {
-                  onChange(
-                    event.target.checked
-                      ? [...selected, option.value]
-                      : selected.filter((value) => value !== option.value),
-                  );
-                }}
-              />
-              {option.label}
-            </label>
-          );
-        })}
-      </div>
-      {atCap && (
-        <p className="mt-1 text-2xs text-text-muted">
-          {MAX_LIST_ITEMS} selected (maximum)
-        </p>
-      )}
-    </fieldset>
-  );
-}
-
-interface DefinitionFieldsProps {
-  definitionType: ResolvedSportAttributeDefinitionType;
-  record: Record<string, unknown>;
-  onChange: (record: Record<string, unknown>) => void;
-  definitionsByName: Map<string, ResolvedSportAttributeDefinitionType>;
-}
-
-function DefinitionFields({
-  definitionType,
-  record,
-  onChange,
-  definitionsByName,
-}: DefinitionFieldsProps) {
-  return (
-    <div className="flex flex-col gap-3">
-      {definitionType.fields.map((field) => (
-        <DefinitionField
-          key={field.key}
-          field={field}
-          value={record[field.key]}
-          onChange={(value) => onChange({ ...record, [field.key]: value })}
-          definitionsByName={definitionsByName}
-        />
-      ))}
-    </div>
-  );
-}
-
-interface DefinitionFieldProps {
-  field: ResolvedSportAttributeField;
-  value: unknown;
-  onChange: (value: unknown) => void;
-  definitionsByName: Map<string, ResolvedSportAttributeDefinitionType>;
-}
-
-/** One field inside a `DEFINITION`/`DEFINITION_LIST` record. `useId()` for every id here (not a
- * key-derived id like the top-level `AttributeField`) — a `DEFINITION_LIST` repeats this
- * component once per row, and a key-derived id would collide across rows. */
-function DefinitionField({ field, value, onChange, definitionsByName }: DefinitionFieldProps) {
-  const fieldId = useId();
-  const isRequired = field.isRequired === true;
-  const showRequiredHint = isRequired && isEmptyValue(value);
-  const label = isRequired ? `${field.label} *` : field.label;
-
-  switch (field.type) {
-    case 'STRING':
-      return (
-        <div>
-          <Label htmlFor={fieldId}>{label}</Label>
-          <Input
-            id={fieldId}
-            aria-required={isRequired}
-            value={typeof value === 'string' ? value : ''}
-            onChange={(event) => onChange(event.target.value)}
-          />
-          {showRequiredHint && <p className="mt-1 text-2xs text-text-danger">Required</p>}
-        </div>
-      );
-
-    case 'NUMBER':
-      return (
-        <div>
-          <Label htmlFor={fieldId}>{label}</Label>
-          <Input
-            id={fieldId}
-            type="number"
-            step="any"
-            min={field.min ?? undefined}
-            max={field.max ?? undefined}
-            aria-required={isRequired}
-            value={typeof value === 'number' ? value : ''}
-            onChange={(event) => {
-              const parsed = event.target.valueAsNumber;
-              onChange(Number.isNaN(parsed) ? undefined : parsed);
-            }}
-          />
-          {showRequiredHint && <p className="mt-1 text-2xs text-text-danger">Required</p>}
-        </div>
-      );
-
-    case 'BOOLEAN':
-      return (
-        <div className="flex items-center justify-between gap-3">
-          <Label className="mb-0">{label}</Label>
-          <Switch
-            aria-label={label}
-            checked={typeof value === 'boolean' ? value : false}
-            onCheckedChange={onChange}
-          />
-          {showRequiredHint && <p className="mt-1 text-2xs text-text-danger">Required</p>}
-        </div>
-      );
-
-    case 'ENUM':
-      return (
-        <div>
-          <Label htmlFor={fieldId}>{label}</Label>
-          <Select
-            id={fieldId}
-            aria-required={isRequired}
-            value={typeof value === 'string' ? value : ''}
-            onChange={(event) => onChange(event.target.value)}
-          >
-            <option value="" disabled>
-              Select…
-            </option>
-            {(field.options ?? []).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-          {showRequiredHint && <p className="mt-1 text-2xs text-text-danger">Required</p>}
-        </div>
-      );
-
-    case 'LIST':
-      return (
-        <div>
-          <ListField
-            fieldId={fieldId}
-            label={label}
-            options={field.options ?? []}
-            selected={Array.isArray(value) ? (value as string[]) : []}
-            onChange={onChange}
-          />
-          {showRequiredHint && <p className="mt-1 text-2xs text-text-danger">Required</p>}
-        </div>
-      );
-
-    case 'DEFINITION': {
-      const definitionType =
-        field.definitionRef != null ? definitionsByName.get(field.definitionRef) : undefined;
-      if (definitionType === undefined) return null;
-      return (
-        <fieldset className="border-hairline flex flex-col gap-3 rounded-lg border-border p-3">
-          <legend className="px-1 text-2sm font-medium text-text-secondary">{label}</legend>
-          <DefinitionFields
-            definitionType={definitionType}
-            record={isRecord(value) ? value : {}}
-            onChange={onChange}
-            definitionsByName={definitionsByName}
-          />
-          {showRequiredHint && <p className="text-2xs text-text-danger">Required</p>}
-        </fieldset>
-      );
-    }
-
-    // A definition field is never `DEFINITION_LIST` (depth-2 rule) and never an unrecognized
-    // type by contract — but degrade rather than crash if either ever slips through.
-    default:
-      return null;
-  }
-}
-
-interface DefinitionListFieldProps {
-  label: string;
-  definitionType: ResolvedSportAttributeDefinitionType;
-  rows: Record<string, unknown>[];
-  onChange: (rows: Record<string, unknown>[]) => void;
-  definitionsByName: Map<string, ResolvedSportAttributeDefinitionType>;
-}
-
-function DefinitionListField({
-  label,
-  definitionType,
-  rows,
-  onChange,
-  definitionsByName,
-}: DefinitionListFieldProps) {
-  const atCap = rows.length >= MAX_LIST_ITEMS;
-  return (
-    <div className="flex flex-col gap-2.5">
-      <span className="text-xs font-medium text-text-secondary">{label}</span>
-      {rows.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {/* Rows have no element identity (v2 design §9.1 — a write replaces the whole list),
-              so the array index is the only available React key, which is correct here rather
-              than a workaround. */}
-          {rows.map((row, index) => (
-            <div
-              key={index}
-              className="border-hairline flex flex-col gap-3 rounded-lg border-border p-3"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-2xs font-medium text-text-secondary">Item {index + 1}</span>
-                <button
-                  type="button"
-                  aria-label={`Remove item ${index + 1}`}
-                  onClick={() => onChange(rows.filter((_row, rowIndex) => rowIndex !== index))}
-                  className="cursor-pointer rounded p-0.5 text-text-secondary hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-                >
-                  <IconTrash className="size-4" aria-hidden="true" />
-                </button>
-              </div>
-              <DefinitionFields
-                definitionType={definitionType}
-                record={row}
-                onChange={(next) =>
-                  onChange(rows.map((existingRow, rowIndex) => (rowIndex === index ? next : existingRow)))
-                }
-                definitionsByName={definitionsByName}
-              />
-            </div>
-          ))}
-        </div>
-      )}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={atCap}
-        onClick={() => onChange([...rows, {}])}
-        className="self-start"
-      >
-        <IconPlus className="size-4" aria-hidden="true" />
-        Add
-      </Button>
-      {atCap && <p className="text-2xs text-text-muted">{MAX_LIST_ITEMS} items (maximum)</p>}
-    </div>
-  );
 }

@@ -80,7 +80,13 @@ export const mockSportProfiles: UserSportProfileResponse[] = [
     skillLevel: 'intermediate',
     yearsOfExperience: 4,
     bio: null,
-    attributes: null,
+    // CLIENT-SESSION-17: the Badminton session schema's `#ref` nodes read choices from here — the
+    // `LIST` `#ref` from `gear/racketModels` (two choices), the `SINGLE` `#ref` from
+    // `gear/racketBrand` (nothing stored → renders the "Other… only" empty state). Neither key is
+    // in the *profile* attribute schema, so the profile Settings tab doesn't render them.
+    attributes: {
+      'gear/racketModels': ['Yonex Astrox 99', 'Li-Ning Axforce 90'],
+    },
     isActive: true,
     createdAt: '2026-06-01T10:00:00',
     updatedAt: '2026-06-01T10:00:00',
@@ -552,6 +558,17 @@ export const mockLocation: Location = {
   updatedAt: '2026-06-01T10:00:00',
 };
 
+// CLIENT-SESSION-17: a Badminton (sportId 1) location — `/api/locations/search` filters by
+// sportId, so the create-session `#ref` e2e (which must pick Badminton to get a session schema
+// with `#ref` nodes) needs a Badminton location to search for.
+export const mockBadmintonLocation: Location = {
+  ...mockLocation,
+  id: 8,
+  sportId: 1,
+  sportName: 'Badminton',
+  name: 'Smashers Badminton Hall',
+};
+
 // A standalone session mockUser created themselves (Pickleball, sportId 3) —
 // not yet joined by mockUser (participantCount 0), so the journey can
 // exercise Join -> Leave -> Cancel on one fixture.
@@ -745,6 +762,15 @@ export const mockDiscoverableSession: Session = {
   likeCount: 0,
   isLikedByCurrentUser: false,
   callerParticipation: null, // overwritten per-response — see mockSession's note above.
+  // CLIENT-SESSION-17: stored session attributes for the read-only summary in SessionDetailModal —
+  // Badminton's session schema (`defaultSessionAttributeSchemas` in sport.ts) has two `#ref`
+  // nodes (`match/racketModel` LIST, `match/racketBrand` SINGLE) plus one own node
+  // (`match/format`). Values here follow each node's `cardinality`: LIST → array, SINGLE → scalar.
+  attributes: {
+    'match/racketModel': ['Yonex Astrox 99', 'Li-Ning Axforce 90'],
+    'match/racketBrand': 'Yonex',
+    'match/format': 'Doubles',
+  },
   createdAt: '2026-06-23T10:00:00',
   updatedAt: '2026-06-23T10:00:00',
 };

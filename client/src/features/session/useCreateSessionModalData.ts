@@ -11,7 +11,7 @@ import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import type { Location } from '@/shared/types/location';
 import type { ResolvedSportAttributeSchema } from '@/shared/types/sport';
 import { useCreateSession } from './hooks/useCreateSession';
-import { buildSessionAttributePrefill, collectSchemaPaths, pickPaths } from './sessionAttributePrefill';
+import { collectSchemaPaths, pickPaths } from './sessionAttributePaths';
 import type { CreateSessionPayload } from './types';
 
 /**
@@ -29,10 +29,12 @@ export function useCreateSessionModalData() {
   const [createFormSportId, setCreateFormSportId] = useState<number | null>(null);
   const [selectedLocationForCreate, setSelectedLocationForCreate] = useState<Location | null>(null);
   // CLIENT-SESSION-15: the session-attributes draft for the still-open create form. Reset to `{}`
-  // on sport change and on close (same lifecycle as `selectedLocationForCreate`); `prefilledForSport`
-  // guards the one-time profile pre-fill per selected sport.
+  // on sport change and on close (same lifecycle as `selectedLocationForCreate`).
   const [sessionAttributes, setSessionAttributes] = useState<Record<string, unknown>>({});
-  const [prefilledForSport, setPrefilledForSport] = useState<number | null>(null);
+  // CLIENT-SESSION-17 Part B: per-`#ref`-node "Other…" draft options, keyed by the node's full
+  // path. Session-local — never written to the user's profile — and cleared on the same lifecycle
+  // as `sessionAttributes`.
+  const [refDraftOptions, setRefDraftOptions] = useState<Record<string, unknown[]>>({});
 
   const openCreateModal = () => {
   // SPORT-5: this modal embeds the zero-sport-profile gate, which lists the catalogue the
@@ -51,7 +53,7 @@ export function useCreateSessionModalData() {
     // CLIENT-SESSION-15: same reason as `selectedLocationForCreate` — this draft is hook-owned,
     // so the modal's own `key` remount doesn't clear it.
     setSessionAttributes({});
-    setPrefilledForSport(null);
+    setRefDraftOptions({});
     // CLIENT-MODAL-1: the modal's own fields reset via its `key` remount, but `isCreateError`
     // is a prop off this mutation — without this the previous failure renders again the next
     // time the modal opens. Declared below; only ever called from an event handler, so the
@@ -78,7 +80,7 @@ export function useCreateSessionModalData() {
       if (prev !== null && next !== null && prev !== next) {
         setSelectedLocationForCreate(null);
         setSessionAttributes({});
-        setPrefilledForSport(null);
+        setRefDraftOptions({});
       }
       return next;
     });
@@ -132,30 +134,21 @@ export function useCreateSessionModalData() {
   const profileForCreateSport = rawProfiles.data?.find(
     (profile) => profile.sportId === createFormSportId && profile.isActive,
   );
-
-  // Pre-fill `prefillable` (#ref) nodes from that profile, once per selected sport — a render-phase
-  // state adjustment (React's documented "reset/seed state when an input changes" pattern), not an
-  // effect. Runs once the schema *and* the profile query have both settled for the current sport;
-  // `prefilledForSport` stops it re-firing, and the sport-change reset above clears both the draft
-  // and this guard so the next sport pre-fills fresh.
-  if (
-    createFormSportId !== null &&
-    sessionAttributeSchema !== null &&
-    !rawProfiles.isLoading &&
-    prefilledForSport !== createFormSportId
-  ) {
-    const seeds = buildSessionAttributePrefill(
-      sessionAttributeSchema,
-      profileForCreateSport?.attributes ?? null,
-    );
-    setPrefilledForSport(createFormSportId);
-    // User edits win over a seed for the same path (they can't realistically exist yet — the
-    // section only renders once the schema is here — but the overlay order is the safe one).
-    setSessionAttributes((current) => ({ ...seeds, ...current }));
-  }
+  // CLIENT-SESSION-17 Part B: a `#ref` session node's choices come from the creator's own profile
+  // attributes at the node's `prefillKey` (A23 made `#ref` a *data source*, not a one-shot
+  // pre-fill — so CLIENT-SESSION-15's `buildSessionAttributePrefill` is gone). `null` until the
+  // profile query settles; `RefField` renders an empty control + hint in that window.
+  const refChoiceSource: Record<string, unknown> | null =
+    profileForCreateSport?.attributes ?? null;
 
   const onSessionAttributeChange = (key: string, value: unknown) =>
     setSessionAttributes((current) => ({ ...current, [key]: value }));
+
+  const onAddRefDraftOption = (path: string, value: unknown) =>
+    setRefDraftOptions((current) => ({
+      ...current,
+      [path]: [...(current[path] ?? []), value],
+    }));
 
   const createSessionMutation = useCreateSession();
   const submitCreate = (payload: CreateSessionPayload) => {
@@ -199,5 +192,10 @@ export function useCreateSessionModalData() {
     sessionAttributeSchema,
     sessionAttributeValues: sessionAttributes,
     onSessionAttributeChange,
+    // CLIENT-SESSION-17 Part B: `#ref` node rendering — the creator's profile as choice source,
+    // plus their accumulated "Other…" drafts.
+    refChoiceSource,
+    refDraftOptions,
+    onAddRefDraftOption,
   };
 }
