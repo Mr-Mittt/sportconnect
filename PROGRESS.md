@@ -4354,8 +4354,9 @@ explicit go-ahead at each step (full story in A3's summary doc):
   schema gains two `#ref` nodes with `cardinality`, profile fixture stocks `gear/racketModels`, new
   `mockBadmintonLocation` (search filters by sportId). **Visual regression:** 3 **new** baselines
   `create-session-session-detail-ref-*` + 3 **changed** `session-detail-not-joined-*` (the
-  `not-joined` state now frames the read-only `#ref` summary) — need an `update-baselines`
-  dispatch; every other baseline byte-identical (Part A changed no markup).
+  `not-joined` state now frames the read-only `#ref` summary) — regenerated via `/updatebaseline`
+  (2026-09-09), SHA-256 confirmed exactly those 6; every other baseline byte-identical (Part A
+  changed no markup).
 - **Client CLIENT-SESSION-16 (`DONE`, 2026-09-08, `client/docs/MVP/CLIENT-SESSION-16_SESSION_ATTRIBUTES_READ_ONLY_IN_DETAIL_MODAL.md`):**
   read-only view of a session's stored `attributes` in `SessionDetailModal`. New self-contained
   `SessionAttributesSummary` (`{ schema, values }`, presentational) walks the resolved session

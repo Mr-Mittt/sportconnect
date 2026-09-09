@@ -305,6 +305,16 @@ cannot be created on a Windows host):
 **Every other baseline is byte-identical** — Part A's per-arm extraction changed no rendered
 markup.
 
+**Executed 2026-09-09:** `update-baselines` dispatch artifact applied via `/updatebaseline`.
+SHA-256 against the committed set confirmed **exactly** the predicted 6 changed — 3 new
+`create-session-session-detail-ref-{375,768,1280}.png` + 3 modified
+`session-detail-not-joined-{375,768,1280}.png` — and the other 105 baselines came back
+byte-identical (local Windows noise floor only, no `MISSING`). Human eyeball (1280 of each
+surface): the create-session state frames both `#ref` controls (`LIST` checkboxes + "Other…"
+above, `SINGLE` dropdown in its "Nothing on your profile" empty state, both scrolled into
+frame); the not-joined state renders the read-only "Session detail" summary (racket-model
+chips, "Racket brand: Yonex", "Format: Doubles") with the rest of the modal unchanged.
+
 `visual-regression` **was run** for `app-create-session-modal.spec.ts` on this Windows host:
 - the 3 new `session-detail-ref` states → *"A snapshot doesn't exist … writing actual"* (expected —
   they render, there is just no baseline yet);
