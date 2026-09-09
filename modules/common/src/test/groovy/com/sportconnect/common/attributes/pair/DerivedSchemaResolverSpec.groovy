@@ -68,6 +68,13 @@ class DerivedSchemaResolverSpec extends Specification {
         AttributeOption.builder().value(value).label(["en": label]).build()
     }
 
+    /** The seeded `Reference` definition: one required `value` STRING field. */
+    private static AttributeDefinitionType refDef() {
+        AttributeDefinitionType.builder().name("Reference")
+                .fields([StringField.builder().key("value").label(["en": "Name"]).isRequired(true).build()])
+                .build()
+    }
+
     private static findAttr(schema, String key) {
         for (g in schema.groups) {
             def hit = findInGroup(g, key)
@@ -89,7 +96,7 @@ class DerivedSchemaResolverSpec extends Specification {
 
     // ---- tests: ported from SessionAttributeSchemaResolverSpec ----
 
-    def "a #ref inherits type, options and definitionRef from the base attribute and carries its cardinality"() {
+    def "a #ref inherits options and definitionRef from the base; its type follows its cardinality (C10)"() {
         given:
         def baseSchema = base([
                 bGroup("gear", [
@@ -106,7 +113,9 @@ class DerivedSchemaResolverSpec extends Specification {
 
         then:
         def node = findAttr(resolved, "shuttleSpeed")
-        node.type == AttributeType.ENUM
+        // C10: LIST cardinality off an ENUM base -> a LIST node (multi-select over the base's options),
+        // not the base's own ENUM type. The base still supplies the options.
+        node.type == AttributeType.LIST
         node.options*.value == ["fast", "slow"]
         node.prefillable
         node.prefillKey == "gear/shuttleSpeed"
@@ -256,20 +265,28 @@ class DerivedSchemaResolverSpec extends Specification {
     // ---- tests: new #ref cardinality contract (extraction plan D9) ----
 
     @Unroll
-    def "the resolved ref node carries the ref cardinality independent of the base shape: #description"() {
+    def "C10: a ref node value arity follows its cardinality; element type from the base: #description"() {
         given:
         def baseSchema = base([bGroup("prefs", [
                 EnumAttribute.builder().key("speed").label(["en": "Speed"]).isAvailable(true)
                         .options([opt("fast", "Fast"), opt("slow", "Slow")]).build(),
                 ListAttribute.builder().key("surfaces").label(["en": "Surfaces"]).isAvailable(true)
-                        .options([opt("wood", "Wood"), opt("mat", "Mat")]).build()
-        ])])
+                        .options([opt("wood", "Wood"), opt("mat", "Mat")]).build(),
+                DefinitionAttribute.builder().key("primary").label(["en": "Primary"]).isAvailable(true)
+                        .definitionRef("Reference").searchScope("equipment.shuttle").build(),
+                DefinitionListAttribute.builder().key("stash").label(["en": "Stash"]).isAvailable(true)
+                        .definitionRef("Reference").build()
+        ])], [refDef()])
         def d = derived([dGroup("setup", [ref("pick", "prefs/" + basePath, cardinality)])])
 
         when:
+        def expanded = DerivedSchemaExpander.expand(baseSchema, d)
         def resolved = resolver.resolve(baseSchema, d, EN)
 
-        then:
+        then: "the expanded (value-validation) node has the arity-correct subtype"
+        expanded.schema().groups[0].attributes[0].class == expandedNodeClass
+
+        and: "the resolved (member-facing) node's type + cardinality + prefill marker match"
         def node = findAttr(resolved, "pick")
         node != null
         node.type == expectedType
@@ -278,11 +295,65 @@ class DerivedSchemaResolverSpec extends Specification {
         node.prefillKey == "prefs/" + basePath
 
         where:
-        description                       | basePath   | cardinality        | expectedType
-        "SINGLE off a single-valued base" | "speed"    | Cardinality.SINGLE | AttributeType.ENUM
-        "LIST off a single-valued base"   | "speed"    | Cardinality.LIST   | AttributeType.ENUM
-        "SINGLE off a list-valued base"   | "surfaces" | Cardinality.SINGLE | AttributeType.LIST
-        "LIST off a list-valued base"     | "surfaces" | Cardinality.LIST   | AttributeType.LIST
+        description                          | basePath   | cardinality        | expandedNodeClass          | expectedType
+        "SINGLE off an ENUM base"            | "speed"    | Cardinality.SINGLE | EnumAttribute              | AttributeType.ENUM
+        "LIST off an ENUM base"              | "speed"    | Cardinality.LIST   | ListAttribute              | AttributeType.LIST
+        "SINGLE off a LIST base"             | "surfaces" | Cardinality.SINGLE | EnumAttribute              | AttributeType.ENUM
+        "LIST off a LIST base"               | "surfaces" | Cardinality.LIST   | ListAttribute              | AttributeType.LIST
+        "SINGLE off a DEFINITION base"       | "primary"  | Cardinality.SINGLE | DefinitionAttribute       | AttributeType.DEFINITION
+        "LIST off a DEFINITION base"         | "primary"  | Cardinality.LIST   | DefinitionListAttribute   | AttributeType.DEFINITION_LIST
+        "SINGLE off a DEFINITION_LIST base"  | "stash"    | Cardinality.SINGLE | DefinitionAttribute       | AttributeType.DEFINITION
+        "LIST off a DEFINITION_LIST base"    | "stash"    | Cardinality.LIST   | DefinitionListAttribute   | AttributeType.DEFINITION_LIST
+    }
+
+    def "C10: the expanded #ref node keeps the base target's options / definitionRef / searchScope"() {
+        given:
+        def baseSchema = base([bGroup("prefs", [
+                ListAttribute.builder().key("surfaces").label(["en": "Surfaces"]).isAvailable(true)
+                        .options([opt("wood", "Wood"), opt("mat", "Mat")]).build(),
+                DefinitionListAttribute.builder().key("stash").label(["en": "Stash"]).isAvailable(true)
+                        .definitionRef("Reference").searchScope("equipment.shuttle").build()
+        ])], [refDef()])
+        def d = derived([dGroup("setup", [
+                ref("oneSurface", "prefs/surfaces", Cardinality.SINGLE),
+                ref("oneShuttle", "prefs/stash", Cardinality.SINGLE)
+        ])])
+
+        when:
+        def expanded = DerivedSchemaExpander.expand(baseSchema, d)
+
+        then:
+        def surface = expanded.schema().groups[0].attributes.find { it.key == "oneSurface" }
+        surface instanceof EnumAttribute
+        ((EnumAttribute) surface).options*.value == ["wood", "mat"]
+
+        and:
+        def shuttle = expanded.schema().groups[0].attributes.find { it.key == "oneShuttle" }
+        shuttle instanceof DefinitionAttribute
+        ((DefinitionAttribute) shuttle).definitionRef == "Reference"
+        ((DefinitionAttribute) shuttle).searchScope == "equipment.shuttle"
+    }
+
+    @Unroll
+    def "C10: AttributeValueFilter over the expanded schema keeps a ref value in its declared arity: #description"() {
+        given: "a #ref off a DEFINITION_LIST base — the exact shape CLIENT-SESSION-17 hit"
+        def baseSchema = base([bGroup("gear", [
+                DefinitionListAttribute.builder().key("shuttlecocks").label(["en": "Shuttlecocks"]).isAvailable(true)
+                        .definitionRef("Reference").build()
+        ])], [refDef()])
+        def d = derived([dGroup("match", [ref("shuttlecocks", "gear/shuttlecocks", cardinality)])])
+        def expanded = DerivedSchemaExpander.expand(baseSchema, d).schema()
+
+        expect:
+        com.sportconnect.common.attributes.value.AttributeValueFilter
+                .filter(["match/shuttlecocks": submitted], expanded) == kept
+
+        where:
+        description                             | cardinality        | submitted                       | kept
+        "SINGLE keeps a bare record"            | Cardinality.SINGLE | [value: "Ba Sao ProX"]          | ["match/shuttlecocks": [value: "Ba Sao ProX"]]
+        "SINGLE drops an array"                 | Cardinality.SINGLE | [[value: "Ba Sao ProX"]]        | [:]
+        "LIST keeps a one-element array"        | Cardinality.LIST   | [[value: "Ba Sao ProX"]]        | ["match/shuttlecocks": [[value: "Ba Sao ProX"]]]
+        "LIST drops a bare record"              | Cardinality.LIST   | [value: "Ba Sao ProX"]          | [:]
     }
 
     def "the expander does not carry the base target's defaultValue onto the #ref node (D9)"() {

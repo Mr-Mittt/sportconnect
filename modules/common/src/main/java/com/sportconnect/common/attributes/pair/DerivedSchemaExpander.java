@@ -35,10 +35,12 @@ import java.util.Map;
  * Per {@code #ref} node: look the base path up in the base schema's live + available view
  * ({@link AttributePaths#availableByPath}); <strong>drop the node</strong> if it no longer resolves
  * (the base schema may have retired the attribute since the derived schema was stored). Otherwise
- * emit a node of the base target's own concrete subtype — inheriting its {@code type} /
- * {@code options} / {@code definitionRef} / bounds / {@code searchScope} — re-keyed to the
- * {@code #ref}'s explicit {@code key}, its label the {@code #ref}'s override if present else the
- * base target's. The base target's {@code defaultValue} is <strong>not</strong> carried: under D9 a
+ * emit a concrete node whose <strong>arity follows the {@code #ref}'s own {@code cardinality}</strong>
+ * (C10 — a {@code SINGLE} {@code #ref} off a list base emits the single subtype, not the list one),
+ * its element type ({@code options} / {@code definitionRef} / bounds / {@code searchScope}) taken
+ * from the base target — re-keyed to the {@code #ref}'s explicit {@code key}, its label the
+ * {@code #ref}'s override if present else the base target's; see {@link #expandRefTarget} for the
+ * full mapping. The base target's {@code defaultValue} is <strong>not</strong> carried: under D9 a
  * {@code #ref} is a choice-list source, not a prefilled default (that role is now
  * {@code prefillKey}).
  *
@@ -126,7 +128,7 @@ public final class DerivedSchemaExpander {
                 if (target == null) {
                     continue; // lenient: #ref whose base target is gone / unavailable
                 }
-                attributes.add(reKey(target, ref.getKey(), ref.getLabel()));
+                attributes.add(expandRefTarget(target, ref.getKey(), ref.getLabel(), ref.getCardinality()));
                 refExpansionsByPath.put(groupPath + AttributePaths.SEPARATOR + ref.getKey(),
                         new RefExpansion(ref.getRef(), ref.getCardinality()));
                 pullDefinitionClosure(AttributeNodes.definitionRefOf(target), baseDefinitions, merged);
@@ -155,13 +157,34 @@ public final class DerivedSchemaExpander {
     }
 
     /**
-     * A copy of {@code target} of the same concrete subtype, re-keyed to {@code newKey} and
-     * re-labelled to {@code labelOverride} when non-{@code null} (else the target's own label). The
-     * base target comes from a validated base schema, so it is never a {@link RefAttribute} — that
-     * case is unreachable and treated as a programming error.
+     * The concrete node a surviving {@code #ref} inlines to (C10). Its <strong>arity</strong>
+     * follows the {@code #ref}'s own {@code cardinality}; its <strong>element type</strong>
+     * ({@code options} / {@code definitionRef} / bounds / {@code searchScope}) comes from the base
+     * target. Re-keyed to {@code newKey}, re-labelled to {@code labelOverride} when non-{@code null}
+     * (else the target's own label).
+     *
+     * <p>Mapping (base target type → {@code SINGLE} / {@code LIST}):
+     * <ul>
+     *   <li>{@code ENUM} / {@code LIST} → {@link EnumAttribute} / {@link ListAttribute}, base options;</li>
+     *   <li>{@code DEFINITION} / {@code DEFINITION_LIST} → {@link DefinitionAttribute} /
+     *       {@link DefinitionListAttribute}, base {@code definitionRef} + {@code searchScope};</li>
+     *   <li>{@code STRING} / {@code NUMBER} / {@code BOOLEAN} → that scalar for either cardinality —
+     *       single by nature, and there is no list-of-free-scalars node type.</li>
+     * </ul>
+     *
+     * <p>Before C10 this cloned the base target's subtype verbatim, so a {@code SINGLE} {@code #ref}
+     * off a list base kept a list subtype and {@code AttributeValueFilter} then required an array —
+     * dropping the single value the client submits for a {@code SINGLE} {@code #ref}.
+     *
+     * <p>{@code cardinality} is {@code non-null} in practice (the pair validator rejects a
+     * {@code #ref} without one on write); a {@code null} here is read as {@code SINGLE}, the safe
+     * default for the lenient half of the contract. The base target comes from a validated base
+     * schema, so it is never a {@link RefAttribute} — that case is a programming error.
      */
-    private static AttributeNode reKey(AttributeNode target, String newKey, Map<String, String> labelOverride) {
+    private static AttributeNode expandRefTarget(AttributeNode target, String newKey,
+                                                 Map<String, String> labelOverride, Cardinality cardinality) {
         Map<String, String> label = labelOverride != null ? labelOverride : target.getLabel();
+        boolean list = cardinality == Cardinality.LIST;
         return switch (target) {
             case StringAttribute a -> StringAttribute.builder()
                     .key(newKey).label(label).isAvailable(a.getIsAvailable()).build();
@@ -170,18 +193,30 @@ public final class DerivedSchemaExpander {
                     .min(a.getMin()).max(a.getMax()).build();
             case BooleanAttribute a -> BooleanAttribute.builder()
                     .key(newKey).label(label).isAvailable(a.getIsAvailable()).build();
-            case EnumAttribute a -> EnumAttribute.builder()
-                    .key(newKey).label(label).isAvailable(a.getIsAvailable())
-                    .options(a.getOptions()).build();
-            case ListAttribute a -> ListAttribute.builder()
-                    .key(newKey).label(label).isAvailable(a.getIsAvailable())
-                    .options(a.getOptions()).build();
-            case DefinitionAttribute a -> DefinitionAttribute.builder()
-                    .key(newKey).label(label).isAvailable(a.getIsAvailable())
-                    .definitionRef(a.getDefinitionRef()).searchScope(a.getSearchScope()).build();
-            case DefinitionListAttribute a -> DefinitionListAttribute.builder()
-                    .key(newKey).label(label).isAvailable(a.getIsAvailable())
-                    .definitionRef(a.getDefinitionRef()).searchScope(a.getSearchScope()).build();
+            case EnumAttribute a -> list
+                    ? ListAttribute.builder().key(newKey).label(label)
+                            .isAvailable(a.getIsAvailable()).options(a.getOptions()).build()
+                    : EnumAttribute.builder().key(newKey).label(label)
+                            .isAvailable(a.getIsAvailable()).options(a.getOptions()).build();
+            case ListAttribute a -> list
+                    ? ListAttribute.builder().key(newKey).label(label)
+                            .isAvailable(a.getIsAvailable()).options(a.getOptions()).build()
+                    : EnumAttribute.builder().key(newKey).label(label)
+                            .isAvailable(a.getIsAvailable()).options(a.getOptions()).build();
+            case DefinitionAttribute a -> list
+                    ? DefinitionListAttribute.builder().key(newKey).label(label)
+                            .isAvailable(a.getIsAvailable())
+                            .definitionRef(a.getDefinitionRef()).searchScope(a.getSearchScope()).build()
+                    : DefinitionAttribute.builder().key(newKey).label(label)
+                            .isAvailable(a.getIsAvailable())
+                            .definitionRef(a.getDefinitionRef()).searchScope(a.getSearchScope()).build();
+            case DefinitionListAttribute a -> list
+                    ? DefinitionListAttribute.builder().key(newKey).label(label)
+                            .isAvailable(a.getIsAvailable())
+                            .definitionRef(a.getDefinitionRef()).searchScope(a.getSearchScope()).build()
+                    : DefinitionAttribute.builder().key(newKey).label(label)
+                            .isAvailable(a.getIsAvailable())
+                            .definitionRef(a.getDefinitionRef()).searchScope(a.getSearchScope()).build();
             case RefAttribute a -> throw new IllegalStateException(
                     "base schema contains a #ref node at the target of another #ref: " + a.getRef());
         };
