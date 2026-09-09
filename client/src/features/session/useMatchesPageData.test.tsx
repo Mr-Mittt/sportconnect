@@ -138,7 +138,7 @@ describe('useMatchesPageData', () => {
     useAuthStore.setState({ user: null, accessToken: null, isBootstrapping: false });
   });
 
-  it('merges group sessions, my standalone sessions, and joined sessions into date groups, sorted descending', async () => {
+  it('merges group / my / joined sessions into status zones — active (asc) above history (desc)', async () => {
     mockGets({
       '/groups/user/user-1': () =>
         apiResponse(pageResponse([makeGroup({ id: 5, groupName: 'Riverside Ballers', sportId: 6 })])),
@@ -155,13 +155,18 @@ describe('useMatchesPageData', () => {
     const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
 
     await waitFor(() => expect(result.current.isMySessionsLoading).toBe(false));
+    // SCHEDULED (id 1) + ONGOING (id 2) -> active zone, dates ascending; COMPLETED (id 3) -> history.
     expect(result.current.mySessionDateGroups.map((g) => g.dateKey)).toEqual([
-      '2026-08-05',
-      '2026-08-01',
-      '2026-07-20',
+      'active:2026-08-01',
+      'active:2026-08-05',
+      'history:2026-07-20',
     ]);
-    expect(result.current.mySessionDateGroups[0].sessions[0].groupName).toBe('Riverside Ballers');
-    expect(result.current.mySessionDateGroups[1].sessions[0].groupName).toBeNull();
+    expect(result.current.mySessionDateGroups[0].zone).toBe('active');
+    expect(result.current.mySessionDateGroups[0].sessions[0].id).toBe(2); // ONGOING, from /sessions/mine
+    expect(result.current.mySessionDateGroups[0].sessions[0].groupName).toBeNull();
+    // group-name enrichment still works (id 1 comes off /sessions/group/5)
+    expect(result.current.mySessionDateGroups[1].sessions[0].groupName).toBe('Riverside Ballers');
+    expect(result.current.mySessionDateGroups[2].zone).toBe('history');
   });
 
   it('dedupes a self-created standalone session appearing in both mine and joined', async () => {

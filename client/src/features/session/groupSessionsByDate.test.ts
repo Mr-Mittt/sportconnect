@@ -66,71 +66,111 @@ describe('dedupeSessionsById', () => {
 describe('groupSessionsByDate', () => {
   const now = new Date(2026, 7, 5, 12, 0); // Aug 5 2026, noon
 
-  it('labels the current calendar day as "Today"', () => {
-    const groups = groupSessionsByDate([makeSession({ id: 1, scheduledStart: '2026-08-05T09:00:00' })], now);
+  it('routes SCHEDULED / ONGOING to the active zone and COMPLETED / CANCELLED to history', () => {
+    const groups = groupSessionsByDate(
+      [
+        makeSession({ id: 1, scheduledStart: '2026-08-05T09:00:00', status: 'SCHEDULED' }),
+        makeSession({ id: 2, scheduledStart: '2026-08-05T09:00:00', status: 'ONGOING' }),
+        makeSession({ id: 3, scheduledStart: '2026-08-05T09:00:00', status: 'COMPLETED' }),
+        makeSession({ id: 4, scheduledStart: '2026-08-05T09:00:00', status: 'CANCELLED' }),
+      ],
+      now,
+    );
+    const zoneOf = (id: number) => groups.find((g) => g.sessions.some((s) => s.id === id))?.zone;
+    expect(zoneOf(1)).toBe('active');
+    expect(zoneOf(2)).toBe('active');
+    expect(zoneOf(3)).toBe('history');
+    expect(zoneOf(4)).toBe('history');
+  });
+
+  it('labels the current calendar day "Today" and zone-qualifies the dateKey', () => {
+    const groups = groupSessionsByDate(
+      [makeSession({ id: 1, scheduledStart: '2026-08-05T09:00:00', status: 'SCHEDULED' })],
+      now,
+    );
     expect(groups).toHaveLength(1);
     expect(groups[0].dateLabel).toBe('Today');
-    expect(groups[0].dateKey).toBe('2026-08-05');
+    expect(groups[0].dateKey).toBe('active:2026-08-05');
+    expect(groups[0].zone).toBe('active');
   });
 
   it('labels any other day as "MMM d, yyyy"', () => {
-    const groups = groupSessionsByDate([makeSession({ id: 1, scheduledStart: '2026-08-08T09:00:00' })], now);
+    const groups = groupSessionsByDate(
+      [makeSession({ id: 1, scheduledStart: '2026-08-08T09:00:00', status: 'SCHEDULED' })],
+      now,
+    );
     expect(groups[0].dateLabel).toBe('Aug 8, 2026');
+    expect(groups[0].dateKey).toBe('active:2026-08-08');
   });
 
-  it('groups same-day sessions together, sorted ascending within the group', () => {
+  it('active zone: date groups ascending, and each day ascending by start time', () => {
     const groups = groupSessionsByDate(
       [
-        makeSession({ id: 1, scheduledStart: '2026-08-05T18:00:00' }),
-        makeSession({ id: 2, scheduledStart: '2026-08-05T09:00:00' }),
-      ],
-      now,
-    );
-    expect(groups).toHaveLength(1);
-    expect(groups[0].sessions.map((s) => s.id)).toEqual([2, 1]);
-  });
-
-  it('upcoming days (today or later) sort ascending — soonest first', () => {
-    const groups = groupSessionsByDate(
-      [
-        makeSession({ id: 1, scheduledStart: '2026-08-08T10:00:00' }),
-        makeSession({ id: 2, scheduledStart: '2026-08-05T10:00:00' }), // today
-        makeSession({ id: 3, scheduledStart: '2026-08-06T10:00:00' }),
-      ],
-      now,
-    );
-    expect(groups.map((g) => g.dateKey)).toEqual(['2026-08-05', '2026-08-06', '2026-08-08']);
-  });
-
-  it('past days (before today) sort descending — most recent first', () => {
-    const groups = groupSessionsByDate(
-      [
-        makeSession({ id: 1, scheduledStart: '2026-07-20T10:00:00' }),
-        makeSession({ id: 2, scheduledStart: '2026-08-04T10:00:00' }),
-        makeSession({ id: 3, scheduledStart: '2026-07-31T10:00:00' }),
-      ],
-      now,
-    );
-    expect(groups.map((g) => g.dateKey)).toEqual(['2026-08-04', '2026-07-31', '2026-07-20']);
-  });
-
-  it('the whole upcoming zone (ascending) sorts entirely above the whole past zone (descending)', () => {
-    const groups = groupSessionsByDate(
-      [
-        makeSession({ id: 1, scheduledStart: '2026-07-20T10:00:00' }), // past, oldest
-        makeSession({ id: 2, scheduledStart: '2026-08-08T10:00:00' }), // upcoming, furthest
-        makeSession({ id: 3, scheduledStart: '2026-08-05T10:00:00' }), // today
-        makeSession({ id: 4, scheduledStart: '2026-08-04T10:00:00' }), // past, most recent
-        makeSession({ id: 5, scheduledStart: '2026-08-06T10:00:00' }), // upcoming, soonest
+        makeSession({ id: 1, scheduledStart: '2026-08-08T10:00:00', status: 'SCHEDULED' }),
+        makeSession({ id: 2, scheduledStart: '2026-08-05T18:00:00', status: 'ONGOING' }), // today, later
+        makeSession({ id: 3, scheduledStart: '2026-08-05T09:00:00', status: 'SCHEDULED' }), // today, earlier
+        makeSession({ id: 4, scheduledStart: '2026-08-06T10:00:00', status: 'SCHEDULED' }),
       ],
       now,
     );
     expect(groups.map((g) => g.dateKey)).toEqual([
-      '2026-08-05', // today — upcoming zone, ascending
-      '2026-08-06',
-      '2026-08-08',
-      '2026-08-04', // past zone, descending
-      '2026-07-20',
+      'active:2026-08-05',
+      'active:2026-08-06',
+      'active:2026-08-08',
+    ]);
+    expect(groups[0].sessions.map((s) => s.id)).toEqual([3, 2]); // within today: 09:00 then 18:00
+  });
+
+  it('history zone: date groups descending, and each day descending by start time', () => {
+    const groups = groupSessionsByDate(
+      [
+        makeSession({ id: 1, scheduledStart: '2026-07-20T10:00:00', status: 'COMPLETED' }),
+        makeSession({ id: 2, scheduledStart: '2026-08-04T09:00:00', status: 'COMPLETED' }), // most recent day, earlier
+        makeSession({ id: 3, scheduledStart: '2026-08-04T20:00:00', status: 'CANCELLED' }), // most recent day, later
+        makeSession({ id: 4, scheduledStart: '2026-07-31T10:00:00', status: 'COMPLETED' }),
+      ],
+      now,
+    );
+    expect(groups.map((g) => g.dateKey)).toEqual([
+      'history:2026-08-04',
+      'history:2026-07-31',
+      'history:2026-07-20',
+    ]);
+    expect(groups[0].sessions.map((s) => s.id)).toEqual([3, 2]); // within Aug 4: 20:00 then 09:00
+  });
+
+  it('the whole active zone renders above the whole history zone', () => {
+    const groups = groupSessionsByDate(
+      [
+        makeSession({ id: 1, scheduledStart: '2026-07-20T10:00:00', status: 'COMPLETED' }), // history, oldest
+        makeSession({ id: 2, scheduledStart: '2026-08-08T10:00:00', status: 'SCHEDULED' }), // active, furthest
+        makeSession({ id: 3, scheduledStart: '2026-08-05T10:00:00', status: 'ONGOING' }), // active, today
+        makeSession({ id: 4, scheduledStart: '2026-08-04T10:00:00', status: 'CANCELLED' }), // history, most recent
+        makeSession({ id: 5, scheduledStart: '2026-08-06T10:00:00', status: 'SCHEDULED' }), // active, soonest
+      ],
+      now,
+    );
+    expect(groups.map((g) => g.dateKey)).toEqual([
+      'active:2026-08-05',
+      'active:2026-08-06',
+      'active:2026-08-08',
+      'history:2026-08-04',
+      'history:2026-07-20',
+    ]);
+  });
+
+  it('the same calendar day appears in both zones when it has both active and terminal sessions', () => {
+    const groups = groupSessionsByDate(
+      [
+        makeSession({ id: 1, scheduledStart: '2026-08-05T10:00:00', status: 'COMPLETED' }), // today, done
+        makeSession({ id: 2, scheduledStart: '2026-08-05T11:00:00', status: 'ONGOING' }), // today, live
+        makeSession({ id: 3, scheduledStart: '2026-08-05T15:00:00', status: 'SCHEDULED' }), // today, upcoming
+      ],
+      now,
+    );
+    expect(groups.map((g) => ({ key: g.dateKey, label: g.dateLabel, ids: g.sessions.map((s) => s.id) }))).toEqual([
+      { key: 'active:2026-08-05', label: 'Today', ids: [2, 3] },
+      { key: 'history:2026-08-05', label: 'Today', ids: [1] },
     ]);
   });
 

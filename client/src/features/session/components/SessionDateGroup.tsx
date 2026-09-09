@@ -4,7 +4,11 @@ import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation'
 import type { SessionDateGroup as SessionDateGroupData } from '../groupSessionsByDate';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 
-interface SessionDateGroupProps extends SessionDateGroupData {
+interface SessionDateGroupProps
+  extends Pick<SessionDateGroupData, 'dateKey' | 'dateLabel' | 'sessions'> {
+  // `zone` is on the group data (CLIENT-SESSION-20) but this component doesn't render it — the
+  // per-day header carries everything. `dateKey` is already zone-qualified, so it stays a valid
+  // opaque collapse-state identity.
   sportsByKey: Record<SportKey, SportProfile>;
   currentUserId: string;
   isCollapsed: boolean;
