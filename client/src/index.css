@@ -115,6 +115,10 @@
   border-right-width: 0.5px;
 }
 
+@utility border-hairline-l {
+  border-left-width: 0.5px;
+}
+
 body {
   @apply bg-surface-0 text-text-primary antialiased;
 }

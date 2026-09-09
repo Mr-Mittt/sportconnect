@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
-import type { ResolvedSportAttributeDefinitionType } from '@/shared/types/sport';
+import type {
+  ResolvedAttributeLayout,
+  ResolvedSportAttributeDefinitionType,
+} from '@/shared/types/sport';
 
 /**
  * Common shape every per-type attribute control component takes (CLIENT-SESSION-17 Part A). The
@@ -21,6 +24,12 @@ export interface AttributeControlBaseProps {
   ariaRequired?: boolean;
   /** `record` variant only — rendered after the control when the required field is still empty. */
   requiredHint?: ReactNode;
+  /**
+   * SPORT-13: the node's resolved presentation hint. Each scalar arm switches on `layout.id` to
+   * pick an alternate control and falls back to its default rendering (with a dev warning) when
+   * `layout` is absent, not a valid object, or carries an id/format the arm doesn't support.
+   */
+  layout?: ResolvedAttributeLayout | null;
 }
 
 export interface DefinitionControlProps extends AttributeControlBaseProps {

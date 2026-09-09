@@ -4315,6 +4315,31 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client SPORT-13 (`DONE`, 2026-09-09, `client/docs/MVP/SPORT-13_SCHEMA_DRIVEN_ATTRIBUTE_LAYOUT.md`,
+  impl `..._IMPL.md`):** 1 of a 3-ticket split (SPORT-14 container layouts, SPORT-15 read-only
+  parity + `#ref`) that picks up the schema-driven `widget`/`display` scope SPORT-7 deferred.
+  Adds an optional `layout` **object** (`{ id, icon?, format? }` — `format` localizable like
+  `label`, so a locale map raw / resolved string in the `Resolved*` twins) to the attribute-schema
+  node types, threaded through `AttributeControlBaseProps` into the four scalar arms. `StringField`
+  gains `textarea`/`readonly-text`; `NumberField` `stepper`/`slider`/`readonly-text` (slider →
+  input + warn without bounds); `BooleanField` `checkbox`/`segmented` (default stays `switch`);
+  `EnumField` `radio`/`segmented` (→ dropdown + warn past 5 options). **Scope addition (user):**
+  an `ENUM` selection is also **clearable** — an `×` on the `dropdown` when set, and
+  click-selected-to-deselect on `radio`/`segmented` (opt-in `allowDeselect` on the primitives);
+  no baselined surface renders an editable `EnumField` so nothing shifts. Each arm's `default:`
+  reproduces its pre-SPORT-13 DOM verbatim; absent/malformed/unknown `layout` → default +
+  deduped dev `console.warn` (`shared/lib/devWarn.ts`). New `formatAttributeValue()` (closed
+  NUMBER/STRING pattern grammar via `Intl.NumberFormat`, display-only), `normalizeLayout`/
+  `pickLayoutId` guards, and three native token-styled primitives (`radio-group`,
+  `segmented-control`, `slider` — no new Radix deps, matching the `Select`/`Switch` precedent) +
+  a `border-hairline-l` utility. No backend change (that's `common` C11); no MSW seed sets
+  `layout`, so every existing surface renders byte-identically. New: `formatAttributeValue` +
+  4 arm `.test.tsx` + 4 arm `.stories.tsx` + a `ScalarLayouts` composite story; `tsc`/`eslint`
+  clean; Vitest **172 files / 1213 passed**. **E2E:** `pnpm e2e` 75 passed; 8 `a11y.spec.ts`
+  home-feed/groups failures under concurrent load (`[WebServer] ECONNABORTED`) — a
+  suite-parallelism flake, `a11y.spec.ts` 31/31 green re-run isolated. **Visual-regression:** no
+  baselined surface changes (default DOM verbatim, no seed sets `layout`); the Windows noise-floor
+  diff reproduces at the same magnitude on stashed `master`, so no `update-baselines` dispatch.
 - **Client CLIENT-SESSION-17 (`DONE`, 2026-09-08, `client/docs/MVP/CLIENT-SESSION-17_REF_ATTRIBUTE_SINGLE_MULTI_SELECT.md`):**
   two folded concerns. **Part A** — migrated `shared/types/sport.ts`'s resolved attribute god-type
   to a **discriminated union on `type`** (7 arms + a `ResolvedRefAttribute` arm narrowed by a new

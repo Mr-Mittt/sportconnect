@@ -81,6 +81,7 @@ function RecordField({ field, value, onChange, definitionsByName }: RecordFieldP
           onChange={onChange}
           ariaRequired={isRequired}
           requiredHint={hint}
+          layout={field.layout ?? undefined}
         />
       );
 
@@ -95,6 +96,7 @@ function RecordField({ field, value, onChange, definitionsByName }: RecordFieldP
           onChange={onChange}
           ariaRequired={isRequired}
           requiredHint={hint}
+          layout={field.layout ?? undefined}
         />
       );
 
@@ -108,6 +110,7 @@ function RecordField({ field, value, onChange, definitionsByName }: RecordFieldP
           onChange={onChange}
           ariaRequired={isRequired}
           requiredHint={hint}
+          layout={field.layout ?? undefined}
         />
       );
 
@@ -122,6 +125,7 @@ function RecordField({ field, value, onChange, definitionsByName }: RecordFieldP
           onChange={onChange}
           ariaRequired={isRequired}
           requiredHint={hint}
+          layout={field.layout ?? undefined}
         />
       );
 
