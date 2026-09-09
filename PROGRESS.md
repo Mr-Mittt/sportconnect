@@ -2607,6 +2607,18 @@ explicit go-ahead at each step (full story in A3's summary doc):
   Backend delta: `GET /api/sessions/joined`'s `status` param is now optional (omitted returns every
   status in one page) — added so "My sessions" needs one query instead of a 4-call fan-out per
   `SessionStatus`; fully backward compatible.
+  - **`CLIENT-SESSION-20` (`DONE`, 2026-09-09,
+    `client/docs/MVP/CLIENT-SESSION-20_MY_SESSIONS_STATUS_ZONES.md`)** — revises the "My sessions"
+    ordering: `groupSessionsByDate` now splits by **status** instead of date. Active
+    (`SCHEDULED`+`ONGOING`) date-grouped ascending on top; history (`COMPLETED`+`CANCELLED`)
+    date-grouped descending below (within-day: active asc, history desc). The same calendar day can
+    now appear in **both** zones (e.g. a "Today" group for live/upcoming sessions above another
+    "Today" group for completed ones); no divider. `SessionDateGroup` gains `zone`; `dateKey` is now
+    `${zone}:${yyyy-MM-dd}` (opaque collapse-state identity, needed distinct per zone).
+    `SessionDateGroup.tsx`'s props narrowed to `Pick<…,'dateKey'|'dateLabel'|'sessions'>` (never
+    used `zone`); no `MatchesPage` change. Filed + built from a live-env observation — a completed
+    10:00 session was sitting above a live 11:00 one on "Today". `groupSessionsByDate.test.ts`
+    rewritten for the status-zone model; `useMatchesPageData.test.tsx` updated.
 - **`CLIENT-SESSION-7` (`DONE`, 2026-08-06,
   `client/docs/MVP/CLIENT-SESSION-7_RAIL_CTAS_AND_HOOK_EXTRACTION.md`)** — `UpcomingMatches`'s empty
   state gains "Create a match"/"Join a match" CTAs on Home Feed/Groups/Friends. Scope grew at
