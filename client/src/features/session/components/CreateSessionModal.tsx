@@ -406,6 +406,13 @@ interface CreateSessionModalProps {
   sessionAttributeSchema: ResolvedSportAttributeSchema | null;
   sessionAttributeValues: Record<string, unknown>;
   onSessionAttributeChange: (key: string, value: unknown) => void;
+  /** CLIENT-SESSION-17 Part B: `#ref` node choice source (the creator's profile attributes) +
+   * accumulated "Other…" drafts. Owned by `useCreateSessionModalData`. Optional — a `#ref` node
+   * without a choice source simply doesn't render, and a session schema with no `#ref` node never
+   * reads these. */
+  refChoiceSource?: Record<string, unknown> | null;
+  refDraftOptions?: Record<string, unknown[]>;
+  onAddRefDraftOption?: (path: string, value: unknown) => void;
 
   /** CLIENT-SESSION-7 follow-up: when the caller has zero sport profiles (`sportsByKey` empty),
    * this form is replaced by an inline "add a sport first" prompt (`AddSportFields`) instead of
@@ -508,6 +515,9 @@ export function CreateSessionModal({
   sessionAttributeSchema,
   sessionAttributeValues,
   onSessionAttributeChange,
+  refChoiceSource,
+  refDraftOptions,
+  onAddRefDraftOption,
   availableSports,
   resumableProfiles,
   onAddSport,
@@ -889,9 +899,10 @@ export function CreateSessionModal({
               </CollapsibleContent>
             </Collapsible>
 
-            {/* CLIENT-SESSION-15: sport-specific session attributes (A17 schema), pre-filled from
-                the creator's profile for `prefillable` (#ref) nodes by `useCreateSessionModalData`.
-                Hidden entirely when the chosen sport has no session schema. */}
+            {/* CLIENT-SESSION-15: sport-specific session attributes (A17 schema). CLIENT-SESSION-17
+                Part B: `#ref` nodes render as single-/multi-select sourced from the creator's
+                profile (`refChoiceSource`). Hidden entirely when the chosen sport has no session
+                schema. */}
             {sessionAttributeSchema !== null && (
               <Collapsible open={isDetailOpen} onOpenChange={setIsDetailOpen} className="border-hairline-t border-border pt-3">
                 <CollapsibleTrigger className="border-hairline-b justify-center gap-1.5 border-border px-1.75 py-1.5">
@@ -902,6 +913,9 @@ export function CreateSessionModal({
                     schema={sessionAttributeSchema}
                     values={sessionAttributeValues}
                     onChange={onSessionAttributeChange}
+                    refChoiceSource={refChoiceSource}
+                    refDraftOptions={refDraftOptions}
+                    onAddRefDraftOption={onAddRefDraftOption}
                   />
                 </CollapsibleContent>
               </Collapsible>

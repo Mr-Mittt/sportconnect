@@ -224,21 +224,28 @@ export interface SportAttributeSchema {
 
 /** One attribute node under a `SessionAttributeGroup` — one of two kinds,
  * distinguished by whether `#ref` is set (A17):
- * - **`#ref` node** (`#ref` non-null): a pointer at a profile-schema attribute
- *   by its full `/`-separated path (`gear/rackets/tension`). `type`/`options`/
- *   `definitionRef` are inherited from that profile attribute; only `label` may
- *   be overridden. Every own-node field below must be null/absent.
+ * - **`#ref` node** (`#ref` non-null, A23/D9): draws its value(s) from the
+ *   profile-schema attribute at that full `/`-separated path (`gear/rackets`).
+ *   `type`/`options`/`definitionRef` are inherited; carries its own explicit
+ *   `key` and a required `cardinality` (`SINGLE`/`LIST`), and an optional
+ *   `label` override. Every other own-node field must be null/absent.
  * - **own node** (`#ref` null): a self-contained event-only attribute, shaped
  *   exactly like `SportAttributeDefinition`, whose `definitionRef` resolves
- *   against the session-local `SessionAttributeSchema.definitions`. */
+ *   against the session-local `SessionAttributeSchema.definitions`.
+ *
+ * The client only reads this raw shape through the admin JSON textarea
+ * (ADMIN-5) — it is not narrowed into a discriminated union (CLIENT-SESSION-17
+ * SC-3); the member-facing resolved read is `ResolvedRefAttribute` & co. */
 export interface SessionAttributeNode {
   '#ref'?: string | null;
   /** `#ref` node: optional locale→text override (`null` keeps the inherited
    * label). Own node: the required label map, carrying the schema's
    * `defaultLocale`. */
   label?: Record<string, string> | null;
-  /** Own node only. Sibling-unique. */
+  /** `#ref` node (A23): its own sibling-unique key. Own node: sibling-unique. */
   key?: string | null;
+  /** `#ref` node only (A23): `SINGLE` → one value, `LIST` → many. */
+  cardinality?: Cardinality | null;
   /** Own node only. */
   type?: SportAttributeType | null;
   /** Own node only. Required and non-empty for `ENUM`/`LIST`. */
@@ -290,45 +297,152 @@ export interface ResolvedSportAttributeOption {
   label: string;
 }
 
-export interface ResolvedSportAttributeField {
+/** How many values a `#ref` node holds (A23/`common.attributes` extraction plan D9) — mirrors the
+ * backend `Cardinality` enum. `SINGLE` → the client renders a single-select control; `LIST` → a
+ * multi-select. Independent of the referenced base attribute's own `type`. */
+export type Cardinality = 'SINGLE' | 'LIST';
+
+/* ── Discriminated union: one arm per `SportAttributeType` (CLIENT-SESSION-17 Part A) ───────────
+ * The backend serves these flattened (`common.attributes.ResolvedAttributeNode` is one flat DTO —
+ * `type` plus whichever per-kind fields apply, the rest `null`); the client narrows that wire into
+ * the union below so every attribute surface switches exhaustively (`assertNever`) instead of
+ * reading optional fields off a god-type. A schema-declared `type` this client build doesn't know
+ * is still possible (older client than backend) — the render dispatchers guard for that at runtime
+ * *before* trusting the union, and degrade rather than crash. */
+
+interface ResolvedAttributeCommon {
   key: string;
   label: string;
-  type: SportAttributeType;
-  options?: ResolvedSportAttributeOption[] | null;
-  definitionRef?: string | null;
-  isRequired?: boolean | null;
-  /** SPORT-9/A16: see `SportAttributeField.min`/`.max`. */
+  /** Soft delete — `false` hides the node (and, for a group, its subtree). */
+  isAvailable?: boolean | null;
+  /** Seeds a field with no stored value, once. Never set on `DEFINITION`/`DEFINITION_LIST`. */
+  defaultValue?: unknown;
+}
+
+export interface ResolvedStringAttribute extends ResolvedAttributeCommon {
+  type: 'STRING';
+}
+
+export interface ResolvedNumberAttribute extends ResolvedAttributeCommon {
+  type: 'NUMBER';
+  /** SPORT-9/A16: inclusive bounds, mirrored as `<input>` `min`/`max`. Independent and optional. */
   min?: number | null;
   max?: number | null;
 }
+
+export interface ResolvedBooleanAttribute extends ResolvedAttributeCommon {
+  type: 'BOOLEAN';
+}
+
+export interface ResolvedEnumAttribute extends ResolvedAttributeCommon {
+  type: 'ENUM';
+  options: ResolvedSportAttributeOption[];
+}
+
+export interface ResolvedListAttribute extends ResolvedAttributeCommon {
+  type: 'LIST';
+  options: ResolvedSportAttributeOption[];
+}
+
+export interface ResolvedDefinitionAttribute extends ResolvedAttributeCommon {
+  type: 'DEFINITION' | 'DEFINITION_LIST';
+  /** Names the `ResolvedSportAttributeDefinitionType` this value is shaped by. */
+  definitionRef: string;
+  /** Entity-linking typeahead pool (v2 design §8.3); absent means plain free text. */
+  searchScope?: string | null;
+}
+
+/**
+ * A `#ref`-derived resolved node — A23/C9, session attribute schema only
+ * (`GET /api/sports/{sportId}/session-attribute-schema`). On the wire it is **not** a distinct
+ * `type`: it carries the *inherited* base `type` plus `cardinality`/`prefillable`/`prefillKey`.
+ * The client keeps it a separate union arm, discriminated by `prefillable === true` (see
+ * {@link isRefAttribute}), and renders it (CLIENT-SESSION-17 Part B) as a single-/multi-select
+ * whose choices are the creator's own profile value(s) at `prefillKey` — never by switching on
+ * `type`. Absent from every profile-schema (`/attribute-schema`) resolution and from "own"
+ * (event-only) session nodes.
+ */
+export interface ResolvedRefAttribute extends ResolvedAttributeCommon {
+  /** Inherited from the referenced base attribute. */
+  type: SportAttributeType;
+  cardinality: Cardinality;
+  prefillable: true;
+  /** Full `/`-separated path of the referenced profile attribute — the key to read the choice
+   * list from `profile.attributes[prefillKey]`. */
+  prefillKey: string;
+  /** Inherited — present when the base attribute is `ENUM`/`LIST`. */
+  options?: ResolvedSportAttributeOption[] | null;
+  /** Inherited — present when the base attribute is `DEFINITION`/`DEFINITION_LIST`. */
+  definitionRef?: string | null;
+}
+
+export type ResolvedSportAttributeDefinition =
+  | ResolvedRefAttribute
+  | ResolvedStringAttribute
+  | ResolvedNumberAttribute
+  | ResolvedBooleanAttribute
+  | ResolvedEnumAttribute
+  | ResolvedListAttribute
+  | ResolvedDefinitionAttribute;
+
+/** Narrows a resolved node to its `#ref`-derived arm. `prefillable` is the only wire signal that
+ * distinguishes it — its `type` is the inherited base type, so a `switch (node.type)` cannot. */
+export function isRefAttribute(
+  attribute: ResolvedSportAttributeDefinition,
+): attribute is ResolvedRefAttribute {
+  return (attribute as { prefillable?: unknown }).prefillable === true;
+}
+
+/* One field within a `DEFINITION`/`DEFINITION_LIST` record — same per-type union, minus the `#ref`
+ * arm (a record field is never a `#ref`) and `DEFINITION_LIST` (depth-2 rule, v2 design §5.3). */
+
+interface ResolvedFieldCommon {
+  key: string;
+  label: string;
+  /** Missing/invalid ⇒ the whole enclosing record is dropped (v2 design §6). Absent reads `false`. */
+  isRequired?: boolean | null;
+}
+
+export interface ResolvedStringField extends ResolvedFieldCommon {
+  type: 'STRING';
+}
+
+export interface ResolvedNumberField extends ResolvedFieldCommon {
+  type: 'NUMBER';
+  min?: number | null;
+  max?: number | null;
+}
+
+export interface ResolvedBooleanField extends ResolvedFieldCommon {
+  type: 'BOOLEAN';
+}
+
+export interface ResolvedEnumField extends ResolvedFieldCommon {
+  type: 'ENUM';
+  options: ResolvedSportAttributeOption[];
+}
+
+export interface ResolvedListField extends ResolvedFieldCommon {
+  type: 'LIST';
+  options: ResolvedSportAttributeOption[];
+}
+
+export interface ResolvedDefinitionField extends ResolvedFieldCommon {
+  type: 'DEFINITION';
+  definitionRef: string;
+}
+
+export type ResolvedSportAttributeField =
+  | ResolvedStringField
+  | ResolvedNumberField
+  | ResolvedBooleanField
+  | ResolvedEnumField
+  | ResolvedListField
+  | ResolvedDefinitionField;
 
 export interface ResolvedSportAttributeDefinitionType {
   name: string;
   fields: ResolvedSportAttributeField[];
-}
-
-export interface ResolvedSportAttributeDefinition {
-  key: string;
-  label: string;
-  type: SportAttributeType;
-  options?: ResolvedSportAttributeOption[] | null;
-  isAvailable?: boolean | null;
-  defaultValue?: unknown;
-  definitionRef?: string | null;
-  searchScope?: string | null;
-  /** SPORT-9/A16: see `SportAttributeField.min`/`.max`. */
-  min?: number | null;
-  max?: number | null;
-  /** A17 (`modules/sport/sport-impl`), populated on the **session** attribute schema resolution
-   * only (`GET /api/sports/{sportId}/session-attribute-schema`): `true` on a `#ref` node — one
-   * that mirrors one of the sport's profile attributes and can be seeded from the user's own
-   * profile. Absent/`null` on an "own" (event-only) node and on every profile-schema
-   * (`/attribute-schema`) resolution. Read by CLIENT-SESSION-15 to decide which fields to
-   * pre-fill. */
-  prefillable?: boolean | null;
-  /** A17, session schema only: when {@link prefillable} is `true`, the full `/`-separated path of
-   * the referenced profile attribute — the key to read from `profile.attributes[prefillKey]`. */
-  prefillKey?: string | null;
 }
 
 export interface ResolvedSportAttributeGroup {

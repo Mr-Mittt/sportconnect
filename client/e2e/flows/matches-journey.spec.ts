@@ -1,4 +1,5 @@
 import {
+  mockBadmintonLocation,
   mockDiscoverableSession,
   mockFriend,
   mockLocation,
@@ -257,6 +258,18 @@ test('Matches journey', async ({ page }) => {
       .getByRole('button', { name: new RegExp(`${mockDiscoverableSession.title} — View details`) })
       .click();
     const dialog = page.getByRole('dialog', { name: mockDiscoverableSession.title! });
+
+    // CLIENT-SESSION-17: the read-only "Session detail" summary — `mockDiscoverableSession`
+    // (Badminton) carries `#ref` attribute values. A `LIST` `#ref` (`match/racketModel`) renders
+    // as chips, a `SINGLE` `#ref` (`match/racketBrand`) and an own node (`match/format`) as plain
+    // values — proving `SessionAttributesSummary` maps a `#ref` node's stored shape onto the right
+    // render type by `cardinality`, not its inherited scalar `type`.
+    const detailSummary = dialog.getByRole('region', { name: 'Session detail' });
+    await expect(detailSummary.getByText('Yonex Astrox 99')).toBeVisible();
+    await expect(detailSummary.getByText('Li-Ning Axforce 90')).toBeVisible();
+    await expect(detailSummary.getByText('Yonex', { exact: true })).toBeVisible();
+    await expect(detailSummary.getByText('Doubles')).toBeVisible();
+
     await dialog.getByRole('button', { name: 'Join' }).click();
     await expect(dialog.getByRole('button', { name: 'Leave' })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
@@ -281,6 +294,72 @@ test('Matches journey', async ({ page }) => {
 
     await page.getByRole('button', { name: 'Show my sessions' }).click();
     await expect(page.getByRole('region', { name: 'My sessions' })).toBeVisible();
+  });
+});
+
+/*
+ * CLIENT-SESSION-17 Part B: `#ref` session attributes render as single-/multi-select sourced from
+ * the creator's own profile, with an "Other…" nested modal for a value not on the profile, and the
+ * selections are folded into the `POST /api/sessions` `attributes` payload under each node's path.
+ * Its own `test()` (not a step of the journey above) so it gets a fresh page and its own 30s
+ * budget — the journey test is already long. Badminton has a session attribute schema with two
+ * `#ref` nodes; Pickleball (used by the journey's create step) has none.
+ */
+test('Matches — Session detail #ref attributes render, and land in the create payload', async ({
+  page,
+}) => {
+  let createBody: Record<string, unknown> | undefined;
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/sessions') && request.method() === 'POST') {
+      createBody = request.postDataJSON() as Record<string, unknown>;
+    }
+  });
+
+  await seedAuthenticatedSession(page, '/matches');
+
+  await page.getByRole('button', { name: 'Create session' }).click();
+  const createDialog = page.getByRole('dialog', { name: 'Create your session' });
+  await createDialog.getByLabel(/^Sport/).selectOption('badminton');
+  await createDialog.getByRole('button', { name: 'Session detail' }).click();
+
+  // LIST `#ref` — one checkbox per racket model on the creator's profile
+  // (fixture: gear/racketModels = two entries).
+  await expect(createDialog.getByLabel('Yonex Astrox 99')).toBeVisible();
+  await expect(createDialog.getByLabel('Li-Ning Axforce 90')).toBeVisible();
+  await createDialog.getByLabel('Yonex Astrox 99').check();
+
+  // SINGLE `#ref` — the profile has nothing at its path, so the control is just a dropdown ending
+  // in "Other…" + a hint.
+  await expect(createDialog.getByText('Nothing on your profile to pick from')).toBeVisible();
+
+  // The LIST `#ref`'s "Other…" opens a nested modal; the added value becomes a checked draft.
+  await createDialog.getByRole('button', { name: 'Other…' }).click();
+  const otherDialog = page.getByRole('dialog', { name: /^Add — / });
+  await otherDialog.getByLabel('Value').fill('Victor Thruster');
+  await otherDialog.getByRole('button', { name: 'Add' }).click();
+  await expect(otherDialog).not.toBeVisible();
+  await expect(createDialog.getByLabel('Victor Thruster')).toBeChecked();
+
+  // Fill the remaining required fields and create — the `#ref` selections must reach the payload.
+  await createDialog.getByLabel(/^Session title/).fill('Ref payload session');
+  await createDialog.getByRole('button', { name: 'Choose location' }).click();
+  await page.getByRole('menuitem', { name: 'Choose a location…' }).click();
+  const locationDialog = page.getByRole('dialog', { name: 'Choose a location' });
+  await locationDialog.getByLabel('Search locations').fill('Smashers');
+  await locationDialog.getByRole('button', { name: 'Search' }).click();
+  await locationDialog.getByText(mockBadmintonLocation.name, { exact: true }).click();
+  await expect(createDialog.getByText(mockBadmintonLocation.name)).toBeVisible();
+  await createDialog.getByLabel(/^Duration in minutes/).fill('60');
+  await createDialog.getByLabel(/^Open slot/).fill('4');
+  await createDialog.getByRole('button', { name: 'Create session' }).click();
+
+  await expect(createDialog).not.toBeVisible();
+  await expect(page.getByText('Ref payload session')).toBeVisible();
+  expect(createBody?.attributes).toEqual({
+    // the LIST `#ref` — the checked profile option + the "Other…" draft, keyed by node path
+    'match/racketModel': ['Yonex Astrox 99', 'Victor Thruster'],
+    // the own node's `defaultValue`, seeded by SportAttributesFields
+    'match/format': 'Doubles',
   });
 });
 

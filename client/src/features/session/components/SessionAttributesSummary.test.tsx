@@ -192,4 +192,85 @@ describe('SessionAttributesSummary', () => {
     expect(screen.getByText('Singles')).toBeInTheDocument();
     expect(screen.queryByText('Weird')).not.toBeInTheDocument();
   });
+
+  // CLIENT-SESSION-17: a `#ref` node's value shape follows `cardinality`, not the inherited
+  // scalar `type` — the summary maps it onto the matching own-node render type.
+  it('renders a SINGLE #ref (scalar base) as a plain value and a LIST #ref as chips', () => {
+    const refSchema = {
+      groups: [
+        {
+          key: 'match',
+          label: 'Match details',
+          isAvailable: true,
+          attributes: [
+            {
+              key: 'mainRacket',
+              label: 'Main racket',
+              type: 'STRING',
+              isAvailable: true,
+              cardinality: 'SINGLE',
+              prefillable: true,
+              prefillKey: 'gear/mainRacket',
+            },
+            {
+              key: 'racketModels',
+              label: 'Racket models',
+              type: 'STRING',
+              isAvailable: true,
+              cardinality: 'LIST',
+              prefillable: true,
+              prefillKey: 'gear/racketModels',
+            },
+          ],
+        },
+      ],
+    } as unknown as ResolvedSportAttributeSchema;
+    render(
+      <SessionAttributesSummary
+        schema={refSchema}
+        values={{
+          'match/mainRacket': 'Yonex Astrox 99',
+          'match/racketModels': ['Yonex Astrox 99', 'Li-Ning Axforce 90'],
+        }}
+      />,
+    );
+    expect(within(row('Main racket')).getByText('Yonex Astrox 99')).toBeInTheDocument();
+    const models = row('Racket models');
+    expect(within(models).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(models).getByText('Li-Ning Axforce 90')).toBeInTheDocument();
+  });
+
+  it('renders a SINGLE #ref off a DEFINITION_LIST base as a nested record', () => {
+    const refSchema = {
+      definitions: [referenceDefinition],
+      groups: [
+        {
+          key: 'match',
+          label: 'Match details',
+          isAvailable: true,
+          attributes: [
+            {
+              key: 'racket',
+              label: 'Racket',
+              type: 'DEFINITION_LIST',
+              isAvailable: true,
+              cardinality: 'SINGLE',
+              prefillable: true,
+              prefillKey: 'gear/rackets',
+              definitionRef: 'Reference',
+            },
+          ],
+        },
+      ],
+    } as unknown as ResolvedSportAttributeSchema;
+    render(
+      <SessionAttributesSummary
+        schema={refSchema}
+        values={{ 'match/racket': { id: 'yonex-as99', value: 'Yonex Astrox 99' } }}
+      />,
+    );
+    const racket = row('Racket');
+    expect(within(racket).getByText('yonex-as99')).toBeInTheDocument();
+    expect(within(racket).getByText('Yonex Astrox 99')).toBeInTheDocument();
+  });
 });

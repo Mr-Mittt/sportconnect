@@ -405,6 +405,9 @@ export function ProfilePage() {
           sessionAttributeSchema={createSessionModalData.sessionAttributeSchema}
           sessionAttributeValues={createSessionModalData.sessionAttributeValues}
           onSessionAttributeChange={createSessionModalData.onSessionAttributeChange}
+          refChoiceSource={createSessionModalData.refChoiceSource}
+          refDraftOptions={createSessionModalData.refDraftOptions}
+          onAddRefDraftOption={createSessionModalData.onAddRefDraftOption}
           availableSports={availableSports}
           resumableProfiles={resumableProfiles}
           onAddSport={addSportMutation.mutate}

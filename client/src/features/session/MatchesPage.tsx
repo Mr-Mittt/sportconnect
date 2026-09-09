@@ -225,6 +225,9 @@ export function MatchesPage() {
         sessionAttributeSchema={data.sessionAttributeSchema}
         sessionAttributeValues={data.sessionAttributeValues}
         onSessionAttributeChange={data.onSessionAttributeChange}
+        refChoiceSource={data.refChoiceSource}
+        refDraftOptions={data.refDraftOptions}
+        onAddRefDraftOption={data.onAddRefDraftOption}
         availableSports={availableSports}
         resumableProfiles={resumableProfiles}
         onAddSport={addSportMutation.mutate}
@@ -237,7 +240,7 @@ export function MatchesPage() {
         onClose={closeDetail}
         session={data.selectedSession}
         sportsByKey={data.sportsByKey}
-        sessionAttributeSchema={data.sessionAttributeSchema}
+        sessionAttributeSchema={data.detailSessionAttributeSchema}
         isLoading={data.isSessionLoading}
         isError={data.isSessionError}
         participants={data.participants}

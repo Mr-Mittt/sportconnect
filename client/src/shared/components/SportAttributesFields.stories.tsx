@@ -517,14 +517,14 @@ export const UnknownTypeDegradation: Story = {
             {
               key: 'mystery',
               label: 'Mystery (future type)',
-              type: 'FUTURE_TYPE' as ResolvedSportAttributeSchema['groups'][number]['attributes'][number]['type'],
+              type: 'FUTURE_TYPE',
               isAvailable: true,
             },
             { key: 'handedness', label: 'Hand', type: 'STRING', isAvailable: true },
           ],
         },
       ],
-    },
+    } as unknown as ResolvedSportAttributeSchema,
     values: {},
   },
 };
@@ -534,5 +534,63 @@ export const Empty: Story = {
   args: {
     schema: { groups: [] },
     values: {},
+  },
+};
+
+/* CLIENT-SESSION-17 Part B — `#ref` nodes: single-/multi-select whose choices are the creator's
+ * own profile value(s) at `prefillKey`, plus an "Other…" affordance for a value not on the
+ * profile. Only rendered when `refChoiceSource` is passed (the session-create context). */
+
+const refSchema = {
+  groups: [
+    {
+      key: 'match',
+      label: 'Match details',
+      isAvailable: true,
+      attributes: [
+        {
+          key: 'mainRacket',
+          label: 'Main racket',
+          type: 'STRING',
+          isAvailable: true,
+          cardinality: 'SINGLE',
+          prefillable: true,
+          prefillKey: 'gear/mainRacket',
+        },
+        {
+          key: 'racketBrand',
+          label: 'Racket brands you might bring',
+          type: 'STRING',
+          isAvailable: true,
+          cardinality: 'LIST',
+          prefillable: true,
+          prefillKey: 'gear/racketBrand',
+        },
+      ],
+    },
+  ],
+} as unknown as ResolvedSportAttributeSchema;
+
+export const RefSingleAndMultiSelect: Story = {
+  args: {
+    schema: refSchema,
+    values: {},
+    refChoiceSource: {
+      'gear/mainRacket': 'Yonex Astrox 99',
+      'gear/racketBrand': ['Yonex', 'Li-Ning'],
+    },
+    refDraftOptions: {},
+    onAddRefDraftOption: () => {},
+  },
+};
+
+/** No profile value at the `#ref` path — the control shows only "Other…" and a hint. */
+export const RefEmptyProfile: Story = {
+  args: {
+    schema: refSchema,
+    values: {},
+    refChoiceSource: {},
+    refDraftOptions: {},
+    onAddRefDraftOption: () => {},
   },
 };

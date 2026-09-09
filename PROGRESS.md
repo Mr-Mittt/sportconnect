@@ -4315,6 +4315,47 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client CLIENT-SESSION-17 (`DONE`, 2026-09-08, `client/docs/MVP/CLIENT-SESSION-17_REF_ATTRIBUTE_SINGLE_MULTI_SELECT.md`):**
+  two folded concerns. **Part A** — migrated `shared/types/sport.ts`'s resolved attribute god-type
+  to a **discriminated union on `type`** (7 arms + a `ResolvedRefAttribute` arm narrowed by a new
+  `isRefAttribute` guard, since a `#ref` node carries an inherited base `type` and can't be
+  discriminated by it) and split every attribute surface into **one component per arm** under
+  `shared/components/attributeFields/` (`StringField`…`DefinitionListField`, `RecordField`
+  dispatcher), dispatched with `assertNever` exhaustiveness + a runtime unknown-type guard.
+  Rendered output byte-identical (full Vitest + the pre-existing 624-line
+  `SportAttributesFields.test.tsx` prove it). ADMIN-2/5 editors are a JSON textarea, not a per-type
+  surface — untouched (ticket SC-2). **Part B** — a `#ref` session attribute (`prefillable`,
+  A23/C9) now renders as a single-select dropdown (`cardinality: SINGLE`, all bases) / multi-select
+  checkbox list (`LIST`) whose choices are the creator's own profile value(s) at `prefillKey`
+  (`deriveRefChoices`), not a one-shot pre-fill — CLIENT-SESSION-15's `buildSessionAttributePrefill`
+  value-seeding is deleted. Read side (`SessionAttributesSummary` in `SessionDetailModal`) maps a
+  `#ref` node onto an `effectiveRenderType` by `cardinality` (a `LIST` `#ref` stores an array, a
+  `SINGLE` a single instance — the inherited scalar `type` doesn't describe the shape).
+  Each control ends in an **"Other…"** affordance opening a nested `Dialog` for a value not on the
+  profile (free-text; the suggested-results typeahead is follow-up **CLIENT-SESSION-18**, blocked
+  on backend A14; reusing the modal to add to the profile's own `DEFINITION_LIST` is
+  **CLIENT-SESSION-19** — both filed at pickup). Draft values accumulate per node in
+  `useCreateSessionModalData` (`refDraftOptions`), session-local, never written to the profile.
+  New optional `refChoiceSource`/`refDraftOptions`/`onAddRefDraftOption` props on
+  `SportAttributesFields`, threaded through `CreateSessionModal` + all 5 render sites; the profile
+  Settings tab passes none. New tests: `refChoices.test.tsx`, `sessionAttributePaths.test.ts`,
+  `sport.test.ts`, `assertNever.test.ts`, an 8-case `#ref` block in `SportAttributesFields.test.tsx`,
+  `Ref*` stories. Also **fixed a latent CLIENT-SESSION-16 bug**: `useMatchesPageData` spreads
+  `...createSessionModalData` then `...sessionDetailData`, both of which now expose
+  `sessionAttributeSchema` — the later spread shadowed the create-form one with the detail one
+  (null unless a detail modal is open), so `CreateSessionModal`'s "Session detail" section never
+  rendered on `/matches`; bound both explicitly (`detailSessionAttributeSchema` for the detail
+  modal). `tsc -b` + `eslint` clean; full Vitest **167 files / 1169 green**.
+  **E2E:** `e2e` project (run alone) 82 passed, 1 pre-existing parallel-load flake
+  (`friends-journey:13`, green isolated). New standalone `matches-journey.spec.ts` `#ref` test —
+  renders the controls **and asserts the intercepted `POST /api/sessions` `attributes` payload**
+  (`{ 'match/racketModel': [...], 'match/format': 'Doubles' }`) — plus step 9 now asserts the
+  read-only `#ref` summary (`mockDiscoverableSession` gained `attributes`). MSW: Badminton session
+  schema gains two `#ref` nodes with `cardinality`, profile fixture stocks `gear/racketModels`, new
+  `mockBadmintonLocation` (search filters by sportId). **Visual regression:** 3 **new** baselines
+  `create-session-session-detail-ref-*` + 3 **changed** `session-detail-not-joined-*` (the
+  `not-joined` state now frames the read-only `#ref` summary) — need an `update-baselines`
+  dispatch; every other baseline byte-identical (Part A changed no markup).
 - **Client CLIENT-SESSION-16 (`DONE`, 2026-09-08, `client/docs/MVP/CLIENT-SESSION-16_SESSION_ATTRIBUTES_READ_ONLY_IN_DETAIL_MODAL.md`):**
   read-only view of a session's stored `attributes` in `SessionDetailModal`. New self-contained
   `SessionAttributesSummary` (`{ schema, values }`, presentational) walks the resolved session

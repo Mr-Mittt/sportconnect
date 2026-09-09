@@ -124,11 +124,13 @@ function defaultAttributeSchemas(): Record<number, SportAttributeSchema | null> 
 }
 
 /**
- * CLIENT-SESSION-15 / A17: the *session* attribute schema per sport, served already resolved
- * (matches what `useSessionAttributeSchema` consumes). Badminton (1) has one `prefillable`
- * (`#ref`) node whose `prefillKey` points at its profile schema's `gear/racketBrand`, plus one
- * "own" node with a `defaultValue`. Pickleball (3) exercises the "no session schema -> section
- * hidden" branch.
+ * CLIENT-SESSION-15 / A17 + CLIENT-SESSION-17 / A23: the *session* attribute schema per sport,
+ * served already resolved (matches what `useSessionAttributeSchema` consumes). Badminton (1) has
+ * two `#ref` nodes — `racketModel` (`cardinality: LIST`, multi-select from the creator's profile
+ * `gear/racketModels`, which the fixture stocks with two entries) and `racketBrand`
+ * (`cardinality: SINGLE`, from `gear/racketBrand`, which the fixture leaves empty → the
+ * "Other… only" state) — plus one "own" node with a `defaultValue`. Pickleball (3) exercises the
+ * "no session schema -> section hidden" branch.
  */
 function defaultSessionAttributeSchemas(): Record<number, ResolvedSportAttributeSchema | null> {
   return {
@@ -140,10 +142,20 @@ function defaultSessionAttributeSchemas(): Record<number, ResolvedSportAttribute
           isAvailable: true,
           attributes: [
             {
+              key: 'racketModel',
+              label: 'Racket models you might bring',
+              type: 'STRING',
+              isAvailable: true,
+              cardinality: 'LIST',
+              prefillable: true,
+              prefillKey: 'gear/racketModels',
+            },
+            {
               key: 'racketBrand',
               label: 'Racket brand',
               type: 'STRING',
               isAvailable: true,
+              cardinality: 'SINGLE',
               prefillable: true,
               prefillKey: 'gear/racketBrand',
             },
@@ -179,7 +191,9 @@ function defaultSessionAttributeSchemasRaw(): Record<number, SessionAttributeSch
           label: { en: 'Match details' },
           isAvailable: true,
           attributes: [
-            { '#ref': 'gear/racketBrand' },
+            // A23/D9: a raw `#ref` node now carries an explicit `key` + `cardinality`.
+            { '#ref': 'gear/racketModels', key: 'racketModel', cardinality: 'LIST' },
+            { '#ref': 'gear/racketBrand', key: 'racketBrand', cardinality: 'SINGLE' },
             {
               key: 'format',
               label: { en: 'Format' },
@@ -216,6 +230,9 @@ function resolveOption(
 }
 
 function resolveField(field: SportAttributeField, defaultLocale: string): ResolvedSportAttributeField {
+  // The resolver mirrors every field through flat (like the real backend's flattened
+  // `ResolvedAttributeNode`); the client narrows it into the `ResolvedSportAttributeField` union
+  // on `type`, so cast rather than satisfy every arm's required fields here.
   return {
     key: field.key,
     label: resolveLabel(field.label, defaultLocale),
@@ -226,7 +243,7 @@ function resolveField(field: SportAttributeField, defaultLocale: string): Resolv
     // SPORT-9/A16: min/max only meaningful on NUMBER, mirrored through unchanged otherwise.
     min: field.min,
     max: field.max,
-  };
+  } as unknown as ResolvedSportAttributeField;
 }
 
 // A19/v3: recurse the nested `groups` tree; display order is array position, so no `order`.
@@ -239,19 +256,20 @@ function resolveGroup(
     label: resolveLabel(group.label, defaultLocale),
     isAvailable: group.isAvailable,
     attributes: group.attributes.map(
-      (attribute): ResolvedSportAttributeDefinition => ({
-        key: attribute.key,
-        label: resolveLabel(attribute.label, defaultLocale),
-        type: attribute.type,
-        options: attribute.options?.map((option) => resolveOption(option, defaultLocale)),
-        isAvailable: attribute.isAvailable,
-        defaultValue: attribute.defaultValue,
-        definitionRef: attribute.definitionRef,
-        searchScope: attribute.searchScope,
-        // SPORT-9/A16: min/max only meaningful on NUMBER, mirrored through unchanged otherwise.
-        min: attribute.min,
-        max: attribute.max,
-      }),
+      (attribute) =>
+        ({
+          key: attribute.key,
+          label: resolveLabel(attribute.label, defaultLocale),
+          type: attribute.type,
+          options: attribute.options?.map((option) => resolveOption(option, defaultLocale)),
+          isAvailable: attribute.isAvailable,
+          defaultValue: attribute.defaultValue,
+          definitionRef: attribute.definitionRef,
+          searchScope: attribute.searchScope,
+          // SPORT-9/A16: min/max only meaningful on NUMBER, mirrored through unchanged otherwise.
+          min: attribute.min,
+          max: attribute.max,
+        }) as unknown as ResolvedSportAttributeDefinition,
     ),
     groups: group.groups?.map((subGroup) => resolveGroup(subGroup, defaultLocale)),
   };

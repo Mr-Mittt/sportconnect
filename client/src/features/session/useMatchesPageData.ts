@@ -164,6 +164,15 @@ export function useMatchesPageData(initialSessionId: number | null) {
     isParticipationActionPending,
 
     ...sessionDetailData,
+    // Both `createSessionModalData` and `sessionDetailData` expose a `sessionAttributeSchema`
+    // (CLIENT-SESSION-15 for the create form's chosen sport; CLIENT-SESSION-16 for the open
+    // session's sport) — the later spread would otherwise shadow the create one with the detail
+    // one (null whenever no detail modal is open), so CreateSessionModal's "Session detail"
+    // section never rendered on this page. Bind each explicitly: `sessionAttributeSchema` is the
+    // create form's (CreateSessionModal), `detailSessionAttributeSchema` the open session's
+    // (SessionDetailModal). CLIENT-SESSION-17.
+    sessionAttributeSchema: createSessionModalData.sessionAttributeSchema,
+    detailSessionAttributeSchema: sessionDetailData.sessionAttributeSchema,
     // Overrides sessionDetailData's own currentUserId (which falls back to '' for the modal's
     // prop convention) with the real string | undefined this page's other callers need —
     // MatchesPage.tsx's useAddSportProfile(data.currentUserId) relies on undefined meaning
