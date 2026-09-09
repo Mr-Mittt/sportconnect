@@ -292,7 +292,12 @@ visual section) updated.
 cannot be created on a Windows host):
 - `create-session-session-detail-ref-{375,768,1280}.png` — **new**: `app-create-session-modal.spec.ts`
   gains a `session-detail-ref` state (select Badminton, expand "Session detail" → the two `#ref`
-  controls).
+  controls). **Fixup 2026-09-09:** the first `update-baselines` artifact caught during
+  `/updatebaseline` review showed only the "Session detail" toggle in frame — clicking it scrolls
+  the toggle, not its expanded content, into view, and `toBeVisible()` passes below the fold. The
+  spec now `scrollIntoViewIfNeeded()`s the lower `#ref` control after expanding (same pattern as
+  `app-notification-bell.spec.ts`'s `with-load-more`); that first artifact was discarded (branch
+  reset, force-pushed) and a fresh dispatch is needed off this fix.
 - `session-detail-not-joined-{375,768,1280}.png` — **changed**: `mockDiscoverableSession` now
   carries `attributes`, so `app-session-detail-modal.spec.ts`'s `not-joined` state also frames the
   read-only "Session detail" `#ref` summary (needed to give the read path real visual coverage).

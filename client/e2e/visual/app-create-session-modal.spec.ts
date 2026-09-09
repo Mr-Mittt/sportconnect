@@ -95,8 +95,15 @@ for (const width of breakpoints) {
     // schema, so this is the only state that renders `RefField`.
     await dialog.getByLabel(/^Sport/).selectOption('badminton');
     await dialog.getByRole('button', { name: 'Session detail' }).click();
+    const singleRefHint = dialog.getByText('Nothing on your profile to pick from');
     await expect(dialog.getByLabel('Yonex Astrox 99')).toBeVisible();
-    await expect(dialog.getByText('Nothing on your profile to pick from')).toBeVisible();
+    await expect(singleRefHint).toBeVisible();
+    // The modal body is its own internal scroll container (fixed-height dialog,
+    // overflow-y-auto) — clicking the "Session detail" toggle only scrolls the
+    // toggle itself into view, leaving the two expanded `#ref` controls below the
+    // fold. `toBeVisible()` passes on out-of-viewport elements, so without this
+    // the screenshot the state exists to cover wouldn't actually frame them.
+    await singleRefHint.scrollIntoViewIfNeeded();
     await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
 
