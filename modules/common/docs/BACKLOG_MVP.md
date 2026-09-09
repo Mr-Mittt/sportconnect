@@ -19,7 +19,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| — | — | _(none)_ | — |
+| 1 | [C11](MVP/C11_ATTRIBUTE_SCHEMA_LAYOUT_HINT.md) | `layout` presentation hint on attribute-schema nodes — optional `{ id, icon?, format?, … }` passthrough object on the `common.attributes` node model + `Resolved*` twins, carried through JSON round-trip / validators (lenient, non-gating) / resolver / derived-schema expander; sport + session seeds updated. No server-side interpretation. Client consumers are `SPORT-13`/`14`/`15`; design: `documentation/md/ATTRIBUTE_LAYOUT_DESIGN.md`. | `TODO` |
 
 ---
 
