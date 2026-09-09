@@ -1,9 +1,14 @@
 package com.sportconnect.integration;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.sportconnect.common.attributes.AttributeDefinitionType;
 import com.sportconnect.common.attributes.AttributeGroup;
 import com.sportconnect.common.attributes.AttributeSchema;
+import com.sportconnect.common.attributes.Cardinality;
+import com.sportconnect.common.attributes.field.StringField;
 import com.sportconnect.common.attributes.json.AttributeJson;
+import com.sportconnect.common.attributes.node.DefinitionListAttribute;
+import com.sportconnect.common.attributes.node.RefAttribute;
 import com.sportconnect.common.attributes.node.StringAttribute;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.repository.SessionParticipantRepository;
@@ -213,6 +218,88 @@ class SessionAttributesIntegrationTest extends RedisBaseIT {
 
         Session reloaded = sessionRepository.findById(sessionId).orElseThrow();
         org.junit.jupiter.api.Assertions.assertTrue(reloaded.getAttributes().isEmpty());
+    }
+
+    /**
+     * C10 (found via CLIENT-SESSION-17): a {@code #ref} node with {@code cardinality: SINGLE}
+     * pointing at a {@code DEFINITION_LIST} base must accept — and persist — a <em>bare record</em>,
+     * not a one-element array. Before C10, {@code DerivedSchemaExpander} kept the base's list
+     * subtype and {@code AttributeValueFilter} then dropped the single value the client submits.
+     */
+    @Test
+    void put_singleCardinalityRefOffAListBase_keepsABareRecordValue() throws Exception {
+        reseedSportWithSingleRefSchema();
+        authenticateAs(creatorId);
+
+        mockMvc.perform(put("/api/sessions/{sessionId}", sessionId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"attributes": {"match/shuttlecocks": {"value": "Ba Sao ProX"}}}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.attributes.['match/shuttlecocks'].value").value("Ba Sao ProX"))
+                // a one-element array is now the *wrong* shape for a SINGLE #ref — it must NOT come back as one
+                .andExpect(jsonPath("$.data.attributes.['match/shuttlecocks']").isMap());
+
+        Session reloaded = sessionRepository.findById(sessionId).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(
+                Map.of("match/shuttlecocks", Map.of("value", "Ba Sao ProX")),
+                reloaded.getAttributes());
+    }
+
+    @Test
+    void put_singleCardinalityRef_dropsAnArrayValue() throws Exception {
+        reseedSportWithSingleRefSchema();
+        authenticateAs(creatorId);
+
+        mockMvc.perform(put("/api/sessions/{sessionId}", sessionId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"attributes": {"match/shuttlecocks": [{"value": "Ba Sao ProX"}]}}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.attributes.['match/shuttlecocks']").doesNotExist());
+    }
+
+    /**
+     * Re-saves the {@link #sportId} sport with a real (base profile schema + derived session
+     * schema) pair: {@code gear/shuttlecocks} is a {@code DEFINITION_LIST} on the profile schema,
+     * and the session schema references it via a {@code #ref} node with {@code cardinality: SINGLE}
+     * at path {@code match/shuttlecocks}. Cache evicted so the next read re-expands.
+     */
+    private void reseedSportWithSingleRefSchema() {
+        AttributeDefinitionType reference = AttributeDefinitionType.builder()
+                .name("Reference")
+                .fields(List.of(StringField.builder()
+                        .key("value").label(Map.of("en", "Name")).isRequired(true).build()))
+                .build();
+
+        AttributeSchema profileSchema = AttributeSchema.builder()
+                .defaultLocale("en")
+                .definitions(List.of(reference))
+                .groups(List.of(AttributeGroup.builder()
+                        .key("gear").label(Map.of("en", "Gear")).isAvailable(true)
+                        .attributes(List.of(DefinitionListAttribute.builder()
+                                .key("shuttlecocks").label(Map.of("en", "Shuttlecocks"))
+                                .definitionRef("Reference").isAvailable(true).build()))
+                        .build()))
+                .build();
+
+        AttributeSchema sessionSchema = AttributeSchema.builder()
+                .defaultLocale("en")
+                .groups(List.of(AttributeGroup.builder()
+                        .key("match").label(Map.of("en", "Match")).isAvailable(true)
+                        .attributes(List.of(RefAttribute.builder()
+                                .key("shuttlecocks").ref("gear/shuttlecocks")
+                                .cardinality(Cardinality.SINGLE).build()))
+                        .build()))
+                .build();
+
+        Sport sport = sportRepository.findById(sportId).orElseThrow();
+        sport.setAttributesSchema(AttributeJson.mapper()
+                .convertValue(profileSchema, new TypeReference<Map<String, Object>>() {}));
+        sport.setSessionAttributesSchema(AttributeJson.mapper()
+                .convertValue(sessionSchema, new TypeReference<Map<String, Object>>() {}));
+        sportRepository.save(sport);
+        evictSportCache();
     }
 
     @Test

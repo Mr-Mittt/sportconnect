@@ -3330,6 +3330,19 @@ explicit go-ahead at each step (full story in A3's summary doc):
   cardinality}>`; does **not** carry the base `defaultValue` — under D9 a `#ref` is a choice-list
   source, not a default), `DerivedSchemaResolver` (stamp `prefillable`/`prefillKey`/`cardinality`
   onto the resolved node). Ported both session Spock specs + D9 cardinality cases.
+  **C10 `DONE` 2026-09-09** — bug fix found live via `CLIENT-SESSION-17`: C9's expander cloned the
+  base target's subtype **verbatim**, so a `#ref` with `cardinality: SINGLE` off a `LIST`/
+  `DEFINITION_LIST` base still validated its *value* as a list and `AttributeValueFilter` dropped
+  the client's single value. Fix: `DerivedSchemaExpander.expandRefTarget` picks the arity-correct
+  subtype from `cardinality` (`SINGLE` → `Enum`/`Definition`/scalar, `LIST` → `List`/
+  `DefinitionList`); element type still from the base. `AttributeValueFilter`/`DerivedSchemaResolver`
+  untouched. `DerivedSchemaResolverSpec`'s D9 "inherits type from base" case flipped to the C10
+  contract + 13 new cases; 2 new `SessionAttributesIntegrationTest` cases proving the exact live
+  bug (`SINGLE` `#ref` off a `DEFINITION_LIST` base now persists a bare record through the real
+  expander→filter→JSONB round trip). Green: `:modules:common:test` 302 · sport-impl · session-impl ·
+  `:server:test` 181 (0 failures). No `CLIENT-SESSION-17` code change needed — it already submits a
+  bare value for `SINGLE`, and the member-facing resolved `type` now agrees (`DEFINITION_LIST` →
+  `DEFINITION`).
   **Sport `A23` `DONE` 2026-09-08** — the consumer side: `sport-api`/`sport-impl`/`session-impl`
   repointed onto `common.attributes`; the 16-file `sport-api` DTO tree + 9 `sport-impl` logic
   classes + the 3-file SESSION-23 clone (and their now-duplicate specs) **deleted**; `SportService`
