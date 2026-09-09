@@ -102,6 +102,36 @@ export type SportAttributeType =
  * multi-select) and SPORT-6 (the `DEFINITION_LIST` add/remove rows). */
 export const MAX_LIST_ITEMS = 10;
 
+/**
+ * SPORT-13: an optional schema-driven presentation hint on any attribute/field/group node.
+ * `layout` is an **object** (not a bare string) so more props can be added without another type
+ * change — `documentation/md/ATTRIBUTE_LAYOUT_DESIGN.md` holds the vocabulary. The renderer
+ * degrades to its current default when `layout` is absent, malformed, or carries an id it doesn't
+ * recognise for that element/type — a `layout` never gates a hard error.
+ *
+ * `AttributeLayout` is the raw shape (admin path): `format` is a locale map, exactly like
+ * `label`. `ResolvedAttributeLayout` is the member-facing twin, `format` already resolved to one
+ * string. The backend field that carries this is `common` C11 (not shipped yet — until then no
+ * resolved schema sets `layout` and the renderer stays on its defaults).
+ */
+export interface AttributeLayout {
+  /** Layout id for this element/type — one of the sets in the design doc. */
+  id: string;
+  /** SPORT-14 renders this (Tabler outline name) on container headings; SPORT-13 ignores it. */
+  icon?: string | null;
+  /** Value-format pattern, per locale (mirrors `label`). SPORT-13 grammar — NUMBER: `0`, `0.0`,
+   * `0.00`, `#,##0`, `#,##0.0`, `0%`, with an optional literal prefix/suffix; STRING: `uppercase`,
+   * `lowercase`, `titlecase`. */
+  format?: Record<string, string> | null;
+}
+
+/** Resolved twin of {@link AttributeLayout} — `format` is one already-resolved pattern string. */
+export interface ResolvedAttributeLayout {
+  id: string;
+  icon?: string | null;
+  format?: string | null;
+}
+
 /** One selectable choice on an `ENUM`/`LIST` node — raw shape, `label` is
  * every locale (admin only). `value` is what gets stored and is unique
  * within its node; options are additive by policy — removing one that
@@ -137,6 +167,8 @@ export interface SportAttributeField {
    * gates a hard client-side error. */
   min?: number | null;
   max?: number | null;
+  /** SPORT-13: optional presentation hint — see {@link AttributeLayout}. */
+  layout?: AttributeLayout | null;
 }
 
 /** A named, reusable record shape declared once in a sport's schema and
@@ -177,6 +209,8 @@ export interface SportAttributeDefinition {
   /** SPORT-9/A16: see `SportAttributeField.min`/`.max` — same rules, one level up. */
   min?: number | null;
   max?: number | null;
+  /** SPORT-13: optional presentation hint — see {@link AttributeLayout}. */
+  layout?: AttributeLayout | null;
 }
 
 export interface SportAttributeGroup {
@@ -194,6 +228,9 @@ export interface SportAttributeGroup {
    * together, to arbitrary depth (nesting is by containment, so no cycle and no
    * depth counter). Absent/`null`/`[]` on a leaf group. */
   groups?: SportAttributeGroup[] | null;
+  /** SPORT-13: optional presentation hint. Group layout (child arrangement + heading `icon`) is
+   * rendered by SPORT-14 — added here now to keep the type stable across the split. */
+  layout?: AttributeLayout | null;
 }
 
 /** The whole raw document (admin-only path). `GET` returns `data: null` for a
@@ -261,6 +298,9 @@ export interface SessionAttributeNode {
   /** Own node only. Names a `SessionAttributeSchema.definitions` entry;
    * required when `type` is `DEFINITION`/`DEFINITION_LIST`. */
   definitionRef?: string | null;
+  /** SPORT-13: optional presentation hint — see {@link AttributeLayout}. Legal on both a `#ref`
+   * node and an own node. */
+  layout?: AttributeLayout | null;
 }
 
 export interface SessionAttributeGroup {
@@ -272,6 +312,8 @@ export interface SessionAttributeGroup {
   /** Nested sub-groups, arbitrary depth. Absent/`null`/`[]` on a leaf group. */
   groups?: SessionAttributeGroup[] | null;
   attributes: SessionAttributeNode[];
+  /** SPORT-13: optional presentation hint (group layout rendered by SPORT-14). */
+  layout?: AttributeLayout | null;
 }
 
 export interface SessionAttributeSchema {
@@ -317,6 +359,10 @@ interface ResolvedAttributeCommon {
   isAvailable?: boolean | null;
   /** Seeds a field with no stored value, once. Never set on `DEFINITION`/`DEFINITION_LIST`. */
   defaultValue?: unknown;
+  /** SPORT-13: optional presentation hint — {@link ResolvedAttributeLayout}. The scalar arms
+   * (`StringField`/`NumberField`/`BooleanField`/`EnumField`) read `layout.id` + `layout.format`;
+   * container/`#ref`/read-only handling is SPORT-14/15. */
+  layout?: ResolvedAttributeLayout | null;
 }
 
 export interface ResolvedStringAttribute extends ResolvedAttributeCommon {
@@ -401,6 +447,9 @@ interface ResolvedFieldCommon {
   label: string;
   /** Missing/invalid ⇒ the whole enclosing record is dropped (v2 design §6). Absent reads `false`. */
   isRequired?: boolean | null;
+  /** SPORT-13: optional presentation hint — {@link ResolvedAttributeLayout}. A record-context
+   * scalar field honours `layout` the same way a top-level one does. */
+  layout?: ResolvedAttributeLayout | null;
 }
 
 export interface ResolvedStringField extends ResolvedFieldCommon {
@@ -454,6 +503,8 @@ export interface ResolvedSportAttributeGroup {
    * Rendered recursively by `SportAttributesFields`, one indent level per depth.
    * Absent/`null`/`[]` on a leaf group. */
   groups?: ResolvedSportAttributeGroup[] | null;
+  /** SPORT-13: optional presentation hint (group layout + heading `icon` rendered by SPORT-14). */
+  layout?: ResolvedAttributeLayout | null;
 }
 
 /** The whole document `GET /api/sports/{sportId}/attribute-schema` returns —

@@ -594,3 +594,61 @@ export const RefEmptyProfile: Story = {
     onAddRefDraftOption: () => {},
   },
 };
+
+/** SPORT-13: a schema whose scalar nodes each declare a non-default `layout` — the arms render
+ * the alternate controls (textarea / segmented / radio / slider / stepper) and a `format`
+ * preview, all driven purely by the schema. */
+const scalarLayoutSchema: ResolvedSportAttributeSchema = {
+  groups: [
+    {
+      key: 'match',
+      label: 'Match details',
+      isAvailable: true,
+      attributes: [
+        { key: 'notes', label: 'Notes', type: 'STRING', isAvailable: true, layout: { id: 'textarea' } },
+        {
+          key: 'competitive',
+          label: 'Competitive',
+          type: 'BOOLEAN',
+          isAvailable: true,
+          layout: { id: 'segmented' },
+        },
+        {
+          key: 'level',
+          label: 'Level',
+          type: 'ENUM',
+          isAvailable: true,
+          options: [
+            { value: 'beginner', label: 'Beginner' },
+            { value: 'intermediate', label: 'Intermediate' },
+            { value: 'advanced', label: 'Advanced' },
+          ],
+          layout: { id: 'radio' },
+        },
+        {
+          key: 'tension',
+          label: 'String tension (lbs)',
+          type: 'NUMBER',
+          isAvailable: true,
+          min: 15,
+          max: 35,
+          layout: { id: 'slider', format: '0 lbs' },
+        },
+        {
+          key: 'winRate',
+          label: 'Win rate',
+          type: 'NUMBER',
+          isAvailable: true,
+          layout: { id: 'readonly-text', format: '0%' },
+        },
+      ],
+    },
+  ],
+};
+
+export const ScalarLayouts: Story = {
+  args: {
+    schema: scalarLayoutSchema,
+    values: { 'match/tension': 26, 'match/winRate': 0.62, 'match/level': 'intermediate' },
+  },
+};

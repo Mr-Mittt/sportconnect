@@ -33,10 +33,13 @@ interface AttributeLayout {
   /** Optional. Tabler icon name (outline set — client CLAUDE.md). Container elements render their
    *  heading as `{icon} {label}`; scalar arms may show it as an adornment. */
   icon?: string;
-  /** Optional. Value-format token, interpreted per type — NUMBER: `"0.0"`, `"0%"`, `"#,##0"`, a
-   *  unit suffix; STRING: `"uppercase"`, `"titlecase"`, a mask. Applied to the read display and,
-   *  where sensible, as an input format. Small documented token set for v1 — not a full DSL. */
-  format?: string;
+  /** Optional. Value-format **pattern string**, per type — NUMBER: `0` / `0.0` / `0.00` /
+   *  `#,##0` / `#,##0.0` / `0%`, optional literal prefix+suffix (unit, currency); STRING:
+   *  `uppercase` / `lowercase` / `titlecase`. Deliberately closed grammar, not an open DSL.
+   *  **Localizable exactly like `label`**: a locale map in the raw schema, the resolved single
+   *  string in the `Resolved*` twins. Applied to the read display; SPORT-13 keeps it
+   *  display-only (no format-on-blur), SPORT-15 applies it across the read-only view. */
+  format?: string; // raw schema: Record<string, string>
   // extension point — future props (density, columns override, help placement, …) land here
 }
 ```
@@ -56,9 +59,9 @@ interface AttributeLayout {
 |---|---|---|
 | `STRING` | `input` · `textarea` · `readonly-text` | SPORT-13 |
 | `NUMBER` | `input` · `stepper` · `slider` (needs `min`/`max`) | SPORT-13 |
-| `BOOLEAN` | `checkbox` · `switch` · `segmented` | SPORT-13 |
-| `ENUM` | `dropdown` · `radio` · `segmented` | SPORT-13 |
-| `format` on `STRING` / `NUMBER` | token set (uppercase / titlecase / mask; `0.0` / `0%` / `#,##0` / unit) | SPORT-13 |
+| `BOOLEAN` | `switch` (current) · `checkbox` · `segmented` | SPORT-13 |
+| `ENUM` | `dropdown` · `radio` · `segmented`; selection is **clearable** in every layout (SPORT-13 scope add) | SPORT-13 |
+| `format` on `STRING` / `NUMBER` | pattern grammar (`0.0` / `#,##0` / `0%` + literal prefix/suffix; `uppercase` / `lowercase` / `titlecase`), localizable like `label` | SPORT-13 |
 | `group` | `section` · `grid-2` · `grid-3` · `inline` (label-left rows) · `flat` (no heading/box) | SPORT-14 |
 | `DEFINITION` | `stacked` · `inline` · `grid-2` | SPORT-14 |
 | `DEFINITION_LIST` | `cards` · `table` · `accordion` | SPORT-14 |

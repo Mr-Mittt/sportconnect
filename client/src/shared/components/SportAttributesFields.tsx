@@ -299,7 +299,13 @@ function AttributeField({
     switch (attribute.type) {
       case 'STRING':
         return (
-          <StringField fieldId={fieldId} label={attribute.label} value={value} onChange={onChange} />
+          <StringField
+            fieldId={fieldId}
+            label={attribute.label}
+            value={value}
+            onChange={onChange}
+            layout={attribute.layout ?? undefined}
+          />
         );
       case 'NUMBER':
         return (
@@ -309,6 +315,7 @@ function AttributeField({
             label={attribute.label}
             value={value}
             onChange={onChange}
+            layout={attribute.layout ?? undefined}
           />
         );
       case 'BOOLEAN':
@@ -318,6 +325,7 @@ function AttributeField({
             label={attribute.label}
             value={value}
             onChange={onChange}
+            layout={attribute.layout ?? undefined}
           />
         );
       case 'ENUM':
@@ -328,6 +336,7 @@ function AttributeField({
             label={attribute.label}
             value={value}
             onChange={onChange}
+            layout={attribute.layout ?? undefined}
           />
         );
       case 'LIST':

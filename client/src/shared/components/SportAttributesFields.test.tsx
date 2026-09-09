@@ -783,3 +783,52 @@ describe('#ref nodes', () => {
     expect(screen.queryByText('Main racket')).not.toBeInTheDocument();
   });
 });
+
+describe('SPORT-13 — scalar layout threads through', () => {
+  const layoutSchema: ResolvedSportAttributeSchema = {
+    groups: [
+      {
+        key: 'g',
+        label: 'G',
+        isAvailable: true,
+        attributes: [
+          { key: 'note', label: 'Note', type: 'STRING', isAvailable: true, layout: { id: 'textarea' } },
+          {
+            key: 'tension',
+            label: 'Tension',
+            type: 'NUMBER',
+            isAvailable: true,
+            min: 15,
+            max: 35,
+            layout: { id: 'slider' },
+          },
+          {
+            key: 'level',
+            label: 'Level',
+            type: 'ENUM',
+            isAvailable: true,
+            options: [
+              { value: 'a', label: 'A' },
+              { value: 'b', label: 'B' },
+            ],
+            layout: { id: 'radio' },
+          },
+        ],
+      },
+    ],
+  };
+
+  it('renders each scalar arm in its declared layout', () => {
+    render(<Harness schema={layoutSchema} />);
+    expect(screen.getByLabelText('Note').tagName).toBe('TEXTAREA');
+    expect(screen.getByLabelText('Tension')).toHaveAttribute('type', 'range');
+    expect(screen.getByRole('radiogroup', { name: 'Level' })).toBeInTheDocument();
+  });
+
+  it('a schema with no layout renders the same default controls as before', () => {
+    render(<Harness schema={badmintonSchema} />);
+    // Hand ENUM default is a <select>, not a radiogroup.
+    expect(screen.getByLabelText('Hand').tagName).toBe('SELECT');
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+  });
+});
