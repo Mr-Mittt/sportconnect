@@ -116,6 +116,7 @@ public final class DerivedSchemaValidator {
             throw new BadRequestException("Duplicate node key among siblings: " + group.getKey());
         }
         LeafChecks.validateLabel(group.getLabel(), defaultLocale, "Group " + group.getKey());
+        LeafChecks.validateLayout(group.getLayout(), "Group " + group.getKey());
 
         Set<String> childKeys = new HashSet<>();
         for (AttributeNode node : LeafChecks.nullSafe(group.getAttributes())) {

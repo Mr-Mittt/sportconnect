@@ -2,6 +2,7 @@ package com.sportconnect.common.attributes.field;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.sportconnect.common.attributes.AttributeLayout;
 
 import java.util.Map;
 
@@ -41,4 +42,18 @@ public sealed interface AttributeField
      * record on a value write. Read as {@code false} when absent.
      */
     Boolean getIsRequired();
+
+    /**
+     * Optional, server-opaque presentation hint (C11). {@code null} when the field declares none.
+     * Shape-checked on admin write (non-blank {@code id} when present), carried raw otherwise.
+     */
+    AttributeLayout getLayout();
+
+    /**
+     * Optional render-suppression flag (C11). {@code true} ⇒ the field's value is stored and
+     * round-trips but no editor input and no read-only row is rendered. Absent reads as
+     * {@code false}. The single-schema validator rejects {@code hidden == true} together with
+     * {@code isRequired == true}.
+     */
+    Boolean getHidden();
 }

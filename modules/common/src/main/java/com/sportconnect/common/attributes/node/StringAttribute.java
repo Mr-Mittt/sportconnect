@@ -1,6 +1,7 @@
 package com.sportconnect.common.attributes.node;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.sportconnect.common.attributes.AttributeLayout;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,6 +22,12 @@ public final class StringAttribute implements AttributeNode {
     private String key;
 
     private Map<String, String> label;
+
+    /** Optional server-opaque presentation hint (C11); shape-checked on admin write, carried raw otherwise. */
+    private AttributeLayout layout;
+
+    /** Optional render-suppression flag (C11). Absent reads as {@code false}. See {@link AttributeNode#getHidden()}. */
+    private Boolean hidden;
 
     /** Soft delete. When {@code false} the attribute is not offered on writes; stored values remain readable. */
     private Boolean isAvailable;

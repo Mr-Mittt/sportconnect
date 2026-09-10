@@ -1,6 +1,6 @@
 # C11 · `layout` presentation hint + `hidden` flag on attribute-schema nodes
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-10)
 **Type:** Enhancement
 **Depends on:** `C5`–`C9` (the `common.attributes` DTO tree). Pairs with client `SPORT-13` /
 `SPORT-14` / `SPORT-15`, which define and consume the vocabulary.
@@ -112,3 +112,121 @@ resolution of `format` locale maps for `layout` (moved client-side). Any behavio
 - `#ref` expansion: a `#ref` node's `layout` / `hidden` / `fieldLayouts` survive; the referenced
   definition type is present in the derived `definitions` with its fields' `layout` / `hidden`
   intact.
+
+---
+
+## Implementation (2026-09-10)
+
+### Approved design (Phase 3, as built)
+
+Three server-opaque fields on the neutral `com.sportconnect.common.attributes` model — the server
+**validates the shape on an admin write and carries everything else raw** (no resolution, no
+interpretation).
+
+**New value types** (`common/attributes/`):
+
+- **`AttributeLayout`** `{ String id, String icon, Map<String,String> format }` —
+  `@JsonInclude(NON_NULL)` + `@JsonIgnoreProperties(ignoreUnknown = true)` (the framework mapper
+  has `FAIL_ON_UNKNOWN_PROPERTIES` on globally; the class-level annotation lets a newer client
+  send an unmodelled prop — it is dropped, not carried). Shared by the raw model **and** the
+  `Resolved*` twins: `format` stays a raw `locale → pattern` map on both sides, the one
+  `Resolved*` field not collapsed to a single locale.
+- **`AttributeFieldLayout`** `{ String id, String icon, Map<String,String> format, Boolean hidden }`
+  — the `fieldLayouts` map-value bundle (a partial layout override + `hidden`).
+
+**Model fields** — `layout` (`AttributeLayout`) + `hidden` (`Boolean`) as **siblings** (never
+nested in `layout`, matching the shipped client contract) on: `AttributeNode` sealed iface + all 8
+subtypes; `AttributeField` sealed iface + all 6 subtypes; `AttributeGroup`. `fieldLayouts`
+(`Map<String,AttributeFieldLayout>`) on `RefAttribute` **only**. Resolved twins:
+`ResolvedAttributeNode` (all three), `ResolvedAttributeField` / `ResolvedAttributeGroup`
+(`layout` + `hidden`).
+
+**Carry-through:**
+
+- **JSON** — no code; Lombok `@Data`/`@Builder` + `@JsonInclude(NON_NULL)` + the two
+  `@JsonIgnoreProperties` classes. `AttributeJson` mapper untouched.
+- **`AttributeSchemaResolver`** — `resolveNode` / `resolveField` / `resolveGroup` copy
+  `layout` / `hidden` verbatim in the common pre-`switch` chain; the `RefAttribute` arm also copies
+  `fieldLayouts`. `format` is **not** locale-resolved.
+- **`#ref` (`DerivedSchemaExpander` + `DerivedSchemaResolver`)** — `RefExpansion` grew from
+  `(basePath, cardinality)` to also carry `(layout, hidden, fieldLayouts)`; `markRefs` stamps all
+  three onto the resolved `#ref`-derived node alongside `prefillable`/`prefillKey`/`cardinality`.
+  **`expandRefTarget` is untouched** — the inlined concrete node carries none of the C11 fields
+  (only the `Resolved*` tree does; the raw expanded schema feeds only `AttributeValueFilter`, which
+  ignores presentation). This was chosen over having `expandRefTarget` copy them so C10's
+  carefully-tested arity mapping stays byte-identical and one mechanism covers all three fields.
+
+**Validation** — the only gate, via a shared `LeafChecks.validateLayout(layout, ctx)` (reject a
+`layout` present with a null/blank `id`; a non-object `layout` is already impossible post-parse):
+
+- `NodeValidators.validateOwnNode` (own nodes), `FieldValidators.validate` (fields),
+  `AttributeSchemaValidator.validateGroup` **and** `DerivedSchemaValidator.validateGroup` (groups).
+- `FieldValidators.validate` also rejects a definition field that is `hidden == true` **and**
+  `isRequired == true`.
+- **Decision (Phase 1):** the field-level checks live in shared code (`DefinitionRegistryValidator`
+  → `FieldValidators`), so they run for **both** the profile (single-schema) and session (derived)
+  validators. "Derived validator stays lenient" is honoured where it actually matters — a `#ref`
+  node's own `layout` / `fieldLayouts` are carried **unvalidated** (`validateRefNode` unchanged).
+- Nodes/groups have no "required" concept, so the `hidden` XOR required rule is field-only.
+
+**`sport-api` / `sport-impl`** — no change. `SportService` returns the common `AttributeSchema` /
+`ResolvedAttributeSchema` directly, so all 6 schema endpoints expose the new fields for free. Only
+the two admin `PUT` Swagger descriptions in `SportController` were updated (doc text, not a
+contract change).
+
+**Seeds** — no DB migration (Phase 1 decision #3). Session schema stays deliberately unseeded
+(V062); the Badminton profile seed (V061) untouched. Demo examples added to the `common` test
+fixtures `modules/common/src/test/resources/attributes/{comprehensive,derived}-schema.json` and
+documented in `documentation/md/ATTRIBUTE_LAYOUT_DESIGN.md` § "C11 — backend carry contract".
+
+### Open decision — resolved
+
+**`#ref` → base `layout` inheritance: client-side (option a).** The server carries nothing extra;
+a `#ref` node with no own `layout` falls back to the referenced base attribute's `layout` in the
+client (`SPORT-16`), which already loads the profile schema at session-create time.
+
+### Delta vs. the SPORT-13 epic spec
+
+C11's `Resolved*` twin keeps `layout.format` as a **raw `Map<String,String>` locale map**, not the
+single resolved string `SPORT-13` shipped in `ResolvedAttributeLayout.format`. The client-side
+retrofit + locale resolution is client **`SPORT-16`** (already filed, `TODO`).
+
+### Tests
+
+- **`AttributeSchemaJsonSpec`** — `layout`(+`format` map)/`hidden` on node/field/group + a
+  `RefAttribute.fieldLayouts` map round-trip lossless (added to the comprehensive + derived
+  fixtures and asserted); a new case proving an unknown property inside a `layout` object is
+  dropped, never a parse failure.
+- **`AttributeSchemaResolverSpec`** — `layout`/`hidden` reach the resolved node/field/group
+  verbatim, `format` stays a `Map`; a `#ref` node's own `layout`/`hidden`/`fieldLayouts` reach the
+  resolved node on a single-schema resolve.
+- **`AttributeSchemaValidatorSpec`** — accepts a node/field/group carrying `layout`+`hidden` with
+  arbitrary values; rejects a definition field that is `hidden`+`isRequired` (`@Unroll` STRING /
+  NUMBER / ENUM); accepts `hidden` alone; rejects a `layout` with null/blank `id` on a
+  node / field / group.
+- **`DerivedSchemaValidatorSpec`** — a `#ref` carrying `layout`/`hidden`/`fieldLayouts` (incl. an
+  unknown key) is accepted; a `#ref`'s own blank-`id` `layout` is **not** rejected; a
+  derived-local definition field that is `hidden`+`isRequired` **is** rejected; an own node's
+  blank-`id` `layout` in a derived schema still fails.
+- **`DerivedSchemaResolverSpec`** — a `#ref` node's own `layout`/`hidden`/`fieldLayouts` land on
+  the resolved node (the inlined concrete node has none); own nodes keep theirs via the normal
+  path; a pulled-in base definition's fields keep their own `layout`/`hidden`.
+- **`AttributeValueFilterSpec`** — regression guard: `layout`/`hidden` on a schema node don't
+  affect value filtering; a `hidden` field's value still round-trips.
+- **`:server:test` IT** — `SportAttributeSchemaIntegrationTest`: real admin `PUT` → member `GET`
+  round-trips `layout` (incl. `format` locale map) / `hidden` on node + group + definition field;
+  real `PUT` of a `hidden`+`isRequired` field → **400**, nothing written.
+  `SessionAttributeSchemaIntegrationTest`: real `PUT` → member `GET` stamps a `#ref`'s own
+  `layout`/`hidden`/`fieldLayouts` onto the resolved (expanded) node; a `hidden`+`isRequired`
+  session-schema definition field → **400**.
+
+### Verification
+
+- `:modules:common:test` — **320 pass**, 0 failures (was 302 at C10; +18).
+- `:server:test` targeted (`--tests SportAttributeSchemaIntegrationTest SessionAttributeSchemaIntegrationTest`)
+  — **32 pass**, 0 failures (`SportAttributeSchemaIntegrationTest` 21, +2 new; `SessionAttributeSchemaIntegrationTest`
+  11, +2 new). The full `:server:test` was started but ran >40 min on this Windows/Testcontainers
+  box without finishing and was cut to the targeted run; the full suite runs on CI/PR. No other
+  module's tests were touched (`sport-impl`/`session-impl` call the same unchanged entry points).
+- `./gradlew compileJava` — clean across all modules.
+- No N+1 risk — pure DTO field copies. Class + method Javadoc updated across the touched files.

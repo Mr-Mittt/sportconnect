@@ -44,6 +44,10 @@ public final class NodeValidators {
     public static void validateOwnNode(AttributeNode node, Map<String, AttributeDefinitionType> definitions,
                                        String defaultLocale) {
         String ctx = "Attribute " + node.getKey();
+        if (!(node instanceof RefAttribute)) {
+            // C11 layout shape sanity — before the per-type rules; a #ref keeps its own "not here" error.
+            LeafChecks.validateLayout(node.getLayout(), ctx);
+        }
         switch (node) {
             case RefAttribute ignored -> throw new BadRequestException(
                     ctx + " is a #ref node — #ref is only valid in a derived schema");

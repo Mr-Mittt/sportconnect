@@ -48,6 +48,13 @@ import java.util.stream.Collectors;
  * fields, the rest {@code null} (extraction plan D6). {@code cardinality} / {@code prefillable} /
  * {@code prefillKey} are <strong>not</strong> set here — C9's derived-schema resolver stamps them
  * after {@code #ref} expansion. Spring-free (D2): a {@code public static} entry point.
+ *
+ * <p>C11 presentation hints ({@code layout} / {@code hidden} on every node, field and group, plus a
+ * {@code #ref} node's {@code fieldLayouts}) are copied to the {@code Resolved*} twin
+ * <strong>verbatim</strong> — no interpretation, and {@code layout.format} stays a raw
+ * {@code locale -> pattern} map here (the client resolves it, ticket {@code SPORT-16}). A
+ * {@code #ref}-derived node takes its {@code layout} / {@code hidden} / {@code fieldLayouts} from
+ * the {@code #ref} itself, stamped by C9's derived-schema resolver, not from this walk.
  */
 public final class AttributeSchemaResolver {
 
@@ -83,6 +90,8 @@ public final class AttributeSchemaResolver {
         return ResolvedAttributeGroup.builder()
                 .key(group.getKey())
                 .label(resolveLabel(group.getLabel(), exact, language, defaultLocale))
+                .layout(group.getLayout())
+                .hidden(group.getHidden())
                 .isAvailable(group.getIsAvailable())
                 .groups(nullSafe(group.getGroups()).stream()
                         .map(child -> resolveGroup(child, exact, language, defaultLocale))
@@ -97,7 +106,9 @@ public final class AttributeSchemaResolver {
                                                      String exact, String language, String defaultLocale) {
         ResolvedAttributeNode.ResolvedAttributeNodeBuilder builder = ResolvedAttributeNode.builder()
                 .key(node.getKey())
-                .label(resolveLabel(node.getLabel(), exact, language, defaultLocale));
+                .label(resolveLabel(node.getLabel(), exact, language, defaultLocale))
+                .layout(node.getLayout())
+                .hidden(node.getHidden());
 
         switch (node) {
             case StringAttribute a -> builder.type(AttributeType.STRING)
@@ -118,8 +129,9 @@ public final class AttributeSchemaResolver {
             case DefinitionListAttribute a -> builder.type(AttributeType.DEFINITION_LIST)
                     .isAvailable(a.getIsAvailable()).definitionRef(a.getDefinitionRef()).searchScope(a.getSearchScope());
             // A #ref node should never reach a single-schema resolve (C6 rejects it; C9 resolves
-            // only expanded, ref-free schemas). Resolve key + label, leave type null — never throw.
-            case RefAttribute a -> { /* key + label already set */ }
+            // only expanded, ref-free schemas). Resolve key + label (+ its own fieldLayouts), leave
+            // type null — never throw.
+            case RefAttribute a -> builder.fieldLayouts(a.getFieldLayouts());
         }
         return builder.build();
     }
@@ -139,6 +151,8 @@ public final class AttributeSchemaResolver {
         ResolvedAttributeField.ResolvedAttributeFieldBuilder builder = ResolvedAttributeField.builder()
                 .key(field.getKey())
                 .label(resolveLabel(field.getLabel(), exact, language, defaultLocale))
+                .layout(field.getLayout())
+                .hidden(field.getHidden())
                 .isRequired(field.getIsRequired());
 
         switch (field) {

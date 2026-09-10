@@ -1,6 +1,7 @@
 package com.sportconnect.common.attributes.resolved;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.sportconnect.common.attributes.AttributeLayout;
 import com.sportconnect.common.attributes.AttributeType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,4 +37,14 @@ public class ResolvedAttributeField {
     private String definitionRef;
 
     private Boolean isRequired;
+
+    /**
+     * Optional, server-opaque presentation hint (C11), copied verbatim from the raw field.
+     * {@code format} inside it stays a raw {@code locale -> pattern} map (client ticket
+     * {@code SPORT-16}).
+     */
+    private AttributeLayout layout;
+
+    /** Optional render-suppression flag (C11), copied verbatim from the raw field. Absent reads as {@code false}. */
+    private Boolean hidden;
 }

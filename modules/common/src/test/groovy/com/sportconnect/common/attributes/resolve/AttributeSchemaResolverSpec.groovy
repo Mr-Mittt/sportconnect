@@ -1,7 +1,9 @@
 package com.sportconnect.common.attributes.resolve
 
 import com.sportconnect.common.attributes.AttributeDefinitionType
+import com.sportconnect.common.attributes.AttributeFieldLayout
 import com.sportconnect.common.attributes.AttributeGroup
+import com.sportconnect.common.attributes.AttributeLayout
 import com.sportconnect.common.attributes.AttributeOption
 import com.sportconnect.common.attributes.AttributeSchema
 import com.sportconnect.common.attributes.AttributeType
@@ -172,6 +174,68 @@ class AttributeSchemaResolverSpec extends Specification {
             type == null
             cardinality == null
             prefillable == null
+        }
+    }
+
+    def "C11 layout / hidden reach the resolved node, field and group verbatim - format stays a raw map"() {
+        given:
+        def nodeLayout = AttributeLayout.builder().id("slider").icon("ruler")
+                .format([en: "#,##0 cm", vi: "#,##0 cm"]).build()
+        def fieldLayout = AttributeLayout.builder().id("stepper").format([en: "0.0"]).build()
+        def def0 = AttributeDefinitionType.builder().name("Spec").fields([
+                NumberField.builder().key("gauge").label([en: "Gauge"]).isRequired(false)
+                        .layout(fieldLayout).hidden(true).build()
+        ]).build()
+        def schema = AttributeSchema.builder().defaultLocale("en").definitions([def0]).groups([
+                AttributeGroup.builder().key("gear").label([en: "Gear"]).isAvailable(true)
+                        .layout(AttributeLayout.builder().id("grid-2").build()).hidden(false).attributes([
+                        NumberAttribute.builder().key("tension").label([en: "Tension"]).isAvailable(true)
+                                .layout(nodeLayout).hidden(true).build()
+                ]).build()
+        ]).build()
+
+        when:
+        def result = AttributeSchemaResolver.resolve(schema, Locale.forLanguageTag("vi"))
+
+        then: "node"
+        with(result.groups[0].attributes[0]) {
+            layout.id == "slider"
+            layout.icon == "ruler"
+            layout.format == [en: "#,##0 cm", vi: "#,##0 cm"]   // NOT resolved to one string
+            hidden == true
+        }
+
+        and: "group"
+        result.groups[0].layout.id == "grid-2"
+        result.groups[0].hidden == false
+
+        and: "definition field"
+        with(result.definitions[0].fields[0]) {
+            layout.id == "stepper"
+            layout.format == [en: "0.0"]
+            hidden == true
+        }
+    }
+
+    def "a #ref node's own layout / hidden / fieldLayouts reach the resolved node on a single-schema resolve"() {
+        given: "not a real path (C6 rejects a #ref here) but the resolver must still carry its C11 fields"
+        def schema = AttributeSchema.builder().defaultLocale("en").groups([
+                AttributeGroup.builder().key("session").label([en: "Session"]).isAvailable(true).attributes([
+                        RefAttribute.builder().key("shuttlecock").label([en: "Shuttlecock"])
+                                .ref("gear/shuttlecocks").cardinality(Cardinality.SINGLE)
+                                .layout(AttributeLayout.builder().id("radio").build()).hidden(true)
+                                .fieldLayouts([value: AttributeFieldLayout.builder().id("input").build()]).build()
+                ]).build()
+        ]).build()
+
+        when:
+        def result = AttributeSchemaResolver.resolve(schema, Locale.ENGLISH)
+
+        then:
+        with(result.groups[0].attributes[0]) {
+            layout.id == "radio"
+            hidden == true
+            fieldLayouts["value"].id == "input"
         }
     }
 

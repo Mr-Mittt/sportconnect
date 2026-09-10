@@ -2,6 +2,8 @@ package com.sportconnect.common.attributes.node;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.sportconnect.common.attributes.AttributeFieldLayout;
+import com.sportconnect.common.attributes.AttributeLayout;
 import com.sportconnect.common.attributes.Cardinality;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -48,4 +50,19 @@ public final class RefAttribute implements AttributeNode {
 
     /** Required. {@code SINGLE} → one value (single-select UI); {@code LIST} → many (multi-select UI). */
     private Cardinality cardinality;
+
+    /** Optional server-opaque presentation hint (C11); carried raw through expansion onto the resolved node. */
+    private AttributeLayout layout;
+
+    /** Optional render-suppression flag (C11). Absent reads as {@code false}. See {@link AttributeNode#getHidden()}. */
+    private Boolean hidden;
+
+    /**
+     * Optional per-field presentation overrides for the fields of the definition type this
+     * {@code #ref} resolves to, keyed by field key (C11). Legal only on a {@code #ref} node.
+     * Server-opaque: carried verbatim onto the resolved node (via the derived-schema expander's
+     * {@code RefExpansion} record), never validated against the target definition's fields — an
+     * unknown key is tolerated.
+     */
+    private Map<String, AttributeFieldLayout> fieldLayouts;
 }

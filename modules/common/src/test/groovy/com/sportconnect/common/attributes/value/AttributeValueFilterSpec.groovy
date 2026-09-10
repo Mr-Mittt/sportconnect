@@ -113,6 +113,22 @@ class AttributeValueFilterSpec extends Specification {
         AttributeValueFilter.filter(g([racket: "Yonex", rackettt: "typo"]), schema()) == g([racket: "Yonex"])
     }
 
+    def "C11 layout / hidden on a schema node do not affect value filtering (regression guard)"() {
+        given: "the same schema, but the racket node carries a layout and hidden"
+        def withLayout = AttributeSchema.builder().groups([
+                AttributeGroup.builder().key("gear").label([en: "Gear"]).isAvailable(true)
+                        .layout(com.sportconnect.common.attributes.AttributeLayout.builder().id("grid-2").build())
+                        .attributes([
+                                StringAttribute.builder().key("racket").label([en: "Racket"]).isAvailable(true)
+                                        .layout(com.sportconnect.common.attributes.AttributeLayout.builder().id("textarea").build())
+                                        .hidden(true).build()
+                        ]).build()
+        ]).build()
+
+        expect: "a hidden field's value still round-trips through the filter untouched"
+        AttributeValueFilter.filter(g([racket: "Yonex"]), withLayout) == g([racket: "Yonex"])
+    }
+
     def "iteration order of the surviving entries follows the request, not the schema"() {
         when: "keys submitted in an order that is not the schema's declaration order"
         def result = AttributeValueFilter.filter(g([shots: ["smash"], racket: "Yonex", shuttlecock: "nylon"]), schema())

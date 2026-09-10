@@ -4,15 +4,15 @@
     {
       "name": "Reference",
       "fields": [
-        { "key": "id", "label": { "en": "Item" }, "type": "STRING", "isRequired": false },
-        { "key": "value", "label": { "en": "Name" }, "type": "STRING", "isRequired": true }
+        { "key": "id", "label": { "en": "Item" }, "type": "STRING", "isRequired": false, "hidden": true },
+        { "key": "value", "label": { "en": "Name" }, "type": "STRING", "isRequired": true, "layout": { "id": "input", "icon": "tag" } }
       ]
     },
     {
       "name": "Grip",
       "fields": [
         { "key": "brand", "label": { "en": "Brand" }, "type": "DEFINITION", "definitionRef": "Reference", "isRequired": true },
-        { "key": "thickness", "label": { "en": "Thickness (mm)" }, "type": "NUMBER", "isRequired": false, "min": 0.5, "max": 2.0 },
+        { "key": "thickness", "label": { "en": "Thickness (mm)" }, "type": "NUMBER", "isRequired": false, "min": 0.5, "max": 2.0, "layout": { "id": "stepper", "format": { "en": "0.0", "vi": "0,0" } } },
         { "key": "overgrip", "label": { "en": "Overgrip?" }, "type": "BOOLEAN", "isRequired": false },
         {
           "key": "colour", "label": { "en": "Colour" }, "type": "ENUM", "isRequired": false,
@@ -38,8 +38,8 @@
       "isAvailable": true,
       "attributes": [
         { "key": "nickname", "label": { "en": "Nickname" }, "type": "STRING", "isAvailable": true, "defaultValue": "Ace" },
-        { "key": "reach", "label": { "en": "Reach (cm)" }, "type": "NUMBER", "isAvailable": true, "min": 120.0, "max": 230.0, "defaultValue": 175 },
-        { "key": "leftHanded", "label": { "en": "Left handed?" }, "type": "BOOLEAN", "isAvailable": true, "defaultValue": false },
+        { "key": "reach", "label": { "en": "Reach (cm)" }, "type": "NUMBER", "isAvailable": true, "min": 120.0, "max": 230.0, "defaultValue": 175, "layout": { "id": "slider", "icon": "ruler", "format": { "en": "#,##0 cm", "vi": "#,##0 cm" } } },
+        { "key": "leftHanded", "label": { "en": "Left handed?" }, "type": "BOOLEAN", "isAvailable": true, "defaultValue": false, "hidden": true },
         {
           "key": "playstyle", "label": { "en": "Playstyle" }, "type": "ENUM", "isAvailable": true, "defaultValue": "balance",
           "options": [
@@ -60,6 +60,7 @@
       "key": "gear",
       "label": { "en": "Gear" },
       "isAvailable": true,
+      "layout": { "id": "grid-2", "icon": "briefcase" },
       "groups": [
         {
           "key": "rackets",

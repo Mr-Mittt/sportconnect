@@ -14,10 +14,21 @@
       "label": { "en": "Session detail" },
       "isAvailable": true,
       "attributes": [
-        { "type": "REF", "#ref": "gear/shuttlecocks", "key": "shuttlecock", "cardinality": "SINGLE" },
-        { "type": "REF", "#ref": "gear/rackets", "key": "rackets", "cardinality": "LIST", "label": { "en": "Rackets in play" } },
         {
-          "key": "competitive", "label": { "en": "Competitive?" }, "type": "BOOLEAN", "isAvailable": true, "defaultValue": false
+          "type": "REF", "#ref": "gear/shuttlecocks", "key": "shuttlecock", "cardinality": "SINGLE",
+          "layout": { "id": "radio", "format": { "en": "titlecase" } }, "hidden": true
+        },
+        {
+          "type": "REF", "#ref": "gear/rackets", "key": "rackets", "cardinality": "LIST", "label": { "en": "Rackets in play" },
+          "layout": { "id": "chips" },
+          "fieldLayouts": {
+            "value": { "id": "input", "icon": "tag", "format": { "en": "titlecase" } },
+            "bogusKey": { "hidden": true }
+          }
+        },
+        {
+          "key": "competitive", "label": { "en": "Competitive?" }, "type": "BOOLEAN", "isAvailable": true, "defaultValue": false,
+          "layout": { "id": "segmented" }
         },
         {
           "key": "notes", "label": { "en": "Notes" }, "type": "DEFINITION_LIST", "definitionRef": "MatchNote", "isAvailable": true

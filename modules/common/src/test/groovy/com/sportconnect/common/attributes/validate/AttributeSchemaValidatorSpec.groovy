@@ -3,6 +3,7 @@ package com.sportconnect.common.attributes.validate
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.sportconnect.common.attributes.AttributeDefinitionType
 import com.sportconnect.common.attributes.AttributeGroup
+import com.sportconnect.common.attributes.AttributeLayout
 import com.sportconnect.common.attributes.AttributeOption
 import com.sportconnect.common.attributes.AttributeSchema
 import com.sportconnect.common.attributes.Cardinality
@@ -587,6 +588,89 @@ class AttributeSchemaValidatorSpec extends Specification {
         "a definition field with no type"             | fieldJson('{"key":"x","label":{"en":"x"}}')
         "definitionRef on a STRING field"             | fieldJson('{"type":"STRING","key":"x","label":{"en":"x"},"definitionRef":"R"}')
         "min/max on a STRING field"                   | fieldJson('{"type":"STRING","key":"x","label":{"en":"x"},"min":1}')
+    }
+
+    // ---- C11: layout / hidden ----
+
+    def "a node, field and group may carry a layout and hidden - accepted, values not gated"() {
+        given:
+        def layout = AttributeLayout.builder().id("anything-goes").icon("weird-icon")
+                .format([en: "0.0", "xx-YY": "junk"]).build()
+        def field = StringField.builder().key("value").label([en: "Value"]).isRequired(false)
+                .layout(layout).build()
+        def hiddenField = StringField.builder().key("url").label([en: "URL"]).isRequired(false).hidden(true).build()
+        def schema = AttributeSchema.builder().defaultLocale("en")
+                .definitions([defType("Reference", [field, hiddenField])])
+                .groups([
+                        AttributeGroup.builder().key("gear").label([en: "Gear"]).isAvailable(true)
+                                .layout(AttributeLayout.builder().id("grid-2").build())
+                                .attributes([
+                                        StringAttribute.builder().key("racket").label([en: "Racket"]).isAvailable(true)
+                                                .layout(layout).hidden(true).build(),
+                                        defn("brand", "Reference")
+                                ]).build()
+                ]).build()
+
+        expect:
+        AttributeSchemaValidator.validate(schema)
+    }
+
+    @Unroll
+    def "a definition field that is both hidden and required is rejected (#desc)"() {
+        given:
+        def bad = fieldBuilder.call()
+        def schema = AttributeSchema.builder().defaultLocale("en")
+                .definitions([defType("Reference", [bad, sf("value", true)])])
+                .groups([group("gear", [defn("brand", "Reference")])]).build()
+
+        when:
+        AttributeSchemaValidator.validate(schema)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains("cannot be both hidden and required")
+
+        where:
+        desc          | fieldBuilder
+        "STRING"      | { StringField.builder().key("x").label([en: "X"]).isRequired(true).hidden(true).build() }
+        "NUMBER"      | { NumberField.builder().key("x").label([en: "X"]).isRequired(true).hidden(true).build() }
+        "ENUM"        | { EnumField.builder().key("x").label([en: "X"]).isRequired(true).hidden(true).options([opt("a")]).build() }
+    }
+
+    def "hidden alone on a non-required field is fine"() {
+        given:
+        def schema = AttributeSchema.builder().defaultLocale("en")
+                .definitions([defType("Reference", [
+                        StringField.builder().key("url").label([en: "URL"]).isRequired(false).hidden(true).build(),
+                        sf("value", true)
+                ])])
+                .groups([group("gear", [defn("brand", "Reference")])]).build()
+
+        expect:
+        AttributeSchemaValidator.validate(schema)
+    }
+
+    @Unroll
+    def "a layout present with a null or blank id is rejected on a #subject"() {
+        when:
+        AttributeSchemaValidator.validate(schema)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains("layout with no id")
+
+        where:
+        subject | schema
+        "node"  | schemaOf([group("gear", [
+                        StringAttribute.builder().key("racket").label([en: "Racket"]).isAvailable(true)
+                                .layout(AttributeLayout.builder().id("  ").build()).build()])])
+        "field" | AttributeSchema.builder().defaultLocale("en")
+                        .definitions([defType("Reference", [
+                                StringField.builder().key("value").label([en: "Value"]).isRequired(false)
+                                        .layout(AttributeLayout.builder().id(null).build()).build()])])
+                        .groups([group("gear", [defn("brand", "Reference")])]).build()
+        "group" | schemaOf([AttributeGroup.builder().key("gear").label([en: "Gear"]).isAvailable(true)
+                        .layout(AttributeLayout.builder().id("").build()).attributes([str("racket")]).build()])
     }
 
     /** Wrap a raw node JSON into a minimal one-group schema document. */

@@ -27,6 +27,13 @@ import java.util.Set;
  * {@code ObjectMapper} (the size check uses the framework's own
  * {@link com.sportconnect.common.attributes.json.AttributeJson#mapper()}). A consumer that wants a
  * bean wraps this in its own {@code @Component} façade.
+ *
+ * <p><strong>C11 presentation hints.</strong> {@code layout} / {@code hidden} / {@code fieldLayouts}
+ * are otherwise carried raw, but two rules are enforced here (and, since the field walk is shared,
+ * in the derived-schema validator too): a {@code layout} object present must carry a non-blank
+ * {@code id} ({@link LeafChecks#validateLayout}, on nodes / fields / groups), and a definition field
+ * may not be {@code hidden} <em>and</em> {@code isRequired} at once. Values are never gated — an
+ * unknown {@code layout.id} or {@code fieldLayouts} key passes.
  */
 public final class AttributeSchemaValidator {
 
@@ -78,6 +85,7 @@ public final class AttributeSchemaValidator {
             throw new BadRequestException("Duplicate node key among siblings: " + group.getKey());
         }
         LeafChecks.validateLabel(group.getLabel(), defaultLocale, "Group " + group.getKey());
+        LeafChecks.validateLayout(group.getLayout(), "Group " + group.getKey());
 
         Set<String> childKeys = new HashSet<>();
         for (AttributeNode attribute : LeafChecks.nullSafe(group.getAttributes())) {

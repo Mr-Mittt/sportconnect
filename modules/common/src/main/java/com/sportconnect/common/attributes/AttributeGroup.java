@@ -35,6 +35,16 @@ public class AttributeGroup {
     /** Locale (BCP 47) → display text. Must carry an entry for the schema's {@code defaultLocale}. */
     private Map<String, String> label;
 
+    /** Optional server-opaque presentation hint (C11); shape-checked on admin write, carried raw otherwise. */
+    private AttributeLayout layout;
+
+    /**
+     * Optional render-suppression flag (C11). {@code true} ⇒ the group renders no editor section and
+     * no read-only section (its whole subtree), while values stored under it still round-trip.
+     * Absent reads as {@code false}. A rendering flag, not a soft delete ({@code isAvailable}).
+     */
+    private Boolean hidden;
+
     /**
      * Soft delete. An unavailable group hides its whole subtree at every depth — no descendant is
      * offered on writes even if its own {@code isAvailable} is {@code true}. Parent state wins.

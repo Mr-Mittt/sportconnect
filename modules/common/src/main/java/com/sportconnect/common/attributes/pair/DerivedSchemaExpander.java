@@ -1,7 +1,9 @@
 package com.sportconnect.common.attributes.pair;
 
 import com.sportconnect.common.attributes.AttributeDefinitionType;
+import com.sportconnect.common.attributes.AttributeFieldLayout;
 import com.sportconnect.common.attributes.AttributeGroup;
+import com.sportconnect.common.attributes.AttributeLayout;
 import com.sportconnect.common.attributes.AttributeNodes;
 import com.sportconnect.common.attributes.AttributeSchema;
 import com.sportconnect.common.attributes.AttributeType;
@@ -60,9 +62,11 @@ public final class DerivedSchemaExpander {
 
     /**
      * The expanded document plus, for every {@code #ref} node that survived expansion, the base path
-     * it draws its value(s) from and the {@link Cardinality} it declared — everything
+     * it draws its value(s) from, the {@link Cardinality} it declared, and its own C11 presentation
+     * hints ({@code layout} / {@code hidden} / {@code fieldLayouts}) — everything
      * {@link DerivedSchemaResolver} needs to stamp {@code prefillable} / {@code prefillKey} /
-     * {@code cardinality} onto the matching resolved node.
+     * {@code cardinality} and the C11 fields onto the matching resolved node (the inlined concrete
+     * node in {@link #schema()} carries none of them — only the {@code Resolved*} tree does).
      *
      * @param schema             a {@link AttributeSchema} with no {@code #ref} nodes; every leaf a
      *                           plain typed {@link AttributeNode} subtype; {@code definitions} the
@@ -74,12 +78,18 @@ public final class DerivedSchemaExpander {
     }
 
     /**
-     * @param basePath    the base-schema {@code /}-path the client reads the choice list from
-     * @param cardinality whether the derived attribute holds one value ({@code SINGLE}) or many
-     *                    ({@code LIST}) — the {@code #ref}'s own declaration, independent of the
-     *                    base attribute's shape
+     * @param basePath     the base-schema {@code /}-path the client reads the choice list from
+     * @param cardinality  whether the derived attribute holds one value ({@code SINGLE}) or many
+     *                     ({@code LIST}) — the {@code #ref}'s own declaration, independent of the
+     *                     base attribute's shape
+     * @param layout       the {@code #ref} node's own C11 {@code layout} hint, or {@code null} —
+     *                     carried through so C9's resolver can stamp it on the resolved node (the
+     *                     inlined concrete node never carries it)
+     * @param hidden       the {@code #ref} node's own C11 {@code hidden} flag, or {@code null}
+     * @param fieldLayouts the {@code #ref} node's own C11 {@code fieldLayouts} map, or {@code null}
      */
-    public record RefExpansion(String basePath, Cardinality cardinality) {
+    public record RefExpansion(String basePath, Cardinality cardinality, AttributeLayout layout,
+                               Boolean hidden, Map<String, AttributeFieldLayout> fieldLayouts) {
     }
 
     /**
@@ -130,7 +140,8 @@ public final class DerivedSchemaExpander {
                 }
                 attributes.add(expandRefTarget(target, ref.getKey(), ref.getLabel(), ref.getCardinality()));
                 refExpansionsByPath.put(groupPath + AttributePaths.SEPARATOR + ref.getKey(),
-                        new RefExpansion(ref.getRef(), ref.getCardinality()));
+                        new RefExpansion(ref.getRef(), ref.getCardinality(),
+                                ref.getLayout(), ref.getHidden(), ref.getFieldLayouts()));
                 pullDefinitionClosure(AttributeNodes.definitionRefOf(target), baseDefinitions, merged);
             } else {
                 AttributeType type = AttributeNodes.typeOf(node);
