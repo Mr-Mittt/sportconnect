@@ -19,7 +19,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [C11](MVP/C11_ATTRIBUTE_SCHEMA_LAYOUT_HINT.md) | `layout` presentation hint on attribute-schema nodes — optional `{ id, icon?, format?, … }` passthrough object on the `common.attributes` node model + `Resolved*` twins, carried through JSON round-trip / validators (lenient, non-gating) / resolver / derived-schema expander; sport + session seeds updated. No server-side interpretation. Client consumers are `SPORT-13`/`14`/`15`; design: `documentation/md/ATTRIBUTE_LAYOUT_DESIGN.md`. | `TODO` |
+| 1 | [C11](MVP/C11_ATTRIBUTE_SCHEMA_LAYOUT_HINT.md) | `layout` hint **+ `hidden` flag + `#ref` `fieldLayouts`** on attribute-schema nodes — **server validates on schema update, carries the rest raw** (no resolution/interpretation). Optional `layout` `{ id, icon?, format?(raw locale map) }`, `hidden` boolean, and `fieldLayouts` (per-field override map on `#ref` nodes) on the `common.attributes` model + `Resolved*` twins; carried verbatim through JSON round-trip / resolver / `#ref` expander. Only gate: single-schema validator **rejects `hidden` + `required` together** (+ shape sanity, lenient on values). `format` locale-map resolution moves client-side. Open decision: `#ref`→base `layout` inheritance (client fetches base schema vs expander carries a `baseLayout` fallback). Seeds updated. Client consumers `SPORT-13`/`14`/`15` + new `SPORT-16`; design: `documentation/md/ATTRIBUTE_LAYOUT_DESIGN.md`. | `TODO` |
 
 ---
 

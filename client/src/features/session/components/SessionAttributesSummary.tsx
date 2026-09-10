@@ -8,7 +8,14 @@ import type {
 } from '@/shared/types/sport';
 import { isRefAttribute } from '@/shared/types/sport';
 import { cn } from '@/shared/lib/utils';
-import { AttributeList, renderValueNode, type Row } from '@/shared/components/attributeFields/attributeValues';
+import {
+  AttributeList,
+  GridPairs,
+  renderValueNode,
+  type Row,
+} from '@/shared/components/attributeFields/attributeValues';
+import { renderHeadingLabel } from '@/shared/components/attributeFields/headingIcons';
+import { normalizeLayout, pickLayoutId } from '@/shared/components/attributeFields/layout';
 
 /**
  * The type `renderValueNode` should use for a resolved node's stored value. For an "own" node it is
@@ -46,8 +53,13 @@ function joinPath(prefix: string, key: string): string {
   return prefix === '' ? key : `${prefix}/${key}`;
 }
 
-/** One (sub-)group and its descendants. `null` when the group is unavailable or nothing inside it
- * has a stored value. */
+const GROUP_LAYOUTS = ['section', 'grid-2', 'grid-3', 'inline', 'flat'] as const;
+
+/** One (sub-)group and its descendants. `null` when the group is unavailable / `hidden` or nothing
+ * inside it has a stored value. SPORT-15: `group.layout` picks the read arrangement — `section`
+ * (default) ≡ `inline` (the read view is already label-left) → heading + `AttributeList`; `flat` →
+ * no heading; `grid-2` / `grid-3` → a grid of term-over-value cells. `layout.icon` prefixes the
+ * heading. */
 function renderGroup(
   group: ResolvedSportAttributeSchema['groups'][number],
   prefix: string,
@@ -55,20 +67,26 @@ function renderGroup(
   values: Record<string, unknown>,
   definitionsByName: Map<string, ResolvedSportAttributeDefinitionType>,
 ): ReactNode | null {
-  if (group.isAvailable === false) return null;
+  if (group.isAvailable === false || group.hidden === true) return null;
   const groupPath = joinPath(prefix, group.key);
 
   const rows: Row[] = group.attributes
-    .filter((attribute) => attribute.isAvailable !== false)
+    .filter((attribute) => attribute.isAvailable !== false && attribute.hidden !== true)
     .map((attribute) => ({
       key: attribute.key,
-      term: attribute.label,
+      term: renderHeadingLabel(
+        attribute.label,
+        normalizeLayout(attribute.layout, attribute.key).icon,
+        attribute.key,
+      ),
       node: renderValueNode(
         effectiveRenderType(attribute),
         values[joinPath(groupPath, attribute.key)],
         'options' in attribute ? attribute.options : undefined,
         'definitionRef' in attribute ? attribute.definitionRef : undefined,
         definitionsByName,
+        attribute.layout,
+        attribute.key,
       ),
     }))
     .filter((row): row is Row => row.node !== null);
@@ -82,10 +100,30 @@ function renderGroup(
 
   if (rows.length === 0 && subGroups.length === 0) return null;
 
+  const layoutId = pickLayoutId(
+    normalizeLayout(group.layout, group.key).id,
+    GROUP_LAYOUTS,
+    'section',
+    group.key,
+  );
+  const heading =
+    layoutId === 'flat' ? null : (
+      <p className="text-2xs font-medium uppercase tracking-wide text-text-muted">
+        {renderHeadingLabel(group.label, normalizeLayout(group.layout, group.key).icon, group.key)}
+      </p>
+    );
+
   return (
     <div className={cn('flex flex-col gap-1.5', depth > 0 && 'border-l border-border pl-3')}>
-      <p className="text-2xs font-medium uppercase tracking-wide text-text-muted">{group.label}</p>
-      {rows.length > 0 && <AttributeList rows={rows} />}
+      {heading}
+      {rows.length > 0 &&
+        (layoutId === 'grid-2' ? (
+          <GridPairs rows={rows} cols={2} />
+        ) : layoutId === 'grid-3' ? (
+          <GridPairs rows={rows} cols={3} />
+        ) : (
+          <AttributeList rows={rows} />
+        ))}
       {subGroups.map((entry) => (
         <div key={entry.key}>{entry.node}</div>
       ))}
