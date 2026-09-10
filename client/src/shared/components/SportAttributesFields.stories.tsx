@@ -652,3 +652,130 @@ export const ScalarLayouts: Story = {
     values: { 'match/tension': 26, 'match/winRate': 0.62, 'match/level': 'intermediate' },
   },
 };
+
+/* SPORT-14 — container-element layouts. `group` child arrangement, `DEFINITION` record body,
+ * `DEFINITION_LIST` presentation, and a heading `icon`. No MSW schema seed sets `layout`, so these
+ * are the human-review surface for the container variants (the composite Vitest covers behaviour). */
+
+const twoFieldGroup = (layout: unknown): ResolvedSportAttributeSchema =>
+  ({
+    groups: [
+      {
+        key: 'general',
+        label: 'General',
+        isAvailable: true,
+        layout,
+        attributes: [
+          { key: 'hand', label: 'Handedness', type: 'STRING', isAvailable: true },
+          { key: 'reach', label: 'Reach (cm)', type: 'NUMBER', isAvailable: true, min: 0, max: 250 },
+          { key: 'stance', label: 'Stance', type: 'STRING', isAvailable: true },
+          { key: 'coached', label: 'Has a coach', type: 'BOOLEAN', isAvailable: true },
+        ],
+      },
+    ],
+  }) as unknown as ResolvedSportAttributeSchema;
+
+const groupValues = {
+  'general/hand': 'Right',
+  'general/reach': 180,
+  'general/stance': 'Square',
+  'general/coached': true,
+};
+
+/** `grid-3` — a third column from the `lg` breakpoint (generalises SPORT-7's fixed 1→2 grid). */
+export const GroupLayoutGrid3: Story = {
+  args: { schema: twoFieldGroup({ id: 'grid-3' }), values: groupValues },
+};
+
+/** `inline` — label-left rows (container-level CSS; the arms are untouched). */
+export const GroupLayoutInline: Story = {
+  args: { schema: twoFieldGroup({ id: 'inline' }), values: groupValues },
+};
+
+/** `flat` — the collapsible heading stays, the inner grid/box does not. */
+export const GroupLayoutFlat: Story = {
+  args: { schema: twoFieldGroup({ id: 'flat' }), values: groupValues },
+};
+
+/** `layout.icon` on container headings — `{icon} {label}`, the icon decorative (`aria-hidden`). */
+export const HeadingIcons: Story = {
+  args: {
+    schema: {
+      definitions: [referenceDefinition],
+      groups: [
+        {
+          key: 'general',
+          label: 'General',
+          isAvailable: true,
+          layout: { id: 'section', icon: 'shuttlecock' },
+          attributes: [{ key: 'hand', label: 'Handedness', type: 'STRING', isAvailable: true }],
+        },
+        {
+          key: 'gear',
+          label: 'Gear',
+          isAvailable: true,
+          layout: { id: 'section', icon: 'racket' },
+          attributes: [
+            {
+              key: 'rackets',
+              label: 'Rackets',
+              type: 'DEFINITION_LIST',
+              definitionRef: 'Reference',
+              isAvailable: true,
+              layout: { id: 'cards', icon: 'racket' },
+            },
+          ],
+        },
+      ],
+    } as unknown as ResolvedSportAttributeSchema,
+    values: {
+      'general/hand': 'Right',
+      'gear/rackets': [{ id: null, value: 'Yonex Astrox 99 Pro', gramWeight: 90, inStock: true }],
+    },
+  },
+};
+
+/** A mixed, nested document: a `grid-3` group holding an `inline` DEFINITION and a `table`
+ * DEFINITION_LIST — container layouts compose. */
+export const MixedNestedLayouts: Story = {
+  args: {
+    schema: {
+      definitions: [referenceDefinition],
+      groups: [
+        {
+          key: 'gear',
+          label: 'Gear',
+          isAvailable: true,
+          layout: { id: 'grid-3', icon: 'gear' },
+          attributes: [
+            { key: 'bagBrand', label: 'Bag brand', type: 'STRING', isAvailable: true },
+            {
+              key: 'primaryRacket',
+              label: 'Primary racket',
+              type: 'DEFINITION',
+              definitionRef: 'Reference',
+              isAvailable: true,
+              layout: { id: 'inline' },
+            },
+            {
+              key: 'rackets',
+              label: 'Rackets',
+              type: 'DEFINITION_LIST',
+              definitionRef: 'Reference',
+              isAvailable: true,
+              layout: { id: 'table' },
+            },
+          ],
+        },
+      ],
+    } as unknown as ResolvedSportAttributeSchema,
+    values: {
+      'gear/bagBrand': 'Victor',
+      'gear/primaryRacket': { id: null, value: 'Yonex Astrox 88D Pro', gramWeight: 83, inStock: true },
+      'gear/rackets': [
+        { id: null, value: 'Yonex Astrox 88D Pro', gramWeight: 83, inStock: true },
+        { id: 'eq_123', value: 'Yonex Astrox 99 Pro', gramWeight: 90, inStock: false },
+      ],
+    },
+  },
+};

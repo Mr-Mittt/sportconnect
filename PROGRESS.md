@@ -4315,6 +4315,28 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client SPORT-14 (`DONE`, 2026-09-09, `client/docs/MVP/SPORT-14_CONTAINER_ELEMENT_LAYOUTS.md`,
+  impl `..._IMPL.md`):** 2 of the 3-ticket attribute-layout split — the **container elements** now
+  honour SPORT-13's `layout` object. `group`: `section` (default) / `grid-2` / `grid-3` / `inline`
+  (label-left, CSS-only — arms untouched) / `flat`, all keeping the collapsible wrapper.
+  `DEFINITION`: `stacked` / `inline` / `grid-2`. `DEFINITION_LIST`: `cards` / `table` (scalar
+  fields only — a `LIST`/`DEFINITION` field degrades to `cards` + warn) / `accordion`. `LIST`
+  container: `checkboxes` (default — the design doc's "`chips` is current" label was stale) /
+  `chips` / `multiselect` (native `<select multiple>`) / `ordered` (reorder the stored array).
+  `layout.icon` on `group`/`DEFINITION`/`DEFINITION_LIST` headings via a new `headingIcons.tsx`
+  registry (Tabler names + local `IconShuttlecock`/`IconRacket`, placeholder art `TODO`); unknown
+  name → no icon + warn; decorative (`aria-hidden`). Every default branch reproduces its
+  pre-SPORT-14 DOM verbatim (`renderHeadingLabel` returns a bare string with no icon); reuses
+  `normalizeLayout`/`pickLayoutId`/`devWarn`. No `sport.ts` migration, no backend change (`common`
+  C11), no MSW seed sets `layout`. New: `ListField`/`DefinitionFields`/`DefinitionListField`/
+  `headingIcons` `.test.tsx` + `.stories.tsx`, a `SportAttributesFields` SPORT-14 test block +
+  layout stories; `RecordField` exported for the `table` cell render. `tsc`/`eslint` clean; Vitest
+  **176 files / 1248 passed** (+4 files / +35 cases). **E2E:** `pnpm e2e` 75 passed; 8 `a11y.spec.ts`
+  failures under concurrent load (`[WebServer] ECONNABORTED`) — same Windows suite-parallelism flake
+  as SPORT-13, `a11y.spec.ts` 31/31 isolated. **Visual-regression:** no baselined surface touched
+  (default DOM verbatim, no seed sets `layout`); stash-and-rerun shows every diff byte-identical to
+  clean `master`, so it's the documented Windows noise floor — no `update-baselines` dispatch.
+  SPORT-15 (read-only parity + `#ref` composition) is 3 of 3.
 - **Client SPORT-13 (`DONE`, 2026-09-09, `client/docs/MVP/SPORT-13_SCHEMA_DRIVEN_ATTRIBUTE_LAYOUT.md`,
   impl `..._IMPL.md`):** 1 of a 3-ticket split (SPORT-14 container layouts, SPORT-15 read-only
   parity + `#ref`) that picks up the schema-driven `widget`/`display` scope SPORT-7 deferred.

@@ -6,9 +6,12 @@ export interface NormalizedLayout {
   id: string | null;
   /** A non-empty `layout.format` pattern, or `null`. */
   format: string | null;
+  /** SPORT-14: a non-empty `layout.icon` (Tabler outline name) for container headings, or `null`.
+   * Resolved to a component by `resolveHeadingIcon` (`headingIcons.tsx`); the scalar arms ignore it. */
+  icon: string | null;
 }
 
-const EMPTY: NormalizedLayout = { id: null, format: null };
+const EMPTY: NormalizedLayout = { id: null, format: null, icon: null };
 
 /**
  * SPORT-13: validate a resolved `layout` object once, before an arm switches on it.
@@ -27,12 +30,14 @@ export function normalizeLayout(
     devWarn(`layout-shape:${context}`, `"${context}" has a non-object \`layout\` — ignoring it`);
     return EMPTY;
   }
-  const { id, format } = layout as ResolvedAttributeLayout;
+  const { id, format, icon } = layout as ResolvedAttributeLayout;
+  const cleanFormat = typeof format === 'string' && format !== '' ? format : null;
+  const cleanIcon = typeof icon === 'string' && icon !== '' ? icon : null;
   if (typeof id !== 'string' || id === '') {
     devWarn(`layout-id-missing:${context}`, `"${context}" \`layout\` has no string \`id\` — ignoring it`);
-    return { id: null, format: typeof format === 'string' && format !== '' ? format : null };
+    return { id: null, format: cleanFormat, icon: cleanIcon };
   }
-  return { id, format: typeof format === 'string' && format !== '' ? format : null };
+  return { id, format: cleanFormat, icon: cleanIcon };
 }
 
 /**
