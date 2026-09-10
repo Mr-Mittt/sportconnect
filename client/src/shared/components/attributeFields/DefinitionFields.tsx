@@ -48,26 +48,30 @@ export function DefinitionFields({
     definitionType.name,
   );
 
-  const rows = definitionType.fields.map((field) => {
-    const row = (
-      <RecordField
-        key={field.key}
-        field={field}
-        value={record[field.key]}
-        onChange={(value) => onChange({ ...record, [field.key]: value })}
-        definitionsByName={definitionsByName}
-      />
-    );
-    // `inline` needs a per-row grid wrapper; `stacked`/`grid-2` render the `RecordField` directly
-    // so the `stacked` default DOM stays byte-identical to pre-SPORT-14.
-    return kind === 'inline' ? (
-      <div key={field.key} className={INLINE_ROW}>
-        {row}
-      </div>
-    ) : (
-      row
-    );
-  });
+  // SPORT-15: a `hidden` record field renders no input — its value in the record round-trips
+  // untouched (e.g. a code-populated `Reference.url` sitting next to a user-facing `name`).
+  const rows = definitionType.fields
+    .filter((field) => field.hidden !== true)
+    .map((field) => {
+      const row = (
+        <RecordField
+          key={field.key}
+          field={field}
+          value={record[field.key]}
+          onChange={(value) => onChange({ ...record, [field.key]: value })}
+          definitionsByName={definitionsByName}
+        />
+      );
+      // `inline` needs a per-row grid wrapper; `stacked`/`grid-2` render the `RecordField` directly
+      // so the `stacked` default DOM stays byte-identical to pre-SPORT-14.
+      return kind === 'inline' ? (
+        <div key={field.key} className={INLINE_ROW}>
+          {row}
+        </div>
+      ) : (
+        row
+      );
+    });
 
   if (kind === 'grid-2') {
     return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{rows}</div>;

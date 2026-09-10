@@ -74,3 +74,37 @@ describe('DefinitionFields layout', () => {
     expect(console.warn).toHaveBeenCalledOnce();
   });
 });
+
+describe('DefinitionFields — hidden fields (SPORT-15)', () => {
+  const withHidden: ResolvedSportAttributeDefinitionType = {
+    name: 'Reference',
+    fields: [
+      { key: 'value', label: 'Name', type: 'STRING', isRequired: true },
+      { key: 'url', label: 'URL', type: 'STRING', hidden: true },
+    ],
+  };
+
+  it('renders no input for a hidden field but keeps its stored value intact', async () => {
+    const onChange = vi.fn();
+    function Harness() {
+      const [record, setRecord] = useState<Record<string, unknown>>({ url: 'https://x' });
+      return (
+        <DefinitionFields
+          definitionType={withHidden}
+          record={record}
+          onChange={(next) => {
+            onChange(next);
+            setRecord(next);
+          }}
+          definitionsByName={new Map([['Reference', withHidden]])}
+        />
+      );
+    }
+    render(<Harness />);
+    expect(screen.getByLabelText('Name *')).toBeInTheDocument();
+    expect(screen.queryByLabelText('URL')).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Name *'), 'A');
+    // the hidden `url` value round-trips untouched
+    expect(onChange).toHaveBeenLastCalledWith({ url: 'https://x', value: 'A' });
+  });
+});

@@ -4315,6 +4315,29 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client SPORT-15 (`DONE`, 2026-09-10, `client/docs/MVP/SPORT-15_READ_ONLY_LAYOUT_PARITY_AND_REF.md`,
+  impl `..._IMPL.md`):** 3 of 3 — the attribute-layout split's **read-only parity** plus a new
+  `hidden` flag. `SessionAttributesSummary` / `attributeValues` now honour `layout` in the read
+  view: `format` on scalar values (via SPORT-13's `formatAttributeValue`); `LIST` display
+  `chips`(default)/`comma`/`bullets` (SPORT-14 editable ids silently → `chips`); `DEFINITION` record
+  `grid-2` (`inline` ≡ `stacked` here — the read `<dl>` is already label-left); `group`
+  `grid-2`/`grid-3`/`flat`/`inline` (new `GridPairs` helper); `DEFINITION_LIST` `table` /
+  `accordion` (collapsible, reuses `Collapsible`); `layout.icon` on headings/terms via
+  `renderHeadingLabel`. **`#ref` composition** — `RefField` (edit) resolves `node.layout.id` against
+  the composed set (`SINGLE` → `dropdown`/`radio`/`segmented`, `LIST` →
+  `checkboxes`/`chips`/`multiselect`/`ordered`) keeping the choice/Other wiring shared; the `#ref`
+  read branch composes automatically. **`hidden`** (schema flag, backend half `common` C11,
+  scope-expanded same day): a `hidden` attribute/record-field/group renders no editor input and no
+  read row, but its stored value round-trips untouched; mutually exclusive with `required` (C11
+  validator; client `hidden` wins) — filtered next to the existing `isAvailable` checks in
+  `SportAttributesFields` / `DefinitionFields` / `SessionAttributesSummary` / `renderRecord`.
+  `hidden?` added to 5 raw + 3 resolved commons in `shared/types/sport.ts`. Every default branch =
+  pre-SPORT-15 markup; no MSW seed sets `layout`/`hidden`. New: `RefField.test.tsx` (12) +
+  `RefField.stories.tsx`, `SessionAttributesSummary` SPORT-15/`hidden` test + story blocks. `tsc`/
+  `eslint` clean; Vitest **177 files / 1276 passed**. **E2E:** `pnpm e2e` 72 pass; 11 documented
+  parallel-load flakes (`a11y` ×8, `feed-groups-journey` "reappear" ×3), 43/43 isolated incl.
+  `matches-journey`. **Visual-regression:** no baselined surface touched; stash-and-rerun shows an
+  identical 33-fail Windows noise floor on clean `master` — no `update-baselines` dispatch.
 - **Client SPORT-14 (`DONE`, 2026-09-09, `client/docs/MVP/SPORT-14_CONTAINER_ELEMENT_LAYOUTS.md`,
   impl `..._IMPL.md`):** 2 of the 3-ticket attribute-layout split — the **container elements** now
   honour SPORT-13's `layout` object. `group`: `section` (default) / `grid-2` / `grid-3` / `inline`

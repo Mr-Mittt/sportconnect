@@ -150,3 +150,132 @@ export const RefValues: Story = {
     },
   },
 };
+
+/* SPORT-15 — read-only `layout` parity. No MSW schema seed sets `layout`, so these stories are the
+ * human-review surface for the read variants (the composite Vitest covers behaviour). */
+
+const layoutSchema = {
+  definitions: [
+    {
+      name: 'Reference',
+      fields: [
+        { key: 'value', label: 'Model', type: 'STRING' },
+        { key: 'grams', label: 'Weight (g)', type: 'NUMBER' },
+      ],
+    },
+  ],
+  groups: [
+    {
+      key: 'match',
+      label: 'Match details',
+      isAvailable: true,
+      layout: { id: 'grid-2', icon: 'shuttlecock' },
+      attributes: [
+        { key: 'format', label: 'Format', type: 'STRING', isAvailable: true },
+        {
+          key: 'winRate',
+          label: 'Win rate',
+          type: 'NUMBER',
+          isAvailable: true,
+          layout: { id: 'readonly-text', format: '0%' },
+        },
+        {
+          key: 'kitComma',
+          label: 'Kit (comma)',
+          type: 'LIST',
+          isAvailable: true,
+          layout: { id: 'comma' },
+          options: [
+            { value: 's', label: 'Shuttles' },
+            { value: 'w', label: 'Water' },
+          ],
+        },
+        {
+          key: 'kitBullets',
+          label: 'Kit (bullets)',
+          type: 'LIST',
+          isAvailable: true,
+          layout: { id: 'bullets' },
+          options: [
+            { value: 's', label: 'Shuttles' },
+            { value: 'w', label: 'Water' },
+          ],
+        },
+        {
+          key: 'racketsTable',
+          label: 'Rackets (table)',
+          type: 'DEFINITION_LIST',
+          isAvailable: true,
+          definitionRef: 'Reference',
+          layout: { id: 'table', icon: 'racket' },
+        },
+        {
+          key: 'racketsAccordion',
+          label: 'Rackets (accordion)',
+          type: 'DEFINITION_LIST',
+          isAvailable: true,
+          definitionRef: 'Reference',
+          layout: { id: 'accordion' },
+        },
+      ],
+    },
+  ],
+} as unknown as ResolvedSportAttributeSchema;
+
+/** One document exercising every read `layout.id`: a `grid-2` group with a heading icon, a
+ * `format`ted NUMBER, `comma` / `bullets` LIST display, and `table` / `accordion` DEFINITION_LIST. */
+export const ReadOnlyLayouts: Story = {
+  args: {
+    schema: layoutSchema,
+    values: {
+      'match/format': 'Doubles',
+      'match/winRate': 0.62,
+      'match/kitComma': ['s', 'w'],
+      'match/kitBullets': ['s', 'w'],
+      'match/racketsTable': [
+        { value: 'Astrox 99 Pro', grams: 90 },
+        { value: 'Nanoflare 800', grams: 88 },
+      ],
+      'match/racketsAccordion': [
+        { value: 'Astrox 99 Pro', grams: 90 },
+        { value: 'Nanoflare 800', grams: 88 },
+      ],
+    },
+  },
+};
+
+/** A `hidden` field (`url`) holds a stored value but renders no row — only `Model` shows. */
+export const HiddenField: Story = {
+  args: {
+    schema: {
+      definitions: [
+        {
+          name: 'Reference',
+          fields: [
+            { key: 'value', label: 'Model', type: 'STRING' },
+            { key: 'url', label: 'URL', type: 'STRING', hidden: true },
+          ],
+        },
+      ],
+      groups: [
+        {
+          key: 'match',
+          label: 'Match details',
+          isAvailable: true,
+          attributes: [
+            {
+              key: 'racket',
+              label: 'Racket',
+              type: 'DEFINITION',
+              isAvailable: true,
+              definitionRef: 'Reference',
+            },
+          ],
+        },
+      ],
+    } as unknown as ResolvedSportAttributeSchema,
+    values: {
+      'match/racket': { value: 'Yonex Astrox 99 Pro', url: 'https://example.com/astrox-99-pro' },
+    },
+  },
+};

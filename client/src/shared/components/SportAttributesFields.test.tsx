@@ -973,3 +973,59 @@ describe('SPORT-14 — container layouts', () => {
     expect(screen.getByRole('table')).toBeInTheDocument();
   });
 });
+
+describe('SPORT-15 — hidden attributes and groups', () => {
+  it('renders no input for a hidden attribute or a hidden group, but keeps unaffected siblings', () => {
+    const schema = {
+      groups: [
+        {
+          key: 'general',
+          label: 'General',
+          isAvailable: true,
+          attributes: [
+            { key: 'shown', label: 'Hand', type: 'STRING', isAvailable: true },
+            { key: 'secret', label: 'Secret', type: 'STRING', isAvailable: true, hidden: true },
+          ],
+        },
+        {
+          key: 'gone',
+          label: 'Hidden group',
+          isAvailable: true,
+          hidden: true,
+          attributes: [{ key: 'x', label: 'X', type: 'STRING', isAvailable: true }],
+        },
+      ],
+    } as unknown as ResolvedSportAttributeSchema;
+    render(<Harness schema={schema} />);
+    expect(screen.getByLabelText('Hand')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Secret')).not.toBeInTheDocument();
+    expect(screen.queryByText('Hidden group')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('X')).not.toBeInTheDocument();
+  });
+
+  it('does not seed a hidden field\u2019s defaultValue', () => {
+    const onChangeSpy = vi.fn();
+    const schema = {
+      groups: [
+        {
+          key: 'g',
+          label: 'G',
+          isAvailable: true,
+          attributes: [
+            {
+              key: 'code',
+              label: 'Code',
+              type: 'STRING',
+              isAvailable: true,
+              hidden: true,
+              defaultValue: 'AUTO',
+            },
+            { key: 'name', label: 'Name', type: 'STRING', isAvailable: true },
+          ],
+        },
+      ],
+    } as unknown as ResolvedSportAttributeSchema;
+    render(<Harness schema={schema} onChangeSpy={onChangeSpy} />);
+    expect(onChangeSpy).not.toHaveBeenCalledWith('g/code', 'AUTO');
+  });
+});

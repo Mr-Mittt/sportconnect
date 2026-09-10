@@ -70,11 +70,15 @@ export interface SportAttributesFieldsProps {
 }
 
 function isGroupAvailable(group: ResolvedSportAttributeGroup): boolean {
-  return group.isAvailable !== false;
+  // SPORT-15: `hidden` suppresses the whole subtree in the editor, the same as a soft delete —
+  // the stored values under it are untouched (a `hidden` group is code-managed data).
+  return group.isAvailable !== false && group.hidden !== true;
 }
 
 function isAttributeVisible(attribute: ResolvedSportAttributeDefinition): boolean {
-  return attribute.isAvailable !== false;
+  // SPORT-15: `hidden` ⇒ no input (value is code-written, e.g. a `Reference.url`). `hidden` wins
+  // over any required flag (C11 rejects both upstream; this must not crash on a bad schema).
+  return attribute.isAvailable !== false && attribute.hidden !== true;
 }
 
 /**

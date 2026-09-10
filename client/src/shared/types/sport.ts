@@ -169,6 +169,11 @@ export interface SportAttributeField {
   max?: number | null;
   /** SPORT-13: optional presentation hint — see {@link AttributeLayout}. */
   layout?: AttributeLayout | null;
+  /** SPORT-15/C11: render-suppression flag. A `hidden` field's value is stored and round-trips
+   * normally, but no editor input and no read-only row is rendered for it (e.g. a code-populated
+   * `Reference.url`). Mutually exclusive with `isRequired` (C11 validator rejects both; client-side
+   * `hidden` wins). Not a soft delete — that is `isAvailable`. */
+  hidden?: boolean | null;
 }
 
 /** A named, reusable record shape declared once in a sport's schema and
@@ -211,6 +216,9 @@ export interface SportAttributeDefinition {
   max?: number | null;
   /** SPORT-13: optional presentation hint — see {@link AttributeLayout}. */
   layout?: AttributeLayout | null;
+  /** SPORT-15/C11: render-suppression flag — see {@link SportAttributeField.hidden}. Mutually
+   * exclusive with a `defaultValue`-less required field. */
+  hidden?: boolean | null;
 }
 
 export interface SportAttributeGroup {
@@ -231,6 +239,9 @@ export interface SportAttributeGroup {
   /** SPORT-13: optional presentation hint. Group layout (child arrangement + heading `icon`) is
    * rendered by SPORT-14 — added here now to keep the type stable across the split. */
   layout?: AttributeLayout | null;
+  /** SPORT-15/C11: render-suppression flag — a `hidden` group renders no editor section and no
+   * read-only section (its whole subtree). Values under it still round-trip. */
+  hidden?: boolean | null;
 }
 
 /** The whole raw document (admin-only path). `GET` returns `data: null` for a
@@ -301,6 +312,8 @@ export interface SessionAttributeNode {
   /** SPORT-13: optional presentation hint — see {@link AttributeLayout}. Legal on both a `#ref`
    * node and an own node. */
   layout?: AttributeLayout | null;
+  /** SPORT-15/C11: render-suppression flag — see {@link SportAttributeField.hidden}. */
+  hidden?: boolean | null;
 }
 
 export interface SessionAttributeGroup {
@@ -314,6 +327,8 @@ export interface SessionAttributeGroup {
   attributes: SessionAttributeNode[];
   /** SPORT-13: optional presentation hint (group layout rendered by SPORT-14). */
   layout?: AttributeLayout | null;
+  /** SPORT-15/C11: render-suppression flag — a `hidden` group renders no section (whole subtree). */
+  hidden?: boolean | null;
 }
 
 export interface SessionAttributeSchema {
@@ -363,6 +378,11 @@ interface ResolvedAttributeCommon {
    * (`StringField`/`NumberField`/`BooleanField`/`EnumField`) read `layout.id` + `layout.format`;
    * container/`#ref`/read-only handling is SPORT-14/15. */
   layout?: ResolvedAttributeLayout | null;
+  /** SPORT-15/C11: render-suppression flag. `true` ⇒ no editor input (`SportAttributesFields`) and
+   * no read-only row (`SessionAttributesSummary`), but the stored value round-trips untouched.
+   * Mutually exclusive with a required field (C11 rejects both; client-side `hidden` wins). Not a
+   * soft delete — that is `isAvailable`. */
+  hidden?: boolean | null;
 }
 
 export interface ResolvedStringAttribute extends ResolvedAttributeCommon {
@@ -450,6 +470,10 @@ interface ResolvedFieldCommon {
   /** SPORT-13: optional presentation hint — {@link ResolvedAttributeLayout}. A record-context
    * scalar field honours `layout` the same way a top-level one does. */
   layout?: ResolvedAttributeLayout | null;
+  /** SPORT-15/C11: render-suppression flag — see {@link ResolvedAttributeCommon.hidden}. A `hidden`
+   * record field is skipped by `DefinitionFields` (edit) and `renderRecord` (read); its value in
+   * the record round-trips untouched. */
+  hidden?: boolean | null;
 }
 
 export interface ResolvedStringField extends ResolvedFieldCommon {
@@ -505,6 +529,9 @@ export interface ResolvedSportAttributeGroup {
   groups?: ResolvedSportAttributeGroup[] | null;
   /** SPORT-13: optional presentation hint (group layout + heading `icon` rendered by SPORT-14). */
   layout?: ResolvedAttributeLayout | null;
+  /** SPORT-15/C11: render-suppression flag — a `hidden` group renders no editor section and no
+   * read-only section (its whole subtree). Values under it still round-trip. */
+  hidden?: boolean | null;
 }
 
 /** The whole document `GET /api/sports/{sportId}/attribute-schema` returns —
