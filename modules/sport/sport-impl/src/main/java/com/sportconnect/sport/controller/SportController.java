@@ -193,7 +193,11 @@ public class SportController {
 
     @Operation(summary = "Replace a sport's attribute schema",
             description = "Admin-only. Replaces the whole document; there is no partial update. "
-                    + "An invalid document is rejected in full and never half-applies.")
+                    + "An invalid document is rejected in full and never half-applies. "
+                    + "C11: a node/field/group may carry an optional 'layout' object "
+                    + "({ id, icon?, format? } — server-opaque, carried raw; 'id' must be non-blank "
+                    + "when present) and an optional 'hidden' boolean; a definition field may not be "
+                    + "'hidden' and required at once.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema replaced"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Schema document is invalid"),
@@ -257,7 +261,11 @@ public class SportController {
     @Operation(summary = "Replace a sport's session attribute schema",
             description = "Admin-only. Replaces the whole document; no partial update. Rejected in "
                     + "full if any #ref does not resolve to a live, available profile attribute, or "
-                    + "any other rule is broken.")
+                    + "any other rule is broken. C11: own nodes/fields/groups may carry a 'layout' "
+                    + "object and 'hidden' boolean (same rules as the profile schema); a #ref node "
+                    + "may additionally carry 'fieldLayouts' (per-field override map) — #ref "
+                    + "presentation data is carried raw and never gated. A definition field may not "
+                    + "be 'hidden' and required at once.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema replaced"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Schema document is invalid"),

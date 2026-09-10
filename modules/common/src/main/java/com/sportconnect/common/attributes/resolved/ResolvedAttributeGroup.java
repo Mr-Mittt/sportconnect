@@ -1,6 +1,7 @@
 package com.sportconnect.common.attributes.resolved;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.sportconnect.common.attributes.AttributeLayout;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -23,6 +24,12 @@ public class ResolvedAttributeGroup {
     private String key;
 
     private String label;
+
+    /** Optional, server-opaque presentation hint (C11), copied verbatim from the raw group. */
+    private AttributeLayout layout;
+
+    /** Optional render-suppression flag (C11), copied verbatim from the raw group. Absent reads as {@code false}. */
+    private Boolean hidden;
 
     private Boolean isAvailable;
 

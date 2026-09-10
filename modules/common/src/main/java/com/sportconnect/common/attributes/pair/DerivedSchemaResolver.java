@@ -28,7 +28,10 @@ import java.util.Map;
  *
  * <p>{@code prefillKey} now names <em>the base path the client reads the choice list from</em> — no
  * longer a one-shot default. Own nodes and single-schema resolutions carry none of the three
- * markers. Spring-free (D2): a {@code public static} entry point.
+ * markers. The same walk also stamps a {@code #ref} node's own C11 {@code layout} / {@code hidden} /
+ * {@code fieldLayouts} onto the resolved node — the inlined concrete node the expander produced
+ * carries none of them, so they are copied here from the {@code RefExpansion} instead. Spring-free
+ * (D2): a {@code public static} entry point.
  */
 public final class DerivedSchemaResolver {
 
@@ -73,6 +76,11 @@ public final class DerivedSchemaResolver {
                         attribute.setPrefillable(true);
                         attribute.setPrefillKey(expansion.basePath());
                         attribute.setCardinality(expansion.cardinality());
+                        // C11: the #ref node's own presentation hints — the inlined concrete node
+                        // (which AttributeSchemaResolver just walked) carries none of them.
+                        attribute.setLayout(expansion.layout());
+                        attribute.setHidden(expansion.hidden());
+                        attribute.setFieldLayouts(expansion.fieldLayouts());
                     }
                 }
             }

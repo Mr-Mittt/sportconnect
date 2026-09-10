@@ -97,6 +97,18 @@ class AttributeSchemaJsonSpec extends Specification {
         (grip.fields.find { it.key == 'thickness' } as NumberField).max == 2.0d
         grip.fields.find { it.key == 'brand' } instanceof DefinitionField
 
+        and: "C11 layout / hidden carried on nodes, fields and groups"
+        def reach = schema.groups.find { it.key == 'general' }.attributes.find { it.key == 'reach' } as NumberAttribute
+        reach.layout.id == 'slider'
+        reach.layout.icon == 'ruler'
+        reach.layout.format == ['en': '#,##0 cm', 'vi': '#,##0 cm']   // still a raw locale map, not resolved
+        schema.groups.find { it.key == 'general' }.attributes.find { it.key == 'leftHanded' }.hidden
+        (schema.groups.find { it.key == 'gear' }).layout.id == 'grid-2'
+        def refDef = schema.definitions.find { it.name == 'Reference' }
+        refDef.fields.find { it.key == 'id' }.hidden
+        refDef.fields.find { it.key == 'value' }.layout.id == 'input'
+        (schema.definitions.find { it.name == 'Grip' }.fields.find { it.key == 'thickness' } as NumberField).layout.format == ['en': '0.0', 'vi': '0,0']
+
         and: "stable + lossless"
         AttributeSchema reparsed = mapper.readValue(mapper.writeValueAsString(schema), AttributeSchema)
         reparsed == schema
@@ -140,8 +152,36 @@ class AttributeSchemaJsonSpec extends Specification {
         refOut.path('#ref').asText() == 'gear/shuttlecocks'
         refOut.path('type').asText() == 'REF'
 
+        and: "C11 layout / hidden / fieldLayouts carried on the #ref nodes verbatim"
+        shuttlecock.layout.id == 'radio'
+        shuttlecock.layout.format == ['en': 'titlecase']
+        shuttlecock.hidden
+        rackets.layout.id == 'chips'
+        rackets.fieldLayouts.keySet() == ['value', 'bogusKey'] as Set
+        rackets.fieldLayouts['value'].id == 'input'
+        rackets.fieldLayouts['value'].icon == 'tag'
+        rackets.fieldLayouts['bogusKey'].hidden
+
         and: "stable"
         mapper.readValue(mapper.writeValueAsString(schema), AttributeSchema) == schema
+    }
+
+    def "tolerates an unknown property inside a layout object (dropped, not rejected)"() {
+        given: "a layout carrying a property this model version does not know"
+        String json = '''
+        { "defaultLocale": "en", "groups": [ { "key": "g", "label": {"en":"G"}, "attributes": [
+          { "key": "x", "label": {"en":"X"}, "type": "STRING",
+            "layout": { "id": "textarea", "density": "compact", "rows": 4 } } ] } ] }
+        '''
+
+        when:
+        AttributeSchema schema = mapper.readValue(json, AttributeSchema)
+        def node = schema.groups[0].attributes[0] as StringAttribute
+
+        then: "known props kept, unknown ones silently dropped — never a parse failure"
+        node.layout.id == 'textarea'
+        JsonNode layoutOut = mapper.valueToTree(schema).path('groups').get(0).path('attributes').get(0).path('layout')
+        layoutOut.fieldNames().collect() == ['id']
     }
 
     def "rejects an unknown field for a subtype at parse time"() {

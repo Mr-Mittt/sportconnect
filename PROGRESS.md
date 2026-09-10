@@ -3355,6 +3355,25 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `:server:test` 181 (0 failures). No `CLIENT-SESSION-17` code change needed — it already submits a
   bare value for `SINGLE`, and the member-facing resolved `type` now agrees (`DEFINITION_LIST` →
   `DEFINITION`).
+  **C11 `DONE` 2026-09-10** — schema-driven presentation hints as **server-opaque** data (validate
+  on admin write, carry the rest raw). New `AttributeLayout` `{ id, icon?, format? }` + optional
+  `hidden` boolean on every `AttributeNode`/`AttributeField`/`AttributeGroup` and `Resolved*` twin;
+  `AttributeFieldLayout` + `fieldLayouts` map on `RefAttribute` + `ResolvedAttributeNode` only.
+  `format` carried as a **raw locale map on both sides** (not resolved server-side — client
+  `SPORT-16` retrofits `ResolvedAttributeLayout.format` `string`→map). Carry-through: `AttributeJson`
+  round-trip (Lombok + `@JsonIgnoreProperties(ignoreUnknown=true)` on the two value types),
+  `AttributeSchemaResolver` (verbatim copy), `DerivedSchemaExpander.RefExpansion` +
+  `DerivedSchemaResolver.markRefs` (a `#ref` node's own `layout`/`hidden`/`fieldLayouts` stamped
+  onto the resolved node like `prefillKey`/`cardinality`; `expandRefTarget` untouched). Only gate
+  (`LeafChecks.validateLayout` + `FieldValidators`, shared → both single & derived validators):
+  `layout` present ⇒ non-blank `id`; a definition field may not be `hidden` **and** `isRequired`.
+  `#ref` presentation data stays lenient (unvalidated). No DB migration — session schema stays
+  unseeded (V062), demo examples in `common` fixtures `{comprehensive,derived}-schema.json`.
+  `sport-api`/`sport-impl` unchanged (they re-expose the common types). Green:
+  `:modules:common:test` 320 (+18) · targeted `:server:test` 32 (`SportAttributeSchemaIT` 21 +2,
+  `SessionAttributeSchemaIT` 11 +2 — `layout`/`hidden`/`fieldLayouts` round-trip + `hidden`+required
+  → 400); full `:server:test` deferred to CI (>40 min locally). Client consumers `SPORT-13`/`14`/`15`
+  shipped; `SPORT-16` `TODO`.
   **Sport `A23` `DONE` 2026-09-08** — the consumer side: `sport-api`/`sport-impl`/`session-impl`
   repointed onto `common.attributes`; the 16-file `sport-api` DTO tree + 9 `sport-impl` logic
   classes + the 3-file SESSION-23 clone (and their now-duplicate specs) **deleted**; `SportService`

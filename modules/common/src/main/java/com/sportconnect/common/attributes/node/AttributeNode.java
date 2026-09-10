@@ -2,6 +2,7 @@ package com.sportconnect.common.attributes.node;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.sportconnect.common.attributes.AttributeLayout;
 
 import java.util.Map;
 
@@ -53,4 +54,19 @@ public sealed interface AttributeNode
      * {@code null}.
      */
     Map<String, String> getLabel();
+
+    /**
+     * Optional, server-opaque presentation hint (C11). {@code null} when the node declares none.
+     * Carried verbatim through JSON round-trip / resolver / {@code #ref} expansion; the only gate is
+     * a shape check on admin write (non-blank {@code id} when present).
+     */
+    AttributeLayout getLayout();
+
+    /**
+     * Optional render-suppression flag (C11). {@code true} ⇒ the value is stored and round-trips but
+     * no editor input and no read-only row is rendered for it. Absent ({@code null}) reads as
+     * {@code false}. A rendering flag, not a soft delete ({@code isAvailable} covers removal); the
+     * single-schema validator rejects {@code hidden} together with a required definition field.
+     */
+    Boolean getHidden();
 }

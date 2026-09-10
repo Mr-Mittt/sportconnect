@@ -370,4 +370,72 @@ class DerivedSchemaResolverSpec extends Specification {
         expanded.schema().groups[0].attributes[0] instanceof StringAttribute
         ((StringAttribute) expanded.schema().groups[0].attributes[0]).defaultValue == null
     }
+
+    // ---- C11: layout / hidden / fieldLayouts ----
+
+    def "a #ref node's own C11 layout / hidden / fieldLayouts land on the resolved node, and own nodes keep theirs"() {
+        given:
+        def baseSchema = base([bGroup("gear", [
+                DefinitionListAttribute.builder().key("rackets").label(["en": "Rackets"]).isAvailable(true)
+                        .definitionRef("Reference").build()
+        ])], [refDef()])
+        def refNode = RefAttribute.builder().key("rackets").ref("gear/rackets").cardinality(Cardinality.LIST)
+                .layout(com.sportconnect.common.attributes.AttributeLayout.builder().id("chips").icon("racket")
+                        .format(["en": "titlecase"]).build())
+                .hidden(true)
+                .fieldLayouts([
+                        value  : com.sportconnect.common.attributes.AttributeFieldLayout.builder().id("input").build(),
+                        unknown: com.sportconnect.common.attributes.AttributeFieldLayout.builder().hidden(true).build()
+                ]).build()
+        def ownNode = StringAttribute.builder().key("note").label(["en": "Note"]).isAvailable(true)
+                .layout(com.sportconnect.common.attributes.AttributeLayout.builder().id("textarea").build())
+                .hidden(true).build()
+        def d = derived([dGroup("match", [refNode, ownNode])])
+
+        when:
+        def resolved = resolver.resolve(baseSchema, d, EN)
+
+        then: "#ref-derived node carries the ref's own C11 fields (the inlined concrete node had none)"
+        def rackets = findAttr(resolved, "rackets")
+        rackets.prefillable
+        rackets.layout.id == "chips"
+        rackets.layout.icon == "racket"
+        rackets.layout.format == ["en": "titlecase"]     // still a raw locale map
+        rackets.hidden
+        rackets.fieldLayouts.keySet() == ["value", "unknown"] as Set
+        rackets.fieldLayouts["value"].id == "input"
+        rackets.fieldLayouts["unknown"].hidden
+
+        and: "an own node keeps its own layout / hidden through the normal resolver path"
+        def note = findAttr(resolved, "note")
+        note.layout.id == "textarea"
+        note.hidden
+        note.fieldLayouts == null
+
+        and: "the pulled-in base definition's fields keep their own layout / hidden"
+        def resolvedDef = resolved.definitions.find { it.name == "Reference" }
+        resolvedDef.fields.find { it.key == "value" }.hidden == null   // refDef() sets none — sanity that the field is present
+    }
+
+    def "a base definition field's own layout / hidden survives the pull into the merged registry"() {
+        given:
+        def defWithLayout = AttributeDefinitionType.builder().name("Reference").fields([
+                StringField.builder().key("value").label(["en": "Name"]).isRequired(true)
+                        .layout(com.sportconnect.common.attributes.AttributeLayout.builder().id("input").build()).build(),
+                StringField.builder().key("url").label(["en": "URL"]).isRequired(false).hidden(true).build()
+        ]).build()
+        def baseSchema = base([bGroup("gear", [
+                DefinitionListAttribute.builder().key("rackets").label(["en": "Rackets"]).isAvailable(true)
+                        .definitionRef("Reference").build()
+        ])], [defWithLayout])
+        def d = derived([dGroup("match", [ref("rackets", "gear/rackets", Cardinality.LIST)])])
+
+        when:
+        def resolved = resolver.resolve(baseSchema, d, EN)
+
+        then:
+        def fields = resolved.definitions.find { it.name == "Reference" }.fields
+        fields.find { it.key == "value" }.layout.id == "input"
+        fields.find { it.key == "url" }.hidden
+    }
 }

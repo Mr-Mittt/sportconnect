@@ -2,6 +2,7 @@ package com.sportconnect.integration;
 
 import com.sportconnect.common.attributes.AttributeDefinitionType;
 import com.sportconnect.common.attributes.AttributeGroup;
+import com.sportconnect.common.attributes.AttributeLayout;
 import com.sportconnect.common.attributes.AttributeOption;
 import com.sportconnect.common.attributes.AttributeSchema;
 import com.sportconnect.common.attributes.field.DefinitionField;
@@ -168,6 +169,91 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
         mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.groups[0].attributes[0].key").value("racket"));
+    }
+
+    @Test
+    void adminPut_thenMemberGet_roundTripsC11LayoutAndHidden() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        // A node with a full layout (incl. a raw format locale map) + a hidden group + a hidden,
+        // non-required definition field — C11's "carry raw" contract through a real JSON column.
+        AttributeSchema schema = AttributeSchema.builder()
+                .defaultLocale("en")
+                .definitions(List.of(AttributeDefinitionType.builder()
+                        .name("Reference")
+                        .fields(List.of(
+                                StringField.builder().key("id").label(Map.of("en", "Item"))
+                                        .isRequired(false).hidden(true).build(),
+                                StringField.builder().key("value").label(Map.of("en", "Name"))
+                                        .isRequired(true)
+                                        .layout(AttributeLayout.builder().id("input").icon("tag").build()).build()))
+                        .build()))
+                .groups(List.of(AttributeGroup.builder()
+                        .key("gear").label(Map.of("en", "Gear")).isAvailable(true)
+                        .layout(AttributeLayout.builder().id("grid-2").build())
+                        .attributes(List.of(
+                                NumberAttribute.builder()
+                                        .key("reach").label(Map.of("en", "Reach"))
+                                        .isAvailable(true)
+                                        .layout(AttributeLayout.builder().id("slider").icon("ruler")
+                                                .format(Map.of("en", "#,##0 cm", "vi", "#,##0 cm")).build())
+                                        .hidden(true).build(),
+                                DefinitionAttribute.builder()
+                                        .key("brand").label(Map.of("en", "Brand"))
+                                        .isAvailable(true).definitionRef("Reference").build()))
+                        .build()))
+                .build();
+
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(schema)))
+                .andExpect(status().isOk());
+
+        evictSportCache();
+
+        // Member GET resolves labels but carries layout/hidden verbatim — format stays a locale map.
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.groups[0].layout.id").value("grid-2"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].key").value("reach"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].layout.id").value("slider"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].layout.format.en").value("#,##0 cm"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].hidden").value(true))
+                .andExpect(jsonPath("$.data.definitions[0].fields[0].key").value("id"))
+                .andExpect(jsonPath("$.data.definitions[0].fields[0].hidden").value(true))
+                .andExpect(jsonPath("$.data.definitions[0].fields[1].layout.id").value("input"));
+    }
+
+    @Test
+    void adminPut_rejectsAHiddenAndRequiredDefinitionField_withBadRequest() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+
+        AttributeSchema schema = AttributeSchema.builder()
+                .defaultLocale("en")
+                .definitions(List.of(AttributeDefinitionType.builder()
+                        .name("Reference")
+                        .fields(List.of(StringField.builder()
+                                .key("value").label(Map.of("en", "Name"))
+                                .isRequired(true).hidden(true).build()))
+                        .build()))
+                .groups(List.of(AttributeGroup.builder()
+                        .key("gear").label(Map.of("en", "Gear")).isAvailable(true)
+                        .attributes(List.of(DefinitionAttribute.builder()
+                                .key("brand").label(Map.of("en", "Brand"))
+                                .isAvailable(true).definitionRef("Reference").build()))
+                        .build()))
+                .build();
+
+        mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(schema)))
+                .andExpect(status().isBadRequest());
+
+        evictSportCache();
+
+        mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test

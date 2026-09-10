@@ -1,9 +1,14 @@
 package com.sportconnect.integration;
 
+import com.sportconnect.common.attributes.AttributeDefinitionType;
+import com.sportconnect.common.attributes.AttributeFieldLayout;
 import com.sportconnect.common.attributes.AttributeGroup;
+import com.sportconnect.common.attributes.AttributeLayout;
 import com.sportconnect.common.attributes.AttributeSchema;
 import com.sportconnect.common.attributes.Cardinality;
+import com.sportconnect.common.attributes.field.StringField;
 import com.sportconnect.common.attributes.node.BooleanAttribute;
+import com.sportconnect.common.attributes.node.DefinitionAttribute;
 import com.sportconnect.common.attributes.node.NumberAttribute;
 import com.sportconnect.common.attributes.node.RefAttribute;
 import com.sportconnect.common.attributes.node.StringAttribute;
@@ -173,6 +178,74 @@ class SessionAttributeSchemaIntegrationTest extends BaseIT {
                 .andExpect(jsonPath("$.data.groups[0].attributes[1].label").value("Độ căng"))
                 .andExpect(jsonPath("$.data.groups[0].attributes[1].prefillable").value(true))
                 .andExpect(jsonPath("$.data.groups[0].attributes[1].prefillKey").value("gear/rackets/tension"));
+    }
+
+    @Test
+    void adminPut_thenMemberGet_stampsC11FieldsFromTheRefOntoTheResolvedNode() throws Exception {
+        putProfileSchema();
+
+        AttributeSchema session = AttributeSchema.builder()
+                .defaultLocale("en")
+                .groups(List.of(AttributeGroup.builder()
+                        .key("setup").label(Map.of("en", "Setup")).isAvailable(true)
+                        .attributes(List.of(RefAttribute.builder()
+                                .key("tension").ref("gear/rackets/tension").cardinality(Cardinality.SINGLE)
+                                .layout(AttributeLayout.builder().id("slider").icon("ruler")
+                                        .format(Map.of("en", "0.0")).build())
+                                .hidden(true)
+                                .fieldLayouts(Map.of(
+                                        "value", AttributeFieldLayout.builder().id("input").build(),
+                                        "bogusKey", AttributeFieldLayout.builder().hidden(true).build()))
+                                .build()))
+                        .build()))
+                .build();
+
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+        mockMvc.perform(put("/api/sports/{sportId}/session-attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(session)))
+                .andExpect(status().isOk());
+        evictSportCache();
+
+        // Member GET: the #ref's own layout / hidden / fieldLayouts are stamped onto the resolved
+        // (expanded) node — the inlined concrete node never carries them.
+        mockMvc.perform(get("/api/sports/{sportId}/session-attribute-schema", sportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].key").value("tension"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].type").value("NUMBER"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].prefillable").value(true))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].layout.id").value("slider"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].layout.format.en").value("0.0"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].hidden").value(true))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].fieldLayouts.value.id").value("input"))
+                .andExpect(jsonPath("$.data.groups[0].attributes[0].fieldLayouts.bogusKey.hidden").value(true));
+    }
+
+    @Test
+    void adminPut_rejectsAHiddenAndRequiredSessionDefinitionField_withBadRequest() throws Exception {
+        putProfileSchema();
+
+        AttributeSchema session = AttributeSchema.builder()
+                .defaultLocale("en")
+                .definitions(List.of(AttributeDefinitionType.builder()
+                        .name("Note")
+                        .fields(List.of(StringField.builder()
+                                .key("text").label(Map.of("en", "Text"))
+                                .isRequired(true).hidden(true).build()))
+                        .build()))
+                .groups(List.of(AttributeGroup.builder()
+                        .key("setup").label(Map.of("en", "Setup")).isAvailable(true)
+                        .attributes(List.of(DefinitionAttribute.builder()
+                                .key("note").label(Map.of("en", "Note"))
+                                .isAvailable(true).definitionRef("Note").build()))
+                        .build()))
+                .build();
+
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+        mockMvc.perform(put("/api/sports/{sportId}/session-attribute-schema", sportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(session)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.sportconnect.common.attributes.validate;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.sportconnect.common.attributes.AttributeLayout;
 import com.sportconnect.common.attributes.AttributeOption;
 import com.sportconnect.common.attributes.json.AttributeJson;
 import com.sportconnect.common.exception.BadRequestException;
@@ -93,6 +94,19 @@ public final class LeafChecks {
                 throw new BadRequestException(context + " has duplicate option value: " + option.getValue());
             }
             validateLabel(option.getLabel(), defaultLocale, context + " option " + option.getValue());
+        }
+    }
+
+    /**
+     * C11 {@code layout} <strong>shape</strong> sanity — the only structural gate on a presentation
+     * hint. A {@code layout} is either absent or an object with a non-blank {@code id}; an
+     * <em>unknown</em> {@code id}, {@code icon} or {@code format} value is never rejected (the client
+     * owns the vocabulary and degrades gracefully). {@code layout} being a non-object is already
+     * impossible here — the strict framework mapper fails that at parse.
+     */
+    public static void validateLayout(AttributeLayout layout, String context) {
+        if (layout != null && (layout.getId() == null || layout.getId().isBlank())) {
+            throw new BadRequestException(context + " has a layout with no id");
         }
     }
 

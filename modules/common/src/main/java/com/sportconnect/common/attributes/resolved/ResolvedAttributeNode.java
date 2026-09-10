@@ -1,6 +1,8 @@
 package com.sportconnect.common.attributes.resolved;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.sportconnect.common.attributes.AttributeFieldLayout;
+import com.sportconnect.common.attributes.AttributeLayout;
 import com.sportconnect.common.attributes.AttributeType;
 import com.sportconnect.common.attributes.Cardinality;
 import lombok.AllArgsConstructor;
@@ -9,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * {@link com.sportconnect.common.attributes.node.AttributeNode}, locale-resolved and
@@ -50,6 +53,24 @@ public class ResolvedAttributeNode {
     private String definitionRef;
 
     private String searchScope;
+
+    /**
+     * Optional, server-opaque presentation hint (C11) — copied verbatim from the raw node
+     * ({@code #ref}-derived nodes take it from the {@code #ref} itself). {@code format} inside it is
+     * still a raw {@code locale -> pattern} map, not resolved to one string (client ticket
+     * {@code SPORT-16}).
+     */
+    private AttributeLayout layout;
+
+    /** Optional render-suppression flag (C11), copied verbatim from the raw node. Absent reads as {@code false}. */
+    private Boolean hidden;
+
+    /**
+     * Optional per-field presentation overrides (C11) — set only on a node produced from a
+     * {@code #ref} that declared {@code fieldLayouts}, copied verbatim. Keyed by the referenced
+     * definition type's field keys.
+     */
+    private Map<String, AttributeFieldLayout> fieldLayouts;
 
     /** {@code SINGLE}/{@code LIST} — set only on a {@code #ref}-derived node (C9). */
     private Cardinality cardinality;

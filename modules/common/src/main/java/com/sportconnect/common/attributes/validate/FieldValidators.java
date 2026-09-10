@@ -8,6 +8,7 @@ import com.sportconnect.common.attributes.field.EnumField;
 import com.sportconnect.common.attributes.field.ListField;
 import com.sportconnect.common.attributes.field.NumberField;
 import com.sportconnect.common.attributes.field.StringField;
+import com.sportconnect.common.exception.BadRequestException;
 
 import java.util.Map;
 
@@ -27,6 +28,12 @@ final class FieldValidators {
                          Map<String, AttributeDefinitionType> byName, String defaultLocale) {
         String ctx = "Definition " + definition.getName() + " field " + field.getKey();
         LeafChecks.validateLabel(field.getLabel(), defaultLocale, ctx);
+        LeafChecks.validateLayout(field.getLayout(), ctx);
+        // C11: a hidden field renders no input and no read row, so a required-but-hidden field could
+        // never be satisfied — reject the contradiction. Applies to both single and derived schemas.
+        if (Boolean.TRUE.equals(field.getHidden()) && Boolean.TRUE.equals(field.getIsRequired())) {
+            throw new BadRequestException(ctx + " cannot be both hidden and required");
+        }
         switch (field) {
             case StringField ignored -> {
             }

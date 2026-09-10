@@ -370,6 +370,64 @@ class DerivedSchemaValidatorSpec extends Specification {
         "an own node with no type"                   | node('{"key":"x","label":{"en":"x"}}')
     }
 
+    // ---- C11: layout / hidden / fieldLayouts ----
+
+    def "a #ref carrying layout / hidden / fieldLayouts (incl. an unknown key) is accepted - #ref presentation data is never gated"() {
+        given:
+        def refNode = RefAttribute.builder().key("tension").ref("gear/rackets/tension").cardinality(Cardinality.SINGLE)
+                .layout(com.sportconnect.common.attributes.AttributeLayout.builder().id("slider").build())
+                .hidden(true)
+                .fieldLayouts([
+                        anything: com.sportconnect.common.attributes.AttributeFieldLayout.builder().id("x").hidden(true).build()
+                ]).build()
+
+        when:
+        validator.validate(badmintonBase(), derived([dGroup("setup", [refNode])]))
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "a #ref's own malformed layout (blank id) is NOT rejected - the derived validator stays lenient on #ref presentation data"() {
+        given:
+        def refNode = RefAttribute.builder().key("tension").ref("gear/rackets/tension").cardinality(Cardinality.SINGLE)
+                .layout(com.sportconnect.common.attributes.AttributeLayout.builder().id("  ").build()).build()
+
+        when:
+        validator.validate(badmintonBase(), derived([dGroup("setup", [refNode])]))
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "a derived-local definition field that is both hidden and required is rejected (shared field walk)"() {
+        given:
+        def badDef = defType("Note", [
+                StringField.builder().key("text").label(["en": "Text"]).isRequired(true).hidden(true).build()
+        ])
+        def schema = derived([dGroup("setup", [bDefinition("note", "Note")])], [badDef])
+
+        when:
+        validator.validate(badmintonBase(), schema)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains("cannot be both hidden and required")
+    }
+
+    def "an own node / group in a derived schema still gets layout shape-sanity (shared own-node walk)"() {
+        given:
+        def ownBad = StringAttribute.builder().key("note").label(["en": "Note"]).isAvailable(true)
+                .layout(com.sportconnect.common.attributes.AttributeLayout.builder().id("").build()).build()
+
+        when:
+        validator.validate(badmintonBase(), derived([dGroup("setup", [ownBad])]))
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains("layout with no id")
+    }
+
     /** Wrap a raw node JSON into a minimal one-group derived schema document. */
     private static String node(String nodeJson) {
         '{"defaultLocale":"en","groups":[{"key":"g","label":{"en":"G"},"attributes":[' + nodeJson + ']}]}'
