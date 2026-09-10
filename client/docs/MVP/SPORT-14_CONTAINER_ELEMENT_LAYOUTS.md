@@ -1,6 +1,6 @@
 # SPORT-14 · Container-element layouts (group / DEFINITION / DEFINITION_LIST / LIST) + heading `icon`
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-09)
 **Type:** Client feature
 **Depends on:** `SPORT-13` (the `layout` object type + threading mechanism + per-arm story
 scaffold). Generalises `SPORT-7`'s fixed group grid.
@@ -65,6 +65,29 @@ carries the meaning.
 - Visual-regression: new stories only; existing profile / create-session / session-detail
   baselines byte-identical (the default ids reproduce today's output). Any shift →
   `update-baselines` dispatch, called out in the summary.
+
+## Delta (2026-09-09, at pickup — corrections found during implementation)
+
+- **`LIST` container default id is `checkboxes`, not `chips`.** `ATTRIBUTE_LAYOUT_DESIGN.md` listed
+  the ids as `chips`(current)·`checkboxes`·… but the shipped `ListField` is a checkbox list. Since
+  "first id = byte-identical to today" is the hard rule, the default is `checkboxes`; `chips` /
+  `multiselect` / `ordered` are the three alternates. (`SPORT-15`'s `LIST` **display** ids —
+  `chips` / `comma` / `bullets` — are a separate read-only axis and unaffected.)
+- **`table` DEFINITION_LIST is scalar-only.** A record whose fields include a `LIST` or nested
+  `DEFINITION` degrades to `cards` + a dev warning (`layout-degrade-table:<label>`) rather than
+  forcing those controls into a table cell.
+- **`inline` is a container-level CSS affordance** (`display:contents` + a 2-col grid) — the seven
+  arm components are **not** restructured (user decision). `BOOLEAN` / radio / segmented arms have
+  their own internal flex, so they render label-left with looser alignment than the scalar
+  `<input>` / `<select>` arms.
+- **`RecordField` is now exported** from `attributeFields/DefinitionFields.tsx` (was module-private)
+  so the `table` layout can render one field per cell.
+- **Custom heading-icon artwork is still `TODO`.** `icons/IconShuttlecock.tsx` /
+  `icons/IconRacket.tsx` ship with placeholder outline paths — real `d` data to be supplied and
+  swapped; the registry + resolver mechanism is complete.
+- **Verified:** no baseline moved. `pnpm test` 176/1248; `pnpm e2e` 75 pass (8 `a11y.spec.ts`
+  concurrent-load flakes, 31/31 isolated); `visual-regression` stash-and-rerun shows every diff
+  byte-identical to clean `master` (Windows noise floor) — no `update-baselines` dispatch.
 
 ---
 

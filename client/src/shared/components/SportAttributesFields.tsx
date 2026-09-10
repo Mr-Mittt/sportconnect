@@ -13,10 +13,32 @@ import { BooleanField } from './attributeFields/BooleanField';
 import { DefinitionField } from './attributeFields/DefinitionField';
 import { DefinitionListField } from './attributeFields/DefinitionListField';
 import { EnumField } from './attributeFields/EnumField';
+import { renderHeadingLabel } from './attributeFields/headingIcons';
+import { normalizeLayout, pickLayoutId } from './attributeFields/layout';
 import { ListField } from './attributeFields/ListField';
 import { NumberField } from './attributeFields/NumberField';
 import { RefField } from './attributeFields/RefField';
 import { StringField } from './attributeFields/StringField';
+
+const GROUP_LAYOUTS = ['section', 'grid-2', 'grid-3', 'inline', 'flat'] as const;
+
+/** SPORT-14: the inner attribute-wrapper for each `group` layout. `section` (default) and `grid-2`
+ * are the same string SPORT-7 hardcoded — the default output is byte-identical. */
+const GROUP_ATTR_WRAPPER: Record<(typeof GROUP_LAYOUTS)[number], string> = {
+  section: 'grid grid-cols-1 gap-3.5 sm:grid-cols-2',
+  'grid-2': 'grid grid-cols-1 gap-3.5 sm:grid-cols-2',
+  'grid-3': 'grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3',
+  inline: 'flex flex-col gap-1',
+  flat: 'flex flex-col gap-3.5',
+};
+
+/** SPORT-14: per-child wrapper for the `inline` group layout. `display:contents` on the
+ * `AttributeField` cell and a scalar arm's own root `<div>` lifts its `<Label>` + control into
+ * this 2-col grid without touching the arm; `<fieldset>`-rooted arms (`LIST` / `DEFINITION`) span
+ * both columns and keep their stacked layout. Known limitation (SPORT-14 impl notes): `BOOLEAN` /
+ * radio / segmented arms have internal flex, so they render label-left with looser alignment. */
+const GROUP_INLINE_ROW =
+  'grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] items-baseline gap-x-3 gap-y-0.5 [&>.min-w-0]:contents [&>.min-w-0>div]:contents [&>.min-w-0>fieldset]:col-span-2';
 
 export interface SportAttributesFieldsProps {
   /** A9/v2's resolved schema document for this sport, already fetched by the caller
@@ -195,6 +217,8 @@ function GroupSection({
   const visibleAttributes = group.attributes.filter(isAttributeVisible);
   const visibleSubGroups = (group.groups ?? []).filter(groupHasVisibleContent);
   const Heading = depth === 0 ? 'h3' : 'h4';
+  const { id: rawLayoutId, icon } = normalizeLayout(group.layout, path);
+  const layoutId = pickLayoutId(rawLayoutId, GROUP_LAYOUTS, 'section', path);
 
   return (
     <Collapsible
@@ -204,14 +228,16 @@ function GroupSection({
       {/* Heading wraps the trigger (WAI-ARIA accordion pattern) so screen-reader heading
           navigation still works while the whole row stays the collapse toggle. */}
       <Heading className="text-sm font-semibold text-text-primary">
-        <CollapsibleTrigger className="py-0.5">{group.label}</CollapsibleTrigger>
+        <CollapsibleTrigger className="py-0.5">
+          {renderHeadingLabel(group.label, icon, path)}
+        </CollapsibleTrigger>
       </Heading>
       <CollapsibleContent className="flex flex-col gap-4">
         {visibleAttributes.length > 0 && (
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          <div className={GROUP_ATTR_WRAPPER[layoutId]}>
             {visibleAttributes.map((attribute) => {
               const attributePath = joinPath(path, attribute.key);
-              return (
+              const cell = (
                 <AttributeField
                   key={attribute.key}
                   attribute={attribute}
@@ -223,6 +249,13 @@ function GroupSection({
                   refDraftOptions={refDraftOptions}
                   onAddRefDraftOption={onAddRefDraftOption}
                 />
+              );
+              return layoutId === 'inline' ? (
+                <div key={attribute.key} className={GROUP_INLINE_ROW}>
+                  {cell}
+                </div>
+              ) : (
+                cell
               );
             })}
           </div>
@@ -347,6 +380,7 @@ function AttributeField({
             options={attribute.options ?? []}
             selected={Array.isArray(value) ? (value as string[]) : []}
             onChange={onChange}
+            layout={attribute.layout ?? undefined}
           />
         );
       case 'DEFINITION':
@@ -371,6 +405,7 @@ function AttributeField({
             rows={Array.isArray(value) ? (value as Record<string, unknown>[]) : []}
             onChange={onChange}
             definitionsByName={definitionsByName}
+            layout={attribute.layout ?? undefined}
           />
         );
       }

@@ -1,8 +1,9 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResolvedSportAttributeSchema } from '@/shared/types/sport';
+import { resetDevWarnCache } from '@/shared/lib/devWarn';
 import { SportAttributesFields } from './SportAttributesFields';
 
 /** Stateful wrapper — `SportAttributesFields` is fully controlled, so interaction tests need
@@ -830,5 +831,145 @@ describe('SPORT-13 — scalar layout threads through', () => {
     // Hand ENUM default is a <select>, not a radiogroup.
     expect(screen.getByLabelText('Hand').tagName).toBe('SELECT');
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+  });
+});
+
+describe('SPORT-14 — container layouts', () => {
+  beforeEach(() => {
+    resetDevWarnCache();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  const groupWith = (layout?: unknown): ResolvedSportAttributeSchema =>
+    ({
+      groups: [
+        {
+          key: 'general',
+          label: 'General',
+          isAvailable: true,
+          layout,
+          attributes: [
+            { key: 'hand', label: 'Hand', type: 'STRING', isAvailable: true },
+            { key: 'reach', label: 'Reach', type: 'STRING', isAvailable: true },
+          ],
+        },
+      ],
+    }) as ResolvedSportAttributeSchema;
+
+  const attrWrapperClass = (headingText: string) =>
+    screen
+      .getByText(headingText)
+      .closest('[data-slot="collapsible"]')
+      ?.querySelector('[data-slot="collapsible-content"] > div')?.className ?? '';
+
+  it('default (no layout) keeps SPORT-7\'s 1→2-col grid wrapper', () => {
+    render(<Harness schema={groupWith(undefined)} />);
+    expect(attrWrapperClass('General')).toContain('sm:grid-cols-2');
+    expect(attrWrapperClass('General')).not.toContain('lg:grid-cols-3');
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('layout.id "grid-3" adds a third column at lg', () => {
+    render(<Harness schema={groupWith({ id: 'grid-3' })} />);
+    expect(attrWrapperClass('General')).toContain('lg:grid-cols-3');
+  });
+
+  it('layout.id "flat" drops the grid for a plain column', () => {
+    render(<Harness schema={groupWith({ id: 'flat' })} />);
+    const content = screen
+      .getByText('General')
+      .closest('[data-slot="collapsible"]')
+      ?.querySelector('[data-slot="collapsible-content"] > div');
+    expect(content?.className).toContain('flex');
+    expect(content?.className).not.toContain('grid-cols');
+  });
+
+  it('layout.id "inline" still renders every field and keeps path-keyed onChange', async () => {
+    const onChangeSpy = vi.fn();
+    render(<Harness schema={groupWith({ id: 'inline' })} onChangeSpy={onChangeSpy} />);
+    expect(screen.getByLabelText('Hand')).toBeInTheDocument();
+    expect(screen.getByLabelText('Reach')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Hand'), 'L');
+    expect(onChangeSpy).toHaveBeenLastCalledWith('general/hand', 'L');
+  });
+
+  it('an unknown group layout.id falls back to the grid and warns once', () => {
+    render(<Harness schema={groupWith({ id: 'masonry' })} />);
+    expect(attrWrapperClass('General')).toContain('sm:grid-cols-2');
+    expect(console.warn).toHaveBeenCalledOnce();
+  });
+
+  it('renders a heading icon for a known layout.icon, and warns (no icon) for an unknown one', () => {
+    render(<Harness schema={groupWith({ id: 'section', icon: 'racket' })} />);
+    const heading = screen.getByText('General').closest('h3') as HTMLElement;
+    // The layout icon sits inside an aria-hidden <span>; the collapse chevron is a bare
+    // aria-hidden <svg>, so this descendant selector matches only the former.
+    expect(heading.querySelector('[aria-hidden="true"] svg')).not.toBeNull();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('an unknown layout.icon renders no icon and warns once', () => {
+    render(<Harness schema={groupWith({ id: 'section', icon: 'no-such-icon' })} />);
+    const heading = screen.getByText('General').closest('h3') as HTMLElement;
+    expect(heading.querySelector('[aria-hidden="true"] svg')).toBeNull();
+    expect(console.warn).toHaveBeenCalledOnce();
+  });
+
+  it('isAvailable:false still hides a group under any layout', () => {
+    render(
+      <Harness
+        schema={
+          {
+            groups: [
+              {
+                key: 'gone',
+                label: 'Retired',
+                isAvailable: false,
+                layout: { id: 'grid-3' },
+                attributes: [{ key: 'x', label: 'X', type: 'STRING', isAvailable: true }],
+              },
+            ],
+          } as ResolvedSportAttributeSchema
+        }
+      />,
+    );
+    expect(screen.queryByText('Retired')).not.toBeInTheDocument();
+  });
+
+  it('a DEFINITION_LIST node honours its own layout.id (table)', () => {
+    render(
+      <Harness
+        initialValues={{ 'gear/rackets': [{ value: 'Astrox 99' }] }}
+        schema={
+          {
+            definitions: [
+              {
+                name: 'Racket',
+                fields: [{ key: 'value', label: 'Model', type: 'STRING', isRequired: true }],
+              },
+            ],
+            groups: [
+              {
+                key: 'gear',
+                label: 'Gear',
+                isAvailable: true,
+                attributes: [
+                  {
+                    key: 'rackets',
+                    label: 'Rackets',
+                    type: 'DEFINITION_LIST',
+                    definitionRef: 'Racket',
+                    isAvailable: true,
+                    layout: { id: 'table' },
+                  },
+                ],
+              },
+            ],
+          } as ResolvedSportAttributeSchema
+        }
+      />,
+    );
+    expect(screen.getByRole('table')).toBeInTheDocument();
   });
 });
