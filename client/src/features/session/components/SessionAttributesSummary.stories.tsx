@@ -177,7 +177,7 @@ const layoutSchema = {
           label: 'Win rate',
           type: 'NUMBER',
           isAvailable: true,
-          layout: { id: 'readonly-text', format: '0%' },
+          layout: { id: 'readonly-text', format: { en: '0%' } },
         },
         {
           key: 'kitComma',

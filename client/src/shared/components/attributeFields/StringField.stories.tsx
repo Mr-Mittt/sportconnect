@@ -24,10 +24,10 @@ export const Input: Story = { args: { layout: { id: 'input' } } };
 export const Textarea: Story = { args: { layout: { id: 'textarea' } } };
 export const ReadonlyText: Story = { args: { layout: { id: 'readonly-text' } } };
 export const ReadonlyTextUppercase: Story = {
-  args: { layout: { id: 'readonly-text', format: 'uppercase' } },
+  args: { layout: { id: 'readonly-text', format: { en: 'uppercase' } } },
 };
 export const ReadonlyTextTitlecase: Story = {
-  args: { layout: { id: 'readonly-text', format: 'titlecase' }, initial: 'li-ning axforce 90' },
+  args: { layout: { id: 'readonly-text', format: { en: 'titlecase' } }, initial: 'li-ning axforce 90' },
 };
 /** No `layout` — the default, must match pre-SPORT-13 output. */
 export const DefaultNoLayout: Story = {};

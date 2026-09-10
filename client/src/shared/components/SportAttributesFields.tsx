@@ -18,6 +18,7 @@ import { normalizeLayout, pickLayoutId } from './attributeFields/layout';
 import { ListField } from './attributeFields/ListField';
 import { NumberField } from './attributeFields/NumberField';
 import { RefField } from './attributeFields/RefField';
+import { findAttributeByPath } from './attributeFields/refFieldLayouts';
 import { StringField } from './attributeFields/StringField';
 
 const GROUP_LAYOUTS = ['section', 'grid-2', 'grid-3', 'inline', 'flat'] as const;
@@ -67,6 +68,13 @@ export interface SportAttributesFieldsProps {
   refDraftOptions?: Record<string, unknown[]>;
   /** CLIENT-SESSION-17 Part B — records a new "Other…" draft value for a `#ref` node path. */
   onAddRefDraftOption?: (path: string, value: unknown) => void;
+  /**
+   * SPORT-16 — the resolved *profile* schema for this sport (`useSportAttributeSchema`). Only the
+   * session-create context passes it. A `#ref` node with no own `layout` inherits the base
+   * attribute's (`node.layout ?? baseAttr.layout` at `node.prefillKey`) — `common` C11's
+   * client-side resolution of the `#ref`→base inheritance decision.
+   */
+  refBaseSchema?: ResolvedSportAttributeSchema | null;
 }
 
 function isGroupAvailable(group: ResolvedSportAttributeGroup): boolean {
@@ -140,6 +148,7 @@ export function SportAttributesFields({
   refChoiceSource,
   refDraftOptions,
   onAddRefDraftOption,
+  refBaseSchema,
 }: SportAttributesFieldsProps) {
   useEffect(() => {
     const seedDefaults = (groups: ResolvedSportAttributeGroup[], prefix: string) => {
@@ -185,6 +194,7 @@ export function SportAttributesFields({
           refChoiceSource={refChoiceSource}
           refDraftOptions={refDraftOptions}
           onAddRefDraftOption={onAddRefDraftOption}
+          refBaseSchema={refBaseSchema}
         />
       ))}
     </div>
@@ -202,6 +212,7 @@ interface GroupSectionProps {
   refChoiceSource?: Record<string, unknown> | null;
   refDraftOptions?: Record<string, unknown[]>;
   onAddRefDraftOption?: (path: string, value: unknown) => void;
+  refBaseSchema?: ResolvedSportAttributeSchema | null;
 }
 
 /** One (sub-)group as a collapsible section. Own attributes render first in a responsive grid,
@@ -217,6 +228,7 @@ function GroupSection({
   refChoiceSource,
   refDraftOptions,
   onAddRefDraftOption,
+  refBaseSchema,
 }: GroupSectionProps) {
   const visibleAttributes = group.attributes.filter(isAttributeVisible);
   const visibleSubGroups = (group.groups ?? []).filter(groupHasVisibleContent);
@@ -252,6 +264,7 @@ function GroupSection({
                   refChoiceSource={refChoiceSource}
                   refDraftOptions={refDraftOptions}
                   onAddRefDraftOption={onAddRefDraftOption}
+                  refBaseSchema={refBaseSchema}
                 />
               );
               return layoutId === 'inline' ? (
@@ -276,6 +289,7 @@ function GroupSection({
             refChoiceSource={refChoiceSource}
             refDraftOptions={refDraftOptions}
             onAddRefDraftOption={onAddRefDraftOption}
+            refBaseSchema={refBaseSchema}
           />
         ))}
       </CollapsibleContent>
@@ -293,6 +307,7 @@ interface AttributeFieldProps {
   refChoiceSource?: Record<string, unknown> | null;
   refDraftOptions?: Record<string, unknown[]>;
   onAddRefDraftOption?: (path: string, value: unknown) => void;
+  refBaseSchema?: ResolvedSportAttributeSchema | null;
 }
 
 function AttributeField({
@@ -304,6 +319,7 @@ function AttributeField({
   refChoiceSource,
   refDraftOptions,
   onAddRefDraftOption,
+  refBaseSchema,
 }: AttributeFieldProps) {
   const fieldId = `sport-attribute-${path}`;
   // DEFINITION/DEFINITION_LIST render as indented sub-sections — never squeezed into a grid
@@ -319,6 +335,10 @@ function AttributeField({
       // `#ref` needs the creator's profile as its choice source — only the session-create context
       // wires it. Absent → skip the node (the profile editor's schema has none anyway).
       if (refChoiceSource === undefined) return null;
+      // SPORT-16: a `#ref` with no own `layout` inherits the base attribute's, read from the
+      // profile schema at `prefillKey` (undefined until that query settles → no inheritance yet).
+      const inheritedLayout =
+        attribute.layout ?? findAttributeByPath(refBaseSchema, attribute.prefillKey)?.layout ?? null;
       return (
         <RefField
           node={attribute}
@@ -329,6 +349,7 @@ function AttributeField({
           draftOptions={refDraftOptions?.[path] ?? []}
           onAddDraftOption={(draft) => onAddRefDraftOption?.(path, draft)}
           definitionsByName={definitionsByName}
+          layout={inheritedLayout}
         />
       );
     }

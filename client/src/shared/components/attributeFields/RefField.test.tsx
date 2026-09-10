@@ -168,3 +168,121 @@ describe('RefField — LIST layout composition', () => {
     }
   });
 });
+
+// ── SPORT-16 ────────────────────────────────────────────────────────────────────────────────────
+
+describe('RefField — SPORT-16 layout prop (#ref→base inheritance point)', () => {
+  it('an explicit layout prop drives the control instead of node.layout', () => {
+    render(
+      <RefField
+        node={makeNode('SINGLE') /* no own layout */}
+        fieldId="ref"
+        value=""
+        onChange={vi.fn()}
+        choiceSource={THREE}
+        draftOptions={[]}
+        onAddDraftOption={vi.fn()}
+        definitionsByName={defs}
+        layout={{ id: 'radio' }}
+      />,
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Racket' })).toBeInTheDocument();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('layout={null} means "no hint" — the dropdown default, no warning', () => {
+    render(
+      <RefField
+        node={makeNode('SINGLE', { id: 'radio' })}
+        fieldId="ref"
+        value=""
+        onChange={vi.fn()}
+        choiceSource={THREE}
+        draftOptions={[]}
+        onAddDraftOption={vi.fn()}
+        definitionsByName={defs}
+        layout={null}
+      />,
+    );
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('an omitted layout prop falls back to node.layout (existing callers unaffected)', () => {
+    render(
+      <RefField
+        node={makeNode('SINGLE', { id: 'radio' })}
+        fieldId="ref"
+        value=""
+        onChange={vi.fn()}
+        choiceSource={THREE}
+        draftOptions={[]}
+        onAddDraftOption={vi.fn()}
+        definitionsByName={defs}
+      />,
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Racket' })).toBeInTheDocument();
+  });
+});
+
+describe('RefField — SPORT-16 #ref fieldLayouts override', () => {
+  const grip: ResolvedSportAttributeDefinitionType = {
+    name: 'Grip',
+    fields: [
+      { key: 'brand', label: 'Brand', type: 'STRING', isRequired: true },
+      { key: 'note', label: 'Note', type: 'STRING' },
+    ],
+  };
+  const gripDefs = new Map<string, ResolvedSportAttributeDefinitionType>([['Grip', grip]]);
+
+  function recordNode(fieldLayouts?: ResolvedRefAttribute['fieldLayouts']): ResolvedRefAttribute {
+    return {
+      key: 'grip',
+      label: 'Grip',
+      type: 'DEFINITION',
+      prefillable: true,
+      cardinality: 'SINGLE',
+      prefillKey: 'gear/grip',
+      definitionRef: 'Grip',
+      fieldLayouts,
+    } as ResolvedRefAttribute;
+  }
+
+  async function openOtherModal(node: ResolvedRefAttribute) {
+    render(
+      <RefField
+        node={node}
+        fieldId="ref"
+        value=""
+        onChange={vi.fn()}
+        choiceSource={null}
+        draftOptions={[]}
+        onAddDraftOption={vi.fn()}
+        definitionsByName={gripDefs}
+        layout={{ id: 'radio' }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Other…' }));
+  }
+
+  it('a { hidden: true } override drops that field from the Other… record form', async () => {
+    await openOtherModal(recordNode({ note: { hidden: true } }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Brand');
+    expect(dialog).not.toHaveTextContent('Note');
+  });
+
+  it('no fieldLayouts → every field renders (isRequired still marked)', async () => {
+    await openOtherModal(recordNode(undefined));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Brand');
+    expect(dialog).toHaveTextContent('Note');
+  });
+
+  it('an unknown fieldLayouts key is ignored', async () => {
+    await openOtherModal(recordNode({ nope: { hidden: true } }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Brand');
+    expect(dialog).toHaveTextContent('Note');
+  });
+});

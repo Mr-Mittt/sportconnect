@@ -127,6 +127,7 @@ export function AppShell() {
         session={sessionDetailData.selectedSession}
         sportsByKey={sportsByKey}
         sessionAttributeSchema={sessionDetailData.sessionAttributeSchema}
+        refBaseSchema={sessionDetailData.refBaseSchema}
         isLoading={sessionDetailData.isSessionLoading}
         isError={sessionDetailData.isSessionError}
         participants={sessionDetailData.participants}

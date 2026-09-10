@@ -370,7 +370,7 @@ describe('SessionAttributesSummary — SPORT-15 read-only layout parity', () => 
             label: 'Win rate',
             type: 'NUMBER',
             isAvailable: true,
-            layout: { id: 'readonly-text', format: '0%' },
+            layout: { id: 'readonly-text', format: { en: '0%' } },
           },
         ])}
         values={{ 'match/rate': 0.62 }}
@@ -584,5 +584,91 @@ describe('SessionAttributesSummary — hidden (SPORT-15)', () => {
     render(<SessionAttributesSummary schema={schema} values={{ 'g/r': { value: 'A', sku: 'X1' } }} />);
     expect(screen.getByText('A')).toBeInTheDocument();
     expect(screen.queryByText('SKU')).not.toBeInTheDocument();
+  });
+});
+
+describe('SessionAttributesSummary — SPORT-16 #ref layout resolution', () => {
+  const sessionSchema = {
+    definitions: [
+      {
+        name: 'Reference',
+        fields: [
+          { key: 'id', label: 'Item', type: 'STRING' },
+          { key: 'value', label: 'Name', type: 'STRING' },
+        ],
+      },
+    ],
+    groups: [
+      {
+        key: 'match',
+        label: 'Match',
+        isAvailable: true,
+        attributes: [
+          {
+            key: 'winRate',
+            label: 'Win rate',
+            type: 'NUMBER',
+            isAvailable: true,
+            cardinality: 'SINGLE',
+            prefillable: true,
+            prefillKey: 'stats/winRate',
+            // no own layout — inherits from the base profile attribute
+          },
+          {
+            key: 'racket',
+            label: 'Racket',
+            type: 'DEFINITION_LIST',
+            isAvailable: true,
+            cardinality: 'SINGLE',
+            prefillable: true,
+            prefillKey: 'gear/rackets',
+            definitionRef: 'Reference',
+            fieldLayouts: { id: { hidden: true } },
+          },
+        ],
+      },
+    ],
+  } as unknown as ResolvedSportAttributeSchema;
+
+  const baseSchema = {
+    groups: [
+      {
+        key: 'stats',
+        label: 'Stats',
+        attributes: [
+          { key: 'winRate', label: 'Win rate', type: 'NUMBER', layout: { id: 'readonly-text', format: { en: '0%' } } },
+        ],
+      },
+    ],
+  } as unknown as ResolvedSportAttributeSchema;
+
+  it('a #ref with no own layout inherits the base attribute’s format', () => {
+    render(
+      <SessionAttributesSummary
+        schema={sessionSchema}
+        values={{ 'match/winRate': 0.62 }}
+        refBaseSchema={baseSchema}
+      />,
+    );
+    expect(within(row('Win rate')).getByText('62%')).toBeInTheDocument();
+  });
+
+  it('without refBaseSchema the #ref falls back to the raw value (no inheritance)', () => {
+    render(<SessionAttributesSummary schema={sessionSchema} values={{ 'match/winRate': 0.62 }} />);
+    expect(within(row('Win rate')).getByText('0.62')).toBeInTheDocument();
+  });
+
+  it('a #ref fieldLayouts { hidden } drops that field from the rendered record', () => {
+    render(
+      <SessionAttributesSummary
+        schema={sessionSchema}
+        values={{ 'match/racket': { id: 'yonex-as99', value: 'Yonex Astrox 99' } }}
+        refBaseSchema={baseSchema}
+      />,
+    );
+    const racket = row('Racket');
+    expect(within(racket).getByText('Yonex Astrox 99')).toBeInTheDocument();
+    expect(within(racket).queryByText('yonex-as99')).not.toBeInTheDocument();
+    expect(within(racket).queryByText('Item')).not.toBeInTheDocument();
   });
 });

@@ -69,6 +69,9 @@ interface SessionDetailModalProps {
    * render a read-only term/value summary; `SessionAttributesSummary` renders nothing when there
    * is nothing to show, so this needs no separate visibility gate. */
   sessionAttributeSchema?: ResolvedSportAttributeSchema | null;
+  /** SPORT-16: the resolved *profile* schema for `session.sportId`, for `#ref`→base `layout`
+   * inheritance in the read view. `null` / absent → no inheritance, defaults render. */
+  refBaseSchema?: ResolvedSportAttributeSchema | null;
 
   onJoin: () => void;
   isJoining: boolean;
@@ -246,6 +249,7 @@ export function SessionDetailModal({
   currentUserId,
   sportsByKey,
   sessionAttributeSchema,
+  refBaseSchema,
   onJoin,
   isJoining,
   isJoinError,
@@ -393,6 +397,7 @@ export function SessionDetailModal({
                 <SessionAttributesSummary
                   schema={sessionAttributeSchema}
                   values={session.attributes}
+                  refBaseSchema={refBaseSchema}
                 />
               )}
 

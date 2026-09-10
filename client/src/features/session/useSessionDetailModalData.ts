@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { useSessionAttributeSchema } from '@/shared/hooks/useSessionAttributeSchema';
+import { useSportAttributeSchema } from '@/shared/hooks/useSportAttributeSchema';
 import { useApproveParticipant } from './hooks/useApproveParticipant';
 import { useCancelSession } from './hooks/useCancelSession';
 import { useLikeSession } from './hooks/useLikeSession';
@@ -73,6 +74,10 @@ export function useSessionDetailModalData(sessionId: number | null) {
   // its `sportId`. `SessionAttributesSummary` renders nothing when there is nothing to show, so
   // the modal mounts it unconditionally.
   const sessionAttributeSchema = useSessionAttributeSchema(sessionQuery.data?.sportId).data;
+  // SPORT-16: the sport's *profile* schema — the base a `#ref` node inherits its read-view
+  // `layout` from. Shares the `['sportAttributeSchema', sportId]` query cache; `null` until it
+  // settles (or when the sport has no profile schema) → no inheritance, defaults render.
+  const refBaseSchema = useSportAttributeSchema(sessionQuery.data?.sportId).data;
 
   return {
     /**
@@ -95,6 +100,8 @@ export function useSessionDetailModalData(sessionId: number | null) {
     isSessionLoading: sessionQuery.isLoading,
     isSessionError: sessionQuery.isError,
     sessionAttributeSchema,
+    // SPORT-16: profile schema for `#ref`→base `layout` inheritance in the read view.
+    refBaseSchema,
     participants: participantsQuery.data?.content ?? [],
     isParticipantsLoading: participantsQuery.isLoading,
     isParticipantsError: participantsQuery.isError,
