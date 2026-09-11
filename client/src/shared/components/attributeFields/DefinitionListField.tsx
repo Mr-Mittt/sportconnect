@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import type {
   ResolvedAttributeLayout,
@@ -7,6 +8,7 @@ import { MAX_LIST_ITEMS } from '@/shared/types/sport';
 import { devWarn } from '@/shared/lib/devWarn';
 import { Button } from '@/shared/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
+import { AddDefinitionRecordModal } from './AddDefinitionRecordModal';
 import { DefinitionFields, RecordField } from './DefinitionFields';
 import { renderHeadingLabel } from './headingIcons';
 import { normalizeLayout, pickLayoutId } from './layout';
@@ -27,7 +29,14 @@ interface DefinitionListFieldProps {
 /** Top-level `DEFINITION_LIST` attribute arm (CLIENT-SESSION-17 Part A). Repeating records capped
  * at `MAX_LIST_ITEMS` (the server silently drops a whole over-cap value). SPORT-14 adds the
  * `layout` variants; `cards` is byte-identical to the pre-SPORT-14 markup. Every variant stores and
- * emits `Record<string, unknown>[]` with unchanged keys. */
+ * emits `Record<string, unknown>[]` with unchanged keys.
+ *
+ * CLIENT-SESSION-19: "Add" opens `AddDefinitionRecordModal` (the same shared modal
+ * `RefField`'s record-base "Other…" add reuses) instead of appending a blank row inline — the
+ * submitted record is appended to `rows` and reported through the same `onChange`, which already
+ * flows into the profile's existing save path via `SportAttributesFields`. Closed (the common
+ * case), the modal contributes nothing to the DOM (Radix only mounts `Dialog.Content` while
+ * `open`), so every layout's existing markup stays unchanged. */
 export function DefinitionListField({
   label,
   definitionType,
@@ -60,13 +69,15 @@ export function DefinitionListField({
   const updateRow = (index: number, next: Record<string, unknown>) =>
     onChange(rows.map((row, i) => (i === index ? next : row)));
 
+  const [addModalOpen, setAddModalOpen] = useState(false);
+
   const addButton = (
     <Button
       type="button"
       variant="outline"
       size="sm"
       disabled={atCap}
-      onClick={() => onChange([...rows, {}])}
+      onClick={() => setAddModalOpen(true)}
       className="self-start"
     >
       <IconPlus className="size-4" aria-hidden="true" />
@@ -76,6 +87,16 @@ export function DefinitionListField({
   const capNote = atCap ? (
     <p className="text-2xs text-text-muted">{MAX_LIST_ITEMS} items (maximum)</p>
   ) : null;
+  const addModal = (
+    <AddDefinitionRecordModal
+      open={addModalOpen}
+      onOpenChange={setAddModalOpen}
+      title={`Add — ${label}`}
+      definitionType={definitionType}
+      definitionsByName={definitionsByName}
+      onSubmit={(record) => onChange([...rows, record])}
+    />
+  );
 
   if (kind === 'table') {
     return (
@@ -134,6 +155,7 @@ export function DefinitionListField({
         )}
         {addButton}
         {capNote}
+        {addModal}
       </div>
     );
   }
@@ -177,6 +199,7 @@ export function DefinitionListField({
         )}
         {addButton}
         {capNote}
+        {addModal}
       </div>
     );
   }
@@ -218,6 +241,7 @@ export function DefinitionListField({
       )}
       {addButton}
       {capNote}
+      {addModal}
     </div>
   );
 }

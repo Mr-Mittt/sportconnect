@@ -4334,6 +4334,17 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client CLIENT-SESSION-19 (`DONE`, 2026-09-11,
+  `client/docs/MVP/CLIENT-SESSION-19_ADD_MODAL_FOR_PROFILE_DEFINITION_LIST.md`):** `DefinitionListField`'s
+  "Add" (profile Settings tab, per-sport `DEFINITION_LIST` attributes) now opens the same shared
+  add-modal `CLIENT-SESSION-17`'s `#ref` "Other…" affordance uses, instead of appending a blank row
+  directly — replaces the inline behavior entirely (user decision). New `AddDefinitionRecordModal`
+  (`shared/components/attributeFields/`), extracted from `RefField`'s previously-inline record-base
+  modal so both callers share one implementation; `RefField`'s own behavior/tests unchanged. Writes
+  still flow through the existing profile `PUT` `attributes` merge — no new backend contract.
+  Vitest 180 files / 1309 green; e2e 83 passed (one `friends-journey` parallel-load flake, 1/1
+  isolated); visual-regression: `profile-settings-{375,768,1280}.png` legitimately change (new field
+  adds height) — confirmed via stash-and-rerun against clean master, everything else unaffected.
 - **Client SPORT-16 (`DONE`, 2026-09-10, `client/docs/MVP/SPORT-16_CLIENT_SIDE_LAYOUT_RESOLUTION.md`,
   impl `..._IMPL.md`):** consumes `common` C11's **raw** presentation fields client-side (C11 narrowed
   to "validate the shape on an admin write, carry the rest raw"). Three steps: **(1) `layout.format`

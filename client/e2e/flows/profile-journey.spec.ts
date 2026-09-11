@@ -21,11 +21,13 @@ import { expect, test } from '../mocks/test.ts';
  *
  * Fixtures: mockUser ("Jordan Lee") holds two sport profiles — Badminton
  * (sportId 1, skillLevel 'intermediate', the page's default active pill,
- * the one sport with a real attribute schema: `racketBrand`/"Racket brand",
- * STRING) and Pickleball (sportId 3, skillLevel 'beginner', no attribute
- * schema — sport.ts's own fixture comment). mockPost/mockGroupPost are both
- * Jordan Lee's own Badminton posts (via GET /api/posts/mine, PROFILE-7).
- * mockMyProfile (e2e/mocks/fixtures.ts) is Jordan Lee's own full profile row.
+ * the one sport with a real attribute schema: `racketBrand`/"Racket brand"
+ * (STRING) and `ownedRackets`/"Rackets you own" (`DEFINITION_LIST` of
+ * `Racket` records — CLIENT-SESSION-19's add-via-modal path)) and Pickleball
+ * (sportId 3, skillLevel 'beginner', no attribute schema — sport.ts's own
+ * fixture comment). mockPost/mockGroupPost are both Jordan Lee's own
+ * Badminton posts (via GET /api/posts/mine, PROFILE-7). mockMyProfile
+ * (e2e/mocks/fixtures.ts) is Jordan Lee's own full profile row.
  */
 
 test('Profile journey', async ({ page }) => {
@@ -91,6 +93,29 @@ test('Profile journey', async ({ page }) => {
     await expect(saveButton).toBeDisabled();
     await expect(page.getByLabel('Skill level')).toHaveValue('advanced');
     await expect(page.getByLabel('Racket brand')).toHaveValue('Yonex');
+  });
+
+  await test.step('5b. Settings tab — CLIENT-SESSION-19: add a DEFINITION_LIST entry ("Rackets you own") via the shared Add modal, and it persists', async () => {
+    const saveButton = page.getByRole('button', { name: 'Save changes' });
+    await expect(saveButton).toBeDisabled();
+
+    // { exact: true } — a substring match also hits the SportSwitcher's "Add sport" pill.
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    const addDialog = page.getByRole('dialog');
+    await expect(addDialog).toBeVisible();
+    await addDialog.getByLabel('Model').fill('Yonex Astrox 99 Pro');
+    await addDialog.getByLabel('Weight (g)').fill('90');
+    await addDialog.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(addDialog).not.toBeVisible();
+
+    await expect(page.getByText('Item 1')).toBeVisible();
+    await expect(page.getByLabel('Model')).toHaveValue('Yonex Astrox 99 Pro');
+    await expect(saveButton).toBeEnabled();
+    await saveButton.click();
+
+    await expect(saveButton).toBeDisabled();
+    await expect(page.getByText('Item 1')).toBeVisible();
+    await expect(page.getByLabel('Model')).toHaveValue('Yonex Astrox 99 Pro');
   });
 
   await test.step('6. Edit Profile modal — changing the bio saves and updates the header', async () => {

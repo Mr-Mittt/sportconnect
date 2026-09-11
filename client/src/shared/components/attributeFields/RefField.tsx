@@ -15,7 +15,7 @@ import { Label } from '@/shared/ui/label';
 import { RadioGroup } from '@/shared/ui/radio-group';
 import { SegmentedControl } from '@/shared/ui/segmented-control';
 import { Select } from '@/shared/ui/select';
-import { DefinitionFields } from './DefinitionFields';
+import { AddDefinitionRecordModal } from './AddDefinitionRecordModal';
 import { normalizeLayout, pickLayoutId } from './layout';
 import { applyRefFieldLayouts } from './refFieldLayouts';
 import { deriveRefChoices, draftToChoice, refValueKey, type RefChoice } from './refChoices';
@@ -108,17 +108,13 @@ export function RefField({
 
   const [modalOpen, setModalOpen] = useState(false);
   const [draftText, setDraftText] = useState('');
-  const [draftRecord, setDraftRecord] = useState<Record<string, unknown>>({});
 
   const openModal = () => {
     setDraftText('');
-    setDraftRecord({});
     setModalOpen(true);
   };
 
-  const commitDraft = () => {
-    const entered: unknown = recordBase ? draftRecord : draftText.trim();
-    if (recordBase ? Object.keys(draftRecord).length === 0 : draftText.trim() === '') return;
+  const addDraft = (entered: unknown) => {
     onAddDraftOption(entered);
     if (isList) {
       const current = Array.isArray(value) ? value : [];
@@ -126,6 +122,12 @@ export function RefField({
     } else {
       onChange(entered);
     }
+  };
+
+  const commitScalarDraft = () => {
+    const entered = draftText.trim();
+    if (entered === '') return;
+    addDraft(entered);
     setModalOpen(false);
   };
 
@@ -143,19 +145,21 @@ export function RefField({
     );
   };
 
-  const modal = (
-    <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader title={`Add — ${node.label}`} onCloseClick={() => setModalOpen(false)} />
-        <div className="flex flex-col gap-4 p-4">
-          {recordBase && definitionType !== undefined ? (
-            <DefinitionFields
-              definitionType={definitionType}
-              record={draftRecord}
-              onChange={(next) => setDraftRecord(next)}
-              definitionsByName={effectiveDefinitions}
-            />
-          ) : (
+  const modal =
+    recordBase && definitionType !== undefined ? (
+      <AddDefinitionRecordModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        title={`Add — ${node.label}`}
+        definitionType={definitionType}
+        definitionsByName={effectiveDefinitions}
+        onSubmit={addDraft}
+      />
+    ) : (
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader title={`Add — ${node.label}`} onCloseClick={() => setModalOpen(false)} />
+          <div className="flex flex-col gap-4 p-4">
             <div>
               <Label htmlFor={`${fieldId}-other`}>Value</Label>
               <Input
@@ -164,19 +168,18 @@ export function RefField({
                 onChange={(event) => setDraftText(event.target.value)}
               />
             </div>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" size="sm" onClick={commitDraft}>
-              Add
-            </Button>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" size="sm" onClick={commitScalarDraft}>
+                Add
+              </Button>
+            </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+        </DialogContent>
+      </Dialog>
+    );
 
   const otherButton = (
     <Button

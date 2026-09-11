@@ -472,12 +472,17 @@ describe('SportAttributesFields', () => {
     expect(onChangeSpy).toHaveBeenLastCalledWith('g/primary', { gramWeight: 50, inStock: true });
   });
 
-  it('adds a row for a DEFINITION_LIST field via Add', async () => {
+  // CLIENT-SESSION-19: "Add" opens the shared `AddDefinitionRecordModal` instead of appending a
+  // blank row directly.
+  it('adds a row for a DEFINITION_LIST field via the Add modal', async () => {
     const user = userEvent.setup();
     const onChangeSpy = vi.fn();
     render(<Harness schema={simpleSchema} onChangeSpy={onChangeSpy} />);
     await user.click(screen.getByRole('button', { name: 'Add' }));
-    expect(onChangeSpy).toHaveBeenCalledWith('g/items', [{}]);
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Name *'), 'A');
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }));
+    expect(onChangeSpy).toHaveBeenCalledWith('g/items', [{ value: 'A' }]);
   });
 
   it('removes a row for a DEFINITION_LIST field via its remove button', async () => {
