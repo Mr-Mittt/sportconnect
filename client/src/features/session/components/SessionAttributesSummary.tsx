@@ -16,6 +16,10 @@ import {
 } from '@/shared/components/attributeFields/attributeValues';
 import { renderHeadingLabel } from '@/shared/components/attributeFields/headingIcons';
 import { normalizeLayout, pickLayoutId } from '@/shared/components/attributeFields/layout';
+import {
+  applyRefFieldLayouts,
+  findAttributeByPath,
+} from '@/shared/components/attributeFields/refFieldLayouts';
 
 /**
  * The type `renderValueNode` should use for a resolved node's stored value. For an "own" node it is
@@ -46,6 +50,12 @@ export interface SessionAttributesSummaryProps {
    * `SportAttributesFields` writes it.
    */
   values: Record<string, unknown>;
+  /**
+   * SPORT-16 — the resolved *profile* schema for this session's sport (`useSportAttributeSchema`),
+   * for `#ref`→base `layout` inheritance in the read view (`node.layout ?? baseAttr.layout` at
+   * `node.prefillKey`). Optional: absent / not-yet-loaded → no inheritance, defaults render.
+   */
+  refBaseSchema?: ResolvedSportAttributeSchema | null;
 }
 
 /** Full `/`-separated path of a child node — `''` prefix (a root group) yields the bare key. */
@@ -66,35 +76,47 @@ function renderGroup(
   depth: number,
   values: Record<string, unknown>,
   definitionsByName: Map<string, ResolvedSportAttributeDefinitionType>,
+  refBaseSchema: ResolvedSportAttributeSchema | null | undefined,
 ): ReactNode | null {
   if (group.isAvailable === false || group.hidden === true) return null;
   const groupPath = joinPath(prefix, group.key);
 
   const rows: Row[] = group.attributes
     .filter((attribute) => attribute.isAvailable !== false && attribute.hidden !== true)
-    .map((attribute) => ({
-      key: attribute.key,
-      term: renderHeadingLabel(
-        attribute.label,
-        normalizeLayout(attribute.layout, attribute.key).icon,
-        attribute.key,
-      ),
-      node: renderValueNode(
-        effectiveRenderType(attribute),
-        values[joinPath(groupPath, attribute.key)],
-        'options' in attribute ? attribute.options : undefined,
-        'definitionRef' in attribute ? attribute.definitionRef : undefined,
-        definitionsByName,
-        attribute.layout,
-        attribute.key,
-      ),
-    }))
+    .map((attribute) => {
+      // SPORT-16: for a `#ref` node, apply `#ref`→base `layout` inheritance and fold its
+      // `fieldLayouts` overrides into the definition the record renderer resolves by name.
+      const isRef = isRefAttribute(attribute);
+      const layout = isRef
+        ? (attribute.layout ??
+          findAttributeByPath(refBaseSchema, attribute.prefillKey)?.layout ??
+          null)
+        : attribute.layout;
+      const defs = isRef ? applyRefFieldLayouts(definitionsByName, attribute) : definitionsByName;
+      return {
+        key: attribute.key,
+        term: renderHeadingLabel(
+          attribute.label,
+          normalizeLayout(layout, attribute.key).icon,
+          attribute.key,
+        ),
+        node: renderValueNode(
+          effectiveRenderType(attribute),
+          values[joinPath(groupPath, attribute.key)],
+          'options' in attribute ? attribute.options : undefined,
+          'definitionRef' in attribute ? attribute.definitionRef : undefined,
+          defs,
+          layout,
+          attribute.key,
+        ),
+      };
+    })
     .filter((row): row is Row => row.node !== null);
 
   const subGroups = (group.groups ?? [])
     .map((subGroup) => ({
       key: subGroup.key,
-      node: renderGroup(subGroup, groupPath, depth + 1, values, definitionsByName),
+      node: renderGroup(subGroup, groupPath, depth + 1, values, definitionsByName, refBaseSchema),
     }))
     .filter((entry): entry is { key: string; node: ReactNode } => entry.node !== null);
 
@@ -145,7 +167,11 @@ function renderGroup(
  * The enclosing modal can therefore mount it unconditionally. Editing is out of scope — the create
  * modal (`CreateSessionModal` → `SportAttributesFields`) is the only write path.
  */
-export function SessionAttributesSummary({ schema, values }: SessionAttributesSummaryProps) {
+export function SessionAttributesSummary({
+  schema,
+  values,
+  refBaseSchema,
+}: SessionAttributesSummaryProps) {
   const definitionsByName = new Map<string, ResolvedSportAttributeDefinitionType>(
     (schema.definitions ?? []).map((definitionType) => [definitionType.name, definitionType]),
   );
@@ -153,7 +179,7 @@ export function SessionAttributesSummary({ schema, values }: SessionAttributesSu
   const groups = schema.groups
     .map((group) => ({
       key: group.key,
-      node: renderGroup(group, '', 0, values, definitionsByName),
+      node: renderGroup(group, '', 0, values, definitionsByName, refBaseSchema),
     }))
     .filter((entry): entry is { key: string; node: ReactNode } => entry.node !== null);
 

@@ -4334,6 +4334,29 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client SPORT-16 (`DONE`, 2026-09-10, `client/docs/MVP/SPORT-16_CLIENT_SIDE_LAYOUT_RESOLUTION.md`,
+  impl `..._IMPL.md`):** consumes `common` C11's **raw** presentation fields client-side (C11 narrowed
+  to "validate the shape on an admin write, carry the rest raw"). Three steps: **(1) `layout.format`
+  locale-map resolution** — `ResolvedAttributeLayout.format` `string`→`Record<string,string>`
+  (reverses a SPORT-13 assumption); new `resolveFormatMap` (`map['en-US'] ?? map['en']`, else
+  unformatted — the resolved schema drops `defaultLocale` so `'en'` is the fallback) resolved inside
+  `normalizeLayout`, so `NumberField`/`StringField`/`attributeValues` are untouched; 13 `format:'…'`
+  fixtures → `{ en:'…' }`. **(2) `#ref` `fieldLayouts` merge** — new `refFieldLayouts.ts`
+  `applyRefFieldLayouts(defsMap, node)` returns a new `definitionsByName` with the `#ref`'s
+  definition entry's fields' `layout`/`hidden` overridden (whole-object replace; `{hidden}`-only
+  keeps own layout; unknown keys ignored; no mutation) — applied in `RefField` + `SessionAttributesSummary`
+  with **zero renderer signature changes**. **(3) `#ref`→base `layout` inheritance** (C11's open
+  decision resolved **client-side**) — new `findAttributeByPath`; `SportAttributesFields` +
+  `SessionAttributesSummary` gain an optional `refBaseSchema` prop, `#ref` layout =
+  `node.layout ?? findAttributeByPath(refBaseSchema, prefillKey)?.layout`; `RefField` gains a
+  `layout?` prop (defaults to `node.layout`). Data: `useSportAttributeSchema` wired into
+  `useCreateSessionModalData` + `useSessionDetailModalData` (its `['sportAttributeSchema', sportId]`
+  query cache is the "load-once / check-then-fetch" layer — no Zustand/sessionStorage), threaded via
+  `useMatchesPageData`/`useDiscoverModalData` + 6 modal render sites. `tsc`/`eslint` clean; Vitest
+  **179 files / 1301 passed** (+2 files, +25). **E2E:** `pnpm e2e` 82 pass / 1 fail
+  (`friends-journey` — passes 1/1 isolated; `ws proxy ECONNABORTED` parallel-load flake, no
+  friends/chat code touched). **Visual-regression:** no baselined surface touched (no MSW seed sets
+  `layout`/`format`/`fieldLayouts`) — a failing run is the Windows noise floor, no `update-baselines`.
 - **Client SPORT-15 (`DONE`, 2026-09-10, `client/docs/MVP/SPORT-15_READ_ONLY_LAYOUT_PARITY_AND_REF.md`,
   impl `..._IMPL.md`):** 3 of 3 — the attribute-layout split's **read-only parity** plus a new
   `hidden` flag. `SessionAttributesSummary` / `attributeValues` now honour `layout` in the read

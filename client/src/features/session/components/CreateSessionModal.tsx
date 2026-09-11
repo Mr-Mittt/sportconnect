@@ -413,6 +413,9 @@ interface CreateSessionModalProps {
   refChoiceSource?: Record<string, unknown> | null;
   refDraftOptions?: Record<string, unknown[]>;
   onAddRefDraftOption?: (path: string, value: unknown) => void;
+  /** SPORT-16: the chosen sport's resolved *profile* schema, for `#ref`→base `layout`
+   * inheritance. Owned by `useCreateSessionModalData`; `null` until it settles. */
+  refBaseSchema?: ResolvedSportAttributeSchema | null;
 
   /** CLIENT-SESSION-7 follow-up: when the caller has zero sport profiles (`sportsByKey` empty),
    * this form is replaced by an inline "add a sport first" prompt (`AddSportFields`) instead of
@@ -518,6 +521,7 @@ export function CreateSessionModal({
   refChoiceSource,
   refDraftOptions,
   onAddRefDraftOption,
+  refBaseSchema,
   availableSports,
   resumableProfiles,
   onAddSport,
@@ -916,6 +920,7 @@ export function CreateSessionModal({
                     refChoiceSource={refChoiceSource}
                     refDraftOptions={refDraftOptions}
                     onAddRefDraftOption={onAddRefDraftOption}
+                    refBaseSchema={refBaseSchema}
                   />
                 </CollapsibleContent>
               </Collapsible>

@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import type {
+  ResolvedAttributeLayout,
   ResolvedRefAttribute,
   ResolvedSportAttributeDefinitionType,
 } from '@/shared/types/sport';
@@ -16,6 +17,7 @@ import { SegmentedControl } from '@/shared/ui/segmented-control';
 import { Select } from '@/shared/ui/select';
 import { DefinitionFields } from './DefinitionFields';
 import { normalizeLayout, pickLayoutId } from './layout';
+import { applyRefFieldLayouts } from './refFieldLayouts';
 import { deriveRefChoices, draftToChoice, refValueKey, type RefChoice } from './refChoices';
 
 export interface RefFieldProps {
@@ -32,6 +34,10 @@ export interface RefFieldProps {
   draftOptions: unknown[];
   onAddDraftOption: (value: unknown) => void;
   definitionsByName: Map<string, ResolvedSportAttributeDefinitionType>;
+  /** SPORT-16: the effective `layout` for this `#ref` node — `node.layout` with `#ref`→base
+   * inheritance already applied by the caller (`node.layout ?? baseAttr.layout`). Defaults to
+   * `node.layout` when omitted, so existing callers/tests need no change. */
+  layout?: ResolvedAttributeLayout | null;
 }
 
 const OTHER = '__other__';
@@ -60,15 +66,26 @@ export function RefField({
   draftOptions,
   onAddDraftOption,
   definitionsByName,
+  layout,
 }: RefFieldProps) {
   const isList = node.cardinality === 'LIST';
+  const effectiveLayout = layout === undefined ? node.layout : layout;
   const recordBase = node.type === 'DEFINITION' || node.type === 'DEFINITION_LIST';
+  // SPORT-16: fold this node's `fieldLayouts` overrides into the definition it renders — every
+  // record renderer below resolves the definition by name from this map. Returns the same map
+  // reference when the node has no `fieldLayouts`, so the `choices` memo below stays stable.
+  const effectiveDefinitions = useMemo(
+    () => applyRefFieldLayouts(definitionsByName, node),
+    [definitionsByName, node],
+  );
   const definitionType =
-    recordBase && node.definitionRef != null ? definitionsByName.get(node.definitionRef) : undefined;
+    recordBase && node.definitionRef != null
+      ? effectiveDefinitions.get(node.definitionRef)
+      : undefined;
 
   const choices = useMemo(() => {
-    const derived = deriveRefChoices(node, choiceSource, definitionsByName);
-    const drafts = draftOptions.map((draft) => draftToChoice(node, draft, definitionsByName));
+    const derived = deriveRefChoices(node, choiceSource, effectiveDefinitions);
+    const drafts = draftOptions.map((draft) => draftToChoice(node, draft, effectiveDefinitions));
     const merged: RefChoice[] = [];
     const seen = new Set<string>();
     // Also surface any already-selected value that isn't in either list (e.g. a stale draft),
@@ -77,17 +94,17 @@ export function RefField({
     for (const choice of [
       ...derived,
       ...drafts,
-      ...selectedValues.map((v) => draftToChoice(node, v, definitionsByName)),
+      ...selectedValues.map((v) => draftToChoice(node, v, effectiveDefinitions)),
     ]) {
       if (seen.has(choice.key)) continue;
       seen.add(choice.key);
       merged.push(choice);
     }
     return merged;
-  }, [node, choiceSource, draftOptions, value, definitionsByName]);
+  }, [node, choiceSource, draftOptions, value, effectiveDefinitions]);
 
   const noProfileValues =
-    deriveRefChoices(node, choiceSource, definitionsByName).length === 0 && draftOptions.length === 0;
+    deriveRefChoices(node, choiceSource, effectiveDefinitions).length === 0 && draftOptions.length === 0;
 
   const [modalOpen, setModalOpen] = useState(false);
   const [draftText, setDraftText] = useState('');
@@ -136,7 +153,7 @@ export function RefField({
               definitionType={definitionType}
               record={draftRecord}
               onChange={(next) => setDraftRecord(next)}
-              definitionsByName={definitionsByName}
+              definitionsByName={effectiveDefinitions}
             />
           ) : (
             <div>
@@ -179,7 +196,7 @@ export function RefField({
     const selectedKey = selectedKeys[0] ?? '';
     const inChoices = choices.some((choice) => choice.key === selectedKey);
     let singleId = pickLayoutId(
-      normalizeLayout(node.layout, node.label).id,
+      normalizeLayout(effectiveLayout, node.label).id,
       SINGLE_LAYOUTS,
       'dropdown',
       node.label,
@@ -266,7 +283,7 @@ export function RefField({
 
   // ── LIST ────────────────────────────────────────────────────────────────────────────────────
   const listId = pickLayoutId(
-    normalizeLayout(node.layout, node.label).id,
+    normalizeLayout(effectiveLayout, node.label).id,
     LIST_LAYOUTS,
     'checkboxes',
     node.label,

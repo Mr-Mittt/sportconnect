@@ -1,6 +1,6 @@
 # SPORT-16 · Client-side resolution of C11's raw `layout` fields (`format` maps, `#ref` `fieldLayouts`, `#ref`→base inheritance)
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-10)
 **Type:** Client feature
 **Depends on:** `common` **C11** (carries `layout` / `hidden` / `fieldLayouts` raw, validates only
 `hidden` XOR `required` at schema-update time). **Hard-blocked until C11 ships** — there is no wire
@@ -44,14 +44,24 @@ does not merge `fieldLayouts`. This ticket does all of that client-side.
 
 ### 3. `#ref` → base `layout` inheritance (resolve C11's open decision)
 
-Pick one at pickup and implement it:
-- **(a)** client holds the base/profile schema and does `node.layout ?? baseAttr.layout` (the read
-  path — `SessionDetailModal` — must then also load the profile schema); or
-- **(b)** consume a `baseLayout` fallback field the C11 expander carries: `node.layout ?? node.baseLayout`.
+**Resolved at pickup: option (a)** — the client holds the profile schema and does
+`node.layout ?? baseAttr.layout`. C11 already locked this ("client-side, no server carry"); no
+`baseLayout` field was added. Both the create path (`useCreateSessionModalData`) and the read path
+(`useSessionDetailModalData`) call `useSportAttributeSchema(sportId)` — its
+`['sportAttributeSchema', sportId]` TanStack Query cache dedupes and persists, so the profile
+schema is loaded at most once per sport.
 
-Whichever: an inherited `layout.id` that doesn't fit the `#ref`'s composed control set
+An inherited `layout.id` that doesn't fit the `#ref`'s composed control set
 (`SINGLE`→ENUM set, `LIST`→LIST set) already degrades to the default + a dev warning (SPORT-15) —
 no new handling needed.
+
+### Delta — `format` fallback (vs. §1's `map['en'] ?? firstValue`)
+
+`ResolvedAttributeLayout.format` resolves as `map['en-US'] ?? map['en'] ?? unformatted`. The
+`defaultLocale` fallback §1 gestures at is **not reachable** — the member-facing resolved schema
+(`ResolvedSportAttributeSchema`) deliberately omits `defaultLocale` (it's "only an input to
+resolution"), and the raw schema that carries it is admin-only. `'en'` (every seed's locale) is
+the effective fallback; a map with neither key renders the raw value, same as a null pattern.
 
 ## Out of scope
 

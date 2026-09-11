@@ -45,7 +45,7 @@ describe('StringField layout', () => {
   });
 
   it('readonly-text applies layout.format', () => {
-    setup({ id: 'readonly-text', format: 'uppercase' }, 'yonex');
+    setup({ id: 'readonly-text', format: { en: 'uppercase' } }, 'yonex');
     expect(screen.getByText('YONEX')).toBeInTheDocument();
   });
 
@@ -56,7 +56,7 @@ describe('StringField layout', () => {
   });
 
   it('a malformed layout (no id) falls back to the input and warns', () => {
-    setup({ format: 'uppercase' } as unknown as ResolvedAttributeLayout);
+    setup({ format: { en: 'uppercase' } } as unknown as ResolvedAttributeLayout);
     expect(screen.getByRole('textbox')).toBeInTheDocument();
     expect(console.warn).toHaveBeenCalledOnce();
   });

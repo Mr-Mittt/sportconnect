@@ -37,16 +37,16 @@ type Story = StoryObj<typeof meta>;
 
 export const Input: Story = { args: { layout: { id: 'input' } } };
 export const InputWithFormatPreview: Story = {
-  args: { layout: { id: 'input', format: '0.0 lbs' } },
+  args: { layout: { id: 'input', format: { en: '0.0 lbs' } } },
 };
 export const Stepper: Story = { args: { layout: { id: 'stepper' } } };
 export const Slider: Story = { args: { layout: { id: 'slider' } } };
 /** `slider` needs bounds — without them it degrades to the number input (a dev warning fires). */
 export const SliderNoBoundsDegrades: Story = { args: { layout: { id: 'slider' }, bounds: false } };
 export const ReadonlyTextGrouped: Story = {
-  args: { layout: { id: 'readonly-text', format: '#,##0' }, initial: 1234 },
+  args: { layout: { id: 'readonly-text', format: { en: '#,##0' } }, initial: 1234 },
 };
 export const ReadonlyTextPercent: Story = {
-  args: { layout: { id: 'readonly-text', format: '0%' }, initial: 0.42 },
+  args: { layout: { id: 'readonly-text', format: { en: '0%' } }, initial: 0.42 },
 };
 export const DefaultNoLayout: Story = {};

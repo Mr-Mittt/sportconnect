@@ -173,6 +173,12 @@ export function useMatchesPageData(initialSessionId: number | null) {
     // (SessionDetailModal). CLIENT-SESSION-17.
     sessionAttributeSchema: createSessionModalData.sessionAttributeSchema,
     detailSessionAttributeSchema: sessionDetailData.sessionAttributeSchema,
+    // SPORT-16: same collision as `sessionAttributeSchema` above — both hooks expose a
+    // `refBaseSchema` (the sport's profile schema, for `#ref`→base `layout` inheritance). Bind
+    // each explicitly: `refBaseSchema` is the create form's, `detailRefBaseSchema` the open
+    // session's.
+    refBaseSchema: createSessionModalData.refBaseSchema,
+    detailRefBaseSchema: sessionDetailData.refBaseSchema,
     // Overrides sessionDetailData's own currentUserId (which falls back to '' for the modal's
     // prop convention) with the real string | undefined this page's other callers need —
     // MatchesPage.tsx's useAddSportProfile(data.currentUserId) relies on undefined meaning

@@ -1012,6 +1012,7 @@ export function GroupsPage() {
           refChoiceSource={createSessionModalData.refChoiceSource}
           refDraftOptions={createSessionModalData.refDraftOptions}
           onAddRefDraftOption={createSessionModalData.onAddRefDraftOption}
+          refBaseSchema={createSessionModalData.refBaseSchema}
           availableSports={availableSports}
           resumableProfiles={resumableProfiles}
           onAddSport={addSportMutation.mutate}
@@ -1045,6 +1046,7 @@ export function GroupsPage() {
           session={discoverModalData.selectedSession}
           sportsByKey={sportsByKey}
           sessionAttributeSchema={discoverModalData.sessionAttributeSchema}
+          refBaseSchema={discoverModalData.refBaseSchema}
           isLoading={discoverModalData.isSessionLoading}
           isError={discoverModalData.isSessionError}
           participants={discoverModalData.participants}

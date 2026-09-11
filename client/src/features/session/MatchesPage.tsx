@@ -228,6 +228,7 @@ export function MatchesPage() {
         refChoiceSource={data.refChoiceSource}
         refDraftOptions={data.refDraftOptions}
         onAddRefDraftOption={data.onAddRefDraftOption}
+        refBaseSchema={data.refBaseSchema}
         availableSports={availableSports}
         resumableProfiles={resumableProfiles}
         onAddSport={addSportMutation.mutate}
@@ -241,6 +242,7 @@ export function MatchesPage() {
         session={data.selectedSession}
         sportsByKey={data.sportsByKey}
         sessionAttributeSchema={data.detailSessionAttributeSchema}
+        refBaseSchema={data.detailRefBaseSchema}
         isLoading={data.isSessionLoading}
         isError={data.isSessionError}
         participants={data.participants}

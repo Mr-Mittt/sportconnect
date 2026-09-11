@@ -6,6 +6,7 @@ import { useFavoriteLocations } from '@/features/location/hooks/useFavoriteLocat
 import { useUnfavoriteLocation } from '@/features/location/hooks/useUnfavoriteLocation';
 import { useLocationPickerData } from '@/features/location/useLocationPickerData';
 import { useSessionAttributeSchema } from '@/shared/hooks/useSessionAttributeSchema';
+import { useSportAttributeSchema } from '@/shared/hooks/useSportAttributeSchema';
 import { useRawMySportProfiles } from '@/shared/hooks/useRawMySportProfiles';
 import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import type { Location } from '@/shared/types/location';
@@ -130,6 +131,11 @@ export function useCreateSessionModalData() {
   // same populate-then-settle pattern `useFavoriteLocations` above already relies on.
   const sessionSchemaQuery = useSessionAttributeSchema(createFormSportId ?? undefined);
   const sessionAttributeSchema: ResolvedSportAttributeSchema | null = sessionSchemaQuery.data;
+  // SPORT-16: the sport's *profile* schema — the base a `#ref` node inherits its `layout` from
+  // (`node.layout ?? baseAttr.layout`). Shares the `['sportAttributeSchema', sportId]` query cache
+  // with `/profile`, so this is usually a warm hit; lazy via the hook's own `enabled` guard.
+  const profileSchemaQuery = useSportAttributeSchema(createFormSportId ?? undefined);
+  const refBaseSchema: ResolvedSportAttributeSchema | null = profileSchemaQuery.data;
   const rawProfiles = useRawMySportProfiles();
   const profileForCreateSport = rawProfiles.data?.find(
     (profile) => profile.sportId === createFormSportId && profile.isActive,
@@ -197,5 +203,7 @@ export function useCreateSessionModalData() {
     refChoiceSource,
     refDraftOptions,
     onAddRefDraftOption,
+    // SPORT-16: profile schema for `#ref`→base `layout` inheritance. `null` until it settles.
+    refBaseSchema,
   };
 }

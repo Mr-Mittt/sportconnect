@@ -109,10 +109,10 @@ export const MAX_LIST_ITEMS = 10;
  * degrades to its current default when `layout` is absent, malformed, or carries an id it doesn't
  * recognise for that element/type — a `layout` never gates a hard error.
  *
- * `AttributeLayout` is the raw shape (admin path): `format` is a locale map, exactly like
- * `label`. `ResolvedAttributeLayout` is the member-facing twin, `format` already resolved to one
- * string. The backend field that carries this is `common` C11 (not shipped yet — until then no
- * resolved schema sets `layout` and the renderer stays on its defaults).
+ * `AttributeLayout` is the raw shape (admin path). `ResolvedAttributeLayout` is the member-facing
+ * twin — since `common` C11 the server carries `layout` **raw** and no longer resolves it, so
+ * `format` is a locale map on **both** (unlike `label`, which the server still resolves). SPORT-16
+ * resolves `format` to one string client-side in `normalizeLayout`.
  */
 export interface AttributeLayout {
   /** Layout id for this element/type — one of the sets in the design doc. */
@@ -125,11 +125,31 @@ export interface AttributeLayout {
   format?: Record<string, string> | null;
 }
 
-/** Resolved twin of {@link AttributeLayout} — `format` is one already-resolved pattern string. */
+/**
+ * Resolved twin of {@link AttributeLayout}. Since `common` C11 the server carries `layout` raw, so
+ * `format` is a **locale map here too** (SPORT-16 reversed SPORT-13's single-string assumption).
+ * `normalizeLayout` resolves it to one pattern string (`map['en-US'] ?? map['en']`, else none) at
+ * render time — the app has no UI locale yet (`I18N-1`, V1).
+ */
 export interface ResolvedAttributeLayout {
   id: string;
   icon?: string | null;
-  format?: string | null;
+  format?: Record<string, string> | null;
+}
+
+/**
+ * SPORT-16: one entry of a `#ref` node's `fieldLayouts` map (mirrors `common` C11's
+ * `AttributeFieldLayout`) — a **partial** {@link ResolvedAttributeLayout} plus an optional
+ * `hidden`, applied as a whole-object *replace* of the referenced definition field's own `layout`
+ * (`node.fieldLayouts?.[field.key] ?? field.layout`) and `hidden`
+ * (`node.fieldLayouts?.[field.key]?.hidden ?? field.hidden`). Never changes a field's
+ * `type` / `options` / `isRequired` / `definitionRef`; an unknown map key is ignored.
+ */
+export interface ResolvedAttributeFieldLayout {
+  id?: string;
+  icon?: string | null;
+  format?: Record<string, string> | null;
+  hidden?: boolean | null;
 }
 
 /** One selectable choice on an `ENUM`/`LIST` node — raw shape, `label` is
@@ -440,6 +460,10 @@ export interface ResolvedRefAttribute extends ResolvedAttributeCommon {
   options?: ResolvedSportAttributeOption[] | null;
   /** Inherited — present when the base attribute is `DEFINITION`/`DEFINITION_LIST`. */
   definitionRef?: string | null;
+  /** SPORT-16 / `common` C11: per-field presentation overrides for the referenced definition
+   * type's fields, keyed by field key. Applied by `applyRefFieldLayouts` when rendering a
+   * `#ref`-to-`DEFINITION(_LIST)` record. Only ever set on a `#ref` node. */
+  fieldLayouts?: Record<string, ResolvedAttributeFieldLayout> | null;
 }
 
 export type ResolvedSportAttributeDefinition =

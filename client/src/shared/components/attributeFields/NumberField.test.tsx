@@ -58,13 +58,13 @@ describe('NumberField layout', () => {
   });
 
   it('layout.id "readonly-text" renders the value as text with format applied', () => {
-    setup({ layout: { id: 'readonly-text', format: '0.0 lbs' }, value: 24 });
+    setup({ layout: { id: 'readonly-text', format: { en: '0.0 lbs' } }, value: 24 });
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
     expect(screen.getByText('24.0 lbs')).toBeInTheDocument();
   });
 
   it('format shows a preview line under the editable input', () => {
-    setup({ layout: { id: 'input', format: '#,##0' }, value: 1234 });
+    setup({ layout: { id: 'input', format: { en: '#,##0' } }, value: 1234 });
     expect(screen.getByRole('spinbutton')).toHaveValue(1234);
     expect(screen.getByText('1,234')).toBeInTheDocument();
   });
