@@ -4343,8 +4343,11 @@ explicit go-ahead at each step (full story in A3's summary doc):
   modal so both callers share one implementation; `RefField`'s own behavior/tests unchanged. Writes
   still flow through the existing profile `PUT` `attributes` merge — no new backend contract.
   Vitest 180 files / 1309 green; e2e 83 passed (one `friends-journey` parallel-load flake, 1/1
-  isolated); visual-regression: `profile-settings-{375,768,1280}.png` legitimately change (new field
-  adds height) — confirmed via stash-and-rerun against clean master, everything else unaffected.
+  isolated). 5 visual baselines regenerated via `/updatebaseline` (2026-09-12):
+  `profile-settings-{375,768,1280}.png` (new field + bundled `grid-2` Skill level/Years-of-
+  experience tweak) and `profile-settings-inactive-{768,1280}.png` (the `grid-2` tweak alone,
+  found only at `update-baselines` time — it applies regardless of active/inactive state); all
+  other 106 baselines byte-identical.
 - **Client SPORT-16 (`DONE`, 2026-09-10, `client/docs/MVP/SPORT-16_CLIENT_SIDE_LAYOUT_RESOLUTION.md`,
   impl `..._IMPL.md`):** consumes `common` C11's **raw** presentation fields client-side (C11 narrowed
   to "validate the shape on an admin write, carry the rest raw"). Three steps: **(1) `layout.format`

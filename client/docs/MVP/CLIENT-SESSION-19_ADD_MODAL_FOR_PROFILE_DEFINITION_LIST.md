@@ -107,9 +107,22 @@ before the modal can even open.
   unaffected states); only `profile — settings` differs in a way attributable to real content —
   clean master renders the Settings tab at 1790px tall (before this ticket) vs. 1862px with this
   ticket's new field (baseline itself is 1803px), a genuine height delta consistent with one new
-  empty-state field, not sub-pixel noise. Expected to fail until the `update-baselines` GitHub
-  dispatch regenerates exactly those 3 files; every other baseline is unaffected by this ticket
-  (no other visual spec renders Badminton's *profile* attribute schema).
+  empty-state field, not sub-pixel noise.
+  **Correction (found by the `update-baselines` dispatch, not caught at pickup):** the bundled
+  `grid-2` tweak below also legitimately changes `profile-settings-inactive-768.png` / `-1280.png`
+  (`e2e/visual/app-sport-reactivate.spec.ts`, Pickleball's read-only Settings view) — `grid-2`
+  applies unconditionally in `SportProfileSettingsTab`, regardless of active/inactive state, so any
+  render of that tab at ≥640px (the `sm:` breakpoint) picks up the side-by-side layout.
+  `profile-settings-inactive-375.png` stayed byte-identical, confirming the mechanism: below `sm`,
+  `grid-cols-1` renders the same as the old stacked layout. Not caught at pickup since this doc's
+  expectation line was written before the "Small tweak" section below existed.
+  **Executed (2026-09-12):** `update-baselines` GitHub dispatch run, artifact downloaded and
+  applied via `/updatebaseline`. SHA-256 against the committed set confirmed exactly 5 files
+  changed — the 3 above plus the 2 inactive-state corrections — and the other 106 baselines came
+  back byte-identical (Windows noise floor confirmed, not a regression). Human visual check on
+  `profile-settings-375.png`/`-768.png` and `profile-settings-inactive-768.png`: the new "Rackets
+  you own" field and the side-by-side Skill level/Years-of-experience row render correctly, nothing
+  else drifted. Baselines committed `ef5e12d`.
 - **Live backend:** not exercised — this ticket adds no new backend contract (writes through the
   same `attributes` merge on `PUT /api/sports/profiles/:profileId` that `PROFILE-8` already
   verified live), and the real backend's current Badminton schema has no `DEFINITION_LIST`
@@ -125,6 +138,11 @@ uses (`grid grid-cols-1 gap-3.5 sm:grid-cols-2`) — side by side at `sm+`, stac
 along in this PR since it touches the same `profile — settings` visual surface this ticket already
 changes. tsc/eslint clean; `SportProfileSettingsTab.test.tsx` + `useSportProfileSettingsTabData.test.tsx`
 (18 tests) green — no role/label change, so no test updates needed.
+
+**Delta found at `update-baselines` time:** since this wrapper is unconditional, it also legitimately
+changes `profile-settings-inactive-768.png` / `-1280.png` (the Pickleball read-only Settings state,
+`app-sport-reactivate.spec.ts`) — not just the active-Badminton surface this section originally
+called out. See the "Visual-regression expectation" correction above.
 
 ---
 
