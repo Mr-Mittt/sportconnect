@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { userEvent, within } from 'storybook/test';
 import type {
   ResolvedAttributeLayout,
   ResolvedSportAttributeDefinitionType,
@@ -48,3 +49,12 @@ export const Accordion: Story = { args: { layout: { id: 'accordion' } } };
 export const WithHeadingIcon: Story = { args: { layout: { id: 'cards', icon: 'racket' } } };
 /** No `layout` — the default, byte-identical to pre-SPORT-14 (`cards`). */
 export const DefaultNoLayout: Story = {};
+
+/** CLIENT-SESSION-19: "Add" opens the shared `AddDefinitionRecordModal` instead of appending a
+ * blank row inline — same `play`-driven pattern as `TopBar.stories.tsx`'s open-dropdown state. */
+export const AddModalOpen: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
+  },
+};

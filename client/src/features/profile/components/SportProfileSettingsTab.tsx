@@ -131,32 +131,36 @@ export function SportProfileSettingsTab({
       >
       <div className="flex flex-col gap-3.5">
         <h3 className="text-sm font-semibold text-text-primary">Sport profile</h3>
-        <div>
-          <Label htmlFor="sport-profile-skill-level">Skill level</Label>
-          <Select
-            id="sport-profile-skill-level"
-            value={draft.skillLevel}
-            onChange={(event) => setSkillLevel(event.target.value)}
-          >
-            <option value="" disabled>
-              Select a skill level
-            </option>
-            {SKILL_LEVELS.map((level) => (
-              <option key={level.value} value={level.value}>
-                {level.label}
+        {/* grid-2 — same responsive 1→2-col wrapper `SportAttributesFields`' own `group` layout
+            uses, so Skill level / Years of experience sit side by side at sm+ instead of stacked. */}
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="sport-profile-skill-level">Skill level</Label>
+            <Select
+              id="sport-profile-skill-level"
+              value={draft.skillLevel}
+              onChange={(event) => setSkillLevel(event.target.value)}
+            >
+              <option value="" disabled>
+                Select a skill level
               </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="sport-profile-experience">Years of experience</Label>
-          <Input
-            id="sport-profile-experience"
-            type="number"
-            min={0}
-            value={draft.yearsOfExperience}
-            onChange={(event) => setYearsOfExperience(event.target.value)}
-          />
+              {SKILL_LEVELS.map((level) => (
+                <option key={level.value} value={level.value}>
+                  {level.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="sport-profile-experience">Years of experience</Label>
+            <Input
+              id="sport-profile-experience"
+              type="number"
+              min={0}
+              value={draft.yearsOfExperience}
+              onChange={(event) => setYearsOfExperience(event.target.value)}
+            />
+          </div>
         </div>
       </div>
 

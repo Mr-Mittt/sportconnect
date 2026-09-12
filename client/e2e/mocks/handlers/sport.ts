@@ -81,11 +81,29 @@ function defaultAdminSportCatalog(): SportResponse[] {
 // Schema v3 document shape (A19 — nested `groups`, no `order`; A12/A13 registry + localized
 // labels unchanged). Only Badminton starts with one — Pickleball exercises the "sport has no
 // schema yet, GET returns data: null" branch. The `gear` group carries a loose `racketBrand`
-// attribute *and* a nested `rackets` sub-group, so a GET exercises real recursion.
+// attribute, a nested `rackets` sub-group, and a `DEFINITION_LIST` attribute (`ownedRackets`,
+// CLIENT-SESSION-19 — exercises the `DefinitionListField` add-via-modal path end to end), so a
+// GET exercises real recursion plus the `definitions` registry.
 function defaultAttributeSchemas(): Record<number, SportAttributeSchema | null> {
   return {
     1: {
       defaultLocale: 'en',
+      definitions: [
+        {
+          name: 'Racket',
+          fields: [
+            { key: 'model', label: { en: 'Model' }, type: 'STRING', isRequired: true },
+            {
+              key: 'weight',
+              label: { en: 'Weight (g)' },
+              type: 'NUMBER',
+              isRequired: false,
+              min: 50,
+              max: 500,
+            },
+          ],
+        },
+      ],
       groups: [
         {
           key: 'gear',
@@ -97,6 +115,13 @@ function defaultAttributeSchemas(): Record<number, SportAttributeSchema | null> 
               label: { en: 'Racket brand' },
               type: 'STRING',
               isAvailable: true,
+            },
+            {
+              key: 'ownedRackets',
+              label: { en: 'Rackets you own' },
+              type: 'DEFINITION_LIST',
+              isAvailable: true,
+              definitionRef: 'Racket',
             },
           ],
           groups: [

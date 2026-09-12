@@ -262,7 +262,7 @@ The single logged-in test user, unless a spec explicitly overrides via an admin-
 | `mockUser` | Jordan Lee, `jordan@example.com` | `id: '11111111-...'` |
 | `mockAdminUser` | Alex Admin, `admin@example.com` | **ADMIN-1:** `id: '22222222-...'`, `roles: ['USER', 'ADMIN']` — the only fixture holding ADMIN. Deliberately holds USER too, matching how a real admin is provisioned (registration grants USER, ADMIN is added on top) |
 | `mockPassword` | `password123` | Shared by both accounts — they differ only by email and roles |
-| `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. **SPORT-5:** specs no longer assert `aria-disabled` for this state; they assert the dialog it now opens. The fixture still supplies the "every available sport already held" condition both depend on. **PROFILE-8:** Badminton is the only one with an attribute schema (see `defaultAttributeSchemas()` in `sport.ts`); `PUT /api/sports/profiles/:profileId` (new this ticket) merges a saved `attributes` object into the existing one rather than replacing it, mirroring the real service. **SPORT-7:** that schema is now v3 (nested `groups`) — a loose `gear/racketBrand` STRING plus a nested `gear/rackets/stringTension` NUMBER sub-group; attribute values are path-keyed. **CLIENT-SESSION-15 / CLIENT-SESSION-17:** Badminton also has a *session* attribute schema (`defaultSessionAttributeSchemas()` / `GET /api/sports/1/session-attribute-schema`) — post-A23 it carries **two `#ref` nodes** each with a `cardinality`: `racketModel` (`LIST`, `prefillKey: gear/racketModels`) and `racketBrand` (`SINGLE`, `prefillKey: gear/racketBrand`), plus one own node with a `defaultValue`; Pickleball has none. The Badminton profile fixture stocks `attributes.gear/racketModels` with two entries (choices for the `LIST` `#ref`) and leaves `gear/racketBrand` empty (so the `SINGLE` `#ref` shows the "Other… only" state) — neither key is in the *profile* attribute schema, so the profile Settings tab doesn't render them |
+| `mockSportProfiles` | Badminton(1)/Pickleball(3) | **SPORT-3:** every sport the real MVP catalog serves (A6) — the old "3-sport cap" (Soccer/Basketball/Tennis) is no longer representable at all with only 2 real sports. **SPORT-5:** specs no longer assert `aria-disabled` for this state; they assert the dialog it now opens. The fixture still supplies the "every available sport already held" condition both depend on. **PROFILE-8:** Badminton is the only one with an attribute schema (see `defaultAttributeSchemas()` in `sport.ts`); `PUT /api/sports/profiles/:profileId` (new this ticket) merges a saved `attributes` object into the existing one rather than replacing it, mirroring the real service. **SPORT-7:** that schema is now v3 (nested `groups`) — a loose `gear/racketBrand` STRING plus a nested `gear/rackets/stringTension` NUMBER sub-group; attribute values are path-keyed. **CLIENT-SESSION-19:** the `gear` group also carries `ownedRackets`/"Rackets you own", a `DEFINITION_LIST` referencing a `Racket` definition (`model` STRING required + `weight` NUMBER) via the document's `definitions` registry — starts empty, exercised by `profile-journey.spec.ts` step 5b's add-via-modal flow. **CLIENT-SESSION-15 / CLIENT-SESSION-17:** Badminton also has a *session* attribute schema (`defaultSessionAttributeSchemas()` / `GET /api/sports/1/session-attribute-schema`) — post-A23 it carries **two `#ref` nodes** each with a `cardinality`: `racketModel` (`LIST`, `prefillKey: gear/racketModels`) and `racketBrand` (`SINGLE`, `prefillKey: gear/racketBrand`), plus one own node with a `defaultValue`; Pickleball has none. The Badminton profile fixture stocks `attributes.gear/racketModels` with two entries (choices for the `LIST` `#ref`) and leaves `gear/racketBrand` empty (so the `SINGLE` `#ref` shows the "Other… only" state) — neither key is in the *profile* attribute schema, so the profile Settings tab doesn't render them |
 
 Posts (all owned by `mockUser` unless noted) — `sportId` 1 = Badminton, 3 = Pickleball
 (SPORT-3 — was 5 = Soccer/6 = Basketball before the real catalog shrank to 2 sports, A6):
@@ -817,10 +817,11 @@ it rather than being left describing the old behaviour.
 
 Related docs: `client/docs/MVP/ADMIN-2_SPORT_ADMIN_MASTER_DETAIL_PAGE.md`.
 
-### `e2e/flows/profile-journey.spec.ts` (PROFILE-8, one `test()` with 7 steps + 1 separate `test()` — SPORT-10)
+### `e2e/flows/profile-journey.spec.ts` (PROFILE-8, one `test()` with 8 steps + 1 separate `test()` — SPORT-10)
 
 The `/profile` page's full journey — header/bio, `SportSwitcher`, posting from the composer, the
-comment modal, Settings tab save, Edit Profile save, and the Memories placeholder.
+comment modal, Settings tab save (a scalar attribute and a `DEFINITION_LIST` add-via-modal), Edit
+Profile save, and the Memories placeholder.
 
 | Step | Asserts |
 |---|---|
@@ -829,6 +830,7 @@ comment modal, Settings tab save, Edit Profile save, and the Memories placeholde
 | 3. composer | Typed content + "Post" (exact — `getByRole('button', { name: 'Post' })` without `exact: true` also matches "Post options"/the trending "#fridayrun 12 posts" button) → new article first, 3 total |
 | 4. comment modal | Opens empty on the new post, adds a comment via `dialog.getByLabel('Add a comment')`, comment count bumps to 1 |
 | 5. Settings tab | Skill level starts `intermediate`, Save disabled; changes skill level to `advanced` **and** the `SportAttributesFields` "Racket brand" attribute (a top-level `gear` field; SPORT-7 made the schema v3/nested but this step still edits the loose one), Save enables, saves, Save disables again and both values persist |
+| 5b. Settings tab — CLIENT-SESSION-19 | Save starts disabled again; clicks "Add" on the `DEFINITION_LIST` attribute "Rackets you own", fills the `AddDefinitionRecordModal` (Model/Weight), submits — dialog closes, "Item 1" + the entered model render inline, Save enables — saves, Save disables again and the record still renders |
 | 6. Edit Profile modal | Prefilled ("Jordan" in First name), changes Bio, saves — modal closes and the new bio appears in `ProfileHeader` |
 | 7. Memories tab | `ComingSoonPage` placeholder ("Memories" heading + "Coming soon.") |
 
@@ -848,7 +850,8 @@ session-scoped `myProfileState` field so a save actually changes what the next `
 | Settings tab — deactivate a sport, then reactivate it via the muted pill | `seedSoftDeletedSportProfileOnNextLoad(mockSessionId)` makes Pickleball soft-deleted → its **muted** `SportSwitcher` pill opens the Settings tab (`role="switch"` reads "Pickleball profile: Inactive", Skill level + Save disabled) → the switch → "Welcome back to Pickleball!" confirm → Reactivate → switch reads Active, fields editable, Pickleball is an un-muted active pill → switch back → "hidden from your active sports" confirm → Deactivate → Inactive again | The muted pill routes into the Settings tab (not `AddSportModal` — that reactivate variant is for the non-Profile surfaces). `DELETE /api/sports/profiles/:profileId` (soft delete) + `POST { isResume: true }` both go through `SportProfileStatusConfirmDialog`. `SportProfileStatusConfirmDialog` duplicates its prompt in an `sr-only` `DialogTitle` + a visible `<p>`, so `getByText(...).first()` |
 
 Related docs: `client/docs/MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md`,
-`client/docs/MVP/SPORT-10_ADD_SPORT_RESUME_REACTIVATION_FLOW.md`.
+`client/docs/MVP/SPORT-10_ADD_SPORT_RESUME_REACTIVATION_FLOW.md`,
+`client/docs/MVP/CLIENT-SESSION-19_ADD_MODAL_FOR_PROFILE_DEFINITION_LIST.md`.
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 

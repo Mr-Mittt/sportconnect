@@ -126,3 +126,48 @@ describe('DefinitionListField cap', () => {
     }
   });
 });
+
+// CLIENT-SESSION-19: "Add" opens the shared `AddDefinitionRecordModal` instead of appending a
+// blank row inline.
+describe('DefinitionListField add-via-modal', () => {
+  it('Add opens a modal; filling required fields and submitting appends the record via onChange', async () => {
+    const { onChange } = setup(undefined, [{ value: 'Astrox 99' }]);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Add — Rackets');
+    await userEvent.type(within(dialog).getByLabelText('Model *'), 'Nanoflare 800');
+    await userEvent.type(within(dialog).getByLabelText('Weight'), '83');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      { value: 'Astrox 99' },
+      { value: 'Nanoflare 800', gramWeight: 83 },
+    ]);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('Cancel closes the modal without appending anything', async () => {
+    const { onChange } = setup(undefined, [{ value: 'Astrox 99' }]);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText('Model *'), 'Nanoflare 800');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('submitting an empty record is a no-op — the modal stays open with nothing appended', async () => {
+    const { onChange } = setup(undefined, []);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    const dialog = screen.getByRole('dialog');
+    // Nothing entered — the dialog's own "Add" must not append an empty record.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(dialog).toBeInTheDocument();
+  });
+});
