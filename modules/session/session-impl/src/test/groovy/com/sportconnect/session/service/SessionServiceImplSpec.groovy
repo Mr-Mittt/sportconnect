@@ -1358,8 +1358,10 @@ class SessionServiceImplSpec extends Specification {
     def "updateSession rejects switching to FIXED without ever supplying a feeAmountVnd"() {
         given:
         def userId = UUID.randomUUID()
+        // SESSION-24: feeType is only changeable while PREPARING — moved off SCHEDULED so this
+        // still reaches resolveFeeAmountVnd's own validation rather than the new PREPARING gate.
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.PREPARING)
                 .capacity(10).feeType(FeeType.FREE).build()
         def request = UpdateSessionRequest.builder().feeType(FeeType.FIXED).build()
 
@@ -1375,8 +1377,10 @@ class SessionServiceImplSpec extends Specification {
     def "updateSession clears a stale feeAmountVnd when switching away from FIXED"() {
         given:
         def userId = UUID.randomUUID()
+        // SESSION-24: feeType is only changeable while PREPARING — moved off SCHEDULED (this
+        // scenario is no longer reachable there at all, see the rejection test right below).
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.PREPARING)
                 .capacity(10).feeType(FeeType.FIXED).feeAmountVnd(30000L).build()
         def request = UpdateSessionRequest.builder().feeType(FeeType.SPLIT).build()
 
@@ -1387,6 +1391,185 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionRepository.save({ Session s -> s.feeType == FeeType.SPLIT && s.feeAmountVnd == null }) >> session
         interaction { stubBatchEnrichment() }
+        1 * sessionOutboxWriter.record("session.details.updated", _)
+    }
+
+    def "updateSession rejects changing feeType once the session is genuinely SCHEDULED"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .capacity(10).feeType(FeeType.FIXED).feeAmountVnd(30000L).build()
+        def request = UpdateSessionRequest.builder().feeType(FeeType.SPLIT).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        thrown(BadRequestException)
+        0 * sessionRepository.save(_)
+    }
+
+    def "updateSession rejects changing locationId once the session is genuinely SCHEDULED"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .capacity(10).feeType(FeeType.FREE).build()
+        def request = UpdateSessionRequest.builder().locationId(2L).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        thrown(BadRequestException)
+        0 * sessionRepository.save(_)
+        0 * locationService.getLocation(_)
+    }
+
+    // ── SESSION-24 — PREPARING status ───────────────────────────────────────
+
+    def "createSession starts PREPARING when locationId is missing"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .capacity(10).feeType(FeeType.FREE).build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.PREPARING).build()
+
+        when:
+        def result = sessionService.createSession(userId, request)
+
+        then:
+        0 * locationService.getLocation(_)
+        1 * sessionRepository.save({ Session s -> s.status == SessionStatus.PREPARING && s.locationId == null }) >> saved
+        interaction { stubBatchEnrichment() }
+        result.status == SessionStatus.PREPARING
+    }
+
+    def "createSession starts PREPARING when feeType is missing"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .capacity(10).build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
+                .status(SessionStatus.PREPARING).build()
+
+        when:
+        def result = sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.status == SessionStatus.PREPARING && s.feeType == null }) >> saved
+        interaction { stubBatchEnrichment() }
+        result.status == SessionStatus.PREPARING
+    }
+
+    def "createSession starts PREPARING when both locationId and feeType are missing"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).capacity(10).build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.PREPARING).build()
+
+        when:
+        def result = sessionService.createSession(userId, request)
+
+        then:
+        0 * locationService.getLocation(_)
+        1 * sessionRepository.save({ Session s ->
+            s.status == SessionStatus.PREPARING && s.locationId == null && s.feeType == null
+        }) >> saved
+        interaction { stubBatchEnrichment() }
+        result.status == SessionStatus.PREPARING
+    }
+
+    def "createSession starts SCHEDULED when both locationId and feeType are present"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .capacity(10).feeType(FeeType.FREE).build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
+                .status(SessionStatus.SCHEDULED).build()
+
+        when:
+        def result = sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.status == SessionStatus.SCHEDULED }) >> saved
+        interaction { stubBatchEnrichment() }
+        result.status == SessionStatus.SCHEDULED
+    }
+
+    def "updateSession flips PREPARING to SCHEDULED once both locationId and feeType are completed"() {
+        given:
+        def userId = UUID.randomUUID()
+        // .feeType(null) explicitly, not omitted — Session.feeType's @Builder.Default only
+        // applies when the builder method is never called at all; a genuinely-missing feeType
+        // (as a real PREPARING session would have) requires calling it with null.
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).feeType(null)
+                .scheduledStart(LocalDateTime.now().plusDays(1)).status(SessionStatus.PREPARING)
+                .capacity(10).build()
+        def request = UpdateSessionRequest.builder().locationId(1L).feeType(FeeType.FREE).build()
+
+        when:
+        def result = sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.status == SessionStatus.SCHEDULED }) >> session
+        interaction { stubBatchEnrichment() }
+        1 * sessionOutboxWriter.record("session.details.updated", { it.sessionId == 1L && it.actorId == userId })
+        result.status == SessionStatus.SCHEDULED
+    }
+
+    def "updateSession stays PREPARING when only one of locationId/feeType is completed"() {
+        given:
+        def userId = UUID.randomUUID()
+        // .feeType(null) explicitly — see the comment in the sibling "flips PREPARING to
+        // SCHEDULED" test above for why omitting the builder call entirely is wrong here.
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).feeType(null)
+                .scheduledStart(LocalDateTime.now().plusDays(1)).status(SessionStatus.PREPARING)
+                .capacity(10).build()
+        def request = UpdateSessionRequest.builder().locationId(1L).build()
+
+        when:
+        def result = sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.status == SessionStatus.PREPARING && s.locationId == 1L }) >> session
+        interaction { stubBatchEnrichment() }
+        result.status == SessionStatus.PREPARING
+    }
+
+    def "updateSession writes a session.details.updated outbox row on every successful update, regardless of field"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
+                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .capacity(10).feeType(FeeType.FREE).build()
+        def request = UpdateSessionRequest.builder().title("New title").build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save(_) >> session
+        interaction { stubBatchEnrichment() }
+        1 * sessionOutboxWriter.record("session.details.updated", { it.sessionId == 1L && it.actorId == userId })
     }
 
     // ── createSession — companion SESSION_POST (SESSION-10/A17) ────────────────

@@ -3843,6 +3843,26 @@ explicit go-ahead at each step (full story in A3's summary doc):
   and **NOTIF-4** filed as a new `CANDIDATE` — fan-out currently notifies participants whose account
   is deactivated, since nothing filters recipients by `isActive`; cross-cutting across every
   trigger, and related to user-impl's U12.
+- **SESSION-24 (`DONE`, 2026-09-14,
+  `modules/session/docs/MVP/SESSION-24_ADD_PREPARING_SESSION_STATUS.md`):** new `PREPARING` session
+  status — `locationId`/`feeType` are now optional on `CreateSessionRequest`; missing either starts
+  the session `PREPARING` instead of `SCHEDULED` (`V065` drops `NOT NULL` on both `sessions
+  .location_id` and `.fee_type`). `updateSession` gains a `PREPARING`-only gate on those two fields
+  (immutable once genuinely `SCHEDULED`) plus the completion flip back to `SCHEDULED`; a new
+  `SessionGenerationJob.cancelUnpreparedSessions` (15-min cadence) auto-cancels a `PREPARING`
+  session once `scheduledStart` passes uncompleted. New `session.details.updated` notification —
+  fans out to JOINED participants on every successful `updateSession` call regardless of which
+  field changed; `notification-impl`'s `ACTIVE_SESSION_STATUSES` gained `PREPARING` alongside
+  `SCHEDULED`/`ONGOING`. **Routing-key naming caught before wiring:** the originally-planned
+  `session.updated` is 2 segments, but `SessionEventsRabbitConfig`'s queue binds a strict
+  `session.*.*` (3-segment) topic pattern — that key would have silently never matched, so it's
+  `session.details.updated` instead. Client companions filed: **CLIENT-SESSION-21** (warning +
+  completion UI) and **CLIENT-SESSION-22** (search/filter wiring, for the sibling **SESSION-25**).
+  **NOTIF-7** logged (should the auto-cancellation itself notify anyone? — open). Green:
+  `:modules:session:session-impl:test` (148), `:modules:notification:notification-impl:test`,
+  `V065` applied + verified against dev Postgres. `:server:test` not run to completion (~55min, no
+  output, on this Windows/Testcontainers box) — deferred to `server-ci` on push, consistent with the
+  precedent in `documentation/sessions/103_log.md`.
 - **SESSION-23 (`DONE`, 2026-09-07,
   `modules/session/docs/MVP/SESSION-23_SESSION_ATTRIBUTES.md`):** per-session structured attributes
   — `V064` adds nullable `sessions.attributes JSONB`; `attributes` (a path-keyed `Map<String,Object>`)

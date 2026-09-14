@@ -22,8 +22,13 @@ public interface SessionService {
     /**
      * groupId null → standalone (open to any ROLE_USER, sportId required in the request).
      * groupId non-null → requires GroupService.canManageMembers; sportId inherited from the
-     * group if omitted. In both cases locationId must resolve to a Location whose sportId
-     * matches the session's resolved sportId — a BadRequestException otherwise.
+     * group if omitted. When {@code locationId} is supplied, it must resolve to a Location whose
+     * sportId matches the session's resolved sportId — a BadRequestException otherwise.
+     *
+     * <p>SESSION-24: {@code locationId} and {@code feeType} are both optional. Missing either (or
+     * both) starts the session as {@code PREPARING} instead of {@code SCHEDULED} — see {@code
+     * updateSession} for how it's completed, and {@code SessionStatus}'s own Javadoc for the full
+     * lifecycle.
      *
      * <p>SESSION-23: when {@code request.attributes} is non-null it is filtered against the sport's
      * session attribute schema ({@code SportService.getSessionAttributeSchemaRaw}) — unknown /
@@ -47,6 +52,14 @@ public interface SessionService {
 
     /**
      * Standalone → creator-only. Group-linked → owner/admin via canManageMembers.
+     *
+     * <p>SESSION-24: {@code locationId}/{@code feeType} may only be changed while the session is
+     * {@code PREPARING} — a request touching either while the session is genuinely {@code
+     * SCHEDULED} (or beyond) is a BadRequestException, checked before any field is applied.
+     * Completing both flips the session to {@code SCHEDULED}; completing only one leaves it
+     * {@code PREPARING}. Every successful call also fans out a {@code session.details.updated}
+     * notification to the session's currently-{@code JOINED} participants, regardless of which
+     * field(s) changed.
      *
      * <p>SESSION-23: {@code request.attributes} has replace semantics — a non-null map is filtered
      * (as in {@link #createSession}) and stored wholesale, an explicit empty map clears the stored

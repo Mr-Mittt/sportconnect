@@ -28,6 +28,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent;
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
+import com.sportconnect.session.api.event.SessionUpdatedEvent;
 import com.sportconnect.session.api.service.SessionService;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionOutboxEvent;
@@ -127,10 +128,18 @@ public class SessionServiceImpl implements SessionService {
             sportService.requireActiveSportById(sportId);
         }
 
-        LocationResponse location = locationService.getLocation(request.getLocationId());
-        if (!Objects.equals(location.getSportId(), sportId)) {
-            throw new BadRequestException("locationId does not match this session's sport");
+        // SESSION-24: locationId is now optional — a session missing it (or feeType) starts
+        // PREPARING instead of SCHEDULED, so the sport-match check only applies once a location
+        // is actually supplied.
+        if (request.getLocationId() != null) {
+            LocationResponse location = locationService.getLocation(request.getLocationId());
+            if (!Objects.equals(location.getSportId(), sportId)) {
+                throw new BadRequestException("locationId does not match this session's sport");
+            }
         }
+        SessionStatus initialStatus = (request.getLocationId() != null && request.getFeeType() != null)
+                ? SessionStatus.SCHEDULED
+                : SessionStatus.PREPARING;
 
         LocalDateTime scheduledEndAt = request.getDurationMinutes() != null
                 ? request.getScheduledStart().plusMinutes(request.getDurationMinutes())
@@ -162,7 +171,7 @@ public class SessionServiceImpl implements SessionService {
                 .locationNote(request.getLocationNote())
                 .scheduledStart(request.getScheduledStart())
                 .scheduledEndAt(scheduledEndAt)
-                .status(SessionStatus.SCHEDULED)
+                .status(initialStatus)
                 .capacity(request.getCapacity())
                 .feeType(request.getFeeType())
                 .feeAmountVnd(feeAmountVnd)
@@ -239,6 +248,14 @@ public class SessionServiceImpl implements SessionService {
         Session session = findSessionOrThrow(sessionId);
         requireCanModify(session, userId);
 
+        // SESSION-24: locationId/feeType are only changeable while the session is PREPARING —
+        // once genuinely SCHEDULED (or beyond), they're immutable via this endpoint. Checked
+        // before applying any field so a rejected request leaves the session fully untouched.
+        if ((request.getLocationId() != null || request.getFeeType() != null)
+                && session.getStatus() != SessionStatus.PREPARING) {
+            throw new BadRequestException("locationId/feeType can only be changed while the session is PREPARING");
+        }
+
         if (request.getTitle() != null) {
             session.setTitle(request.getTitle());
         }
@@ -288,7 +305,22 @@ public class SessionServiceImpl implements SessionService {
         // an amount" and clears a stale amount when switching away from FIXED.
         session.setFeeAmountVnd(resolveFeeAmountVnd(session.getFeeType(), session.getFeeAmountVnd()));
 
-        return toResponse(sessionRepository.save(session), userId);
+        // SESSION-24: PREPARING -> SCHEDULED once both location and fee type are present.
+        if (session.getStatus() == SessionStatus.PREPARING
+                && session.getLocationId() != null && session.getFeeType() != null) {
+            session.setStatus(SessionStatus.SCHEDULED);
+        }
+
+        Session saved = sessionRepository.save(session);
+
+        // SESSION-24: field-agnostic — fires on every successful update, fanned out to the
+        // session's currently-JOINED participants (actor excluded at consume time).
+        sessionOutboxWriter.record("session.details.updated", SessionUpdatedEvent.builder()
+                .sessionId(saved.getId())
+                .actorId(userId)
+                .build());
+
+        return toResponse(saved, userId);
     }
 
     /**
@@ -744,7 +776,10 @@ public class SessionServiceImpl implements SessionService {
                 .distinct()
                 .collect(Collectors.toList());
         List<Long> sportIds = sessions.stream().map(Session::getSportId).distinct().collect(Collectors.toList());
-        List<Long> locationIds = sessions.stream().map(Session::getLocationId).distinct().collect(Collectors.toList());
+        // SESSION-24: locationId is nullable (a PREPARING session may not have one yet) — filtered
+        // before the batch lookup, same as userIds above, since a null id has no meaning to pass on.
+        List<Long> locationIds = sessions.stream().map(Session::getLocationId)
+                .filter(Objects::nonNull).distinct().collect(Collectors.toList());
         List<Long> sessionIds = sessions.stream().map(Session::getId).collect(Collectors.toList());
         List<Long> postIds = sessions.stream().map(Session::getPostId).distinct().collect(Collectors.toList());
 

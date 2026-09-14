@@ -41,6 +41,9 @@ public class SessionGenerationService {
 
     private static final int START_BATCH_SIZE = 200;
     private static final int CLOSE_BATCH_SIZE = 200;
+    private static final int CANCEL_UNPREPARED_BATCH_SIZE = 200;
+    private static final String UNPREPARED_CANCEL_REASON =
+            "Auto-cancelled — session setup was not completed before the scheduled start time";
 
     private final SessionRepository sessionRepository;
     private final GroupService groupService;
@@ -154,6 +157,35 @@ public class SessionGenerationService {
             sessions.forEach(s -> s.setStatus(SessionStatus.COMPLETED));
             sessionRepository.saveAll(sessions);
             log.info("Closed {} past session(s)", sessions.size());
+        } while (batch.hasNext());
+    }
+
+    /** SESSION-24: PREPARING -> CANCELLED once scheduledStart passes without the creator
+     * completing locationId/feeType. No real actor (a scheduled job made the transition, same as
+     * startOngoingSessions) — cancelledBy stays null. No outbox event or system comment: whether
+     * this should notify anyone is an open question, logged as NOTIF-7 in
+     * documentation/md/NOTIFICATION_USE_CASES.md rather than decided here. */
+    @Transactional
+    public void cancelUnpreparedSessions() {
+        LocalDateTime cutoff = LocalDateTime.now();
+        Pageable pageable = PageRequest.of(0, CANCEL_UNPREPARED_BATCH_SIZE);
+        Slice<Session> batch;
+        do {
+            // Always re-query page 0 — rows flipped to CANCELLED below drop out of this
+            // PREPARING-status filter, so the "next" batch is always page 0 again.
+            batch = sessionRepository.findUnpreparedSessionsToCancel(SessionStatus.PREPARING, cutoff, pageable);
+            if (batch.isEmpty()) {
+                break;
+            }
+            List<Session> sessions = batch.getContent();
+            LocalDateTime cancelledAt = LocalDateTime.now();
+            sessions.forEach(s -> {
+                s.setStatus(SessionStatus.CANCELLED);
+                s.setCancelReason(UNPREPARED_CANCEL_REASON);
+                s.setCancelledAt(cancelledAt);
+            });
+            sessionRepository.saveAll(sessions);
+            log.info("Auto-cancelled {} unprepared session(s)", sessions.size());
         } while (batch.hasNext());
     }
 
