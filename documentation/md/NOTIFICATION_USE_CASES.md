@@ -127,3 +127,13 @@ When a session is created with structured attributes (A17's session schema), sho
 sport profile attributes for that sport "match" be notified? Open: what "match" means (any shared
 attribute value? a threshold?), opt-in vs opt-out, and interaction with SESSION-8 discovery
 ranking (which may make a passive surface the better answer than a push).
+
+### NOTIF-7 · A PREPARING session auto-cancelled without being completed
+**Date added:** 2026-09-14
+**Status:** `CANDIDATE`
+**Source:** SESSION-24 scoping (`/ticket` session) — surfaced, not resolved on the spot.
+
+When the new auto-cancel job (SESSION-24) cancels a `PREPARING` session because its
+`scheduledStart` passed without location/fee being completed, should the creator (and, separately,
+anyone who already joined a `PREPARING` session while it was joinable) be notified? Not resolved
+here — SESSION-24 explicitly leaves this out of scope.

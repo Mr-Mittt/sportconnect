@@ -21,6 +21,9 @@
 |---|---|---|---|
 | 1 | [SESSION-8](MVP/SESSION-8_SESSION_DISCOVER_RANKING_ALGORITHM.md) | Session discover ranking algorithm | `TODO` |
 | 2 | [SESSION-22](MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md) | `SessionEventsConsumerIntegrationTest` fails intermittently on its RabbitMQ container — **~50% flake rate** (6 of 12 full runs), fails as a block on `AmqpIOException`, passes in isolation | `TODO` |
+| 3 | [SESSION-24](MVP/SESSION-24_ADD_PREPARING_SESSION_STATUS.md) | Add `PREPARING` session status — optional location/fee at creation | `TODO` |
+| 4 | [SESSION-25](MVP/SESSION-25_DISCOVER_SEARCH_AND_FILTER.md) | Server-side search + column filter on session discover | `TODO` |
+| 5 | [SESSION-26](MVP/SESSION-26_DISCOVER_ATTRIBUTE_FILTER.md) | Session-attribute filtering on discover (deferred from SESSION-25) | `TODO` |
 
 ---
 
