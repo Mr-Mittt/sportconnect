@@ -318,6 +318,16 @@ migrations, built up lazily — a table/column only gets added the first time so
 so a new IT test may need to add missing schema there first; that's expected, not a sign something
 is wrong.
 
+**If a local `./gradlew :server:test` run seems to hang or take an unreasonably long time (tens of
+minutes with zero output), try `./gradlew --stop` first, then re-run — do not immediately assume
+the suite itself is slow and abandon it in favor of `server-ci`.** Investigated 2026-09-14
+(`documentation/md/IT_OVERVIEW.md` has the full write-up): neither individual containers, nor
+several IT classes run together, nor eventually the full 19-class suite showed any real slowness
+once stale local Gradle-daemon/locked-file state was cleared — the full suite completed in `1m 41s`
+once clean, comparable to CI. A genuine multi-40-minute local stall (first documented in
+`documentation/sessions/103_log.md`) is most likely leftover daemon/process/file-lock state on the
+machine, not a real performance problem with the suite, Testcontainers, or Windows itself.
+
 ### Frontend
 
 The old CRA client (AuthContext/GroupContext, localStorage tokens) was removed on 2026-07-06 for a from-scratch rebuild. The new client's stack (Vite, React 18 + TS strict, Tailwind, shadcn/ui, Zustand + TanStack Query, Vitest, Storybook, Playwright + MSW) and all conventions are defined in `client/CLAUDE.md`; the build order is `client/docs/BACKLOG_MVP.md`.
