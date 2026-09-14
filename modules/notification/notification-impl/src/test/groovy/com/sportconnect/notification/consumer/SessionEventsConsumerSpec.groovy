@@ -11,6 +11,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent
 import com.sportconnect.session.api.event.SessionStatusStartedEvent
+import com.sportconnect.session.api.event.SessionUpdatedEvent
 import org.springframework.amqp.core.Message
 import org.springframework.amqp.core.MessageProperties
 import spock.lang.Specification
@@ -64,7 +65,9 @@ class SessionEventsConsumerSpec extends Specification {
         then:
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
             e.type() == "session.participant.joined" && e.fanOutStatuses() == [ParticipantStatus.JOINED] &&
-                    e.fanOutSessionStatuses() == [SessionStatus.SCHEDULED, SessionStatus.ONGOING]
+                    // SESSION-24: PREPARING included alongside SCHEDULED/ONGOING — a PREPARING
+                    // session is fully joinable, so this event fans out for it too.
+                    e.fanOutSessionStatuses() == [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING]
         })
     }
 
@@ -84,7 +87,9 @@ class SessionEventsConsumerSpec extends Specification {
             e.type() == "session.participant.left" && e.sessionId() == 1L && e.actorId() == actorId &&
                     e.singleRecipient() == null &&
                     e.fanOutStatuses() == [ParticipantStatus.JOINED] &&
-                    e.fanOutSessionStatuses() == [SessionStatus.SCHEDULED, SessionStatus.ONGOING]
+                    // SESSION-24: PREPARING included alongside SCHEDULED/ONGOING — a PREPARING
+                    // session is fully joinable, so this event fans out for it too.
+                    e.fanOutSessionStatuses() == [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING]
         })
     }
 
@@ -99,7 +104,27 @@ class SessionEventsConsumerSpec extends Specification {
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
             e.type() == "session.status.started" && e.sessionId() == 1L && e.actorId() == null &&
                     e.fanOutStatuses() == [ParticipantStatus.JOINED] &&
-                    e.fanOutSessionStatuses() == [SessionStatus.SCHEDULED, SessionStatus.ONGOING]
+                    // SESSION-24: PREPARING included alongside SCHEDULED/ONGOING — a PREPARING
+                    // session is fully joinable, so this event fans out for it too.
+                    e.fanOutSessionStatuses() == [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING]
+        })
+    }
+
+    def "dispatches session.details.updated as a fan-out event scoped to JOINED only"() {
+        given:
+        def actorId = UUID.randomUUID()
+        def body = objectMapper.writeValueAsString(
+                SessionUpdatedEvent.builder().sessionId(1L).actorId(actorId).build())
+
+        when:
+        consumer.onSessionEvent(messageWith("session.details.updated", body))
+
+        then:
+        1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
+            e.type() == "session.details.updated" && e.sessionId() == 1L && e.actorId() == actorId &&
+                    e.singleRecipient() == null &&
+                    e.fanOutStatuses() == [ParticipantStatus.JOINED] &&
+                    e.fanOutSessionStatuses() == [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING]
         })
     }
 

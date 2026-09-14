@@ -12,6 +12,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent;
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
 import com.sportconnect.session.api.event.SessionStatusStartedEvent;
+import com.sportconnect.session.api.event.SessionUpdatedEvent;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -55,11 +56,13 @@ public class SessionEventsConsumer {
     // from values() rather than a hand-listed set so a future SessionStatus is included by
     // default — silently excluding a new state is exactly the bug shape SESSION-20 fixed.
     private static final List<SessionStatus> ANY_SESSION_STATUS = List.of(SessionStatus.values());
-    // Everything else stays scoped to a live session: "someone joined/left" and "it's starting
-    // now" are only meaningful while the session is still ahead of or underway for its
-    // participants. Unchanged behavior for these three events.
+    // Everything else stays scoped to a live session: "someone joined/left", "it's starting
+    // now", and "the session was updated" are only meaningful while the session is still ahead
+    // of or underway for its participants. SESSION-24: PREPARING included alongside SCHEDULED/
+    // ONGOING — a PREPARING session is fully joinable, so join/leave/update notifications fire
+    // for it the same as a SCHEDULED one.
     private static final List<SessionStatus> ACTIVE_SESSION_STATUSES =
-            List.of(SessionStatus.SCHEDULED, SessionStatus.ONGOING);
+            List.of(SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING);
 
     private final ObjectMapper objectMapper;
     private final SessionEventProcessor sessionEventProcessor;
@@ -96,6 +99,11 @@ public class SessionEventsConsumer {
             }
             case "session.participant.left" -> {
                 SessionParticipantLeftEvent e = objectMapper.readValue(body, SessionParticipantLeftEvent.class);
+                yield ParsedSessionEvent.fanOut(routingKey, e.getSessionId(), e.getActorId(),
+                        PARTICIPANT_JOINED_RECIPIENT_STATUSES, ACTIVE_SESSION_STATUSES);
+            }
+            case "session.details.updated" -> {
+                SessionUpdatedEvent e = objectMapper.readValue(body, SessionUpdatedEvent.class);
                 yield ParsedSessionEvent.fanOut(routingKey, e.getSessionId(), e.getActorId(),
                         PARTICIPANT_JOINED_RECIPIENT_STATUSES, ACTIVE_SESSION_STATUSES);
             }

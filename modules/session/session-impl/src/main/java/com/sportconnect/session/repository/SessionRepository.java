@@ -49,6 +49,18 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             Pageable pageable);
 
     /**
+     * {@code PREPARING} sessions whose {@code scheduledStart} has passed without the creator
+     * completing {@code locationId}/{@code feeType} — ready to be auto-cancelled (SESSION-24).
+     * Same shape as {@link #findSessionsToStart}/{@link #findSessionsToComplete}: batched via
+     * Pageable so an unbounded backlog can't be loaded in one query.
+     */
+    @Query("SELECT s FROM Session s WHERE s.status = :status AND s.scheduledStart <= :cutoff")
+    Slice<Session> findUnpreparedSessionsToCancel(
+            @Param("status") SessionStatus status,
+            @Param("cutoff") LocalDateTime cutoff,
+            Pageable pageable);
+
+    /**
      * Joinable standalone sessions for discover: open (group_id IS NULL), in {@code status},
      * restricted to {@code sportIds} (the caller's active-sport-profile gate, resolved by the
      * caller), excluding sessions the caller created and sessions the caller currently has a

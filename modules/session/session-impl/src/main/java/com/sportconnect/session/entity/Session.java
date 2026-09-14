@@ -66,7 +66,9 @@ public class Session {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "location_id", nullable = false)
+    /** SESSION-24: nullable — null means the creator hasn't set a location yet, which keeps the
+     * session in {@code PREPARING} rather than {@code SCHEDULED}. */
+    @Column(name = "location_id")
     private Long locationId;
 
     /** Free-text detail within the shared Location, e.g. "Court 3" or "North field" —
@@ -92,8 +94,13 @@ public class Session {
     @Builder.Default
     private Integer capacity = 9999;
 
+    /** SESSION-24: nullable — null means the creator hasn't set a fee type yet, which keeps the
+     * session in {@code PREPARING} rather than {@code SCHEDULED}. The {@code @Builder.Default}
+     * only applies when {@code .feeType(...)} is never called on the builder; every call site here
+     * calls it unconditionally (even with a null request value), so this default is effectively
+     * unreachable in practice — kept for any future builder usage that genuinely omits the field. */
     @Enumerated(EnumType.STRING)
-    @Column(name = "fee_type", nullable = false, length = 10)
+    @Column(name = "fee_type", length = 10)
     @Builder.Default
     private FeeType feeType = FeeType.FREE;
 

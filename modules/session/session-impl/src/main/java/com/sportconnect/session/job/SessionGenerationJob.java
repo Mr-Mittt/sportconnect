@@ -33,4 +33,9 @@ public class SessionGenerationJob {
     public void closePastSessions() {
         sessionGenerationService.closePastSessions();
     }
+
+    @Scheduled(cron = "0 */15 * * * *") // every 15 minutes
+    public void cancelUnpreparedSessions() {
+        sessionGenerationService.cancelUnpreparedSessions();
+    }
 }

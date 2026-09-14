@@ -256,4 +256,40 @@ class SessionGenerationServiceSpec extends Specification {
         1 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >> new PageImpl([])
         0 * commentService._
     }
+
+    // ── SESSION-24 ────────────────────────────────────────────────────────────
+
+    def "cancelUnpreparedSessions cancels a PREPARING session whose start has passed, looping until empty"() {
+        given:
+        def pageable = PageRequest.of(0, 200)
+        def session1 = Session.builder().id(1L).status(SessionStatus.PREPARING).build()
+        // total=201 with page size 200 forces hasNext()==true, so the loop re-queries once more
+        def firstBatch = new PageImpl([session1], pageable, 201)
+        def secondBatch = new PageImpl([], pageable, 0)
+
+        when:
+        service.cancelUnpreparedSessions()
+
+        then:
+        2 * sessionRepository.findUnpreparedSessionsToCancel(SessionStatus.PREPARING, _ as LocalDateTime, pageable) >>>
+                [firstBatch, secondBatch]
+        1 * sessionRepository.saveAll({ List sessions ->
+            sessions[0].status == SessionStatus.CANCELLED &&
+            sessions[0].cancelReason != null &&
+            sessions[0].cancelledAt != null &&
+            sessions[0].cancelledBy == null
+        })
+    }
+
+    def "cancelUnpreparedSessions does nothing when no PREPARING session is past its start time"() {
+        given:
+        def pageable = PageRequest.of(0, 200)
+
+        when:
+        service.cancelUnpreparedSessions()
+
+        then:
+        1 * sessionRepository.findUnpreparedSessionsToCancel(SessionStatus.PREPARING, _ as LocalDateTime, pageable) >> new PageImpl([])
+        0 * sessionRepository.saveAll(_)
+    }
 }

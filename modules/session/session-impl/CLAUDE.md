@@ -78,8 +78,11 @@ ownership-only), so there's nothing this module needs to wrap.
 1. `groupId` present → `sportId` inherited from the group if omitted, `sessionType` =
    `GROUP_RECURRING`, requires `groupService.canManageMembers`. `groupId` null → `sportId`
    required in the request, `sessionType` = `STANDALONE`, open to any `ROLE_USER`.
-2. `locationId` is always required and its `Location.sportId` must equal the session's resolved
-   `sportId` — a mismatch is a `BadRequestException`, not silently allowed.
+2. `locationId` is optional at creation (SESSION-24) — when supplied, its `Location.sportId` must
+   equal the session's resolved `sportId` (a mismatch is a `BadRequestException`, not silently
+   allowed); when omitted (along with `feeType`, also now optional), the session starts
+   `PREPARING` instead of `SCHEDULED`. See rule 10 below and `SessionStatus`'s own Javadoc for the
+   full `PREPARING` lifecycle.
 3. `joinSession` rejects a `CANCELLED` session outright, then (for `GROUP_RECURRING` only)
    requires `groupService.isGroupMember`; `STANDALONE` is otherwise open. It upserts — an
    existing `LEFT` row flips back to `JOINED` rather than inserting a duplicate (the unique
@@ -130,6 +133,29 @@ ownership-only), so there's nothing this module needs to wrap.
    existing guards exactly (SESSION-16's already-`JOINED` early return, SESSION-19's
    `JOINED`-only leave). Batch call sites use `createSystemSessionComments` — one query and one
    `saveAll` for the whole batch, never a call per session.
+
+10. **SESSION-24 — `PREPARING` status.** `locationId`/`feeType` are the only fields
+    `updateSession` allows changing while the session is `PREPARING`; once genuinely `SCHEDULED`
+    (or beyond), both are immutable via this endpoint — a request touching either while not
+    `PREPARING` is a `BadRequestException`, checked before any field is applied. Completing both
+    flips the session to `SCHEDULED`; completing only one leaves it `PREPARING`. A `PREPARING`
+    session is fully joinable — identical to `SCHEDULED` everywhere else (join/leave/comment/like,
+    and `SessionEventsConsumer.ACTIVE_SESSION_STATUSES` in `notification-impl`). If
+    `scheduledStart` passes while still `PREPARING`, `SessionGenerationJob.cancelUnpreparedSessions`
+    auto-cancels it (no real actor, `cancelledBy` stays null) — see that job's Javadoc. Every
+    successful `updateSession` call (regardless of which field changed) also fans out a
+    `session.details.updated` notification to the session's currently-`JOINED` participants.
+11. **Session filtering — check on every `Session` field change.** Whenever a field is added to
+    `Session` (schema, entity, or `Create`/`UpdateSessionRequest`), check whether
+    `GET /api/sessions/discover`'s search/filter query params (SESSION-25, and its follow-ups)
+    need a corresponding filter — a new session attribute a caller would plausibly want to narrow
+    Discover results by shouldn't require rediscovering this gap from scratch each time a field is
+    added. Not every field needs one (e.g. `postId`, audit columns) — the test is "would a caller
+    browsing Discover plausibly want to filter/search by this?", not "does every column need one."
+    SESSION-24's own `PREPARING` status is the concrete example that prompted this rule: adding a
+    field can also mean an existing filter (here, `/discover`'s status inclusion) needs revisiting,
+    not just that a new filter param is needed.
+
 ## Gotchas
 
 - `SessionType.TOURNAMENT`/`TRAINING` are reserved enum values with **no** supporting logic —

@@ -169,5 +169,6 @@
 
     <!-- SESSION-23: sessions.attributes — per-session structured attributes, filtered on write against the sport's session attribute schema -->
     <include file="db/changelog/changes/V064__add_attributes_to_sessions.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V065__allow_optional_location_and_fee_on_sessions.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

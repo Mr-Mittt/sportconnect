@@ -34,4 +34,12 @@ class SessionGenerationJobSpec extends Specification {
         then:
         1 * sessionGenerationService.closePastSessions()
     }
+
+    def "cancelUnpreparedSessions delegates to the service"() {
+        when:
+        job.cancelUnpreparedSessions()
+
+        then:
+        1 * sessionGenerationService.cancelUnpreparedSessions()
+    }
 }

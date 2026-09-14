@@ -31,7 +31,8 @@ public class CreateSessionRequest {
     @Size(max = 5000, message = "description must not exceed 5000 characters")
     private String description;
 
-    @NotNull(message = "locationId is required")
+    /** SESSION-24: optional — omitted (or null) means the session starts {@code PREPARING}
+     * instead of {@code SCHEDULED}, until the creator completes it via {@code updateSession}. */
     private Long locationId;
 
     @Size(max = 500, message = "locationNote must not exceed 500 characters")
@@ -46,7 +47,8 @@ public class CreateSessionRequest {
     @Min(value = 0, message = "capacity must be >= 0")
     private Integer capacity;
 
-    @NotNull(message = "feeType is required")
+    /** SESSION-24: optional — omitted (or null) means the session starts {@code PREPARING}
+     * instead of {@code SCHEDULED}, until the creator completes it via {@code updateSession}. */
     private FeeType feeType;
 
     /** Required when feeType is FIXED, ignored otherwise — enforced in SessionServiceImpl. */
