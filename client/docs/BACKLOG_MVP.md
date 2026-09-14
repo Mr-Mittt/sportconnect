@@ -73,6 +73,8 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 3 | [PROFILE-12](MVP/PROFILE-12_HEADER_LOADING_ERROR_PLACEHOLDER.md) | ProfileHeader shows a placeholder instead of blank space while `/profile`'s profile query is loading or errors — found during backend U11's rollout, when a stale backend made the header vanish entirely | `TODO` |
 | 4 | [GRP-11](MVP/GRP-11_GROUP_COVER_BANNER_PENDING_SELECTION_PLACEHOLDER.md) | `GroupCoverBanner` shows a placeholder instead of the discovery panel while a cross-page-navigated group selection is still loading — found alongside `PROFILE-12` | `TODO` |
 | 5 | [CLIENT-SESSION-18](MVP/CLIENT-SESSION-18_REF_OTHER_MODAL_SUGGESTED_RESULTS.md) | Suggested-results typeahead inside the `CLIENT-SESSION-17` `#ref` "Other…" add-modal — debounced backend search over an aggregated value pool, shared with `SPORT-6`. **Hard-blocked on backend `A14`** (postponed) — same block as `SPORT-6`, sequence together. Split out of the CLIENT-SESSION-17 pickup (user decision 2026-09-08). | `TODO` |
+| 6 | [CLIENT-SESSION-21](MVP/CLIENT-SESSION-21_PREPARING_SESSION_WARNING_AND_COMPLETION.md) | PREPARING-session warning + minimal completion UI (SESSION-24) | `TODO` |
+| 7 | [CLIENT-SESSION-22](MVP/CLIENT-SESSION-22_DISCOVER_SEARCH_FILTER_UI.md) | Wire Discover search/filter UI to SESSION-25's new backend contract | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
