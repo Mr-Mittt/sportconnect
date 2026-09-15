@@ -22,6 +22,7 @@ import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
+import com.sportconnect.session.api.dto.StartTimeFilter;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent;
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent;
@@ -59,8 +60,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -109,6 +113,13 @@ public class SessionServiceImpl implements SessionService {
             List.of(SessionStatus.CANCELLED, SessionStatus.COMPLETED);
     private static final List<String> HISTORY_SESSION_STATUS_NAMES =
             List.of(SessionStatus.CANCELLED.name(), SessionStatus.COMPLETED.name());
+
+    /** SESSION-25 — discoverSessions' default status list when the caller omits/empties
+     * {@code statuses}. Coincides with {@link #UPCOMING_SESSION_STATUSES} today but kept as its
+     * own constant — the two represent different contracts (discover's default vs. upcoming's
+     * inclusion set) that happen to agree now, not a shared concept. */
+    private static final List<SessionStatus> DISCOVER_DEFAULT_STATUSES =
+            List.of(SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING);
 
     @Override
     @Transactional
@@ -653,7 +664,11 @@ public class SessionServiceImpl implements SessionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<SessionResponse> discoverSessions(UUID callerId, Long sportId, Pageable pageable) {
+    public Page<SessionResponse> discoverSessions(
+            UUID callerId, Long sportId, String title, Long locationId, Integer minOpenSlots,
+            FeeType feeType, Long maxFeeAmountVnd, LocalDate date,
+            StartTimeFilter startTimeFilter, LocalTime startTime,
+            List<SessionStatus> statuses, Pageable pageable) {
         List<Long> activeSportIds = userSportProfileService.getUserProfiles(callerId).stream()
                 .map(UserSportProfileResponse::getSportId)
                 .distinct()
@@ -667,8 +682,43 @@ public class SessionServiceImpl implements SessionService {
             return Page.empty(pageable);
         }
 
-        Page<Session> sessions = sessionRepository.findDiscoverSessions(
-                SessionStatus.SCHEDULED, effectiveSportIds, callerId, ParticipantStatus.JOINED, pageable);
+        List<SessionStatus> effectiveStatuses = (statuses == null || statuses.isEmpty())
+                ? DISCOVER_DEFAULT_STATUSES : statuses;
+        // The now() default lower bound applies only when the caller hasn't already narrowed the
+        // time window via date or startTimeFilter — see SessionService.discoverSessions' Javadoc.
+        LocalDateTime lowerBound = (date == null && startTimeFilter == null) ? LocalDateTime.now() : null;
+        // Half-open [dayStart, dayEnd) range, not CAST(scheduledStart AS date) — see
+        // SessionRepository.findDiscoverSessions' Javadoc for why a date/time CAST or EXTRACT on
+        // scheduledStart silently reads the wrong value (this app's hibernate.jdbc.time_zone:UTC
+        // setting only gets reapplied on plain attribute reads, not inside a SQL function). Same
+        // precedent as findUpcomingSessionsByDate/findHistorySessionsByDate (SESSION-27).
+        LocalDateTime dayStart = date != null ? date.atStartOfDay() : null;
+        LocalDateTime dayEnd = date != null ? date.plusDays(1).atStartOfDay() : null;
+        // Unconverted wall-clock seconds-of-day — the repository query reconstructs the
+        // wall-clock-equivalent from scheduledStart's raw stored representation itself (MOD
+        // arithmetic against zoneOffsetSeconds), rather than shifting this parameter. See
+        // SessionRepository.findDiscoverSessions' Javadoc: shifting the parameter instead breaks
+        // the "any date" cyclic comparison whenever it crosses the wrap point the shift
+        // introduces (confirmed: AFTER_OR_EQUAL 00:00 inverted against an 18:00 session).
+        Integer startTimeBeforeOrEqual = startTimeFilter == StartTimeFilter.BEFORE_OR_EQUAL && startTime != null
+                ? startTime.toSecondOfDay() : null;
+        Integer startTimeAfterOrEqual = startTimeFilter == StartTimeFilter.AFTER_OR_EQUAL && startTime != null
+                ? startTime.toSecondOfDay() : null;
+        // The JVM's current UTC offset in seconds — added back to scheduledStart's raw-stored
+        // EXTRACT to undo the write-side shift (see SessionRepository.findDiscoverSessions'
+        // Javadoc). Only ever used by the two startTime* clauses, so left null (no-op MOD) when
+        // neither is set. A DST-observing server zone would need the row's own date to convert
+        // perfectly, which a "time-of-day regardless of date" filter can't supply — same
+        // inherent ambiguity the write-side conversion already has.
+        Integer zoneOffsetSeconds = (startTimeBeforeOrEqual != null || startTimeAfterOrEqual != null)
+                ? ZoneId.systemDefault().getRules().getOffset(Instant.now()).getTotalSeconds()
+                : null;
+
+        Page<Object[]> rows = sessionRepository.findDiscoverSessions(
+                effectiveStatuses, effectiveSportIds, callerId, ParticipantStatus.JOINED, lowerBound,
+                title, locationId, feeType, maxFeeAmountVnd, dayStart, dayEnd,
+                startTimeBeforeOrEqual, startTimeAfterOrEqual, zoneOffsetSeconds, minOpenSlots, unsorted(pageable));
+        Page<Session> sessions = rows.map(row -> (Session) row[0]);
         return toResponsePage(sessions, callerId);
     }
 

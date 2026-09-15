@@ -19,6 +19,7 @@ import com.sportconnect.session.api.dto.ParticipantStatus
 import com.sportconnect.session.api.dto.RejectParticipantRequest
 import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.dto.SessionType
+import com.sportconnect.session.api.dto.StartTimeFilter
 import com.sportconnect.session.api.dto.UpdateSessionRequest
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent
@@ -53,6 +54,7 @@ import spock.lang.Subject
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 
 class SessionServiceImplSpec extends Specification {
 
@@ -1111,20 +1113,29 @@ class SessionServiceImplSpec extends Specification {
         0 * sessionParticipantRepository.findBySessionIdAndUserId(_, _)
     }
 
-    def "discoverSessions with no sportId filter queries across all the caller's active sports"() {
+    // SESSION-25 — discoverSessions' full param list, in the order SessionRepository.findDiscoverSessions
+    // declares them: statuses, sportIds, callerId, joinedStatus, lowerBound, title, locationId, feeType,
+    // maxFeeAmountVnd, dayStart, dayEnd, startTimeBeforeOrEqual, startTimeAfterOrEqual, zoneOffsetSeconds,
+    // minOpenSlots, pageable. Every test here stubs an empty PageImpl (mapToResponses short-circuits on
+    // an empty list, so no batch-enrichment stub is needed) and asserts only on the query construction,
+    // matching the pre-existing tests' own style.
+
+    def "discoverSessions with no sportId filter queries across all the caller's active sports, defaulting statuses and the now() lower bound"() {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
 
         when:
-        sessionService.discoverSessions(callerId, null, pageable)
+        sessionService.discoverSessions(callerId, null, null, null, null, null, null, null, null, null, null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [
                 UserSportProfileResponse.builder().sportId(1L).build(),
                 UserSportProfileResponse.builder().sportId(2L).build()
         ]
-        1 * sessionRepository.findDiscoverSessions(SessionStatus.SCHEDULED, [1L, 2L], callerId, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L, 2L], callerId,
+                ParticipantStatus.JOINED, { it != null }, null, null, null, null, null, null, null, null, null, null, pageable) >> new PageImpl([])
     }
 
     def "discoverSessions with a sportId the caller has an active profile for narrows to that sport"() {
@@ -1133,14 +1144,16 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 10)
 
         when:
-        sessionService.discoverSessions(callerId, 2L, pageable)
+        sessionService.discoverSessions(callerId, 2L, null, null, null, null, null, null, null, null, null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [
                 UserSportProfileResponse.builder().sportId(1L).build(),
                 UserSportProfileResponse.builder().sportId(2L).build()
         ]
-        1 * sessionRepository.findDiscoverSessions(SessionStatus.SCHEDULED, [2L], callerId, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [2L], callerId,
+                ParticipantStatus.JOINED, { it != null }, null, null, null, null, null, null, null, null, null, null, pageable) >> new PageImpl([])
     }
 
     def "discoverSessions returns an empty page without querying when the sportId isn't one of the caller's active sports"() {
@@ -1149,7 +1162,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 10)
 
         when:
-        def result = sessionService.discoverSessions(callerId, 99L, pageable)
+        def result = sessionService.discoverSessions(callerId, 99L, null, null, null, null, null, null, null, null, null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
@@ -1163,12 +1176,114 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 10)
 
         when:
-        def result = sessionService.discoverSessions(callerId, null, pageable)
+        def result = sessionService.discoverSessions(callerId, null, null, null, null, null, null, null, null, null, null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> []
         0 * sessionRepository.findDiscoverSessions(*_)
         result.totalElements == 0
+    }
+
+    def "discoverSessions passes an explicit status list through unchanged, without defaulting"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, null, null, null,
+                [SessionStatus.ONGOING], pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.ONGOING], [1L], callerId, ParticipantStatus.JOINED,
+                { it != null }, null, null, null, null, null, null, null, null, null, null, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions forwards title/locationId/minOpenSlots/feeType/maxFeeAmountVnd filters"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, "Sunday", 5L, 2, FeeType.FIXED, 100000L,
+                null, null, null, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                ParticipantStatus.JOINED, { it != null }, "Sunday", 5L, FeeType.FIXED, 100000L,
+                null, null, null, null, null, 2, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions given a date opts out of the now() lower bound and passes a dayStart/dayEnd range"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def date = LocalDate.now().plusDays(3)
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                date.atStartOfDay(), date.plusDays(1).atStartOfDay(), null, null, null, null, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions maps startTimeFilter AFTER_OR_EQUAL to the startTimeAfterOrEqual param, opts out of the now() lower bound, and passes a non-null zoneOffsetSeconds"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def time = LocalTime.of(18, 0)
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, null,
+                StartTimeFilter.AFTER_OR_EQUAL, time, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                ParticipantStatus.JOINED, null, null, null, null, null, null, null,
+                null, time.toSecondOfDay(), { it != null }, null, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions maps startTimeFilter BEFORE_OR_EQUAL to the startTimeBeforeOrEqual param"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def time = LocalTime.of(9, 0)
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, null,
+                StartTimeFilter.BEFORE_OR_EQUAL, time, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                ParticipantStatus.JOINED, null, null, null, null, null, null, null,
+                time.toSecondOfDay(), null, { it != null }, null, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions strips the caller-supplied Pageable sort before querying"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def sortedPageable = PageRequest.of(1, 5, Sort.by("title").ascending())
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, null, null, null, null, sortedPageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                ParticipantStatus.JOINED, { it != null }, null, null, null, null, null, null, null, null, null, null,
+                PageRequest.of(1, 5)) >> new PageImpl([])
     }
 
     def "getJoinedSessions delegates to the repository for the given status"() {

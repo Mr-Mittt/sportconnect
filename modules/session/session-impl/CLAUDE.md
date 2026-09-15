@@ -37,6 +37,7 @@ GET    /api/sessions/{sessionId}               ROLE_USER (SESSION-9: caller id n
 GET    /api/sessions/group/{groupId}          paginated, private-group visibility enforced via GroupService.getGroup
 GET    /api/sessions/upcoming                 paginated (SESSION-27) — JOINED/INVITED, status PREPARING/SCHEDULED/ONGOING, standalone or group-linked; optional date; scheduledStart ASC + PREPARING->SCHEDULED->ONGOING tiebreak, caller's own Pageable sort ignored
 GET    /api/sessions/history                  paginated (SESSION-27) — exactly one of date (JOINED-only, CANCELLED/COMPLETED, scheduledStart DESC) or dateCount (distinct history dates + counts, before cursor)
+GET    /api/sessions/discover                 paginated (SESSION-25) — standalone, PREPARING/SCHEDULED/ONGOING (default all three) sessions gated to the caller's active sport profiles, excluding sessions they created or joined; optional title/locationId/minOpenSlots/feeType/maxFeeAmountVnd/date/startTimeFilter+startTime/status filters, all AND-combined; scheduledStart >= now() default lower bound unless date/startTimeFilter narrows it; scheduledStart ASC + open-slots ASC + createdAt ASC sort, caller's own Pageable sort ignored
 PUT    /api/sessions/{sessionId}               creator (standalone) or owner/admin (group)
 POST   /api/sessions/{sessionId}/cancel        same gating; soft — sets status=CANCELLED, never deletes; rejected if already COMPLETED/CANCELLED
 POST   /api/sessions/{sessionId}/join          rejected if the session is CANCELLED
@@ -195,3 +196,34 @@ ownership-only), so there's nothing this module needs to wrap.
 - `SessionGenerationService.generateUpcomingSessions()` always computes exactly the single next
   occurrence (`TemporalAdjusters.nextOrSame`, rolling forward a week if today's slot already
   passed) — there's no "generate N weeks ahead" window, by design.
+- **A JPQL `(:param IS NULL OR ...)` optional-filter clause needs the `IS NULL` side cast too**
+  (`CAST(:param AS <type>) IS NULL`, not bare `:param IS NULL`) — `SessionRepository
+  .findDiscoverSessions` (SESSION-25) hit `"ERROR: could not determine data type of parameter $N"`
+  against real Postgres for its `LocalDateTime` lower-bound param with only the comparison side
+  cast; the `GroupRepository.searchPublicGroupsWithCounts` precedent this pattern is copied from
+  happens not to trip it for its `String` param (verified live — temporal types are apparently a
+  sharper edge for Postgres's parameter-type inference than `String`), but that's not a guarantee
+  for every type. Only caught by an actual HTTP call against real Postgres — a mock-based Spock
+  test proves the service calls the repository correctly, never that the JPQL itself is valid SQL.
+  Cast every optional param's `IS NULL` check defensively when adding a new one here (SESSION-26).
+- **Never apply a SQL date/time function (`CAST(... AS date/time)`, `EXTRACT(...)`) directly to
+  `Session.scheduledStart` (or any `LocalDateTime`-mapped column) in a query — it silently reads
+  the wrong value on this app.** This app sets `hibernate.jdbc.time_zone: UTC` (root
+  `application.yml`), which shifts every stored `LocalDateTime` by the JVM's default-zone offset
+  on write, but that shift is only *reapplied by Hibernate on a plain attribute read* — confirmed:
+  `SELECT s.scheduledStart` correctly returns the intended wall-clock value, but
+  `EXTRACT(HOUR FROM s.scheduledStart)` on that same row returned a value 7 hours off (this
+  ICT/UTC+7 dev host), and `CAST(s.scheduledStart AS date)` on an early-morning session returned
+  the **previous** calendar day. Confirmed on both H2 and real Postgres, and via a raw native
+  query bypassing Hibernate entirely — this is not a Postgres-specific quirk. Found by
+  `SessionDiscoverIntegrationTest` while building SESSION-25's `date`/`startTime` discover filters
+  (three other time-typed/string-typed comparison strategies were tried first and each failed a
+  different way — full history in `SessionRepository.findDiscoverSessions`'s Javadoc); a
+  **pre-existing, already-shipped instance of the same bug** was found in `findHistoryDateCounts`
+  (SESSION-27, a native query) and filed as **SESSION-31**, not fixed inline. The two safe patterns
+  in this file: a plain `LocalDateTime`/`LocalDate` comparison (`>=`/`<`/`=` against the bare path
+  expression — proven correct, e.g. `findUpcomingSessionsByDate`'s `[dayStart, dayEnd)` range), or,
+  when a genuine time-of-day-regardless-of-date comparison is unavoidable, `EXTRACT` combined with
+  a `MOD`-based correction using the JVM's current zone offset (see `findDiscoverSessions`'s
+  `startTimeBeforeOrEqual`/`startTimeAfterOrEqual` clauses) — never a bare `CAST`/`EXTRACT` result
+  compared directly.

@@ -2,12 +2,14 @@ package com.sportconnect.session.api.service;
 
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
+import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
 import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
+import com.sportconnect.session.api.dto.StartTimeFilter;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
@@ -15,6 +17,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -162,14 +165,36 @@ public interface SessionService {
     void rejectParticipant(Long sessionId, UUID callerId, UUID userId, RejectParticipantRequest request);
 
     /**
-     * Standalone sessions (groupId null) the caller can discover and join: status SCHEDULED,
-     * restricted to sports the caller holds an active UserSportProfile for, excluding sessions
-     * the caller created and sessions the caller currently has a JOINED participant row for.
-     * If sportId is given but isn't one of the caller's active
-     * sports, returns an empty page rather than throwing. A caller with zero active sport
-     * profiles also gets an empty page.
+     * Standalone sessions (groupId null) the caller can discover and join, restricted to sports
+     * the caller holds an active UserSportProfile for, excluding sessions the caller created and
+     * sessions the caller currently has a JOINED participant row for. If sportId is given but
+     * isn't one of the caller's active sports, returns an empty page rather than throwing. A
+     * caller with zero active sport profiles also gets an empty page.
+     *
+     * <p>SESSION-25 — every other parameter is optional and AND-combined: {@code title}
+     * (case-insensitive substring match), {@code locationId} (exact match), {@code minOpenSlots}
+     * (a session qualifies when its remaining open slots — capacity minus participantCount minus
+     * initialSlot — minus {@code minOpenSlots} is {@code > 0}), {@code feeType} (exact match)
+     * and/or {@code maxFeeAmountVnd} (upper bound on feeAmountVnd, meaningful only when feeType is
+     * FIXED), {@code date} (exact-day match against scheduledStart's date component), and
+     * {@code startTimeFilter}/{@code startTime} (compares scheduledStart's time-of-day component
+     * against the given time, independent of {@code date} — the caller must supply both together,
+     * validated by the controller). {@code statuses} restricts to a subset of
+     * {@code PREPARING}/{@code SCHEDULED}/{@code ONGOING}; a null/empty list defaults to all
+     * three — a real behavior delta from this method's original SCHEDULED-only default, since
+     * ONGOING and PREPARING sessions are now discoverable too.
+     *
+     * <p>When neither {@code date} nor {@code startTimeFilter} is given, results are implicitly
+     * lower-bounded to {@code scheduledStart >= now()} — supplying either opts out of that
+     * default. Results are always sorted {@code scheduledStart ASC}, then remaining open slots
+     * {@code ASC}, then {@code createdAt ASC}, regardless of the caller's own {@code Pageable}
+     * sort (ignored, same as {@code getUpcomingSessions}/{@code getSessionHistory}).
      */
-    Page<SessionResponse> discoverSessions(UUID callerId, Long sportId, Pageable pageable);
+    Page<SessionResponse> discoverSessions(
+            UUID callerId, Long sportId, String title, Long locationId, Integer minOpenSlots,
+            FeeType feeType, Long maxFeeAmountVnd, LocalDate date,
+            StartTimeFilter startTimeFilter, LocalTime startTime,
+            List<SessionStatus> statuses, Pageable pageable);
 
     /**
      * Sessions (standalone or group-linked) the caller currently has a JOINED participant row
