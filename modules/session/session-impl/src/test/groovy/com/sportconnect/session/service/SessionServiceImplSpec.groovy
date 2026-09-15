@@ -46,9 +46,12 @@ import com.sportconnect.user.api.service.UserService
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import spock.lang.Specification
 import spock.lang.Subject
 
+import java.time.LocalDate
 import java.time.LocalDateTime
 
 class SessionServiceImplSpec extends Specification {
@@ -1191,6 +1194,156 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findJoinedSessions(userId, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
         0 * sessionRepository.findJoinedSessionsByStatus(*_)
+    }
+
+    // SESSION-27 — replaces GET /sessions/mine.
+
+    def "getUpcomingSessions with no date queries JOINED/INVITED across PREPARING/SCHEDULED/ONGOING"() {
+        given:
+        def userId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        sessionService.getUpcomingSessions(userId, null, pageable)
+
+        then:
+        1 * sessionRepository.findUpcomingSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING],
+                userId,
+                [ParticipantStatus.JOINED, ParticipantStatus.INVITED],
+                SessionStatus.PREPARING, SessionStatus.SCHEDULED,
+                pageable) >> new PageImpl([])
+        0 * sessionRepository.findUpcomingSessionsByDate(*_)
+    }
+
+    def "getUpcomingSessions strips any client-supplied sort, keeping only page/size"() {
+        given:
+        def userId = UUID.randomUUID()
+        def sortedPageable = PageRequest.of(1, 5, Sort.by(Sort.Direction.DESC, "createdAt"))
+
+        when:
+        sessionService.getUpcomingSessions(userId, null, sortedPageable)
+
+        then:
+        1 * sessionRepository.findUpcomingSessions(*_) >> { args ->
+            Pageable used = args[5]
+            assert used.pageNumber == 1
+            assert used.pageSize == 5
+            assert used.sort.isUnsorted()
+            new PageImpl([])
+        }
+    }
+
+    def "getUpcomingSessions with a date narrows to that calendar day"() {
+        given:
+        def userId = UUID.randomUUID()
+        def date = LocalDate.of(2026, 9, 20)
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        sessionService.getUpcomingSessions(userId, date, pageable)
+
+        then:
+        1 * sessionRepository.findUpcomingSessionsByDate(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING],
+                userId,
+                [ParticipantStatus.JOINED, ParticipantStatus.INVITED],
+                SessionStatus.PREPARING, SessionStatus.SCHEDULED,
+                date.atStartOfDay(), date.plusDays(1).atStartOfDay(),
+                pageable) >> new PageImpl([])
+        0 * sessionRepository.findUpcomingSessions(*_)
+    }
+
+    def "getSessionHistory queries JOINED-only across CANCELLED/COMPLETED for the given date"() {
+        given:
+        def userId = UUID.randomUUID()
+        def date = LocalDate.of(2026, 9, 14)
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        sessionService.getSessionHistory(userId, date, pageable)
+
+        then:
+        1 * sessionRepository.findHistorySessionsByDate(
+                [SessionStatus.CANCELLED, SessionStatus.COMPLETED],
+                userId, ParticipantStatus.JOINED,
+                date.atStartOfDay(), date.plusDays(1).atStartOfDay(),
+                pageable) >> new PageImpl([])
+    }
+
+    def "getSessionHistory strips any client-supplied sort, keeping only page/size"() {
+        given:
+        def userId = UUID.randomUUID()
+        def date = LocalDate.of(2026, 9, 14)
+        def sortedPageable = PageRequest.of(2, 10, Sort.by(Sort.Direction.ASC, "id"))
+
+        when:
+        sessionService.getSessionHistory(userId, date, sortedPageable)
+
+        then:
+        1 * sessionRepository.findHistorySessionsByDate(*_) >> { args ->
+            Pageable used = args[5]
+            assert used.pageNumber == 2
+            assert used.pageSize == 10
+            assert used.sort.isUnsorted()
+            new PageImpl([])
+        }
+    }
+
+    def "getSessionHistoryDates returns hasMore=false when the repository's row count is within dateCount"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        def result = sessionService.getSessionHistoryDates(userId, 3, null)
+
+        then:
+        1 * sessionRepository.findHistoryDateCounts(
+                [SessionStatus.CANCELLED.name(), SessionStatus.COMPLETED.name()],
+                userId, ParticipantStatus.JOINED.name(), null, 4) >> [
+                stubDateCount(LocalDate.of(2026, 9, 14), 2L),
+                stubDateCount(LocalDate.of(2026, 9, 10), 1L)
+        ]
+        result.dates.size() == 2
+        result.dates[0].date == LocalDate.of(2026, 9, 14)
+        result.dates[0].count == 2L
+        !result.hasMore
+    }
+
+    def "getSessionHistoryDates returns hasMore=true and trims to dateCount when an extra row comes back"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        def result = sessionService.getSessionHistoryDates(userId, 2, null)
+
+        then:
+        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, 3) >> [
+                stubDateCount(LocalDate.of(2026, 9, 14), 2L),
+                stubDateCount(LocalDate.of(2026, 9, 10), 1L),
+                stubDateCount(LocalDate.of(2026, 9, 5), 1L)
+        ]
+        result.dates.size() == 2
+        result.hasMore
+    }
+
+    def "getSessionHistoryDates passes the before cursor through unchanged"() {
+        given:
+        def userId = UUID.randomUUID()
+        def before = LocalDate.of(2026, 9, 10)
+
+        when:
+        sessionService.getSessionHistoryDates(userId, 5, before)
+
+        then:
+        1 * sessionRepository.findHistoryDateCounts(_, userId, _, before, 6) >> []
+    }
+
+    private static SessionRepository.SessionDateCountProjection stubDateCount(LocalDate date, Long count) {
+        return new SessionRepository.SessionDateCountProjection() {
+            LocalDate getSessionDate() { date }
+            Long getCount() { count }
+        }
     }
 
     def "createSession sets capacity/feeType/feeAmountVnd from the request"() {

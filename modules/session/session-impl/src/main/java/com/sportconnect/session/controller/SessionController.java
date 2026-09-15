@@ -2,10 +2,12 @@ package com.sportconnect.session.controller;
 
 import com.sportconnect.common.auth.SecurityUtils;
 import com.sportconnect.common.dto.ApiResponse;
+import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
+import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
@@ -36,6 +38,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 @RestController
@@ -93,19 +96,53 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
-    @Operation(summary = "List the caller's standalone sessions")
+    @Operation(summary = "List the caller's upcoming sessions", description = "SESSION-27 — replaces GET /api/sessions/mine. Standalone or group-linked sessions where the caller currently has a JOINED or INVITED participant row, status PREPARING/SCHEDULED/ONGOING. Optional date narrows to one calendar day. Sorted scheduledStart ASC with a PREPARING->SCHEDULED->ONGOING tiebreaker; the caller's own Pageable sort is ignored.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
-    @GetMapping("/mine")
+    @GetMapping("/upcoming")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<ApiResponse<Page<SessionResponse>>> getMySessions(
+    public ResponseEntity<ApiResponse<Page<SessionResponse>>> getUpcomingSessions(
             Authentication authentication,
-            Pageable pageable) {
-        Page<SessionResponse> response = sessionService.getSessionsCreatedByUser(
-                SecurityUtils.extractUserId(authentication), pageable);
+            @RequestParam(required = false) LocalDate date,
+            @PageableDefault(size = 20) Pageable pageable) {
+        Page<SessionResponse> response = sessionService.getUpcomingSessions(
+                SecurityUtils.extractUserId(authentication), date, pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
+    }
+
+    @Operation(summary = "List the caller's session history, or its distinct history dates", description = "SESSION-27 — exactly one of date or dateCount is required. date: paginated CANCELLED/COMPLETED sessions the caller was JOINED to, for that calendar day, scheduledStart DESC. dateCount: the last N distinct history dates (most-recent-first) with per-date counts; before (exclusive, only valid alongside dateCount) pages further back.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions, or history dates (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "date/dateCount both given or neither, before without dateCount, or dateCount <= 0"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    @GetMapping("/history")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<?>> getSessionHistory(
+            Authentication authentication,
+            @RequestParam(required = false) LocalDate date,
+            @RequestParam(required = false) Integer dateCount,
+            @RequestParam(required = false) LocalDate before,
+            @PageableDefault(size = 20) Pageable pageable) {
+        if ((date == null) == (dateCount == null)) {
+            throw new BadRequestException("Exactly one of date or dateCount is required");
+        }
+        if (dateCount == null && before != null) {
+            throw new BadRequestException("before is only valid alongside dateCount");
+        }
+        if (dateCount != null && dateCount <= 0) {
+            throw new BadRequestException("dateCount must be positive");
+        }
+
+        UUID userId = SecurityUtils.extractUserId(authentication);
+        if (date != null) {
+            Page<SessionResponse> response = sessionService.getSessionHistory(userId, date, pageable);
+            return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
+        }
+        SessionHistoryDatesResponse response = sessionService.getSessionHistoryDates(userId, dateCount, before);
+        return ResponseEntity.ok(ApiResponse.success("History dates retrieved successfully", response));
     }
 
     @Operation(summary = "Discover joinable standalone sessions", description = "SCHEDULED, standalone sessions gated to sports the caller holds an active profile for, excluding sessions the caller created or currently has joined. Optional sportId narrows to one sport.")

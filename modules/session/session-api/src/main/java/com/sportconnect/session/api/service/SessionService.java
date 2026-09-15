@@ -4,6 +4,7 @@ import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
+import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
@@ -13,6 +14,7 @@ import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -48,7 +50,46 @@ public interface SessionService {
      */
     Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, Pageable pageable);
 
-    Page<SessionResponse> getSessionsCreatedByUser(UUID userId, Pageable pageable);
+    /**
+     * SESSION-27 — every session (standalone or group-linked) where the caller currently has a
+     * {@code JOINED} or {@code INVITED} participant row (never {@code REQUESTED}), restricted to
+     * {@code Session.status IN (PREPARING, SCHEDULED, ONGOING)}. {@code date}, when given, narrows
+     * to that calendar date's {@code scheduledStart}; {@code null} returns every matching session.
+     * Replaces the removed {@code getSessionsCreatedByUser}/{@code GET /sessions/mine} — the real
+     * fix for the client-side {@code mine} + {@code joined} + per-group fan-out/merge this ticket
+     * was filed to close.
+     *
+     * <p>Sorted {@code scheduledStart ASC} (soonest first), with a second sort level — status in
+     * {@code PREPARING}→{@code SCHEDULED}→{@code ONGOING} order — breaking ties when two sessions
+     * share the exact same {@code scheduledStart} (also makes pagination deterministic across
+     * those ties). Enforced in the DB query regardless of what {@code Sort} the caller's
+     * {@code Pageable} carries — only its {@code page}/{@code size} are honoured, the sort itself
+     * is not caller-configurable.
+     */
+    Page<SessionResponse> getUpcomingSessions(UUID userId, LocalDate date, Pageable pageable);
+
+    /**
+     * SESSION-27 — every session (standalone or group-linked) where the caller currently has a
+     * {@code JOINED} participant row (not {@code INVITED} — an invite never accepted isn't "my
+     * history"), restricted to {@code Session.status IN (CANCELLED, COMPLETED)}, narrowed to
+     * {@code date}'s calendar date. Sorted {@code scheduledStart DESC} — matches
+     * {@code groupSessionsByDate.ts}'s existing history-zone convention (newest-within-the-day
+     * first) — same "caller's Pageable sort is ignored" contract as {@link #getUpcomingSessions}.
+     */
+    Page<SessionResponse> getSessionHistory(UUID userId, LocalDate date, Pageable pageable);
+
+    /**
+     * SESSION-27 — the last {@code dateCount} distinct calendar dates (most-recent-first) on which
+     * the caller has at least one session matching {@link #getSessionHistory}'s population
+     * (standalone-or-group-linked, {@code JOINED}, {@code CANCELLED}/{@code COMPLETED}), each
+     * annotated with its own per-date count. {@code before} (nullable, exclusive) pages further
+     * back — the next {@code dateCount} distinct history dates strictly older than {@code before}.
+     *
+     * <p>This is pagination over <em>distinct dates</em>, not over individual sessions — a given
+     * date's own session list is fetched separately via {@link #getSessionHistory} once the caller
+     * expands that date.
+     */
+    SessionHistoryDatesResponse getSessionHistoryDates(UUID userId, int dateCount, LocalDate before);
 
     /**
      * Standalone → creator-only. Group-linked → owner/admin via canManageMembers.
@@ -123,8 +164,8 @@ public interface SessionService {
     /**
      * Standalone sessions (groupId null) the caller can discover and join: status SCHEDULED,
      * restricted to sports the caller holds an active UserSportProfile for, excluding sessions
-     * the caller created (see getSessionsCreatedByUser) and sessions the caller currently has a
-     * JOINED participant row for. If sportId is given but isn't one of the caller's active
+     * the caller created and sessions the caller currently has a JOINED participant row for.
+     * If sportId is given but isn't one of the caller's active
      * sports, returns an empty page rather than throwing. A caller with zero active sport
      * profiles also gets an empty page.
      */

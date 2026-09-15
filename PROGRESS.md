@@ -3843,6 +3843,61 @@ explicit go-ahead at each step (full story in A3's summary doc):
   and **NOTIF-4** filed as a new `CANDIDATE` — fan-out currently notifies participants whose account
   is deactivated, since nothing filters recipients by `isActive`; cross-cutting across every
   trigger, and related to user-impl's U12.
+- **SESSION-29 (`TODO`, documentation only, 2026-09-15,
+  `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
+  `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive
+  "exclude sessions older than a month from the index" doesn't work (Postgres partial-index
+  predicates must be `IMMUTABLE`, so a moving `now() - interval` cutoff is rejected outright, and
+  wouldn't self-update even if allowed). Documented the three real options (a rolling
+  scheduled-rebuild partial index; table partitioning by date, the only one that bounds real table
+  storage too; an actual retention/archival policy, which directly caps how far back SESSION-27's
+  `/history?dateCount`+`before` cursor can page — a product decision, not a performance one) without
+  picking one — no real usage/storage data yet since `/upcoming`/`/history` just shipped. User asked
+  to document and revisit later rather than scope now.
+- **SESSION-28 (`IN PROGRESS`, drop part `DONE` 2026-09-15,
+  `modules/session/docs/MVP/SESSION-28_SESSION_PARTICIPANTS_USER_STATUS_INDEX.md`):** index
+  cleanup found while reviewing every `sessions`/`session_participants` index right after SESSION-27
+  shipped. **Part 1 done** — `V066__drop_redundant_session_indexes.sql` drops
+  `idx_sessions_group_id`/`idx_session_participants_session_id`, both fully redundant with the
+  `unique_group_session_start (group_id, scheduled_start)`/`unique_session_user (session_id,
+  user_id)` composite unique indexes already leading with the same column since `V031`/`V032`
+  (SESSION-1) — Postgres's leftmost-prefix rule gives identical single-column lookup coverage from
+  the composite index alone. `idx_sessions_created_by`/`idx_sessions_location_id` reviewed too
+  (the former's only query consumer was SESSION-27's own removed `/mine`; the latter has no query
+  consumer found by grep) but **kept, not dropped** per explicit user decision — neither was
+  confirmed unused against real `pg_stat_user_indexes`, only a static code grep. Verified against
+  the real dev Postgres: `:server:bootRun` applied the changeset, `\d`/`EXPLAIN` confirmed the drop
+  and that both queries still get an `Index Scan` via the surviving composite index. **Part 2 still
+  open** — adding `session_participants(user_id, status)` (two shapes proposed, not decided): every
+  "my sessions"-shaped query, including SESSION-27's four new ones, filters this table by both
+  columns with only a single-column `user_id` index available today; not urgent at current
+  per-user row counts. A related but distinct question (archiving/deleting old `CANCELLED`/
+  `COMPLETED` sessions for storage — partial indexes can't express a moving date cutoff) was raised
+  in the same discussion and deliberately kept separate, not yet filed.
+- **SESSION-27 (`DONE`, 2026-09-15,
+  `modules/session/docs/MVP/SESSION-27_REFACTOR_SESSION_LISTING_UPCOMING_AND_HISTORY.md`):**
+  replaces `GET /sessions/mine` (removed — standalone-only, creator-scoped, no guaranteed sort,
+  silently dropped anything past an unrequested page 0) with two participant-scoped endpoints
+  covering standalone **and** group-linked sessions alike: `GET /upcoming` (`JOINED`/`INVITED`,
+  status `PREPARING`/`SCHEDULED`/`ONGOING`, sorted `scheduledStart ASC` with a
+  `PREPARING`→`SCHEDULED`→`ONGOING` tiebreak for same-`scheduledStart` rows — added as a scope
+  change at pickup, enforced in the DB query and non-overridable by the caller's own `Pageable`
+  sort) and `GET /history` (`date`: `JOINED`-only, `CANCELLED`/`COMPLETED`, `scheduledStart DESC`;
+  `dateCount`: the last N **distinct history dates** with per-date counts, `before` cursor for
+  paging further back — this module's second native query, after `notification-impl`'s
+  `ProcessedMessageRepository.insertIfAbsent`, since a date-cast `GROUP BY`/`LIMIT` has no portable
+  JPQL form). No migration. Green: `session-impl` (11 new Spock) + new
+  `SessionListingIntegrationTest` (19 IT cases, real H2 round trip — covers what mocked specs
+  can't: the tiebreak and the native query's grouping/paging; grew from 10 to 19 across two rounds
+  of self-review against the ticket's own Tests checklist — first surfaced missing coverage for
+  standalone+group-linked mixing, real multi-page pagination, the `dateCount` boundary, and
+  empty-result-not-error; second found every ordered assertion held either `scheduledStart` or
+  status constant across rows, so none actually proved `scheduledStart` dominates the status
+  tiebreak rather than the reverse — added a case with both varying) + `:server:test` (195, all
+  passed on the run after the first addition; an earlier run saw 189/6, the 6 being the
+  pre-existing documented **SESSION-22** RabbitMQ flake, confirmed by isolated re-run, not a
+  regression). Client wiring deferred to already-filed **CLIENT-SESSION-23** (hard-blocked on this
+  ticket).
 - **SESSION-24 (`DONE`, 2026-09-14,
   `modules/session/docs/MVP/SESSION-24_ADD_PREPARING_SESSION_STATUS.md`):** new `PREPARING` session
   status — `locationId`/`feeType` are now optional on `CreateSessionRequest`; missing either starts

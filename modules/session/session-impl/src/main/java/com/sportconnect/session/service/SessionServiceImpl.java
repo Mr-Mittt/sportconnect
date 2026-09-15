@@ -16,6 +16,8 @@ import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
+import com.sportconnect.session.api.dto.SessionHistoryDateCount;
+import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
@@ -36,6 +38,7 @@ import com.sportconnect.session.entity.SessionParticipant;
 import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
+import com.sportconnect.session.repository.SessionRepository.SessionDateCountProjection;
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import com.sportconnect.social.post.api.dto.PostLikeInfoResponse;
@@ -51,10 +54,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -92,6 +97,18 @@ public class SessionServiceImpl implements SessionService {
     /** SESSION-23 — same serialized-size ceiling profile attributes use
      * ({@code UserSportProfileServiceImpl.MAX_ATTRIBUTES_BYTES}); checked against the filtered map. */
     private static final int MAX_ATTRIBUTES_BYTES = 4096;
+
+    /** SESSION-27 — the session/participant-status populations getUpcomingSessions/
+     * getSessionHistory(Dates) query against. Native-query variants need the enum names as
+     * plain strings (no @Enumerated context to bind a Java enum directly). */
+    private static final List<SessionStatus> UPCOMING_SESSION_STATUSES =
+            List.of(SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING);
+    private static final List<ParticipantStatus> UPCOMING_PARTICIPANT_STATUSES =
+            List.of(ParticipantStatus.JOINED, ParticipantStatus.INVITED);
+    private static final List<SessionStatus> HISTORY_SESSION_STATUSES =
+            List.of(SessionStatus.CANCELLED, SessionStatus.COMPLETED);
+    private static final List<String> HISTORY_SESSION_STATUS_NAMES =
+            List.of(SessionStatus.CANCELLED.name(), SessionStatus.COMPLETED.name());
 
     @Override
     @Transactional
@@ -238,8 +255,53 @@ public class SessionServiceImpl implements SessionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<SessionResponse> getSessionsCreatedByUser(UUID userId, Pageable pageable) {
-        return toResponsePage(sessionRepository.findByCreatedByAndGroupIdIsNull(userId, pageable), userId);
+    public Page<SessionResponse> getUpcomingSessions(UUID userId, LocalDate date, Pageable pageable) {
+        Pageable effectivePageable = unsorted(pageable);
+        Page<Session> sessions = date != null
+                ? sessionRepository.findUpcomingSessionsByDate(UPCOMING_SESSION_STATUSES, userId,
+                        UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
+                        date.atStartOfDay(), date.plusDays(1).atStartOfDay(), effectivePageable)
+                : sessionRepository.findUpcomingSessions(UPCOMING_SESSION_STATUSES, userId,
+                        UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
+                        effectivePageable);
+        return toResponsePage(sessions, userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SessionResponse> getSessionHistory(UUID userId, LocalDate date, Pageable pageable) {
+        LocalDateTime dayStart = date.atStartOfDay();
+        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
+        Page<Session> sessions = sessionRepository.findHistorySessionsByDate(
+                HISTORY_SESSION_STATUSES, userId, ParticipantStatus.JOINED, dayStart, dayEnd, unsorted(pageable));
+        return toResponsePage(sessions, userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SessionHistoryDatesResponse getSessionHistoryDates(UUID userId, int dateCount, LocalDate before) {
+        // Fetches one extra row so hasMore can be computed without a separate count query.
+        List<SessionDateCountProjection> rows = sessionRepository.findHistoryDateCounts(
+                HISTORY_SESSION_STATUS_NAMES, userId, ParticipantStatus.JOINED.name(), before, dateCount + 1);
+        boolean hasMore = rows.size() > dateCount;
+        List<SessionHistoryDateCount> dates = rows.stream()
+                .limit(dateCount)
+                .map(row -> SessionHistoryDateCount.builder()
+                        .date(row.getSessionDate())
+                        .count(row.getCount())
+                        .build())
+                .collect(Collectors.toList());
+        return SessionHistoryDatesResponse.builder().dates(dates).hasMore(hasMore).build();
+    }
+
+    /** SESSION-27 — strips any client-supplied {@code Sort} down to just {@code page}/{@code size}.
+     * {@code getUpcomingSessions}/{@code getSessionHistory}'s ordering is a static, non-negotiable
+     * part of the query (see {@code SessionRepository.findUpcomingSessions}'s Javadoc) — this ticket
+     * exists specifically because the old {@code /mine} endpoint's implicit, unrequested ordering
+     * silently dropped sessions past page 0, so the fix does not leave the order caller-overridable
+     * either. */
+    private Pageable unsorted(Pageable pageable) {
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
     }
 
     @Override
