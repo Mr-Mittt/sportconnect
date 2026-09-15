@@ -171,4 +171,8 @@
     <include file="db/changelog/changes/V064__add_attributes_to_sessions.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/changes/V065__allow_optional_location_and_fee_on_sessions.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-28: drop idx_sessions_group_id / idx_session_participants_session_id — redundant
+         with the unique composite indexes that already lead with the same column -->
+    <include file="db/changelog/changes/V066__drop_redundant_session_indexes.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

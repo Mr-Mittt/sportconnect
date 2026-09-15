@@ -35,7 +35,8 @@ fields. See `modules/location/location-impl/CLAUDE.md` for that side of the boun
 POST   /api/sessions                          ROLE_USER
 GET    /api/sessions/{sessionId}               ROLE_USER (SESSION-9: caller id now threaded through for callerParticipation)
 GET    /api/sessions/group/{groupId}          paginated, private-group visibility enforced via GroupService.getGroup
-GET    /api/sessions/mine                     paginated — caller's STANDALONE sessions only (not group ones they created)
+GET    /api/sessions/upcoming                 paginated (SESSION-27) — JOINED/INVITED, status PREPARING/SCHEDULED/ONGOING, standalone or group-linked; optional date; scheduledStart ASC + PREPARING->SCHEDULED->ONGOING tiebreak, caller's own Pageable sort ignored
+GET    /api/sessions/history                  paginated (SESSION-27) — exactly one of date (JOINED-only, CANCELLED/COMPLETED, scheduledStart DESC) or dateCount (distinct history dates + counts, before cursor)
 PUT    /api/sessions/{sessionId}               creator (standalone) or owner/admin (group)
 POST   /api/sessions/{sessionId}/cancel        same gating; soft — sets status=CANCELLED, never deletes; rejected if already COMPLETED/CANCELLED
 POST   /api/sessions/{sessionId}/join          rejected if the session is CANCELLED
@@ -155,6 +156,19 @@ ownership-only), so there's nothing this module needs to wrap.
     SESSION-24's own `PREPARING` status is the concrete example that prompted this rule: adding a
     field can also mean an existing filter (here, `/discover`'s status inclusion) needs revisiting,
     not just that a new filter param is needed.
+12. **SESSION-27 — `/upcoming`/`/history` replace `/mine`, and their sort is non-negotiable.**
+    Both are scoped by the caller's own `SessionParticipant` row (`JOINED`/`INVITED` for upcoming,
+    `JOINED`-only for history), not `createdBy` — unlike the removed `/mine`, a group-linked
+    session is included exactly like a standalone one. `getUpcomingSessions`/`getSessionHistory`
+    both strip any client-supplied `Pageable.sort` down to just `page`/`size` before querying (see
+    `SessionServiceImpl.unsorted`) — the static `ORDER BY` in `SessionRepository.findUpcomingSessions`
+    et al. (`scheduledStart ASC`, then a `PREPARING`→`SCHEDULED`→`ONGOING` tiebreak for `/upcoming`;
+    `scheduledStart DESC` for `/history`) is not caller-overridable, since this ticket exists
+    specifically because `/mine`'s old implicit, unrequested ordering silently dropped sessions past
+    page 0. `GET /api/sessions/history?dateCount=` is pagination over **distinct dates**, not
+    sessions — its own repository method (`findHistoryDateCounts`) is this module's second native
+    query (`ProcessedMessageRepository.insertIfAbsent` in `notification-impl` is the first;
+    `GROUP BY`/`LIMIT` on a date cast has no portable JPQL form).
 
 ## Gotchas
 
@@ -165,9 +179,12 @@ ownership-only), so there's nothing this module needs to wrap.
 - A session with no `scheduledEndAt` **skips `ONGOING` entirely** — `findSessionsToStart` never
   matches it (a null `scheduledEndAt` fails the `> :now` comparison in JPQL), so it goes straight
   `SCHEDULED` → `COMPLETED` once `scheduledStart` passes, same as before this lifecycle existed.
-- `getSessionsCreatedByUser` (`GET /api/sessions/mine`) only returns **standalone** sessions
-  (`findByCreatedByAndGroupIdIsNull`) — a group owner's group-linked sessions are visible via
-  `getGroupSessions` instead, not here.
+- `GET /api/sessions/mine`/`getSessionsCreatedByUser` (standalone-only, creator-scoped) was
+  **removed** by SESSION-27 in favor of `getUpcomingSessions`/`getSessionHistory(Dates)`, both
+  participant-scoped (own `SessionParticipant` row, not `createdBy`) and covering standalone +
+  group-linked alike. A group owner/admin's group-linked sessions they manage but never personally
+  joined are still not covered by either — same pre-existing gap SESSION-27 flagged rather than
+  fixed; still visible via `getGroupSessions`.
 - Recurrence/auto-generation does **not** live in `SessionServiceImpl` — it's
   `SessionGenerationService`/`SessionGenerationJob` (SESSION-2), which never re-validates a
   `recurrenceLocationId`'s sport match — that's checked once when the group's recurrence is

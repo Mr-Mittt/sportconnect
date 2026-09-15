@@ -310,13 +310,16 @@ CREATE TABLE IF NOT EXISTS sessions (
     sport_id BIGINT NOT NULL,
     title VARCHAR(200),
     description TEXT,
-    location_id BIGINT NOT NULL,
+    -- SESSION-24 (V065): nullable in production — a session missing either this or fee_type
+    -- starts PREPARING instead of SCHEDULED. This mirror was still NOT NULL until SESSION-27
+    -- needed to insert a PREPARING session (no location/fee) in a real IT for the first time.
+    location_id BIGINT,
     location_note VARCHAR(500),
     scheduled_start TIMESTAMP NOT NULL,
     scheduled_end_at TIMESTAMP,
     status VARCHAR(20) NOT NULL DEFAULT 'SCHEDULED',
     capacity INTEGER NOT NULL DEFAULT 9999,
-    fee_type VARCHAR(10) NOT NULL DEFAULT 'FREE',
+    fee_type VARCHAR(10),
     fee_amount_vnd BIGINT,
     initial_slot INTEGER NOT NULL DEFAULT 0,
     auto_approve BOOLEAN NOT NULL DEFAULT FALSE,
