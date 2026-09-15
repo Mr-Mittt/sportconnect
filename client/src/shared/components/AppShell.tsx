@@ -135,6 +135,12 @@ export function AppShell() {
         isParticipantsError={sessionDetailData.isParticipantsError}
         currentUserId={sessionDetailData.currentUserId}
         canManage={sessionDetailData.canManage}
+        selectedCompletionLocation={sessionDetailData.selectedCompletionLocation}
+        onOpenCompletionLocationPicker={sessionDetailData.onOpenCompletionLocationPicker}
+        completionLocationPicker={sessionDetailData.completionLocationPicker}
+        onCompleteSession={sessionDetailData.onCompleteSession}
+        isCompletingSession={sessionDetailData.isCompletingSession}
+        isCompleteSessionError={sessionDetailData.isCompleteSessionError}
         onJoin={sessionDetailData.onJoin}
         isJoining={sessionDetailData.isJoining}
         isJoinError={sessionDetailData.isJoinError}

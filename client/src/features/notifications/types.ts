@@ -31,6 +31,9 @@ export type NotificationType =
   | 'session.join_request.approved'
   | 'session.join_request.rejected'
   | 'session.invitation.created'
+  // SESSION-24 / CLIENT-SESSION-21: fired on every successful updateSession call, regardless of
+  // which field changed — field-agnostic by design, hence the generic text below.
+  | 'session.details.updated'
   | 'user.friend_request.created'
   | 'user.friend_request.accepted';
 

@@ -4354,6 +4354,30 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client CLIENT-SESSION-21 (`DONE`, 2026-09-14,
+  `client/docs/MVP/CLIENT-SESSION-21_PREPARING_SESSION_WARNING_AND_COMPLETION.md`):** the client
+  half of backend SESSION-24's new `PREPARING` session status. `CreateSessionModal`'s Location and
+  Fee both lose their required-ness (Fee's state now starts `undefined`, no more default `FREE`),
+  with a new amber informational banner explaining the session will be created `PREPARING` if
+  either is left blank. New `SessionPreparingCompletion` in `SessionDetailModal` (creator/owner-
+  admin only, PREPARING sessions only) completes whichever field is still missing, reusing
+  `CreateSessionModal`'s own `LocationPicker`/`FeeTypeFields` (the latter extracted into its own
+  file) via the previously-unconsumed `useUpdateSession` hook — the first "edit session" UI this
+  codebase has. Also fixed the real button-visibility gate the ticket's own scope named wrong
+  (`shared/lib/sessionParticipation.ts`'s `getParticipationAction`, not `SessionDetailModal`'s
+  `canJoinOrLeave`) — all three PREPARING-aware call sites (that one, `canJoinOrLeave` for the
+  approval queue, `groupSessionsByDate.ts`'s `ACTIVE_STATUSES`) now include it. `Session.location`/
+  `.feeType` become nullable; 4 read sites null-guarded. `session.details.updated` added to
+  `NotificationType`. **Delta (same day, user feedback):** the Preparing banner moved from the
+  scrollable form body into the footer, left of "Create session", so it stays visible regardless
+  of scroll position; each fee checkbox (and the amount input) also gained un-select — clicking an
+  already-checked one, or clearing the amount to empty, goes back to "no fee picked" rather than
+  staying stuck once chosen (the now-unreachable "Amount is required." validation branch was
+  removed rather than left dead). tsc/eslint clean; Vitest 181 files / 1333 green; e2e 83 passed
+  (`matches-journey` gains a create-without-location/fee → complete → Scheduled step).
+  Visual-regression: `app-create-session-modal`/`app-session-detail-modal` baselines legitimately
+  change (pending `/updatebaseline`); every other spec's failure confirmed via stash-and-rerun as
+  the identical Windows noise floor on clean `master`.
 - **Client CLIENT-SESSION-19 (`DONE`, 2026-09-11,
   `client/docs/MVP/CLIENT-SESSION-19_ADD_MODAL_FOR_PROFILE_DEFINITION_LIST.md`):** `DefinitionListField`'s
   "Add" (profile Settings tab, per-sport `DEFINITION_LIST` attributes) now opens the same shared

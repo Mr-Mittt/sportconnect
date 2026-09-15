@@ -9,7 +9,11 @@ import type { Location } from '@/shared/types/location';
 // (modules/session/session-impl/CLAUDE.md) — included here for type-completeness only.
 export type SessionType = 'GROUP_RECURRING' | 'STANDALONE' | 'TOURNAMENT' | 'TRAINING';
 
-export type SessionStatus = 'SCHEDULED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
+// SESSION-24: PREPARING = created with location and/or feeType omitted; fully joinable, like
+// SCHEDULED, everywhere except updateSession's own PREPARING-only locationId/feeType gate. Flips
+// to SCHEDULED once both are completed via PUT /api/sessions/{id}; auto-cancelled if
+// scheduledStart passes while still PREPARING.
+export type SessionStatus = 'SCHEDULED' | 'ONGOING' | 'PREPARING' | 'COMPLETED' | 'CANCELLED';
 
 // SESSION-6: REQUESTED = self-initiated join awaiting creator/owner-admin approval (only reachable
 // when the session's autoApprove is false). INVITED = pre-created at session creation from
@@ -31,7 +35,8 @@ export interface Session {
   sportName: string;
   title: string | null;
   description: string | null;
-  location: Location;
+  /** SESSION-24: null on a PREPARING session created without a location. */
+  location: Location | null;
   locationNote: string | null;
   scheduledStart: string; // ISO, LocalDateTime (no timezone)
   scheduledEndAt: string | null;
@@ -44,7 +49,8 @@ export interface Session {
    * participant-table count. */
   participantCount: number;
   capacity: number;
-  feeType: FeeType;
+  /** SESSION-24: null on a PREPARING session created without a fee type. */
+  feeType: FeeType | null;
   feeAmountVnd: number | null;
   /** Participants the creator already accounts for outside the app, folded into
    * `participantCount` above (backend-side, `SessionServiceImpl.mapToResponses`). */

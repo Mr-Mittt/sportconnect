@@ -58,6 +58,9 @@ export function getNotificationText(notification: Notification): NotificationTex
       return [plain('Your request to join '), entity, plain(' was declined')];
     case 'session.invitation.created':
       return [actor, plain(' invited you to join '), entity];
+    // SESSION-24: deliberately field-agnostic — fires on any successful updateSession call.
+    case 'session.details.updated':
+      return [actor, plain(' updated '), entity];
     // U13 / CLIENT-NOTIF-5 — `entityType` is USER, not SESSION, so there is no
     // `entity` segment here: the text names only the other person. Both events
     // always carry a real actor (a self-request is rejected upstream), so

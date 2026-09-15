@@ -300,6 +300,12 @@ export function FriendsPage() {
           isParticipantsError={discoverModalData.isParticipantsError}
           currentUserId={discoverModalData.currentUserId}
           canManage={discoverModalData.canManage}
+          selectedCompletionLocation={discoverModalData.selectedCompletionLocation}
+          onOpenCompletionLocationPicker={discoverModalData.onOpenCompletionLocationPicker}
+          completionLocationPicker={discoverModalData.completionLocationPicker}
+          onCompleteSession={discoverModalData.onCompleteSession}
+          isCompletingSession={discoverModalData.isCompletingSession}
+          isCompleteSessionError={discoverModalData.isCompleteSessionError}
           onJoin={discoverModalData.onJoin}
           isJoining={discoverModalData.isJoining}
           isJoinError={discoverModalData.isJoinError}

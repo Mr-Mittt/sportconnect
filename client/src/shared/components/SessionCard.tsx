@@ -122,7 +122,8 @@ export function SessionCard({
 
       <div className={s.detailRow}>
         <IconMapPin className={s.detailIcon} aria-hidden="true" />
-        {session.location.name}
+        {/* SESSION-24: null on a PREPARING session created without a location. */}
+        {session.location?.name ?? 'Location pending'}
       </div>
 
       <div className={s.feeRow}>

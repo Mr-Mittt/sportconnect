@@ -66,13 +66,15 @@ describe('dedupeSessionsById', () => {
 describe('groupSessionsByDate', () => {
   const now = new Date(2026, 7, 5, 12, 0); // Aug 5 2026, noon
 
-  it('routes SCHEDULED / ONGOING to the active zone and COMPLETED / CANCELLED to history', () => {
+  it('routes SCHEDULED / ONGOING / PREPARING to the active zone and COMPLETED / CANCELLED to history', () => {
     const groups = groupSessionsByDate(
       [
         makeSession({ id: 1, scheduledStart: '2026-08-05T09:00:00', status: 'SCHEDULED' }),
         makeSession({ id: 2, scheduledStart: '2026-08-05T09:00:00', status: 'ONGOING' }),
         makeSession({ id: 3, scheduledStart: '2026-08-05T09:00:00', status: 'COMPLETED' }),
         makeSession({ id: 4, scheduledStart: '2026-08-05T09:00:00', status: 'CANCELLED' }),
+        // CLIENT-SESSION-21: PREPARING is still being set up, not "done" — belongs in "active".
+        makeSession({ id: 5, scheduledStart: '2026-08-05T09:00:00', status: 'PREPARING' }),
       ],
       now,
     );
@@ -81,6 +83,7 @@ describe('groupSessionsByDate', () => {
     expect(zoneOf(2)).toBe('active');
     expect(zoneOf(3)).toBe('history');
     expect(zoneOf(4)).toBe('history');
+    expect(zoneOf(5)).toBe('active');
   });
 
   it('labels the current calendar day "Today" and zone-qualifies the dateKey', () => {

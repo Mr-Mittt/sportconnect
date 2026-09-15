@@ -20,7 +20,8 @@ export function filterDiscoverSessions(
   return withGroupName.filter((session) => {
     const title = session.title ?? `${session.sportName} session`;
     return (
-      title.toLowerCase().includes(query) || session.location.name.toLowerCase().includes(query)
+      title.toLowerCase().includes(query) ||
+      (session.location?.name.toLowerCase().includes(query) ?? false)
     );
   });
 }

@@ -1,8 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
+import { useFavoriteLocation } from '@/features/location/hooks/useFavoriteLocation';
+import { useFavoriteLocations } from '@/features/location/hooks/useFavoriteLocations';
+import { useUnfavoriteLocation } from '@/features/location/hooks/useUnfavoriteLocation';
+import { useLocationPickerData } from '@/features/location/useLocationPickerData';
 import { useSessionAttributeSchema } from '@/shared/hooks/useSessionAttributeSchema';
 import { useSportAttributeSchema } from '@/shared/hooks/useSportAttributeSchema';
+import type { Location } from '@/shared/types/location';
 import { useApproveParticipant } from './hooks/useApproveParticipant';
 import { useCancelSession } from './hooks/useCancelSession';
 import { useLikeSession } from './hooks/useLikeSession';
@@ -12,6 +17,8 @@ import { useSession } from './hooks/useSession';
 import { useSessionParticipants } from './hooks/useSessionParticipants';
 import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
 import { useUnlikeSession } from './hooks/useUnlikeSession';
+import { useUpdateSession } from './hooks/useUpdateSession';
+import type { UpdateSessionPayload } from './types';
 import { useSessionCommentsData } from './useSessionCommentsData';
 
 const CAN_MANAGE_ROLES = new Set(['group_owner', 'group_admin']);
@@ -68,6 +75,56 @@ export function useSessionDetailModalData(sessionId: number | null) {
   // CLIENT-SESSION-8: the detail dialog's Discussion section.
   const sessionCommentsData = useSessionCommentsData(sessionId ?? undefined, isDetailOpen);
 
+  // CLIENT-SESSION-21 (SESSION-24): a PREPARING session's own creator/owner-admin completes its
+  // still-missing location and/or fee via SessionPreparingCompletion. Location picking reuses the
+  // exact same LocationPicker + favorites plumbing CreateSessionModal already owns, just scoped to
+  // this already-known session (no sport-switch dance needed — the sport never changes here).
+  const sessionSportId = sessionQuery.data?.sportId;
+  const [selectedCompletionLocation, setSelectedCompletionLocation] = useState<Location | null>(null);
+  const [isCompletionLocationPickerOpen, setIsCompletionLocationPickerOpen] = useState(false);
+  const completionFavoriteLocationsQuery = useFavoriteLocations(
+    sessionSportId,
+    isDetailOpen && canManage,
+  );
+  const completionFavoriteLocationIds = useMemo(
+    () => new Set((completionFavoriteLocationsQuery.data?.content ?? []).map((location) => location.id)),
+    [completionFavoriteLocationsQuery.data],
+  );
+  const completionFavoriteLocationMutation = useFavoriteLocation();
+  const completionUnfavoriteLocationMutation = useUnfavoriteLocation();
+  const toggleCompletionFavoriteLocation = (location: Location) => {
+    if (sessionSportId === undefined) return;
+    const payload = { locationId: location.id, sportId: sessionSportId };
+    if (completionFavoriteLocationIds.has(location.id)) {
+      completionUnfavoriteLocationMutation.mutate(payload);
+    } else {
+      completionFavoriteLocationMutation.mutate(payload);
+    }
+  };
+  const completionLocationPickerData = useLocationPickerData(
+    sessionSportId ?? 0,
+    isCompletionLocationPickerOpen,
+    (location) => setSelectedCompletionLocation(location),
+    () => setIsCompletionLocationPickerOpen(false),
+  );
+  const completionLocationPicker = {
+    isOpen: isCompletionLocationPickerOpen,
+    onClose: () => setIsCompletionLocationPickerOpen(false),
+    ...completionLocationPickerData,
+    favoriteLocationIds: completionFavoriteLocationIds,
+    onToggleFavorite: toggleCompletionFavoriteLocation,
+    isTogglingFavorite:
+      completionFavoriteLocationMutation.isPending || completionUnfavoriteLocationMutation.isPending,
+  };
+  const updateSessionMutation = useUpdateSession();
+  const onCompleteSession = (payload: UpdateSessionPayload) => {
+    if (sessionId === null) return;
+    updateSessionMutation.mutate(
+      { sessionId, payload },
+      { onSuccess: () => setSelectedCompletionLocation(null) },
+    );
+  };
+
   // CLIENT-SESSION-16: the resolved session attribute schema for this session's sport, so the
   // modal can render the session's stored `attributes` read-only. `null` (not an error) when the
   // sport's sessions carry no attributes; also `null` while the session query is still resolving
@@ -87,7 +144,7 @@ export function useSessionDetailModalData(sessionId: number | null) {
      * *different* session, so without this a failed join on session A renders its error
      * against session B — an error attributed to the wrong entity, not just a stale one.
      *
-     * Only the three mutation-backed flags need it. `isSessionError`,
+     * Only the mutation-backed flags need it. `isSessionError`,
      * `isParticipantsError`, `isRequestedParticipantsError` and `isCommentsError` are all
      * query-derived and re-evaluate on the next fetch, so they cannot go stale this way.
      */
@@ -95,6 +152,10 @@ export function useSessionDetailModalData(sessionId: number | null) {
       joinMutation.reset();
       leaveMutation.reset();
       cancelMutation.reset();
+      // CLIENT-SESSION-21: same reasoning — a failed/half-picked completion on session A must
+      // not surface (or leave a stale chosen location) when this dialog reopens for session B.
+      updateSessionMutation.reset();
+      setSelectedCompletionLocation(null);
     },
     selectedSession: sessionQuery.data,
     isSessionLoading: sessionQuery.isLoading,
@@ -107,6 +168,14 @@ export function useSessionDetailModalData(sessionId: number | null) {
     isParticipantsError: participantsQuery.isError,
     currentUserId: currentUserId ?? '',
     canManage,
+    // CLIENT-SESSION-21 (SESSION-24): the PREPARING-completion flow — SessionPreparingCompletion
+    // renders only when the caller passes `canManage && selectedSession.status === 'PREPARING'`.
+    selectedCompletionLocation,
+    onOpenCompletionLocationPicker: () => setIsCompletionLocationPickerOpen(true),
+    completionLocationPicker,
+    onCompleteSession,
+    isCompletingSession: updateSessionMutation.isPending,
+    isCompleteSessionError: updateSessionMutation.isError,
     onJoin: () => sessionId !== null && joinMutation.mutate(sessionId),
     isJoining: joinMutation.isPending,
     isJoinError: joinMutation.isError,

@@ -2,10 +2,49 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { Comment } from '@/features/feed/types';
+import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
 import type { Session, SessionParticipant } from '@/shared/types/session';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { SessionDetailModal } from './SessionDetailModal';
+
+// Inert stub — this modal's tests only need it to render without crashing on a `PREPARING`
+// fixture; `SessionPreparingCompletion.test.tsx` covers the real LocationPicker interaction.
+const inertLocationPicker: LocationPickerProps = {
+  isOpen: false,
+  onClose: () => {},
+  mode: 'search',
+  onSwitchToCreate: () => {},
+  onSwitchToSearch: () => {},
+  inputValue: '',
+  onInputChange: () => {},
+  onSearch: () => {},
+  results: [],
+  isSearching: false,
+  isSearchError: false,
+  onSelectResult: () => {},
+  favoriteLocationIds: new Set(),
+  onToggleFavorite: () => {},
+  isTogglingFavorite: false,
+  onOpenGoogleMaps: () => {},
+  mapsUrlInput: '',
+  onMapsUrlChange: () => {},
+  onResolveUrl: () => {},
+  isResolving: false,
+  isResolveError: false,
+  resolvedNoCoordinates: false,
+  coordinates: null,
+  mapSeed: 0,
+  onMovePin: () => {},
+  name: '',
+  onNameChange: () => {},
+  address: '',
+  onAddressChange: () => {},
+  canSave: false,
+  onSave: () => {},
+  isSaving: false,
+  isSaveError: false,
+};
 
 // src/test/setup.ts globally seeds sportCatalogStore with { id: 6, key: 'basketball', ... } —
 // same pre-SPORT-3 fixture convention this file's sportId: 6 already relies on.
@@ -116,6 +155,12 @@ const baseProps = {
   isParticipantsError: false,
   currentUserId: 'user-2',
   canManage: false,
+  selectedCompletionLocation: null,
+  onOpenCompletionLocationPicker: () => {},
+  completionLocationPicker: inertLocationPicker,
+  onCompleteSession: () => {},
+  isCompletingSession: false,
+  isCompleteSessionError: false,
   onJoin: () => {},
   isJoining: false,
   isJoinError: false,
@@ -531,5 +576,86 @@ describe('SessionDetailModal', () => {
   it('omits the summary when the session carries no attributes', () => {
     render(<SessionDetailModal {...baseProps} sessionAttributeSchema={attributeSchema} />);
     expect(screen.queryByRole('region', { name: 'Session detail' })).not.toBeInTheDocument();
+  });
+
+  describe('CLIENT-SESSION-21: PREPARING completion (SESSION-24)', () => {
+    it('shows the completion surface for the manager of a PREPARING session', () => {
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          canManage
+          session={makeSession({ status: 'PREPARING', location: null, feeType: null })}
+        />,
+      );
+      expect(screen.getByRole('region', { name: 'Complete session setup' })).toBeInTheDocument();
+      expect(screen.getByText(/Location and Fee/)).toBeInTheDocument();
+    });
+
+    it('hides the completion surface for a non-manager, even while PREPARING', () => {
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          canManage={false}
+          session={makeSession({ status: 'PREPARING', location: null, feeType: null })}
+        />,
+      );
+      expect(screen.queryByRole('region', { name: 'Complete session setup' })).not.toBeInTheDocument();
+    });
+
+    it('hides the completion surface once the session is SCHEDULED, even for the manager', () => {
+      render(<SessionDetailModal {...baseProps} canManage session={makeSession({ status: 'SCHEDULED' })} />);
+      expect(screen.queryByRole('region', { name: 'Complete session setup' })).not.toBeInTheDocument();
+    });
+
+    it('names only the field still missing when just one is null', () => {
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          canManage
+          session={makeSession({ status: 'PREPARING', location: null, feeType: 'FREE' })}
+        />,
+      );
+      expect(screen.getByText('Location', { selector: 'strong' })).toBeInTheDocument();
+    });
+
+    it('shows Preparing as the status label, with PREPARING treated as an active/joinable session', () => {
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          session={makeSession({ status: 'PREPARING', location: null, feeType: null })}
+        />,
+      );
+      expect(screen.getByText('Preparing')).toBeInTheDocument();
+      // CLIENT-SESSION-21's own correction: getParticipationAction (not canJoinOrLeave) is the
+      // real gate on this button — PREPARING must clear it, same as SCHEDULED/ONGOING.
+      expect(screen.getByRole('button', { name: 'Join' })).toBeInTheDocument();
+    });
+
+    it('Save calls onCompleteSession with only the location field when Location is the only one missing', async () => {
+      const user = userEvent.setup();
+      const onCompleteSession = vi.fn();
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          canManage
+          session={makeSession({ status: 'PREPARING', location: null, feeType: 'FREE' })}
+          selectedCompletionLocation={location}
+          onCompleteSession={onCompleteSession}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onCompleteSession).toHaveBeenCalledWith({ locationId: location.id });
+    });
+
+    it('Save is disabled until a value is picked for the only missing field', () => {
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          canManage
+          session={makeSession({ status: 'PREPARING', location: null, feeType: 'FREE' })}
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
   });
 });

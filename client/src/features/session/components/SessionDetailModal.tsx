@@ -34,10 +34,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
-import type { Session, SessionParticipant } from '../types';
+import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
+import type { Location } from '@/shared/types/location';
+import type { Session, SessionParticipant, UpdateSessionPayload } from '../types';
 import { SessionAttributesSummary } from './SessionAttributesSummary';
 import { SessionCommentComposer } from './SessionCommentComposer';
 import { SessionCommentSection } from './SessionCommentSection';
+import { SessionPreparingCompletion } from './SessionPreparingCompletion';
 
 interface SessionDetailModalProps {
   isOpen: boolean;
@@ -72,6 +75,15 @@ interface SessionDetailModalProps {
   /** SPORT-16: the resolved *profile* schema for `session.sportId`, for `#ref`→base `layout`
    * inheritance in the read view. `null` / absent → no inheritance, defaults render. */
   refBaseSchema?: ResolvedSportAttributeSchema | null;
+
+  /** CLIENT-SESSION-21 (SESSION-24): PREPARING-completion — rendered via
+   * `SessionPreparingCompletion` only when `canManage && session.status === 'PREPARING'`. */
+  selectedCompletionLocation: Location | null;
+  onOpenCompletionLocationPicker: () => void;
+  completionLocationPicker: LocationPickerProps;
+  onCompleteSession: (payload: UpdateSessionPayload) => void;
+  isCompletingSession: boolean;
+  isCompleteSessionError: boolean;
 
   onJoin: () => void;
   isJoining: boolean;
@@ -190,9 +202,10 @@ function ActionButtonContent({
  * the parent (`useMatchesPageData`) owns every query/mutation and passes state + callbacks down.
  * (Cancelling the session itself — `canManage`/`onConfirmCancel` — was a modal action here through
  * CLIENT-SESSION-10; its button was removed post-ship, user decision, this modal no longer renders
- * it. `canManage`/`onConfirmCancel`/`isCancelling`/`isCancelError` stay in the prop contract
- * unused, rather than rippling the removal through `useSessionDetailModalData` and all 4 render
- * sites, since only the button's presence in this modal was asked to go, not the capability.)
+ * it. `onConfirmCancel`/`isCancelling`/`isCancelError` stay in the prop contract unused, rather
+ * than rippling the removal through `useSessionDetailModalData` and all 6 render sites, since only
+ * the button's presence in this modal was asked to go, not the capability. `canManage` itself is
+ * no longer unused as of CLIENT-SESSION-21 — it now also gates `SessionPreparingCompletion`.)
  *
  * CLIENT-SESSION-9 replaced the old "isJoined" derivation (`participants.some(...JOINED)` — a
  * false negative for anyone INVITED/REQUESTED, since `participants` only ever holds JOINED rows
@@ -236,6 +249,11 @@ function ActionButtonContent({
  * was Join/Accept/Decline/Cancel/Leave only. A JOINED session creator never sees Leave (they'd
  * have managed via Cancel session; now that's gone, they simply have no participation action —
  * post-ship refinement, same day).
+ *
+ * CLIENT-SESSION-21 (SESSION-24) renders `SessionPreparingCompletion` between the
+ * cancelled-status block and the Players section for the session's own manager while it's
+ * `PREPARING` — the first "edit session" surface this codebase has, scoped narrowly to
+ * completing the location/fee `CreateSessionModal` allowed leaving blank at creation.
  */
 export function SessionDetailModal({
   isOpen,
@@ -247,9 +265,16 @@ export function SessionDetailModal({
   isParticipantsLoading,
   isParticipantsError,
   currentUserId,
+  canManage,
   sportsByKey,
   sessionAttributeSchema,
   refBaseSchema,
+  selectedCompletionLocation,
+  onOpenCompletionLocationPicker,
+  completionLocationPicker,
+  onCompleteSession,
+  isCompletingSession,
+  isCompleteSessionError,
   onJoin,
   isJoining,
   isJoinError,
@@ -291,7 +316,11 @@ export function SessionDetailModal({
   // `participants` (which only ever holds JOINED rows for a non-manager — see the Players
   // section below).
   const participationAction = session !== undefined ? getParticipationAction(session) : null;
-  const canJoinOrLeave = session !== undefined && (session.status === 'SCHEDULED' || session.status === 'ONGOING');
+  // CLIENT-SESSION-21: PREPARING is fully joinable (SESSION-24) — approve/reject aren't blocked
+  // on it either (backend only rejects CANCELLED), so this gate must include it too.
+  const canJoinOrLeave =
+    session !== undefined &&
+    (session.status === 'SCHEDULED' || session.status === 'ONGOING' || session.status === 'PREPARING');
 
   const title = session === undefined ? 'Session' : (session.title ?? `${session.sportName} session`);
   const sportKey = session !== undefined ? sportKeyForId(session.sportId) : undefined;
@@ -361,19 +390,24 @@ export function SessionDetailModal({
               <div className="flex flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <IconMapPin className="size-4 shrink-0 text-text-muted" aria-hidden="true" />
-                  <span className="text-2sm text-text-primary">{session.location.name}</span>
-                  {session.location.latitude !== null && session.location.longitude !== null && (
-                    <a
-                      href={directionsUrl(session.location.latitude, session.location.longitude)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-2sm font-medium text-text-accent hover:underline"
-                    >
-                      Get Directions
-                    </a>
-                  )}
+                  {/* SESSION-24: null on a PREPARING session created without a location. */}
+                  <span className="text-2sm text-text-primary">
+                    {session.location?.name ?? 'Location pending'}
+                  </span>
+                  {session.location !== null &&
+                    session.location.latitude !== null &&
+                    session.location.longitude !== null && (
+                      <a
+                        href={directionsUrl(session.location.latitude, session.location.longitude)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-2sm font-medium text-text-accent hover:underline"
+                      >
+                        Get Directions
+                      </a>
+                    )}
                 </div>
-                {session.location.address !== null && (
+                {session.location?.address !== null && session.location?.address !== undefined && (
                   <div className="pl-6 text-2xs text-text-muted">{session.location.address}</div>
                 )}
                 {session.locationNote !== null && (
@@ -411,6 +445,20 @@ export function SessionDetailModal({
                     <div className="mt-1 text-2xs text-text-muted">Reason: {session.cancelReason}</div>
                   )}
                 </div>
+              )}
+
+              {/* CLIENT-SESSION-21 (SESSION-24): only this session's own creator/owner-admin can
+                  complete a still-PREPARING session's missing location/fee. */}
+              {canManage && session.status === 'PREPARING' && (
+                <SessionPreparingCompletion
+                  session={session}
+                  selectedLocation={selectedCompletionLocation}
+                  onOpenLocationPicker={onOpenCompletionLocationPicker}
+                  locationPicker={completionLocationPicker}
+                  onSubmit={onCompleteSession}
+                  isSubmitting={isCompletingSession}
+                  isError={isCompleteSessionError}
+                />
               )}
 
               <section aria-label="Players" className="flex flex-col gap-2">
