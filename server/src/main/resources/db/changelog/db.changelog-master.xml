@@ -175,4 +175,8 @@
          with the unique composite indexes that already lead with the same column -->
     <include file="db/changelog/changes/V066__drop_redundant_session_indexes.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-28 Part 2: partial index on session_participants(user_id) WHERE status='JOINED' —
+         serves the "my sessions"-shaped query family (discover/joined/history) -->
+    <include file="db/changelog/changes/V067__add_session_participants_user_id_joined_partial_index.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

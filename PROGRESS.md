@@ -3854,10 +3854,10 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `/history?dateCount`+`before` cursor can page — a product decision, not a performance one) without
   picking one — no real usage/storage data yet since `/upcoming`/`/history` just shipped. User asked
   to document and revisit later rather than scope now.
-- **SESSION-28 (`IN PROGRESS`, drop part `DONE` 2026-09-15,
+- **SESSION-28 (`DONE`, 2026-09-15,
   `modules/session/docs/MVP/SESSION-28_SESSION_PARTICIPANTS_USER_STATUS_INDEX.md`):** index
   cleanup found while reviewing every `sessions`/`session_participants` index right after SESSION-27
-  shipped. **Part 1 done** — `V066__drop_redundant_session_indexes.sql` drops
+  shipped, in two parts. **Part 1** — `V066__drop_redundant_session_indexes.sql` drops
   `idx_sessions_group_id`/`idx_session_participants_session_id`, both fully redundant with the
   `unique_group_session_start (group_id, scheduled_start)`/`unique_session_user (session_id,
   user_id)` composite unique indexes already leading with the same column since `V031`/`V032`
@@ -3865,15 +3865,22 @@ explicit go-ahead at each step (full story in A3's summary doc):
   the composite index alone. `idx_sessions_created_by`/`idx_sessions_location_id` reviewed too
   (the former's only query consumer was SESSION-27's own removed `/mine`; the latter has no query
   consumer found by grep) but **kept, not dropped** per explicit user decision — neither was
-  confirmed unused against real `pg_stat_user_indexes`, only a static code grep. Verified against
-  the real dev Postgres: `:server:bootRun` applied the changeset, `\d`/`EXPLAIN` confirmed the drop
-  and that both queries still get an `Index Scan` via the surviving composite index. **Part 2 still
-  open** — adding `session_participants(user_id, status)` (two shapes proposed, not decided): every
-  "my sessions"-shaped query, including SESSION-27's four new ones, filters this table by both
-  columns with only a single-column `user_id` index available today; not urgent at current
-  per-user row counts. A related but distinct question (archiving/deleting old `CANCELLED`/
-  `COMPLETED` sessions for storage — partial indexes can't express a moving date cutoff) was raised
-  in the same discussion and deliberately kept separate, not yet filed.
+  confirmed unused against real `pg_stat_user_indexes`, only a static code grep. **Part 2** —
+  `V067__add_session_participants_user_id_joined_partial_index.sql` adds a partial index,
+  `session_participants(user_id) WHERE status = 'JOINED'` (user picked this over a full
+  `(user_id, status)` composite): traced all 7 repository methods/5 service methods/5 endpoints
+  that filter this table by `(user_id, status)` before building — 5 are `JOINED`-only
+  (`discoverSessions`, `getJoinedSessions` ×2, `getSessionHistory`, `getSessionHistoryDates`, all
+  now served directly by the new index with no residual filter) and 2 need `IN (JOINED, INVITED)`
+  (`getUpcomingSessions`/`ByDate`, which correctly keep falling back to the existing plain
+  `user_id` index — confirmed via `EXPLAIN`, since a partial index structurally can't serve rows
+  outside its predicate). Both parts verified against the real dev Postgres: `:server:bootRun`
+  applied each changeset, `\d`/`EXPLAIN` confirmed the exact plan each query gets.
+  `:modules:session:session-impl:test` + `:server:test` green throughout (no Java changed — both
+  parts are pure schema/index changes). A related but distinct question (archiving/deleting old
+  `CANCELLED`/`COMPLETED` sessions for storage — partial indexes can't express a moving date
+  cutoff) was raised in the same discussion and filed separately as **SESSION-29**
+  (documentation-only, no direction decided).
 - **SESSION-27 (`DONE`, 2026-09-15,
   `modules/session/docs/MVP/SESSION-27_REFACTOR_SESSION_LISTING_UPCOMING_AND_HISTORY.md`):**
   replaces `GET /sessions/mine` (removed — standalone-only, creator-scoped, no guaranteed sort,
