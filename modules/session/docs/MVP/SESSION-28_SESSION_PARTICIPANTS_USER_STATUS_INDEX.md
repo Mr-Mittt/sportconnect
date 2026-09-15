@@ -1,6 +1,6 @@
 # SESSION-28 · Session/session_participants index cleanup — drop redundant, add `(user_id, status)`
 
-**Status:** `TODO` (drop part `DONE`, 2026-09-15; add part still open)
+**Status:** `DONE` (2026-09-15)
 **Type:** Enhancement (Performance)
 **Depends on:** none (informed by SESSION-27's index review)
 **Filed:** 2026-09-15, found while double-checking every index/query against `sessions`/
@@ -50,7 +50,7 @@ DROP INDEX idx_session_participants_session_id;
 - `:modules:session:session-impl:test` + `:server:test` — both green (no Java changed by this
   part; pure schema/index change).
 
-## Part 2 — add `session_participants(user_id, status)` (still `TODO`)
+## Part 2 — add `session_participants(user_id, status)` (`DONE`, `V067__add_session_participants_user_id_joined_partial_index.sql`)
 
 `session_participants` currently has only single-column indexes on `session_id` (now just the
 `unique_session_user` composite, per Part 1) and `user_id`. Every "my sessions"-shaped query in
@@ -71,16 +71,58 @@ this module.
 
 **Not urgent today** — a single user's own participant history is naturally small (tens to low
 hundreds of rows even for a very active user), so the residual status filter costs little in
-practice at current scale.
+practice at current scale. Built anyway, since it's cheap and closes the gap for good.
 
-### Proposed shape (not decided — pick one at implementation time)
+### Shape decided: partial index, `WHERE status = 'JOINED'`
 
-1. A straight composite `(user_id, status)` index — covers every consumer above, including the
-   `INVITED`-inclusive ones, at the cost of indexing every historical status (`LEFT` included).
-2. A partial index scoped to `status = 'JOINED'` (mirroring `idx_sessions_scheduled_status_only`'s
-   technique exactly) — covers the `JOINED`-only majority of consumers; `findUpcomingSessions`'s
-   `IN (JOINED, INVITED)` would still fall back to the existing plain `user_id` index for its
-   `INVITED` half, which is fine since pending invites per user are typically very few.
+Two shapes were weighed: a straight composite `(user_id, status)` (covers every consumer including
+the `INVITED`-inclusive ones, at the cost of indexing every historical status, `LEFT` included) vs.
+a partial index scoped to `status = 'JOINED'` (mirrors `idx_sessions_scheduled_status_only`'s
+technique exactly — covers 5 of the 7 consumer queries outright, at less storage/write cost since it
+only ever tracks the live `JOINED` slice). **User picked the partial index** — it covers the
+dominant case, and `findUpcomingSessions`/`findUpcomingSessionsByDate`'s `IN (JOINED, INVITED)`
+falling back to the existing plain `user_id` index for its `INVITED` half is an acceptable, cheap
+tradeoff (pending invites per user are typically very few).
+
+**Full consumer list traced before building** (7 repository methods / 5 service methods / 5
+endpoints, all caller-scoped "my sessions" queries):
+
+| Repository method | `status` filter | Service method | Endpoint | Served by |
+|---|---|---|---|---|
+| `findDiscoverSessions` | `= JOINED` | `discoverSessions` | `GET /sessions/discover` | new partial index |
+| `findJoinedSessionsByStatus` | `= JOINED` | `getJoinedSessions` (status given) | `GET /sessions/joined?status=` | new partial index |
+| `findJoinedSessions` | `= JOINED` | `getJoinedSessions` (no status) | `GET /sessions/joined` | new partial index |
+| `findHistorySessionsByDate` | `= JOINED` | `getSessionHistory` | `GET /sessions/history?date=` | new partial index |
+| `findHistoryDateCounts` | `= JOINED` | `getSessionHistoryDates` | `GET /sessions/history?dateCount=` | new partial index |
+| `findUpcomingSessions` | `IN (JOINED, INVITED)` | `getUpcomingSessions` (no date) | `GET /sessions/upcoming` | existing plain `user_id` index (unchanged) |
+| `findUpcomingSessionsByDate` | `IN (JOINED, INVITED)` | `getUpcomingSessions` (date given) | `GET /sessions/upcoming?date=` | existing plain `user_id` index (unchanged) |
+
+**What was built:** one Liquibase changeset,
+`server/src/main/resources/db/changelog/changes/V067__add_session_participants_user_id_joined_partial_index.sql`:
+
+```sql
+CREATE INDEX idx_session_participants_user_id_joined ON session_participants(user_id)
+    WHERE status = 'JOINED';
+```
+
+No entity/repository/service/controller change — every consuming query method already matched this
+predicate structurally.
+
+**Verification:**
+- Applied against the real running dev DB via `:server:bootRun` — changeset ran successfully in
+  21ms.
+- `\d session_participants` confirms the new partial index exists alongside the untouched plain
+  `idx_session_participants_user_id`.
+- `SET enable_seqscan = off; EXPLAIN SELECT session_id FROM session_participants WHERE user_id = ?
+  AND status = 'JOINED';` → `Index Scan using idx_session_participants_user_id_joined`, **no
+  residual filter** (the predicate is baked into the index itself) — confirms the 5 `JOINED`-only
+  consumers benefit directly.
+- Same `EXPLAIN` with `status IN ('JOINED','INVITED')` → `Index Scan using
+  idx_session_participants_user_id` with `Filter: status = ANY(...)` — confirms
+  `getUpcomingSessions`/`ByDate` correctly fall back to the plain index exactly as designed, not the
+  new partial one (which structurally can't serve `INVITED` rows).
+- `:modules:session:session-impl:test` + `:server:test` — both green (no Java changed; pure
+  schema/index addition).
 
 ## Out of scope
 
@@ -88,12 +130,8 @@ Any change to query logic, entity shape, or endpoint behavior — index-only, sa
 Row-level archival/deletion of old `CANCELLED`/`COMPLETED` sessions to save storage — a real
 product question raised alongside this ticket (partial indexes can't express a moving "older than
 a month" cutoff; the real options are archival/deletion or partitioning, both bigger decisions than
-an index shape) — deliberately not folded in here; not yet filed as its own ticket pending which
-direction is wanted.
-
-**Tests (Part 2, when built):** `EXPLAIN` verification the new index is actually picked up (same
-technique as Part 1's own verification above), plus confirming
-`:modules:session:session-impl:test`/`:server:test` stay green with no Java changes.
+an index shape) — tracked separately as **SESSION-29** (documentation-only, no direction decided
+yet).
 
 ---
 
