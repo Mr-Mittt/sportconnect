@@ -3843,6 +3843,45 @@ explicit go-ahead at each step (full story in A3's summary doc):
   and **NOTIF-4** filed as a new `CANDIDATE` — fan-out currently notifies participants whose account
   is deactivated, since nothing filters recipients by `isActive`; cross-cutting across every
   trigger, and related to user-impl's U12.
+- **SESSION-25 (`DONE`, 2026-09-15,
+  `modules/session/docs/MVP/SESSION-25_DISCOVER_SEARCH_AND_FILTER.md`):** server-side search +
+  filter on `GET /api/sessions/discover` — 8 new AND-combined optional query params (`title`
+  substring, `locationId` exact, `minOpenSlots`, `feeType`+`maxFeeAmountVnd`, `date`,
+  `startTimeFilter`+`startTime` compared as a pair, `status`), a new default status list
+  (`PREPARING`/`SCHEDULED`/`ONGOING` — supersedes SESSION-4's original `SCHEDULED`-only default;
+  intentional, user-confirmed, `ONGOING` discoverable again), a `scheduledStart >= now()` default
+  lower bound (skipped when `date`/`startTimeFilter` already narrows it), and a new non-negotiable
+  3-level sort (`scheduledStart ASC` → remaining open slots `ASC` → `createdAt ASC`, caller's own
+  `Pageable` sort stripped). `findDiscoverSessions` returns `(Session, openSlots)` pairs — a
+  correlated-subquery scalar that must be a SELECT-list result variable to be legal in `ORDER BY`
+  per JPQL grammar, discarded by the caller since `mapToResponses` independently recomputes
+  `participantCount`.
+  **Two real bugs found, neither catchable by mocked Spock tests or the H2 `:server:test` suite.**
+  (1) Every `(:param IS NULL OR ...)` optional-filter clause needed the `IS NULL` side cast too —
+  Postgres's extended query protocol can't infer a bare placeholder's type from `IS NULL` alone,
+  regardless of the same named parameter being fully typed elsewhere in the query; caught live via
+  `:server:bootRun` against real Postgres, failing with `"could not determine data type of
+  parameter $N"`. (2) After the user pushed on "do we have enough IT?" and a new permanent IT test
+  (`SessionDiscoverIntegrationTest`, 27 cases) was added, a **systemic timezone bug** surfaced: this
+  app's `hibernate.jdbc.time_zone: UTC` shifts stored timestamps on write but only reapplies that
+  shift on plain attribute reads — any `CAST`/`EXTRACT` applied directly to `scheduledStart` reads
+  the raw, wrong value (confirmed: an `18:00`-local session's `EXTRACT(HOUR FROM ...)` returned
+  `11`; an early-morning session's `CAST(... AS date)` returned the previous calendar day). Original
+  design (splitting `scheduledStart` into separate columns, benchmarked and rejected in favor of
+  `CAST`, filed as follow-up **SESSION-30**) turned out to have picked between two *correctness
+  bugs*, not a performance tradeoff — **SESSION-30 is now superseded**. Fixed `date` via a half-open
+  `[dayStart, dayEnd)` range (no cast, matching SESSION-27's existing pattern) and `startTime` via
+  `EXTRACT` + a JVM-offset `MOD` correction in `SessionServiceImpl`, after three earlier
+  time-typed/string-typed comparison attempts each failed differently (wrong rows, a
+  `"cannot cast bytea to time"` error, then silently-wrong rows again even via plain text
+  comparison — isolated to Hibernate's translation via a raw psql `PREPARE`/`EXECUTE` proving the
+  same comparison is correct outside Hibernate/JDBC). Full mechanism in `SessionRepository
+  .findDiscoverSessions`'s Javadoc. The **same timezone bug was found already shipped** in
+  SESSION-27's `findHistoryDateCounts` — not fixed here (different ticket), filed as **SESSION-31**.
+  Green: `session-impl` (expanded `discoverSessions` Spock coverage) + `SessionDiscoverIntegrationTest`
+  (27 IT cases, real H2 round trip, including dedicated regression cases for both bugs) +
+  `:server:test` (full suite) + repeated live end-to-end verification against real dev Postgres as
+  each bug was found and fixed, including the exact previously-wrong boundary values. No migration.
 - **SESSION-29 (`TODO`, documentation only, 2026-09-15,
   `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
   `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive

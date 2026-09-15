@@ -5,12 +5,14 @@ import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
+import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
 import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
+import com.sportconnect.session.api.dto.StartTimeFilter;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.session.api.service.SessionService;
 import com.sportconnect.social.post.api.dto.CommentResponse;
@@ -22,7 +24,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,6 +40,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -48,6 +52,13 @@ import java.util.UUID;
 public class SessionController {
 
     private final SessionService sessionService;
+
+    /** SESSION-25 — the only status values {@code GET /discover} accepts (a caller-supplied
+     * status outside this set is a BadRequestException). Matches {@code SessionServiceImpl
+     * .DISCOVER_DEFAULT_STATUSES}, kept as its own copy here since it's a controller-layer
+     * validation concern, not a service-layer default. */
+    private static final Set<SessionStatus> DISCOVERABLE_STATUSES =
+            Set.of(SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING);
 
     @Operation(summary = "Create a session", description = "groupId omitted → standalone (any user). groupId set → owner/admin of that group only.")
     @ApiResponses({
@@ -145,9 +156,10 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("History dates retrieved successfully", response));
     }
 
-    @Operation(summary = "Discover joinable standalone sessions", description = "SCHEDULED, standalone sessions gated to sports the caller holds an active profile for, excluding sessions the caller created or currently has joined. Optional sportId narrows to one sport.")
+    @Operation(summary = "Discover joinable standalone sessions", description = "SESSION-25: PREPARING/SCHEDULED/ONGOING (default all three) standalone sessions gated to sports the caller holds an active profile for, excluding sessions the caller created or currently has joined. All params below sportId are optional and AND-combined; defaults to scheduledStart >= now() unless date or startTimeFilter is given. Sorted scheduledStart ASC, then remaining open slots ASC, then createdAt ASC — the caller's own Pageable sort is ignored.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Negative minOpenSlots/maxFeeAmountVnd, startTimeFilter/startTime given without the other, or a status outside PREPARING/SCHEDULED/ONGOING"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/discover")
@@ -155,9 +167,32 @@ public class SessionController {
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> discoverSessions(
             Authentication authentication,
             @RequestParam(required = false) Long sportId,
-            @PageableDefault(sort = "scheduledStart", direction = Sort.Direction.ASC) Pageable pageable) {
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false) Long locationId,
+            @RequestParam(required = false) Integer minOpenSlots,
+            @RequestParam(required = false) FeeType feeType,
+            @RequestParam(required = false) Long maxFeeAmountVnd,
+            @RequestParam(required = false) LocalDate date,
+            @RequestParam(required = false) StartTimeFilter startTimeFilter,
+            @RequestParam(required = false) LocalTime startTime,
+            @RequestParam(required = false) List<SessionStatus> status,
+            @PageableDefault(size = 20) Pageable pageable) {
+        if (minOpenSlots != null && minOpenSlots < 0) {
+            throw new BadRequestException("minOpenSlots must be >= 0");
+        }
+        if (maxFeeAmountVnd != null && maxFeeAmountVnd < 0) {
+            throw new BadRequestException("maxFeeAmountVnd must be >= 0");
+        }
+        if ((startTimeFilter == null) != (startTime == null)) {
+            throw new BadRequestException("startTimeFilter and startTime must be given together");
+        }
+        if (status != null && !DISCOVERABLE_STATUSES.containsAll(status)) {
+            throw new BadRequestException("status must be one of PREPARING, SCHEDULED, ONGOING");
+        }
+
         Page<SessionResponse> response = sessionService.discoverSessions(
-                SecurityUtils.extractUserId(authentication), sportId, pageable);
+                SecurityUtils.extractUserId(authentication), sportId, title, locationId, minOpenSlots,
+                feeType, maxFeeAmountVnd, date, startTimeFilter, startTime, status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
