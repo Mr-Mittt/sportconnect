@@ -4,7 +4,6 @@ import { sportIdForKey } from '@/features/feed/sportIdMap';
 import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import { LocationPicker } from '@/features/location/components/LocationPicker';
-import { FEE_TYPE_LABEL } from '@/shared/lib/feeType';
 import type { Location } from '@/shared/types/location';
 import type { FeeType } from '@/shared/types/session';
 import type { ResolvedSportAttributeSchema, SportKey, SportProfile } from '@/shared/types/sport';
@@ -28,6 +27,7 @@ import { AddSportFields, type AddSportProfileSubmission } from '@/shared/compone
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import type { CreateSessionPayload } from '../types';
+import { FeeTypeFields } from './FeeTypeFields';
 import { SessionStartTimePicker } from './SessionStartTimePicker';
 
 const NO_SPORTS_PROMPT = "Hey champ, add a sport first — can't host a match out of thin air! 🏆";
@@ -68,9 +68,11 @@ const ALLOWED_DIGITS_ONLY_KEYS = new Set([
   'End',
 ]);
 
-/** Shared by every numeric field in this form (Duration, Taken/Open slot, Fixed amount) — blocks
- * any keystroke that isn't a digit or a navigation/edit key. A native `type="number"` input still
- * accepts `e`/`+`/`-`/`.` from the keyboard, so `type="number"` alone isn't enough. */
+/** Shared by every numeric field in this form (Duration, Taken/Open slot) — blocks any keystroke
+ * that isn't a digit or a navigation/edit key. A native `type="number"` input still accepts
+ * `e`/`+`/`-`/`.` from the keyboard, so `type="number"` alone isn't enough. (The Fixed-amount
+ * field's own copy of this guard moved to `FeeTypeFields.tsx` along with the rest of the fee UI —
+ * CLIENT-SESSION-21.) */
 function handleDigitsOnlyKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
   if (event.ctrlKey || event.metaKey || event.altKey || ALLOWED_DIGITS_ONLY_KEYS.has(event.key)) {
     return;
@@ -95,106 +97,6 @@ function DigitsOnlyInput(props: ComponentProps<typeof Input>) {
         }
       }}
     />
-  );
-}
-
-/** `n.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')` — inserts a space every 3 digits from the right,
- * e.g. `"50000"` -> `"50 000"`. Only the Fixed-amount field uses this (large VND amounts);
- * Duration/Taken/Open slot stay small counts with no need for a thousands separator. */
-function formatThousandSpaces(digits: string): string {
-  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-}
-
-/** The Fixed-amount field — `type="text"` (not `number`, which can't render a space-formatted
- * value at all), reformatted on every keystroke: `onChange` strips the raw event value down to
- * digits only (so a paste like `"50,000"` normalizes to `"50000"` before it's ever re-displayed),
- * then `value` re-renders it with `formatThousandSpaces`. Same digits-only keydown guard as
- * `DigitsOnlyInput`; paste is allowed through as long as it contains at least one digit and
- * nothing outside digits/space/comma/period (so a pre-formatted "50,000" or "50 000" pastes in
- * fine, but "90 mins" is rejected outright) — `onChange` does the actual normalizing afterward. */
-function VndAmountInput({
-  value,
-  onChange,
-  ...props
-}: Omit<ComponentProps<typeof Input>, 'value' | 'onChange' | 'type'> & {
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <Input
-      {...props}
-      type="text"
-      inputMode="numeric"
-      value={formatThousandSpaces(value)}
-      onChange={(event) => onChange(event.target.value.replace(/[^0-9]/g, ''))}
-      onKeyDown={handleDigitsOnlyKeyDown}
-      onPaste={(event) => {
-        const pasted = event.clipboardData.getData('text');
-        if (pasted.replace(/[^0-9]/g, '') === '' || !/^[0-9\s,.]+$/.test(pasted)) {
-          event.preventDefault();
-        }
-      }}
-    />
-  );
-}
-
-/** `Free`/`Split cost` are a checkbox + label each; `Fixed amount` is a label + number input
- * instead (no checkbox of its own) — typing into that input is what selects `FIXED`. All three
- * stay mutually exclusive: checking `Free`/`Split cost` also clears the amount field, and typing
- * a non-empty amount switches `value` to `FIXED`. Same inline-checkbox idiom `CreateGroupModal`'s
- * "Private group" toggle already uses, not a custom `Checkbox` primitive (none exists yet). */
-function FeeTypeFields({
-  value,
-  onChange,
-  amount,
-  onAmountChange,
-}: {
-  value: FeeType;
-  onChange: (next: FeeType) => void;
-  amount: string;
-  onAmountChange: (next: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="flex cursor-pointer items-center gap-2 text-2sm text-text-primary select-none">
-        <input
-          type="checkbox"
-          checked={value === 'FREE'}
-          onChange={() => {
-            onChange('FREE');
-            onAmountChange('');
-          }}
-          className="size-4 cursor-pointer rounded border-border-strong"
-        />
-        {FEE_TYPE_LABEL.FREE}
-      </label>
-      <label className="flex cursor-pointer items-center gap-2 text-2sm text-text-primary select-none">
-        <input
-          type="checkbox"
-          checked={value === 'SPLIT'}
-          onChange={() => {
-            onChange('SPLIT');
-            onAmountChange('');
-          }}
-          className="size-4 cursor-pointer rounded border-border-strong"
-        />
-        {FEE_TYPE_LABEL.SPLIT}
-      </label>
-      <div className="flex items-center gap-2">
-        <Label htmlFor="create-session-fee-amount" className="mb-0 shrink-0">
-          {FEE_TYPE_LABEL.FIXED}
-        </Label>
-        <VndAmountInput
-          id="create-session-fee-amount"
-          value={amount}
-          onChange={(next) => {
-            onAmountChange(next);
-            onChange('FIXED');
-          }}
-          placeholder="VND"
-        />
-      </div>
-    </div>
   );
 }
 
@@ -497,6 +399,17 @@ interface CreateSessionModalProps {
  * uses, rather than a setState-in-effect reset. `selectedLocation` is the one field that can't be
  * local state, since the callback that sets it (`useLocationPickerData`'s `onSelect`) lives at
  * the page level, not in this component.
+ *
+ * CLIENT-SESSION-21 (SESSION-24): Location and Fee are no longer required — `feeType` now starts
+ * `undefined` (no FREE default) instead of always carrying a value, each of the three fee
+ * checkboxes/the amount input toggles back to `undefined` when unset (not just switching between
+ * options), and neither field blocks `isValid`/submit anymore. Leaving either blank creates the
+ * session `PREPARING` instead of `SCHEDULED`; an amber informational banner (`willBePreparing`)
+ * says so, distinct from the red required-field errors since it isn't one — pinned in the footer
+ * next to "Create session" (user decision, so it stays visible regardless of scroll position),
+ * not the scrollable body. `FeeTypeFields` (and its digit-input helpers) moved out to their own
+ * file so `SessionPreparingCompletion` can reuse the same fee UI for completing a `PREPARING`
+ * session later.
  */
 export function CreateSessionModal({
   isOpen,
@@ -557,7 +470,10 @@ export function CreateSessionModal({
   const [durationMinutes, setDurationMinutes] = useState('');
   const [takenSlots, setTakenSlots] = useState('');
   const [openSlots, setOpenSlots] = useState('');
-  const [feeType, setFeeType] = useState<FeeType>('FREE');
+  // CLIENT-SESSION-21: no default — undefined means "not picked yet", which SESSION-24 now
+  // treats as a valid, intentional choice (the session is created PREPARING instead of
+  // SCHEDULED), not just an unfinished form.
+  const [feeType, setFeeType] = useState<FeeType | undefined>(undefined);
   const [feeAmountVnd, setFeeAmountVnd] = useState('');
   const [selectedInvitees, setSelectedInvitees] = useState<FriendUser[]>([]);
   const [autoApprove, setAutoApprove] = useState(false);
@@ -593,7 +509,7 @@ export function CreateSessionModal({
     setDurationMinutes('');
     setTakenSlots('');
     setOpenSlots('');
-    setFeeType('FREE');
+    setFeeType(undefined);
     setFeeAmountVnd('');
     setSelectedInvitees([]);
     setAutoApprove(false);
@@ -624,17 +540,23 @@ export function CreateSessionModal({
   // it's "Taken slot" minus the creator's own already-real row — 0 when Taken slot is blank.
   const initialSlot = effectiveTakenSlots - 1;
 
+  // CLIENT-SESSION-21 / SESSION-24: Location and Fee are no longer required to submit — leaving
+  // either blank is now a valid, intentional way to create a PREPARING session that gets
+  // completed later via SessionPreparingCompletion. `isValid` (and the red-asterisk required
+  // fields it still gates) covers everything that's genuinely still mandatory.
   const isValid =
     effectiveSportId !== undefined &&
-    selectedLocation !== null &&
     scheduledStart !== '' &&
     title.trim() !== '' &&
     durationMinutes !== '' &&
-    openSlots !== '' &&
-    (!isFeeAmountRequired || feeAmountVnd !== '');
+    openSlots !== '';
+
+  // Drives the "will be created as Preparing" warning below — SESSION-24's own condition for
+  // landing in PREPARING instead of SCHEDULED.
+  const willBePreparing = selectedLocation === null || feeType === undefined;
 
   const submit = () => {
-    if (!isValid || effectiveSportId === undefined || selectedLocation === null) {
+    if (!isValid || effectiveSportId === undefined) {
       setHasAttemptedSubmit(true);
       return;
     }
@@ -642,7 +564,7 @@ export function CreateSessionModal({
       sportId: effectiveSportId,
       title: title.trim(),
       description: description.trim() || undefined,
-      locationId: selectedLocation.id,
+      locationId: selectedLocation?.id,
       locationNote: locationNote.trim() || undefined,
       scheduledStart: `${scheduledStart}:00`,
       durationMinutes: Number(durationMinutes),
@@ -736,8 +658,7 @@ export function CreateSessionModal({
                         display/button pair below (same reasoning as jsx-a11y flagging an
                         unassociated <label>). */}
                     <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-                      Location
-                      <RequiredMark />
+                      Location (optional)
                     </span>
                     <div className="flex items-center gap-2">
                       {selectedLocation !== null && (
@@ -756,13 +677,8 @@ export function CreateSessionModal({
                         }
                       />
                     </div>
-                    {effectiveSportId === undefined ? (
+                    {effectiveSportId === undefined && (
                       <p className="mt-1 text-2xs text-text-muted">Pick a sport first.</p>
-                    ) : (
-                      hasAttemptedSubmit &&
-                      selectedLocation === null && (
-                        <p className="mt-1 text-2xs text-text-danger">Location is required.</p>
-                      )
                     )}
                   </div>
 
@@ -857,8 +773,7 @@ export function CreateSessionModal({
 
                   <div className="sm:col-span-5">
                     <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-                      Fee
-                      <RequiredMark />
+                      Fee (optional)
                     </span>
                     <FeeTypeFields
                       value={feeType}
@@ -866,9 +781,6 @@ export function CreateSessionModal({
                       amount={feeAmountVnd}
                       onAmountChange={setFeeAmountVnd}
                     />
-                    {hasAttemptedSubmit && isFeeAmountRequired && feeAmountVnd === '' && (
-                      <p className="mt-1 text-2xs text-text-danger">Amount is required.</p>
-                    )}
                   </div>
                 </div>
 
@@ -932,12 +844,24 @@ export function CreateSessionModal({
               </p>
             )}
           </div>
-          <div className="border-hairline-t flex justify-end border-border px-4 py-3">
+          <div className="border-hairline-t flex items-center justify-end gap-3 border-border px-4 py-3">
+            {/* CLIENT-SESSION-21 / SESSION-24: informational, not a validation error — leaving
+                Location and/or Fee blank is a valid choice, so this uses the app's reserved
+                warning tokens (amber), not the red danger-text style the required-field errors
+                use. Pinned in the footer (not the scrollable body) so it stays visible regardless
+                of scroll position, same reasoning as the submit button itself. */}
+            {willBePreparing && (
+              <p className="flex-1 text-2xs text-amber-800">
+                This session will be created as <strong>Preparing</strong> — add a location and
+                fee to make it Scheduled. You can complete it anytime before it starts, or it will
+                be auto-cancelled.
+              </p>
+            )}
             <Button
               variant="primary"
               onClick={submit}
               disabled={isSubmitting}
-              className={cn('cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
+              className={cn('shrink-0 cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
             >
               {isSubmitting ? 'Creating…' : 'Create session'}
             </Button>

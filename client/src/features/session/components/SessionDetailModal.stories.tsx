@@ -1,9 +1,48 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { Comment } from '@/features/feed/types';
+import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
 import type { Session, SessionParticipant } from '@/shared/types/session';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { SessionDetailModal } from './SessionDetailModal';
+
+// Inert stub — SessionPreparingCompletion's own stories cover LocationPicker's real states;
+// this modal's stories only need it to render without crashing on a `PREPARING` fixture.
+const inertLocationPicker: LocationPickerProps = {
+  isOpen: false,
+  onClose: () => {},
+  mode: 'search',
+  onSwitchToCreate: () => {},
+  onSwitchToSearch: () => {},
+  inputValue: '',
+  onInputChange: () => {},
+  onSearch: () => {},
+  results: [],
+  isSearching: false,
+  isSearchError: false,
+  onSelectResult: () => {},
+  favoriteLocationIds: new Set(),
+  onToggleFavorite: () => {},
+  isTogglingFavorite: false,
+  onOpenGoogleMaps: () => {},
+  mapsUrlInput: '',
+  onMapsUrlChange: () => {},
+  onResolveUrl: () => {},
+  isResolving: false,
+  isResolveError: false,
+  resolvedNoCoordinates: false,
+  coordinates: null,
+  mapSeed: 0,
+  onMovePin: () => {},
+  name: '',
+  onNameChange: () => {},
+  address: '',
+  onAddressChange: () => {},
+  canSave: false,
+  onSave: () => {},
+  isSaving: false,
+  isSaveError: false,
+};
 
 const location: Location = {
   id: 1,
@@ -127,6 +166,12 @@ const meta = {
     isParticipantsError: false,
     currentUserId: 'user-3',
     canManage: false,
+    selectedCompletionLocation: null,
+    onOpenCompletionLocationPicker: () => {},
+    completionLocationPicker: inertLocationPicker,
+    onCompleteSession: () => {},
+    isCompletingSession: false,
+    isCompleteSessionError: false,
     onJoin: () => {},
     isJoining: false,
     isJoinError: false,
@@ -196,6 +241,24 @@ export const Ongoing: Story = {
 
 export const Completed: Story = {
   args: { session: makeSession({ status: 'COMPLETED' }) },
+};
+
+export const PreparingMissingBoth: Story = {
+  args: {
+    canManage: true,
+    session: makeSession({ status: 'PREPARING', location: null, feeType: null }),
+  },
+};
+
+export const PreparingMissingLocationOnly: Story = {
+  args: {
+    canManage: true,
+    session: makeSession({ status: 'PREPARING', location: null }),
+  },
+};
+
+export const PreparingNotManager: Story = {
+  args: { session: makeSession({ status: 'PREPARING', location: null, feeType: null }) },
 };
 
 export const Cancelled: Story = {

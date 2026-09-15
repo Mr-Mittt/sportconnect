@@ -114,7 +114,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** No `activeSport` and more than one sport profile — prefills the first one (`sportsByKey`'s
- * own order, "football" here). */
+ * own order, "football" here). CLIENT-SESSION-21: neither Location nor Fee is picked, so the
+ * amber "will be created as Preparing" banner shows by default. */
 export const Default: Story = {};
 
 /** `activeSport` set to a real sport pre-selects the Sport field. */
@@ -130,6 +131,9 @@ export const SportPreselectedFromSoleProfile: Story = {
   },
 };
 
+/** CLIENT-SESSION-21: Location is picked but Fee still isn't (no `feeType` prop exists to
+ * pre-set — it's local component state, chosen only via checking a fee checkbox) — the Preparing
+ * banner still shows, now for Fee alone. */
 export const LocationChosen: Story = {
   args: { activeSport: 'basketball', selectedLocation: location },
 };

@@ -21,13 +21,15 @@ export interface CreateSessionPayload {
   sportId?: number;
   title?: string;
   description?: string;
-  locationId: number;
+  /** SESSION-24: omitted -> the session is created PREPARING instead of SCHEDULED (CLIENT-SESSION-21). */
+  locationId?: number;
   locationNote?: string;
   scheduledStart: string; // LocalDateTime, e.g. "2026-08-01T19:00:00"
   durationMinutes?: number;
   /** Mandatory on the real backend (SESSION-5) — no default fallback for a missing field. */
   capacity: number;
-  feeType: FeeType;
+  /** SESSION-24: omitted -> the session is created PREPARING instead of SCHEDULED (CLIENT-SESSION-21). */
+  feeType?: FeeType;
   /** Required only when feeType is FIXED; omitted otherwise. */
   feeAmountVnd?: number;
   /** Participants already accounted for outside the app — folded into the backend's reported

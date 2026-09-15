@@ -18,9 +18,14 @@ export function dedupeSessionsById(sessions: SessionListItem[]): SessionListItem
   return [...seen.values()];
 }
 
-/** `SCHEDULED`/`ONGOING` — a session that hasn't reached a terminal state. Everything else
- * (`COMPLETED`, `CANCELLED`) is "history". */
-const ACTIVE_STATUSES: ReadonlySet<SessionStatus> = new Set<SessionStatus>(['SCHEDULED', 'ONGOING']);
+/** `SCHEDULED`/`ONGOING`/`PREPARING` — a session that hasn't reached a terminal state
+ * (CLIENT-SESSION-21: PREPARING is still being set up, not "done" — belongs in "active", not
+ * "history"). Everything else (`COMPLETED`, `CANCELLED`) is "history". */
+const ACTIVE_STATUSES: ReadonlySet<SessionStatus> = new Set<SessionStatus>([
+  'SCHEDULED',
+  'ONGOING',
+  'PREPARING',
+]);
 
 export type SessionZone = 'active' | 'history';
 

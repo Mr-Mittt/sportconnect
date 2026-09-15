@@ -11,8 +11,13 @@ export const FEE_TYPE_LABEL: Record<FeeType, string> = {
 };
 
 /** `feeAmountVnd` is only meaningful when `feeType` is `FIXED` (enforced backend-side) — this
- * renders the VND amount in that case, and the plain label otherwise. */
-export function formatFeeDisplay(feeType: FeeType, feeAmountVnd: number | null): string {
+ * renders the VND amount in that case, and the plain label otherwise. `feeType` is `null` on a
+ * PREPARING session created without one (SESSION-24) — rendered as a distinct "pending" state,
+ * never mistaken for the real `FREE` label. */
+export function formatFeeDisplay(feeType: FeeType | null, feeAmountVnd: number | null): string {
+  if (feeType === null) {
+    return 'Fee pending';
+  }
   if (feeType === 'FIXED' && feeAmountVnd !== null) {
     return formatVnd(feeAmountVnd);
   }

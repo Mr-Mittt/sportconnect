@@ -98,6 +98,13 @@ function defaultSessionsSession(): SessionsSession {
       { ...mockInvitedSession },
       { ...mockRequestedSession },
       { ...mockCancelledSession },
+      // CLIENT-SESSION-21: no static PREPARING fixture is seeded here, unlike every session
+      // status above — UpcomingMatches' rail caps at maxVisible=4 by soonest-start, and every
+      // other e2e spec that asserts a specific session appears in that rail (home-feed/groups/
+      // friends/profile journeys) would silently start failing if an 8th standalone session
+      // pushed one of theirs out of view. matches-journey.spec.ts's own PREPARING step (11)
+      // creates its session live through the real create-session flow instead, exercising the
+      // POST/PUT handler logic below without touching this shared seed.
     ],
     // CLIENT-SESSION-4: mockOwnedGroupSession (mockUser is group_owner) starts with one
     // pre-seeded REQUESTED row, so the approval queue has something to show without needing a
@@ -211,12 +218,13 @@ export const sessionHandlers: HttpHandler[] = [
       sportId?: number;
       title?: string;
       description?: string;
-      locationId: number;
+      // SESSION-24 / CLIENT-SESSION-21: both optional now — omitted -> PREPARING.
+      locationId?: number;
       locationNote?: string;
       scheduledStart: string;
       durationMinutes?: number;
       capacity: number;
-      feeType: Session['feeType'];
+      feeType?: Session['feeType'];
       feeAmountVnd?: number;
       initialSlot?: number;
       autoApprove?: boolean;
@@ -225,7 +233,7 @@ export const sessionHandlers: HttpHandler[] = [
       // these against the sport's session schema; this mock stores what it's sent.
       attributes?: Record<string, unknown>;
     };
-    if (!body.locationId || !body.scheduledStart || body.capacity === undefined || !body.feeType) {
+    if (!body.scheduledStart || body.capacity === undefined) {
       return HttpResponse.json(apiError('Validation failed'), { status: 400 });
     }
     const session = sessionsSessions.get(sessionIdFromRequest(request));
@@ -240,11 +248,12 @@ export const sessionHandlers: HttpHandler[] = [
       sportName: mockLocation.sportName,
       title: body.title ?? null,
       description: body.description ?? null,
-      location: mockLocation,
+      location: body.locationId !== undefined ? mockLocation : null,
       locationNote: body.locationNote ?? null,
       scheduledStart: body.scheduledStart,
       scheduledEndAt: null,
-      status: 'SCHEDULED',
+      // SESSION-24: missing either -> PREPARING instead of SCHEDULED.
+      status: body.locationId !== undefined && body.feeType !== undefined ? 'SCHEDULED' : 'PREPARING',
       cancelReason: null,
       cancelledBy: null,
       cancelledByFullName: null,
@@ -254,7 +263,7 @@ export const sessionHandlers: HttpHandler[] = [
       // the real-JOINED-rows half stays 0 — initialSlot is the only real addition this ticket makes.
       participantCount: initialSlot,
       capacity: body.capacity,
-      feeType: body.feeType,
+      feeType: body.feeType ?? null,
       feeAmountVnd: body.feeType === 'FIXED' ? (body.feeAmountVnd ?? null) : null,
       initialSlot,
       autoApprove: body.autoApprove ?? false,
@@ -371,8 +380,48 @@ export const sessionHandlers: HttpHandler[] = [
     if (!existing) {
       return HttpResponse.json(apiError('Session not found'), { status: 404 });
     }
-    const body = (await request.json()) as Partial<Session>;
-    const updated: Session = { ...existing, ...body, updatedAt: new Date().toISOString() };
+    // The real request body is `UpdateSessionPayload` (a `locationId` number, not the resolved
+    // `Location` object `Session.location` carries) — never `Partial<Session>`.
+    const body = (await request.json()) as {
+      title?: string;
+      description?: string;
+      locationId?: number;
+      locationNote?: string;
+      scheduledStart?: string;
+      durationMinutes?: number;
+      capacity?: number;
+      feeType?: Session['feeType'];
+      feeAmountVnd?: number;
+      initialSlot?: number;
+    };
+    // SESSION-24: locationId/feeType are mutable via this endpoint only while PREPARING.
+    if ((body.locationId !== undefined || body.feeType !== undefined) && existing.status !== 'PREPARING') {
+      return HttpResponse.json(
+        apiError('Location and fee are immutable once the session is no longer being prepared'),
+        { status: 400 },
+      );
+    }
+    const resolvedLocation = body.locationId !== undefined ? mockLocation : existing.location;
+    const resolvedFeeType = body.feeType ?? existing.feeType;
+    const updated: Session = {
+      ...existing,
+      ...(body.title !== undefined && { title: body.title }),
+      ...(body.description !== undefined && { description: body.description }),
+      location: resolvedLocation,
+      ...(body.locationNote !== undefined && { locationNote: body.locationNote }),
+      ...(body.scheduledStart !== undefined && { scheduledStart: body.scheduledStart }),
+      ...(body.capacity !== undefined && { capacity: body.capacity }),
+      feeType: resolvedFeeType,
+      feeAmountVnd: resolvedFeeType === 'FIXED' ? (body.feeAmountVnd ?? existing.feeAmountVnd) : null,
+      ...(body.initialSlot !== undefined && { initialSlot: body.initialSlot }),
+      // SESSION-24: completing both while PREPARING flips it to SCHEDULED; completing only one
+      // leaves it PREPARING.
+      status:
+        existing.status === 'PREPARING' && resolvedLocation !== null && resolvedFeeType !== null
+          ? 'SCHEDULED'
+          : existing.status,
+      updatedAt: new Date().toISOString(),
+    };
     session.sessionsState = session.sessionsState.map((candidate) =>
       candidate.id === sessionId ? updated : candidate,
     );

@@ -250,6 +250,12 @@ export function MatchesPage() {
         isParticipantsError={data.isParticipantsError}
         currentUserId={data.currentUserId ?? ''}
         canManage={data.canManage}
+        selectedCompletionLocation={data.selectedCompletionLocation}
+        onOpenCompletionLocationPicker={data.onOpenCompletionLocationPicker}
+        completionLocationPicker={data.completionLocationPicker}
+        onCompleteSession={data.onCompleteSession}
+        isCompletingSession={data.isCompletingSession}
+        isCompleteSessionError={data.isCompleteSessionError}
         onJoin={data.onJoin}
         isJoining={data.isJoining}
         isJoinError={data.isJoinError}

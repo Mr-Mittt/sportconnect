@@ -168,8 +168,11 @@ test('Matches journey', async ({ page }) => {
     // CLIENT-SESSION-2 pre-fills it on open, so there's nothing to fill in here anymore.
     await createDialog.getByLabel(/^Session title/).fill('New pickup game');
     await createDialog.getByLabel(/^Duration in minutes/).fill('90');
-    // Open slot is required (CLIENT-SESSION-3); Fee is left on its default "Free" checkbox state.
     await createDialog.getByLabel(/^Open slot/).fill('10');
+    // CLIENT-SESSION-21: Fee has no default anymore (SESSION-24) — check "Free" explicitly so
+    // this session lands SCHEDULED, not PREPARING (the PREPARING path is covered by its own
+    // journey, step 11 below).
+    await createDialog.getByRole('checkbox', { name: 'Free' }).check();
 
     // CLIENT-SESSION-4: invite a friend (dismissible badge) and check auto-approve (reveals the
     // inline warning, no separate confirm step).
@@ -294,6 +297,38 @@ test('Matches journey', async ({ page }) => {
 
     await page.getByRole('button', { name: 'Show my sessions' }).click();
     await expect(page.getByRole('region', { name: 'My sessions' })).toBeVisible();
+  });
+
+  await test.step('11. create without location/fee shows the Preparing warning; completing both via the detail modal flips it to Scheduled (CLIENT-SESSION-21, SESSION-24)', async () => {
+    await page.getByRole('button', { name: 'Create session' }).click();
+    const createDialog = page.getByRole('dialog', { name: 'Create your session' });
+    await createDialog.getByLabel(/^Sport/).selectOption('pickleball');
+    await createDialog.getByLabel(/^Session title/).fill('Needs setup');
+    await createDialog.getByLabel(/^Duration in minutes/).fill('60');
+    await createDialog.getByLabel(/^Open slot/).fill('6');
+
+    await expect(createDialog.getByText(/will be created as/)).toBeVisible();
+    await createDialog.getByRole('button', { name: 'Create session' }).click();
+    await expect(createDialog).not.toBeVisible();
+
+    await page.getByRole('button', { name: /Needs setup — View details/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Needs setup' });
+    await expect(dialog.getByText('Preparing')).toBeVisible();
+    const completion = dialog.getByRole('region', { name: 'Complete session setup' });
+    await expect(completion.getByText('Location and Fee', { exact: true })).toBeVisible();
+
+    await completion.getByRole('button', { name: 'Choose location' }).click();
+    const locationDialog = page.getByRole('dialog', { name: 'Choose a location' });
+    await locationDialog.getByLabel('Search locations').fill('Riverside');
+    await locationDialog.getByRole('button', { name: 'Search' }).click();
+    await locationDialog.getByText(mockLocation.name, { exact: true }).click();
+    await expect(completion.getByText(mockLocation.name)).toBeVisible();
+
+    await completion.getByRole('checkbox', { name: 'Free' }).check();
+    await completion.getByRole('button', { name: 'Save' }).click();
+
+    await expect(dialog.getByText('Scheduled')).toBeVisible();
+    await expect(dialog.getByRole('region', { name: 'Complete session setup' })).not.toBeVisible();
   });
 });
 

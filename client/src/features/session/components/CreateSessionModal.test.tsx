@@ -338,32 +338,96 @@ describe('CreateSessionModal', () => {
     await user.click(screen.getByRole('button', { name: 'Create session' }));
 
     expect(screen.getByText('Title is required.')).toBeInTheDocument();
-    expect(screen.getByText('Location is required.')).toBeInTheDocument();
+    // CLIENT-SESSION-21: Location is no longer a required field (SESSION-24) — no error for it.
+    expect(screen.queryByText('Location is required.')).not.toBeInTheDocument();
     expect(screen.getByText('Duration is required.')).toBeInTheDocument();
     expect(screen.getByText('Open slot is required.')).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('Fee defaults to "Free" checked, and it never blocks submit on its own', () => {
+  it('Fee has no default selection, and it never blocks submit on its own (CLIENT-SESSION-21)', () => {
     render(<CreateSessionModal {...baseProps} />);
-    expect(screen.getByRole('checkbox', { name: 'Free' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Free' })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Split cost' })).not.toBeChecked();
     expect(screen.getByLabelText('Fixed amount')).toHaveValue('');
   });
 
-  it('typing into "Fixed amount" selects it and requires the amount on submit', async () => {
+  describe('CLIENT-SESSION-21: PREPARING warning (SESSION-24)', () => {
+    it('shows the Preparing warning when both Location and Fee are unset', () => {
+      render(<CreateSessionModal {...baseProps} />);
+      expect(screen.getByText(/will be created as/)).toBeInTheDocument();
+      expect(screen.getByText('Preparing')).toBeInTheDocument();
+    });
+
+    it('shows the warning when only Location is missing', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      // Free is a valid explicit pick, but Location is still unset.
+      await user.click(screen.getByRole('checkbox', { name: 'Free' }));
+      expect(screen.getByText(/will be created as/)).toBeInTheDocument();
+    });
+
+    it('shows the warning when only Fee is missing', () => {
+      render(<CreateSessionModal {...baseProps} selectedLocation={location} />);
+      expect(screen.getByText(/will be created as/)).toBeInTheDocument();
+    });
+
+    it('hides the warning once both Location and Fee are set', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} selectedLocation={location} />);
+      await user.click(screen.getByRole('checkbox', { name: 'Free' }));
+      expect(screen.queryByText(/will be created as/)).not.toBeInTheDocument();
+    });
+
+    it('renders in the footer, next to "Create session" — always visible, not scrolled with the form body', () => {
+      render(<CreateSessionModal {...baseProps} />);
+      const warning = screen.getByText(/will be created as/);
+      const createButton = screen.getByRole('button', { name: 'Create session' });
+      expect(warning.parentElement).toBe(createButton.parentElement);
+    });
+
+    it('submits with locationId/feeType omitted when both are left blank', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" onSubmit={onSubmit} />);
+
+      await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ locationId: undefined, feeType: undefined }),
+      );
+    });
+  });
+
+  it('typing into "Fixed amount" selects it; clearing it back to empty un-selects Fixed entirely (CLIENT-SESSION-21)', async () => {
     const user = userEvent.setup();
-    render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
+    const onSubmit = vi.fn();
+    render(
+      <CreateSessionModal
+        {...baseProps}
+        selectedLocation={location}
+        activeSport="basketball"
+        onSubmit={onSubmit}
+      />,
+    );
 
     await user.type(screen.getByLabelText('Fixed amount'), '50000');
     expect(screen.getByRole('checkbox', { name: 'Free' })).not.toBeChecked();
 
     await user.clear(screen.getByLabelText('Fixed amount'));
+    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+    await pickAnyStartTime(user);
+    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Open slot/), '10');
     await user.click(screen.getByRole('button', { name: 'Create session' }));
-    expect(screen.getByText('Amount is required.')).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Fixed amount'), '50000');
-    expect(screen.queryByText('Amount is required.')).not.toBeInTheDocument();
+    // Clearing the amount cleared the FIXED selection too, so this submits with feeType
+    // undefined (PREPARING), not FIXED with a missing amount.
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ feeType: undefined }));
   });
 
   it('checking "Free" or "Split cost" clears a previously-typed amount', async () => {
@@ -376,6 +440,24 @@ describe('CreateSessionModal', () => {
     expect(screen.getByRole('checkbox', { name: 'Split cost' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Free' })).not.toBeChecked();
     expect(screen.getByLabelText('Fixed amount')).toHaveValue('');
+  });
+
+  it('re-clicking a checked "Free"/"Split cost" checkbox un-checks it back to no fee selected (CLIENT-SESSION-21)', async () => {
+    const user = userEvent.setup();
+    render(<CreateSessionModal {...baseProps} />);
+
+    const free = screen.getByRole('checkbox', { name: 'Free' });
+    await user.click(free);
+    expect(free).toBeChecked();
+    await user.click(free);
+    expect(free).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Split cost' })).not.toBeChecked();
+
+    const split = screen.getByRole('checkbox', { name: 'Split cost' });
+    await user.click(split);
+    expect(split).toBeChecked();
+    await user.click(split);
+    expect(split).not.toBeChecked();
   });
 
   it('a field error clears on its own once that field is filled in, without needing to resubmit', async () => {
@@ -444,7 +526,9 @@ describe('CreateSessionModal', () => {
       // Taken slot left blank -> defaults to 1 (the creator, who auto-joins) -> capacity = 1 + 10,
       // initialSlot = 1 - 1 = 0 (the creator's own auto-joined row already accounts for it).
       capacity: 11,
-      feeType: 'FREE',
+      // CLIENT-SESSION-21: no fee picked in this test -> feeType stays undefined (SESSION-24
+      // PREPARING), not the old FREE default.
+      feeType: undefined,
       feeAmountVnd: undefined,
       initialSlot: 0,
       autoApprove: false,

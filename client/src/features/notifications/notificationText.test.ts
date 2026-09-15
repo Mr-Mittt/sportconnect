@@ -69,6 +69,7 @@ describe('getNotificationText', () => {
     ['session.join_request.approved', 'Your request to join "Friday Pickup Game" was approved'],
     ['session.join_request.rejected', 'Your request to join "Friday Pickup Game" was declined'],
     ['session.invitation.created', 'Alice Nguyen invited you to join "Friday Pickup Game"'],
+    ['session.details.updated', 'Alice Nguyen updated "Friday Pickup Game"'],
     ['session.participant.left', 'Alice Nguyen left "Friday Pickup Game"'],
     ['session.status.started', '"Friday Pickup Game" has started'],
     ['user.friend_request.created', 'Alice Nguyen wants to be your friend'],
