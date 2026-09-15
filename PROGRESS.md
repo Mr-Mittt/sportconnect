@@ -4375,9 +4375,13 @@ explicit go-ahead at each step (full story in A3's summary doc):
   staying stuck once chosen (the now-unreachable "Amount is required." validation branch was
   removed rather than left dead). tsc/eslint clean; Vitest 181 files / 1333 green; e2e 83 passed
   (`matches-journey` gains a create-without-location/fee → complete → Scheduled step).
-  Visual-regression: `app-create-session-modal`/`app-session-detail-modal` baselines legitimately
-  change (pending `/updatebaseline`); every other spec's failure confirmed via stash-and-rerun as
-  the identical Windows noise floor on clean `master`.
+  Visual-regression baselines regenerated via `/updatebaseline` (2026-09-15): 9
+  `app-create-session-modal` files changed as predicted (SHA-256 verified against the committed
+  set); the other 102 came back byte-identical, confirming the local Windows noise floor was pure
+  noise. `app-session-detail-modal`'s baselines turned out correctly untouched — none of its 7
+  states render a `PREPARING` session with `canManage`, so the completion UI never appears in any
+  of them; the ticket's own doc was corrected, and `CLIENT-SESSION-23` gets a note to add that
+  visual coverage.
 - **Client CLIENT-SESSION-19 (`DONE`, 2026-09-11,
   `client/docs/MVP/CLIENT-SESSION-19_ADD_MODAL_FOR_PROFILE_DEFINITION_LIST.md`):** `DefinitionListField`'s
   "Add" (profile Settings tab, per-sport `DEFINITION_LIST` attributes) now opens the same shared

@@ -160,14 +160,27 @@ Built as scoped, items 1-6, plus the corrections above:
   as part of the full `e2e` project run (83 passed). The `ws proxy ECONNABORTED` lines in the
   output are the documented chat-websocket parallel-load noise (CLAUDE.md/CLIENT-NOTIF-3's
   precedent), not a failure.
-- **Visual-regression expectation**: `app-create-session-modal.spec.ts` and
-  `app-session-detail-modal.spec.ts` baselines legitimately change (removed required asterisks +
-  "(optional)" labels, the new Preparing banner/status color, the new completion section) —
-  expected to fail until `/updatebaseline` regenerates exactly those files. Confirmed via
+- **Visual-regression expectation**: `app-create-session-modal.spec.ts` baselines legitimately
+  change (removed required asterisks + "(optional)" labels, the new Preparing footer banner) —
+  expected to fail until `/updatebaseline` regenerates exactly those files. `app-session-detail
+  -modal.spec.ts` was *originally* predicted to change too (the new completion section, the
+  Preparing status color) — **corrected at `/updatebaseline` time**: none of that spec's 7 existing
+  states (not-joined/already-joined/invited/requested/approval-queue/discussion/cancelled) ever
+  render a `PREPARING` session with `canManage`, so `SessionPreparingCompletion` never actually
+  appears in any of them — this ticket only added Storybook/Vitest coverage for it, never a
+  `visual-regression` Playwright case. **CLIENT-SESSION-23 gets a note to add one.** Confirmed via
   stash-and-rerun: the full `visual-regression` project fails identically (111 failed) on clean
   `master` with none of this ticket's changes applied, matching the documented Windows
-  font-rendering noise floor — so every *other* baseline failing alongside these two is that same
+  font-rendering noise floor — so every baseline failing alongside `create-session-*` is that same
   noise, not a regression, and cannot be regenerated on this Windows host.
+- **Executed** (2026-09-15, `/updatebaseline`): applied the `client-ci` `update-baselines` dispatch
+  artifact. SHA-256 comparison against the committed set confirmed **exactly 9 files changed**
+  (`create-session-{default,location-chosen,session-detail-ref}-{375,768,1280}.png`), 0 new, 0
+  missing, and the other **102 baselines came back byte-identical** — confirming the local Windows
+  noise floor was pure noise, not a masked regression. Human-checked one breakpoint per changed
+  state: the "(optional)" labels and the amber Preparing banner render correctly and stay visible
+  in the scrolled `session-detail-ref` state (footer-pinned, as designed). Committed
+  `7a3f7c3` on `feature/client-session-21-preparing-warning-completion`.
 
 ---
 

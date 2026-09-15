@@ -3,7 +3,7 @@
 **Status:** `TODO`
 **Type:** Client feature
 **Depends on:** backend **SESSION-27** (`modules/session/docs/BACKLOG_MVP.md`) — hard, for the
-"Upcoming sessions"/"History" scope only (items 2-4 below). Items 1 and 5 have no backend
+"Upcoming sessions"/"History" scope only (items 2-3 below). Items 1, 4, and 5 have no backend
 dependency and can be built first if this ticket is picked up before SESSION-27 ships.
 **Filed:** 2026-09-15, user request — bundled with the SESSION-27 backend work as one client
 follow-up (user decision: keep as one ticket rather than split by dependency, unlike this repo's
@@ -69,6 +69,17 @@ session never appeared in the `UpcomingMatches` rail on Home Feed/Groups/Friends
    `CreateSessionModal.tsx` into its own file (same "extract for reuse" precedent as
    `FeeTypeFields.tsx`, CLIENT-SESSION-21) so both components share one implementation.
 
+5. **Add the `PREPARING`/completion visual-regression coverage CLIENT-SESSION-21 never got.**
+   Found at that ticket's own `/updatebaseline` run (2026-09-15): `app-session-detail-modal.spec.ts`
+   has 7 states, none of which render a `PREPARING` session with `canManage` — so
+   `SessionPreparingCompletion` and the `PREPARING` status color have **zero** Playwright
+   visual-regression coverage today, only Storybook stories + Vitest component tests. Add at least
+   one new state (creator/owner-admin view, `PREPARING`, missing-both or missing-one, per
+   `SessionPreparingCompletion.stories.tsx`'s existing fixtures) to that spec, at all 3 breakpoints.
+   Since this ticket's own item 4 already touches `SessionPreparingCompletion`
+   (`LocationFavoritesDropdown`), land this new visual case in the same PR so it isn't yet another
+   separately-dispatched baseline round.
+
 **Who:** Normal User — the Matches page and every page hosting the `UpcomingMatches` rail.
 
 **Entry point:** `/matches` page ("Upcoming sessions"/"History" sections), and
@@ -101,7 +112,9 @@ component test); `useUpcomingMatches.test.ts` update proving a `PREPARING` sessi
 `/api/sessions/upcoming`/`/api/sessions/history` (both `date` and `dateCount` shapes) replacing the
 now-removed `/api/sessions/mine` mock; `matches-journey.spec.ts` updated for the new section
 labels/structure plus a new step covering history date expand → load more → collapse;
-visual-regression baselines for the Matches page and rail will change (expected, regenerate via
+a new `app-session-detail-modal.spec.ts` state for `PREPARING`/`SessionPreparingCompletion` (item
+5 — the coverage gap CLIENT-SESSION-21 left); visual-regression baselines for the Matches page,
+the rail, and the new session-detail-modal state will all change (expected, regenerate via
 `/updatebaseline`).
 
 ---
