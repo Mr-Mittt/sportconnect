@@ -155,6 +155,18 @@ landing on the third:
 No client change — `LocationResponse.timezone` is additive and nullable; no existing consumer reads
 it yet (checked, zero references in `client/src`).
 
+## Post-ship manual backfill (2026-09-16)
+
+Exactly the "any row that needs a value can be fixed with a direct manual `UPDATE`" path this ticket
+scoped in place of an automated backfill. Checked real dev Postgres for pre-existing `Location` rows
+with coordinates but no `timezone` (created before this ticket shipped): 4 rows, all real coordinates
+in and around Da Nang/Ho Chi Minh City. Derived each one's zone the same way production does —
+via `LocationTimeZoneResolver` directly (a temporary probe test, removed immediately after, not left
+in the suite) — all 4 resolved to `Asia/Ho_Chi_Minh`, then applied via a direct `UPDATE`. Also found
+and cleaned up two leftover test rows from this ticket's own Phase 5 live-verification runs that
+weren't fully deleted the first time (`id` 11/12, "Real E2E Court") — genuine test pollution, not
+real data.
+
 ---
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
