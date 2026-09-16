@@ -290,6 +290,8 @@ CREATE TABLE IF NOT EXISTS locations (
     location GEOMETRY(Point, 4326),
     source_maps_url VARCHAR(1000),
     claimed_by_vendor_id BIGINT,
+    -- LOC-4: nullable, best-effort IANA zone id derived from lat/lng at creation (V068)
+    timezone VARCHAR(64),
     created_by UUID NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

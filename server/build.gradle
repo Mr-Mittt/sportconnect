@@ -67,7 +67,12 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
     
     // Utilities
-    implementation 'org.apache.commons:commons-lang3:3.14.0'
+    // LOC-4: bumped from 3.14.0 — location-impl's timeshape dependency needs commons-lang3 3.18.0+
+    // (SystemProperties.getUserName(String), added after 3.13.0) via its commons-compress
+    // transitive dependency. server's own explicit version here overrides both Spring Boot's BOM
+    // default and location-impl's own explicit pin in server's dependency resolution, so it needs
+    // bumping here too, not just in location-impl/build.gradle.
+    implementation 'org.apache.commons:commons-lang3:3.18.0'
     implementation 'com.google.code.gson:gson:2.10.1'
     
     // API Documentation

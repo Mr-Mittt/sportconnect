@@ -22,12 +22,14 @@ class LocationServiceImplSpec extends Specification {
     SportService sportService = Mock()
     UserSportProfileService userSportProfileService = Mock()
     GoogleMapsUrlResolver googleMapsUrlResolver = Mock()
+    LocationTimeZoneResolver locationTimeZoneResolver = Mock()
 
     @Subject
     LocationServiceImpl locationService = new LocationServiceImpl(
-            locationRepository, userFavoriteLocationRepository, sportService, userSportProfileService, googleMapsUrlResolver)
+            locationRepository, userFavoriteLocationRepository, sportService, userSportProfileService,
+            googleMapsUrlResolver, locationTimeZoneResolver)
 
-    def "createLocation saves a location with coordinates when lat/lng provided"() {
+    def "createLocation saves a location with coordinates when lat/lng provided, timezone derived"() {
         given:
         def userId = UUID.randomUUID()
         def request = CreateLocationRequest.builder()
@@ -50,8 +52,10 @@ class LocationServiceImplSpec extends Specification {
         def result = locationService.createLocation(userId, request)
 
         then:
+        1 * locationTimeZoneResolver.resolve(37.4224764d, -122.0842499d) >> Optional.of("America/Los_Angeles")
         1 * locationRepository.save({ Location loc ->
-            loc.sportId == 1L && loc.name == "Riverside Court" && loc.location != null
+            loc.sportId == 1L && loc.name == "Riverside Court" && loc.location != null &&
+                    loc.timezone == "America/Los_Angeles"
         }) >> saved
         1 * sportService.requireActiveSportById(1L) >> SportResponse.builder().id(1L).name("Basketball").isActive(true).build()
         1 * sportService.getActiveSportsByIds([1L]) >> [1L: SportResponse.builder().id(1L).name("Basketball").build()]
@@ -59,7 +63,29 @@ class LocationServiceImplSpec extends Specification {
         result.sportName == "Basketball"
     }
 
-    def "createLocation saves a location without coordinates when lat/lng omitted"() {
+    def "createLocation leaves timezone null when coordinates match no timezone polygon"() {
+        given: "coordinates in open ocean, outside every timezone boundary"
+        def userId = UUID.randomUUID()
+        def request = CreateLocationRequest.builder()
+                .sportId(1L)
+                .name("Ocean Buoy")
+                .latitude(0.0d)
+                .longitude(-140.0d)
+                .build()
+
+        def saved = Location.builder().id(12L).sportId(1L).name("Ocean Buoy").createdBy(userId).build()
+
+        when:
+        locationService.createLocation(userId, request)
+
+        then:
+        1 * locationTimeZoneResolver.resolve(0.0d, -140.0d) >> Optional.empty()
+        1 * locationRepository.save({ Location loc -> loc.location != null && loc.timezone == null }) >> saved
+        1 * sportService.requireActiveSportById(1L) >> SportResponse.builder().id(1L).name("Basketball").isActive(true).build()
+        1 * sportService.getActiveSportsByIds([1L]) >> [:]
+    }
+
+    def "createLocation saves a location without coordinates when lat/lng omitted, resolver never called"() {
         given:
         def userId = UUID.randomUUID()
         def request = CreateLocationRequest.builder()
@@ -73,7 +99,8 @@ class LocationServiceImplSpec extends Specification {
         locationService.createLocation(userId, request)
 
         then:
-        1 * locationRepository.save({ Location loc -> loc.location == null }) >> saved
+        0 * locationTimeZoneResolver._
+        1 * locationRepository.save({ Location loc -> loc.location == null && loc.timezone == null }) >> saved
         1 * sportService.requireActiveSportById(1L) >> SportResponse.builder().id(1L).name("Basketball").isActive(true).build()
         1 * sportService.getActiveSportsByIds([1L]) >> [:]
     }
@@ -99,9 +126,10 @@ class LocationServiceImplSpec extends Specification {
         thrown(ResourceNotFoundException)
     }
 
-    def "getLocation returns the location when found"() {
+    def "getLocation returns the location when found, including its derived timezone"() {
         given:
-        def location = Location.builder().id(5L).sportId(2L).name("Court").createdBy(UUID.randomUUID()).build()
+        def location = Location.builder().id(5L).sportId(2L).name("Court").createdBy(UUID.randomUUID())
+                .timezone("Asia/Ho_Chi_Minh").build()
 
         when:
         def result = locationService.getLocation(5L)
@@ -111,6 +139,7 @@ class LocationServiceImplSpec extends Specification {
         1 * sportService.getActiveSportsByIds([2L]) >> [2L: SportResponse.builder().id(2L).name("Tennis").build()]
         result.id == 5L
         result.sportName == "Tennis"
+        result.timezone == "Asia/Ho_Chi_Minh"
     }
 
     def "getLocation throws ResourceNotFoundException when missing"() {

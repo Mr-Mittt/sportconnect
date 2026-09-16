@@ -3916,6 +3916,30 @@ explicit go-ahead at each step (full story in A3's summary doc):
   and are flagged on their owning ticket rather than guessed at (location-vs-creator-zone precedence
   once a `PREPARING` session's location is attached later, migration/backfill for existing zone-less
   data, big-bang vs. incremental rollout).
+- **LOC-4 (`DONE`, 2026-09-16, `modules/location/docs/MVP/LOC-4_LOCATION_TIMEZONE.md`):** first
+  implementation ticket off SESSION-32's design — `Location` gains a real, nullable IANA `timezone`
+  (`V068`), auto-derived from `latitude`/`longitude` via `net.iakovlev:timeshape` (an offline
+  point-in-polygon lookup against the bundled timezone-boundary dataset, no network call, no API
+  key). `latitude`/`longitude` stay optional exactly as before (an earlier draft considered making
+  them required; rejected). Best-effort by design: no coordinates, or coordinates matching no
+  timezone polygon, both leave `timezone` null — never rejected, never defaulted. Verified
+  empirically (not assumed) that the bundled dataset gives full global coverage including oceans and
+  poles via nautical `Etc/GMT±N` zones and Antarctica claims, so a genuinely empty result in practice
+  only surfaces for physically invalid coordinates — corrected the ticket's original
+  "ocean/Antarctica → null" framing once tested against the real library. **Real production incident
+  during Phase 5:** `TimeZoneEngine.initialize()`'s memory cost caused `OutOfMemoryError: Java heap
+  space` across `:server:test`'s many Spring contexts when wired as a normal eager singleton bean —
+  `@Lazy` didn't help (target class is `final`, blocking CGLIB proxying; moving `@Lazy` to the
+  non-final wrapping component still didn't defer in practice for reasons not fully isolated), so
+  `LocationTimeZoneResolver` now self-manages a double-checked-locking lazy field instead of relying
+  on Spring/CGLIB laziness at all. Also had to bump `commons-lang3` to 3.18.0+ in both
+  `location-impl` and `server`'s build files — Spring Boot's BOM default (and `server`'s own
+  pre-existing explicit 3.14.0 pin) conflicted with `timeshape`'s `commons-compress` transitive
+  dependency needing a newer method. Verified live end-to-end against real dev Postgres: a real
+  `POST /api/locations` call with real Ho Chi Minh City coordinates correctly returned
+  `"timezone":"Asia/Ho_Chi_Minh"`. No client change (additive, nullable, no current consumer). Green:
+  location-impl (34 tests) + `:server:test` (231, only the 6 pre-existing SESSION-22 RabbitMQ-flake
+  failures, confirmed unrelated via isolated re-run).
 - **SESSION-29 (`TODO`, documentation only, 2026-09-15,
   `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
   `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive
