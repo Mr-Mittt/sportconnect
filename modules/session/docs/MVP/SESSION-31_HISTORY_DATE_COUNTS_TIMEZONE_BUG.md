@@ -1,6 +1,6 @@
 # SESSION-31 · `findHistoryDateCounts` misbuckets early-morning sessions onto the wrong calendar date
 
-**Status:** `TODO`
+**Status:** `SUPERSEDED` (2026-09-16)
 **Type:** Bug Fix
 **Depends on:** none
 **Filed:** 2026-09-15, found while implementing and debugging SESSION-25's own `date`/`startTime`
@@ -49,6 +49,39 @@ assumption in this module (or the wider app) is a separate, bigger conversation.
 regression coverage should use the same "genuinely cross the day boundary" fixture shape
 `SessionDiscoverIntegrationTest`'s `dateFilter_matchesAnEarlyMorningSessionOnTheCorrectCalendarDay`
 test uses, not a mid-day time that can't expose the bug.
+
+## Superseded — not shipped
+
+A JVM-offset-correction fix (matching `findDiscoverSessions`' `EXTRACT`+`MOD` pattern, adapted to a
+direct timestamp shift for this query's `GROUP BY`) was implemented, verified green on both H2 and
+real Postgres, and then **deliberately reverted before merge** — not because it didn't work, but
+because a follow-up conversation right after it landed surfaced the deeper problem it was patching
+over: `scheduledStart` carries no timezone information at all, so *any* offset correction here can
+only ever be correct for the server's own JVM zone, never a client's. Shipping the point-fix would
+have meant re-doing this same category of work again once the real fix landed, and would have left
+`session-impl` maintaining two different timezone-correction idioms (this one's timestamp shift,
+`findDiscoverSessions`' `EXTRACT`+`MOD`) at once.
+
+The full reasoning, a validated `TIMESTAMP` vs. `TIMESTAMPTZ` example against real Postgres, and the
+proposed real fix (`Location`-owned timezones, `Session.scheduledStart` as a true instant, `AT TIME
+ZONE` replacing every hand-derived offset correction in this module) live in
+**`documentation/md/LOCATION_TIMEZONE_DESIGN.md`**. That design is now split into concrete
+implementation tickets:
+
+- **LOC-4** — `Location` gains a real IANA timezone (foundational, no dependency on this ticket)
+- **SESSION-33** — `Session.scheduledStart` becomes a true instant, plus a creator-zone fallback for
+  location-less (`PREPARING`/standalone) sessions
+- **SESSION-34** — rewrites `findHistoryDateCounts` (this ticket's own query) using `AT TIME ZONE`
+  — **the actual fix this ticket was chasing**, done the durable way instead of the point-patch way
+- **SESSION-35** — rewrites `/discover`'s `date`/`startTime` filters the same way, retiring the
+  `EXTRACT`+`MOD` correction SESSION-25 introduced
+- **CLIENT-SESSION-24** — client submits an offset-aware `scheduledStart` and its own browser
+  timezone (`Intl.DateTimeFormat()`, no permission prompt needed) instead of a bare `LocalDateTime`
+
+This ticket's own diagnosis (the Hibernate write-shift mechanism, the exact early-morning failure
+mode, the regression-test shape) stays fully valid and reusable — everything above it in this file
+is still the correct description of the bug. Only the **fix** changed, from a local patch to a
+root-cause redesign.
 
 ---
 

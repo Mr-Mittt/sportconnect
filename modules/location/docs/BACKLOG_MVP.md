@@ -19,6 +19,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 1 | [LOC-4](MVP/LOC-4_LOCATION_TIMEZONE.md) | Location gains a real IANA timezone — foundation for the session-impl location-timezone redesign (see `documentation/md/LOCATION_TIMEZONE_DESIGN.md`, session `SESSION-33`/`34`/`35`) | `TODO` |
 
 ---
 

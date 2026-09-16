@@ -3882,6 +3882,40 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (27 IT cases, real H2 round trip, including dedicated regression cases for both bugs) +
   `:server:test` (full suite) + repeated live end-to-end verification against real dev Postgres as
   each bug was found and fixed, including the exact previously-wrong boundary values. No migration.
+- **SESSION-31 (`SUPERSEDED`, 2026-09-16,
+  `modules/session/docs/MVP/SESSION-31_HISTORY_DATE_COUNTS_TIMEZONE_BUG.md`):** a JVM-offset
+  correction fix for `findHistoryDateCounts` (the native query behind
+  `GET /api/sessions/history?dateCount`) was implemented and fully verified — every
+  `CAST(s.scheduled_start AS date)` shifted by `CAST(:zoneOffsetSeconds AS INTEGER) * INTERVAL '1'
+  SECOND` before truncation, `GROUP BY` switched to the `sessionDate` output alias to work around H2
+  not recognizing two separately-numbered bind placeholders for the same named parameter as the same
+  GROUP BY expression, verified against both H2 and real dev Postgres (`:server:test` 232/232) —
+  then **deliberately reverted before merge**. A follow-up discussion right after it landed asked why
+  the correction uses the *server's* JVM zone at all, surfacing that `scheduledStart` carries no
+  timezone information anywhere on the wire; rather than ship a fix that would need redoing once
+  that deeper question was resolved, the point-fix was dropped in favor of a root-cause redesign
+  (below). SESSION-31's own bug diagnosis stays fully accurate — only the fix approach changed.
+- **SESSION-32 (`DONE`, 2026-09-16,
+  `modules/session/docs/MVP/SESSION-32_LOCATION_TIMEZONE_DESIGN.md`):** the deeper-question
+  discussion above, captured as a design doc and then split into concrete tickets rather than left
+  open-ended. New cross-cutting doc `documentation/md/LOCATION_TIMEZONE_DESIGN.md`: give `Location`
+  a real IANA timezone, store `Session.scheduledStart` as a true instant (`TIMESTAMPTZ`) instead of a
+  naive `LocalDateTime`, and use two different zones for two different purposes — the **location's**
+  zone for canonical date bucketing (so a shared event has one agreed date) and the **caller's own**
+  zone for time-of-day search filters (so `/discover`'s `startTime` means the caller's own clock). A
+  location-less (`PREPARING`/standalone) session falls back to the creator's own browser zone
+  (`Intl.DateTimeFormat()`, confirmed permission-free) at creation time, captured in a new
+  `originZoneId` column. Includes a worked cross-zone example (04:00 at a UTC+7 location ≡ 05:00 for
+  a UTC+8 caller, same real instant), a `TIMESTAMP`-vs-`TIMESTAMPTZ` example verified live against
+  real Postgres, and the `AT TIME ZONE` query mechanics that replace every hand-derived
+  `zoneOffsetSeconds`/`EXTRACT`+`MOD` correction. Split into 5 tickets: **LOC-4** (location timezone
+  field), **SESSION-33** (`scheduledStart` → true instant + `originZoneId` fallback), **SESSION-34**
+  (rewrites `findHistoryDateCounts`, supersedes SESSION-31), **SESSION-35** (rewrites `/discover`'s
+  `date`/`startTime`, partially supersedes SESSION-25's correction), **CLIENT-SESSION-24** (client
+  submits offset-aware `scheduledStart` + browser zone). Several sub-decisions remain genuinely open
+  and are flagged on their owning ticket rather than guessed at (location-vs-creator-zone precedence
+  once a `PREPARING` session's location is attached later, migration/backfill for existing zone-less
+  data, big-bang vs. incremental rollout).
 - **SESSION-29 (`TODO`, documentation only, 2026-09-15,
   `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
   `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive
