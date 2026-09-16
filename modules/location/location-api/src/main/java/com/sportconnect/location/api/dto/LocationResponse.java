@@ -30,6 +30,10 @@ public class LocationResponse {
 
     private String sourceMapsUrl;
 
+    /** LOC-4 — IANA zone id derived from coordinates at creation time; null when the location has
+     * no coordinates or when they fall outside every timezone polygon. */
+    private String timezone;
+
     private Long claimedByVendorId;
 
     private UUID createdBy;

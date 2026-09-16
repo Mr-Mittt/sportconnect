@@ -18,6 +18,16 @@ dependencies {
     implementation 'org.hibernate.orm:hibernate-spatial:6.4.1.Final'
     implementation 'org.locationtech.jts:jts-core:1.19.0'
 
+    // LOC-4: offline coordinate-to-IANA-timezone lookup (bundled boundary dataset, no network
+    // call) — used only by LocationTimeZoneResolver. Explicit commons-lang3 override: Spring
+    // Boot's dependency management pins 3.13.0, but timeshape's commons-compress transitive
+    // dependency needs 3.18.0+ (SystemProperties.getUserName(String), added after 3.13.0) —
+    // without this override, Gradle's BOM-managed version silently wins over the higher version
+    // commons-compress itself requests, and TimeZoneEngine.initialize() fails with
+    // NoSuchMethodError at runtime.
+    implementation 'net.iakovlev:timeshape:2026b.29'
+    implementation 'org.apache.commons:commons-lang3:3.18.0'
+
     // OpenAPI/Swagger annotations for controller documentation — version matches what
     // server's springdoc-openapi-starter-webmvc-ui:2.3.0 resolves (verified, not guessed)
     compileOnly 'io.swagger.core.v3:swagger-annotations-jakarta:2.2.19'

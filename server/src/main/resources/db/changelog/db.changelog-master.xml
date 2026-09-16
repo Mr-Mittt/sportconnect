@@ -179,4 +179,8 @@
          serves the "my sessions"-shaped query family (discover/joined/history) -->
     <include file="db/changelog/changes/V067__add_session_participants_user_id_joined_partial_index.sql" relativeToChangelogFile="false"/>
 
+    <!-- LOC-4: locations gain a real IANA timezone, derived from coordinates at creation time —
+         nullable, best-effort, foundation for session-impl's SESSION-34/35 AT TIME ZONE queries -->
+    <include file="db/changelog/changes/V068__add_timezone_to_locations.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

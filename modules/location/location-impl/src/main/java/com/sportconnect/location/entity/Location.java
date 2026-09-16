@@ -46,6 +46,14 @@ public class Location {
     @Column(name = "source_maps_url", length = 1000)
     private String sourceMapsUrl;
 
+    /** LOC-4 — IANA zone id (e.g. {@code Asia/Ho_Chi_Minh}), derived automatically from {@code
+     * location}'s coordinates at creation time. Nullable and best-effort: null when the location
+     * has no coordinates, and also null (never rejected, never defaulted) when coordinates exist
+     * but fall outside every timezone polygon (open ocean, parts of Antarctica). No update path
+     * exists yet — see {@code location-impl/CLAUDE.md}. */
+    @Column(length = 64)
+    private String timezone;
+
     @Column(name = "claimed_by_vendor_id")
     private Long claimedByVendorId;
 

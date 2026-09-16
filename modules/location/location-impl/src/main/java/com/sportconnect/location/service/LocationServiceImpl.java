@@ -39,6 +39,7 @@ public class LocationServiceImpl implements LocationService {
     private final SportService sportService;
     private final UserSportProfileService userSportProfileService;
     private final GoogleMapsUrlResolver googleMapsUrlResolver;
+    private final LocationTimeZoneResolver locationTimeZoneResolver;
 
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
@@ -59,9 +60,15 @@ public class LocationServiceImpl implements LocationService {
                 .createdBy(userId)
                 .build();
 
+        // LOC-4: timezone is derived from coordinates when present, never manually entered.
+        // Best-effort - stays null when there are no coordinates, and also null (not rejected,
+        // not defaulted) when coordinates fall outside every timezone polygon (open ocean, parts
+        // of Antarctica) - see LocationTimeZoneResolver's Javadoc.
         if (request.getLatitude() != null && request.getLongitude() != null) {
             location.setLocation(geometryFactory.createPoint(
                     new Coordinate(request.getLongitude(), request.getLatitude())));
+            locationTimeZoneResolver.resolve(request.getLatitude(), request.getLongitude())
+                    .ifPresent(location::setTimezone);
         }
 
         Location saved = locationRepository.save(location);
@@ -195,6 +202,7 @@ public class LocationServiceImpl implements LocationService {
                 .latitude(latitude)
                 .longitude(longitude)
                 .sourceMapsUrl(location.getSourceMapsUrl())
+                .timezone(location.getTimezone())
                 .claimedByVendorId(location.getClaimedByVendorId())
                 .createdBy(location.getCreatedBy())
                 .createdAt(location.getCreatedAt())
