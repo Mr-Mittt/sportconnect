@@ -1415,12 +1415,12 @@ class SessionServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
 
         when:
-        def result = sessionService.getSessionHistoryDates(userId, 3, null)
+        def result = sessionService.getSessionHistoryDates(userId, 3, null, null)
 
         then:
         1 * sessionRepository.findHistoryDateCounts(
                 [SessionStatus.CANCELLED.name(), SessionStatus.COMPLETED.name()],
-                userId, ParticipantStatus.JOINED.name(), null, 4) >> [
+                userId, ParticipantStatus.JOINED.name(), null, "UTC", 4) >> [
                 stubDateCount(LocalDate.of(2026, 9, 14), 2L),
                 stubDateCount(LocalDate.of(2026, 9, 10), 1L)
         ]
@@ -1435,10 +1435,10 @@ class SessionServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
 
         when:
-        def result = sessionService.getSessionHistoryDates(userId, 2, null)
+        def result = sessionService.getSessionHistoryDates(userId, 2, null, null)
 
         then:
-        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, 3) >> [
+        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, _, 3) >> [
                 stubDateCount(LocalDate.of(2026, 9, 14), 2L),
                 stubDateCount(LocalDate.of(2026, 9, 10), 1L),
                 stubDateCount(LocalDate.of(2026, 9, 5), 1L)
@@ -1453,10 +1453,44 @@ class SessionServiceImplSpec extends Specification {
         def before = LocalDate.of(2026, 9, 10)
 
         when:
-        sessionService.getSessionHistoryDates(userId, 5, before)
+        sessionService.getSessionHistoryDates(userId, 5, before, null)
 
         then:
-        1 * sessionRepository.findHistoryDateCounts(_, userId, _, before, 6) >> []
+        1 * sessionRepository.findHistoryDateCounts(_, userId, _, before, _, 6) >> []
+    }
+
+    def "getSessionHistoryDates defaults to UTC when viewerZoneId is omitted"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getSessionHistoryDates(userId, 5, null, null)
+
+        then:
+        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, "UTC", _) >> []
+    }
+
+    def "getSessionHistoryDates passes a valid viewerZoneId through to the repository"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getSessionHistoryDates(userId, 5, null, "America/Los_Angeles")
+
+        then:
+        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, "America/Los_Angeles", _) >> []
+    }
+
+    def "getSessionHistoryDates rejects an invalid viewerZoneId"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getSessionHistoryDates(userId, 5, null, "Not/AZone")
+
+        then:
+        0 * sessionRepository.findHistoryDateCounts(*_)
+        thrown(BadRequestException)
     }
 
     private static SessionRepository.SessionDateCountProjection stubDateCount(LocalDate date, Long count) {

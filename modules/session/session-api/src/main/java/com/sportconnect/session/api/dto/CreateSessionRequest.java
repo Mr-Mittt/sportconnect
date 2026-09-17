@@ -47,11 +47,6 @@ public class CreateSessionRequest {
 
     private Integer durationMinutes;
 
-    /** SESSION-33: the creator's own browser zone (IANA id, e.g. {@code "Asia/Bangkok"}), used
-     * only when locationId is omitted — silently dropped by the server otherwise. Optional; not
-     * yet sent by today's client (CLIENT-SESSION-24 wires this up). */
-    private String originZoneId;
-
     @NotNull(message = "capacity is required")
     @Min(value = 0, message = "capacity must be >= 0")
     private Integer capacity;

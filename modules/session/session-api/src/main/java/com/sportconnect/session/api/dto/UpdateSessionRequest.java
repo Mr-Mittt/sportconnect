@@ -29,7 +29,7 @@ public class UpdateSessionRequest {
     private String locationNote;
 
     /** SESSION-33: offset-aware instant — see {@code CreateSessionRequest.scheduledStart}'s
-     * Javadoc. No corresponding originZoneId field here — it's immutable once set at creation. */
+     * Javadoc. */
     private Instant scheduledStart;
 
     private Integer durationMinutes;

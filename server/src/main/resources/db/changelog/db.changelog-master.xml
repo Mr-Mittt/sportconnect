@@ -188,4 +188,9 @@
          location-less session's creator-zone fallback -->
     <include file="db/changelog/changes/V069__scheduled_start_true_instant.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-34 (scope correction): drops origin_zone_id (V069) — GET /history?dateCount now
+         buckets by the caller's own current viewerZoneId, falling back to UTC, never a per-session
+         stored zone. No consumer ever read this column in production. -->
+    <include file="db/changelog/changes/V070__drop_origin_zone_id.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

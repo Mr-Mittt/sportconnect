@@ -61,11 +61,10 @@ public class SessionGenerationService {
     /**
      * SESSION-33: {@code computeNextOccurrence} returns a wall-clock value with no zone attached —
      * every auto-generated session has a real {@code recurrenceLocationId} ({@link
-     * #hasCompleteRecurrenceRule} requires it, so this path never needs an {@code originZoneId}
-     * fallback), so that location's own timezone is the correct zone to interpret it in. Falls
-     * back to the JVM's zone only when the location itself has no timezone (LOC-4: best-effort,
-     * nullable). Locations are batch-resolved once per run across every config — never one lookup
-     * per config — per CLAUDE.md's no-N+1 rule.
+     * #hasCompleteRecurrenceRule} requires it), so that location's own timezone is the correct zone
+     * to interpret it in. Falls back to the JVM's zone only when the location itself has no
+     * timezone (LOC-4: best-effort, nullable). Locations are batch-resolved once per run across
+     * every config — never one lookup per config — per CLAUDE.md's no-N+1 rule.
      */
     @Transactional
     public void generateUpcomingSessions() {

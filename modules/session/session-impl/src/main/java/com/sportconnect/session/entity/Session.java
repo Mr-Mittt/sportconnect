@@ -83,15 +83,6 @@ public class Session {
     @Column(name = "scheduled_end_at")
     private Instant scheduledEndAt;
 
-    /** SESSION-33 — the creator's own browser zone (IANA id), captured only when this session had
-     * no {@code locationId} yet at creation (PREPARING/standalone) — never set for a session
-     * created with a real location. Once set, it stays authoritative forever for calendar-date
-     * bucketing ({@code COALESCE(origin_zone_id, location.timezone)}, SESSION-34), even after a
-     * real {@code Location} is attached later via {@code updateSession} — a location is only
-     * canonical for a session that had one from day one. */
-    @Column(name = "origin_zone_id", length = 64)
-    private String originZoneId;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

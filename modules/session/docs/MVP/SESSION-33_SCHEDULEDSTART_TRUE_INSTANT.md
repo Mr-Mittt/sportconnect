@@ -132,6 +132,23 @@ No client change in this ticket — `client/src/features/session/**` still sends
 offset-less `scheduledStart` string, which will now fail 400 on create/update until
 CLIENT-SESSION-24 ships. Accepted, per this ticket's own "intentional, non-additive contract break."
 
+## Delta (2026-09-17, mid-SESSION-34 — reverses part of "What was built" above)
+
+`originZoneId` (`Session.originZoneId`, `CreateSessionRequest.originZoneId`, the `origin_zone_id`
+column) was **fully removed** by SESSION-34 (new migration `V070`, since this ticket's own `V069`
+had already merged and can't be edited retroactively). It was introduced here as a fallback source
+for `/history?dateCount`'s calendar-date bucketing — its *only* ever consumer, by design (see this
+file's "Resolved" section above). Mid-SESSION-34, that whole design was replaced: a personal history
+view is caller-relative the same way `/discover` is (a date pinned to somewhere the viewer no longer
+is can show a completed session as "in the future" relative to the viewer's own current clock), so
+`/history?dateCount` now buckets by a caller-supplied `viewerZoneId` (falling back to `"UTC"`, never
+to a per-session stored zone). With that change, `originZoneId` had zero remaining consumers
+anywhere in the codebase (confirmed via a full-codebase grep before removing it) — a write-only
+column capturing a value nothing ever read. No client ever sent it (`CLIENT-SESSION-24` hadn't
+shipped), so removing `CreateSessionRequest.originZoneId` broke no real consumer. Everything else in
+this ticket's "What was built" — the `TIMESTAMPTZ` migration, the `Instant` type change, the
+backfill, the contract break on `scheduledStart`'s offset — stays exactly as shipped and accurate.
+
 ---
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

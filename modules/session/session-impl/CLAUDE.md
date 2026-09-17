@@ -226,4 +226,30 @@ ownership-only), so there's nothing this module needs to wrap.
   when a genuine time-of-day-regardless-of-date comparison is unavoidable, `EXTRACT` combined with
   a `MOD`-based correction using the JVM's current zone offset (see `findDiscoverSessions`'s
   `startTimeBeforeOrEqual`/`startTimeAfterOrEqual` clauses) — never a bare `CAST`/`EXTRACT` result
-  compared directly.
+  compared directly. **Historical as of SESSION-33/34:** `scheduled_start` is now `TIMESTAMPTZ`, not
+  the naive, implicitly-JVM-shifted `LocalDateTime` this bullet describes, and `findHistoryDateCounts`
+  now buckets correctly via an explicit `AT TIME ZONE` conversion (SESSION-34) — this bullet stays
+  for historical context and because the write-side shift it describes could resurface if a future
+  `LocalDateTime`-mapped column reintroduces the same pattern.
+- **H2's `CAST(timestamptz AS timestamp/date)` re-normalizes through the JDBC session's own default
+  zone instead of preserving `AT TIME ZONE`-shifted wall-clock fields the way real Postgres does —
+  confirmed empirically (SESSION-34), not documented behavior.** `AT TIME ZONE` itself computes the
+  correct shifted value in H2 2.2.224 (`MODE=PostgreSQL`); only the subsequent narrowing cast to a
+  zone-less type silently discards it and re-derives the date/time through the session zone instead,
+  producing a *different, wrong* result than the same expression against real Postgres — this
+  doesn't throw, so a test only against H2 can pass while being wrong on Postgres, or (as found
+  here) fail on H2 while the underlying SQL is already correct on Postgres. Route through
+  `TO_CHAR(x AT TIME ZONE zone, 'YYYY-MM-DD')` (or the equivalent format string for a time
+  component) and cast *that* text result, never a direct `CAST(x AT TIME ZONE zone AS date/timestamp)`
+  — verified to produce identical, correct output on both engines (see `SessionRepository
+  .findHistoryDateCounts`'s Javadoc for the full empirical trail). Relevant to SESSION-35 too, which
+  will add its own `AT TIME ZONE` usage.
+- **A second, narrower H2 quirk found in the same query (SESSION-34): `GROUP BY` on a repeated
+  `CAST(TO_CHAR(x AT TIME ZONE :param, ...))` expression can fail with `Column "..." must be in the
+  GROUP BY list` — through Hibernate specifically, not reproducible via a hand-written JDBC
+  `PreparedStatement` sending the byte-identical SQL text (isolated to Hibernate's native-query
+  execution path; root cause not fully isolated). The fix: `GROUP BY 1` (ordinal position of the
+  `SELECT` list column) instead of repeating the expression — sidesteps expression-equivalence
+  checking entirely, verified correct on both H2 and real Postgres. If a future query needs to
+  `GROUP BY` a bind-parameter-containing expression, reach for ordinal `GROUP BY` first rather than
+  re-debugging this from scratch.
