@@ -2,6 +2,8 @@ package com.sportconnect.session.service;
 
 import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
 import com.sportconnect.group.api.service.GroupService;
+import com.sportconnect.location.api.dto.LocationResponse;
+import com.sportconnect.location.api.service.LocationService;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.api.event.SessionStatusStartedEvent;
@@ -21,11 +23,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -47,27 +53,46 @@ public class SessionGenerationService {
 
     private final SessionRepository sessionRepository;
     private final GroupService groupService;
+    private final LocationService locationService;
     private final SessionOutboxEventRepository sessionOutboxEventRepository;
     private final SessionOutboxWriter sessionOutboxWriter;
     private final CommentService commentService;
 
+    /**
+     * SESSION-33: {@code computeNextOccurrence} returns a wall-clock value with no zone attached —
+     * every auto-generated session has a real {@code recurrenceLocationId} ({@link
+     * #hasCompleteRecurrenceRule} requires it, so this path never needs an {@code originZoneId}
+     * fallback), so that location's own timezone is the correct zone to interpret it in. Falls
+     * back to the JVM's zone only when the location itself has no timezone (LOC-4: best-effort,
+     * nullable). Locations are batch-resolved once per run across every config — never one lookup
+     * per config — per CLAUDE.md's no-N+1 rule.
+     */
     @Transactional
     public void generateUpcomingSessions() {
         List<GroupRecurrenceConfigResponse> configs = groupService.getGroupsWithAutoGenerateSessionsEnabled();
+        List<Long> locationIds = configs.stream()
+                .map(GroupRecurrenceConfigResponse::getRecurrenceLocationId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, LocationResponse> locationsById = locationService.getLocationsByIds(locationIds);
+
         for (GroupRecurrenceConfigResponse config : configs) {
             if (!hasCompleteRecurrenceRule(config)) {
                 log.debug("Skipping group {} — incomplete recurrence rule", config.getGroupId());
                 continue;
             }
 
-            LocalDateTime nextOccurrence = computeNextOccurrence(config.getRecurrenceDayOfWeek(), config.getRecurrenceTime());
+            LocalDateTime nextOccurrenceLocal = computeNextOccurrence(config.getRecurrenceDayOfWeek(), config.getRecurrenceTime());
+            ZoneId zone = resolveZone(locationsById.get(config.getRecurrenceLocationId()));
+            Instant nextOccurrence = nextOccurrenceLocal.atZone(zone).toInstant();
 
             if (sessionRepository.existsByGroupIdAndScheduledStart(config.getGroupId(), nextOccurrence)) {
                 continue;
             }
 
-            LocalDateTime scheduledEndAt = config.getRecurrenceDurationMinutes() != null
-                    ? nextOccurrence.plusMinutes(config.getRecurrenceDurationMinutes())
+            Instant scheduledEndAt = config.getRecurrenceDurationMinutes() != null
+                    ? nextOccurrence.plusSeconds(config.getRecurrenceDurationMinutes() * 60L)
                     : null;
 
             Session session = Session.builder()
@@ -93,6 +118,16 @@ public class SessionGenerationService {
         }
     }
 
+    /** Falls back to the JVM's own zone when the location carries no timezone (LOC-4: best-effort,
+     * nullable) or doesn't resolve at all (a race with the location being deleted — shouldn't
+     * happen, no delete path exists yet, but never worth failing job execution over). */
+    private ZoneId resolveZone(LocationResponse location) {
+        if (location == null || location.getTimezone() == null) {
+            return ZoneId.systemDefault();
+        }
+        return ZoneId.of(location.getTimezone());
+    }
+
     /** SCHEDULED → ONGOING once scheduledStart arrives (only for sessions with a scheduledEndAt
      * — see {@link SessionRepository#findSessionsToStart}). SESSION-18: also writes one
      * {@code session.status.started} outbox row per started session, in the same transaction — no
@@ -100,7 +135,7 @@ public class SessionGenerationService {
      * carries no {@code actorId}, unlike every other session event. */
     @Transactional
     public void startOngoingSessions() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         Pageable pageable = PageRequest.of(0, START_BATCH_SIZE);
         Slice<Session> batch;
         do {
@@ -142,7 +177,7 @@ public class SessionGenerationService {
     /** SCHEDULED or ONGOING → COMPLETED once the session's effective end has passed. */
     @Transactional
     public void closePastSessions() {
-        LocalDateTime cutoff = LocalDateTime.now();
+        Instant cutoff = Instant.now();
         Pageable pageable = PageRequest.of(0, CLOSE_BATCH_SIZE);
         List<SessionStatus> openStatuses = List.of(SessionStatus.SCHEDULED, SessionStatus.ONGOING);
         Slice<Session> batch;
@@ -167,7 +202,7 @@ public class SessionGenerationService {
      * documentation/md/NOTIFICATION_USE_CASES.md rather than decided here. */
     @Transactional
     public void cancelUnpreparedSessions() {
-        LocalDateTime cutoff = LocalDateTime.now();
+        Instant cutoff = Instant.now();
         Pageable pageable = PageRequest.of(0, CANCEL_UNPREPARED_BATCH_SIZE);
         Slice<Session> batch;
         do {

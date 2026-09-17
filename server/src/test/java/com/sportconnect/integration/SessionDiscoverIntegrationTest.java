@@ -20,7 +20,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -141,7 +143,7 @@ class SessionDiscoverIntegrationTest extends BaseIT {
                 .createdBy(creatorId)
                 .sportId(sportId)
                 .locationId(1L)
-                .scheduledStart(LocalDateTime.now().plusDays(1))
+                .scheduledStart(instant(LocalDateTime.now().plusDays(1)))
                 .status(SessionStatus.SCHEDULED)
                 .capacity(10)
                 .feeType(FeeType.FREE)
@@ -151,6 +153,14 @@ class SessionDiscoverIntegrationTest extends BaseIT {
 
     private Long save(Session.SessionBuilder builder) {
         return sessionRepository.save(builder.build()).getId();
+    }
+
+    /** SESSION-33: scheduledStart is now Instant — this fixture still builds wall-clock values
+     * via LocalDateTime for readability (.withHour/.withMinute chains, .toLocalDate() for the
+     * date param), converting only at the point of setting the entity field. Uses the JVM's own
+     * zone, matching SessionServiceImpl.discoverSessions' placeholder date-bucketing zone. */
+    private static Instant instant(LocalDateTime localDateTime) {
+        return localDateTime.atZone(ZoneId.systemDefault()).toInstant();
     }
 
     private void participate(Long sessionId, UUID userId, ParticipantStatus status) {
@@ -234,8 +244,8 @@ class SessionDiscoverIntegrationTest extends BaseIT {
 
     @Test
     void defaultLowerBound_excludesAPastSessionWhenNeitherDateNorStartTimeFilterGiven() throws Exception {
-        save(sessionBuilder().scheduledStart(LocalDateTime.now().minusDays(1)));
-        Long futureId = save(sessionBuilder().scheduledStart(LocalDateTime.now().plusDays(1)));
+        save(sessionBuilder().scheduledStart(instant(LocalDateTime.now().minusDays(1))));
+        Long futureId = save(sessionBuilder().scheduledStart(instant(LocalDateTime.now().plusDays(1))));
 
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover"))
@@ -247,7 +257,7 @@ class SessionDiscoverIntegrationTest extends BaseIT {
     @Test
     void dateFilter_optsOutOfTheNowLowerBoundSoAPastDateStillMatches() throws Exception {
         LocalDateTime pastDay = LocalDateTime.now().minusDays(10).withHour(10).withMinute(0);
-        Long pastId = save(sessionBuilder().scheduledStart(pastDay));
+        Long pastId = save(sessionBuilder().scheduledStart(instant(pastDay)));
 
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover")
@@ -268,7 +278,7 @@ class SessionDiscoverIntegrationTest extends BaseIT {
     @Test
     void dateFilter_matchesAnEarlyMorningSessionOnTheCorrectCalendarDay() throws Exception {
         LocalDateTime earlyMorning = LocalDateTime.now().plusDays(3).withHour(3).withMinute(0);
-        Long earlyMorningId = save(sessionBuilder().scheduledStart(earlyMorning));
+        Long earlyMorningId = save(sessionBuilder().scheduledStart(instant(earlyMorning)));
 
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover")
@@ -368,8 +378,8 @@ class SessionDiscoverIntegrationTest extends BaseIT {
     @Test
     void startTimeFilter_afterOrEqual_matchesOnlyTimeOfDayAtOrAfterGivenTimeRegardlessOfDate() throws Exception {
         Long eveningId = save(sessionBuilder()
-                .scheduledStart(LocalDateTime.now().plusDays(1).withHour(18).withMinute(0)));
-        save(sessionBuilder().scheduledStart(LocalDateTime.now().plusDays(2).withHour(9).withMinute(0)));
+                .scheduledStart(instant(LocalDateTime.now().plusDays(1).withHour(18).withMinute(0))));
+        save(sessionBuilder().scheduledStart(instant(LocalDateTime.now().plusDays(2).withHour(9).withMinute(0))));
 
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover")
@@ -381,9 +391,9 @@ class SessionDiscoverIntegrationTest extends BaseIT {
 
     @Test
     void startTimeFilter_beforeOrEqual_matchesOnlyTimeOfDayAtOrBeforeGivenTime() throws Exception {
-        save(sessionBuilder().scheduledStart(LocalDateTime.now().plusDays(1).withHour(18).withMinute(0)));
+        save(sessionBuilder().scheduledStart(instant(LocalDateTime.now().plusDays(1).withHour(18).withMinute(0))));
         Long morningId = save(sessionBuilder()
-                .scheduledStart(LocalDateTime.now().plusDays(2).withHour(9).withMinute(0)));
+                .scheduledStart(instant(LocalDateTime.now().plusDays(2).withHour(9).withMinute(0))));
 
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover")
@@ -396,7 +406,7 @@ class SessionDiscoverIntegrationTest extends BaseIT {
     @Test
     void startTimeFilter_optsOutOfTheNowLowerBoundJustLikeDateDoes() throws Exception {
         LocalDateTime pastEvening = LocalDateTime.now().minusDays(5).withHour(18).withMinute(0);
-        Long pastId = save(sessionBuilder().scheduledStart(pastEvening));
+        Long pastId = save(sessionBuilder().scheduledStart(instant(pastEvening)));
 
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover")
@@ -415,7 +425,7 @@ class SessionDiscoverIntegrationTest extends BaseIT {
     @Test
     void startTimeFilter_afterOrEqual_matchesAtExactlyMidnight() throws Exception {
         Long eveningId = save(sessionBuilder()
-                .scheduledStart(LocalDateTime.now().plusDays(1).withHour(18).withMinute(0)));
+                .scheduledStart(instant(LocalDateTime.now().plusDays(1).withHour(18).withMinute(0))));
 
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover")
@@ -459,8 +469,8 @@ class SessionDiscoverIntegrationTest extends BaseIT {
 
     @Test
     void sort_ordersByScheduledStartAscendingPrimarily() throws Exception {
-        LocalDateTime start = LocalDateTime.now().plusDays(1);
-        Long laterId = save(sessionBuilder().scheduledStart(start.plusHours(2)));
+        Instant start = instant(LocalDateTime.now().plusDays(1));
+        Long laterId = save(sessionBuilder().scheduledStart(start.plusSeconds(2 * 3600)));
         Long earlierId = save(sessionBuilder().scheduledStart(start));
 
         authenticateAs(callerId);
@@ -473,7 +483,7 @@ class SessionDiscoverIntegrationTest extends BaseIT {
 
     @Test
     void sort_onATiedScheduledStartOrdersByRemainingOpenSlotsAscending() throws Exception {
-        LocalDateTime tiedStart = LocalDateTime.now().plusDays(1).withNano(0);
+        Instant tiedStart = instant(LocalDateTime.now().plusDays(1).withNano(0));
         // Same scheduledStart, different capacity -> different openSlots (10 vs 3).
         Long moreOpenId = save(sessionBuilder().scheduledStart(tiedStart).capacity(10));
         Long fewerOpenId = save(sessionBuilder().scheduledStart(tiedStart).capacity(3));
@@ -492,7 +502,7 @@ class SessionDiscoverIntegrationTest extends BaseIT {
         // caller-settable), so proving this tiebreak needs two genuinely sequential inserts with a
         // real clock gap between them rather than a constructed value — the small sleep is
         // deliberate, not incidental.
-        LocalDateTime tiedStart = LocalDateTime.now().plusDays(1).withNano(0);
+        Instant tiedStart = instant(LocalDateTime.now().plusDays(1).withNano(0));
         Long firstCreatedId = save(sessionBuilder().scheduledStart(tiedStart).capacity(10));
         Thread.sleep(20);
         Long secondCreatedId = save(sessionBuilder().scheduledStart(tiedStart).capacity(10));

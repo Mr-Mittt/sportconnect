@@ -8,7 +8,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -38,10 +38,19 @@ public class CreateSessionRequest {
     @Size(max = 500, message = "locationNote must not exceed 500 characters")
     private String locationNote;
 
+    /** SESSION-33: offset-aware instant, e.g. {@code "2026-09-20T07:00:00+07:00"} — Jackson
+     * rejects an offset-less string with a 400, an intentional, non-additive contract break (see
+     * documentation/md/LOCATION_TIMEZONE_DESIGN.md). Not reinterpreted through locationId's
+     * timezone in any way; stored exactly as the UTC instant this offset implies. */
     @NotNull(message = "scheduledStart is required")
-    private LocalDateTime scheduledStart;
+    private Instant scheduledStart;
 
     private Integer durationMinutes;
+
+    /** SESSION-33: the creator's own browser zone (IANA id, e.g. {@code "Asia/Bangkok"}), used
+     * only when locationId is omitted — silently dropped by the server otherwise. Optional; not
+     * yet sent by today's client (CLIENT-SESSION-24 wires this up). */
+    private String originZoneId;
 
     @NotNull(message = "capacity is required")
     @Min(value = 0, message = "capacity must be >= 0")

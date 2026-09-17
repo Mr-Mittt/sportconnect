@@ -22,6 +22,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -77,10 +78,19 @@ public class Session {
     private String locationNote;
 
     @Column(name = "scheduled_start", nullable = false)
-    private LocalDateTime scheduledStart;
+    private Instant scheduledStart;
 
     @Column(name = "scheduled_end_at")
-    private LocalDateTime scheduledEndAt;
+    private Instant scheduledEndAt;
+
+    /** SESSION-33 — the creator's own browser zone (IANA id), captured only when this session had
+     * no {@code locationId} yet at creation (PREPARING/standalone) — never set for a session
+     * created with a real location. Once set, it stays authoritative forever for calendar-date
+     * bucketing ({@code COALESCE(origin_zone_id, location.timezone)}, SESSION-34), even after a
+     * real {@code Location} is attached later via {@code updateSession} — a location is only
+     * canonical for a session that had one from day one. */
+    @Column(name = "origin_zone_id", length = 64)
+    private String originZoneId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

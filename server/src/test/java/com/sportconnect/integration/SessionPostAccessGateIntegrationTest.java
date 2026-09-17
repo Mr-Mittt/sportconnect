@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -160,7 +160,7 @@ class SessionPostAccessGateIntegrationTest extends RedisBaseIT {
                 .createdBy(creatorId)
                 .sportId(1L)
                 .locationId(1L)
-                .scheduledStart(LocalDateTime.now().plusDays(1))
+                .scheduledStart(Instant.now().plusSeconds(86400))
                 .status(SessionStatus.SCHEDULED)
                 .capacity(9999)
                 .feeType(FeeType.FREE)

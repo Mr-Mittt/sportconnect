@@ -53,8 +53,9 @@ import spock.lang.Specification
 import spock.lang.Subject
 
 import java.time.LocalDate
-import java.time.LocalDateTime
+import java.time.Instant
 import java.time.LocalTime
+import java.time.ZoneId
 
 class SessionServiceImplSpec extends Specification {
 
@@ -115,7 +116,7 @@ class SessionServiceImplSpec extends Specification {
                 .sportId(1L)
                 .locationId(1L)
                 .locationNote("Court 3")
-                .scheduledStart(LocalDateTime.now().plusDays(1))
+                .scheduledStart(Instant.now().plusSeconds(86400))
                 .build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).locationId(1L).locationNote("Court 3").scheduledStart(request.scheduledStart)
@@ -137,7 +138,7 @@ class SessionServiceImplSpec extends Specification {
 
     def "createSession rejects a standalone session without a sportId"() {
         given:
-        def request = CreateSessionRequest.builder().locationId(1L).scheduledStart(LocalDateTime.now()).build()
+        def request = CreateSessionRequest.builder().locationId(1L).scheduledStart(Instant.now()).build()
 
         when:
         sessionService.createSession(UUID.randomUUID(), request)
@@ -151,7 +152,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .groupId(5L).locationId(1L).scheduledStart(LocalDateTime.now()).build()
+                .groupId(5L).locationId(1L).scheduledStart(Instant.now()).build()
 
         when:
         sessionService.createSession(userId, request)
@@ -166,7 +167,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .groupId(5L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+                .groupId(5L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def group = GroupResponse.builder().id(5L).sportId(1L).build()
         def saved = Session.builder().id(2L).groupId(5L).sessionType(SessionType.GROUP_RECURRING)
                 .createdBy(userId).sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
@@ -188,7 +189,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.SCHEDULED).build()
 
@@ -209,7 +210,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .groupId(5L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+                .groupId(5L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def group = GroupResponse.builder().id(5L).sportId(1L).build()
         def saved = Session.builder().id(2L).groupId(5L).sessionType(SessionType.GROUP_RECURRING)
                 .createdBy(userId).sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
@@ -233,7 +234,7 @@ class SessionServiceImplSpec extends Specification {
         def inviteeA = UUID.randomUUID()
         def inviteeB = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .inviteeIds([inviteeA, inviteeB, inviteeA, userId])
                 .build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -262,7 +263,7 @@ class SessionServiceImplSpec extends Specification {
         def inviteeA = UUID.randomUUID()
         def inviteeB = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .inviteeIds([inviteeA, inviteeB])
                 .build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -286,7 +287,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
 
         when:
         sessionService.createSession(userId, request)
@@ -306,7 +307,7 @@ class SessionServiceImplSpec extends Specification {
         given: "a group session with no sportId on the request, so it inherits the group's"
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .groupId(5L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+                .groupId(5L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def group = GroupResponse.builder().id(5L).sportId(1L).build()
         def saved = Session.builder().id(3L).groupId(5L).sessionType(SessionType.GROUP_RECURRING)
                 .createdBy(userId).sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
@@ -330,7 +331,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(2L).scheduledStart(LocalDateTime.now()).build()
+                .sportId(1L).locationId(2L).scheduledStart(Instant.now()).build()
 
         when:
         sessionService.createSession(userId, request)
@@ -358,7 +359,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .attributes(["match/note": "bring water", "match/unknown": "x"])
                 .build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -380,7 +381,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.SCHEDULED).build()
 
@@ -398,7 +399,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .attributes(["match/note": "x" * 5000])
                 .build()
 
@@ -416,7 +417,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
                 .attributes(["match/note": "old", "match/gone": "y"]).build()
         def request = UpdateSessionRequest.builder().attributes(["match/note": "new"]).build()
 
@@ -434,7 +435,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
                 .attributes(["match/note": "keep"]).build()
         def request = UpdateSessionRequest.builder().title("New title").build()
 
@@ -452,7 +453,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
                 .attributes(["match/note": "old"]).build()
         def request = UpdateSessionRequest.builder().attributes([:]).build()
 
@@ -483,7 +484,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED).build()
+                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED).build()
         def request = UpdateSessionRequest.builder().title("New title").build()
 
         when:
@@ -1231,7 +1232,9 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
                 ParticipantStatus.JOINED, null, null, null, null, null,
-                date.atStartOfDay(), date.plusDays(1).atStartOfDay(), null, null, null, null, pageable) >> new PageImpl([])
+                date.atStartOfDay(ZoneId.systemDefault()).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(),
+                null, null, null, null, pageable) >> new PageImpl([])
     }
 
     def "discoverSessions maps startTimeFilter AFTER_OR_EQUAL to the startTimeAfterOrEqual param, opts out of the now() lower bound, and passes a non-null zoneOffsetSeconds"() {
@@ -1364,7 +1367,8 @@ class SessionServiceImplSpec extends Specification {
                 userId,
                 [ParticipantStatus.JOINED, ParticipantStatus.INVITED],
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                date.atStartOfDay(), date.plusDays(1).atStartOfDay(),
+                date.atStartOfDay(ZoneId.systemDefault()).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(),
                 pageable) >> new PageImpl([])
         0 * sessionRepository.findUpcomingSessions(*_)
     }
@@ -1382,7 +1386,8 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findHistorySessionsByDate(
                 [SessionStatus.CANCELLED, SessionStatus.COMPLETED],
                 userId, ParticipantStatus.JOINED,
-                date.atStartOfDay(), date.plusDays(1).atStartOfDay(),
+                date.atStartOfDay(ZoneId.systemDefault()).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(),
                 pageable) >> new PageImpl([])
     }
 
@@ -1465,7 +1470,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(12).feeType(FeeType.FIXED).feeAmountVnd(50000L)
                 .build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -1489,7 +1494,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession rejects FIXED feeType with no feeAmountVnd"() {
         given:
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now())
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now())
                 .capacity(10).feeType(FeeType.FIXED).build()
 
         when:
@@ -1505,7 +1510,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(10).feeType(FeeType.FREE).feeAmountVnd(99999L)
                 .build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -1525,7 +1530,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(7).feeType(FeeType.FREE).initialSlot(2)
                 .build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -1546,7 +1551,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(7).feeType(FeeType.FREE).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
@@ -1565,7 +1570,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(7).feeType(FeeType.FREE).initialSlot(2)
                 .build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -1593,7 +1598,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
                 .capacity(10).feeType(FeeType.FREE).initialSlot(0).build()
         def request = UpdateSessionRequest.builder().initialSlot(5).build()
 
@@ -1610,7 +1615,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
                 .capacity(10).feeType(FeeType.FREE).build()
         def request = UpdateSessionRequest.builder().capacity(20).build()
 
@@ -1629,7 +1634,7 @@ class SessionServiceImplSpec extends Specification {
         // SESSION-24: feeType is only changeable while PREPARING — moved off SCHEDULED so this
         // still reaches resolveFeeAmountVnd's own validation rather than the new PREPARING gate.
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.PREPARING)
+                .scheduledStart(Instant.now()).status(SessionStatus.PREPARING)
                 .capacity(10).feeType(FeeType.FREE).build()
         def request = UpdateSessionRequest.builder().feeType(FeeType.FIXED).build()
 
@@ -1648,7 +1653,7 @@ class SessionServiceImplSpec extends Specification {
         // SESSION-24: feeType is only changeable while PREPARING — moved off SCHEDULED (this
         // scenario is no longer reachable there at all, see the rejection test right below).
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.PREPARING)
+                .scheduledStart(Instant.now()).status(SessionStatus.PREPARING)
                 .capacity(10).feeType(FeeType.FIXED).feeAmountVnd(30000L).build()
         def request = UpdateSessionRequest.builder().feeType(FeeType.SPLIT).build()
 
@@ -1666,7 +1671,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
                 .capacity(10).feeType(FeeType.FIXED).feeAmountVnd(30000L).build()
         def request = UpdateSessionRequest.builder().feeType(FeeType.SPLIT).build()
 
@@ -1683,7 +1688,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
                 .capacity(10).feeType(FeeType.FREE).build()
         def request = UpdateSessionRequest.builder().locationId(2L).build()
 
@@ -1703,7 +1708,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(10).feeType(FeeType.FREE).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.PREPARING).build()
@@ -1722,7 +1727,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(10).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
@@ -1742,7 +1747,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).capacity(10).build()
+                .sportId(1L).scheduledStart(Instant.now().plusSeconds(86400)).capacity(10).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.PREPARING).build()
 
@@ -1762,7 +1767,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .sportId(1L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1))
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(10).feeType(FeeType.FREE).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
@@ -1785,7 +1790,7 @@ class SessionServiceImplSpec extends Specification {
         // applies when the builder method is never called at all; a genuinely-missing feeType
         // (as a real PREPARING session would have) requires calling it with null.
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).feeType(null)
-                .scheduledStart(LocalDateTime.now().plusDays(1)).status(SessionStatus.PREPARING)
+                .scheduledStart(Instant.now().plusSeconds(86400)).status(SessionStatus.PREPARING)
                 .capacity(10).build()
         def request = UpdateSessionRequest.builder().locationId(1L).feeType(FeeType.FREE).build()
 
@@ -1807,7 +1812,7 @@ class SessionServiceImplSpec extends Specification {
         // .feeType(null) explicitly — see the comment in the sibling "flips PREPARING to
         // SCHEDULED" test above for why omitting the builder call entirely is wrong here.
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).feeType(null)
-                .scheduledStart(LocalDateTime.now().plusDays(1)).status(SessionStatus.PREPARING)
+                .scheduledStart(Instant.now().plusSeconds(86400)).status(SessionStatus.PREPARING)
                 .capacity(10).build()
         def request = UpdateSessionRequest.builder().locationId(1L).build()
 
@@ -1826,7 +1831,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
                 .capacity(10).feeType(FeeType.FREE).build()
         def request = UpdateSessionRequest.builder().title("New title").build()
 
@@ -1847,7 +1852,7 @@ class SessionServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
                 .sportId(1L).locationId(1L).title("Sunday badminton")
-                .scheduledStart(LocalDateTime.now().plusDays(1)).build()
+                .scheduledStart(Instant.now().plusSeconds(86400)).build()
 
         when:
         sessionService.createSession(userId, request)
@@ -1863,7 +1868,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
-                .groupId(5L).locationId(1L).scheduledStart(LocalDateTime.now().plusDays(1)).build()
+                .groupId(5L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def group = GroupResponse.builder().id(5L).sportId(1L).build()
 
         when:
@@ -2146,7 +2151,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).postId(999L).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
                 .capacity(10).feeType(FeeType.FREE).initialSlot(0).build()
 
         when:
@@ -2170,7 +2175,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).postId(999L).sportId(1L).locationId(1L)
-                .scheduledStart(LocalDateTime.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
                 .capacity(10).feeType(FeeType.FREE).initialSlot(0).build()
 
         when:

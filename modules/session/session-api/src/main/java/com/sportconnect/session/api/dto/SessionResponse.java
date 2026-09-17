@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -45,9 +46,11 @@ public class SessionResponse {
 
     private String locationNote;
 
-    private LocalDateTime scheduledStart;
+    /** SESSION-33: a raw UTC instant, e.g. {@code "2026-09-20T00:00:00Z"} — no timezone
+     * information is or needs to be attached; every client renders it in its own local zone. */
+    private Instant scheduledStart;
 
-    private LocalDateTime scheduledEndAt;
+    private Instant scheduledEndAt;
 
     private SessionStatus status;
 
