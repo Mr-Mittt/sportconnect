@@ -3940,6 +3940,28 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `"timezone":"Asia/Ho_Chi_Minh"`. No client change (additive, nullable, no current consumer). Green:
   location-impl (34 tests) + `:server:test` (231, only the 6 pre-existing SESSION-22 RabbitMQ-flake
   failures, confirmed unrelated via isolated re-run).
+- **SESSION-33 (`DONE`, 2026-09-17,
+  `modules/session/docs/MVP/SESSION-33_SCHEDULEDSTART_TRUE_INSTANT.md`):** second implementation
+  ticket off SESSION-32's design — `Session.scheduledStart`/`scheduledEndAt` become `Instant`/
+  `TIMESTAMPTZ` (`V069`) instead of a naive `LocalDateTime`; new nullable `originZoneId`, captured
+  only for a session created with no `locationId` yet. Two user decisions resolve SESSION-32's open
+  precedence question: `originZoneId` **stays pinned forever** once captured — a location attached
+  later via `updateSession` never overrides it for `/history?dateCount`'s calendar-date bucketing
+  (SESSION-34's future `COALESCE(origin_zone_id, location.timezone)`) — and this only ever affects
+  that server-side bucketing, never how a session's own time displays to any viewer (always the raw
+  UTC instant, rendered client-side identically either way). `CreateSessionRequest`/
+  `UpdateSessionRequest.scheduledStart` becoming offset-aware is an **intentional, non-additive
+  contract break** — today's client (bare, offset-less strings) will 400 on session create/update
+  until **CLIENT-SESSION-24** ships. Real necessary addition found during implementation, not in the
+  original ticket text: `SessionGenerationService` gained a `LocationService` dependency (batch
+  `getLocationsByIds`, no N+1) to resolve an auto-generated recurring session's zone from its
+  always-present recurrence location, falling back to the JVM's zone only when that location's own
+  timezone is null. `/discover`'s `startTimeFilter` correction (SESSION-25) is now reverse-engineering
+  a write-side bug this migration removes — re-verified live rather than left as an unverified
+  assumption (all 27 `SessionDiscoverIntegrationTest` cases still green), but it works only because
+  pgjdbc's session `TimeZone` happens to match the JVM's zone on this deployment, not structurally —
+  SESSION-35's job to fix properly. Green: session-impl (162 tests) + `:server:test` (231 tests, 0
+  failures).
 - **SESSION-29 (`TODO`, documentation only, 2026-09-15,
   `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
   `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive

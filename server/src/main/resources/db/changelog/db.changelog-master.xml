@@ -183,4 +183,9 @@
          nullable, best-effort, foundation for session-impl's SESSION-34/35 AT TIME ZONE queries -->
     <include file="db/changelog/changes/V068__add_timezone_to_locations.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-33: sessions.scheduled_start/scheduled_end_at become TIMESTAMPTZ (a true instant)
+         instead of an implicitly server-zoned wall-clock value; adds origin_zone_id for a
+         location-less session's creator-zone fallback -->
+    <include file="db/changelog/changes/V069__scheduled_start_true_instant.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

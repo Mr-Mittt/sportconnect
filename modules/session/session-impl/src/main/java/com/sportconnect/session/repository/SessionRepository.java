@@ -11,8 +11,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,7 +20,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
 
     Page<Session> findByGroupId(Long groupId, Pageable pageable);
 
-    boolean existsByGroupIdAndScheduledStart(Long groupId, LocalDateTime scheduledStart);
+    boolean existsByGroupIdAndScheduledStart(Long groupId, Instant scheduledStart);
 
     /**
      * SCHEDULED sessions whose scheduledStart has arrived but scheduledEndAt hasn't yet — i.e.
@@ -33,7 +33,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             + "AND s.scheduledStart <= :now AND s.scheduledEndAt > :now")
     Slice<Session> findSessionsToStart(
             @Param("status") SessionStatus status,
-            @Param("now") LocalDateTime now,
+            @Param("now") Instant now,
             Pageable pageable);
 
     /**
@@ -45,7 +45,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             + "AND COALESCE(s.scheduledEndAt, s.scheduledStart) < :cutoff")
     Slice<Session> findSessionsToComplete(
             @Param("statuses") List<SessionStatus> statuses,
-            @Param("cutoff") LocalDateTime cutoff,
+            @Param("cutoff") Instant cutoff,
             Pageable pageable);
 
     /**
@@ -57,7 +57,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     @Query("SELECT s FROM Session s WHERE s.status = :status AND s.scheduledStart <= :cutoff")
     Slice<Session> findUnpreparedSessionsToCancel(
             @Param("status") SessionStatus status,
-            @Param("cutoff") LocalDateTime cutoff,
+            @Param("cutoff") Instant cutoff,
             Pageable pageable);
 
     /**
@@ -161,6 +161,19 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      * <p>An explicit {@code countQuery} is required (mirroring {@code
      * searchPublicGroupsWithCounts}) since Spring Data's automatic count-query derivation isn't
      * reliable for a multi-item {@code SELECT}.
+     *
+     * <p><b>SESSION-33 update:</b> {@code scheduled_start} is now {@code TIMESTAMPTZ} (a real UTC
+     * instant), so the write-side JVM-shift bug documented above no longer exists — but the {@code
+     * startTimeBeforeOrEqual}/{@code startTimeAfterOrEqual}/{@code zoneOffsetSeconds} correction
+     * above was reverse-engineering exactly that now-gone artifact, not a general-purpose zone
+     * conversion. Left mechanically type-compatible ({@code Instant} params); re-verified live via
+     * {@code SessionDiscoverIntegrationTest}'s existing 27 cases (all still green against real
+     * Postgres) after this migration, so it is not currently broken in practice — but it works
+     * only because pgjdbc's session {@code TimeZone} setting happens to already match the JVM's
+     * own zone on this deployment, an implicit-connection-state dependency, not a structural
+     * guarantee. Replacing it with an explicit, caller-supplied-zone {@code AT TIME ZONE}
+     * conversion that doesn't depend on that coincidence is SESSION-35's job, not this ticket's —
+     * see {@code modules/session/docs/MVP/SESSION-35_DISCOVER_CALLER_ZONE_FILTERS.md}.
      */
     @Query(
         value = "SELECT s, (s.capacity - s.initialSlot - "
@@ -211,13 +224,13 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("sportIds") List<Long> sportIds,
             @Param("callerId") UUID callerId,
             @Param("joinedStatus") ParticipantStatus joinedStatus,
-            @Param("lowerBound") LocalDateTime lowerBound,
+            @Param("lowerBound") Instant lowerBound,
             @Param("title") String title,
             @Param("locationId") Long locationId,
             @Param("feeType") FeeType feeType,
             @Param("maxFeeAmountVnd") Long maxFeeAmountVnd,
-            @Param("dayStart") LocalDateTime dayStart,
-            @Param("dayEnd") LocalDateTime dayEnd,
+            @Param("dayStart") Instant dayStart,
+            @Param("dayEnd") Instant dayEnd,
             @Param("startTimeBeforeOrEqual") Integer startTimeBeforeOrEqual,
             @Param("startTimeAfterOrEqual") Integer startTimeAfterOrEqual,
             @Param("zoneOffsetSeconds") Integer zoneOffsetSeconds,
@@ -291,8 +304,8 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("participantStatuses") List<ParticipantStatus> participantStatuses,
             @Param("preparingStatus") SessionStatus preparingStatus,
             @Param("scheduledStatus") SessionStatus scheduledStatus,
-            @Param("dayStart") LocalDateTime dayStart,
-            @Param("dayEnd") LocalDateTime dayEnd,
+            @Param("dayStart") Instant dayStart,
+            @Param("dayEnd") Instant dayEnd,
             Pageable pageable);
 
     /**
@@ -312,8 +325,8 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("statuses") List<SessionStatus> statuses,
             @Param("userId") UUID userId,
             @Param("joinedStatus") ParticipantStatus joinedStatus,
-            @Param("dayStart") LocalDateTime dayStart,
-            @Param("dayEnd") LocalDateTime dayEnd,
+            @Param("dayStart") Instant dayStart,
+            @Param("dayEnd") Instant dayEnd,
             Pageable pageable);
 
     /**

@@ -40,6 +40,14 @@ public interface SessionService {
      * wrong-typed / switched-off entries are dropped silently — and the surviving map is stored
      * wholesale; a filtered map over 4KB serialized fails with a BadRequestException. Omitting
      * {@code attributes} stores none and skips the schema lookup entirely.
+     *
+     * <p>SESSION-33: {@code request.scheduledStart} is a client-supplied offset-aware instant,
+     * stored exactly as the UTC instant it implies — never reinterpreted through {@code
+     * locationId}'s own timezone. {@code request.originZoneId} is persisted only when {@code
+     * locationId} is omitted (silently dropped otherwise); once set, it stays authoritative for
+     * calendar-date bucketing forever, even if a real {@code Location} is attached later via
+     * {@code updateSession} (a location is only canonical for a session that had one from day
+     * one — see {@code Session.originZoneId}'s Javadoc).
      */
     SessionResponse createSession(UUID userId, CreateSessionRequest request);
 
@@ -68,6 +76,10 @@ public interface SessionService {
      * those ties). Enforced in the DB query regardless of what {@code Sort} the caller's
      * {@code Pageable} carries — only its {@code page}/{@code size} are honoured, the sort itself
      * is not caller-configurable.
+     *
+     * <p>SESSION-33: {@code date}'s day boundaries are computed in the JVM's own zone — a
+     * placeholder preserving pre-migration behavior exactly, not yet caller/location-zone-correct
+     * (see {@code SessionRepository.findDiscoverSessions}' Javadoc for the same caveat).
      */
     Page<SessionResponse> getUpcomingSessions(UUID userId, LocalDate date, Pageable pageable);
 
@@ -78,6 +90,8 @@ public interface SessionService {
      * {@code date}'s calendar date. Sorted {@code scheduledStart DESC} — matches
      * {@code groupSessionsByDate.ts}'s existing history-zone convention (newest-within-the-day
      * first) — same "caller's Pageable sort is ignored" contract as {@link #getUpcomingSessions}.
+     *
+     * <p>SESSION-33: same JVM-zone day-boundary placeholder as {@link #getUpcomingSessions}.
      */
     Page<SessionResponse> getSessionHistory(UUID userId, LocalDate date, Pageable pageable);
 
@@ -189,6 +203,12 @@ public interface SessionService {
      * default. Results are always sorted {@code scheduledStart ASC}, then remaining open slots
      * {@code ASC}, then {@code createdAt ASC}, regardless of the caller's own {@code Pageable}
      * sort (ignored, same as {@code getUpcomingSessions}/{@code getSessionHistory}).
+     *
+     * <p>SESSION-33: {@code date}'s day boundaries are computed in the JVM's own zone — a
+     * placeholder that preserves this method's pre-migration behavior exactly, not a real fix.
+     * {@code startTimeFilter}/{@code startTime}'s underlying correction is also transitional (see
+     * {@code SessionRepository.findDiscoverSessions}' Javadoc). Neither is caller-zone-correct yet
+     * — that's SESSION-35.
      */
     Page<SessionResponse> discoverSessions(
             UUID callerId, Long sportId, String title, Long locationId, Integer minOpenSlots,

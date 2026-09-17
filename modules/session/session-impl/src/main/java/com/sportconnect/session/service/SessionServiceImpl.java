@@ -60,6 +60,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -169,8 +170,8 @@ public class SessionServiceImpl implements SessionService {
                 ? SessionStatus.SCHEDULED
                 : SessionStatus.PREPARING;
 
-        LocalDateTime scheduledEndAt = request.getDurationMinutes() != null
-                ? request.getScheduledStart().plusMinutes(request.getDurationMinutes())
+        Instant scheduledEndAt = request.getDurationMinutes() != null
+                ? request.getScheduledStart().plus(Duration.ofMinutes(request.getDurationMinutes()))
                 : null;
 
         Long feeAmountVnd = resolveFeeAmountVnd(request.getFeeType(), request.getFeeAmountVnd());
@@ -199,6 +200,11 @@ public class SessionServiceImpl implements SessionService {
                 .locationNote(request.getLocationNote())
                 .scheduledStart(request.getScheduledStart())
                 .scheduledEndAt(scheduledEndAt)
+                // SESSION-33: only ever set for a session created with no location yet — never
+                // for one created with a real location, so SESSION-34's
+                // COALESCE(origin_zone_id, location.timezone) can't override a from-day-one
+                // location's own zone.
+                .originZoneId(request.getLocationId() == null ? request.getOriginZoneId() : null)
                 .status(initialStatus)
                 .capacity(request.getCapacity())
                 .feeType(request.getFeeType())
@@ -271,7 +277,8 @@ public class SessionServiceImpl implements SessionService {
         Page<Session> sessions = date != null
                 ? sessionRepository.findUpcomingSessionsByDate(UPCOMING_SESSION_STATUSES, userId,
                         UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                        date.atStartOfDay(), date.plusDays(1).atStartOfDay(), effectivePageable)
+                        date.atStartOfDay(ZoneId.systemDefault()).toInstant(),
+                        date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(), effectivePageable)
                 : sessionRepository.findUpcomingSessions(UPCOMING_SESSION_STATUSES, userId,
                         UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
                         effectivePageable);
@@ -281,8 +288,8 @@ public class SessionServiceImpl implements SessionService {
     @Override
     @Transactional(readOnly = true)
     public Page<SessionResponse> getSessionHistory(UUID userId, LocalDate date, Pageable pageable) {
-        LocalDateTime dayStart = date.atStartOfDay();
-        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
+        Instant dayStart = date.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        Instant dayEnd = date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
         Page<Session> sessions = sessionRepository.findHistorySessionsByDate(
                 HISTORY_SESSION_STATUSES, userId, ParticipantStatus.JOINED, dayStart, dayEnd, unsorted(pageable));
         return toResponsePage(sessions, userId);
@@ -349,7 +356,7 @@ public class SessionServiceImpl implements SessionService {
             session.setScheduledStart(request.getScheduledStart());
         }
         if (request.getDurationMinutes() != null) {
-            session.setScheduledEndAt(session.getScheduledStart().plusMinutes(request.getDurationMinutes()));
+            session.setScheduledEndAt(session.getScheduledStart().plus(Duration.ofMinutes(request.getDurationMinutes())));
         }
         if (request.getCapacity() != null) {
             session.setCapacity(request.getCapacity());
@@ -686,14 +693,13 @@ public class SessionServiceImpl implements SessionService {
                 ? DISCOVER_DEFAULT_STATUSES : statuses;
         // The now() default lower bound applies only when the caller hasn't already narrowed the
         // time window via date or startTimeFilter — see SessionService.discoverSessions' Javadoc.
-        LocalDateTime lowerBound = (date == null && startTimeFilter == null) ? LocalDateTime.now() : null;
-        // Half-open [dayStart, dayEnd) range, not CAST(scheduledStart AS date) — see
-        // SessionRepository.findDiscoverSessions' Javadoc for why a date/time CAST or EXTRACT on
-        // scheduledStart silently reads the wrong value (this app's hibernate.jdbc.time_zone:UTC
-        // setting only gets reapplied on plain attribute reads, not inside a SQL function). Same
-        // precedent as findUpcomingSessionsByDate/findHistorySessionsByDate (SESSION-27).
-        LocalDateTime dayStart = date != null ? date.atStartOfDay() : null;
-        LocalDateTime dayEnd = date != null ? date.plusDays(1).atStartOfDay() : null;
+        Instant lowerBound = (date == null && startTimeFilter == null) ? Instant.now() : null;
+        // Half-open [dayStart, dayEnd) range against scheduledStart, now a real instant (SESSION-33)
+        // — computed in the JVM's own zone to preserve today's exact bucketing behavior byte-for-
+        // byte. This is a placeholder, not a fix: SESSION-35 owns making this caller-zone-correct
+        // (see SessionRepository.findDiscoverSessions' SESSION-33-update Javadoc note).
+        Instant dayStart = date != null ? date.atStartOfDay(ZoneId.systemDefault()).toInstant() : null;
+        Instant dayEnd = date != null ? date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant() : null;
         // Unconverted wall-clock seconds-of-day — the repository query reconstructs the
         // wall-clock-equivalent from scheduledStart's raw stored representation itself (MOD
         // arithmetic against zoneOffsetSeconds), rather than shifting this parameter. See

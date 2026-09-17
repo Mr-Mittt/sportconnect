@@ -2,6 +2,7 @@ package com.sportconnect.session.service
 
 import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse
 import com.sportconnect.group.api.service.GroupService
+import com.sportconnect.location.api.service.LocationService
 import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.dto.SessionType
 import com.sportconnect.session.api.event.SessionStatusStartedEvent
@@ -18,6 +19,7 @@ import spock.lang.Specification
 import spock.lang.Subject
 
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -26,13 +28,14 @@ class SessionGenerationServiceSpec extends Specification {
 
     SessionRepository sessionRepository = Mock()
     GroupService groupService = Mock()
+    LocationService locationService = Mock()
     SessionOutboxEventRepository sessionOutboxEventRepository = Mock()
     SessionOutboxWriter sessionOutboxWriter = Mock()
     CommentService commentService = Mock()
 
     @Subject
     SessionGenerationService service = new SessionGenerationService(
-            sessionRepository, groupService, sessionOutboxEventRepository, sessionOutboxWriter, commentService)
+            sessionRepository, groupService, locationService, sessionOutboxEventRepository, sessionOutboxWriter, commentService)
 
     def "generateUpcomingSessions skips a group with an incomplete recurrence rule"() {
         given:
@@ -47,6 +50,7 @@ class SessionGenerationServiceSpec extends Specification {
 
         then:
         1 * groupService.getGroupsWithAutoGenerateSessionsEnabled() >> [config]
+        1 * locationService.getLocationsByIds([]) >> [:]
         0 * sessionRepository._
     }
 
@@ -63,7 +67,8 @@ class SessionGenerationServiceSpec extends Specification {
 
         then:
         1 * groupService.getGroupsWithAutoGenerateSessionsEnabled() >> [config]
-        1 * sessionRepository.existsByGroupIdAndScheduledStart(1L, _ as LocalDateTime) >> true
+        1 * locationService.getLocationsByIds([5L]) >> [:]
+        1 * sessionRepository.existsByGroupIdAndScheduledStart(1L, _ as Instant) >> true
         0 * sessionRepository.save(_)
     }
 
@@ -82,7 +87,8 @@ class SessionGenerationServiceSpec extends Specification {
 
         then:
         1 * groupService.getGroupsWithAutoGenerateSessionsEnabled() >> [config]
-        1 * sessionRepository.existsByGroupIdAndScheduledStart(1L, _ as LocalDateTime) >> false
+        1 * locationService.getLocationsByIds([5L]) >> [:]
+        1 * sessionRepository.existsByGroupIdAndScheduledStart(1L, _ as Instant) >> false
         1 * sessionRepository.save({ Session s ->
             s.groupId == 1L &&
             s.sessionType == SessionType.GROUP_RECURRING &&
@@ -91,7 +97,7 @@ class SessionGenerationServiceSpec extends Specification {
             s.locationId == 5L &&
             s.locationNote == "Court 3" &&
             s.status == SessionStatus.SCHEDULED &&
-            s.scheduledEndAt == s.scheduledStart.plusMinutes(90)
+            s.scheduledEndAt == s.scheduledStart.plusSeconds(90 * 60)
         }) >> { Session s -> s }
     }
 
@@ -108,7 +114,8 @@ class SessionGenerationServiceSpec extends Specification {
 
         then:
         1 * groupService.getGroupsWithAutoGenerateSessionsEnabled() >> [config]
-        1 * sessionRepository.existsByGroupIdAndScheduledStart(1L, _ as LocalDateTime) >> false
+        1 * locationService.getLocationsByIds([5L]) >> [:]
+        1 * sessionRepository.existsByGroupIdAndScheduledStart(1L, _ as Instant) >> false
         1 * sessionRepository.save(_) >> { throw new DataIntegrityViolationException("dup") }
         noExceptionThrown()
     }
@@ -161,7 +168,7 @@ class SessionGenerationServiceSpec extends Specification {
 
         then:
         2 * sessionRepository.findSessionsToComplete(
-                [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as LocalDateTime, pageable) >>>
+                [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as Instant, pageable) >>>
                 [firstBatch, secondBatch]
         1 * sessionRepository.saveAll({ List sessions -> sessions[0].status == SessionStatus.COMPLETED })
     }
@@ -175,7 +182,7 @@ class SessionGenerationServiceSpec extends Specification {
 
         then:
         1 * sessionRepository.findSessionsToComplete(
-                [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as LocalDateTime, pageable) >> new PageImpl([])
+                [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as Instant, pageable) >> new PageImpl([])
         0 * sessionRepository.saveAll(_)
     }
 
@@ -190,7 +197,7 @@ class SessionGenerationServiceSpec extends Specification {
         service.startOngoingSessions()
 
         then:
-        2 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >>>
+        2 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as Instant, pageable) >>>
                 [firstBatch, secondBatch]
         1 * sessionRepository.saveAll({ List sessions -> sessions[0].status == SessionStatus.ONGOING })
         1 * sessionOutboxWriter.build("session.status.started", { SessionStatusStartedEvent e -> e.sessionId == 1L }) >>
@@ -206,7 +213,7 @@ class SessionGenerationServiceSpec extends Specification {
         service.startOngoingSessions()
 
         then:
-        1 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >> new PageImpl([])
+        1 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as Instant, pageable) >> new PageImpl([])
         0 * sessionRepository.saveAll(_)
         0 * sessionOutboxWriter.build(_, _)
         0 * sessionOutboxEventRepository.saveAll(_)
@@ -228,7 +235,7 @@ class SessionGenerationServiceSpec extends Specification {
         service.startOngoingSessions()
 
         then:
-        2 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >>>
+        2 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as Instant, pageable) >>>
                 [new PageImpl(sessions, pageable, 201), new PageImpl([], pageable, 0)]
         1 * sessionRepository.saveAll(_)
         3 * sessionOutboxWriter.build("session.status.started", _) >> new SessionOutboxEvent()
@@ -253,7 +260,7 @@ class SessionGenerationServiceSpec extends Specification {
         service.startOngoingSessions()
 
         then:
-        1 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as LocalDateTime, pageable) >> new PageImpl([])
+        1 * sessionRepository.findSessionsToStart(SessionStatus.SCHEDULED, _ as Instant, pageable) >> new PageImpl([])
         0 * commentService._
     }
 
@@ -271,7 +278,7 @@ class SessionGenerationServiceSpec extends Specification {
         service.cancelUnpreparedSessions()
 
         then:
-        2 * sessionRepository.findUnpreparedSessionsToCancel(SessionStatus.PREPARING, _ as LocalDateTime, pageable) >>>
+        2 * sessionRepository.findUnpreparedSessionsToCancel(SessionStatus.PREPARING, _ as Instant, pageable) >>>
                 [firstBatch, secondBatch]
         1 * sessionRepository.saveAll({ List sessions ->
             sessions[0].status == SessionStatus.CANCELLED &&
@@ -289,7 +296,7 @@ class SessionGenerationServiceSpec extends Specification {
         service.cancelUnpreparedSessions()
 
         then:
-        1 * sessionRepository.findUnpreparedSessionsToCancel(SessionStatus.PREPARING, _ as LocalDateTime, pageable) >> new PageImpl([])
+        1 * sessionRepository.findUnpreparedSessionsToCancel(SessionStatus.PREPARING, _ as Instant, pageable) >> new PageImpl([])
         0 * sessionRepository.saveAll(_)
     }
 }

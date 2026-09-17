@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -81,7 +82,10 @@ class SessionListingIntegrationTest extends BaseIT {
         return userRepository.save(user);
     }
 
-    /** locationId/feeType left null for PREPARING, matching SESSION-24's real invariant. */
+    /** locationId/feeType left null for PREPARING, matching SESSION-24's real invariant.
+     * SESSION-33: scheduledStart is now Instant — this fixture still takes a wall-clock
+     * LocalDateTime for every call site's readability, converting via the JVM's own zone only
+     * here at the write. */
     private Long createSession(SessionStatus status, LocalDateTime scheduledStart) {
         Session session = Session.builder()
                 .groupId(null)
@@ -90,7 +94,7 @@ class SessionListingIntegrationTest extends BaseIT {
                 .createdBy(callerId)
                 .sportId(1L)
                 .locationId(status == SessionStatus.PREPARING ? null : 1L)
-                .scheduledStart(scheduledStart)
+                .scheduledStart(scheduledStart.atZone(ZoneId.systemDefault()).toInstant())
                 .status(status)
                 .capacity(9999)
                 .feeType(status == SessionStatus.PREPARING ? null : FeeType.FREE)
@@ -112,7 +116,7 @@ class SessionListingIntegrationTest extends BaseIT {
                 .createdBy(callerId)
                 .sportId(1L)
                 .locationId(status == SessionStatus.PREPARING ? null : 1L)
-                .scheduledStart(scheduledStart)
+                .scheduledStart(scheduledStart.atZone(ZoneId.systemDefault()).toInstant())
                 .status(status)
                 .capacity(9999)
                 .feeType(status == SessionStatus.PREPARING ? null : FeeType.FREE)

@@ -317,8 +317,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- needed to insert a PREPARING session (no location/fee) in a real IT for the first time.
     location_id BIGINT,
     location_note VARCHAR(500),
-    scheduled_start TIMESTAMP NOT NULL,
-    scheduled_end_at TIMESTAMP,
+    -- SESSION-33 (V069): TIMESTAMPTZ, not TIMESTAMP — a real UTC instant, not an implicitly
+    -- server-zoned wall-clock value.
+    scheduled_start TIMESTAMP WITH TIME ZONE NOT NULL,
+    scheduled_end_at TIMESTAMP WITH TIME ZONE,
+    -- SESSION-33 (V069): nullable, set only for a session created with no location yet — the
+    -- creator's own browser zone, used as a fallback/override for calendar-date bucketing.
+    origin_zone_id VARCHAR(64),
     status VARCHAR(20) NOT NULL DEFAULT 'SCHEDULED',
     capacity INTEGER NOT NULL DEFAULT 9999,
     fee_type VARCHAR(10),

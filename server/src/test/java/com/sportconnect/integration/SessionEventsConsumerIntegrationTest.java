@@ -15,7 +15,7 @@ import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionParticipant;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -101,7 +101,7 @@ class SessionEventsConsumerIntegrationTest extends RabbitMqTestContainerBase {
                 .createdBy(creatorId)
                 .sportId(1L)
                 .locationId(1L)
-                .scheduledStart(LocalDateTime.now().plusDays(1))
+                .scheduledStart(Instant.now().plusSeconds(86400))
                 .status(status)
                 .capacity(9999)
                 .feeType(FeeType.FREE)

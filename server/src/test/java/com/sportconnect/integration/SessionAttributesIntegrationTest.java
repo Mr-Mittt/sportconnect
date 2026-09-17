@@ -30,7 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
 import org.springframework.http.MediaType;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -134,7 +134,7 @@ class SessionAttributesIntegrationTest extends RedisBaseIT {
         sessionId = sessionRepository.save(Session.builder()
                 .groupId(null).postId(postId).sessionType(SessionType.STANDALONE)
                 .createdBy(creatorId).sportId(sportId).locationId(1L)
-                .scheduledStart(LocalDateTime.now().plusDays(1)).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now().plusSeconds(86400)).status(SessionStatus.SCHEDULED)
                 .capacity(9999).feeType(FeeType.FREE).initialSlot(0).autoApprove(false)
                 .build()).getId();
     }

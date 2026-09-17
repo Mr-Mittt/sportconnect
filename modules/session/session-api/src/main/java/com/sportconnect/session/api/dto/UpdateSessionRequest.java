@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Map;
 
 /** Partial update — only non-null fields are applied. */
@@ -28,7 +28,9 @@ public class UpdateSessionRequest {
     @Size(max = 500, message = "locationNote must not exceed 500 characters")
     private String locationNote;
 
-    private LocalDateTime scheduledStart;
+    /** SESSION-33: offset-aware instant — see {@code CreateSessionRequest.scheduledStart}'s
+     * Javadoc. No corresponding originZoneId field here — it's immutable once set at creation. */
+    private Instant scheduledStart;
 
     private Integer durationMinutes;
 
