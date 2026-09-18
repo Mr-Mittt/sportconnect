@@ -24,6 +24,7 @@
 | 3 | [SESSION-26](MVP/SESSION-26_DISCOVER_ATTRIBUTE_FILTER.md) | Session-attribute filtering on discover (deferred from SESSION-25) | `TODO` |
 | 4 | [SESSION-29](MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md) | Old `CANCELLED`/`COMPLETED` session storage — retention concern, documented only, no direction decided (revisit once there's real usage/storage data) | `TODO` |
 | 5 | [SESSION-36](MVP/SESSION-36_FLAKY_COMPUTENEXTOCCURRENCE_TIME_OF_DAY_TESTS.md) | `SessionGenerationServiceSpec`'s `computeNextOccurrence` tests are time-of-day-flaky — derive expectations from the real clock instead of a fixed one | `TODO` |
+| 6 | [SESSION-37](MVP/SESSION-37_DISCOVER_OPEN_ENDED_DATE_FLOOR.md) | `/discover`'s `date` becomes an open-ended lower bound (not an exact day) with a smart today/future time floor, and `ONGOING` drops out of discoverable statuses — follow-up refinement to SESSION-35 | `TODO` |
 
 ---
 
