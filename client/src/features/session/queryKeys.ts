@@ -3,8 +3,11 @@ export const sessionKeys = {
   all: ['session'] as const,
   group: (groupId: number) => [...sessionKeys.all, 'group', groupId] as const,
   mine: () => [...sessionKeys.all, 'mine'] as const,
-  /** sportId undefined = every sport the caller holds an active profile for (backend default). */
-  discover: (sportId: number | undefined) => [...sessionKeys.all, 'discover', sportId ?? 'all'] as const,
+  /** sportId undefined = every sport the caller holds an active profile for (backend default).
+   * date is SESSION-35's now-required `date` param (yyyy-MM-dd) — part of the key so the day
+   * rolling over invalidates the cached page instead of serving yesterday's results. */
+  discover: (sportId: number | undefined, date: string) =>
+    [...sessionKeys.all, 'discover', sportId ?? 'all', date] as const,
   /** CLIENT-SESSION-6: one cache entry for every status now that GET /sessions/joined's
    * `status` param is optional (SESSION-4 delta, 2026-08-05) — the "My sessions" panel needs
    * the caller's whole joined history/upcoming at once, not one query per SessionStatus. */

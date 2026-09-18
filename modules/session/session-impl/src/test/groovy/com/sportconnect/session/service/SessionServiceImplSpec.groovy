@@ -1121,13 +1121,14 @@ class SessionServiceImplSpec extends Specification {
     // an empty list, so no batch-enrichment stub is needed) and asserts only on the query construction,
     // matching the pre-existing tests' own style.
 
-    def "discoverSessions with no sportId filter queries across all the caller's active sports, defaulting statuses and the now() lower bound"() {
+    def "discoverSessions with no sportId filter queries across all the caller's active sports, defaulting statuses"() {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
+        def date = LocalDate.now()
 
         when:
-        sessionService.discoverSessions(callerId, null, null, null, null, null, null, null, null, null, null, pageable)
+        sessionService.discoverSessions(callerId, null, null, null, null, null, null, date, null, null, null, null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [
@@ -1136,16 +1137,20 @@ class SessionServiceImplSpec extends Specification {
         ]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L, 2L], callerId,
-                ParticipantStatus.JOINED, { it != null }, null, null, null, null, null, null, null, null, null, null, pageable) >> new PageImpl([])
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, null, null, null, pageable) >> new PageImpl([])
     }
 
     def "discoverSessions with a sportId the caller has an active profile for narrows to that sport"() {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
+        def date = LocalDate.now()
 
         when:
-        sessionService.discoverSessions(callerId, 2L, null, null, null, null, null, null, null, null, null, pageable)
+        sessionService.discoverSessions(callerId, 2L, null, null, null, null, null, date, null, null, null, null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [
@@ -1154,7 +1159,10 @@ class SessionServiceImplSpec extends Specification {
         ]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [2L], callerId,
-                ParticipantStatus.JOINED, { it != null }, null, null, null, null, null, null, null, null, null, null, pageable) >> new PageImpl([])
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, null, null, null, pageable) >> new PageImpl([])
     }
 
     def "discoverSessions returns an empty page without querying when the sportId isn't one of the caller's active sports"() {
@@ -1163,7 +1171,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 10)
 
         when:
-        def result = sessionService.discoverSessions(callerId, 99L, null, null, null, null, null, null, null, null, null, pageable)
+        def result = sessionService.discoverSessions(callerId, 99L, null, null, null, null, null, null, null, null, null, null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
@@ -1177,7 +1185,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 10)
 
         when:
-        def result = sessionService.discoverSessions(callerId, null, null, null, null, null, null, null, null, null, null, pageable)
+        def result = sessionService.discoverSessions(callerId, null, null, null, null, null, null, null, null, null, null, null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> []
@@ -1189,69 +1197,115 @@ class SessionServiceImplSpec extends Specification {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
+        def date = LocalDate.now()
 
         when:
-        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, null, null, null,
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null, null,
                 [SessionStatus.ONGOING], pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.ONGOING], [1L], callerId, ParticipantStatus.JOINED,
-                { it != null }, null, null, null, null, null, null, null, null, null, null, pageable) >> new PageImpl([])
+                null, null, null, null, null,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, null, null, null, pageable) >> new PageImpl([])
     }
 
     def "discoverSessions forwards title/locationId/minOpenSlots/feeType/maxFeeAmountVnd filters"() {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
+        def date = LocalDate.now()
 
         when:
         sessionService.discoverSessions(callerId, 1L, "Sunday", 5L, 2, FeeType.FIXED, 100000L,
-                null, null, null, null, pageable)
+                date, null, null, null, null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
-                ParticipantStatus.JOINED, { it != null }, "Sunday", 5L, FeeType.FIXED, 100000L,
-                null, null, null, null, null, 2, pageable) >> new PageImpl([])
+                ParticipantStatus.JOINED, null, "Sunday", 5L, FeeType.FIXED, 100000L,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, null, null, 2, pageable) >> new PageImpl([])
     }
 
-    def "discoverSessions given a date opts out of the now() lower bound and passes a dayStart/dayEnd range"() {
+    def "discoverSessions given a date but no viewerZoneId computes a UTC dayStart/dayEnd range"() {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
         def date = LocalDate.now().plusDays(3)
 
         when:
-        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null, null, pageable)
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null, null, null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
                 ParticipantStatus.JOINED, null, null, null, null, null,
-                date.atStartOfDay(ZoneId.systemDefault()).toInstant(),
-                date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(),
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
     }
 
-    def "discoverSessions maps startTimeFilter AFTER_OR_EQUAL to the startTimeAfterOrEqual param, opts out of the now() lower bound, and passes a non-null zoneOffsetSeconds"() {
+    def "discoverSessions given a date and viewerZoneId computes the dayStart/dayEnd range in that zone, not UTC"() {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
-        def time = LocalTime.of(18, 0)
+        def date = LocalDate.now().plusDays(3)
+        def zone = ZoneId.of("America/New_York")
 
         when:
-        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, null,
-                StartTimeFilter.AFTER_OR_EQUAL, time, null, pageable)
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null,
+                "America/New_York", null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, null, null, null, null, null,
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                date.atStartOfDay(zone).toInstant(),
+                date.plusDays(1).atStartOfDay(zone).toInstant(),
+                null, null, null, null, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions rejects an invalid viewerZoneId"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null,
+                LocalDate.now(), null, null, "Not/AZone", null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        thrown(BadRequestException)
+        0 * sessionRepository.findDiscoverSessions(*_)
+    }
+
+    def "discoverSessions maps startTimeFilter AFTER_OR_EQUAL to the startTimeAfterOrEqual param and passes a non-null zoneOffsetSeconds"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def time = LocalTime.of(18, 0)
+        def date = LocalDate.now()
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date,
+                StartTimeFilter.AFTER_OR_EQUAL, time, null, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, time.toSecondOfDay(), { it != null }, null, pageable) >> new PageImpl([])
     }
 
@@ -1260,32 +1314,62 @@ class SessionServiceImplSpec extends Specification {
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
         def time = LocalTime.of(9, 0)
+        def date = LocalDate.now()
 
         when:
-        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, null,
-                StartTimeFilter.BEFORE_OR_EQUAL, time, null, pageable)
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date,
+                StartTimeFilter.BEFORE_OR_EQUAL, time, null, null, pageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, null, null, null, null, null,
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 time.toSecondOfDay(), null, { it != null }, null, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions with a startTimeFilter passes the viewerZoneId's current offset, not the JVM's"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def time = LocalTime.of(9, 0)
+        def date = LocalDate.now()
+        def zone = ZoneId.of("Asia/Tokyo")
+        def expectedOffsetSeconds = zone.getRules().getOffset(Instant.now()).getTotalSeconds()
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date,
+                StartTimeFilter.BEFORE_OR_EQUAL, time, "Asia/Tokyo", null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                date.atStartOfDay(zone).toInstant(),
+                date.plusDays(1).atStartOfDay(zone).toInstant(),
+                time.toSecondOfDay(), null, expectedOffsetSeconds, null, pageable) >> new PageImpl([])
     }
 
     def "discoverSessions strips the caller-supplied Pageable sort before querying"() {
         given:
         def callerId = UUID.randomUUID()
         def sortedPageable = PageRequest.of(1, 5, Sort.by("title").ascending())
+        def date = LocalDate.now()
 
         when:
-        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, null, null, null, null, sortedPageable)
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null, null, null, sortedPageable)
 
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
-                ParticipantStatus.JOINED, { it != null }, null, null, null, null, null, null, null, null, null, null,
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, null, null, null,
                 PageRequest.of(1, 5)) >> new PageImpl([])
     }
 
@@ -1322,7 +1406,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 20)
 
         when:
-        sessionService.getUpcomingSessions(userId, null, pageable)
+        sessionService.getUpcomingSessions(userId, null, null, pageable)
 
         then:
         1 * sessionRepository.findUpcomingSessions(
@@ -1340,7 +1424,7 @@ class SessionServiceImplSpec extends Specification {
         def sortedPageable = PageRequest.of(1, 5, Sort.by(Sort.Direction.DESC, "createdAt"))
 
         when:
-        sessionService.getUpcomingSessions(userId, null, sortedPageable)
+        sessionService.getUpcomingSessions(userId, null, null, sortedPageable)
 
         then:
         1 * sessionRepository.findUpcomingSessions(*_) >> { args ->
@@ -1352,14 +1436,14 @@ class SessionServiceImplSpec extends Specification {
         }
     }
 
-    def "getUpcomingSessions with a date narrows to that calendar day"() {
+    def "getUpcomingSessions with a date but no viewerZoneId narrows to that calendar day in UTC"() {
         given:
         def userId = UUID.randomUUID()
         def date = LocalDate.of(2026, 9, 20)
         def pageable = PageRequest.of(0, 20)
 
         when:
-        sessionService.getUpcomingSessions(userId, date, pageable)
+        sessionService.getUpcomingSessions(userId, date, null, pageable)
 
         then:
         1 * sessionRepository.findUpcomingSessionsByDate(
@@ -1367,28 +1451,96 @@ class SessionServiceImplSpec extends Specification {
                 userId,
                 [ParticipantStatus.JOINED, ParticipantStatus.INVITED],
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                date.atStartOfDay(ZoneId.systemDefault()).toInstant(),
-                date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(),
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 pageable) >> new PageImpl([])
         0 * sessionRepository.findUpcomingSessions(*_)
     }
 
-    def "getSessionHistory queries JOINED-only across CANCELLED/COMPLETED for the given date"() {
+    def "getUpcomingSessions with a date and viewerZoneId narrows to that calendar day in the given zone"() {
+        given:
+        def userId = UUID.randomUUID()
+        def date = LocalDate.of(2026, 9, 20)
+        def zone = ZoneId.of("America/New_York")
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        sessionService.getUpcomingSessions(userId, date, "America/New_York", pageable)
+
+        then:
+        1 * sessionRepository.findUpcomingSessionsByDate(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING],
+                userId,
+                [ParticipantStatus.JOINED, ParticipantStatus.INVITED],
+                SessionStatus.PREPARING, SessionStatus.SCHEDULED,
+                date.atStartOfDay(zone).toInstant(),
+                date.plusDays(1).atStartOfDay(zone).toInstant(),
+                pageable) >> new PageImpl([])
+    }
+
+    def "getUpcomingSessions rejects an invalid viewerZoneId"() {
+        given:
+        def userId = UUID.randomUUID()
+        def date = LocalDate.of(2026, 9, 20)
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        sessionService.getUpcomingSessions(userId, date, "Not/AZone", pageable)
+
+        then:
+        thrown(BadRequestException)
+        0 * sessionRepository.findUpcomingSessionsByDate(*_)
+    }
+
+    def "getSessionHistory queries JOINED-only across CANCELLED/COMPLETED for the given date, defaulting to UTC"() {
         given:
         def userId = UUID.randomUUID()
         def date = LocalDate.of(2026, 9, 14)
         def pageable = PageRequest.of(0, 20)
 
         when:
-        sessionService.getSessionHistory(userId, date, pageable)
+        sessionService.getSessionHistory(userId, date, null, pageable)
 
         then:
         1 * sessionRepository.findHistorySessionsByDate(
                 [SessionStatus.CANCELLED, SessionStatus.COMPLETED],
                 userId, ParticipantStatus.JOINED,
-                date.atStartOfDay(ZoneId.systemDefault()).toInstant(),
-                date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(),
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 pageable) >> new PageImpl([])
+    }
+
+    def "getSessionHistory with a viewerZoneId narrows to that calendar day in the given zone"() {
+        given:
+        def userId = UUID.randomUUID()
+        def date = LocalDate.of(2026, 9, 14)
+        def zone = ZoneId.of("America/New_York")
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        sessionService.getSessionHistory(userId, date, "America/New_York", pageable)
+
+        then:
+        1 * sessionRepository.findHistorySessionsByDate(
+                [SessionStatus.CANCELLED, SessionStatus.COMPLETED],
+                userId, ParticipantStatus.JOINED,
+                date.atStartOfDay(zone).toInstant(),
+                date.plusDays(1).atStartOfDay(zone).toInstant(),
+                pageable) >> new PageImpl([])
+    }
+
+    def "getSessionHistory rejects an invalid viewerZoneId"() {
+        given:
+        def userId = UUID.randomUUID()
+        def date = LocalDate.of(2026, 9, 14)
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        sessionService.getSessionHistory(userId, date, "Not/AZone", pageable)
+
+        then:
+        thrown(BadRequestException)
+        0 * sessionRepository.findHistorySessionsByDate(*_)
     }
 
     def "getSessionHistory strips any client-supplied sort, keeping only page/size"() {
@@ -1398,7 +1550,7 @@ class SessionServiceImplSpec extends Specification {
         def sortedPageable = PageRequest.of(2, 10, Sort.by(Sort.Direction.ASC, "id"))
 
         when:
-        sessionService.getSessionHistory(userId, date, sortedPageable)
+        sessionService.getSessionHistory(userId, date, null, sortedPageable)
 
         then:
         1 * sessionRepository.findHistorySessionsByDate(*_) >> { args ->

@@ -76,6 +76,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 6 | [CLIENT-SESSION-22](MVP/CLIENT-SESSION-22_DISCOVER_SEARCH_FILTER_UI.md) | Wire Discover search/filter UI to SESSION-25's new backend contract | `TODO` |
 | 7 | [CLIENT-SESSION-23](MVP/CLIENT-SESSION-23_UPCOMING_HISTORY_SPLIT_AND_SESSION_CARD_POLISH.md) | "My sessions" → Upcoming/History split (SessionCard polish + completion favorites dropdown + the PREPARING visual-regression coverage CLIENT-SESSION-21 never got, all bundled in) — **hard-blocked on backend SESSION-27** for the Upcoming/History scope only; the other 3 items have no backend dependency | `TODO` |
 | 8 | [CLIENT-SESSION-24](MVP/CLIENT-SESSION-24_SUBMIT_OFFSET_AWARE_SCHEDULEDSTART_AND_CALLER_ZONE.md) | Submit offset-aware `scheduledStart` and the browser's own timezone (`Intl.DateTimeFormat`, no permission prompt) on session create/update, session history (`viewerZoneId`), and discover search — **hard-blocked on backend SESSION-33, SESSION-34, and SESSION-35** | `TODO` |
+| 9 | [CLIENT-SESSION-25](MVP/CLIENT-SESSION-25_DISCOVER_DATE_PICKER.md) | Discover panel/modal needs a real date picker — backend SESSION-35 made `/discover`'s `date` required, and `useDiscoverSessions` currently hardcodes today as a stopgap, regressing multi-day/time-of-day browsing | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against

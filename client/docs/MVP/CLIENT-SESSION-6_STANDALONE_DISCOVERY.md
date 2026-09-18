@@ -150,3 +150,13 @@ SESSION-4 ship time, with an explicit "add an all-statuses mode if a real caller
 now optional. The "My sessions" panel needed the caller's whole joined set in one date-grouped list;
 omitting `status` returns every `SessionStatus` in one page instead of a 4-call fan-out. Backward
 compatible, see `modules/session/docs/MVP/SESSION-4_STANDALONE_DISCOVERY.md`'s own delta note.
+
+**Delta (2026-09-18, backend SESSION-35):** `GET /api/sessions/discover`'s `date` param became
+required (was, and had always been, omittable). `useDiscoverSessions.ts` — this ticket's own
+Discover-fetching hook, still used as-is by both the Discover grid here and the rail-triggered
+Discover modal (CLIENT-SESSION-7) — was patched to always send the browser's today, a real,
+accepted regression from this ticket's original "browse every upcoming joinable session" behavior
+to "browse today's sessions only." Follow-up **CLIENT-SESSION-25** (`TODO`) restores multi-day
+browsing via a real date picker; see that ticket and `modules/session/docs/MVP
+/SESSION-35_DISCOVER_CALLER_ZONE_FILTERS.md`'s own "Scope change (2026-09-18, second)" for the
+full consumer-census trail that found this ticket's hook as the live consumer.

@@ -73,11 +73,13 @@ public interface SessionService {
      * {@code Pageable} carries — only its {@code page}/{@code size} are honoured, the sort itself
      * is not caller-configurable.
      *
-     * <p>SESSION-33: {@code date}'s day boundaries are computed in the JVM's own zone — a
-     * placeholder preserving pre-migration behavior exactly, not yet caller/location-zone-correct
-     * (see {@code SessionRepository.findDiscoverSessions}' Javadoc for the same caveat).
+     * <p>SESSION-35: when {@code date} is given, its day boundaries are computed in
+     * {@code viewerZoneId} (nullable, an IANA zone id, falling back to {@code "UTC"} when omitted)
+     * rather than the JVM's own zone — a caller-relative "today", not a server-relative one.
+     * {@code viewerZoneId} given without {@code date} is rejected by the controller (it would have
+     * no effect). Invalid (unparseable) values are rejected with a {@code BadRequestException}.
      */
-    Page<SessionResponse> getUpcomingSessions(UUID userId, LocalDate date, Pageable pageable);
+    Page<SessionResponse> getUpcomingSessions(UUID userId, LocalDate date, String viewerZoneId, Pageable pageable);
 
     /**
      * SESSION-27 — every session (standalone or group-linked) where the caller currently has a
@@ -87,9 +89,12 @@ public interface SessionService {
      * {@code groupSessionsByDate.ts}'s existing history-zone convention (newest-within-the-day
      * first) — same "caller's Pageable sort is ignored" contract as {@link #getUpcomingSessions}.
      *
-     * <p>SESSION-33: same JVM-zone day-boundary placeholder as {@link #getUpcomingSessions}.
+     * <p>SESSION-35: {@code date}'s day boundaries are computed in {@code viewerZoneId} (nullable,
+     * an IANA zone id, falling back to {@code "UTC"} when omitted) rather than the JVM's own zone —
+     * same caller-relative treatment as {@link #getUpcomingSessions}. Invalid (unparseable) values
+     * are rejected with a {@code BadRequestException}.
      */
-    Page<SessionResponse> getSessionHistory(UUID userId, LocalDate date, Pageable pageable);
+    Page<SessionResponse> getSessionHistory(UUID userId, LocalDate date, String viewerZoneId, Pageable pageable);
 
     /**
      * SESSION-27/34 — the last {@code dateCount} distinct calendar dates (most-recent-first) on
@@ -109,9 +114,8 @@ public interface SessionService {
      * zone), so this endpoint buckets by the viewer's own <em>current</em> zone, not the session's
      * location/origin zone. Invalid (unparseable) values are rejected with a
      * {@code BadRequestException}. Nullable only because today's client doesn't send it yet
-     * (CLIENT-SESSION-24) — when omitted, this falls back to the session's own location/origin zone
-     * (the pre-SESSION-34-scope-change behavior) rather than failing the request outright, since
-     * every existing caller omits it until that client ticket ships.
+     * (CLIENT-SESSION-24) — when omitted, this falls back to {@code "UTC"} rather than failing the
+     * request outright, since every existing caller omits it until that client ticket ships.
      */
     SessionHistoryDatesResponse getSessionHistoryDates(
             UUID userId, int dateCount, LocalDate before, String viewerZoneId);
@@ -193,35 +197,40 @@ public interface SessionService {
      * isn't one of the caller's active sports, returns an empty page rather than throwing. A
      * caller with zero active sport profiles also gets an empty page.
      *
-     * <p>SESSION-25 — every other parameter is optional and AND-combined: {@code title}
-     * (case-insensitive substring match), {@code locationId} (exact match), {@code minOpenSlots}
-     * (a session qualifies when its remaining open slots — capacity minus participantCount minus
-     * initialSlot — minus {@code minOpenSlots} is {@code > 0}), {@code feeType} (exact match)
-     * and/or {@code maxFeeAmountVnd} (upper bound on feeAmountVnd, meaningful only when feeType is
-     * FIXED), {@code date} (exact-day match against scheduledStart's date component), and
-     * {@code startTimeFilter}/{@code startTime} (compares scheduledStart's time-of-day component
-     * against the given time, independent of {@code date} — the caller must supply both together,
-     * validated by the controller). {@code statuses} restricts to a subset of
+     * <p>SESSION-25 — every other parameter except {@code date} is optional and AND-combined:
+     * {@code title} (case-insensitive substring match), {@code locationId} (exact match),
+     * {@code minOpenSlots} (a session qualifies when its remaining open slots — capacity minus
+     * participantCount minus initialSlot — minus {@code minOpenSlots} is {@code > 0}),
+     * {@code feeType} (exact match) and/or {@code maxFeeAmountVnd} (upper bound on
+     * feeAmountVnd, meaningful only when feeType is FIXED), and {@code startTimeFilter}/
+     * {@code startTime} (compares scheduledStart's time-of-day component against the given time,
+     * independent of {@code date} — the caller must supply both together, validated by the
+     * controller). {@code statuses} restricts to a subset of
      * {@code PREPARING}/{@code SCHEDULED}/{@code ONGOING}; a null/empty list defaults to all
      * three — a real behavior delta from this method's original SCHEDULED-only default, since
      * ONGOING and PREPARING sessions are now discoverable too.
      *
-     * <p>When neither {@code date} nor {@code startTimeFilter} is given, results are implicitly
-     * lower-bounded to {@code scheduledStart >= now()} — supplying either opts out of that
-     * default. Results are always sorted {@code scheduledStart ASC}, then remaining open slots
-     * {@code ASC}, then {@code createdAt ASC}, regardless of the caller's own {@code Pageable}
-     * sort (ignored, same as {@code getUpcomingSessions}/{@code getSessionHistory}).
+     * <p><b>SESSION-35 (2026-09-18 scope addition): {@code date} is required</b>, not optional —
+     * an exact-day match against scheduledStart's date component, validated non-null by the
+     * controller (missing → 400). This replaces the original SESSION-25 design, where an omitted
+     * {@code date}/{@code startTimeFilter} pair implicitly lower-bounded results to
+     * {@code scheduledStart >= now()}; that default no longer exists since a request can no
+     * longer omit both (a past {@code date} still matches — no hidden "now" floor either way).
+     * Results are always sorted {@code scheduledStart ASC}, then remaining open slots {@code ASC},
+     * then {@code createdAt ASC}, regardless of the caller's own {@code Pageable} sort (ignored,
+     * same as {@code getUpcomingSessions}/{@code getSessionHistory}).
      *
-     * <p>SESSION-33: {@code date}'s day boundaries are computed in the JVM's own zone — a
-     * placeholder that preserves this method's pre-migration behavior exactly, not a real fix.
-     * {@code startTimeFilter}/{@code startTime}'s underlying correction is also transitional (see
-     * {@code SessionRepository.findDiscoverSessions}' Javadoc). Neither is caller-zone-correct yet
-     * — that's SESSION-35.
+     * <p>SESSION-35: {@code date}'s day boundaries and {@code startTimeFilter}/{@code startTime}'s
+     * time-of-day comparison are both evaluated in {@code viewerZoneId} (nullable, an IANA zone id,
+     * falling back to {@code "UTC"} when omitted) — a "sessions starting before 9am" filter is
+     * inherently caller-relative, not server-relative (see
+     * {@code SessionRepository.findDiscoverSessions}' Javadoc for the query-side detail). Invalid
+     * (unparseable) {@code viewerZoneId} values are rejected with a {@code BadRequestException}.
      */
     Page<SessionResponse> discoverSessions(
             UUID callerId, Long sportId, String title, Long locationId, Integer minOpenSlots,
             FeeType feeType, Long maxFeeAmountVnd, LocalDate date,
-            StartTimeFilter startTimeFilter, LocalTime startTime,
+            StartTimeFilter startTimeFilter, LocalTime startTime, String viewerZoneId,
             List<SessionStatus> statuses, Pageable pageable);
 
     /**

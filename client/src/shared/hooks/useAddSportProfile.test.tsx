@@ -93,7 +93,9 @@ describe('useAddSportProfile', () => {
   it('invalidates discover-session queries too, since GET /sessions/discover is gated to the caller\'s sport profiles', async () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     // Simulates SessionDiscoverModal opening while the caller had zero profiles — cached empty.
-    queryClient.setQueryData(sessionKeys.discover(undefined), { content: [] });
+    // The date suffix's exact value doesn't matter here — invalidation below matches on the
+    // ['session', 'discover'] prefix, not the full key.
+    queryClient.setQueryData(sessionKeys.discover(undefined, '2026-01-01'), { content: [] });
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
     vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
       data: { success: true, message: '', data: profile({ id: 9 }), timestamp: '' },
@@ -105,7 +107,7 @@ describe('useAddSportProfile', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: [...sessionKeys.all, 'discover'] });
-    expect(queryClient.getQueryState(sessionKeys.discover(undefined))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(sessionKeys.discover(undefined, '2026-01-01'))?.isInvalidated).toBe(true);
   });
 
   it('does not touch the cache when userId is undefined', async () => {

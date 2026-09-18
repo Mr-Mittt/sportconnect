@@ -85,7 +85,11 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      * passes at most one of the two populated, based on the caller's {@code startTimeFilter}
      * direction. {@code lowerBound}, when non-null, is the service's {@code now()} default
      * (skipped whenever the caller narrows by {@code date} or a start-time filter instead — see
-     * {@code SessionService.discoverSessions}'s Javadoc).
+     * {@code SessionService.discoverSessions}'s Javadoc). <b>SESSION-35 (2026-09-18):</b> the
+     * service now always passes {@code null} here — {@code date} became a required param, so the
+     * "caller supplied neither {@code date} nor a start-time filter" case this default existed
+     * for can no longer happen. Left in the query rather than removed: a harmless, always-taken
+     * {@code IS NULL} branch, not worth dropping a parameter from an otherwise-untouched query.
      *
      * <p><b>Every {@code :param IS NULL} check below is itself wrapped in a {@code CAST}</b> (e.g.
      * {@code CAST(:locationId AS long) IS NULL}, not bare {@code :locationId IS NULL}). Confirmed
@@ -163,18 +167,35 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      * searchPublicGroupsWithCounts}) since Spring Data's automatic count-query derivation isn't
      * reliable for a multi-item {@code SELECT}.
      *
-     * <p><b>SESSION-33 update:</b> {@code scheduled_start} is now {@code TIMESTAMPTZ} (a real UTC
-     * instant), so the write-side JVM-shift bug documented above no longer exists — but the {@code
-     * startTimeBeforeOrEqual}/{@code startTimeAfterOrEqual}/{@code zoneOffsetSeconds} correction
-     * above was reverse-engineering exactly that now-gone artifact, not a general-purpose zone
-     * conversion. Left mechanically type-compatible ({@code Instant} params); re-verified live via
-     * {@code SessionDiscoverIntegrationTest}'s existing 27 cases (all still green against real
-     * Postgres) after this migration, so it is not currently broken in practice — but it works
-     * only because pgjdbc's session {@code TimeZone} setting happens to already match the JVM's
-     * own zone on this deployment, an implicit-connection-state dependency, not a structural
-     * guarantee. Replacing it with an explicit, caller-supplied-zone {@code AT TIME ZONE}
-     * conversion that doesn't depend on that coincidence is SESSION-35's job, not this ticket's —
-     * see {@code modules/session/docs/MVP/SESSION-35_DISCOVER_CALLER_ZONE_FILTERS.md}.
+     * <p><b>SESSION-35 update:</b> {@code zoneOffsetSeconds} is now computed in
+     * {@code SessionServiceImpl} from the caller's own resolved {@code viewerZoneId} (via
+     * {@code resolveZone}), not {@code ZoneId.systemDefault()} — fixes the actual bug (every filter
+     * was evaluated in the <em>server's</em> zone regardless of who was asking) for any caller in a
+     * zone that doesn't observe DST (e.g. {@code Asia/Ho_Chi_Minh}), and for any caller whose
+     * candidate sessions all fall in the same DST season as the moment of the request.
+     *
+     * <p><b>Tried and rejected: a real per-row {@code AT TIME ZONE} conversion</b> (would be
+     * correct across DST unconditionally, unlike the offset-shift above). HQL has no {@code AT TIME
+     * ZONE} operator — attempted the JPQL {@code function('timezone', :callerZone,
+     * s.scheduledStart)} passthrough (Postgres's function-call equivalent of the operator), which
+     * compiled but failed against H2 at query execution with
+     * {@code org.hibernate.exception.SQLGrammarException: Function "timezone" not found} — H2
+     * implements the {@code x AT TIME ZONE zone} operator (already used successfully by {@code
+     * findHistoryDateCounts}'s native query) but not the {@code timezone(zone, x)} function-call
+     * form Postgres also accepts. Getting the operator form would require converting this whole
+     * query to {@code nativeQuery = true} with an explicit {@code @SqlResultSetMapping} (to keep
+     * returning {@code Session} entities + the {@code openSlots} scalar, which native queries don't
+     * auto-map) — judged not worth the size/risk of that rewrite for a residual gap this narrow;
+     * revisit if it proves to matter in practice.
+     *
+     * <p><b>Known residual limitation (accepted, not fixed):</b> {@code zoneOffsetSeconds} reflects
+     * {@code viewerZoneId}'s offset <em>at the moment of the request</em>, not each row's own date —
+     * for a DST-observing zone, a candidate session on a date in the <em>other</em> DST season than
+     * "now" is off by the DST delta (typically 1 hour); e.g. filtering in January (EST, UTC-5)
+     * against a session already discoverable for next August (EDT, UTC-4) misjudges the threshold
+     * by an hour. Same category of imprecision as the two-attempts history above, just against the
+     * caller's zone instead of the server's. A true per-row fix needs the native-query rewrite
+     * described above.
      */
     @Query(
         value = "SELECT s, (s.capacity - s.initialSlot - "
