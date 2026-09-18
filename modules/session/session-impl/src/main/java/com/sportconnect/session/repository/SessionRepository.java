@@ -156,7 +156,8 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      *
      * <p>A pre-existing, already-shipped instance of this same timezone bug was found in {@code
      * findHistoryDateCounts} below (SESSION-27) while investigating — flagged as a follow-up,
-     * not fixed here (out of scope for this ticket).
+     * not fixed here (out of scope for this ticket). Fixed by SESSION-34, which replaced that
+     * query's own bare {@code CAST} with an explicit, per-row {@code AT TIME ZONE} conversion.
      *
      * <p>An explicit {@code countQuery} is required (mirroring {@code
      * searchPublicGroupsWithCounts}) since Spring Data's automatic count-query derivation isn't
@@ -330,7 +331,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             Pageable pageable);
 
     /**
-     * SESSION-27 — the caller's last {@code limit} distinct calendar dates (most-recent-first) on
+     * SESSION-27/34 — the caller's last {@code limit} distinct calendar dates (most-recent-first) on
      * which they have at least one {@code CANCELLED}/{@code COMPLETED} session they were
      * {@code JOINED} to, each with its own count. {@code before} (nullable) restricts to dates
      * strictly earlier than it, for paging further back. Native — {@code GROUP BY} a date cast
@@ -339,14 +340,51 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      * requests {@code dateCount + 1} rows so it can compute {@code hasMore} and trim to
      * {@code dateCount}. {@code statuses}/{@code joinedStatus} are passed as enum {@code name()}
      * strings — a native query has no {@code @Enumerated} context to bind a Java enum directly.
+     *
+     * <p><b>SESSION-34:</b> buckets every row by {@code zoneId} — a single caller-resolved IANA zone
+     * (the caller's own current zone when the request supplied one, else {@code "UTC"}; the service
+     * layer resolves which before calling this method) — via an explicit {@code AT TIME ZONE}
+     * conversion, replacing the previously-reverted JVM-offset point-fix (SESSION-31). A personal
+     * history reads oddest when a date is pinned to somewhere the viewer no longer is (a completed
+     * session could even show as "in the future" relative to the viewer's own current clock), so
+     * this deliberately does <em>not</em> bucket by the session's own location/origin zone —
+     * {@code zoneId} is a single value shared by every row in one call, not resolved per row, so
+     * there's no join to another domain's table and no per-row unresolved-zone case to handle;
+     * {@code zoneId} being non-null is guaranteed by the caller (either a validated caller-supplied
+     * value or the {@code "UTC"} literal), so this query never needs to exclude a row.
+     *
+     * <p><b>Why {@code TO_CHAR(... , 'YYYY-MM-DD')} instead of a direct {@code CAST(... AS date)}
+     * on the {@code AT TIME ZONE} result:</b> confirmed empirically (a standalone H2 script, not
+     * guessed) that H2 2.2.224's {@code CAST(timestamptz AS timestamp)} — the implicit step inside
+     * {@code CAST(... AS date)} — re-normalizes the value through the JDBC session's own default
+     * zone instead of preserving the {@code AT TIME ZONE}-shifted wall-clock fields the way real
+     * Postgres does, silently discarding the conversion this query depends on (`AT TIME ZONE`
+     * itself works correctly in H2 — only the subsequent narrowing cast mishandles it). Routing
+     * through {@code TO_CHAR} avoids that narrowing step entirely and was verified to produce
+     * identical, correct results on both engines — H2 (2.2.224, {@code MODE=PostgreSQL}) and real
+     * Postgres.
+     *
+     * <p><b>Why {@code GROUP BY 1} (ordinal) instead of repeating the {@code CAST(TO_CHAR(...))}
+     * expression:</b> a real, narrower H2 quirk than the one above, found via this exact query
+     * through Hibernate (not reproducible via a hand-written JDBC {@code PreparedStatement} sending
+     * the identical SQL text — isolated to Hibernate's own native-query execution path, cause not
+     * further isolated within this ticket's time budget): H2 rejected {@code GROUP BY
+     * CAST(TO_CHAR(s.scheduled_start AT TIME ZONE :zoneId, ...) AS date)} with {@code Column
+     * "s.scheduled_start" must be in the GROUP BY list}, even though that expression is textually
+     * identical to the one in the {@code SELECT} list. Grouping by the {@code SELECT} list's ordinal
+     * position instead sidesteps expression-equivalence checking entirely — verified correct on both
+     * H2 and real Postgres (both support {@code GROUP BY <ordinal>} as a standard extension).
      */
-    @Query(value = "SELECT CAST(s.scheduled_start AS date) AS sessionDate, COUNT(*) AS count "
+    @Query(value = "SELECT CAST(TO_CHAR(s.scheduled_start AT TIME ZONE :zoneId, 'YYYY-MM-DD') AS date) "
+            + "    AS sessionDate, COUNT(*) AS count "
             + "FROM sessions s "
             + "WHERE s.status IN (:statuses) "
             + "AND s.id IN (SELECT sp.session_id FROM session_participants sp "
             + "    WHERE sp.user_id = :userId AND sp.status = :joinedStatus) "
-            + "AND (CAST(:before AS date) IS NULL OR CAST(s.scheduled_start AS date) < CAST(:before AS date)) "
-            + "GROUP BY CAST(s.scheduled_start AS date) "
+            + "AND (CAST(:before AS date) IS NULL OR "
+            + "    CAST(TO_CHAR(s.scheduled_start AT TIME ZONE :zoneId, 'YYYY-MM-DD') AS date) "
+            + "    < CAST(:before AS date)) "
+            + "GROUP BY 1 "
             + "ORDER BY sessionDate DESC "
             + "LIMIT :limit",
             nativeQuery = true)
@@ -355,6 +393,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("userId") UUID userId,
             @Param("joinedStatus") String joinedStatus,
             @Param("before") LocalDate before,
+            @Param("zoneId") String zoneId,
             @Param("limit") int limit);
 
     interface SessionDateCountProjection {

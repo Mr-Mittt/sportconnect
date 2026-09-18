@@ -43,11 +43,7 @@ public interface SessionService {
      *
      * <p>SESSION-33: {@code request.scheduledStart} is a client-supplied offset-aware instant,
      * stored exactly as the UTC instant it implies — never reinterpreted through {@code
-     * locationId}'s own timezone. {@code request.originZoneId} is persisted only when {@code
-     * locationId} is omitted (silently dropped otherwise); once set, it stays authoritative for
-     * calendar-date bucketing forever, even if a real {@code Location} is attached later via
-     * {@code updateSession} (a location is only canonical for a session that had one from day
-     * one — see {@code Session.originZoneId}'s Javadoc).
+     * locationId}'s own timezone.
      */
     SessionResponse createSession(UUID userId, CreateSessionRequest request);
 
@@ -96,8 +92,8 @@ public interface SessionService {
     Page<SessionResponse> getSessionHistory(UUID userId, LocalDate date, Pageable pageable);
 
     /**
-     * SESSION-27 — the last {@code dateCount} distinct calendar dates (most-recent-first) on which
-     * the caller has at least one session matching {@link #getSessionHistory}'s population
+     * SESSION-27/34 — the last {@code dateCount} distinct calendar dates (most-recent-first) on
+     * which the caller has at least one session matching {@link #getSessionHistory}'s population
      * (standalone-or-group-linked, {@code JOINED}, {@code CANCELLED}/{@code COMPLETED}), each
      * annotated with its own per-date count. {@code before} (nullable, exclusive) pages further
      * back — the next {@code dateCount} distinct history dates strictly older than {@code before}.
@@ -105,8 +101,20 @@ public interface SessionService {
      * <p>This is pagination over <em>distinct dates</em>, not over individual sessions — a given
      * date's own session list is fetched separately via {@link #getSessionHistory} once the caller
      * expands that date.
+     *
+     * <p><b>SESSION-34:</b> {@code viewerZoneId} (nullable, an IANA zone id) is the zone this
+     * history is bucketed in — a personal activity log reads oddest when a session's date is pinned
+     * to somewhere the viewer no longer is (it can even show a completed session as "in the future"
+     * relative to the viewer's own current clock, if the viewer has since moved to a very different
+     * zone), so this endpoint buckets by the viewer's own <em>current</em> zone, not the session's
+     * location/origin zone. Invalid (unparseable) values are rejected with a
+     * {@code BadRequestException}. Nullable only because today's client doesn't send it yet
+     * (CLIENT-SESSION-24) — when omitted, this falls back to the session's own location/origin zone
+     * (the pre-SESSION-34-scope-change behavior) rather than failing the request outright, since
+     * every existing caller omits it until that client ticket ships.
      */
-    SessionHistoryDatesResponse getSessionHistoryDates(UUID userId, int dateCount, LocalDate before);
+    SessionHistoryDatesResponse getSessionHistoryDates(
+            UUID userId, int dateCount, LocalDate before, String viewerZoneId);
 
     /**
      * Standalone → creator-only. Group-linked → owner/admin via canManageMembers.

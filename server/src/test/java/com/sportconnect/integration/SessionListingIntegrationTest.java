@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.UUID;
@@ -95,6 +96,29 @@ class SessionListingIntegrationTest extends BaseIT {
                 .sportId(1L)
                 .locationId(status == SessionStatus.PREPARING ? null : 1L)
                 .scheduledStart(scheduledStart.atZone(ZoneId.systemDefault()).toInstant())
+                .status(status)
+                .capacity(9999)
+                .feeType(status == SessionStatus.PREPARING ? null : FeeType.FREE)
+                .initialSlot(0)
+                .autoApprove(true)
+                .build();
+        return sessionRepository.save(session).getId();
+    }
+
+    /** SESSION-34 — same shape as {@link #createSession}, but takes a precomputed {@link Instant}
+     * directly (not a wall-clock {@link LocalDateTime} converted via the JVM's own zone) so
+     * dateCount zone tests can control exactly which UTC instant — and therefore which calendar
+     * date under a given {@code viewerZoneId} — a session lands on, independent of whatever zone
+     * this test JVM happens to run in. */
+    private Long createSessionAtInstant(SessionStatus status, Instant scheduledStart) {
+        Session session = Session.builder()
+                .groupId(null)
+                .postId(postIdSeq.getAndIncrement())
+                .sessionType(SessionType.STANDALONE)
+                .createdBy(callerId)
+                .sportId(1L)
+                .locationId(status == SessionStatus.PREPARING ? null : 1L)
+                .scheduledStart(scheduledStart)
                 .status(status)
                 .capacity(9999)
                 .feeType(status == SessionStatus.PREPARING ? null : FeeType.FREE)
@@ -394,6 +418,146 @@ class SessionListingIntegrationTest extends BaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.dates.length()").value(3))
                 .andExpect(jsonPath("$.data.hasMore").value(false));
+    }
+
+    @Test
+    void history_dateCountBucketsByUtcWhenViewerZoneIdOmitted() throws Exception {
+        // 23:30 UTC bucketed under any positive-offset zone (e.g. the server's own ambient zone)
+        // would roll onto the 15th — omitting viewerZoneId must bucket by plain UTC, not by
+        // whatever zone this test JVM happens to be running in.
+        Long sessionId = createSessionAtInstant(SessionStatus.COMPLETED, Instant.parse("2026-09-14T23:30:00Z"));
+        participate(sessionId, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dates.length()").value(1))
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"))
+                .andExpect(jsonPath("$.data.dates[0].count").value(1));
+    }
+
+    @Test
+    void history_dateCountBucketsByViewerZoneIdWhenProvided() throws Exception {
+        // 2026-09-15 05:00 UTC is 2026-09-14 22:00 in Los Angeles (PDT, UTC-7) — the same session
+        // must bucket onto a different calendar date depending on whether viewerZoneId is given.
+        Instant scheduledStart = Instant.parse("2026-09-15T05:00:00Z");
+        Long sessionId = createSessionAtInstant(SessionStatus.COMPLETED, scheduledStart);
+        participate(sessionId, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-15"));
+        mockMvc.perform(get("/api/sessions/history")
+                        .param("dateCount", "5")
+                        .param("viewerZoneId", "America/Los_Angeles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dates.length()").value(1))
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"));
+    }
+
+    @Test
+    void history_dateCountMergesSessionsAcrossUtcDayBoundaryUnderTheSameViewerZone() throws Exception {
+        // Two sessions on different UTC calendar dates (14th and 15th) both fall on LA's 14th —
+        // proves GROUP BY 1 actually re-aggregates rows whose bucket changed, not just passes a
+        // single row through unchanged.
+        Long sessionA = createSessionAtInstant(SessionStatus.COMPLETED, Instant.parse("2026-09-14T23:00:00Z"));
+        Long sessionB = createSessionAtInstant(SessionStatus.CANCELLED, Instant.parse("2026-09-15T01:00:00Z"));
+        participate(sessionA, ParticipantStatus.JOINED);
+        participate(sessionB, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dates.length()").value(2))
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-15"))
+                .andExpect(jsonPath("$.data.dates[1].date").value("2026-09-14"));
+        mockMvc.perform(get("/api/sessions/history")
+                        .param("dateCount", "5")
+                        .param("viewerZoneId", "America/Los_Angeles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dates.length()").value(1))
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"))
+                .andExpect(jsonPath("$.data.dates[0].count").value(2));
+    }
+
+    @Test
+    void history_dateCountBeforeCursorRespectsViewerZoneId() throws Exception {
+        // Both sessions are constructed so their LA-local date is the 10th/14th respectively, even
+        // though their raw UTC instants land on different (later) calendar days — the before cursor
+        // must compare using the same viewerZoneId-shifted date, not the raw UTC one.
+        Long older = createSessionAtInstant(SessionStatus.COMPLETED, Instant.parse("2026-09-10T06:00:00Z"));
+        Long newer = createSessionAtInstant(SessionStatus.COMPLETED, Instant.parse("2026-09-15T05:00:00Z"));
+        participate(older, ParticipantStatus.JOINED);
+        participate(newer, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history")
+                        .param("dateCount", "5")
+                        .param("viewerZoneId", "America/Los_Angeles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dates.length()").value(2))
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"))
+                .andExpect(jsonPath("$.data.dates[1].date").value("2026-09-09"));
+        mockMvc.perform(get("/api/sessions/history")
+                        .param("dateCount", "5")
+                        .param("before", "2026-09-14")
+                        .param("viewerZoneId", "America/Los_Angeles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dates.length()").value(1))
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-09"));
+    }
+
+    @Test
+    void history_dateCountRespectsDstTransitionInViewerZoneId() throws Exception {
+        // 2026-11-01 09:00 UTC is the exact moment America/Los_Angeles falls back from PDT (UTC-7)
+        // to PST (UTC-8) (1st Sunday of November). Just before it (still PDT), 07:15 UTC is
+        // 2026-11-01 00:15 local — genuinely DST-aware conversion required, since naively applying
+        // the day's *other* offset (PST, UTC-8) instead would misbucket this onto 2026-10-31.
+        Long sessionId = createSessionAtInstant(SessionStatus.COMPLETED, Instant.parse("2026-11-01T07:15:00Z"));
+        participate(sessionId, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history")
+                        .param("dateCount", "5")
+                        .param("viewerZoneId", "America/Los_Angeles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dates.length()").value(1))
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-11-01"));
+    }
+
+    @Test
+    void history_dateCountIncludesGroupLinkedSessionsAlongsideStandaloneOnes() throws Exception {
+        LocalDateTime day = LocalDateTime.of(2026, 9, 14, 9, 0);
+        Long standaloneId = createSession(SessionStatus.COMPLETED, day);
+        Long groupLinkedId = createGroupLinkedSession(SessionStatus.CANCELLED, day.plusHours(2));
+        participate(standaloneId, ParticipantStatus.JOINED);
+        participate(groupLinkedId, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dates.length()").value(1))
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"))
+                .andExpect(jsonPath("$.data.dates[0].count").value(2));
+    }
+
+    @Test
+    void history_dateCountRejectsInvalidViewerZoneId() throws Exception {
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history")
+                        .param("dateCount", "5")
+                        .param("viewerZoneId", "Not/AZone"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void history_dateCountRejectsViewerZoneIdWithoutDateCount() throws Exception {
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history")
+                        .param("date", "2026-09-14")
+                        .param("viewerZoneId", "America/Los_Angeles"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

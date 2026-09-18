@@ -60,6 +60,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -114,6 +115,10 @@ public class SessionServiceImpl implements SessionService {
             List.of(SessionStatus.CANCELLED, SessionStatus.COMPLETED);
     private static final List<String> HISTORY_SESSION_STATUS_NAMES =
             List.of(SessionStatus.CANCELLED.name(), SessionStatus.COMPLETED.name());
+
+    /** SESSION-34 — {@code getSessionHistoryDates}' bucketing zone when the caller omits
+     * {@code viewerZoneId} (every caller today, until CLIENT-SESSION-24 ships). */
+    private static final String DEFAULT_HISTORY_ZONE_ID = "UTC";
 
     /** SESSION-25 — discoverSessions' default status list when the caller omits/empties
      * {@code statuses}. Coincides with {@link #UPCOMING_SESSION_STATUSES} today but kept as its
@@ -200,11 +205,6 @@ public class SessionServiceImpl implements SessionService {
                 .locationNote(request.getLocationNote())
                 .scheduledStart(request.getScheduledStart())
                 .scheduledEndAt(scheduledEndAt)
-                // SESSION-33: only ever set for a session created with no location yet — never
-                // for one created with a real location, so SESSION-34's
-                // COALESCE(origin_zone_id, location.timezone) can't override a from-day-one
-                // location's own zone.
-                .originZoneId(request.getLocationId() == null ? request.getOriginZoneId() : null)
                 .status(initialStatus)
                 .capacity(request.getCapacity())
                 .feeType(request.getFeeType())
@@ -295,12 +295,33 @@ public class SessionServiceImpl implements SessionService {
         return toResponsePage(sessions, userId);
     }
 
+    /**
+     * SESSION-27/34. Fetches one extra row so {@code hasMore} can be computed without a separate
+     * count query. Dates are bucketed by {@code viewerZoneId} — the viewer's own <em>current</em>
+     * zone, not the session's location/origin zone — since a personal history reads oddest when a
+     * date is pinned to somewhere the viewer no longer is (a completed session can even appear "in
+     * the future" relative to the viewer's own current clock, if the viewer has since moved to a
+     * very different zone). Falls back to {@link #DEFAULT_HISTORY_ZONE_ID} when {@code viewerZoneId}
+     * is omitted (every caller today, until CLIENT-SESSION-24 ships) rather than failing the
+     * request outright.
+     *
+     * @throws BadRequestException if {@code viewerZoneId} is non-null but not a valid IANA zone id
+     */
     @Override
     @Transactional(readOnly = true)
-    public SessionHistoryDatesResponse getSessionHistoryDates(UUID userId, int dateCount, LocalDate before) {
-        // Fetches one extra row so hasMore can be computed without a separate count query.
+    public SessionHistoryDatesResponse getSessionHistoryDates(
+            UUID userId, int dateCount, LocalDate before, String viewerZoneId) {
+        String zoneId = DEFAULT_HISTORY_ZONE_ID;
+        if (viewerZoneId != null) {
+            try {
+                zoneId = ZoneId.of(viewerZoneId).getId();
+            } catch (DateTimeException e) {
+                throw new BadRequestException("viewerZoneId is not a valid IANA zone id: " + viewerZoneId);
+            }
+        }
         List<SessionDateCountProjection> rows = sessionRepository.findHistoryDateCounts(
-                HISTORY_SESSION_STATUS_NAMES, userId, ParticipantStatus.JOINED.name(), before, dateCount + 1);
+                HISTORY_SESSION_STATUS_NAMES, userId, ParticipantStatus.JOINED.name(), before, zoneId,
+                dateCount + 1);
         boolean hasMore = rows.size() > dateCount;
         List<SessionHistoryDateCount> dates = rows.stream()
                 .limit(dateCount)

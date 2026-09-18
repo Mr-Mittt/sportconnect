@@ -3962,6 +3962,55 @@ explicit go-ahead at each step (full story in A3's summary doc):
   pgjdbc's session `TimeZone` happens to match the JVM's zone on this deployment, not structurally —
   SESSION-35's job to fix properly. Green: session-impl (162 tests) + `:server:test` (231 tests, 0
   failures).
+- **SESSION-34 (`DONE`, 2026-09-17/18,
+  `modules/session/docs/MVP/SESSION-34_HISTORY_DATE_COUNTS_AT_TIME_ZONE.md`):** third implementation
+  ticket off SESSION-32's design, and the actual fix SESSION-31 was chasing — `findHistoryDateCounts`
+  rewritten to bucket by an explicit `AT TIME ZONE` conversion, retiring the reverted
+  `zoneOffsetSeconds` point-fix entirely. **Scope changed mid-implementation** (see the ticket file's
+  own "Scope change" section): the original design (location/origin-zone bucketing, per SESSION-32's
+  design doc) was built, tested, and verified against real Postgres, then replaced before this ticket
+  closed — a real objection surfaced that a *personal* history view reads oddest when a date is
+  pinned to somewhere the viewer no longer is (a session played in one timezone, viewed later from a
+  very different one, can even bucket onto a date that's still "tomorrow" from the viewer's own
+  current moment). Final design: buckets by a new optional `viewerZoneId` query param (the caller's
+  own current zone), falling back to a fixed `"UTC"` when omitted (every caller today, until
+  **CLIENT-SESSION-24** ships — its scope extended to send this). This made `Session.originZoneId`
+  (SESSION-33) pointless — it had exactly one consumer, this query's original design — so it was
+  **fully removed** (new migration `V070`, since `V069` had already merged; `Session.originZoneId`,
+  `CreateSessionRequest.originZoneId`, and the capture logic in `createSession` all removed;
+  SESSION-33's own ticket file carries a Delta note). The removal also eliminated the native SQL
+  `LEFT JOIN locations` the original design needed — `session-impl` no longer touches `location-impl`'s
+  tables at all for this query, resolving a cross-domain concern raised mid-review. **Two real
+  H2-vs-Postgres divergences found and fixed along the way, not guessed:** (1) H2 2.2.224's
+  `CAST(timestamptz AT TIME ZONE zone AS date)` silently re-normalizes through the JDBC session's own
+  default zone instead of preserving the shifted wall-clock fields real Postgres does — fixed via
+  `TO_CHAR(x AT TIME ZONE zone, 'YYYY-MM-DD')` instead of a direct `CAST`; (2) `GROUP BY` on that same
+  repeated expression failed only through Hibernate's native-query path with `Column "..." must be in
+  the GROUP BY list`, despite matching the `SELECT` list exactly (not reproducible via a hand-written
+  JDBC `PreparedStatement` sending identical SQL — root cause not fully isolated) — fixed with
+  `GROUP BY 1` (ordinal), sidestepping expression-equivalence checking entirely. Both verified
+  correct on H2 and a real-Postgres reproduction. Documented in `session-impl/CLAUDE.md`'s gotchas
+  (two new bullets). Reviewed the other 5 `scheduled_start`-touching queries; none needed `AT TIME
+  ZONE` treatment. No client change — wire contract additive/backward-compatible. Also filed
+  **SESSION-36** (a pre-existing, unrelated test flake found while re-running the suite — see below).
+  **"Do we have enough IT?" asked directly after this ticket was first called done — found two real
+  gaps, same as SESSION-25's own precedent:** (1) `V069`/`V070` had never actually been run against
+  real Postgres at all (only temp-table *reproductions* of the query shape) — `scheduled_start` was
+  still `timestamp without time zone` on the real dev container; fixed by actually booting the app
+  against it (Liquibase applied both cleanly) and doing a real HTTP round trip through the running
+  app end-to-end; (2) four real scenarios had no IT coverage — merging two different-UTC-date
+  sessions into one bucket under a shared zone (the only test proving `GROUP BY 1` actually
+  re-aggregates), `before` combined with `viewerZoneId`, a real DST transition boundary, and
+  `dateCount` including a group-linked session. All 4 added. Green: session-impl (165 tests, 1
+  unrelated flake) + `:server:test` (239 tests, 0 failures on a clean run; 9 failures on one run all
+  traced to the already-documented SESSION-22 RabbitMQ flake, confirmed via isolated re-run).
+- **SESSION-36 (`TODO`, 2026-09-17/18,
+  `modules/session/docs/MVP/SESSION-36_FLAKY_COMPUTENEXTOCCURRENCE_TIME_OF_DAY_TESTS.md`):**
+  `SessionGenerationServiceSpec`'s `computeNextOccurrence` tests derive expectations from
+  `LocalTime.now()`/`LocalDate.now()` at test-run time instead of a fixed clock — two different tests
+  in the same group were observed failing at different points across a midnight boundary during
+  SESSION-34's own repeated test runs, confirmed unrelated to that ticket's changes via `git diff`.
+  Needs a fixed/injected `Clock` instead of the real one. Documentation only, not fixed here.
 - **SESSION-29 (`TODO`, documentation only, 2026-09-15,
   `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
   `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive

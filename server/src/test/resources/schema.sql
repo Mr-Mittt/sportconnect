@@ -321,9 +321,6 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- server-zoned wall-clock value.
     scheduled_start TIMESTAMP WITH TIME ZONE NOT NULL,
     scheduled_end_at TIMESTAMP WITH TIME ZONE,
-    -- SESSION-33 (V069): nullable, set only for a session created with no location yet — the
-    -- creator's own browser zone, used as a fallback/override for calendar-date bucketing.
-    origin_zone_id VARCHAR(64),
     status VARCHAR(20) NOT NULL DEFAULT 'SCHEDULED',
     capacity INTEGER NOT NULL DEFAULT 9999,
     fee_type VARCHAR(10),

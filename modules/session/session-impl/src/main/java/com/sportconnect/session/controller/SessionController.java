@@ -123,10 +123,10 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
-    @Operation(summary = "List the caller's session history, or its distinct history dates", description = "SESSION-27 — exactly one of date or dateCount is required. date: paginated CANCELLED/COMPLETED sessions the caller was JOINED to, for that calendar day, scheduledStart DESC. dateCount: the last N distinct history dates (most-recent-first) with per-date counts; before (exclusive, only valid alongside dateCount) pages further back.")
+    @Operation(summary = "List the caller's session history, or its distinct history dates", description = "SESSION-27/34 — exactly one of date or dateCount is required. date: paginated CANCELLED/COMPLETED sessions the caller was JOINED to, for that calendar day, scheduledStart DESC. dateCount: the last N distinct history dates (most-recent-first) with per-date counts; before (exclusive, only valid alongside dateCount) pages further back; viewerZoneId (an IANA zone id, only valid alongside dateCount) is the zone dates are bucketed in — falls back to the session's own location/origin zone when omitted.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions, or history dates (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "date/dateCount both given or neither, before without dateCount, or dateCount <= 0"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "date/dateCount both given or neither, before/viewerZoneId without dateCount, dateCount <= 0, or an invalid viewerZoneId"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/history")
@@ -136,12 +136,16 @@ public class SessionController {
             @RequestParam(required = false) LocalDate date,
             @RequestParam(required = false) Integer dateCount,
             @RequestParam(required = false) LocalDate before,
+            @RequestParam(required = false) String viewerZoneId,
             @PageableDefault(size = 20) Pageable pageable) {
         if ((date == null) == (dateCount == null)) {
             throw new BadRequestException("Exactly one of date or dateCount is required");
         }
         if (dateCount == null && before != null) {
             throw new BadRequestException("before is only valid alongside dateCount");
+        }
+        if (dateCount == null && viewerZoneId != null) {
+            throw new BadRequestException("viewerZoneId is only valid alongside dateCount");
         }
         if (dateCount != null && dateCount <= 0) {
             throw new BadRequestException("dateCount must be positive");
@@ -152,7 +156,8 @@ public class SessionController {
             Page<SessionResponse> response = sessionService.getSessionHistory(userId, date, pageable);
             return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
         }
-        SessionHistoryDatesResponse response = sessionService.getSessionHistoryDates(userId, dateCount, before);
+        SessionHistoryDatesResponse response =
+                sessionService.getSessionHistoryDates(userId, dateCount, before, viewerZoneId);
         return ResponseEntity.ok(ApiResponse.success("History dates retrieved successfully", response));
     }
 
