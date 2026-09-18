@@ -2,11 +2,15 @@
 
 **Status:** `TODO`
 **Depends on:** backend SESSION-33 (offset-aware `scheduledStart` contract), SESSION-34
-(`viewerZoneId` on `/history?dateCount` — done, see below), and SESSION-35 (caller-zone transport
-for `/discover`'s `startTime` filter) — **hard-blocked** on all three; the request shapes this
-ticket builds against don't exist until they ship.
+(`viewerZoneId` on `/history?dateCount` — done, see below), and SESSION-35 (`viewerZoneId` on
+`/discover`, `/upcoming?date`, and `/history?date` — done, see below) — **hard-blocked** on all
+three; the request shapes this ticket builds against don't exist until they ship.
 **Filed:** 2026-09-16, spawned from `documentation/md/LOCATION_TIMEZONE_DESIGN.md`. **Scope extended
 2026-09-17/18** once SESSION-34 shipped its own caller-zone param (`/history` scope bullet below).
+**Scope extended again 2026-09-18** once SESSION-35 also added `viewerZoneId` to `/upcoming?date`
+and `/history?date` (consumer census run from that ticket — no live client caller of either
+endpoint exists yet, only this still-`TODO` ticket and `CLIENT-SESSION-23`, so nothing broke, but
+whichever of those two lands the actual `/upcoming`/`/history?date` calls needs to send it too).
 
 Today the client submits `scheduledStart` as a bare local datetime string with no offset — the
 backend silently assumes it means the server's own JVM timezone. Once SESSION-33 requires an
@@ -27,12 +31,17 @@ three.
   date is pinned to somewhere the viewer no longer is, so this is what makes `/history?dateCount`
   actually bucket by the viewer's real current zone in practice, not just fall back to `"UTC"` for
   every real user.
-- **Discover search:** attach the same browser IANA zone to `/discover` requests per SESSION-35's
-  chosen transport (query param or header — follow whatever that ticket lands on; check whether it
-  reused `viewerZoneId`'s name/shape for consistency with `/history`, per that ticket's own updated
-  "Open questions"). No permission prompt is needed for any of these — `Intl.DateTimeFormat` is a
-  standard, ungated browser API, unlike Geolocation.
-- Update the relevant MSW handlers (`client/e2e/mocks`) to match all three backends' new request
+- **Discover search:** attach the same browser IANA zone to `/discover` requests as `viewerZoneId`
+  — SESSION-35 reused the exact same param name/shape as `/history?dateCount` for consistency (one
+  zone param across every zone-aware listing endpoint), only valid alongside `date` or
+  `startTimeFilter` (rejected otherwise). No permission prompt is needed for any of these —
+  `Intl.DateTimeFormat` is a standard, ungated browser API, unlike Geolocation.
+- **Upcoming/history-by-date (`GET /api/sessions/upcoming?date=`, `GET /api/sessions/history?date=`):**
+  same `viewerZoneId` param, added by SESSION-35 alongside its `/discover` work — attach it whenever
+  either call includes `date`, same rule as `/discover`. Whichever of **CLIENT-SESSION-23**
+  (upcoming/history UI) or this ticket actually wires up these two calls first should send
+  `viewerZoneId` on them from the start, not leave it for a later patch.
+- Update the relevant MSW handlers (`client/e2e/mocks`) to match all four backends' new request
   shapes once every dependency's real contract is known.
 
 ## Out of scope

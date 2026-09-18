@@ -116,9 +116,9 @@ public class SessionServiceImpl implements SessionService {
     private static final List<String> HISTORY_SESSION_STATUS_NAMES =
             List.of(SessionStatus.CANCELLED.name(), SessionStatus.COMPLETED.name());
 
-    /** SESSION-34 — {@code getSessionHistoryDates}' bucketing zone when the caller omits
-     * {@code viewerZoneId} (every caller today, until CLIENT-SESSION-24 ships). */
-    private static final String DEFAULT_HISTORY_ZONE_ID = "UTC";
+    /** SESSION-34/35 — the {@code viewerZoneId}-accepting methods' fallback zone when the caller
+     * omits it (every caller today, until CLIENT-SESSION-24 ships). */
+    private static final String DEFAULT_ZONE_ID = "UTC";
 
     /** SESSION-25 — discoverSessions' default status list when the caller omits/empties
      * {@code statuses}. Coincides with {@link #UPCOMING_SESSION_STATUSES} today but kept as its
@@ -270,29 +270,73 @@ public class SessionServiceImpl implements SessionService {
         return toResponsePage(sessionRepository.findByGroupId(groupId, pageable), currentUserId);
     }
 
+    /**
+     * SESSION-35: {@code date}'s day boundary is computed in {@code viewerZoneId} (falling back to
+     * {@link #DEFAULT_ZONE_ID} when omitted, via {@link #resolveZone}) rather than the JVM's own
+     * zone — a caller-relative "today" the same way {@code discoverSessions}'/
+     * {@code getSessionHistory}'s {@code date} filters are. No-op when {@code date} is null, since
+     * {@code findUpcomingSessions} (the no-date branch) has no day boundary to compute at all.
+     *
+     * @throws BadRequestException if {@code viewerZoneId} is non-null but not a valid IANA zone id
+     */
     @Override
     @Transactional(readOnly = true)
-    public Page<SessionResponse> getUpcomingSessions(UUID userId, LocalDate date, Pageable pageable) {
+    public Page<SessionResponse> getUpcomingSessions(
+            UUID userId, LocalDate date, String viewerZoneId, Pageable pageable) {
         Pageable effectivePageable = unsorted(pageable);
-        Page<Session> sessions = date != null
-                ? sessionRepository.findUpcomingSessionsByDate(UPCOMING_SESSION_STATUSES, userId,
-                        UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                        date.atStartOfDay(ZoneId.systemDefault()).toInstant(),
-                        date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(), effectivePageable)
-                : sessionRepository.findUpcomingSessions(UPCOMING_SESSION_STATUSES, userId,
-                        UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                        effectivePageable);
+        Page<Session> sessions;
+        if (date != null) {
+            ZoneId zone = resolveZone(viewerZoneId);
+            sessions = sessionRepository.findUpcomingSessionsByDate(UPCOMING_SESSION_STATUSES, userId,
+                    UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
+                    date.atStartOfDay(zone).toInstant(),
+                    date.plusDays(1).atStartOfDay(zone).toInstant(), effectivePageable);
+        } else {
+            sessions = sessionRepository.findUpcomingSessions(UPCOMING_SESSION_STATUSES, userId,
+                    UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
+                    effectivePageable);
+        }
         return toResponsePage(sessions, userId);
     }
 
+    /**
+     * SESSION-35: {@code date}'s day boundary is computed in {@code viewerZoneId} (falling back to
+     * {@link #DEFAULT_ZONE_ID} when omitted, via {@link #resolveZone}) rather than the JVM's own
+     * zone — same caller-relative treatment as {@code discoverSessions}'/
+     * {@code getUpcomingSessions}'s {@code date} filters.
+     *
+     * @throws BadRequestException if {@code viewerZoneId} is non-null but not a valid IANA zone id
+     */
     @Override
     @Transactional(readOnly = true)
-    public Page<SessionResponse> getSessionHistory(UUID userId, LocalDate date, Pageable pageable) {
-        Instant dayStart = date.atStartOfDay(ZoneId.systemDefault()).toInstant();
-        Instant dayEnd = date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+    public Page<SessionResponse> getSessionHistory(
+            UUID userId, LocalDate date, String viewerZoneId, Pageable pageable) {
+        ZoneId zone = resolveZone(viewerZoneId);
+        Instant dayStart = date.atStartOfDay(zone).toInstant();
+        Instant dayEnd = date.plusDays(1).atStartOfDay(zone).toInstant();
         Page<Session> sessions = sessionRepository.findHistorySessionsByDate(
                 HISTORY_SESSION_STATUSES, userId, ParticipantStatus.JOINED, dayStart, dayEnd, unsorted(pageable));
         return toResponsePage(sessions, userId);
+    }
+
+    /**
+     * SESSION-34/35 — resolves the caller-supplied {@code viewerZoneId} query param shared by
+     * every zone-aware listing method ({@code discoverSessions}, {@code getSessionHistory},
+     * {@code getUpcomingSessions}, {@code getSessionHistoryDates}): {@code null} falls back to
+     * {@link #DEFAULT_ZONE_ID} rather than failing the request (every caller omits it today, until
+     * CLIENT-SESSION-24 ships); a non-null value is validated via {@link ZoneId#of}.
+     *
+     * @throws BadRequestException if {@code viewerZoneId} is non-null but not a valid IANA zone id
+     */
+    private ZoneId resolveZone(String viewerZoneId) {
+        if (viewerZoneId == null) {
+            return ZoneId.of(DEFAULT_ZONE_ID);
+        }
+        try {
+            return ZoneId.of(viewerZoneId);
+        } catch (DateTimeException e) {
+            throw new BadRequestException("viewerZoneId is not a valid IANA zone id: " + viewerZoneId);
+        }
     }
 
     /**
@@ -301,7 +345,7 @@ public class SessionServiceImpl implements SessionService {
      * zone, not the session's location/origin zone — since a personal history reads oddest when a
      * date is pinned to somewhere the viewer no longer is (a completed session can even appear "in
      * the future" relative to the viewer's own current clock, if the viewer has since moved to a
-     * very different zone). Falls back to {@link #DEFAULT_HISTORY_ZONE_ID} when {@code viewerZoneId}
+     * very different zone). Falls back to {@link #DEFAULT_ZONE_ID} when {@code viewerZoneId}
      * is omitted (every caller today, until CLIENT-SESSION-24 ships) rather than failing the
      * request outright.
      *
@@ -311,14 +355,7 @@ public class SessionServiceImpl implements SessionService {
     @Transactional(readOnly = true)
     public SessionHistoryDatesResponse getSessionHistoryDates(
             UUID userId, int dateCount, LocalDate before, String viewerZoneId) {
-        String zoneId = DEFAULT_HISTORY_ZONE_ID;
-        if (viewerZoneId != null) {
-            try {
-                zoneId = ZoneId.of(viewerZoneId).getId();
-            } catch (DateTimeException e) {
-                throw new BadRequestException("viewerZoneId is not a valid IANA zone id: " + viewerZoneId);
-            }
-        }
+        String zoneId = resolveZone(viewerZoneId).getId();
         List<SessionDateCountProjection> rows = sessionRepository.findHistoryDateCounts(
                 HISTORY_SESSION_STATUS_NAMES, userId, ParticipantStatus.JOINED.name(), before, zoneId,
                 dateCount + 1);
@@ -690,12 +727,36 @@ public class SessionServiceImpl implements SessionService {
                 .orElseThrow(() -> new BadRequestException("No pending join request for this user"));
     }
 
+    /**
+     * SESSION-35: {@code date}'s day boundary and {@code startTime}'s time-of-day comparison are
+     * both evaluated in {@code viewerZoneId} (falling back to {@link #DEFAULT_ZONE_ID} when
+     * omitted, via {@link #resolveZone}) — a "sessions starting before 9am" filter is inherently
+     * caller-relative, not server-relative. Replaces the previous JVM-zone placeholder
+     * ({@code date}) and the JVM-offset {@code zoneOffsetSeconds}/{@code MOD} correction
+     * ({@code startTime}) with the same correction computed from the caller's own zone instead —
+     * see {@code SessionRepository.findDiscoverSessions}' Javadoc for exactly what this does and
+     * does not fix (correct unconditionally for a non-DST zone; a known, accepted residual gap for
+     * a DST-observing zone when a candidate session's date sits in the other DST season than the
+     * moment of the request — a real per-row fix was evaluated and rejected as too large a rewrite
+     * for this ticket, see that Javadoc).
+     *
+     * <p>SESSION-35 (2026-09-18 scope addition): {@code date} is now required, guaranteed
+     * non-null by the controller — the {@code lowerBound} param this method still passes to
+     * {@link SessionRepository#findDiscoverSessions} is always {@code null} as a result (its
+     * {@code scheduledStart >= now()} default applied only when a caller could omit both
+     * {@code date} and {@code startTimeFilter}, which is no longer possible). Left wired through
+     * rather than removed from the repository query/signature — genuinely dead today, but a
+     * no-op, harmless {@code IS NULL} branch, not worth the mechanical churn of dropping a
+     * parameter for a query untouched otherwise.
+     *
+     * @throws BadRequestException if {@code viewerZoneId} is non-null but not a valid IANA zone id
+     */
     @Override
     @Transactional(readOnly = true)
     public Page<SessionResponse> discoverSessions(
             UUID callerId, Long sportId, String title, Long locationId, Integer minOpenSlots,
             FeeType feeType, Long maxFeeAmountVnd, LocalDate date,
-            StartTimeFilter startTimeFilter, LocalTime startTime,
+            StartTimeFilter startTimeFilter, LocalTime startTime, String viewerZoneId,
             List<SessionStatus> statuses, Pageable pageable) {
         List<Long> activeSportIds = userSportProfileService.getUserProfiles(callerId).stream()
                 .map(UserSportProfileResponse::getSportId)
@@ -712,15 +773,14 @@ public class SessionServiceImpl implements SessionService {
 
         List<SessionStatus> effectiveStatuses = (statuses == null || statuses.isEmpty())
                 ? DISCOVER_DEFAULT_STATUSES : statuses;
-        // The now() default lower bound applies only when the caller hasn't already narrowed the
-        // time window via date or startTimeFilter — see SessionService.discoverSessions' Javadoc.
-        Instant lowerBound = (date == null && startTimeFilter == null) ? Instant.now() : null;
-        // Half-open [dayStart, dayEnd) range against scheduledStart, now a real instant (SESSION-33)
-        // — computed in the JVM's own zone to preserve today's exact bucketing behavior byte-for-
-        // byte. This is a placeholder, not a fix: SESSION-35 owns making this caller-zone-correct
-        // (see SessionRepository.findDiscoverSessions' SESSION-33-update Javadoc note).
-        Instant dayStart = date != null ? date.atStartOfDay(ZoneId.systemDefault()).toInstant() : null;
-        Instant dayEnd = date != null ? date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant() : null;
+        ZoneId zone = resolveZone(viewerZoneId);
+        // Half-open [dayStart, dayEnd) range against scheduledStart, computed in the caller's own
+        // zone (SESSION-35) — a plain instant comparison, so no query-side change is needed, unlike
+        // startTime below (see SessionRepository.findDiscoverSessions' Javadoc for why the two
+        // differ: date is a caller-known range, startTime is a per-row time-of-day extraction).
+        // date is required (SESSION-35 scope addition) so this window always applies now.
+        Instant dayStart = date.atStartOfDay(zone).toInstant();
+        Instant dayEnd = date.plusDays(1).atStartOfDay(zone).toInstant();
         // Unconverted wall-clock seconds-of-day — the repository query reconstructs the
         // wall-clock-equivalent from scheduledStart's raw stored representation itself (MOD
         // arithmetic against zoneOffsetSeconds), rather than shifting this parameter. See
@@ -731,18 +791,18 @@ public class SessionServiceImpl implements SessionService {
                 ? startTime.toSecondOfDay() : null;
         Integer startTimeAfterOrEqual = startTimeFilter == StartTimeFilter.AFTER_OR_EQUAL && startTime != null
                 ? startTime.toSecondOfDay() : null;
-        // The JVM's current UTC offset in seconds — added back to scheduledStart's raw-stored
-        // EXTRACT to undo the write-side shift (see SessionRepository.findDiscoverSessions'
-        // Javadoc). Only ever used by the two startTime* clauses, so left null (no-op MOD) when
-        // neither is set. A DST-observing server zone would need the row's own date to convert
-        // perfectly, which a "time-of-day regardless of date" filter can't supply — same
-        // inherent ambiguity the write-side conversion already has.
+        // The caller's zone's current UTC offset in seconds (SESSION-35: resolveZone(viewerZoneId),
+        // not the JVM's own zone) — added back to scheduledStart's raw-stored EXTRACT to reconstruct
+        // the caller's wall-clock time-of-day. Only ever used by the two startTime* clauses, so left
+        // null (no-op MOD) when neither is set. Computed from "now", not each row's own date — see
+        // SessionRepository.findDiscoverSessions' Javadoc for the accepted DST-across-seasons gap
+        // this implies for a DST-observing viewerZoneId.
         Integer zoneOffsetSeconds = (startTimeBeforeOrEqual != null || startTimeAfterOrEqual != null)
-                ? ZoneId.systemDefault().getRules().getOffset(Instant.now()).getTotalSeconds()
+                ? zone.getRules().getOffset(Instant.now()).getTotalSeconds()
                 : null;
 
         Page<Object[]> rows = sessionRepository.findDiscoverSessions(
-                effectiveStatuses, effectiveSportIds, callerId, ParticipantStatus.JOINED, lowerBound,
+                effectiveStatuses, effectiveSportIds, callerId, ParticipantStatus.JOINED, null,
                 title, locationId, feeType, maxFeeAmountVnd, dayStart, dayEnd,
                 startTimeBeforeOrEqual, startTimeAfterOrEqual, zoneOffsetSeconds, minOpenSlots, unsorted(pageable));
         Page<Session> sessions = rows.map(row -> (Session) row[0]);

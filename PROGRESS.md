@@ -4004,6 +4004,73 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `dateCount` including a group-linked session. All 4 added. Green: session-impl (165 tests, 1
   unrelated flake) + `:server:test` (239 tests, 0 failures on a clean run; 9 failures on one run all
   traced to the already-documented SESSION-22 RabbitMQ flake, confirmed via isolated re-run).
+- **SESSION-35 (`DONE`, 2026-09-18,
+  `modules/session/docs/MVP/SESSION-35_DISCOVER_CALLER_ZONE_FILTERS.md`):** fourth implementation
+  ticket off SESSION-32's design — `discoverSessions`' `date`/`startTime` filters now evaluate
+  against a caller-supplied `viewerZoneId` (same optional/`ZoneId.of(...)`-validated/`"UTC"`-
+  fallback param SESSION-34 already established for `/history?dateCount`) instead of the JVM's own
+  zone, via a single shared `SessionServiceImpl.resolveZone` helper. `date`'s day-boundary fix
+  needed no query change at all — it's a plain `Instant` range built service-side — but `startTime`
+  kept its pre-existing `EXTRACT`+offset-shift correction (now sourced from the caller's zone), not
+  a real per-row `AT TIME ZONE` conversion: HQL has no such operator, and the Postgres
+  function-call passthrough (`function('timezone', :zone, s.scheduledStart)`) that compiles cleanly
+  fails at execution against H2 (`Function "timezone" not found` — new gotcha documented in
+  `session-impl/CLAUDE.md`). Leaves an accepted, documented residual gap: a DST-observing
+  `viewerZoneId` is only correct when the candidate session's date falls in the same DST season as
+  the request. **Scope grew mid-implementation** (user call, 2026-09-18): `getUpcomingSessions`'
+  `date` and `getSessionHistory`'s `date` shared the exact same JVM-zone day-boundary bug (already
+  flagged as an unnamed placeholder in both their own Javadocs) — fixed both in this same ticket
+  with the identical one-line pattern rather than filing separate tickets, since it was already
+  touching this bug class. `/upcoming` gains `viewerZoneId` for the first time; `/history?date`
+  widens to accept it (previously only valid alongside `dateCount`). **Open question resolved:**
+  `/discover` reuses `viewerZoneId`'s exact name/shape rather than diverging — one zone param
+  across every zone-aware listing endpoint. **Consumer census run for the scope-added endpoints:**
+  no live client code calls `/upcoming` or `/history?date` today — the only references are
+  still-`TODO` **CLIENT-SESSION-23** (builds those calls) and **CLIENT-SESSION-24** (already
+  scoped to send `viewerZoneId` to `/discover`/`/history?dateCount`) — so nothing broke, but
+  **CLIENT-SESSION-24's scope was updated** (not just noted) to also cover `/upcoming?date` and
+  `/history?date` once CLIENT-SESSION-23 wires those calls up.
+
+  **Scope grew a second time, same day:** `/discover`'s `date` param made **required** (was
+  optional since SESSION-25), per direct user instruction given after the above shipped.
+  **Consumer census run before implementing** (mandatory per API Change Discipline) found a real,
+  live, already-shipped consumer this time — `client/src/features/session/hooks
+  /useDiscoverSessions.ts` (CLIENT-SESSION-6's Discover panel + rail-triggered modal) calls
+  `/discover` with no `date` at all, a general "browse every upcoming session" view. Flagged to the
+  user before proceeding; **user chose to proceed anyway and fix the client too.** A second,
+  non-obvious consequence was also surfaced and confirmed before implementing: `startTimeFilter`
+  previously worked *without* `date` ("any day, just this time-of-day"), which a required `date`
+  eliminates entirely (the two are ANDed), not just multi-day Discover browsing. Implemented:
+  controller `date` now plain-required (`MissingServletRequestParameterException` → existing 400
+  handling); the now-dead `viewerZoneId`-without-`date`/`startTimeFilter` 400 removed; service's
+  `now()`-default `lowerBound` (for the now-impossible "neither date nor startTimeFilter" case)
+  always `null`, repository param/query left in place (harmless always-taken `IS NULL` branch, not
+  worth the churn of removing a parameter from an otherwise-untouched query). Client:
+  `useDiscoverSessions` now always sends the browser's today (`date-fns` `format`, same pattern
+  `groupSessionsByDate` uses); `sessionKeys.discover` gained a date segment. **Follow-up ticket
+  filed** (not just noted): **CLIENT-SESSION-25** (`client/docs/BACKLOG_MVP.md`, `TODO`) — a real
+  date picker to undo the "today only" narrowing; **CLIENT-SESSION-6**'s own file got a Delta note
+  recording the regression. Tests: `SessionServiceImplSpec` call sites needing a real `date` now
+  fixed, one test (viewerZoneId-without-date/startTimeFilter) removed as no-longer-reachable;
+  `SessionDiscoverIntegrationTest` rewritten across the board (every request needs `date`; two
+  now-impossible-scenario tests removed; the "startTimeFilter regardless of date" test rewritten to
+  same-date fixtures; new `date_isRequiredRejectsBeingOmitted`). **"Do we have enough IT?" asked
+  directly after — found two real gaps, same as SESSION-25/27/34's own precedent:** no test proved
+  `startTimeFilter` actually stopped matching "any day" (every rewritten test only used same-date
+  fixtures, so it'd pass even if the new `date` AND were silently broken) — added
+  `startTimeFilter_excludesAMatchingTimeOfDayOnADifferentDateThanTheRequiredDate`; and `date`'s own
+  exclusion behavior was never directly proven even before this ticket (`dateFilter_*` tests only
+  ever saved the one expected match, no distractor on another day) — added
+  `dateFilter_excludesASessionOnADifferentDate`. Both added and green. Green: `session-impl`
+  (173 tests) + `SessionDiscoverIntegrationTest` (30 tests, up from 28) +
+  `SessionListingIntegrationTest` (existing, unaffected), both against real Postgres via
+  Testcontainers + client `tsc -b` clean + targeted Vitest (47 tests across
+  `useAddSportProfile`/`MatchesPage`/`useMatchesPageData`/`HomeFeedPage`/`FriendsPage`) +
+  `matches-journey.spec.ts` E2E (3 tests). A full `:server:test` run could not complete this
+  session — Docker Desktop/Hyper-V became unreachable on the dev machine mid-session (`failed to
+  connect to the backend: timed out dialing Hyper-V socket`), confirmed via `docker ps` failing
+  outright, not a code issue; the two classes this ticket actually touches were verified green both
+  in isolation and together before that outage.
 - **SESSION-36 (`TODO`, 2026-09-17/18,
   `modules/session/docs/MVP/SESSION-36_FLAKY_COMPUTENEXTOCCURRENCE_TIME_OF_DAY_TESTS.md`):**
   `SessionGenerationServiceSpec`'s `computeNextOccurrence` tests derive expectations from

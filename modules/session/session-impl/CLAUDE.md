@@ -242,8 +242,7 @@ ownership-only), so there's nothing this module needs to wrap.
   `TO_CHAR(x AT TIME ZONE zone, 'YYYY-MM-DD')` (or the equivalent format string for a time
   component) and cast *that* text result, never a direct `CAST(x AT TIME ZONE zone AS date/timestamp)`
   — verified to produce identical, correct output on both engines (see `SessionRepository
-  .findHistoryDateCounts`'s Javadoc for the full empirical trail). Relevant to SESSION-35 too, which
-  will add its own `AT TIME ZONE` usage.
+  .findHistoryDateCounts`'s Javadoc for the full empirical trail).
 - **A second, narrower H2 quirk found in the same query (SESSION-34): `GROUP BY` on a repeated
   `CAST(TO_CHAR(x AT TIME ZONE :param, ...))` expression can fail with `Column "..." must be in the
   GROUP BY list` — through Hibernate specifically, not reproducible via a hand-written JDBC
@@ -253,3 +252,19 @@ ownership-only), so there's nothing this module needs to wrap.
   checking entirely, verified correct on both H2 and real Postgres. If a future query needs to
   `GROUP BY` a bind-parameter-containing expression, reach for ordinal `GROUP BY` first rather than
   re-debugging this from scratch.
+- **HQL/JPQL has no `AT TIME ZONE` operator, and its Postgres function-call equivalent isn't
+  portable to H2 (SESSION-35).** `findDiscoverSessions` stayed a JPQL query (not native, to keep
+  returning `Session` entities + the `openSlots` scalar without a custom `@SqlResultSetMapping`), so
+  the real `x AT TIME ZONE zone` operator `findHistoryDateCounts` uses (a native query) wasn't
+  available here. The JPQL passthrough `function('timezone', :zone, s.scheduledStart)` compiles and
+  runs correctly against real Postgres (`timezone(zone, x)` is Postgres's function-call form of the
+  same operator) but fails at execution against H2 with
+  `org.hibernate.exception.SQLGrammarException: Function "timezone" not found` — H2 implements the
+  operator syntax but not this function-call form. SESSION-35 avoided the whole question by keeping
+  the pre-existing `EXTRACT`+offset-shift correction (just sourcing the offset from the caller's own
+  resolved zone instead of the JVM's), rather than switching to `AT TIME ZONE` — see
+  `SessionRepository.findDiscoverSessions`'s Javadoc for the accepted residual DST gap that leaves.
+  If a future query needs a real per-row `AT TIME ZONE` conversion inside a JPQL (not native) query,
+  this function-call passthrough is not the way; either go native with a result-set mapping, or find
+  another portable equivalent — don't re-attempt `function('timezone', ...)` expecting it to work on
+  H2.

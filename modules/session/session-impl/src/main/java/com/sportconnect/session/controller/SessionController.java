@@ -107,9 +107,10 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
-    @Operation(summary = "List the caller's upcoming sessions", description = "SESSION-27 — replaces GET /api/sessions/mine. Standalone or group-linked sessions where the caller currently has a JOINED or INVITED participant row, status PREPARING/SCHEDULED/ONGOING. Optional date narrows to one calendar day. Sorted scheduledStart ASC with a PREPARING->SCHEDULED->ONGOING tiebreaker; the caller's own Pageable sort is ignored.")
+    @Operation(summary = "List the caller's upcoming sessions", description = "SESSION-27 — replaces GET /api/sessions/mine. Standalone or group-linked sessions where the caller currently has a JOINED or INVITED participant row, status PREPARING/SCHEDULED/ONGOING. Optional date narrows to one calendar day. viewerZoneId (an IANA zone id, only valid alongside date) is the zone that day's boundaries are computed in — falls back to UTC when omitted. Sorted scheduledStart ASC with a PREPARING->SCHEDULED->ONGOING tiebreaker; the caller's own Pageable sort is ignored.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "viewerZoneId given without date, or an invalid viewerZoneId"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/upcoming")
@@ -117,16 +118,20 @@ public class SessionController {
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> getUpcomingSessions(
             Authentication authentication,
             @RequestParam(required = false) LocalDate date,
+            @RequestParam(required = false) String viewerZoneId,
             @PageableDefault(size = 20) Pageable pageable) {
+        if (date == null && viewerZoneId != null) {
+            throw new BadRequestException("viewerZoneId is only valid alongside date");
+        }
         Page<SessionResponse> response = sessionService.getUpcomingSessions(
-                SecurityUtils.extractUserId(authentication), date, pageable);
+                SecurityUtils.extractUserId(authentication), date, viewerZoneId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
-    @Operation(summary = "List the caller's session history, or its distinct history dates", description = "SESSION-27/34 — exactly one of date or dateCount is required. date: paginated CANCELLED/COMPLETED sessions the caller was JOINED to, for that calendar day, scheduledStart DESC. dateCount: the last N distinct history dates (most-recent-first) with per-date counts; before (exclusive, only valid alongside dateCount) pages further back; viewerZoneId (an IANA zone id, only valid alongside dateCount) is the zone dates are bucketed in — falls back to the session's own location/origin zone when omitted.")
+    @Operation(summary = "List the caller's session history, or its distinct history dates", description = "SESSION-27/34/35 — exactly one of date or dateCount is required. date: paginated CANCELLED/COMPLETED sessions the caller was JOINED to, for that calendar day, scheduledStart DESC. dateCount: the last N distinct history dates (most-recent-first) with per-date counts; before (exclusive, only valid alongside dateCount) pages further back. viewerZoneId (an IANA zone id, valid alongside either date or dateCount) is the zone the day boundary/date bucketing is computed in — falls back to UTC when omitted.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions, or history dates (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "date/dateCount both given or neither, before/viewerZoneId without dateCount, dateCount <= 0, or an invalid viewerZoneId"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "date/dateCount both given or neither, before without dateCount, dateCount <= 0, or an invalid viewerZoneId"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/history")
@@ -144,16 +149,13 @@ public class SessionController {
         if (dateCount == null && before != null) {
             throw new BadRequestException("before is only valid alongside dateCount");
         }
-        if (dateCount == null && viewerZoneId != null) {
-            throw new BadRequestException("viewerZoneId is only valid alongside dateCount");
-        }
         if (dateCount != null && dateCount <= 0) {
             throw new BadRequestException("dateCount must be positive");
         }
 
         UUID userId = SecurityUtils.extractUserId(authentication);
         if (date != null) {
-            Page<SessionResponse> response = sessionService.getSessionHistory(userId, date, pageable);
+            Page<SessionResponse> response = sessionService.getSessionHistory(userId, date, viewerZoneId, pageable);
             return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
         }
         SessionHistoryDatesResponse response =
@@ -161,10 +163,10 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("History dates retrieved successfully", response));
     }
 
-    @Operation(summary = "Discover joinable standalone sessions", description = "SESSION-25: PREPARING/SCHEDULED/ONGOING (default all three) standalone sessions gated to sports the caller holds an active profile for, excluding sessions the caller created or currently has joined. All params below sportId are optional and AND-combined; defaults to scheduledStart >= now() unless date or startTimeFilter is given. Sorted scheduledStart ASC, then remaining open slots ASC, then createdAt ASC — the caller's own Pageable sort is ignored.")
+    @Operation(summary = "Discover joinable standalone sessions", description = "SESSION-25: PREPARING/SCHEDULED/ONGOING (default all three) standalone sessions gated to sports the caller holds an active profile for, excluding sessions the caller created or currently has joined. date is required (SESSION-35); every other param below sportId is optional and AND-combined. viewerZoneId (an IANA zone id) is the zone date's day boundary and startTimeFilter/startTime's time-of-day comparison are evaluated in — falls back to UTC when omitted. Sorted scheduledStart ASC, then remaining open slots ASC, then createdAt ASC — the caller's own Pageable sort is ignored.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Negative minOpenSlots/maxFeeAmountVnd, startTimeFilter/startTime given without the other, or a status outside PREPARING/SCHEDULED/ONGOING"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "date missing, negative minOpenSlots/maxFeeAmountVnd, startTimeFilter/startTime given without the other, a status outside PREPARING/SCHEDULED/ONGOING, or an invalid viewerZoneId"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/discover")
@@ -177,9 +179,10 @@ public class SessionController {
             @RequestParam(required = false) Integer minOpenSlots,
             @RequestParam(required = false) FeeType feeType,
             @RequestParam(required = false) Long maxFeeAmountVnd,
-            @RequestParam(required = false) LocalDate date,
+            @RequestParam LocalDate date,
             @RequestParam(required = false) StartTimeFilter startTimeFilter,
             @RequestParam(required = false) LocalTime startTime,
+            @RequestParam(required = false) String viewerZoneId,
             @RequestParam(required = false) List<SessionStatus> status,
             @PageableDefault(size = 20) Pageable pageable) {
         if (minOpenSlots != null && minOpenSlots < 0) {
@@ -197,7 +200,7 @@ public class SessionController {
 
         Page<SessionResponse> response = sessionService.discoverSessions(
                 SecurityUtils.extractUserId(authentication), sportId, title, locationId, minOpenSlots,
-                feeType, maxFeeAmountVnd, date, startTimeFilter, startTime, status, pageable);
+                feeType, maxFeeAmountVnd, date, startTimeFilter, startTime, viewerZoneId, status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 

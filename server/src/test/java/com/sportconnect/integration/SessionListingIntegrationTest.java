@@ -285,6 +285,56 @@ class SessionListingIntegrationTest extends BaseIT {
                 .andExpect(jsonPath("$.data.content[0].id").value(onDayId));
     }
 
+    // ── /upcoming?date + viewerZoneId (SESSION-35) ─────────────────────────
+
+    @Test
+    void upcoming_dateBucketsByUtcWhenViewerZoneIdOmitted() throws Exception {
+        Instant scheduledStart = Instant.parse("2026-09-20T05:00:00Z");
+        Long sessionId = createSessionAtInstant(SessionStatus.SCHEDULED, scheduledStart);
+        participate(sessionId, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/upcoming").param("date", "2026-09-20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(sessionId));
+    }
+
+    @Test
+    void upcoming_dateWithViewerZoneIdNarrowsToThatCalendarDayInTheGivenZone() throws Exception {
+        // 2026-09-20 05:00 UTC is 2026-09-19 22:00 in Los Angeles (PDT, UTC-7).
+        Instant scheduledStart = Instant.parse("2026-09-20T05:00:00Z");
+        Long sessionId = createSessionAtInstant(SessionStatus.SCHEDULED, scheduledStart);
+        participate(sessionId, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/upcoming")
+                        .param("date", "2026-09-19")
+                        .param("viewerZoneId", "America/Los_Angeles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(sessionId));
+        mockMvc.perform(get("/api/sessions/upcoming").param("date", "2026-09-19"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(0));
+    }
+
+    @Test
+    void upcoming_dateRejectsAnInvalidViewerZoneId() throws Exception {
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/upcoming")
+                        .param("date", "2026-09-20")
+                        .param("viewerZoneId", "Not/AZone"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void upcoming_rejectsViewerZoneIdWithoutDate() throws Exception {
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/upcoming").param("viewerZoneId", "America/Los_Angeles"))
+                .andExpect(status().isBadRequest());
+    }
+
     // ── /history?date ───────────────────────────────────────────────────────
 
     @Test
@@ -551,12 +601,49 @@ class SessionListingIntegrationTest extends BaseIT {
                 .andExpect(status().isBadRequest());
     }
 
+    // ── /history?date + viewerZoneId (SESSION-35) ──────────────────────────
+
     @Test
-    void history_dateCountRejectsViewerZoneIdWithoutDateCount() throws Exception {
+    void history_dateBucketsByUtcWhenViewerZoneIdOmitted() throws Exception {
+        // 2026-09-15 05:00 UTC falls outside the 2026-09-15 [dayStart, dayEnd) range if bucketed by
+        // any positive-offset zone — omitting viewerZoneId must use plain UTC, not the JVM's zone.
+        Long sessionId = createSessionAtInstant(SessionStatus.COMPLETED, Instant.parse("2026-09-15T05:00:00Z"));
+        participate(sessionId, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history").param("date", "2026-09-15"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(sessionId));
+    }
+
+    @Test
+    void history_dateWithViewerZoneIdNarrowsToThatCalendarDayInTheGivenZone() throws Exception {
+        // 2026-09-15 05:00 UTC is 2026-09-14 22:00 in Los Angeles (PDT, UTC-7) — date=2026-09-15
+        // matches it only when evaluated in UTC (the default), not when evaluated in LA's zone.
+        Instant scheduledStart = Instant.parse("2026-09-15T05:00:00Z");
+        Long sessionId = createSessionAtInstant(SessionStatus.COMPLETED, scheduledStart);
+        participate(sessionId, ParticipantStatus.JOINED);
+
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/history")
                         .param("date", "2026-09-14")
                         .param("viewerZoneId", "America/Los_Angeles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(sessionId));
+        mockMvc.perform(get("/api/sessions/history")
+                        .param("date", "2026-09-14"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(0));
+    }
+
+    @Test
+    void history_dateRejectsAnInvalidViewerZoneId() throws Exception {
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history")
+                        .param("date", "2026-09-14")
+                        .param("viewerZoneId", "Not/AZone"))
                 .andExpect(status().isBadRequest());
     }
 
