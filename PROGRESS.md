@@ -4071,13 +4071,29 @@ explicit go-ahead at each step (full story in A3's summary doc):
   connect to the backend: timed out dialing Hyper-V socket`), confirmed via `docker ps` failing
   outright, not a code issue; the two classes this ticket actually touches were verified green both
   in isolation and together before that outage.
-- **SESSION-36 (`TODO`, 2026-09-17/18,
+- **SESSION-36 (`DONE`, 2026-09-19,
   `modules/session/docs/MVP/SESSION-36_FLAKY_COMPUTENEXTOCCURRENCE_TIME_OF_DAY_TESTS.md`):**
-  `SessionGenerationServiceSpec`'s `computeNextOccurrence` tests derive expectations from
+  `SessionGenerationServiceSpec`'s `computeNextOccurrence` tests derived expectations from
   `LocalTime.now()`/`LocalDate.now()` at test-run time instead of a fixed clock — two different tests
   in the same group were observed failing at different points across a midnight boundary during
   SESSION-34's own repeated test runs, confirmed unrelated to that ticket's changes via `git diff`.
-  Needs a fixed/injected `Clock` instead of the real one. Documentation only, not fixed here.
+  **Fixed test-only, no production change** — a `Clock`-injection design (new `ClockConfig` bean +
+  `Clock` field on `SessionGenerationService`) was drafted and walked through in discussion, then
+  rejected once traced through: the actual bug is entirely in how the tests *construct* their
+  fixtures (`LocalTime.now() ± N hours` wraps around midnight — e.g. `00:30 - 1h = 23:30`, a
+  *later*-looking same-day clock face that silently inverts the intended before/after comparison),
+  not in `computeNextOccurrence`'s own logic, which is only ever called with a real, fixed
+  recurrence time in production. A `LocalDateTime`-based correction was also considered and traced
+  through concretely (rolls the date back correctly, but the corrected date has to be discarded
+  again since the method only accepts a bare `LocalTime`; worse, deriving the test's `dayOfWeek`
+  from that same shifted reference silently drifts onto a different weekday in exactly the edge
+  window, making the test pass while quietly testing the wrong branch instead of flaking). Final
+  fix: replace the arithmetic with fixed boundary constants — `LocalTime.MIDNIGHT` (never after any
+  real `now()` for the whole day) and `LocalTime.MAX` (never before any real `now()` for the whole
+  day) — deterministic for 100% of real run times, zero production impact. Green:
+  `session-impl` (full module suite) + `:server:test` (confirmed via a fresh `UP-TO-DATE` result
+  that the prior full green run, 248 tests, still stands — this change touches only `session-impl`'s
+  test sources, which `:server:test`'s inputs don't depend on).
 - **SESSION-29 (`TODO`, documentation only, 2026-09-15,
   `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
   `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive
