@@ -24,6 +24,7 @@
 | 3 | [SESSION-26](MVP/SESSION-26_DISCOVER_ATTRIBUTE_FILTER.md) | Session-attribute filtering on discover (deferred from SESSION-25) | `TODO` |
 | 4 | [SESSION-29](MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md) | Old `CANCELLED`/`COMPLETED` session storage — retention concern, documented only, no direction decided (revisit once there's real usage/storage data) | `TODO` |
 | 5 | [SESSION-37](MVP/SESSION-37_DISCOVER_OPEN_ENDED_DATE_FLOOR.md) | `/discover`'s `date` becomes an open-ended lower bound (not an exact day) with a smart today/future time floor, and `ONGOING` drops out of discoverable statuses — follow-up refinement to SESSION-35 | `TODO` |
+| 6 | [SESSION-38](MVP/SESSION-38_EVENT_DRIVEN_GROUP_SESSION_GENERATION.md) | Group session generation becomes event-driven (on completion, on recurrence configuration) instead of `SessionGenerationJob`'s hourly full-group-scan sweep, which the job removes entirely | `TODO` |
 
 ---
 
