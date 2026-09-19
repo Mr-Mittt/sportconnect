@@ -120,24 +120,29 @@ class SessionGenerationServiceSpec extends Specification {
         noExceptionThrown()
     }
 
+    /** SESSION-36: uses LocalTime.MIDNIGHT instead of {@code LocalTime.now().minusHours(1)} — the
+     * previous version wrapped to the *previous* day's clock face whenever run within an hour
+     * after midnight (e.g. 00:30 - 1h = 23:30), which reads as *later* than "now" on the same
+     * calendar day, silently inverting the assertion. Midnight is always <= any real "now" for
+     * the entire day (equal only at the exact first nanosecond), so this is deterministic
+     * regardless of when the suite runs — no production change needed for this. */
     def "computeNextOccurrence rolls forward a week when today is the target weekday but the time already passed"() {
-        given:
-        def past = LocalTime.now().minusHours(1)
-
         when:
-        def result = service.computeNextOccurrence(LocalDate.now().dayOfWeek, past)
+        def result = service.computeNextOccurrence(LocalDate.now().dayOfWeek, LocalTime.MIDNIGHT)
 
         then:
         result.toLocalDate() == LocalDate.now().plusWeeks(1)
-        result.toLocalTime() == past
+        result.toLocalTime() == LocalTime.MIDNIGHT
     }
 
+    /** SESSION-36: uses LocalTime.MAX instead of {@code LocalTime.now().plusHours(2)} — the
+     * previous version wrapped to an *earlier*-looking clock face whenever run within 2 hours of
+     * midnight (e.g. 23:15 + 2h = 01:15), silently inverting the assertion the same way the test
+     * above did. LocalTime.MAX (23:59:59.999999999) is always >= any real "now" for the entire
+     * day, so this is deterministic regardless of when the suite runs. */
     def "computeNextOccurrence uses today when today is the target weekday and the time hasn't passed"() {
-        given:
-        def future = LocalTime.now().plusHours(2)
-
         when:
-        def result = service.computeNextOccurrence(LocalDate.now().dayOfWeek, future)
+        def result = service.computeNextOccurrence(LocalDate.now().dayOfWeek, LocalTime.MAX)
 
         then:
         result.toLocalDate() == LocalDate.now()
