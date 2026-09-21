@@ -44,6 +44,16 @@ with a picker to change which day, not a new way to see several days at once. Ex
 scope unless picked up here as a natural pairing — flag it at pickup if it turns out cheap to include
 alongside the date picker, otherwise leave for its own ticket.
 
+## Delta (2026-09-21, not a scope change — new context worth knowing at pickup)
+
+Backend **SESSION-39** (`modules/session/docs/MVP/SESSION-39_SESSION_COUNT_ENDPOINT.md`, `TODO`,
+depends on **SESSION-37**) adds a new `SessionCount` endpoint returning per-date session counts
+(today + next 7 days by default, or an explicit date list) — exactly the data a richer date picker
+could use to show "which days actually have sessions" instead of a bare next/prev control with no
+information about what's ahead. Not required for this ticket's own scope (the plain next/prev
+picker still satisfies it), but worth checking whether `SessionCount` has landed by the time this is
+picked up — using it from the start would avoid building a bare picker now and enhancing it later.
+
 ---
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

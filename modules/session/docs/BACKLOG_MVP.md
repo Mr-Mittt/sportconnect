@@ -23,8 +23,10 @@
 | 2 | [SESSION-22](MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md) | `SessionEventsConsumerIntegrationTest` fails intermittently on its RabbitMQ container — **~50% flake rate** (6 of 12 full runs), fails as a block on `AmqpIOException`, passes in isolation | `TODO` |
 | 3 | [SESSION-26](MVP/SESSION-26_DISCOVER_ATTRIBUTE_FILTER.md) | Session-attribute filtering on discover (deferred from SESSION-25) | `TODO` |
 | 4 | [SESSION-29](MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md) | Old `CANCELLED`/`COMPLETED` session storage — retention concern, documented only, no direction decided (revisit once there's real usage/storage data) | `TODO` |
-| 5 | [SESSION-37](MVP/SESSION-37_DISCOVER_OPEN_ENDED_DATE_FLOOR.md) | `/discover`'s `date` becomes an open-ended lower bound (not an exact day) with a smart today/future time floor, and `ONGOING` drops out of discoverable statuses — follow-up refinement to SESSION-35 | `TODO` |
+| 5 | [SESSION-37](MVP/SESSION-37_DISCOVER_OPEN_ENDED_DATE_FLOOR.md) | `Session.isPublic` + partial index redesign, `/discover`'s final single-required-`date` shape (smart today/future floor) + independently-optional `startTimeFilter`, `ONGOING` drops out of discoverable statuses — follow-up refinement to SESSION-35 | `IN PROGRESS` |
 | 6 | [SESSION-38](MVP/SESSION-38_EVENT_DRIVEN_GROUP_SESSION_GENERATION.md) | Group session generation becomes event-driven (on completion, on recurrence configuration) instead of `SessionGenerationJob`'s hourly full-group-scan sweep, which the job removes entirely | `TODO` |
+| 7 | [SESSION-39](MVP/SESSION-39_SESSION_COUNT_ENDPOINT.md) | New `SessionCount` endpoint — per-date session counts (date list, capped at 8, no pagination) for Discover's date-section overview, split out of SESSION-37 | `TODO` |
+| 8 | [SESSION-40](MVP/SESSION-40_GETSESSION_MISSING_VISIBILITY_GATE.md) | `GET /api/sessions/{sessionId}` has no visibility gate at all — a non-member can read any private group's session details | `TODO` |
 
 ---
 
