@@ -132,7 +132,7 @@ class SessionAttributesIntegrationTest extends RedisBaseIT {
                 .content("Session: fixture").visibility("private").isActive(true).build()).getId();
 
         sessionId = sessionRepository.save(Session.builder()
-                .groupId(null).postId(postId).sessionType(SessionType.STANDALONE)
+                .groupId(null).isPublic(true).postId(postId).sessionType(SessionType.STANDALONE)
                 .createdBy(creatorId).sportId(sportId).locationId(1L)
                 .scheduledStart(Instant.now().plusSeconds(86400)).status(SessionStatus.SCHEDULED)
                 .capacity(9999).feeType(FeeType.FREE).initialSlot(0).autoApprove(false)

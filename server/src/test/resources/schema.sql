@@ -306,6 +306,8 @@ CREATE TABLE IF NOT EXISTS locations (
 CREATE TABLE IF NOT EXISTS sessions (
     id BIGSERIAL PRIMARY KEY,
     group_id BIGINT,
+    -- SESSION-37 (V071): standalone (group_id IS NULL) vs group-linked, as a real stored column.
+    is_public BOOLEAN NOT NULL DEFAULT FALSE,
     post_id BIGINT NOT NULL UNIQUE,
     session_type VARCHAR(30) NOT NULL,
     created_by UUID NOT NULL,

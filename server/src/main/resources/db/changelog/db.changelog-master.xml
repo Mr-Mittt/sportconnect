@@ -193,4 +193,9 @@
          stored zone. No consumer ever read this column in production. -->
     <include file="db/changelog/changes/V070__drop_origin_zone_id.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-37: Session.isPublic (real stored column, standalone vs group-linked), foundation
+         shared with SESSION-39's SessionCount endpoint — plus the idx_sessions_sport_id_standalone
+         predicate swap from group_id IS NULL to is_public = true. -->
+    <include file="db/changelog/changes/V071__add_is_public_to_sessions_and_swap_standalone_index.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

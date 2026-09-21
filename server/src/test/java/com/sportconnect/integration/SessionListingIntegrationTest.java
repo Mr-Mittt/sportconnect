@@ -90,6 +90,7 @@ class SessionListingIntegrationTest extends BaseIT {
     private Long createSession(SessionStatus status, LocalDateTime scheduledStart) {
         Session session = Session.builder()
                 .groupId(null)
+                .isPublic(true)
                 .postId(postIdSeq.getAndIncrement())
                 .sessionType(SessionType.STANDALONE)
                 .createdBy(callerId)
@@ -113,6 +114,7 @@ class SessionListingIntegrationTest extends BaseIT {
     private Long createSessionAtInstant(SessionStatus status, Instant scheduledStart) {
         Session session = Session.builder()
                 .groupId(null)
+                .isPublic(true)
                 .postId(postIdSeq.getAndIncrement())
                 .sessionType(SessionType.STANDALONE)
                 .createdBy(callerId)
@@ -135,6 +137,7 @@ class SessionListingIntegrationTest extends BaseIT {
     private Long createGroupLinkedSession(SessionStatus status, LocalDateTime scheduledStart) {
         Session session = Session.builder()
                 .groupId(999L)
+                .isPublic(false)
                 .postId(postIdSeq.getAndIncrement())
                 .sessionType(SessionType.GROUP_RECURRING)
                 .createdBy(callerId)

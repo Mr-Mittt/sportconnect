@@ -61,7 +61,9 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             Pageable pageable);
 
     /**
-     * SESSION-25 — joinable standalone sessions for discover: open (group_id IS NULL), status in
+     * SESSION-25 — joinable standalone sessions for discover: open ({@code isPublic = true},
+     * SESSION-37 — was {@code groupId IS NULL} until then, now a real stored column backing the
+     * {@code idx_sessions_sport_id_standalone} partial index's predicate), status in
      * {@code statuses} (caller-narrowable subset of PREPARING/SCHEDULED/ONGOING), restricted to
      * {@code sportIds} (the caller's active-sport-profile gate, resolved by the caller), excluding
      * sessions the caller created and sessions the caller currently has a JOINED participant row
@@ -201,7 +203,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
         value = "SELECT s, (s.capacity - s.initialSlot - "
                 + "    (SELECT COUNT(sp2) FROM SessionParticipant sp2 "
                 + "        WHERE sp2.sessionId = s.id AND sp2.status = :joinedStatus)) AS openSlots "
-                + "FROM Session s WHERE s.groupId IS NULL AND s.status IN :statuses "
+                + "FROM Session s WHERE s.isPublic = true AND s.status IN :statuses "
                 + "AND s.sportId IN :sportIds AND s.createdBy <> :callerId "
                 + "AND s.id NOT IN (SELECT sp.sessionId FROM SessionParticipant sp "
                 + "    WHERE sp.userId = :callerId AND sp.status = :joinedStatus) "
@@ -221,7 +223,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
                 + "    (SELECT COUNT(sp3) FROM SessionParticipant sp3 "
                 + "        WHERE sp3.sessionId = s.id AND sp3.status = :joinedStatus)) - :minOpenSlots > 0) "
                 + "ORDER BY s.scheduledStart ASC, openSlots ASC, s.createdAt ASC",
-        countQuery = "SELECT COUNT(s) FROM Session s WHERE s.groupId IS NULL AND s.status IN :statuses "
+        countQuery = "SELECT COUNT(s) FROM Session s WHERE s.isPublic = true AND s.status IN :statuses "
                 + "AND s.sportId IN :sportIds AND s.createdBy <> :callerId "
                 + "AND s.id NOT IN (SELECT sp.sessionId FROM SessionParticipant sp "
                 + "    WHERE sp.userId = :callerId AND sp.status = :joinedStatus) "

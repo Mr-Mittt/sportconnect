@@ -96,6 +96,7 @@ class SessionEventsConsumerIntegrationTest extends RabbitMqTestContainerBase {
 
     private Long createSessionWithJoinedParticipant(UUID creatorId, UUID participantId, SessionStatus status) {
         Session session = Session.builder()
+                .isPublic(true)
                 .postId(System.nanoTime())
                 .sessionType(SessionType.STANDALONE)
                 .createdBy(creatorId)

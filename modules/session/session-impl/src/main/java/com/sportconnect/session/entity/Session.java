@@ -45,6 +45,13 @@ public class Session {
     @Column(name = "group_id")
     private Long groupId;
 
+    /** SESSION-37 — standalone (groupId null) vs group-linked, as a real stored column rather than
+     * derived at query time. Not caller-supplied; SessionServiceImpl.createSession sets it from
+     * {@code groupId == null}. Not settable via updateSession — a group session becoming
+     * independently public is a real future feature, not built here. */
+    @Column(name = "is_public", nullable = false)
+    private Boolean isPublic;
+
     /** SESSION-10/A17 — id of this session's companion SESSION_POST (post-impl), created
      * synchronously in the same transaction as this session, used as the comment-thread anchor
      * for SessionDetailModal. No DB-level FK — cross-domain references are IDs only. */

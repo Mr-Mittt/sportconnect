@@ -162,9 +162,8 @@ default window (no unbounded cache-growth or query-cost concern either).
   - Migration: 3-step (add nullable → backfill `UPDATE sessions SET is_public = (group_id IS NULL)`
     → `ALTER COLUMN is_public SET NOT NULL`), standard pattern for a `NOT NULL` column added to an
     existing table.
-  - **Open question, resolve at pickup:** expose `isPublic` on `SessionResponse`? Not requested
-    either way — lean toward yes (cheap, and both new/changed endpoints conceptually deal with
-    "public sessions"), but don't decide unilaterally here.
+  - **Resolved at pickup (2026-09-21):** not exposed on `SessionResponse`. User decision — kept
+    internal (query/index use only) for now; revisit if a real client consumer needs it.
   - **Explicitly out of scope:** no way to change `isPublic` after creation via `updateSession` — a
     group session becoming independently "public" (diverging from `groupId == null`) is a real
     future feature, not this ticket's.
@@ -246,6 +245,14 @@ A small delta is worth adding to CLIENT-SESSION-25 itself (not a scope change, j
 once SESSION-39 ships, its date-section-overview data could enhance CLIENT-SESSION-25's picker
 beyond a bare next/prev control — flagged there, not decided here.
 
+**Pagination consumer census (2026-09-21, at pickup):** the page-size default change (§3 below,
+`20`→`10`) has a real client consumer — `useDiscoverSessions.ts`/`SessionDiscoverPanel`/
+`SessionDiscoverModal` (CLIENT-SESSION-6/7) fetch only page 0 with **no pagination UI at all**
+today, unlike this ticket's assumption that "the client's load more pattern" already exists.
+User decision: implement the backend change as specified anyway, and file the gap as a real client
+ticket rather than leave it unbuilt — **CLIENT-SESSION-26**
+(`client/docs/MVP/CLIENT-SESSION-26_DISCOVER_LOAD_MORE_PAGINATION.md`, `TODO`).
+
 ---
 
 ## Out of scope
@@ -258,6 +265,80 @@ as SESSION-39, which depends on this ticket for `isPublic` + the index redesign 
 The `getSession` single-item visibility gap found while scoping this ticket (no membership/
 participant check at all on `GET /api/sessions/{sessionId}`, unlike `getGroupSessions`'s list-level
 gate) — unrelated to this ticket's actual scope, filed separately as **SESSION-40**.
+
+---
+
+## Implementation summary (2026-09-21)
+
+Built exactly the "Final decision (2026-09-21)" design above. `isPublic` not exposed on
+`SessionResponse` (user decision at pickup — kept internal for now).
+
+**Migration `V071__add_is_public_to_sessions_and_swap_standalone_index.sql`:** 3-step NOT NULL add
+of `sessions.is_public` (same pattern as V039's `sport_id` promotion) — `ADD COLUMN` → `UPDATE ...
+SET is_public = (group_id IS NULL)` → `SET NOT NULL`. Then drop+recreate
+`idx_sessions_sport_id_standalone`: same `(sport_id, status, scheduled_start)` columns, predicate
+`WHERE group_id IS NULL` → `WHERE is_public = true` (Postgres can't alter a partial index's
+predicate in place). Index (b) from the design doc was already dropped from scope in the design
+itself — not built. H2 test schema (`server/src/test/resources/schema.sql`) got the same column.
+
+**Entity/service:** `Session.isPublic` (`Boolean`, not `@Builder.Default` — always explicitly set).
+`SessionServiceImpl.createSession` sets `.isPublic(groupId == null)`, never caller-supplied.
+`SessionRepository.findDiscoverSessions`'s query base (`s.groupId IS NULL` → `s.isPublic = true`)
+in both the value and count query.
+
+**`/discover` request shape:**
+- `resolveDiscoverStatuses` helper: default `{PREPARING, SCHEDULED}` (ONGOING dropped); an explicit
+  list has ONGOING stripped (never a 400 for that specific value), falling back to the default only
+  if stripping empties the list.
+- `date`'s window: `today = LocalDate.now(zone)`; `effectiveDate = date.isBefore(today) ? today :
+  date`; `dayEnd` from `effectiveDate`; `dayStart = effectiveDate.equals(today) ? Instant.now() :
+  effectiveDate.atStartOfDay(zone).toInstant()`. A past `date` is silently clamped to today's own
+  semantics (never a 400).
+- `startTimeFilter`/`startTime` decoupled: `startTime` alone now defaults `effectiveStartTimeFilter`
+  to `AFTER_OR_EQUAL` before computing the query params; `startTimeFilter` alone already fell
+  through as a no-op under the pre-existing `&& startTime != null` guards, so no code change was
+  needed for that direction — only the controller's old "must be given together" 400 check was
+  removed.
+- Controller: `@PageableDefault(size = 20)` → `size = 10` on `/discover` only. `DISCOVERABLE_STATUSES`
+  validation set unchanged (`ONGOING` still isn't a 400 input, just stripped downstream).
+
+**Consumer census (API Change Discipline):** `useDiscoverSessions.ts` sends no `status`,
+`startTimeFilter`/`startTime`, or `page`/`size` — compatible as-is for every change except page
+size, where Phase 2 exploration found the Discover grid has **no pagination UI at all** today.
+User decision: ship the backend change as specified and file the gap — **CLIENT-SESSION-26**
+(`client/docs/MVP/CLIENT-SESSION-26_DISCOVER_LOAD_MORE_PAGINATION.md`, `TODO`). The MSW
+`/api/sessions/discover` handler already didn't model `date`/`status` filtering before this change
+either (pre-existing gap, tracked under `CLIENT-SESSION-22`) — nothing regressed there.
+
+**Tests:** `SessionServiceImplSpec` — updated every `discoverSessions` expectation for the new
+default status list (switched non-date-focused tests to a future `date` to avoid coupling them to
+the new `now()` floor); added status-stripping (survives vs. empties-to-default), startTime-alone
+defaulting, and date-clamp/floor cases (loose `Instant` bound matchers for the `now()`-derived
+`dayStart`, same style as the existing `zoneOffsetSeconds` matchers); added `createSession` isPublic
+assertions for both branches. `SessionDiscoverIntegrationTest` — `sessionBuilder()` now sets
+`.isPublic(true)`; added an `isPublic`-vs-`groupId` regression test, ONGOING-default/explicit-strip/
+fallback tests, past-date-clamp tests (excludes an actual past-day session, includes a later-today
+one), today-floor tests (excludes already-started, includes later-today), startTimeFilter/startTime
+independence tests (replacing the two old pairing-rejection tests), and a page-size-defaults-to-10
+test — 37 tests, all green. Also fixed 5 other IT fixture files
+(`SessionListingIntegrationTest`, `SessionPostAccessGateIntegrationTest`,
+`SessionSystemCommentIntegrationTest`, `SessionEventsConsumerIntegrationTest`,
+`SessionAttributesIntegrationTest`) that build `Session` entities directly via the builder,
+bypassing `createSession` — each needed an explicit `.isPublic(...)` to satisfy the new `NOT NULL`
+column; found by a full `:server:test` run (57 failures, all `NULL not allowed for column
+"is_public"`), not caught by any mocked unit test. Green: `session-impl` (full Spock suite) +
+`:server:test` (full suite, 0 failures).
+
+**Real-Postgres verification (2026-09-21):** H2 proves query correctness but not the index change
+itself, so `V071` was applied for real against the dev stack (`./gradlew :server:bootRun`, dev
+Postgres via `infra/docker-compose.dev.yml`) — applied cleanly (`databasechangelog` shows it
+executed), `\d sessions` confirms `is_public boolean not null`, and `pg_indexes` confirms
+`idx_sessions_sport_id_standalone`'s predicate is now `WHERE (is_public = true)`. `EXPLAIN` on
+discover's core predicate shape seq-scanned on this tiny dev table (expected, ~27 rows) but
+correctly switched to `Index Scan using idx_sessions_sport_id_standalone` with
+`enable_seqscan = off`, confirming the swapped predicate is genuinely usable by the planner for
+this query shape, not just syntactically valid. No further `EXPLAIN ANALYZE` cost investigation
+needed here — that was already done at design time in `DISCOVER_SCHEDULED_START_FILTER_ADR.md`.
 
 ---
 

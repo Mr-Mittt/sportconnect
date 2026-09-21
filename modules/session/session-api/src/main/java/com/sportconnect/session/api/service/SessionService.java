@@ -204,26 +204,38 @@ public interface SessionService {
      * {@code feeType} (exact match) and/or {@code maxFeeAmountVnd} (upper bound on
      * feeAmountVnd, meaningful only when feeType is FIXED), and {@code startTimeFilter}/
      * {@code startTime} (compares scheduledStart's time-of-day component against the given time,
-     * independent of {@code date} — the caller must supply both together, validated by the
-     * controller). {@code statuses} restricts to a subset of
-     * {@code PREPARING}/{@code SCHEDULED}/{@code ONGOING}; a null/empty list defaults to all
-     * three — a real behavior delta from this method's original SCHEDULED-only default, since
-     * ONGOING and PREPARING sessions are now discoverable too.
+     * independent of {@code date}). {@code statuses} restricts to a subset of
+     * {@code PREPARING}/{@code SCHEDULED}/{@code ONGOING}; a null/empty list defaults to
+     * {@code PREPARING}/{@code SCHEDULED} (SESSION-37 dropped {@code ONGOING} from the default —
+     * see below).
      *
-     * <p><b>SESSION-35 (2026-09-18 scope addition): {@code date} is required</b>, not optional —
-     * an exact-day match against scheduledStart's date component, validated non-null by the
-     * controller (missing → 400). This replaces the original SESSION-25 design, where an omitted
-     * {@code date}/{@code startTimeFilter} pair implicitly lower-bounded results to
-     * {@code scheduledStart >= now()}; that default no longer exists since a request can no
-     * longer omit both (a past {@code date} still matches — no hidden "now" floor either way).
+     * <p><b>SESSION-35 (2026-09-18): {@code date} is required</b>, not optional — validated
+     * non-null by the controller (missing → 400).
+     *
+     * <p><b>SESSION-37 final decision — supersedes SESSION-35's exact-day match and the original
+     * SESSION-25 status/startTimeFilter contract:</b>
+     * <ul>
+     *   <li>{@code date}'s resolved time range: {@code date < today} (in {@code viewerZoneId}) is
+     *       silently clamped to today's own semantics (never a 400, never simply ignored);
+     *       {@code date == today} resolves to {@code [now(), dayEnd(today))}, excluding sessions
+     *       that already started earlier today; {@code date > today} resolves to the plain
+     *       {@code [dayStart(date), dayEnd(date))} window.</li>
+     *   <li>{@code ONGOING} dropped from the default {@code statuses}; an explicit list naming it
+     *       is never a 400 (unlike a genuinely invalid value) — it's silently stripped, falling
+     *       back to the default only if stripping empties the list entirely.</li>
+     *   <li>{@code startTimeFilter}/{@code startTime} are no longer required to be given
+     *       together: {@code startTime} alone defaults the direction to {@code AFTER_OR_EQUAL};
+     *       {@code startTimeFilter} alone has no effect (same as neither being given).</li>
+     * </ul>
      * Results are always sorted {@code scheduledStart ASC}, then remaining open slots {@code ASC},
      * then {@code createdAt ASC}, regardless of the caller's own {@code Pageable} sort (ignored,
-     * same as {@code getUpcomingSessions}/{@code getSessionHistory}).
+     * same as {@code getUpcomingSessions}/{@code getSessionHistory}). Default page size is
+     * {@code 10} (SESSION-37; was {@code 20}).
      *
-     * <p>SESSION-35: {@code date}'s day boundaries and {@code startTimeFilter}/{@code startTime}'s
-     * time-of-day comparison are both evaluated in {@code viewerZoneId} (nullable, an IANA zone id,
-     * falling back to {@code "UTC"} when omitted) — a "sessions starting before 9am" filter is
-     * inherently caller-relative, not server-relative (see
+     * <p>SESSION-35: {@code date}'s day boundaries/floor and {@code startTimeFilter}/
+     * {@code startTime}'s time-of-day comparison are both evaluated in {@code viewerZoneId}
+     * (nullable, an IANA zone id, falling back to {@code "UTC"} when omitted) — a "sessions
+     * starting before 9am" filter is inherently caller-relative, not server-relative (see
      * {@code SessionRepository.findDiscoverSessions}' Javadoc for the query-side detail). Invalid
      * (unparseable) {@code viewerZoneId} values are rejected with a {@code BadRequestException}.
      */

@@ -128,7 +128,8 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * locationService.getLocation(1L) >> basketballLocation
         1 * sessionRepository.save({ Session s ->
-            s.sessionType == SessionType.STANDALONE && s.groupId == null && s.locationNote == "Court 3"
+            s.sessionType == SessionType.STANDALONE && s.groupId == null && s.locationNote == "Court 3" &&
+                    s.isPublic == true
         }) >> saved
         0 * groupService._
         interaction { stubBatchEnrichment() }
@@ -223,7 +224,7 @@ class SessionServiceImplSpec extends Specification {
         1 * groupService.canManageMembers(5L, userId) >> true
         1 * groupService.getGroup(5L, userId) >> group
         1 * locationService.getLocation(1L) >> basketballLocation
-        1 * sessionRepository.save(_) >> saved
+        1 * sessionRepository.save({ Session s -> s.isPublic == false }) >> saved
         0 * sessionParticipantRepository.saveAll(_)
         interaction { stubBatchEnrichment() }
     }
@@ -1125,7 +1126,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
-        def date = LocalDate.now()
+        def date = LocalDate.now().plusDays(1)
 
         when:
         sessionService.discoverSessions(callerId, null, null, null, null, null, null, date, null, null, null, null, pageable)
@@ -1136,7 +1137,7 @@ class SessionServiceImplSpec extends Specification {
                 UserSportProfileResponse.builder().sportId(2L).build()
         ]
         1 * sessionRepository.findDiscoverSessions(
-                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L, 2L], callerId,
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L, 2L], callerId,
                 ParticipantStatus.JOINED, null, null, null, null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
@@ -1147,7 +1148,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
-        def date = LocalDate.now()
+        def date = LocalDate.now().plusDays(1)
 
         when:
         sessionService.discoverSessions(callerId, 2L, null, null, null, null, null, date, null, null, null, null, pageable)
@@ -1158,7 +1159,7 @@ class SessionServiceImplSpec extends Specification {
                 UserSportProfileResponse.builder().sportId(2L).build()
         ]
         1 * sessionRepository.findDiscoverSessions(
-                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [2L], callerId,
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [2L], callerId,
                 ParticipantStatus.JOINED, null, null, null, null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
@@ -1193,11 +1194,55 @@ class SessionServiceImplSpec extends Specification {
         result.totalElements == 0
     }
 
-    def "discoverSessions passes an explicit status list through unchanged, without defaulting"() {
+    def "discoverSessions passes an explicit status list through unchanged when it contains no ONGOING"() {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
-        def date = LocalDate.now()
+        def date = LocalDate.now().plusDays(1)
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null, null,
+                [SessionStatus.SCHEDULED], pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.SCHEDULED], [1L], callerId, ParticipantStatus.JOINED,
+                null, null, null, null, null,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, null, null, null, pageable) >> new PageImpl([])
+    }
+
+    /** SESSION-37 — ONGOING is never a 400 (unlike a genuinely invalid value), but it's stripped
+     * out of an explicit list before querying, whether or not other values survive alongside it. */
+    def "discoverSessions strips ONGOING out of an explicit status list that has other values surviving"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def date = LocalDate.now().plusDays(1)
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null, null,
+                [SessionStatus.SCHEDULED, SessionStatus.ONGOING], pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.SCHEDULED], [1L], callerId, ParticipantStatus.JOINED,
+                null, null, null, null, null,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, null, null, null, pageable) >> new PageImpl([])
+    }
+
+    /** SESSION-37 — stripping ONGOING out of a status list containing only ONGOING falls back to
+     * the default list, the same as an omitted/empty status param — never an empty result. */
+    def "discoverSessions falls back to the default status list when stripping ONGOING empties an explicit list"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def date = LocalDate.now().plusDays(1)
 
         when:
         sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null, null,
@@ -1206,7 +1251,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
-                [SessionStatus.ONGOING], [1L], callerId, ParticipantStatus.JOINED,
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId, ParticipantStatus.JOINED,
                 null, null, null, null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
@@ -1217,7 +1262,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
-        def date = LocalDate.now()
+        def date = LocalDate.now().plusDays(1)
 
         when:
         sessionService.discoverSessions(callerId, 1L, "Sunday", 5L, 2, FeeType.FIXED, 100000L,
@@ -1226,7 +1271,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
-                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
                 ParticipantStatus.JOINED, null, "Sunday", 5L, FeeType.FIXED, 100000L,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
@@ -1245,7 +1290,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
-                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
                 ParticipantStatus.JOINED, null, null, null, null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
@@ -1266,7 +1311,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
-                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
                 ParticipantStatus.JOINED, null, null, null, null, null,
                 date.atStartOfDay(zone).toInstant(),
                 date.plusDays(1).atStartOfDay(zone).toInstant(),
@@ -1293,7 +1338,7 @@ class SessionServiceImplSpec extends Specification {
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
         def time = LocalTime.of(18, 0)
-        def date = LocalDate.now()
+        def date = LocalDate.now().plusDays(1)
 
         when:
         sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date,
@@ -1302,7 +1347,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
-                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
                 ParticipantStatus.JOINED, null, null, null, null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
@@ -1314,7 +1359,7 @@ class SessionServiceImplSpec extends Specification {
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
         def time = LocalTime.of(9, 0)
-        def date = LocalDate.now()
+        def date = LocalDate.now().plusDays(1)
 
         when:
         sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date,
@@ -1323,7 +1368,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
-                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
                 ParticipantStatus.JOINED, null, null, null, null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
@@ -1335,7 +1380,7 @@ class SessionServiceImplSpec extends Specification {
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
         def time = LocalTime.of(9, 0)
-        def date = LocalDate.now()
+        def date = LocalDate.now().plusDays(1)
         def zone = ZoneId.of("Asia/Tokyo")
         def expectedOffsetSeconds = zone.getRules().getOffset(Instant.now()).getTotalSeconds()
 
@@ -1346,7 +1391,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
-                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
                 ParticipantStatus.JOINED, null, null, null, null, null,
                 date.atStartOfDay(zone).toInstant(),
                 date.plusDays(1).atStartOfDay(zone).toInstant(),
@@ -1357,7 +1402,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def callerId = UUID.randomUUID()
         def sortedPageable = PageRequest.of(1, 5, Sort.by("title").ascending())
-        def date = LocalDate.now()
+        def date = LocalDate.now().plusDays(1)
 
         when:
         sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null, null, null, sortedPageable)
@@ -1365,12 +1410,120 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
-                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING], [1L], callerId,
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
                 ParticipantStatus.JOINED, null, null, null, null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null,
                 PageRequest.of(1, 5)) >> new PageImpl([])
+    }
+
+    // ── SESSION-37: date's clamp/floor behavior ─────────────────────────────
+    // dayStart can no longer be asserted as an exact precomputed instant for "today"/past cases
+    // (it's derived from Instant.now() at call time) — these use a loose bound instead, same
+    // style as the existing zoneOffsetSeconds "{ it != null }" matchers above.
+
+    def "discoverSessions with date == today floors dayStart at now() instead of today's own start-of-day"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def date = LocalDate.now(ZoneId.of("UTC"))
+        def beforeCall = Instant.now()
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null, null, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                { Instant dayStart -> !dayStart.isBefore(beforeCall) && dayStart.isBefore(date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant()) },
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, null, null, null, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions with a past date silently clamps to today's semantics, not a 400"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def today = LocalDate.now(ZoneId.of("UTC"))
+        def pastDate = today.minusDays(10)
+        def beforeCall = Instant.now()
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, pastDate, null, null, null, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                { Instant dayStart -> !dayStart.isBefore(beforeCall) },
+                today.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, null, null, null, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions with a future date uses the plain full-day start, not now()"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def date = LocalDate.now(ZoneId.of("UTC")).plusDays(5)
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date, null, null, null, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, null, null, null, pageable) >> new PageImpl([])
+    }
+
+    // ── SESSION-37: startTimeFilter/startTime independence ──────────────────
+
+    def "discoverSessions given startTime without startTimeFilter defaults the direction to AFTER_OR_EQUAL"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def time = LocalTime.of(9, 0)
+        def date = LocalDate.now().plusDays(1)
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date,
+                null, time, null, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, time.toSecondOfDay(), { it != null }, null, pageable) >> new PageImpl([])
+    }
+
+    def "discoverSessions given startTimeFilter without startTime has no effect"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+        def date = LocalDate.now().plusDays(1)
+
+        when:
+        sessionService.discoverSessions(callerId, 1L, null, null, null, null, null, date,
+                StartTimeFilter.AFTER_OR_EQUAL, null, null, null, pageable)
+
+        then:
+        1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
+        1 * sessionRepository.findDiscoverSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
+                ParticipantStatus.JOINED, null, null, null, null, null,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                null, null, null, null, pageable) >> new PageImpl([])
     }
 
     def "getJoinedSessions delegates to the repository for the given status"() {
