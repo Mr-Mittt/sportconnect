@@ -4094,27 +4094,38 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `session-impl` (full module suite) + `:server:test` (confirmed via a fresh `UP-TO-DATE` result
   that the prior full green run, 248 tests, still stands — this change touches only `session-impl`'s
   test sources, which `:server:test`'s inputs don't depend on).
-- **SESSION-37 (`IN PROGRESS`, design finalized 2026-09-21, no code written yet,
+- **SESSION-37 (`DONE`, 2026-09-21,
   `modules/session/docs/MVP/SESSION-37_DISCOVER_OPEN_ENDED_DATE_FLOOR.md`):** scope went through
   several redesigns (documented in the ticket's own history) before landing on a final,
   user-decided shape backed by a real performance investigation (new ADR
   `documentation/md/adr/DISCOVER_SCHEDULED_START_FILTER_ADR.md` — real `EXPLAIN ANALYZE` evidence
   across ~10 query variants, a `startTimeFilter`-per-row-function-cost finding, and a resolved index
-  design). **Final scope:** new `Session.isPublic` column (standalone → `true`, group → `false`,
-  replaces `groupId IS NULL` as Discover's predicate); redesigned partial index
-  (`idx_sessions_sport_id_standalone`'s predicate becomes `is_public = true`, same columns — a
-  second index the user proposed was checked against real `SessionGenerationJob` consumers and
-  dropped as unnecessary); `/discover` reverts to a **single required** `date` (not the
-  intermediate `List<LocalDate>` design) with a smart today/future floor, `startTimeFilter`/
+  design). **Final scope, built:** new `Session.isPublic` column (`V071`, standalone → `true`,
+  group → `false`, replaces `groupId IS NULL` as Discover's predicate — not exposed on
+  `SessionResponse`, user decision); redesigned partial index (`idx_sessions_sport_id_standalone`'s
+  predicate becomes `is_public = true`, same columns — a second index the user proposed was checked
+  against real `SessionGenerationJob` consumers and dropped as unnecessary); `/discover` reverts to
+  a **single required** `date` (not the intermediate `List<LocalDate>` design) with a smart
+  today/future floor (a past date silently clamps to today's `now()` floor), `startTimeFilter`/
   `startTime` independently optional (`startTime` alone defaults `AFTER_OR_EQUAL`; unpaired
-  `startTimeFilter` silently ignored), page size default `20`→`10`; `status` dropping `ONGOING`
-  (original scope item 1) unaffected. **The "browse many days" job that motivated this ticket's
-  earlier redesigns moved to a new, separate ticket — SESSION-39** (`SessionCount`, a `List<LocalDate>`
+  `startTimeFilter` silently ignored), page size default `20`→`10`; `status` drops `ONGOING` from
+  the default (an explicit `ONGOING` is stripped, not a 400 — falls back to the default only if
+  stripping empties the list). **The "browse many days" job that motivated this ticket's earlier
+  redesigns moved to a new, separate ticket — SESSION-39** (`SessionCount`, a `List<LocalDate>`
   count-only endpoint, capped at 8 dates/400 over, sharing `/discover`'s filter set as a live query
   specifically to avoid a caching design's caller-specific-filtering problem the ADR had gotten
   stuck on). Also produced **SESSION-40** (`getSession` has no visibility gate at all — found while
-  scoping this ticket, unrelated to its actual scope, filed separately) and a delta note on client
-  **CLIENT-SESSION-25** (SESSION-39's counts could enhance its date picker, not required for it).
+  scoping this ticket, unrelated to its actual scope, filed separately), a delta note on client
+  **CLIENT-SESSION-25** (SESSION-39's counts could enhance its date picker, not required for it),
+  and a new client follow-up **CLIENT-SESSION-26** (Discover's page-size drop from 20→10 exposed
+  that the Discover grid has no "load more" pagination UI at all — consumer census finding at
+  pickup, filed rather than left unbuilt). Fixed 5 other IT fixture files that build `Session`
+  directly, bypassing `createSession`, and so needed an explicit `.isPublic(...)` for the new
+  `NOT NULL` column — found only by a full `:server:test` run, not any mocked unit test. Green:
+  `session-impl` (full Spock suite) + `:server:test` (full suite, 0 failures) + live verification
+  of `V071` against real dev Postgres (migration applied cleanly, `is_public` confirmed `NOT NULL`,
+  index predicate confirmed via `pg_indexes`, and `EXPLAIN` with `enable_seqscan = off` confirmed
+  the planner can actually use the swapped index for discover's query shape).
 - **SESSION-29 (`TODO`, documentation only, 2026-09-15,
   `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
   `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive

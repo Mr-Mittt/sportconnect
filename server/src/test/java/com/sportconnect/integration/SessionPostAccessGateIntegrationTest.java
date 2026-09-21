@@ -155,6 +155,7 @@ class SessionPostAccessGateIntegrationTest extends RedisBaseIT {
     private Long createSession(Long groupId, Long postId) {
         Session session = Session.builder()
                 .groupId(groupId)
+                .isPublic(groupId == null)
                 .postId(postId)
                 .sessionType(groupId == null ? SessionType.STANDALONE : SessionType.GROUP_RECURRING)
                 .createdBy(creatorId)

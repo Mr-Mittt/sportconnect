@@ -148,6 +148,7 @@ class SessionDiscoverIntegrationTest extends BaseIT {
     private Session.SessionBuilder sessionBuilder() {
         return Session.builder()
                 .groupId(null)
+                .isPublic(true)
                 .postId(postIdSeq.getAndIncrement())
                 .sessionType(SessionType.STANDALONE)
                 .createdBy(creatorId)
@@ -230,6 +231,21 @@ class SessionDiscoverIntegrationTest extends BaseIT {
                 .andExpect(jsonPath("$.data.content[0].id").value(matchingId));
     }
 
+    /** SESSION-37 — {@code findDiscoverSessions}' query base moved from {@code groupId IS NULL} to
+     * {@code isPublic = true}; this proves the new column is actually what gates a group-linked
+     * session out, not just that the old {@code groupId} shape still happens to agree with it. */
+    @Test
+    void isPublicFilter_excludesAGroupLinkedSession() throws Exception {
+        save(sessionBuilder());
+        save(sessionBuilder().groupId(99L).isPublic(false));
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/discover")
+                        .param("date", DEFAULT_DATE.toString()).param("viewerZoneId", JVM_ZONE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1));
+    }
+
     // ── date required + default status list ─────────────────────────────────
 
     @Test
@@ -239,11 +255,12 @@ class SessionDiscoverIntegrationTest extends BaseIT {
                 .andExpect(status().isBadRequest());
     }
 
+    /** SESSION-37 — ONGOING is no longer part of the default status list. */
     @Test
-    void defaultStatuses_includesPreparingScheduledOngoingOnlyExcludingCancelledAndCompleted() throws Exception {
+    void defaultStatuses_includesPreparingScheduledOnlyExcludingOngoingCancelledAndCompleted() throws Exception {
         Long preparingId = save(sessionBuilder().status(SessionStatus.PREPARING).locationId(null).feeType(null));
         Long scheduledId = save(sessionBuilder().status(SessionStatus.SCHEDULED));
-        Long ongoingId = save(sessionBuilder().status(SessionStatus.ONGOING));
+        save(sessionBuilder().status(SessionStatus.ONGOING));
         save(sessionBuilder().status(SessionStatus.CANCELLED));
         save(sessionBuilder().status(SessionStatus.COMPLETED));
 
@@ -251,15 +268,15 @@ class SessionDiscoverIntegrationTest extends BaseIT {
         mockMvc.perform(get("/api/sessions/discover")
                         .param("date", DEFAULT_DATE.toString()).param("viewerZoneId", JVM_ZONE))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content.length()").value(3))
+                .andExpect(jsonPath("$.data.content.length()").value(2))
                 .andExpect(jsonPath("$.data.content[*].id").value(containsInAnyOrder(
-                        preparingId.intValue(), scheduledId.intValue(), ongoingId.intValue())));
+                        preparingId.intValue(), scheduledId.intValue())));
     }
 
     @Test
     void status_explicitListOverridesTheDefaultAndNarrowsToOnlyThoseValues() throws Exception {
         Long scheduledId = save(sessionBuilder().status(SessionStatus.SCHEDULED));
-        save(sessionBuilder().status(SessionStatus.ONGOING));
+        save(sessionBuilder().status(SessionStatus.PREPARING).locationId(null).feeType(null));
 
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover")
@@ -279,18 +296,99 @@ class SessionDiscoverIntegrationTest extends BaseIT {
                 .andExpect(status().isBadRequest());
     }
 
+    /** SESSION-37 — an explicit ONGOING is never a 400 (unlike a genuinely invalid value), but
+     * it's silently stripped out before querying. */
     @Test
-    void dateFilter_aPastDateStillMatchesNoHiddenNowFloor() throws Exception {
+    void status_explicitOngoingIsStrippedNotRejectedAndNarrowsAlongsideOtherValues() throws Exception {
+        Long scheduledId = save(sessionBuilder().status(SessionStatus.SCHEDULED));
+        save(sessionBuilder().status(SessionStatus.ONGOING));
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/discover")
+                        .param("date", DEFAULT_DATE.toString()).param("viewerZoneId", JVM_ZONE)
+                        .param("status", "SCHEDULED").param("status", "ONGOING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(scheduledId));
+    }
+
+    /** SESSION-37 — stripping ONGOING out of a status list containing only ONGOING falls back to
+     * the default list, never an empty result. */
+    @Test
+    void status_onlyOngoingFallsBackToTheDefaultListRatherThanAnEmptyResult() throws Exception {
+        Long scheduledId = save(sessionBuilder().status(SessionStatus.SCHEDULED));
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/discover")
+                        .param("date", DEFAULT_DATE.toString()).param("viewerZoneId", JVM_ZONE)
+                        .param("status", "ONGOING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(scheduledId));
+    }
+
+    /** SESSION-37 — supersedes the old exact-day behavior this test name described: a past
+     * {@code date} is now silently clamped to today's own semantics (a real {@code now()} floor),
+     * so a session actually scheduled on that past day is excluded, not matched. */
+    @Test
+    void dateFilter_aPastDateClampsToTodayExcludingASessionActuallyOnThatPastDay() throws Exception {
         LocalDateTime pastDay = LocalDateTime.now().minusDays(10).withHour(10).withMinute(0);
-        Long pastId = save(sessionBuilder().scheduledStart(instant(pastDay)));
+        save(sessionBuilder().scheduledStart(instant(pastDay)));
 
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover")
                         .param("date", pastDay.toLocalDate().toString())
                         .param("viewerZoneId", JVM_ZONE))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(0));
+    }
+
+    /** SESSION-37 — a past {@code date} clamps to today, so a session actually scheduled later
+     * today still matches even though the request named an earlier day. */
+    @Test
+    void dateFilter_aPastDateClampedToTodayStillMatchesASessionLaterToday() throws Exception {
+        LocalDateTime later = LocalDateTime.now().plusHours(2);
+        Long laterTodayId = save(sessionBuilder().scheduledStart(instant(later)));
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/discover")
+                        .param("date", LocalDate.now().minusDays(10).toString())
+                        .param("viewerZoneId", JVM_ZONE))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
-                .andExpect(jsonPath("$.data.content[0].id").value(pastId));
+                .andExpect(jsonPath("$.data.content[0].id").value(laterTodayId));
+    }
+
+    /** SESSION-37 — {@code date == today} floors at {@code now()}, excluding a session that
+     * already started earlier today (unlike SESSION-35's plain exact-day match, which had no such
+     * floor). */
+    @Test
+    void dateFilter_todayExcludesASessionThatAlreadyStartedEarlierToday() throws Exception {
+        LocalDateTime earlier = LocalDateTime.now().minusHours(2);
+        save(sessionBuilder().scheduledStart(instant(earlier)));
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/discover")
+                        .param("date", LocalDate.now().toString())
+                        .param("viewerZoneId", JVM_ZONE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(0));
+    }
+
+    /** SESSION-37 — {@code date == today} still matches a session later today, just not one
+     * that's already started. */
+    @Test
+    void dateFilter_todayIncludesASessionLaterToday() throws Exception {
+        LocalDateTime later = LocalDateTime.now().plusHours(2);
+        Long laterTodayId = save(sessionBuilder().scheduledStart(instant(later)));
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/discover")
+                        .param("date", LocalDate.now().toString())
+                        .param("viewerZoneId", JVM_ZONE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(laterTodayId));
     }
 
     /** Regression coverage for a real bug this class caught: {@code date} used to be implemented
@@ -557,22 +655,36 @@ class SessionDiscoverIntegrationTest extends BaseIT {
                 .andExpect(status().isBadRequest());
     }
 
+    /** SESSION-37 — startTimeFilter/startTime are no longer a strict pair: startTimeFilter alone
+     * is a no-op (never a 400), same as if neither were given. */
     @Test
-    void startTimeFilter_rejectsBeingGivenWithoutStartTime() throws Exception {
+    void startTimeFilter_givenWithoutStartTimeHasNoEffectNotA400() throws Exception {
+        LocalDateTime day = LocalDateTime.now().plusDays(1);
+        Long morningId = save(sessionBuilder().scheduledStart(instant(day.withHour(9).withMinute(0))));
+
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover")
-                        .param("date", DEFAULT_DATE.toString())
+                        .param("date", day.toLocalDate().toString()).param("viewerZoneId", JVM_ZONE)
                         .param("startTimeFilter", "AFTER_OR_EQUAL"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(morningId));
     }
 
+    /** SESSION-37 — startTime given alone defaults its direction to AFTER_OR_EQUAL, never a 400. */
     @Test
-    void startTime_rejectsBeingGivenWithoutStartTimeFilter() throws Exception {
+    void startTime_givenWithoutStartTimeFilterDefaultsToAfterOrEqual() throws Exception {
+        LocalDateTime day = LocalDateTime.now().plusDays(1);
+        Long eveningId = save(sessionBuilder().scheduledStart(instant(day.withHour(18).withMinute(0))));
+        save(sessionBuilder().scheduledStart(instant(day.withHour(9).withMinute(0))));
+
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover")
-                        .param("date", DEFAULT_DATE.toString())
-                        .param("startTime", "10:00:00"))
-                .andExpect(status().isBadRequest());
+                        .param("date", day.toLocalDate().toString()).param("viewerZoneId", JVM_ZONE)
+                        .param("startTime", "12:00:00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(eveningId));
     }
 
     // ── Validation: negative numeric filters ────────────────────────────────
@@ -593,6 +705,23 @@ class SessionDiscoverIntegrationTest extends BaseIT {
                         .param("date", DEFAULT_DATE.toString())
                         .param("maxFeeAmountVnd", "-1"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ── Pagination: default page size ───────────────────────────────────────
+
+    /** SESSION-37 — default page size dropped from 20 to 10. */
+    @Test
+    void pageSize_defaultsTo10() throws Exception {
+        for (int i = 0; i < 11; i++) {
+            save(sessionBuilder());
+        }
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/discover")
+                        .param("date", DEFAULT_DATE.toString()).param("viewerZoneId", JVM_ZONE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(10))
+                .andExpect(jsonPath("$.data.totalElements").value(11));
     }
 
     // ── Sort: scheduledStart ASC, then open slots ASC, then createdAt ASC ──

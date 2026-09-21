@@ -163,10 +163,10 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("History dates retrieved successfully", response));
     }
 
-    @Operation(summary = "Discover joinable standalone sessions", description = "SESSION-25: PREPARING/SCHEDULED/ONGOING (default all three) standalone sessions gated to sports the caller holds an active profile for, excluding sessions the caller created or currently has joined. date is required (SESSION-35); every other param below sportId is optional and AND-combined. viewerZoneId (an IANA zone id) is the zone date's day boundary and startTimeFilter/startTime's time-of-day comparison are evaluated in — falls back to UTC when omitted. Sorted scheduledStart ASC, then remaining open slots ASC, then createdAt ASC — the caller's own Pageable sort is ignored.")
+    @Operation(summary = "Discover joinable standalone sessions", description = "SESSION-25/37: PREPARING/SCHEDULED (default; an explicit ONGOING is silently stripped, never a 400) standalone sessions gated to sports the caller holds an active profile for, excluding sessions the caller created or currently has joined. date is required; every other param below sportId is optional and AND-combined. date resolves to today's [now(), dayEnd) when it is today or in the past (silently clamped), or the full [dayStart, dayEnd) when it is a future day. startTimeFilter/startTime are independently optional — startTime alone defaults to AFTER_OR_EQUAL, startTimeFilter alone is a no-op. viewerZoneId (an IANA zone id) is the zone date's day boundary/floor and startTimeFilter/startTime's time-of-day comparison are evaluated in — falls back to UTC when omitted. Sorted scheduledStart ASC, then remaining open slots ASC, then createdAt ASC — the caller's own Pageable sort is ignored. Page size defaults to 10.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "date missing, negative minOpenSlots/maxFeeAmountVnd, startTimeFilter/startTime given without the other, a status outside PREPARING/SCHEDULED/ONGOING, or an invalid viewerZoneId"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "date missing, negative minOpenSlots/maxFeeAmountVnd, a status outside PREPARING/SCHEDULED/ONGOING, or an invalid viewerZoneId"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/discover")
@@ -184,15 +184,12 @@ public class SessionController {
             @RequestParam(required = false) LocalTime startTime,
             @RequestParam(required = false) String viewerZoneId,
             @RequestParam(required = false) List<SessionStatus> status,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 10) Pageable pageable) {
         if (minOpenSlots != null && minOpenSlots < 0) {
             throw new BadRequestException("minOpenSlots must be >= 0");
         }
         if (maxFeeAmountVnd != null && maxFeeAmountVnd < 0) {
             throw new BadRequestException("maxFeeAmountVnd must be >= 0");
-        }
-        if ((startTimeFilter == null) != (startTime == null)) {
-            throw new BadRequestException("startTimeFilter and startTime must be given together");
         }
         if (status != null && !DISCOVERABLE_STATUSES.containsAll(status)) {
             throw new BadRequestException("status must be one of PREPARING, SCHEDULED, ONGOING");

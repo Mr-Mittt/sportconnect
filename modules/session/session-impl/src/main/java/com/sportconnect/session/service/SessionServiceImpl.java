@@ -121,11 +121,12 @@ public class SessionServiceImpl implements SessionService {
     private static final String DEFAULT_ZONE_ID = "UTC";
 
     /** SESSION-25 — discoverSessions' default status list when the caller omits/empties
-     * {@code statuses}. Coincides with {@link #UPCOMING_SESSION_STATUSES} today but kept as its
-     * own constant — the two represent different contracts (discover's default vs. upcoming's
-     * inclusion set) that happen to agree now, not a shared concept. */
+     * {@code statuses}, or when an explicit list is left empty after {@link #resolveDiscoverStatuses}
+     * strips {@code ONGOING} out of it (SESSION-37). No longer coincides with
+     * {@link #UPCOMING_SESSION_STATUSES} as of SESSION-37 — discover's default dropped
+     * {@code ONGOING}, upcoming's inclusion set didn't. */
     private static final List<SessionStatus> DISCOVER_DEFAULT_STATUSES =
-            List.of(SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING);
+            List.of(SessionStatus.PREPARING, SessionStatus.SCHEDULED);
 
     @Override
     @Transactional
@@ -195,6 +196,7 @@ public class SessionServiceImpl implements SessionService {
 
         Session session = Session.builder()
                 .groupId(groupId)
+                .isPublic(groupId == null)
                 .postId(postId)
                 .sessionType(sessionType)
                 .createdBy(userId)
@@ -740,17 +742,44 @@ public class SessionServiceImpl implements SessionService {
      * moment of the request — a real per-row fix was evaluated and rejected as too large a rewrite
      * for this ticket, see that Javadoc).
      *
-     * <p>SESSION-35 (2026-09-18 scope addition): {@code date} is now required, guaranteed
-     * non-null by the controller — the {@code lowerBound} param this method still passes to
-     * {@link SessionRepository#findDiscoverSessions} is always {@code null} as a result (its
-     * {@code scheduledStart >= now()} default applied only when a caller could omit both
-     * {@code date} and {@code startTimeFilter}, which is no longer possible). Left wired through
-     * rather than removed from the repository query/signature — genuinely dead today, but a
-     * no-op, harmless {@code IS NULL} branch, not worth the mechanical churn of dropping a
-     * parameter for a query untouched otherwise.
+     * <p><b>SESSION-37 final decision — supersedes SESSION-35's exact-day match:</b>
+     * {@code date} is still required, but its resolved time range is no longer a plain
+     * {@code [dayStart, dayEnd)} exact-day window:
+     * <ul>
+     *   <li>{@code date < today} (in {@code viewerZoneId}) — silently clamped to today's own
+     *       semantics below, never a 400 and never simply ignored.</li>
+     *   <li>{@code date == today} — {@code [now(), dayEnd(today))}, excluding sessions that
+     *       already started earlier today.</li>
+     *   <li>{@code date > today} — {@code [dayStart(date), dayEnd(date))}, unchanged from
+     *       SESSION-35.</li>
+     * </ul>
+     * {@code status}'s default also drops {@code ONGOING} (now {@code {PREPARING, SCHEDULED}});
+     * an explicit list containing {@code ONGOING} has it silently stripped rather than rejected,
+     * falling back to the default if stripping empties the list. {@code startTimeFilter}/
+     * {@code startTime} are no longer a strict pair (the controller's old "must be given together"
+     * 400 is gone): {@code startTime} alone defaults its filter direction to
+     * {@code AFTER_OR_EQUAL}; {@code startTimeFilter} alone is silently ignored (already the
+     * existing behavior below, since both {@code startTimeBeforeOrEqual}/
+     * {@code startTimeAfterOrEqual} require a non-null {@code startTime} to ever populate).
      *
      * @throws BadRequestException if {@code viewerZoneId} is non-null but not a valid IANA zone id
      */
+    /** SESSION-37 — {@code ONGOING} is no longer part of {@code /discover}'s default status list,
+     * but an explicit list naming it isn't a 400 either (unlike a genuinely invalid value, which
+     * the controller still rejects before this method ever runs) — it's silently stripped instead.
+     * A null/empty {@code statuses} uses the default directly; stripping {@code ONGOING} out of a
+     * non-empty explicit list falls back to the default only if that empties the list entirely. */
+    private List<SessionStatus> resolveDiscoverStatuses(List<SessionStatus> statuses) {
+        if (statuses == null || statuses.isEmpty()) {
+            return DISCOVER_DEFAULT_STATUSES;
+        }
+        List<SessionStatus> stripped = statuses.stream()
+                .filter(status -> status != SessionStatus.ONGOING)
+                .distinct()
+                .collect(Collectors.toList());
+        return stripped.isEmpty() ? DISCOVER_DEFAULT_STATUSES : stripped;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Page<SessionResponse> discoverSessions(
@@ -771,25 +800,35 @@ public class SessionServiceImpl implements SessionService {
             return Page.empty(pageable);
         }
 
-        List<SessionStatus> effectiveStatuses = (statuses == null || statuses.isEmpty())
-                ? DISCOVER_DEFAULT_STATUSES : statuses;
+        List<SessionStatus> effectiveStatuses = resolveDiscoverStatuses(statuses);
         ZoneId zone = resolveZone(viewerZoneId);
-        // Half-open [dayStart, dayEnd) range against scheduledStart, computed in the caller's own
-        // zone (SESSION-35) — a plain instant comparison, so no query-side change is needed, unlike
-        // startTime below (see SessionRepository.findDiscoverSessions' Javadoc for why the two
-        // differ: date is a caller-known range, startTime is a per-row time-of-day extraction).
-        // date is required (SESSION-35 scope addition) so this window always applies now.
-        Instant dayStart = date.atStartOfDay(zone).toInstant();
-        Instant dayEnd = date.plusDays(1).atStartOfDay(zone).toInstant();
+        // SESSION-37: date < today clamps to today; date == today floors at now() instead of
+        // today's own dayStart (excludes sessions that already started); date > today is the
+        // plain [dayStart, dayEnd) window SESSION-35 shipped. Still a plain instant comparison —
+        // no query-side change needed, unlike startTime below (see
+        // SessionRepository.findDiscoverSessions' Javadoc for why the two differ: date is a
+        // caller-known range, startTime is a per-row time-of-day extraction).
+        LocalDate today = LocalDate.now(zone);
+        LocalDate effectiveDate = date.isBefore(today) ? today : date;
+        Instant dayEnd = effectiveDate.plusDays(1).atStartOfDay(zone).toInstant();
+        Instant dayStart = effectiveDate.equals(today)
+                ? Instant.now()
+                : effectiveDate.atStartOfDay(zone).toInstant();
+        // SESSION-37: startTimeFilter/startTime are no longer a strict pair. startTime given alone
+        // defaults the direction to AFTER_OR_EQUAL; startTimeFilter given alone already falls
+        // through as a no-op below (both startTimeBeforeOrEqual/startTimeAfterOrEqual require a
+        // non-null startTime to ever populate).
+        StartTimeFilter effectiveStartTimeFilter = (startTimeFilter == null && startTime != null)
+                ? StartTimeFilter.AFTER_OR_EQUAL : startTimeFilter;
         // Unconverted wall-clock seconds-of-day — the repository query reconstructs the
         // wall-clock-equivalent from scheduledStart's raw stored representation itself (MOD
         // arithmetic against zoneOffsetSeconds), rather than shifting this parameter. See
         // SessionRepository.findDiscoverSessions' Javadoc: shifting the parameter instead breaks
         // the "any date" cyclic comparison whenever it crosses the wrap point the shift
         // introduces (confirmed: AFTER_OR_EQUAL 00:00 inverted against an 18:00 session).
-        Integer startTimeBeforeOrEqual = startTimeFilter == StartTimeFilter.BEFORE_OR_EQUAL && startTime != null
+        Integer startTimeBeforeOrEqual = effectiveStartTimeFilter == StartTimeFilter.BEFORE_OR_EQUAL && startTime != null
                 ? startTime.toSecondOfDay() : null;
-        Integer startTimeAfterOrEqual = startTimeFilter == StartTimeFilter.AFTER_OR_EQUAL && startTime != null
+        Integer startTimeAfterOrEqual = effectiveStartTimeFilter == StartTimeFilter.AFTER_OR_EQUAL && startTime != null
                 ? startTime.toSecondOfDay() : null;
         // The caller's zone's current UTC offset in seconds (SESSION-35: resolveZone(viewerZoneId),
         // not the JVM's own zone) — added back to scheduledStart's raw-stored EXTRACT to reconstruct

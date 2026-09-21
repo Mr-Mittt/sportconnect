@@ -135,6 +135,7 @@ class SessionSystemCommentIntegrationTest extends RedisBaseIT {
     private Long createAutoApproveSession(Long postId) {
         Session session = Session.builder()
                 .groupId(null)
+                .isPublic(true)
                 .postId(postId)
                 .sessionType(SessionType.STANDALONE)
                 .createdBy(creatorId)
