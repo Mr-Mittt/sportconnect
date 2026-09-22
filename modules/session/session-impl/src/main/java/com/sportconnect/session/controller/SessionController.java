@@ -8,6 +8,7 @@ import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
+import com.sportconnect.session.api.dto.SessionDiscoverDateCountsResponse;
 import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
@@ -163,7 +164,7 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("History dates retrieved successfully", response));
     }
 
-    @Operation(summary = "Discover joinable standalone sessions", description = "SESSION-25/37: PREPARING/SCHEDULED (default; an explicit ONGOING is silently stripped, never a 400) standalone sessions gated to sports the caller holds an active profile for, excluding sessions the caller created or currently has joined. date is required; every other param below sportId is optional and AND-combined. date resolves to today's [now(), dayEnd) when it is today or in the past (silently clamped), or the full [dayStart, dayEnd) when it is a future day. startTimeFilter/startTime are independently optional — startTime alone defaults to AFTER_OR_EQUAL, startTimeFilter alone is a no-op. viewerZoneId (an IANA zone id) is the zone date's day boundary/floor and startTimeFilter/startTime's time-of-day comparison are evaluated in — falls back to UTC when omitted. Sorted scheduledStart ASC, then remaining open slots ASC, then createdAt ASC — the caller's own Pageable sort is ignored. Page size defaults to 10.")
+    @Operation(summary = "Discover joinable standalone sessions", description = "SESSION-25/37: PREPARING/SCHEDULED (default; an explicit ONGOING is silently stripped, never a 400) standalone sessions gated to sports the caller holds an active profile for, excluding sessions the caller created or currently has joined. date is required; every other param below sportId is optional and AND-combined. date resolves to today's [now(), dayEnd) when it is today or in the past (silently clamped), or the full [dayStart, dayEnd) when it is a future day. startTimeFilter/startTime are independently optional — startTime alone defaults to AFTER_OR_EQUAL, startTimeFilter alone is a no-op. locationId accepts multiple values (repeated param), OR-combined — widened from a single-value exact match on 2026-09-22 for parity with /discover/counts. viewerZoneId (an IANA zone id) is the zone date's day boundary/floor and startTimeFilter/startTime's time-of-day comparison are evaluated in — falls back to UTC when omitted. Sorted scheduledStart ASC, then remaining open slots ASC, then createdAt ASC — the caller's own Pageable sort is ignored. Page size defaults to 10.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "date missing, negative minOpenSlots/maxFeeAmountVnd, a status outside PREPARING/SCHEDULED/ONGOING, or an invalid viewerZoneId"),
@@ -175,7 +176,7 @@ public class SessionController {
             Authentication authentication,
             @RequestParam(required = false) Long sportId,
             @RequestParam(required = false) String title,
-            @RequestParam(required = false) Long locationId,
+            @RequestParam(required = false) List<Long> locationId,
             @RequestParam(required = false) Integer minOpenSlots,
             @RequestParam(required = false) FeeType feeType,
             @RequestParam(required = false) Long maxFeeAmountVnd,
@@ -199,6 +200,51 @@ public class SessionController {
                 SecurityUtils.extractUserId(authentication), sportId, title, locationId, minOpenSlots,
                 feeType, maxFeeAmountVnd, date, startTimeFilter, startTime, viewerZoneId, status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
+    }
+
+    /** SESSION-39 — the max number of explicit {@code date} values {@code /discover/counts}
+     * accepts in one call; also the size of its default today+7-days window (the default is
+     * already the max this endpoint will ever return in one response). */
+    private static final int MAX_DISCOVER_COUNT_DATES = 8;
+
+    @Operation(summary = "Per-date counts of discoverable sessions", description = "SESSION-39: shares /discover's entire filter set except date and pagination — sportId, title, feeType, maxFeeAmountVnd, minOpenSlots, startTimeFilter+startTime, status, viewerZoneId all mean the same thing. locationId differs: multiple values accepted (repeated param), OR-combined, unlike /discover's single-value exact match. date accepts up to 8 specific dates (more is a 400); any given date before today is silently dropped. Omitted -> today + next 7 days (8 total). If every given date is in the past, returns an empty counts list. Every date in the effective window/list is present in the response, including ones with zero matching sessions.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Per-date counts (possibly an empty list)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "More than 8 date values, negative minOpenSlots/maxFeeAmountVnd, a status outside PREPARING/SCHEDULED/ONGOING, or an invalid viewerZoneId"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    @GetMapping("/discover/counts")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<SessionDiscoverDateCountsResponse>> getSessionDiscoverDateCounts(
+            Authentication authentication,
+            @RequestParam(required = false) Long sportId,
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false) List<Long> locationId,
+            @RequestParam(required = false) Integer minOpenSlots,
+            @RequestParam(required = false) FeeType feeType,
+            @RequestParam(required = false) Long maxFeeAmountVnd,
+            @RequestParam(required = false) List<LocalDate> date,
+            @RequestParam(required = false) StartTimeFilter startTimeFilter,
+            @RequestParam(required = false) LocalTime startTime,
+            @RequestParam(required = false) String viewerZoneId,
+            @RequestParam(required = false) List<SessionStatus> status) {
+        if (minOpenSlots != null && minOpenSlots < 0) {
+            throw new BadRequestException("minOpenSlots must be >= 0");
+        }
+        if (maxFeeAmountVnd != null && maxFeeAmountVnd < 0) {
+            throw new BadRequestException("maxFeeAmountVnd must be >= 0");
+        }
+        if (status != null && !DISCOVERABLE_STATUSES.containsAll(status)) {
+            throw new BadRequestException("status must be one of PREPARING, SCHEDULED, ONGOING");
+        }
+        if (date != null && date.size() > MAX_DISCOVER_COUNT_DATES) {
+            throw new BadRequestException("date accepts at most " + MAX_DISCOVER_COUNT_DATES + " values");
+        }
+
+        SessionDiscoverDateCountsResponse response = sessionService.getSessionDiscoverDateCounts(
+                SecurityUtils.extractUserId(authentication), sportId, title, locationId, minOpenSlots,
+                feeType, maxFeeAmountVnd, date, startTimeFilter, startTime, viewerZoneId, status);
+        return ResponseEntity.ok(ApiResponse.success("Discover date counts retrieved successfully", response));
     }
 
     @Operation(summary = "List the caller's joined sessions", description = "Standalone or group-linked sessions the caller currently has a JOINED participant row for. Optional status narrows to one (e.g. ONGOING, COMPLETED); omitted returns every status in one page.")

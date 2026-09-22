@@ -54,6 +54,13 @@ information about what's ahead. Not required for this ticket's own scope (the pl
 picker still satisfies it), but worth checking whether `SessionCount` has landed by the time this is
 picked up — using it from the start would avoid building a bare picker now and enhancing it later.
 
+**Update (2026-09-22): SESSION-39 has now shipped** — `GET /api/sessions/discover/counts`
+(`SessionDiscoverDateCountsResponse`, `{counts: [{date, count}]}`). Note two contract details that
+differ from `/discover` itself, relevant when wiring this in: `locationId` is a **multi-value**
+filter here (repeated param, OR-combined) unlike `/discover`'s single-value `locationId`; `sportId`
+stays single-value, same as `/discover`. If picked up before CLIENT-SESSION-24 ships, omit
+`viewerZoneId` (falls back to UTC) same as every other endpoint today.
+
 ---
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

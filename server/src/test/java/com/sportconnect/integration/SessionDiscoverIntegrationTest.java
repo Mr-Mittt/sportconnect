@@ -250,17 +250,26 @@ class SessionDiscoverIntegrationTest extends BaseIT {
 
     /** SESSION-37 — {@code findDiscoverSessions}' query base moved from {@code groupId IS NULL} to
      * {@code isPublic = true}; this proves the new column is actually what gates a group-linked
-     * session out, not just that the old {@code groupId} shape still happens to agree with it. */
+     * session out, not just that the old {@code groupId} shape still happens to agree with it. A
+     * group-linked session that is (hypothetically) {@code isPublic = true} is still included —
+     * not reachable via any real API path today ({@code Session}'s own Javadoc notes a group
+     * session becoming independently public is "a real future feature, not built here"), but the
+     * query doesn't know or care how the row got that way, so this proves the gate is future-proof
+     * against that feature landing without silently starting to exclude those sessions too
+     * (2026-09-22 addition, prompted by a review comment). */
     @Test
-    void isPublicFilter_excludesAGroupLinkedSession() throws Exception {
-        save(sessionBuilder());
+    void isPublicFilter_excludesPrivateGroupLinkedSessionButIncludesPublicGroupLinkedSession() throws Exception {
+        Long standaloneId = save(sessionBuilder());
         save(sessionBuilder().groupId(99L).isPublic(false));
+        Long publicGroupLinkedId = save(sessionBuilder().groupId(98L).isPublic(true));
 
         authenticateAs(callerId);
         mockMvc.perform(get("/api/sessions/discover")
                         .param("date", DEFAULT_DATE.toString()).param("viewerZoneId", JVM_ZONE))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content.length()").value(1));
+                .andExpect(jsonPath("$.data.content.length()").value(2))
+                .andExpect(jsonPath("$.data.content[*].id").value(containsInAnyOrder(
+                        standaloneId.intValue(), publicGroupLinkedId.intValue())));
     }
 
     // ── date required + default status list ─────────────────────────────────
@@ -471,7 +480,7 @@ class SessionDiscoverIntegrationTest extends BaseIT {
     }
 
     @Test
-    void locationIdFilter_exactMatchOnly() throws Exception {
+    void locationIdFilter_singleValueIsExactMatch() throws Exception {
         Long matchId = save(sessionBuilder().locationId(42L));
         save(sessionBuilder().locationId(7L));
 
@@ -482,6 +491,24 @@ class SessionDiscoverIntegrationTest extends BaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
                 .andExpect(jsonPath("$.data.content[0].id").value(matchId));
+    }
+
+    /** 2026-09-22 — locationId widened from single-value to multi-value, OR-combined, for parity
+     * with /discover/counts (which shipped the multi-value shape first). */
+    @Test
+    void locationIdFilter_multipleValuesAreOrCombined() throws Exception {
+        Long match1Id = save(sessionBuilder().locationId(42L));
+        Long match2Id = save(sessionBuilder().locationId(7L));
+        save(sessionBuilder().locationId(13L));
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/discover")
+                        .param("date", DEFAULT_DATE.toString()).param("viewerZoneId", JVM_ZONE)
+                        .param("locationId", "42", "7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(2))
+                .andExpect(jsonPath("$.data.content[*].id").value(containsInAnyOrder(
+                        match1Id.intValue(), match2Id.intValue())));
     }
 
     @Test

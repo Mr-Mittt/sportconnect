@@ -198,6 +198,15 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      * by an hour. Same category of imprecision as the two-attempts history above, just against the
      * caller's zone instead of the server's. A true per-row fix needs the native-query rewrite
      * described above.
+     *
+     * <p><b>{@code locationIds}/{@code hasLocationIds} (post-SESSION-39 change, 2026-09-22):</b>
+     * {@code locationId} became a multi-value, OR-combined filter here too — matching {@code
+     * findDiscoverDateCounts}'s own {@code locationIds}/{@code hasLocationIds} shape (an explicit
+     * boolean flag rather than a {@code :locationIds IS NULL} check, since binding a null
+     * {@code List} to {@code IN :locationIds} has no proven-safe precedent in this codebase — the
+     * service always passes a non-empty list, a harmless sentinel when the caller omits
+     * {@code locationId}). Originally single-value ({@code s.locationId = :locationId}); widened
+     * for parity once {@code SessionCount}'s own multi-value {@code locationId} shipped.
      */
     @Query(
         value = "SELECT s, (s.capacity - s.initialSlot - "
@@ -209,7 +218,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
                 + "    WHERE sp.userId = :callerId AND sp.status = :joinedStatus) "
                 + "AND (CAST(:lowerBound AS timestamp) IS NULL OR s.scheduledStart >= :lowerBound) "
                 + "AND (CAST(:title AS string) IS NULL OR LOWER(s.title) LIKE LOWER(CONCAT('%', CAST(:title AS string), '%'))) "
-                + "AND (CAST(:locationId AS long) IS NULL OR s.locationId = :locationId) "
+                + "AND (:hasLocationIds = false OR s.locationId IN :locationIds) "
                 + "AND (CAST(:feeType AS string) IS NULL OR s.feeType = :feeType) "
                 + "AND (CAST(:maxFeeAmountVnd AS long) IS NULL OR s.feeAmountVnd <= :maxFeeAmountVnd) "
                 + "AND (CAST(:dayStart AS timestamp) IS NULL OR (s.scheduledStart >= :dayStart AND s.scheduledStart < :dayEnd)) "
@@ -229,7 +238,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
                 + "    WHERE sp.userId = :callerId AND sp.status = :joinedStatus) "
                 + "AND (CAST(:lowerBound AS timestamp) IS NULL OR s.scheduledStart >= :lowerBound) "
                 + "AND (CAST(:title AS string) IS NULL OR LOWER(s.title) LIKE LOWER(CONCAT('%', CAST(:title AS string), '%'))) "
-                + "AND (CAST(:locationId AS long) IS NULL OR s.locationId = :locationId) "
+                + "AND (:hasLocationIds = false OR s.locationId IN :locationIds) "
                 + "AND (CAST(:feeType AS string) IS NULL OR s.feeType = :feeType) "
                 + "AND (CAST(:maxFeeAmountVnd AS long) IS NULL OR s.feeAmountVnd <= :maxFeeAmountVnd) "
                 + "AND (CAST(:dayStart AS timestamp) IS NULL OR (s.scheduledStart >= :dayStart AND s.scheduledStart < :dayEnd)) "
@@ -250,7 +259,8 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("joinedStatus") ParticipantStatus joinedStatus,
             @Param("lowerBound") Instant lowerBound,
             @Param("title") String title,
-            @Param("locationId") Long locationId,
+            @Param("hasLocationIds") boolean hasLocationIds,
+            @Param("locationIds") List<Long> locationIds,
             @Param("feeType") FeeType feeType,
             @Param("maxFeeAmountVnd") Long maxFeeAmountVnd,
             @Param("dayStart") Instant dayStart,
@@ -423,4 +433,98 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
         LocalDate getSessionDate();
         Long getCount();
     }
+
+    /**
+     * SESSION-39 — {@code discoverSessions}-shaped population ({@code is_public = true},
+     * {@code status IN}, {@code sport_id IN}, caller-exclusion — own sessions and already-{@code
+     * JOINED} ones — plus every optional filter {@code discoverSessions} has except {@code date}),
+     * bucketed per calendar date instead of returning session rows. Native, matching {@link
+     * #findHistoryDateCounts}'s style ({@code AT TIME ZONE} + {@code TO_CHAR} + ordinal
+     * {@code GROUP BY 1} — see that method's Javadoc for the H2-vs-Postgres gotchas both queries
+     * share) — this is the ADR's benchmarked "Query C" shape
+     * ({@code documentation/md/adr/DISCOVER_SCHEDULED_START_FILTER_ADR.md} §0c/§0d), re-verified at
+     * SESSION-39 pickup against the redesigned {@code idx_sessions_sport_id_standalone} (SESSION-37).
+     *
+     * <p><b>{@code dateStrings}/{@code todayStr}</b> — the service layer resolves the effective,
+     * already-past-filtered date list to {@code 'YYYY-MM-DD'} strings in {@code zoneId} once, and
+     * this query restricts to exactly those buckets via {@code TO_CHAR(...) IN (:dateStrings)}
+     * (each survivor date's own {@code [dayStart, dayEnd)} window in {@code zoneId} is exactly what
+     * that date string denotes — no separate per-date {@code Instant} range needed). The one
+     * exception is {@code todayStr}: a session already started earlier today must still be
+     * excluded (matching {@code discoverSessions}' {@code date == today → [now(), dayEnd)} rule),
+     * which the date-string equality alone can't express — the trailing {@code <> :todayStr OR
+     * >= :nowInstant} clause adds that floor back in for the one bucket it applies to.
+     *
+     * <p><b>{@code lowerBound}/{@code upperBound}</b> — a loose {@code scheduled_start} envelope
+     * spanning every survivor date (min date's lower bound to max date's exclusive upper bound),
+     * mirroring the ADR's Query C test — a prune helper for the planner, not load-bearing for
+     * correctness (the {@code TO_CHAR(...) IN (...)} clause alone is already exact).
+     *
+     * <p><b>{@code locationIds}/{@code hasLocationIds} (scope change, 2026-09-22; widened to
+     * {@code discoverSessions} too the same day):</b> multi-value, OR-combined via
+     * {@code location_id IN (:locationIds)} — originally introduced here first (this endpoint
+     * shipped it before {@code discoverSessions} did), now the same shape both endpoints share.
+     * {@code hasLocationIds} is an explicit boolean flag rather than a {@code :locationIds IS NULL}
+     * check — binding a null {@code List} to a native {@code IN (:param)} clause has no
+     * proven-safe precedent in this codebase (every existing native/JPQL {@code IN (:list)} usage
+     * here is guaranteed non-empty before the query runs), so the service always passes a
+     * non-empty list — a harmless {@code List.of(-1L)} sentinel (never a real id) when the caller
+     * omitted {@code locationId} — and this flag controls whether the clause is actually applied.
+     *
+     * <p>Every remaining optional filter ({@code title}, {@code feeType}, {@code maxFeeAmountVnd},
+     * {@code minOpenSlots}, {@code startTimeBeforeOrEqual}/{@code startTimeAfterOrEqual} +
+     * {@code zoneOffsetSeconds}) is identical in shape and semantics to {@code discoverSessions}'
+     * own JPQL clauses (see {@link #findDiscoverSessions}' Javadoc) — same defensive
+     * {@code CAST(:param AS type) IS NULL} guard on every optional scalar, same
+     * {@code MOD}-based wall-clock reconstruction for the time-of-day comparison (the ADR's
+     * benchmarked Query C keeps this mechanism rather than a direct {@code AT TIME ZONE} extraction
+     * for the time component, even though this query is native — see the ADR's §0c for why: it's
+     * the already-tested shape, not an unverified "improvement").
+     */
+    @Query(value = "SELECT CAST(TO_CHAR(s.scheduled_start AT TIME ZONE :zoneId, 'YYYY-MM-DD') AS date) "
+            + "    AS sessionDate, COUNT(*) AS count "
+            + "FROM sessions s "
+            + "WHERE s.is_public = true AND s.status IN (:statuses) AND s.sport_id IN (:sportIds) "
+            + "AND s.created_by <> :callerId "
+            + "AND s.id NOT IN (SELECT sp.session_id FROM session_participants sp "
+            + "    WHERE sp.user_id = :callerId AND sp.status = :joinedStatus) "
+            + "AND s.scheduled_start >= :lowerBound AND s.scheduled_start < :upperBound "
+            + "AND TO_CHAR(s.scheduled_start AT TIME ZONE :zoneId, 'YYYY-MM-DD') IN (:dateStrings) "
+            + "AND (TO_CHAR(s.scheduled_start AT TIME ZONE :zoneId, 'YYYY-MM-DD') <> :todayStr "
+            + "    OR s.scheduled_start >= :nowInstant) "
+            + "AND (CAST(:title AS text) IS NULL OR LOWER(s.title) LIKE LOWER(CONCAT('%', CAST(:title AS text), '%'))) "
+            + "AND (:hasLocationIds = false OR s.location_id IN (:locationIds)) "
+            + "AND (CAST(:feeType AS text) IS NULL OR s.fee_type = :feeType) "
+            + "AND (CAST(:maxFeeAmountVnd AS bigint) IS NULL OR s.fee_amount_vnd <= :maxFeeAmountVnd) "
+            + "AND (CAST(:minOpenSlots AS integer) IS NULL OR (s.capacity - s.initial_slot - "
+            + "    (SELECT COUNT(*) FROM session_participants sp3 "
+            + "        WHERE sp3.session_id = s.id AND sp3.status = :joinedStatus)) - :minOpenSlots > 0) "
+            + "AND (CAST(:startTimeBeforeOrEqual AS integer) IS NULL OR "
+            + "    MOD(MOD(CAST(EXTRACT(HOUR FROM s.scheduled_start) * 3600 + EXTRACT(MINUTE FROM s.scheduled_start) * 60 "
+            + "        + EXTRACT(SECOND FROM s.scheduled_start) + :zoneOffsetSeconds AS integer), 86400) + 86400, 86400) <= :startTimeBeforeOrEqual) "
+            + "AND (CAST(:startTimeAfterOrEqual AS integer) IS NULL OR "
+            + "    MOD(MOD(CAST(EXTRACT(HOUR FROM s.scheduled_start) * 3600 + EXTRACT(MINUTE FROM s.scheduled_start) * 60 "
+            + "        + EXTRACT(SECOND FROM s.scheduled_start) + :zoneOffsetSeconds AS integer), 86400) + 86400, 86400) >= :startTimeAfterOrEqual) "
+            + "GROUP BY 1",
+            nativeQuery = true)
+    List<SessionDateCountProjection> findDiscoverDateCounts(
+            @Param("statuses") List<String> statuses,
+            @Param("sportIds") List<Long> sportIds,
+            @Param("callerId") UUID callerId,
+            @Param("joinedStatus") String joinedStatus,
+            @Param("lowerBound") Instant lowerBound,
+            @Param("upperBound") Instant upperBound,
+            @Param("dateStrings") List<String> dateStrings,
+            @Param("todayStr") String todayStr,
+            @Param("nowInstant") Instant nowInstant,
+            @Param("title") String title,
+            @Param("hasLocationIds") boolean hasLocationIds,
+            @Param("locationIds") List<Long> locationIds,
+            @Param("feeType") String feeType,
+            @Param("maxFeeAmountVnd") Long maxFeeAmountVnd,
+            @Param("minOpenSlots") Integer minOpenSlots,
+            @Param("startTimeBeforeOrEqual") Integer startTimeBeforeOrEqual,
+            @Param("startTimeAfterOrEqual") Integer startTimeAfterOrEqual,
+            @Param("zoneOffsetSeconds") Integer zoneOffsetSeconds,
+            @Param("zoneId") String zoneId);
 }
