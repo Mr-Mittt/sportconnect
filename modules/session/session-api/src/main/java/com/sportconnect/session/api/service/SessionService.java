@@ -48,13 +48,27 @@ public interface SessionService {
      */
     SessionResponse createSession(UUID userId, CreateSessionRequest request);
 
-    /** callerId (SESSION-9) resolves SessionResponse.callerParticipation — the caller's own
-     * SessionParticipant row for this session, or null if they have none. */
+    /**
+     * callerId (SESSION-9) resolves SessionResponse.callerParticipation — the caller's own
+     * SessionParticipant row for this session, or null if they have none.
+     *
+     * <p>SESSION-40: gated via {@code SessionDetailGate} — previously ungated entirely.
+     * Availability: the session exists and, if group-linked, its parent group is still active
+     * (else NotFoundException). Visibility: {@code isPublic}, or (standalone) the caller holds a
+     * JOINED/REQUESTED/INVITED participant row, or (group-linked) the caller is a member of the
+     * parent group (else ForbiddenException). See {@code SessionDetailGate}'s own Javadoc for why
+     * this differs from {@code SessionGate} (comments/likes).
+     */
     SessionResponse getSession(Long sessionId, UUID callerId);
 
     /**
-     * Delegates private-group visibility to GroupService.getGroup(groupId, currentUserId) before
-     * querying — reuses the existing membership gate rather than reimplementing it.
+     * SESSION-40 (scope addition, 2026-09-22): member-only regardless of the group's own
+     * public/private flag — widened from the previous {@code GroupService.getGroup(groupId,
+     * currentUserId)} delegation, which only gated a <em>private</em> group (a public group's
+     * sessions were listable by any authenticated user). Throws BadRequestException for a
+     * non-member, whether the group is public, private, non-existent, or inactive —
+     * {@code GroupService.isGroupMember} returns false uniformly for all of those, and this
+     * deliberately doesn't distinguish them (doesn't leak group existence to a non-member).
      */
     Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, Pageable pageable);
 

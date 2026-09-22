@@ -4163,6 +4163,36 @@ explicit go-ahead at each step (full story in A3's summary doc):
   already stopped it once. Fixed by dropping that annotation (both its calls already manage their
   own transactions). Green: `session-impl` + `group-impl` (full Spock suites) + `:server:test`
   (full suite, 262 tests, 0 failures).
+- **SESSION-40 (`DONE`, 2026-09-22,
+  `modules/session/docs/MVP/SESSION-40_GETSESSION_MISSING_VISIBILITY_GATE.md`):**
+  `GET /api/sessions/{sessionId}` was ungated entirely — any authenticated user could read any
+  session's full details, including a private group's, since `callerId` was only ever used to
+  resolve `callerParticipation`, never to gate access. New `SessionDetailGate implements
+  ResourceGate<Session>`, deliberately kept separate from `SessionGate` (which gates comments/likes
+  with a different, purely relationship-based rule): visible if `isPublic`, or (standalone) the
+  caller holds a `JOINED`/`REQUESTED`/`INVITED` participant row, or (group-linked) the caller is a
+  group member — availability-gated first on the parent group still being active, same rule
+  `SessionGate.isAvailable` uses. Today every standalone session has `isPublic=true` and every
+  group-linked session has `isPublic=false` (set at creation from `groupId == null`), so the formula
+  currently collapses to "standalone stays fully open" (no regression) and "group-linked requires
+  membership" (the actual fix) — both the `isPublic` branch and the standalone participant-status
+  clause are forward-compatible pieces that only start mattering once a private standalone session
+  or a public group-linked session can actually exist. **Scope change at pickup (user decision):
+  `getGroupSessions` brought into scope** (originally explicitly out of scope) and tightened to
+  **member-only regardless of the group's own public/private flag** — closes a real gap the original
+  ticket text didn't call out: a *public* group's sessions were listable by any authenticated user,
+  not just members. Widened from `GroupService.getGroup(groupId, currentUserId)` (private-only gate)
+  to `GroupService.isGroupMember`, thrown as `BadRequestException` uniformly for a
+  non-member/non-existent/inactive group (same convention `joinSession`'s own membership check
+  already uses in this class — deliberately not distinguishing "doesn't exist" from "exists but you
+  can't see it", unlike `getGroup`). Consumer census: no client flow depended on non-member access to
+  either endpoint — Discover's standalone `isPublic=true` flow stays fully open, and
+  `useGroupSessionsForGroups` (the only real caller of the group-sessions hook) only ever queries
+  groups the caller already belongs to. Green: `session-impl` full Spock suite (new
+  `SessionDetailGateSpec`, 11 cases, mirroring `SessionGateSpec`'s style; `SessionServiceImplSpec`'s
+  existing `getSession`/`getGroupSessions` cases updated for the new gate delegation) + new
+  `SessionAccessGateIntegrationTest` (13 real `MockMvc`+H2 cases covering the full matrix across both
+  endpoints) + full `:server:test` (0 failures).
 - **SESSION-39 (`DONE`, 2026-09-22,
   `modules/session/docs/MVP/SESSION-39_SESSION_COUNT_ENDPOINT.md`):** new
   `GET /api/sessions/discover/counts` — per-date counts of `discoverSessions`-shaped results across
