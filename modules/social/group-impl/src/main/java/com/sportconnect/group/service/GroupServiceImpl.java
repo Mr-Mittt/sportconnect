@@ -42,6 +42,7 @@ import com.sportconnect.group.repository.GroupSettingsRepository;
 import com.sportconnect.group.repository.GroupTypeRepository;
 import com.sportconnect.location.api.dto.LocationResponse;
 import com.sportconnect.location.api.service.LocationService;
+import com.sportconnect.session.api.service.SessionService;
 import com.sportconnect.social.post.api.dto.PostResponse;
 import com.sportconnect.social.post.api.dto.PostType;
 import com.sportconnect.social.post.api.service.PostService;
@@ -96,6 +97,7 @@ public class GroupServiceImpl implements GroupService {
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final LocationService locationService;
+    private final SessionService sessionService;
 
     // services/chat (the first non-Java service in this repo) consumes this stream to keep its
     // own local authorization cache in sync — see services/chat/docs/SYNC_DESIGN.md for the full
@@ -104,14 +106,17 @@ public class GroupServiceImpl implements GroupService {
     private static final int DOMAIN_EVENT_SCHEMA_VERSION = 1;
 
     /**
-     * Explicit constructor (not {@code @RequiredArgsConstructor}) because {@code postService}
-     * must be {@code @Lazy}: PostServiceImpl depends on GroupService too (membership/permission
-     * checks), so eager construction of both beans forms a cycle Spring refuses to start with by
-     * default. postService is only used here for a handful of pinned-post lookups — a lazy proxy
-     * defers resolving the real PostServiceImpl bean until one of those calls actually happens,
-     * which is well after both beans exist. Relying on Lombok to copy @Lazy onto a generated
-     * constructor parameter is not guaranteed without a lombok.config entry, so this is spelled
-     * out by hand instead.
+     * Explicit constructor (not {@code @RequiredArgsConstructor}) because {@code postService} and
+     * {@code sessionService} must be {@code @Lazy}: PostServiceImpl depends on GroupService too
+     * (membership/permission checks), and as of SESSION-38 SessionServiceImpl does too (it already
+     * depended on GroupService since SESSION-1) — eager construction of either pair of beans forms
+     * a cycle Spring refuses to start with by default. postService is only used here for a handful
+     * of pinned-post lookups, and sessionService only for triggering event-driven generation from
+     * updateGroupRecurrence/updateGroupSettings — a lazy proxy defers resolving the real
+     * PostServiceImpl/SessionServiceImpl bean until one of those calls actually happens, which is
+     * well after every bean exists. Relying on Lombok to copy @Lazy onto a generated constructor
+     * parameter is not guaranteed without a lombok.config entry, so this is spelled out by hand
+     * instead.
      */
     public GroupServiceImpl(
             GroupRepository groupRepository,
@@ -130,7 +135,8 @@ public class GroupServiceImpl implements GroupService {
             GroupInvitationInviterRepository invitationInviterRepository,
             StringRedisTemplate stringRedisTemplate,
             ObjectMapper objectMapper,
-            LocationService locationService) {
+            LocationService locationService,
+            @Lazy SessionService sessionService) {
         this.groupRepository = groupRepository;
         this.groupMemberRepository = groupMemberRepository;
         this.joinRequestRepository = joinRequestRepository;
@@ -148,6 +154,7 @@ public class GroupServiceImpl implements GroupService {
         this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
         this.locationService = locationService;
+        this.sessionService = sessionService;
     }
 
     /**
@@ -1007,6 +1014,7 @@ public class GroupServiceImpl implements GroupService {
 
         settings = groupSettingsRepository.save(settings);
         log.info("Updated settings for group {} by owner {}", groupId, userId);
+        triggerSessionGenerationIfEligible(groupId);
 
         return mapToGroupSettingsResponse(settings);
     }
@@ -1059,14 +1067,53 @@ public class GroupServiceImpl implements GroupService {
 
         group = groupRepository.save(group);
         log.info("Updated recurrence schedule for group {} by owner {}", groupId, userId);
+        triggerSessionGenerationIfEligible(groupId);
 
         return mapToRecurrenceResponse(group);
+    }
+
+    /**
+     * SESSION-38 — fires the event-driven generation trigger after {@code updateGroupRecurrence}/
+     * {@code updateGroupSettings} saves. Unconditional and best-effort: always calls
+     * {@code SessionService.generateNextOccurrenceForGroup}, relying entirely on the session
+     * domain's own eligibility check (autoGenerateSessions + a complete rule + not already
+     * generated) rather than duplicating that logic here — this method's only job is "something
+     * about this group's schedule might have just become eligible, let the session domain decide."
+     * A failure is logged and swallowed, never rethrown: the caller's settings/recurrence save
+     * already succeeded and must not be rolled back over a generation-side problem (e.g. a
+     * transient LocationService error) — see SESSION-38's own doc for this decision, and
+     * SESSION-41 for the follow-up on retrying a failure like this one.
+     */
+    private void triggerSessionGenerationIfEligible(Long groupId) {
+        try {
+            sessionService.generateNextOccurrenceForGroup(groupId);
+        } catch (Exception e) {
+            log.warn("Event-driven session generation failed for group {} — will only retry on the "
+                    + "next trigger for this group (SESSION-41 tracks a real backstop)", groupId, e);
+        }
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<GroupRecurrenceConfigResponse> getGroupsWithAutoGenerateSessionsEnabled() {
-        List<GroupSettings> enabledSettings = groupSettingsRepository.findByAutoGenerateSessionsTrue();
+        return buildRecurrenceConfigs(groupSettingsRepository.findByAutoGenerateSessionsTrue());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupRecurrenceConfigResponse> getGroupRecurrenceConfigsByGroupIds(List<Long> groupIds) {
+        if (groupIds.isEmpty()) {
+            return List.of();
+        }
+        return buildRecurrenceConfigs(groupSettingsRepository.findByGroupIdInAndAutoGenerateSessionsTrue(groupIds));
+    }
+
+    /** Shared batch owner/group resolution for {@link #getGroupsWithAutoGenerateSessionsEnabled()}
+     * and {@link #getGroupRecurrenceConfigsByGroupIds(List)} — the two differ only in how
+     * {@code enabledSettings} is fetched (all-enabled vs. a specific id set), not in how each row
+     * is resolved into a response. Silently skips a settings row whose {@code Group} or owner
+     * can't be resolved, matching this method's pre-existing behavior. */
+    private List<GroupRecurrenceConfigResponse> buildRecurrenceConfigs(List<GroupSettings> enabledSettings) {
         if (enabledSettings.isEmpty()) {
             return List.of();
         }

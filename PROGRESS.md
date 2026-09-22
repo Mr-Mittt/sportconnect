@@ -4126,6 +4126,43 @@ explicit go-ahead at each step (full story in A3's summary doc):
   of `V071` against real dev Postgres (migration applied cleanly, `is_public` confirmed `NOT NULL`,
   index predicate confirmed via `pg_indexes`, and `EXPLAIN` with `enable_seqscan = off` confirmed
   the planner can actually use the swapped index for discover's query shape).
+- **SESSION-38 (`DONE`, 2026-09-21,
+  `modules/session/docs/MVP/SESSION-38_EVENT_DRIVEN_GROUP_SESSION_GENERATION.md`):** replaced the
+  hourly full-group-scan sweep (`SessionGenerationJob.generateUpcomingSessions`, removed entirely)
+  with three direct triggers sharing one extracted `SessionGenerationService.generateForConfigs`:
+  a `GROUP_RECURRING` session completing (`closePastSessions`, batched per page, no `group-api` call
+  for a standalone-only batch), `updateGroupRecurrence` saving a complete rule, and — **scope added
+  at pickup, user decision** — `updateGroupSettings` turning `autoGenerateSessions` on while a
+  complete rule already exists (closes a real gap: that toggle lives in a separate method from the
+  recurrence editor). New `group-api` batch method `getGroupRecurrenceConfigsByGroupIds`; new
+  `session-api` method `generateNextOccurrenceForGroup`; `group-impl` depends on `session-api` for
+  the first time, forming a real (Spring bean, not Gradle) cycle with `session-impl`'s existing
+  `group-api` dependency, fixed with `@Lazy` on `GroupServiceImpl`'s new field — same precedent as
+  its existing `postService` field. Cancellation-triggered generation explicitly deferred (no
+  gap beyond what already existed); a failed generation attempt is isolated (logged, doesn't fail
+  the caller) but has no retry backstop now that the sweep is gone — filed as **SESSION-41**, per
+  user request. **Two real, pre-existing production bugs found and fixed** by this ticket's own IT
+  coverage — the first non-mocked exercise of this code path against a real transactional DB: (1)
+  auto-generated sessions never created their required companion `SESSION_POST`, so every real
+  insert here has silently failed with a NOT NULL violation since V051 (SESSION-10) shipped, masked
+  as a "benign race" by an overly-broad catch block; (2) a caught exception inside a Spring
+  participating transaction still marks it rollback-only — the original try/catch-only
+  failure-isolation design didn't actually work, fixed with
+  `@Transactional(propagation = REQUIRES_NEW)` on `generateForConfigs`. Also fixed 3 unrelated
+  pre-existing test-timing flakes in `SessionDiscoverIntegrationTest` (`now().plusHours/minusHours`
+  crossing midnight; `LocalTime.MAX` not round-tripping reliably through H2's nanosecond precision).
+  New `GroupSessionGenerationIntegrationTest` (real `@SpringBootTest`) proves the `@Lazy` wiring
+  starts cleanly and the full chain actually creates a session. **Follow-up IT pass (2026-09-22,**
+  **user request — "all features should be covered by IT," now also in CLAUDE.md's Testing**
+  **section):** closed 4 more real gaps — `updateGroupSettings`'s own happy path, calling
+  `updateGroupRecurrence` twice creating only one session, `closePastSessions` batching two
+  *different* groups in one page, and a new `GroupSessionGenerationFailureIsolationIntegrationTest`
+  (one `@MockBean` collaborator to force a real failure, everything else real) — which immediately
+  found a **third, deeper instance of bug (2)**: `generateNextOccurrenceForGroup` was itself
+  `@Transactional`, re-poisoning the caller's transaction one level above where `REQUIRES_NEW`
+  already stopped it once. Fixed by dropping that annotation (both its calls already manage their
+  own transactions). Green: `session-impl` + `group-impl` (full Spock suites) + `:server:test`
+  (full suite, 262 tests, 0 failures).
 - **SESSION-29 (`TODO`, documentation only, 2026-09-15,
   `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
   `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive

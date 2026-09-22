@@ -12,6 +12,12 @@ dependencies {
     // Narrow dependency: only used to validate recurrenceLocationId's sport in
     // updateGroupRecurrence (GROUP-RECUR-1) — display-time enrichment stays client-side.
     implementation project(':modules:location:location-api')
+    // SESSION-38: first time group-impl depends on session-api — triggers
+    // SessionService.generateNextOccurrenceForGroup from updateGroupRecurrence/
+    // updateGroupSettings. session-impl already depends on group-api, so this forms a real
+    // Spring bean cycle (not a Gradle one — session-api has no dependency on group-api) fixed
+    // via @Lazy on GroupServiceImpl's sessionService field, same as this file's own postService.
+    implementation project(':modules:session:session-api')
 
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'

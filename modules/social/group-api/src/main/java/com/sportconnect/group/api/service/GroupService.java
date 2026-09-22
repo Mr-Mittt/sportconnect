@@ -157,6 +157,19 @@ public interface GroupService {
      */
     List<GroupRecurrenceConfigResponse> getGroupsWithAutoGenerateSessionsEnabled();
 
+    /**
+     * SESSION-38 — same shape and filtering as {@link #getGroupsWithAutoGenerateSessionsEnabled()}
+     * (GroupSettings.autoGenerateSessions=true, resolvable owner), scoped to {@code groupIds}
+     * instead of every enabled group. Does <b>not</b> filter by recurrence-rule completeness —
+     * that check is the session domain's own concern (a group with autoGenerateSessions=true but
+     * an incomplete rule is still included here; the caller decides what "complete" means). Backs
+     * the session domain's event-driven generation triggers — the completion trigger calls this
+     * with a real batch of groupIds (never one call per session), the recurrence/settings-change
+     * trigger calls it with a single-element list. Never call this per-row in a loop; batch every
+     * id you need in one call.
+     */
+    List<GroupRecurrenceConfigResponse> getGroupRecurrenceConfigsByGroupIds(List<Long> groupIds);
+
     // Permission Checks
     /**
      * Existence/lifecycle only, no caller-identity component — true iff the group exists and is
