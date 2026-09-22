@@ -338,6 +338,117 @@ class SessionListingIntegrationTest extends BaseIT {
                 .andExpect(status().isBadRequest());
     }
 
+    // ── /requested (SESSION-42) ─────────────────────────────────────────────
+
+    @Test
+    void requested_includesPreparingScheduledOngoingButExcludesCancelledAndCompleted() throws Exception {
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        Long preparingId = createSession(SessionStatus.PREPARING, start);
+        Long scheduledId = createSession(SessionStatus.SCHEDULED, start.plusHours(1));
+        Long ongoingId = createSession(SessionStatus.ONGOING, start.plusHours(2));
+        Long completedId = createSession(SessionStatus.COMPLETED, start.minusDays(5));
+        Long cancelledId = createSession(SessionStatus.CANCELLED, start.plusHours(3));
+        participate(preparingId, ParticipantStatus.REQUESTED);
+        participate(scheduledId, ParticipantStatus.REQUESTED);
+        participate(ongoingId, ParticipantStatus.REQUESTED);
+        participate(completedId, ParticipantStatus.REQUESTED);
+        participate(cancelledId, ParticipantStatus.REQUESTED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/requested"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(3))
+                .andExpect(jsonPath("$.data.content[0].id").value(preparingId))
+                .andExpect(jsonPath("$.data.content[1].id").value(scheduledId))
+                .andExpect(jsonPath("$.data.content[2].id").value(ongoingId));
+    }
+
+    /** A REQUESTED row surviving into ONGOING/CANCELLED/COMPLETED is a real, accepted gap
+     * (SESSION-42's own ticket doc) — this test exists to prove {@code /requested} itself behaves
+     * as designed (non-terminal only), not that the underlying gap is closed. */
+    @Test
+    void requested_excludesJoinedAndInvitedParticipantRows() throws Exception {
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        Long requestedId = createSession(SessionStatus.SCHEDULED, start);
+        Long joinedId = createSession(SessionStatus.SCHEDULED, start.plusHours(1));
+        Long invitedId = createSession(SessionStatus.SCHEDULED, start.plusHours(2));
+        participate(requestedId, ParticipantStatus.REQUESTED);
+        participate(joinedId, ParticipantStatus.JOINED);
+        participate(invitedId, ParticipantStatus.INVITED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/requested"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(requestedId));
+    }
+
+    @Test
+    void requested_includesGroupLinkedSessionsAlongsideStandaloneOnes() throws Exception {
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        Long standaloneId = createSession(SessionStatus.SCHEDULED, start);
+        Long groupLinkedId = createGroupLinkedSession(SessionStatus.SCHEDULED, start.plusHours(1));
+        participate(standaloneId, ParticipantStatus.REQUESTED);
+        participate(groupLinkedId, ParticipantStatus.REQUESTED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/requested"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(2))
+                .andExpect(jsonPath("$.data.content[0].id").value(standaloneId))
+                .andExpect(jsonPath("$.data.content[1].id").value(groupLinkedId));
+    }
+
+    @Test
+    void requested_doesNotLeakAnotherUsersRequestedRow() throws Exception {
+        UUID otherUserId = createUser("d42other").getId();
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        Long sessionId = createSession(SessionStatus.SCHEDULED, start);
+        sessionParticipantRepository.save(SessionParticipant.builder()
+                .sessionId(sessionId)
+                .userId(otherUserId)
+                .status(ParticipantStatus.REQUESTED)
+                .build());
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/requested"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(0));
+    }
+
+    @Test
+    void requested_realPaginationSurfacesRowsPastTheFirstPage() throws Exception {
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        Long firstId = createSession(SessionStatus.SCHEDULED, start);
+        Long secondId = createSession(SessionStatus.SCHEDULED, start.plusHours(1));
+        Long thirdId = createSession(SessionStatus.SCHEDULED, start.plusHours(2));
+        participate(firstId, ParticipantStatus.REQUESTED);
+        participate(secondId, ParticipantStatus.REQUESTED);
+        participate(thirdId, ParticipantStatus.REQUESTED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/requested").param("page", "0").param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(2))
+                .andExpect(jsonPath("$.data.content[0].id").value(firstId))
+                .andExpect(jsonPath("$.data.content[1].id").value(secondId))
+                .andExpect(jsonPath("$.data.totalElements").value(3));
+
+        mockMvc.perform(get("/api/sessions/requested").param("page", "1").param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(thirdId));
+    }
+
+    @Test
+    void requested_returnsEmptyPageNotErrorWhenCallerHasNoRequestedSessions() throws Exception {
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/requested"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(0))
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+    }
+
     // ── /history?date ───────────────────────────────────────────────────────
 
     @Test

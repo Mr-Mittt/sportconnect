@@ -126,6 +126,21 @@ public class SessionServiceImpl implements SessionService {
             List.of(SessionStatus.CANCELLED, SessionStatus.COMPLETED);
     private static final List<String> HISTORY_SESSION_STATUS_NAMES =
             List.of(SessionStatus.CANCELLED.name(), SessionStatus.COMPLETED.name());
+    /** SESSION-42 — {@code /requested}'s own participant-status population, reusing {@link
+     * #UPCOMING_SESSION_STATUSES} for the session-status side (same PREPARING/SCHEDULED/ONGOING
+     * set as {@code /upcoming} — a REQUESTED row isn't auto-cleared when a session starts, so it
+     * must stay visible through ONGOING too, not just PREPARING/SCHEDULED). */
+    private static final List<ParticipantStatus> REQUESTED_PARTICIPANT_STATUSES =
+            List.of(ParticipantStatus.REQUESTED);
+    /** SESSION-42 — Discover's caller-exclusion set, widened from JOINED-only: a session the
+     * caller already requested to join or was invited to shouldn't still surface as something to
+     * newly discover, same as one they're already JOINED to. Deliberately separate from the
+     * JOINED-only {@code ParticipantStatus.JOINED} still passed to {@code findDiscoverSessions}/
+     * {@code findDiscoverDateCounts}' own capacity-counting params — see those methods' Javadoc. */
+    private static final List<ParticipantStatus> DISCOVER_EXCLUDED_PARTICIPANT_STATUSES =
+            List.of(ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED);
+    private static final List<String> DISCOVER_EXCLUDED_PARTICIPANT_STATUS_NAMES =
+            DISCOVER_EXCLUDED_PARTICIPANT_STATUSES.stream().map(Enum::name).collect(Collectors.toList());
 
     /** SESSION-34/35 — the {@code viewerZoneId}-accepting methods' fallback zone when the caller
      * omits it (every caller today, until CLIENT-SESSION-24 ships). */
@@ -330,6 +345,31 @@ public class SessionServiceImpl implements SessionService {
                     UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
                     effectivePageable);
         }
+        return toResponsePage(sessions, userId);
+    }
+
+    /**
+     * SESSION-42 — "my pending requests": every session (standalone or group-linked) where the
+     * caller currently holds a {@code REQUESTED} participant row, restricted to {@code
+     * PREPARING}/{@code SCHEDULED}/{@code ONGOING} (the same {@link #UPCOMING_SESSION_STATUSES}
+     * set {@code /upcoming} uses — a {@code REQUESTED} row is never auto-cleared when a session
+     * starts, so it must stay visible through {@code ONGOING} too, not just pre-start). Reuses
+     * {@code findUpcomingSessions} unchanged (already generic over {@code participantStatuses}) —
+     * no new repository method. Sort is {@code scheduledStart ASC} with the same
+     * {@code PREPARING}→{@code SCHEDULED}→{@code ONGOING} tiebreak, non-overridable by the
+     * caller's own {@code Pageable} sort, same precedent as {@code getUpcomingSessions}.
+     *
+     * <p><b>Known gap, not handled here:</b> a {@code REQUESTED} row for a session that later goes
+     * {@code CANCELLED}/{@code COMPLETED} is never auto-cleared and isn't covered by this method
+     * (non-terminal statuses only) or {@code getSessionHistory} ({@code JOINED}-only) — see
+     * SESSION-42's own ticket doc.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SessionResponse> getRequestedSessions(UUID userId, Pageable pageable) {
+        Page<Session> sessions = sessionRepository.findUpcomingSessions(UPCOMING_SESSION_STATUSES, userId,
+                REQUESTED_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
+                unsorted(pageable));
         return toResponsePage(sessions, userId);
     }
 
@@ -891,7 +931,8 @@ public class SessionServiceImpl implements SessionService {
         List<Long> effectiveLocationIds = hasLocationIds ? locationIds : NO_LOCATION_FILTER_SENTINEL;
 
         Page<Object[]> rows = sessionRepository.findDiscoverSessions(
-                effectiveStatuses, effectiveSportIds, callerId, ParticipantStatus.JOINED, null,
+                effectiveStatuses, effectiveSportIds, callerId, ParticipantStatus.JOINED,
+                DISCOVER_EXCLUDED_PARTICIPANT_STATUSES, null,
                 title, hasLocationIds, effectiveLocationIds, feeType, maxFeeAmountVnd, dayStart, dayEnd,
                 startTimeResolution.startTimeBeforeOrEqual(), startTimeResolution.startTimeAfterOrEqual(),
                 startTimeResolution.zoneOffsetSeconds(), minOpenSlots, unsorted(pageable));
@@ -953,6 +994,7 @@ public class SessionServiceImpl implements SessionService {
 
         List<SessionDateCountProjection> rows = sessionRepository.findDiscoverDateCounts(
                 statusNames, effectiveSportIds, callerId, ParticipantStatus.JOINED.name(),
+                DISCOVER_EXCLUDED_PARTICIPANT_STATUS_NAMES,
                 lowerBound, upperBound, dateStrings, todayStr, Instant.now(),
                 title, hasLocationIds, effectiveLocationIds, feeType != null ? feeType.name() : null,
                 maxFeeAmountVnd, minOpenSlots,

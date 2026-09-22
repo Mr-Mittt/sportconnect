@@ -232,6 +232,24 @@ class SessionDiscoverIntegrationTest extends BaseIT {
                         othersId.intValue(), previouslyLeftId.intValue())));
     }
 
+    /** SESSION-42 — widened from JOINED-only: a session the caller already REQUESTED to join or
+     * was INVITED to shouldn't still surface as newly discoverable either. */
+    @Test
+    void baseline_excludesAlreadyRequestedAndInvitedSessionsToo() throws Exception {
+        Long othersId = save(sessionBuilder());
+        Long alreadyRequestedId = save(sessionBuilder());
+        participate(alreadyRequestedId, callerId, ParticipantStatus.REQUESTED);
+        Long alreadyInvitedId = save(sessionBuilder());
+        participate(alreadyInvitedId, callerId, ParticipantStatus.INVITED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/discover")
+                        .param("date", DEFAULT_DATE.toString()).param("viewerZoneId", JVM_ZONE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(othersId));
+    }
+
     @Test
     void baseline_excludesSessionsOutsideTheCallersActiveSports() throws Exception {
         Long otherSportId = sportRepository.save(Sport.builder()

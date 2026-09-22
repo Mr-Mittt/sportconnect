@@ -4226,6 +4226,27 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `Session.isPublic`'s own documented "a group session becoming independently public is a real
   future feature" note. Green: full Spock suite + both discover IT classes (47 tests) +
   `:server:test`.
+- **SESSION-42 (`DONE`, 2026-09-22,
+  `modules/session/docs/MVP/SESSION-42_DISCOVER_PARTICIPANT_EXCLUSION_AND_REQUESTED_ENDPOINT.md`):**
+  `/discover`/`/discover/counts`'s caller-exclusion widened from `JOINED`-only to also exclude
+  `REQUESTED`/`INVITED` — a session the caller already asked to join or was invited to no longer
+  surfaces as newly discoverable. Required a genuinely new repository param
+  (`excludedParticipantStatuses`), not a widened existing one: `findDiscoverSessions`'s
+  `:joinedStatus` param also feeds the `openSlots`/`minOpenSlots` capacity subqueries, which must
+  stay `JOINED`-only or capacity would be undercounted. New `GET /api/sessions/requested` — "my
+  pending requests," standalone or group-linked, `REQUESTED`-only, needed **zero new repository
+  code** (`findUpcomingSessions` was already generic over `participantStatuses`, reused with
+  `List.of(REQUESTED)`). **Scope correction at pickup:** status filter widened from the originally
+  filed `PREPARING/SCHEDULED` to `PREPARING/SCHEDULED/ONGOING` (matching `/upcoming`) after
+  verifying no code path clears a `REQUESTED` row when a session starts — a stale `REQUESTED` row
+  surviving into `CANCELLED`/`COMPLETED` is a documented, accepted known gap, not fixed here.
+  Client `e2e/mocks/handlers/sessions.ts`'s `/discover` MSW handler widened inline in the same
+  change to keep matching the real contract. Green: `session-impl` full Spock suite (23 existing
+  `discoverSessions`/`getSessionDiscoverDateCounts` call-arg assertions updated, 2 new
+  `getRequestedSessions` tests) + `SessionDiscoverIntegrationTest`/
+  `SessionDiscoverDateCountsIntegrationTest`/`SessionListingIntegrationTest` (new REQUESTED/INVITED
+  exclusion + `/requested` coverage, 89 tests combined) + full `:server:test` (0 failures) + client
+  `tsc -b` clean + `matches-journey.spec.ts` e2e re-verified against the widened mock.
 - **SESSION-29 (`TODO`, documentation only, 2026-09-15,
   `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
   `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive
