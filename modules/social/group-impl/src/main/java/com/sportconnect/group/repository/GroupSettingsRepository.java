@@ -21,6 +21,11 @@ public interface GroupSettingsRepository extends JpaRepository<GroupSettings, Lo
     /** Used exclusively by the session domain's scheduled generation job (SESSION-2). */
     List<GroupSettings> findByAutoGenerateSessionsTrue();
 
+    /** SESSION-38 — same population as {@link #findByAutoGenerateSessionsTrue()}, scoped to an
+     * explicit id set instead of every enabled group. Backs the event-driven generation triggers'
+     * batch lookup ({@code GroupService.getGroupRecurrenceConfigsByGroupIds}). */
+    List<GroupSettings> findByGroupIdInAndAutoGenerateSessionsTrue(List<Long> groupIds);
+
     void deleteByGroupId(Long groupId);
 
     /**

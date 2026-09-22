@@ -187,6 +187,23 @@ class SessionDiscoverIntegrationTest extends BaseIT {
      * and aren't otherwise testing date/time filtering, now that {@code date} is required. */
     private static final LocalDate DEFAULT_DATE = LocalDate.now().plusDays(1);
 
+    /** SESSION-37 — a wall-clock time later today, for tests proving {@code date == today}'s
+     * {@code now()} floor still includes a not-yet-started session. {@code now().plusHours(2)}
+     * alone can cross midnight when the suite runs late at night (found while verifying
+     * SESSION-38); clamping to 23:59 keeps it on today regardless. Deliberately not
+     * {@code LocalTime.MAX} (23:59:59.999999999) either — empirically, that exact value doesn't
+     * round-trip through the H2 {@code TIMESTAMP WITH TIME ZONE} column reliably (a real,
+     * reproducible JDBC/Hibernate precision quirk at the nanosecond edge, not a logic error —
+     * confirmed by replicating the service's own Instant math standalone, which showed the value
+     * correctly inside [now(), dayEnd) before it ever reached the database). 23:59:00 has no
+     * fractional seconds at all, so there's no rounding edge to hit. */
+    private static LocalDateTime laterToday() {
+        LocalDateTime candidate = LocalDateTime.now().plusHours(2);
+        return candidate.toLocalDate().equals(LocalDate.now())
+                ? candidate
+                : LocalDate.now().atTime(23, 59);
+    }
+
     private void participate(Long sessionId, UUID userId, ParticipantStatus status) {
         sessionParticipantRepository.save(SessionParticipant.builder()
                 .sessionId(sessionId)
@@ -344,10 +361,11 @@ class SessionDiscoverIntegrationTest extends BaseIT {
     }
 
     /** SESSION-37 — a past {@code date} clamps to today, so a session actually scheduled later
-     * today still matches even though the request named an earlier day. */
+     * today still matches even though the request named an earlier day. See {@link #laterToday()}
+     * for why this doesn't use a bare {@code now().plusHours(2)}. */
     @Test
     void dateFilter_aPastDateClampedToTodayStillMatchesASessionLaterToday() throws Exception {
-        LocalDateTime later = LocalDateTime.now().plusHours(2);
+        LocalDateTime later = laterToday();
         Long laterTodayId = save(sessionBuilder().scheduledStart(instant(later)));
 
         authenticateAs(callerId);
@@ -361,10 +379,13 @@ class SessionDiscoverIntegrationTest extends BaseIT {
 
     /** SESSION-37 — {@code date == today} floors at {@code now()}, excluding a session that
      * already started earlier today (unlike SESSION-35's plain exact-day match, which had no such
-     * floor). */
+     * floor). Uses {@code LocalTime.MIDNIGHT} rather than {@code now().minusHours(2)} — the latter
+     * can cross into yesterday when run early in the morning, same boundary-crossing class of flake
+     * as the "later today" tests below; midnight is always "earlier today" (<= any real
+     * {@code now()} the same day) and never yesterday. */
     @Test
     void dateFilter_todayExcludesASessionThatAlreadyStartedEarlierToday() throws Exception {
-        LocalDateTime earlier = LocalDateTime.now().minusHours(2);
+        LocalDateTime earlier = LocalDate.now().atStartOfDay();
         save(sessionBuilder().scheduledStart(instant(earlier)));
 
         authenticateAs(callerId);
@@ -376,10 +397,11 @@ class SessionDiscoverIntegrationTest extends BaseIT {
     }
 
     /** SESSION-37 — {@code date == today} still matches a session later today, just not one
-     * that's already started. */
+     * that's already started. See {@link #laterToday()} for why this doesn't use a bare
+     * {@code now().plusHours(2)}. */
     @Test
     void dateFilter_todayIncludesASessionLaterToday() throws Exception {
-        LocalDateTime later = LocalDateTime.now().plusHours(2);
+        LocalDateTime later = laterToday();
         Long laterTodayId = save(sessionBuilder().scheduledStart(instant(later)));
 
         authenticateAs(callerId);
@@ -728,7 +750,12 @@ class SessionDiscoverIntegrationTest extends BaseIT {
 
     @Test
     void sort_ordersByScheduledStartAscendingPrimarily() throws Exception {
-        Instant start = instant(LocalDateTime.now().plusDays(1));
+        // Pre-existing flake found while verifying SESSION-38 (unrelated to that ticket): anchoring
+        // start to now().plusDays(1) preserves the current time-of-day, so adding 2 hours on top
+        // could cross into a third calendar day whenever the suite runs late enough at night —
+        // pushing laterId outside date's single-day window and failing this assertion. Anchoring to
+        // a fixed, safe hour (08:00) instead makes the +2h offset never cross midnight.
+        Instant start = instant(LocalDateTime.now().plusDays(1).withHour(8).withMinute(0).withSecond(0).withNano(0));
         Long laterId = save(sessionBuilder().scheduledStart(start.plusSeconds(2 * 3600)));
         Long earlierId = save(sessionBuilder().scheduledStart(start));
 

@@ -6,6 +6,7 @@ import com.sportconnect.common.attributes.AttributeSchema;
 import com.sportconnect.common.attributes.value.AttributeValueFilter;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
+import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.location.api.dto.LocationResponse;
@@ -84,6 +85,11 @@ public class SessionServiceImpl implements SessionService {
 
     private final SessionRepository sessionRepository;
     private final SessionParticipantRepository sessionParticipantRepository;
+    // SESSION-38: as of GroupServiceImpl's new (@Lazy) sessionService field, this IS one side of a
+    // real bidirectional dependency (GroupServiceImpl -> SessionService -> SessionServiceImpl ->
+    // GroupService -> GroupServiceImpl) — same shape as postService below. @Lazy isn't needed on
+    // *this* field specifically only because the cycle is already broken on group-impl's side; only
+    // one side of a cycle needs to defer resolution for Spring to start cleanly.
     private final GroupService groupService;
     private final LocationService locationService;
     private final UserService userService;
@@ -98,6 +104,7 @@ public class SessionServiceImpl implements SessionService {
     private final SessionGate sessionGate;
     private final SessionOutboxEventRepository sessionOutboxEventRepository;
     private final SessionOutboxWriter sessionOutboxWriter;
+    private final SessionGenerationService sessionGenerationService;
     private final ObjectMapper objectMapper;
 
     /** SESSION-23 — same serialized-size ceiling profile attributes use
@@ -927,6 +934,38 @@ public class SessionServiceImpl implements SessionService {
     public Map<Long, String> getSessionTitlesByIds(List<Long> sessionIds) {
         return sessionRepository.findAllById(sessionIds).stream()
                 .collect(Collectors.toMap(Session::getId, Session::getTitle));
+    }
+
+    /**
+     * SESSION-38 — re-fetches this one group's recurrence config from {@code group-api} (ID-only
+     * cross-domain reference; {@code group-impl} never pushes its own config data across the
+     * boundary) and delegates to {@link SessionGenerationService#generateForConfigs} — the same
+     * eligibility checks (autoGenerateSessions, a complete rule, not already generated) and
+     * idempotency backstop as every other generation path in this domain. A singleton-list call to
+     * a batch-shaped {@code group-api} method, matching {@code getGroupRecurrenceConfigsByGroupIds}'
+     * own no-per-row-loop-call contract — this is a single-group caller of a batch method, not a
+     * second, single-id method.
+     *
+     * <p><b>Deliberately not {@code @Transactional} itself.</b> Both calls already manage their own
+     * transaction ({@code getGroupRecurrenceConfigsByGroupIds} is {@code readOnly = true};
+     * {@code generateForConfigs} is {@code REQUIRES_NEW}, precisely so a generation failure can't
+     * poison the caller's transaction). Annotating <em>this</em> coordinating method
+     * {@code @Transactional} would undo that: called from {@code GroupServiceImpl}'s
+     * {@code updateGroupRecurrence}/{@code updateGroupSettings}, it would participate in their
+     * transaction, and — since Spring's transactional AOP marks a participating transaction
+     * rollback-only the moment an exception propagates through {@code @Transactional} boundary,
+     * regardless of what any inner method's own propagation setting already did — a failure
+     * bubbling up through this method would still poison the caller's transaction one level above
+     * where {@code REQUIRES_NEW} was supposed to stop it. Found by
+     * {@code GroupSessionGenerationFailureIsolationIntegrationTest}, which is exactly why that test
+     * exists (a real forced failure through real transaction management; no mocked test can see
+     * this class of bug).
+     */
+    @Override
+    public void generateNextOccurrenceForGroup(Long groupId) {
+        List<GroupRecurrenceConfigResponse> configs =
+                groupService.getGroupRecurrenceConfigsByGroupIds(List.of(groupId));
+        sessionGenerationService.generateForConfigs(configs);
     }
 
     /** SESSION-10/A17 — the sole gate standing between a caller and a session's comment thread or

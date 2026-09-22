@@ -321,4 +321,21 @@ public interface SessionService {
      * {@code user-api}'s {@code getUsersByIds} semantics — no exception thrown.
      */
     Map<Long, String> getSessionTitlesByIds(List<Long> sessionIds);
+
+    /**
+     * SESSION-38 — event-driven replacement for the old hourly full-group-scan sweep. Called by
+     * {@code group-impl} right after {@code updateGroupRecurrence}/{@code updateGroupSettings}
+     * saves, on the chance that save just made this group eligible for auto-generation. A no-op
+     * (never throws for these cases) if the group isn't found, {@code autoGenerateSessions} is
+     * false, the recurrence rule is incomplete, or the next occurrence already exists — the caller
+     * doesn't need to pre-check any of that itself. Idempotent, like every other generation path in
+     * this domain — safe to call more than once for the same group.
+     *
+     * <p>The caller is responsible for failure isolation: a genuine failure (e.g. a
+     * {@code LocationService} lookup error) propagates as an unchecked exception rather than being
+     * swallowed here, since only the caller knows whether its own operation should still succeed.
+     * {@code group-impl}'s caller catches and logs rather than letting it fail the enclosing
+     * settings/recurrence update.
+     */
+    void generateNextOccurrenceForGroup(Long groupId);
 }

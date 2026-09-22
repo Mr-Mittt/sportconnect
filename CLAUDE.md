@@ -318,6 +318,28 @@ migrations, built up lazily — a table/column only gets added the first time so
 so a new IT test may need to add missing schema there first; that's expected, not a sign something
 is wrong.
 
+**Integration tests beyond authorization — the same "mocks can't prove this" test applies more
+broadly.** A green Spock suite (every collaborator mocked) is not sufficient evidence a feature
+actually works whenever the feature depends on real Spring/transaction/database behavior a mock
+can't reproduce. Concretely, plan for real IT coverage (same `server/src/test/java/com/sportconnect/
+integration/` shape as above) whenever a change involves any of: a **new cross-domain bean
+dependency**, especially a bidirectional one needing `@Lazy` (a misconfigured cycle only breaks at
+real `ApplicationContext` startup, never in a test that hand-constructs both services with mocks); a
+**new or changed entity write path** (a new required/`NOT NULL` column, a new constraint — a mocked
+`repository.save()` can't reject anything a real schema would); or a **transaction-boundary/
+propagation design meant to isolate a failure** (whether a caught exception actually protects the
+caller's own transaction is a real `PlatformTransactionManager` question, not a mocked one). Found
+2026-09-21 during SESSION-38 (`modules/session/docs/MVP/SESSION-38_EVENT_DRIVEN_GROUP_SESSION_GENERATION.md`):
+every Spock spec for the new event-driven generation triggers stayed green throughout, yet the
+feature had two real, live bugs a mocked test structurally cannot catch — auto-generated sessions
+never created their required companion `SESSION_POST` (a NOT NULL violation silently masked as a
+benign race by an overly-broad catch block, failing since V051/SESSION-10 shipped), and a caught
+exception inside a Spring *participating* transaction still marked it rollback-only, so the original
+try/catch-only failure-isolation design never actually isolated anything. A new IT test
+(`GroupSessionGenerationIntegrationTest`) was also the only way to prove that ticket's new `@Lazy`
+bidirectional dependency didn't break real context startup. Treat this as the working bar for any
+new feature's test plan, not just something to add reactively once a bug is suspected.
+
 **If a local `./gradlew :server:test` run seems to hang or take an unreasonably long time (tens of
 minutes with zero output), try `./gradlew --stop` first, then re-run — do not immediately assume
 the suite itself is slow and abandon it in favor of `server-ci`.** Investigated 2026-09-14

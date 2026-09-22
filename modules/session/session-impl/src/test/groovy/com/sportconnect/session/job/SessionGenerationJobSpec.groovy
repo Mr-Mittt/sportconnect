@@ -11,14 +11,6 @@ class SessionGenerationJobSpec extends Specification {
     @Subject
     SessionGenerationJob job = new SessionGenerationJob(sessionGenerationService)
 
-    def "generateUpcomingSessions delegates to the service"() {
-        when:
-        job.generateUpcomingSessions()
-
-        then:
-        1 * sessionGenerationService.generateUpcomingSessions()
-    }
-
     def "startOngoingSessions delegates to the service"() {
         when:
         job.startOngoingSessions()

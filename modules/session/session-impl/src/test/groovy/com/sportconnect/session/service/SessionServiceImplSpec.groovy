@@ -7,6 +7,7 @@ import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.common.exception.ResourceNotFoundException
+import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse
 import com.sportconnect.group.api.dto.GroupResponse
 import com.sportconnect.group.api.service.GroupService
 import com.sportconnect.location.api.dto.LocationResponse
@@ -71,6 +72,7 @@ class SessionServiceImplSpec extends Specification {
     SessionGate sessionGate = Mock()
     SessionOutboxEventRepository sessionOutboxEventRepository = Mock()
     SessionOutboxWriter sessionOutboxWriter = Mock()
+    SessionGenerationService sessionGenerationService = Mock()
     // SESSION-23: real filter + mapper — the filter is pure logic with its own spec, and the
     // size check needs a real serializer. Existing create/update tests pass no attributes, so
     // sportService.getSessionAttributeSchemaRaw is never hit; the attributes-path tests stub it.
@@ -80,7 +82,7 @@ class SessionServiceImplSpec extends Specification {
     SessionServiceImpl sessionService = new SessionServiceImpl(
             sessionRepository, sessionParticipantRepository, groupService, locationService, userService,
             sportService, userSportProfileService, postService, commentService, sessionGate,
-            sessionOutboxEventRepository, sessionOutboxWriter, objectMapper)
+            sessionOutboxEventRepository, sessionOutboxWriter, sessionGenerationService, objectMapper)
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
     def tennisLocation = LocationResponse.builder().id(2L).sportId(2L).name("Tennis Court").build()
@@ -1375,13 +1377,21 @@ class SessionServiceImplSpec extends Specification {
                 time.toSecondOfDay(), null, { it != null }, null, pageable) >> new PageImpl([])
     }
 
+    /** Pre-existing flake found while verifying SESSION-38 (unrelated to that ticket's own
+     * changes): {@code date} must be "future" relative to {@code zone}'s own "today", not the
+     * JVM's — computing it from {@code LocalDate.now()} (the JVM's default zone, Asia/Bangkok on
+     * this deployment) intermittently landed on the *same* calendar day as Tokyo's "today"
+     * whenever the JVM zone's wall-clock time was late enough that Tokyo (2 hours ahead) had
+     * already rolled to the next date, tripping SESSION-37's date==today clamp and breaking this
+     * test's hardcoded dayStart expectation. Deriving {@code date} from {@code zone} itself makes
+     * this deterministic regardless of the JVM's own zone. */
     def "discoverSessions with a startTimeFilter passes the viewerZoneId's current offset, not the JVM's"() {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
         def time = LocalTime.of(9, 0)
-        def date = LocalDate.now().plusDays(1)
         def zone = ZoneId.of("Asia/Tokyo")
+        def date = LocalDate.now(zone).plusDays(1)
         def expectedOffsetSeconds = zone.getRules().getOffset(Instant.now()).getTotalSeconds()
 
         when:
@@ -1524,6 +1534,29 @@ class SessionServiceImplSpec extends Specification {
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
+    }
+
+    // ── SESSION-38: generateNextOccurrenceForGroup ──────────────────────────
+
+    def "generateNextOccurrenceForGroup re-fetches the group's config via a singleton-list batch call and delegates to SessionGenerationService"() {
+        given:
+        def config = GroupRecurrenceConfigResponse.builder().groupId(10L).build()
+
+        when:
+        sessionService.generateNextOccurrenceForGroup(10L)
+
+        then:
+        1 * groupService.getGroupRecurrenceConfigsByGroupIds([10L]) >> [config]
+        1 * sessionGenerationService.generateForConfigs([config])
+    }
+
+    def "generateNextOccurrenceForGroup still delegates with an empty configs list when the group isn't eligible"() {
+        when:
+        sessionService.generateNextOccurrenceForGroup(10L)
+
+        then:
+        1 * groupService.getGroupRecurrenceConfigsByGroupIds([10L]) >> []
+        1 * sessionGenerationService.generateForConfigs([])
     }
 
     def "getJoinedSessions delegates to the repository for the given status"() {
