@@ -12,6 +12,7 @@ import com.sportconnect.group.api.dto.GroupResponse
 import com.sportconnect.group.api.service.GroupService
 import com.sportconnect.location.api.dto.LocationResponse
 import com.sportconnect.location.api.service.LocationService
+import com.sportconnect.session.access.SessionDetailGate
 import com.sportconnect.session.access.SessionGate
 import com.sportconnect.session.api.dto.CancelSessionRequest
 import com.sportconnect.session.api.dto.CreateSessionRequest
@@ -70,6 +71,7 @@ class SessionServiceImplSpec extends Specification {
     PostService postService = Mock()
     CommentService commentService = Mock()
     SessionGate sessionGate = Mock()
+    SessionDetailGate sessionDetailGate = Mock()
     SessionOutboxEventRepository sessionOutboxEventRepository = Mock()
     SessionOutboxWriter sessionOutboxWriter = Mock()
     SessionGenerationService sessionGenerationService = Mock()
@@ -81,7 +83,7 @@ class SessionServiceImplSpec extends Specification {
     @Subject
     SessionServiceImpl sessionService = new SessionServiceImpl(
             sessionRepository, sessionParticipantRepository, groupService, locationService, userService,
-            sportService, userSportProfileService, postService, commentService, sessionGate,
+            sportService, userSportProfileService, postService, commentService, sessionGate, sessionDetailGate,
             sessionOutboxEventRepository, sessionOutboxWriter, sessionGenerationService, objectMapper)
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
@@ -470,7 +472,10 @@ class SessionServiceImplSpec extends Specification {
         interaction { stubBatchEnrichment() }
     }
 
-    def "getGroupSessions delegates private-group visibility to GroupService.getGroup"() {
+    /** SESSION-40 (scope addition): member-only regardless of the group's own public/private
+     * flag — widened from the previous GroupService.getGroup delegation, which only gated a
+     * private group. */
+    def "getGroupSessions requires group membership, regardless of the group's public/private flag"() {
         given:
         def userId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10)
@@ -479,8 +484,22 @@ class SessionServiceImplSpec extends Specification {
         sessionService.getGroupSessions(5L, userId, pageable)
 
         then:
-        1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).build()
+        1 * groupService.isGroupMember(5L, userId) >> true
         1 * sessionRepository.findByGroupId(5L, pageable) >> new PageImpl([])
+    }
+
+    def "getGroupSessions rejects a non-member without querying sessions"() {
+        given:
+        def userId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10)
+
+        when:
+        sessionService.getGroupSessions(5L, userId, pageable)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> false
+        thrown(BadRequestException)
+        0 * sessionRepository.findByGroupId(*_)
     }
 
     def "updateSession allows the creator of a standalone session"() {
@@ -590,13 +609,34 @@ class SessionServiceImplSpec extends Specification {
         0 * sessionRepository.save(_)
     }
 
-    def "getSession throws ResourceNotFoundException when missing"() {
+    /** SESSION-40: getSession is now gated via SessionDetailGate.require — a null resource
+     * (session not found) throws NotFoundException from that default method, not this service's
+     * own previous ResourceNotFoundException. */
+    def "getSession throws NotFoundException when missing"() {
+        given:
+        def callerId = UUID.randomUUID()
+
         when:
-        sessionService.getSession(99L, UUID.randomUUID())
+        sessionService.getSession(99L, callerId)
 
         then:
         1 * sessionRepository.findById(99L) >> Optional.empty()
-        thrown(ResourceNotFoundException)
+        1 * sessionDetailGate.require(null, callerId, _, _) >> { throw new NotFoundException("Session not found") }
+        thrown(NotFoundException)
+    }
+
+    def "getSession throws ForbiddenException when the gate denies visibility"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def session = Session.builder().id(1L).sportId(1L).locationId(1L).groupId(5L).isPublic(false).build()
+
+        when:
+        sessionService.getSession(1L, callerId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionDetailGate.require(session, callerId, _, _) >> { throw new ForbiddenException("You don't have access to this session") }
+        thrown(ForbiddenException)
     }
 
     def "getSession populates callerParticipation from the caller's own SessionParticipant row"() {
@@ -612,6 +652,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionDetailGate.require(session, callerId, _, _) >> session
         1 * sessionParticipantRepository.findBySessionIdInAndUserId([1L], callerId) >> [ownRow]
         response.callerParticipation.status == ParticipantStatus.REQUESTED
         response.callerParticipation.id == 9L
@@ -630,6 +671,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionDetailGate.require(session, callerId, _, _) >> session
         1 * sessionParticipantRepository.findBySessionIdInAndUserId([1L], callerId) >> []
         response.callerParticipation == null
     }
@@ -2717,6 +2759,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionDetailGate.require(session, userId, _, _) >> session
         userService.getUsersByIds(_) >> [:]
         sportService.getActiveSportsByIds(_) >> [:]
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
@@ -2741,6 +2784,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionDetailGate.require(session, userId, _, _) >> session
         interaction { stubBatchEnrichment() }
         result.likeCount == 0L
         result.isLikedByCurrentUser == false

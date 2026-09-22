@@ -77,11 +77,12 @@ public class SessionController {
                 .body(ApiResponse.success("Session created successfully", response));
     }
 
-    @Operation(summary = "Get a session by id", description = "Includes the caller's own participation status (SESSION-9), if any.")
+    @Operation(summary = "Get a session by id", description = "Includes the caller's own participation status (SESSION-9), if any. SESSION-40: gated by SessionDetailGate — visible if isPublic, or (standalone) the caller holds a JOINED/REQUESTED/INVITED participant row, or (group-linked) the caller is a group member. 404 if the session doesn't exist or its parent group is no longer active; 403 if it exists but isn't visible to the caller.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session found"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Session exists but isn't visible to the caller"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found, or its parent group is no longer active")
     })
     @GetMapping("/{sessionId}")
     @PreAuthorize("hasRole('USER')")
@@ -92,10 +93,10 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Session retrieved successfully", response));
     }
 
-    @Operation(summary = "List a group's sessions", description = "Private-group visibility is enforced the same way as GET /api/groups/{groupId}.")
+    @Operation(summary = "List a group's sessions", description = "SESSION-40: member-only regardless of the group's own public/private flag (widened 2026-09-22 from the previous private-group-only gate, which left a public group's sessions listable by any authenticated user).")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not visible to the caller")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Caller is not a member of this group")
     })
     @GetMapping("/group/{groupId}")
     @PreAuthorize("hasRole('USER')")

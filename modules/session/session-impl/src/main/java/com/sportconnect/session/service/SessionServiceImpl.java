@@ -11,6 +11,7 @@ import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.location.api.dto.LocationResponse;
 import com.sportconnect.location.api.service.LocationService;
+import com.sportconnect.session.access.SessionDetailGate;
 import com.sportconnect.session.access.SessionGate;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
@@ -104,6 +105,7 @@ public class SessionServiceImpl implements SessionService {
     private final PostService postService;
     private final CommentService commentService;
     private final SessionGate sessionGate;
+    private final SessionDetailGate sessionDetailGate;
     private final SessionOutboxEventRepository sessionOutboxEventRepository;
     private final SessionOutboxWriter sessionOutboxWriter;
     private final SessionGenerationService sessionGenerationService;
@@ -267,17 +269,38 @@ public class SessionServiceImpl implements SessionService {
         return toResponse(saved, userId);
     }
 
+    /**
+     * SESSION-40 — gated via {@link SessionDetailGate} (availability: parent group still active;
+     * visibility: {@code isPublic}, or a type-specific relationship — participant status for a
+     * standalone session, group membership for a group-linked one). Previously ungated entirely —
+     * see that gate's own Javadoc for the full rule and why it differs from {@link SessionGate}
+     * (comments/likes).
+     */
     @Override
     @Transactional(readOnly = true)
     public SessionResponse getSession(Long sessionId, UUID callerId) {
-        return toResponse(findSessionOrThrow(sessionId), callerId);
+        Session session = sessionRepository.findById(sessionId).orElse(null);
+        return toResponse(sessionDetailGate.require(session, callerId,
+                "Session not found", "You don't have access to this session"), callerId);
     }
 
+    /**
+     * SESSION-40 (scope addition, 2026-09-22 user decision): member-only regardless of the
+     * group's own public/private flag — widened from the previous {@code groupService.getGroup}
+     * delegation, which only gated a <em>private</em> group (a public group's sessions were
+     * listable by any authenticated user). {@code isGroupMember} returns {@code false} uniformly
+     * for a non-existent, inactive, or non-member-visible group — collapsed into one
+     * {@code BadRequestException}, same convention {@code joinSession}'s own group-membership
+     * check already uses in this class, rather than distinguishing "doesn't exist" from "exists
+     * but you can't see it" the way {@code getGroup} does (arguably the safer choice — it doesn't
+     * leak group existence to a non-member either).
+     */
     @Override
     @Transactional(readOnly = true)
     public Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, Pageable pageable) {
-        // Enforces the existing private-group membership gate rather than reimplementing it.
-        groupService.getGroup(groupId, currentUserId);
+        if (!groupService.isGroupMember(groupId, currentUserId)) {
+            throw new BadRequestException("Only group members can view this group's sessions");
+        }
         return toResponsePage(sessionRepository.findByGroupId(groupId, pageable), currentUserId);
     }
 
