@@ -66,11 +66,20 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      * {@code idx_sessions_sport_id_standalone} partial index's predicate), status in
      * {@code statuses} (caller-narrowable subset of PREPARING/SCHEDULED/ONGOING), restricted to
      * {@code sportIds} (the caller's active-sport-profile gate, resolved by the caller), excluding
-     * sessions the caller created and sessions the caller currently has a JOINED participant row
-     * for (a session the caller left is eligible to reappear). Every parameter below {@code
-     * sportIds} is an optional, AND-combined filter using the {@code (:param IS NULL OR ...)}
-     * null-safe pattern ({@code GroupRepository.searchPublicGroupsWithCounts} precedent) — a null
-     * value skips that condition entirely.
+     * sessions the caller created and sessions the caller currently holds a participant row in
+     * {@code excludedParticipantStatuses} for (a session the caller {@code LEFT} is eligible to
+     * reappear). Every parameter below {@code sportIds} is an optional, AND-combined filter using
+     * the {@code (:param IS NULL OR ...)} null-safe pattern ({@code
+     * GroupRepository.searchPublicGroupsWithCounts} precedent) — a null value skips that condition
+     * entirely.
+     *
+     * <p><b>SESSION-42:</b> {@code excludedParticipantStatuses} ({@code JOINED}/{@code REQUESTED}/
+     * {@code INVITED} — the service always passes all three) is deliberately a separate parameter
+     * from {@code joinedStatus} below, even though both used to be the same single value. {@code
+     * joinedStatus} is still {@code JOINED}-only and unchanged — it feeds the {@code openSlots}/
+     * {@code minOpenSlots} capacity-counting subqueries, which must count only genuinely joined
+     * participants, never a pending request or an unaccepted invite. Widening {@code joinedStatus}
+     * itself instead of splitting it would have silently undercounted capacity.
      *
      * <p>Returns {@code (Session, openSlots)} pairs rather than a plain {@code Session}: {@code
      * openSlots} (capacity minus initialSlot minus a correlated count of JOINED participants) is a
@@ -215,7 +224,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
                 + "FROM Session s WHERE s.isPublic = true AND s.status IN :statuses "
                 + "AND s.sportId IN :sportIds AND s.createdBy <> :callerId "
                 + "AND s.id NOT IN (SELECT sp.sessionId FROM SessionParticipant sp "
-                + "    WHERE sp.userId = :callerId AND sp.status = :joinedStatus) "
+                + "    WHERE sp.userId = :callerId AND sp.status IN :excludedParticipantStatuses) "
                 + "AND (CAST(:lowerBound AS timestamp) IS NULL OR s.scheduledStart >= :lowerBound) "
                 + "AND (CAST(:title AS string) IS NULL OR LOWER(s.title) LIKE LOWER(CONCAT('%', CAST(:title AS string), '%'))) "
                 + "AND (:hasLocationIds = false OR s.locationId IN :locationIds) "
@@ -235,7 +244,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
         countQuery = "SELECT COUNT(s) FROM Session s WHERE s.isPublic = true AND s.status IN :statuses "
                 + "AND s.sportId IN :sportIds AND s.createdBy <> :callerId "
                 + "AND s.id NOT IN (SELECT sp.sessionId FROM SessionParticipant sp "
-                + "    WHERE sp.userId = :callerId AND sp.status = :joinedStatus) "
+                + "    WHERE sp.userId = :callerId AND sp.status IN :excludedParticipantStatuses) "
                 + "AND (CAST(:lowerBound AS timestamp) IS NULL OR s.scheduledStart >= :lowerBound) "
                 + "AND (CAST(:title AS string) IS NULL OR LOWER(s.title) LIKE LOWER(CONCAT('%', CAST(:title AS string), '%'))) "
                 + "AND (:hasLocationIds = false OR s.locationId IN :locationIds) "
@@ -257,6 +266,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("sportIds") List<Long> sportIds,
             @Param("callerId") UUID callerId,
             @Param("joinedStatus") ParticipantStatus joinedStatus,
+            @Param("excludedParticipantStatuses") List<ParticipantStatus> excludedParticipantStatuses,
             @Param("lowerBound") Instant lowerBound,
             @Param("title") String title,
             @Param("hasLocationIds") boolean hasLocationIds,
@@ -301,8 +311,12 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     /**
      * SESSION-27 — replaces {@code findByCreatedByAndGroupIdIsNull}/{@code GET /sessions/mine}.
      * Every session (standalone or group-linked) where the caller currently has a participant row
-     * in {@code participantStatuses} ({@code JOINED} or {@code INVITED}, never {@code REQUESTED}),
-     * restricted to {@code statuses} ({@code PREPARING}/{@code SCHEDULED}/{@code ONGOING}).
+     * in {@code participantStatuses}, restricted to {@code statuses} ({@code PREPARING}/
+     * {@code SCHEDULED}/{@code ONGOING}). Originally always called with {@code JOINED}/
+     * {@code INVITED} (never {@code REQUESTED}) for {@code /upcoming} — genuinely generic over
+     * {@code participantStatuses} already, so <b>SESSION-42</b> reuses this exact method unchanged
+     * for {@code GET /api/sessions/requested} too, passing {@code List.of(REQUESTED)} instead; no
+     * new repository method needed for that endpoint.
      *
      * <p>{@code ORDER BY} is static and deliberately ignores whatever {@code Sort} the caller's
      * {@code Pageable} carries (the service passes an unsorted one) — {@code scheduledStart ASC}
@@ -436,9 +450,13 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
 
     /**
      * SESSION-39 — {@code discoverSessions}-shaped population ({@code is_public = true},
-     * {@code status IN}, {@code sport_id IN}, caller-exclusion — own sessions and already-{@code
-     * JOINED} ones — plus every optional filter {@code discoverSessions} has except {@code date}),
-     * bucketed per calendar date instead of returning session rows. Native, matching {@link
+     * {@code status IN}, {@code sport_id IN}, caller-exclusion — own sessions and sessions the
+     * caller currently holds a participant row in {@code excludedParticipantStatuses} for
+     * ({@code JOINED}/{@code REQUESTED}/{@code INVITED}, all three — see {@link
+     * #findDiscoverSessions}'s Javadoc for why this is a separate parameter from {@code
+     * joinedStatus}, which stays {@code JOINED}-only for the capacity subquery below) — plus every
+     * optional filter {@code discoverSessions} has except {@code date}), bucketed per calendar date
+     * instead of returning session rows. Native, matching {@link
      * #findHistoryDateCounts}'s style ({@code AT TIME ZONE} + {@code TO_CHAR} + ordinal
      * {@code GROUP BY 1} — see that method's Javadoc for the H2-vs-Postgres gotchas both queries
      * share) — this is the ADR's benchmarked "Query C" shape
@@ -487,7 +505,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             + "WHERE s.is_public = true AND s.status IN (:statuses) AND s.sport_id IN (:sportIds) "
             + "AND s.created_by <> :callerId "
             + "AND s.id NOT IN (SELECT sp.session_id FROM session_participants sp "
-            + "    WHERE sp.user_id = :callerId AND sp.status = :joinedStatus) "
+            + "    WHERE sp.user_id = :callerId AND sp.status IN (:excludedParticipantStatuses)) "
             + "AND s.scheduled_start >= :lowerBound AND s.scheduled_start < :upperBound "
             + "AND TO_CHAR(s.scheduled_start AT TIME ZONE :zoneId, 'YYYY-MM-DD') IN (:dateStrings) "
             + "AND (TO_CHAR(s.scheduled_start AT TIME ZONE :zoneId, 'YYYY-MM-DD') <> :todayStr "
@@ -512,6 +530,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("sportIds") List<Long> sportIds,
             @Param("callerId") UUID callerId,
             @Param("joinedStatus") String joinedStatus,
+            @Param("excludedParticipantStatuses") List<String> excludedParticipantStatuses,
             @Param("lowerBound") Instant lowerBound,
             @Param("upperBound") Instant upperBound,
             @Param("dateStrings") List<String> dateStrings,

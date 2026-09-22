@@ -1182,7 +1182,7 @@ class SessionServiceImplSpec extends Specification {
         ]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L, 2L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1204,7 +1204,7 @@ class SessionServiceImplSpec extends Specification {
         ]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [2L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1252,7 +1252,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.SCHEDULED], [1L], callerId, ParticipantStatus.JOINED,
-                null, null, false, [-1L], null, null,
+                [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1274,7 +1274,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.SCHEDULED], [1L], callerId, ParticipantStatus.JOINED,
-                null, null, false, [-1L], null, null,
+                [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1296,7 +1296,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId, ParticipantStatus.JOINED,
-                null, null, false, [-1L], null, null,
+                [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1316,7 +1316,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, "Sunday", true, [5L], FeeType.FIXED, 100000L,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, "Sunday", true, [5L], FeeType.FIXED, 100000L,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, 2, pageable) >> new PageImpl([])
@@ -1337,7 +1337,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1356,7 +1356,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, true, [5L, 6L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, true, [5L, 6L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1375,7 +1375,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1396,7 +1396,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(zone).toInstant(),
                 date.plusDays(1).atStartOfDay(zone).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1432,7 +1432,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, time.toSecondOfDay(), { it != null }, null, pageable) >> new PageImpl([])
@@ -1453,7 +1453,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 time.toSecondOfDay(), null, { it != null }, null, pageable) >> new PageImpl([])
@@ -1484,7 +1484,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(zone).toInstant(),
                 date.plusDays(1).atStartOfDay(zone).toInstant(),
                 time.toSecondOfDay(), null, expectedOffsetSeconds, null, pageable) >> new PageImpl([])
@@ -1503,7 +1503,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null,
@@ -1529,7 +1529,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 { Instant dayStart -> !dayStart.isBefore(beforeCall) && dayStart.isBefore(date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant()) },
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1550,7 +1550,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 { Instant dayStart -> !dayStart.isBefore(beforeCall) },
                 today.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1569,7 +1569,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1592,7 +1592,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, time.toSecondOfDay(), { it != null }, null, pageable) >> new PageImpl([])
@@ -1612,7 +1612,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverSessions(
                 [SessionStatus.PREPARING, SessionStatus.SCHEDULED], [1L], callerId,
-                ParticipantStatus.JOINED, null, null, false, [-1L], null, null,
+                ParticipantStatus.JOINED, [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED], null, null, false, [-1L], null, null,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 null, null, null, null, pageable) >> new PageImpl([])
@@ -1634,7 +1634,9 @@ class SessionServiceImplSpec extends Specification {
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverDateCounts(
                 [SessionStatus.PREPARING.name(), SessionStatus.SCHEDULED.name()], [1L], callerId,
-                ParticipantStatus.JOINED.name(), _ as Instant, today.plusDays(8).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                ParticipantStatus.JOINED.name(),
+                [ParticipantStatus.JOINED.name(), ParticipantStatus.REQUESTED.name(), ParticipantStatus.INVITED.name()],
+                _ as Instant, today.plusDays(8).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 expectedDateStrings, today.toString(), _ as Instant,
                 null, false, [-1L], null, null, null, null, null, null, "UTC") >> []
         result.counts.size() == 8
@@ -1656,7 +1658,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverDateCounts(
-                _, [1L], callerId, _, d2.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                _, [1L], callerId, _, _, d2.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 d1.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 [d2.toString(), d1.toString()], _, _,
                 _, false, [-1L], _, _, _, _, _, _, "UTC") >> [stubDateCount(d2, 5L)]
@@ -1681,7 +1683,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverDateCounts(
-                _, [1L], callerId, _, _, _, [futureDate.toString()], _, _,
+                _, [1L], callerId, _, _, _, _, [futureDate.toString()], _, _,
                 _, false, [-1L], _, _, _, _, _, _, "UTC") >> []
     }
 
@@ -1746,7 +1748,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * userSportProfileService.getUserProfiles(callerId) >> [UserSportProfileResponse.builder().sportId(1L).build()]
         1 * sessionRepository.findDiscoverDateCounts(
-                _, [1L], callerId, _, _, _, _, _, _,
+                _, [1L], callerId, _, _, _, _, _, _, _,
                 _, true, [10L, 20L], _, _, _, _, _, _, "UTC") >> []
     }
 
@@ -1904,6 +1906,43 @@ class SessionServiceImplSpec extends Specification {
         then:
         thrown(BadRequestException)
         0 * sessionRepository.findUpcomingSessionsByDate(*_)
+    }
+
+    // SESSION-42 â€” "my pending requests", reusing findUpcomingSessions unchanged.
+
+    def "getRequestedSessions queries REQUESTED-only across PREPARING/SCHEDULED/ONGOING"() {
+        given:
+        def userId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        sessionService.getRequestedSessions(userId, pageable)
+
+        then:
+        1 * sessionRepository.findUpcomingSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING],
+                userId,
+                [ParticipantStatus.REQUESTED],
+                SessionStatus.PREPARING, SessionStatus.SCHEDULED,
+                pageable) >> new PageImpl([])
+    }
+
+    def "getRequestedSessions strips any client-supplied sort, keeping only page/size"() {
+        given:
+        def userId = UUID.randomUUID()
+        def sortedPageable = PageRequest.of(1, 5, Sort.by(Sort.Direction.DESC, "createdAt"))
+
+        when:
+        sessionService.getRequestedSessions(userId, sortedPageable)
+
+        then:
+        1 * sessionRepository.findUpcomingSessions(*_) >> { args ->
+            Pageable used = args[5]
+            assert used.pageNumber == 1
+            assert used.pageSize == 5
+            assert used.sort.isUnsorted()
+            new PageImpl([])
+        }
     }
 
     def "getSessionHistory queries JOINED-only across CANCELLED/COMPLETED for the given date, defaulting to UTC"() {

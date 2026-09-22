@@ -130,6 +130,21 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
+    @Operation(summary = "List the caller's own pending join requests", description = "SESSION-42 — standalone or group-linked sessions where the caller currently holds a REQUESTED participant row, status PREPARING/SCHEDULED/ONGOING (same status set as /upcoming — a REQUESTED row isn't auto-cleared when a session starts). Sorted scheduledStart ASC with a PREPARING->SCHEDULED->ONGOING tiebreaker; the caller's own Pageable sort is ignored.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    @GetMapping("/requested")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Page<SessionResponse>>> getRequestedSessions(
+            Authentication authentication,
+            @PageableDefault(size = 20) Pageable pageable) {
+        Page<SessionResponse> response = sessionService.getRequestedSessions(
+                SecurityUtils.extractUserId(authentication), pageable);
+        return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
+    }
+
     @Operation(summary = "List the caller's session history, or its distinct history dates", description = "SESSION-27/34/35 — exactly one of date or dateCount is required. date: paginated CANCELLED/COMPLETED sessions the caller was JOINED to, for that calendar day, scheduledStart DESC. dateCount: the last N distinct history dates (most-recent-first) with per-date counts; before (exclusive, only valid alongside dateCount) pages further back. viewerZoneId (an IANA zone id, valid alongside either date or dateCount) is the zone the day boundary/date bucketing is computed in — falls back to UTC when omitted.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions, or history dates (possibly empty)"),

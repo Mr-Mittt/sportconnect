@@ -353,4 +353,21 @@ class SessionDiscoverDateCountsIntegrationTest extends BaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.counts[0].count").value(2));
     }
+
+    /** SESSION-42 — widened from JOINED-only: a session the caller already REQUESTED to join or
+     * was INVITED to shouldn't count as discoverable either. */
+    @Test
+    void baseline_excludesAlreadyRequestedAndInvitedSessionsToo() throws Exception {
+        save(sessionBuilder());
+        Long alreadyRequestedId = save(sessionBuilder());
+        participate(alreadyRequestedId, callerId, ParticipantStatus.REQUESTED);
+        Long alreadyInvitedId = save(sessionBuilder());
+        participate(alreadyInvitedId, callerId, ParticipantStatus.INVITED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/discover/counts")
+                        .param("viewerZoneId", "UTC").param("date", todayUtc().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.counts[0].count").value(1));
+    }
 }

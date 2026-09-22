@@ -329,10 +329,15 @@ export const sessionHandlers: HttpHandler[] = [
       if (candidate.groupId !== null || candidate.status !== 'SCHEDULED') return false;
       if (candidate.createdBy === mockUser.id) return false;
       if (sportId !== null && candidate.sportId !== sportId) return false;
-      const alreadyJoined = (session.participantsState[candidate.id] ?? []).some(
-        (p) => p.userId === mockUser.id && p.status === 'JOINED',
+      // SESSION-42: mirrors the real backend's widened exclusion — a session the caller already
+      // requested to join or was invited to shouldn't still surface as newly discoverable, same
+      // as one they're already JOINED to (previously JOINED-only here).
+      const alreadyParticipating = (session.participantsState[candidate.id] ?? []).some(
+        (p) =>
+          p.userId === mockUser.id &&
+          (p.status === 'JOINED' || p.status === 'REQUESTED' || p.status === 'INVITED'),
       );
-      return !alreadyJoined;
+      return !alreadyParticipating;
     });
     return HttpResponse.json(
       apiResponse(

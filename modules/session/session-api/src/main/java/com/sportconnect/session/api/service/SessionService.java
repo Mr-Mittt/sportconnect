@@ -97,6 +97,22 @@ public interface SessionService {
     Page<SessionResponse> getUpcomingSessions(UUID userId, LocalDate date, String viewerZoneId, Pageable pageable);
 
     /**
+     * SESSION-42 — "my pending requests": every session (standalone or group-linked) where the
+     * caller currently holds a {@code REQUESTED} participant row, restricted to
+     * {@code Session.status IN (PREPARING, SCHEDULED, ONGOING)} — the same status set {@link
+     * #getUpcomingSessions} uses, since a {@code REQUESTED} row is never auto-cleared when a
+     * session starts and must stay visible through {@code ONGOING} too. Sorted
+     * {@code scheduledStart ASC} with the same {@code PREPARING}→{@code SCHEDULED}→
+     * {@code ONGOING} tiebreak, non-caller-overridable — same contract as {@link
+     * #getUpcomingSessions}.
+     *
+     * <p><b>Known gap, not handled here:</b> a {@code REQUESTED} row for a session that later goes
+     * {@code CANCELLED}/{@code COMPLETED} is never auto-cleared and isn't covered by this method or
+     * {@link #getSessionHistory} ({@code JOINED}-only) — accepted, pre-existing gap.
+     */
+    Page<SessionResponse> getRequestedSessions(UUID userId, Pageable pageable);
+
+    /**
      * SESSION-27 — every session (standalone or group-linked) where the caller currently has a
      * {@code JOINED} participant row (not {@code INVITED} — an invite never accepted isn't "my
      * history"), restricted to {@code Session.status IN (CANCELLED, COMPLETED)}, narrowed to
