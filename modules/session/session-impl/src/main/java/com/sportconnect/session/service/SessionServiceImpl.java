@@ -17,6 +17,8 @@ import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
+import com.sportconnect.session.api.dto.SessionDiscoverDateCount;
+import com.sportconnect.session.api.dto.SessionDiscoverDateCountsResponse;
 import com.sportconnect.session.api.dto.SessionHistoryDateCount;
 import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
@@ -787,22 +789,61 @@ public class SessionServiceImpl implements SessionService {
         return stripped.isEmpty() ? DISCOVER_DEFAULT_STATUSES : stripped;
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public Page<SessionResponse> discoverSessions(
-            UUID callerId, Long sportId, String title, Long locationId, Integer minOpenSlots,
-            FeeType feeType, Long maxFeeAmountVnd, LocalDate date,
-            StartTimeFilter startTimeFilter, LocalTime startTime, String viewerZoneId,
-            List<SessionStatus> statuses, Pageable pageable) {
+    /** SESSION-25/39 — {@code discoverSessions}' and {@code getSessionDiscoverDateCounts}'
+     * shared "which sports gate this caller's Discover results" resolution: the caller's own
+     * active {@code UserSportProfile} sport ids, narrowed to just {@code sportId} when given (or
+     * emptied out entirely if {@code sportId} isn't one of the caller's active sports — never a
+     * silent fallback to "all of them"). An empty result means "no matches, don't even query." */
+    private List<Long> resolveEffectiveSportIds(UUID callerId, Long sportId) {
         List<Long> activeSportIds = userSportProfileService.getUserProfiles(callerId).stream()
                 .map(UserSportProfileResponse::getSportId)
                 .distinct()
                 .collect(Collectors.toList());
-
-        List<Long> effectiveSportIds = sportId != null
+        return sportId != null
                 ? (activeSportIds.contains(sportId) ? List.of(sportId) : List.of())
                 : activeSportIds;
+    }
 
+    /** SESSION-25/39 — {@code discoverSessions}' and {@code getSessionDiscoverDateCounts}' shared
+     * {@code startTimeFilter}/{@code startTime} resolution, reconstructing wall-clock
+     * seconds-of-day via {@code MOD} arithmetic against {@code zoneOffsetSeconds} rather than
+     * shifting the parameter itself (see {@code SessionRepository.findDiscoverSessions}' Javadoc:
+     * shifting the parameter instead breaks the "any date" cyclic comparison whenever it crosses
+     * the wrap point the shift introduces — confirmed via a real repro, {@code AFTER_OR_EQUAL
+     * 00:00} inverted against an 18:00 session). {@code startTime} given alone defaults the
+     * direction to {@code AFTER_OR_EQUAL}; {@code startTimeFilter} given alone is a no-op (both
+     * {@code startTimeBeforeOrEqual}/{@code startTimeAfterOrEqual} require a non-null
+     * {@code startTime} to ever populate). {@code zoneOffsetSeconds} is computed from {@code now()},
+     * not each row's own date — see that same Javadoc for the accepted DST-across-seasons gap this
+     * implies for a DST-observing {@code zone}; SESSION-39 keeps this mechanism deliberately (the
+     * ADR's benchmarked "Query C" shape) rather than switching to a direct {@code AT TIME ZONE}
+     * extraction even though its own query is native. */
+    private record StartTimeFilterResolution(
+            Integer startTimeBeforeOrEqual, Integer startTimeAfterOrEqual, Integer zoneOffsetSeconds) {
+    }
+
+    private StartTimeFilterResolution resolveStartTimeFilter(
+            StartTimeFilter startTimeFilter, LocalTime startTime, ZoneId zone) {
+        StartTimeFilter effectiveStartTimeFilter = (startTimeFilter == null && startTime != null)
+                ? StartTimeFilter.AFTER_OR_EQUAL : startTimeFilter;
+        Integer startTimeBeforeOrEqual = effectiveStartTimeFilter == StartTimeFilter.BEFORE_OR_EQUAL && startTime != null
+                ? startTime.toSecondOfDay() : null;
+        Integer startTimeAfterOrEqual = effectiveStartTimeFilter == StartTimeFilter.AFTER_OR_EQUAL && startTime != null
+                ? startTime.toSecondOfDay() : null;
+        Integer zoneOffsetSeconds = (startTimeBeforeOrEqual != null || startTimeAfterOrEqual != null)
+                ? zone.getRules().getOffset(Instant.now()).getTotalSeconds()
+                : null;
+        return new StartTimeFilterResolution(startTimeBeforeOrEqual, startTimeAfterOrEqual, zoneOffsetSeconds);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SessionResponse> discoverSessions(
+            UUID callerId, Long sportId, String title, List<Long> locationIds, Integer minOpenSlots,
+            FeeType feeType, Long maxFeeAmountVnd, LocalDate date,
+            StartTimeFilter startTimeFilter, LocalTime startTime, String viewerZoneId,
+            List<SessionStatus> statuses, Pageable pageable) {
+        List<Long> effectiveSportIds = resolveEffectiveSportIds(callerId, sportId);
         if (effectiveSportIds.isEmpty()) {
             return Page.empty(pageable);
         }
@@ -821,38 +862,88 @@ public class SessionServiceImpl implements SessionService {
         Instant dayStart = effectiveDate.equals(today)
                 ? Instant.now()
                 : effectiveDate.atStartOfDay(zone).toInstant();
-        // SESSION-37: startTimeFilter/startTime are no longer a strict pair. startTime given alone
-        // defaults the direction to AFTER_OR_EQUAL; startTimeFilter given alone already falls
-        // through as a no-op below (both startTimeBeforeOrEqual/startTimeAfterOrEqual require a
-        // non-null startTime to ever populate).
-        StartTimeFilter effectiveStartTimeFilter = (startTimeFilter == null && startTime != null)
-                ? StartTimeFilter.AFTER_OR_EQUAL : startTimeFilter;
-        // Unconverted wall-clock seconds-of-day — the repository query reconstructs the
-        // wall-clock-equivalent from scheduledStart's raw stored representation itself (MOD
-        // arithmetic against zoneOffsetSeconds), rather than shifting this parameter. See
-        // SessionRepository.findDiscoverSessions' Javadoc: shifting the parameter instead breaks
-        // the "any date" cyclic comparison whenever it crosses the wrap point the shift
-        // introduces (confirmed: AFTER_OR_EQUAL 00:00 inverted against an 18:00 session).
-        Integer startTimeBeforeOrEqual = effectiveStartTimeFilter == StartTimeFilter.BEFORE_OR_EQUAL && startTime != null
-                ? startTime.toSecondOfDay() : null;
-        Integer startTimeAfterOrEqual = effectiveStartTimeFilter == StartTimeFilter.AFTER_OR_EQUAL && startTime != null
-                ? startTime.toSecondOfDay() : null;
-        // The caller's zone's current UTC offset in seconds (SESSION-35: resolveZone(viewerZoneId),
-        // not the JVM's own zone) — added back to scheduledStart's raw-stored EXTRACT to reconstruct
-        // the caller's wall-clock time-of-day. Only ever used by the two startTime* clauses, so left
-        // null (no-op MOD) when neither is set. Computed from "now", not each row's own date — see
-        // SessionRepository.findDiscoverSessions' Javadoc for the accepted DST-across-seasons gap
-        // this implies for a DST-observing viewerZoneId.
-        Integer zoneOffsetSeconds = (startTimeBeforeOrEqual != null || startTimeAfterOrEqual != null)
-                ? zone.getRules().getOffset(Instant.now()).getTotalSeconds()
-                : null;
+        StartTimeFilterResolution startTimeResolution = resolveStartTimeFilter(startTimeFilter, startTime, zone);
+
+        boolean hasLocationIds = locationIds != null && !locationIds.isEmpty();
+        List<Long> effectiveLocationIds = hasLocationIds ? locationIds : NO_LOCATION_FILTER_SENTINEL;
 
         Page<Object[]> rows = sessionRepository.findDiscoverSessions(
                 effectiveStatuses, effectiveSportIds, callerId, ParticipantStatus.JOINED, null,
-                title, locationId, feeType, maxFeeAmountVnd, dayStart, dayEnd,
-                startTimeBeforeOrEqual, startTimeAfterOrEqual, zoneOffsetSeconds, minOpenSlots, unsorted(pageable));
+                title, hasLocationIds, effectiveLocationIds, feeType, maxFeeAmountVnd, dayStart, dayEnd,
+                startTimeResolution.startTimeBeforeOrEqual(), startTimeResolution.startTimeAfterOrEqual(),
+                startTimeResolution.zoneOffsetSeconds(), minOpenSlots, unsorted(pageable));
         Page<Session> sessions = rows.map(row -> (Session) row[0]);
         return toResponsePage(sessions, callerId);
+    }
+
+    /** SESSION-39 — the {@code locationIds} sentinel passed to {@code
+     * SessionRepository.findDiscoverDateCounts} when the caller omits {@code locationId}
+     * entirely: never a real id (ids are positive, auto-incrementing), and never actually matched
+     * against since {@code hasLocationIds=false} short-circuits that clause — exists purely so the
+     * native query always binds a valid, non-empty collection to {@code IN (:locationIds)}. */
+    private static final List<Long> NO_LOCATION_FILTER_SENTINEL = List.of(-1L);
+
+    @Override
+    @Transactional(readOnly = true)
+    public SessionDiscoverDateCountsResponse getSessionDiscoverDateCounts(
+            UUID callerId, Long sportId, String title, List<Long> locationIds, Integer minOpenSlots,
+            FeeType feeType, Long maxFeeAmountVnd, List<LocalDate> dates,
+            StartTimeFilter startTimeFilter, LocalTime startTime, String viewerZoneId,
+            List<SessionStatus> statuses) {
+        ZoneId zone = resolveZone(viewerZoneId);
+        LocalDate today = LocalDate.now(zone);
+
+        // Effective date list: omitted/empty -> default 8-day window; given -> drop any date
+        // strictly before today (silent clamp, same spirit as discoverSessions' own `date`), sorted
+        // ascending. If every given date was in the past, the survivor list is empty and this
+        // returns an empty result immediately — the default window is NOT substituted (2026-09-22
+        // user decision) and no query is made.
+        List<LocalDate> effectiveDates = (dates == null || dates.isEmpty())
+                ? Stream.iterate(today, d -> d.plusDays(1)).limit(8).collect(Collectors.toList())
+                : dates.stream().filter(d -> !d.isBefore(today)).distinct().sorted().collect(Collectors.toList());
+        if (effectiveDates.isEmpty()) {
+            return SessionDiscoverDateCountsResponse.builder().counts(List.of()).build();
+        }
+
+        List<Long> effectiveSportIds = resolveEffectiveSportIds(callerId, sportId);
+        if (effectiveSportIds.isEmpty()) {
+            return SessionDiscoverDateCountsResponse.builder()
+                    .counts(effectiveDates.stream()
+                            .map(d -> SessionDiscoverDateCount.builder().date(d).count(0).build())
+                            .collect(Collectors.toList()))
+                    .build();
+        }
+
+        List<SessionStatus> effectiveStatuses = resolveDiscoverStatuses(statuses);
+        List<String> statusNames = effectiveStatuses.stream().map(Enum::name).collect(Collectors.toList());
+        StartTimeFilterResolution startTimeResolution = resolveStartTimeFilter(startTimeFilter, startTime, zone);
+
+        List<String> dateStrings = effectiveDates.stream().map(LocalDate::toString).collect(Collectors.toList());
+        String todayStr = today.toString();
+        Instant lowerBound = effectiveDates.get(0).equals(today)
+                ? Instant.now()
+                : effectiveDates.get(0).atStartOfDay(zone).toInstant();
+        Instant upperBound = effectiveDates.get(effectiveDates.size() - 1).plusDays(1).atStartOfDay(zone).toInstant();
+
+        boolean hasLocationIds = locationIds != null && !locationIds.isEmpty();
+        List<Long> effectiveLocationIds = hasLocationIds ? locationIds : NO_LOCATION_FILTER_SENTINEL;
+
+        List<SessionDateCountProjection> rows = sessionRepository.findDiscoverDateCounts(
+                statusNames, effectiveSportIds, callerId, ParticipantStatus.JOINED.name(),
+                lowerBound, upperBound, dateStrings, todayStr, Instant.now(),
+                title, hasLocationIds, effectiveLocationIds, feeType != null ? feeType.name() : null,
+                maxFeeAmountVnd, minOpenSlots,
+                startTimeResolution.startTimeBeforeOrEqual(), startTimeResolution.startTimeAfterOrEqual(),
+                startTimeResolution.zoneOffsetSeconds(), zone.getId());
+
+        // The query's GROUP BY naturally omits a date with zero matching sessions — backfill every
+        // effective date not present in the row set with count=0 rather than relying on the row set.
+        Map<LocalDate, Long> countsByDate = rows.stream()
+                .collect(Collectors.toMap(SessionDateCountProjection::getSessionDate, SessionDateCountProjection::getCount));
+        List<SessionDiscoverDateCount> counts = effectiveDates.stream()
+                .map(d -> SessionDiscoverDateCount.builder().date(d).count(countsByDate.getOrDefault(d, 0L)).build())
+                .collect(Collectors.toList());
+        return SessionDiscoverDateCountsResponse.builder().counts(counts).build();
     }
 
     @Override

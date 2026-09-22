@@ -4163,6 +4163,39 @@ explicit go-ahead at each step (full story in A3's summary doc):
   already stopped it once. Fixed by dropping that annotation (both its calls already manage their
   own transactions). Green: `session-impl` + `group-impl` (full Spock suites) + `:server:test`
   (full suite, 262 tests, 0 failures).
+- **SESSION-39 (`DONE`, 2026-09-22,
+  `modules/session/docs/MVP/SESSION-39_SESSION_COUNT_ENDPOINT.md`):** new
+  `GET /api/sessions/discover/counts` — per-date counts of `discoverSessions`-shaped results across
+  a date list (capped at 8, 400 over) or the default today+7-days window, no pagination, every date
+  backfilled to `count=0` when the query's `GROUP BY` omits it. Shares `/discover`'s entire filter
+  set except `date`/pagination — a live query, never a cache, so counts stay accurate against what
+  `/discover` would actually show on drill-down. **Scope change at pickup (user decision):**
+  `locationId` becomes a **multi-value, OR-combined** filter (`List<Long>`, repeated param), unlike
+  `/discover`'s single-value exact match; `sportId` stays single-value. New native
+  `SessionRepository.findDiscoverDateCounts` — the ADR's benchmarked "Query C" shape (`AT TIME
+  ZONE`+`TO_CHAR`+ordinal `GROUP BY 1`, same as `findHistoryDateCounts`) combined with
+  `discoverSessions`' own `MOD`-based `startTimeFilter` mechanism, kept deliberately over an
+  unverified direct `AT TIME ZONE` extraction (user call: "duplicate with ADR query C first").
+  Re-verified the ADR's flagged open question — Query C's plan against the new
+  `idx_sessions_sport_id_standalone` (SESSION-37) — against real dev Postgres, seeded with 1,000
+  synthetic rows in a rolled-back transaction (same methodology as the ADR's own §0c): `sport_id =
+  <single value>` uses the index directly (0.92ms); `sport_id IN (<3 values>)` falls back to a
+  different index with a post-filter (1.97ms) — both fast, confirms the ADR's finding transfers
+  cleanly. Extracted two helpers shared with `discoverSessions` (`resolveEffectiveSportIds`,
+  `resolveStartTimeFilter`) as a refactor, no behavior change to that method. No explicit `isActive`
+  check added — matches `/discover`'s own existing precedent (U12 gap), user decision at pickup.
+  Client follow-up already tracked via `CLIENT-SESSION-25`'s own Delta (updated with the shipped
+  contract) rather than a new ticket. Green: `session-impl` (9 new Spock cases) + new
+  `SessionDiscoverDateCountsIntegrationTest` (10 IT cases, real `MockMvc`+H2) + `:server:test`
+  (full suite, 1m48s, 0 failures). **Post-completion addendum, same session (user-directed):**
+  `/discover`'s own `locationId` widened to the same multi-value/OR-combined shape (was diverging
+  from `/discover/counts`'s — no other backend caller, client doesn't send `locationId` today,
+  compatible as-is); `isPublicFilter_excludesAGroupLinkedSession` (here and in the pre-existing
+  `SessionDiscoverIntegrationTest`) renamed and strengthened with a public group-linked fixture,
+  proving the gate is genuinely `is_public`, not `group_id IS NULL` — future-proofs against
+  `Session.isPublic`'s own documented "a group session becoming independently public is a real
+  future feature" note. Green: full Spock suite + both discover IT classes (47 tests) +
+  `:server:test`.
 - **SESSION-29 (`TODO`, documentation only, 2026-09-15,
   `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
   `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive

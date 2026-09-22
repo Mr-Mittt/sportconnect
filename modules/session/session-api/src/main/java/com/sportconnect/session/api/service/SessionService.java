@@ -5,6 +5,7 @@ import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
+import com.sportconnect.session.api.dto.SessionDiscoverDateCountsResponse;
 import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
@@ -198,7 +199,10 @@ public interface SessionService {
      * caller with zero active sport profiles also gets an empty page.
      *
      * <p>SESSION-25 — every other parameter except {@code date} is optional and AND-combined:
-     * {@code title} (case-insensitive substring match), {@code locationId} (exact match),
+     * {@code title} (case-insensitive substring match), {@code locationId} (multi-value,
+     * OR-combined — a session qualifies if its {@code locationId} is any of the given values;
+     * widened from a single-value exact match on 2026-09-22 for parity with {@code
+     * getSessionDiscoverDateCounts}, which shipped the multi-value shape first),
      * {@code minOpenSlots} (a session qualifies when its remaining open slots — capacity minus
      * participantCount minus initialSlot — minus {@code minOpenSlots} is {@code > 0}),
      * {@code feeType} (exact match) and/or {@code maxFeeAmountVnd} (upper bound on
@@ -240,10 +244,61 @@ public interface SessionService {
      * (unparseable) {@code viewerZoneId} values are rejected with a {@code BadRequestException}.
      */
     Page<SessionResponse> discoverSessions(
-            UUID callerId, Long sportId, String title, Long locationId, Integer minOpenSlots,
+            UUID callerId, Long sportId, String title, List<Long> locationIds, Integer minOpenSlots,
             FeeType feeType, Long maxFeeAmountVnd, LocalDate date,
             StartTimeFilter startTimeFilter, LocalTime startTime, String viewerZoneId,
             List<SessionStatus> statuses, Pageable pageable);
+
+    /**
+     * SESSION-39 — per-date counts of {@link #discoverSessions}-shaped results across a small,
+     * capped window/list of dates (no session data, no pagination) — the data a UI needs to render
+     * Discover's date-section headers before drilling into one specific day. Shares
+     * {@link #discoverSessions}'s entire gating/filter set (sport, title, fee, {@code
+     * startTimeFilter}/{@code startTime}, {@code statuses}) except {@code date} and pagination, so
+     * a returned count stays accurate against what {@code discoverSessions} would actually show on
+     * drill-down — this is a live query, never a cache.
+     *
+     * <p><b>{@code locationIds} (scope change, 2026-09-22):</b> unlike {@code discoverSessions}'s
+     * single-value {@code locationId} exact match, this endpoint accepts multiple values,
+     * OR-combined — a session qualifies if its {@code locationId} is any of the given values.
+     * {@code sportId} stays single-value, unchanged from {@code discoverSessions}.
+     *
+     * <p><b>{@code dates} semantics:</b>
+     * <ul>
+     *   <li>Omitted/empty — today and the next 7 days (8 calendar days total, in the resolved
+     *       {@code viewerZoneId}).</li>
+     *   <li>Given — any date strictly before today (in {@code viewerZoneId}) is silently dropped,
+     *       same clamp/ignore spirit as {@code discoverSessions}'s own {@code date} handling. If
+     *       every given date is in the past, the survivor list is empty and this returns an empty
+     *       {@code counts} list — no query is made, and the default window is <em>not</em>
+     *       substituted (2026-09-22 user decision).</li>
+     *   <li>More than 8 dates given is rejected by the controller with a
+     *       {@code BadRequestException} before this method is ever called — an explicit 400, not a
+     *       silent truncation.</li>
+     * </ul>
+     * Each survivable date's own window matches {@code discoverSessions}' per-day boundary logic:
+     * {@code date == today} → {@code [now(), dayEnd(today))} (excludes sessions already started
+     * today); {@code date > today} → the plain {@code [dayStart(date), dayEnd(date))} window.
+     *
+     * <p><b>{@code counts} always includes every date in the effective window/list</b>, even a date
+     * with zero matching sessions — the underlying query's {@code GROUP BY} naturally omits empty
+     * buckets entirely, so this method explicitly backfills any missing date with
+     * {@code count = 0} before returning, rather than relying on the query's own row set.
+     *
+     * <p>Mirrors {@link #discoverSessions}'s "caller has no active sport profile for {@code
+     * sportId}, or zero active profiles at all" behavior — the effective window/list is still
+     * computed and returned with every date at {@code count = 0}, no query is made.
+     *
+     * <p>{@code viewerZoneId} (nullable, an IANA zone id, falling back to {@code "UTC"} when
+     * omitted) is the zone every date boundary and {@code startTimeFilter}/{@code startTime}'s
+     * time-of-day comparison is evaluated in — same contract as {@link #discoverSessions}. Invalid
+     * (unparseable) values are rejected with a {@code BadRequestException}.
+     */
+    SessionDiscoverDateCountsResponse getSessionDiscoverDateCounts(
+            UUID callerId, Long sportId, String title, List<Long> locationIds, Integer minOpenSlots,
+            FeeType feeType, Long maxFeeAmountVnd, List<LocalDate> dates,
+            StartTimeFilter startTimeFilter, LocalTime startTime, String viewerZoneId,
+            List<SessionStatus> statuses);
 
     /**
      * Sessions (standalone or group-linked) the caller currently has a JOINED participant row
