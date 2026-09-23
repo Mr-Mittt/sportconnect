@@ -49,6 +49,16 @@ three.
 Any UI for picking a timezone explicitly (e.g. "schedule for a different timezone than mine") — this
 ticket only makes the client honest about the browser's own zone, not a timezone-selection feature.
 
+## Delta (2026-09-22, at CLIENT-SESSION-22's pickup)
+
+**The "Discover search" scope bullet above is already done** — CLIENT-SESSION-22's widened scope
+(see that ticket's own "Scope change (2026-09-22)" entry) now sends `viewerZoneId` on every
+`/discover` and `/discover/counts` call itself, since SESSION-33/34/35 shipped before
+CLIENT-SESSION-22 was picked up. When this ticket is picked up, skip the "Discover search" bullet
+entirely (verify it's still wired, don't re-add it) and focus on session create/update's offset-aware
+`scheduledStart` plus `/history?dateCount`/`/upcoming?date`/`/history?date`'s `viewerZoneId`, which
+remain unbuilt.
+
 ---
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

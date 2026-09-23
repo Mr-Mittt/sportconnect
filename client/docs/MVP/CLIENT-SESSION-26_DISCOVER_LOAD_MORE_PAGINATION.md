@@ -1,6 +1,12 @@
 # CLIENT-SESSION-26 · Discover panel/modal needs a "load more" control
 
-**Status:** `TODO`
+**Status:** `SUPERSEDED` (2026-09-22, by CLIENT-SESSION-22)
+
+**Superseded 2026-09-22 (user decision, at CLIENT-SESSION-22's pickup):** CLIENT-SESSION-22's scope
+widened at pickup to give each of its new per-date Discover sections its own `useInfiniteQuery`
+load-more, absorbing this ticket's entire scope rather than building pagination twice. See
+CLIENT-SESSION-22's own "Scope change (2026-09-22)" entry for the actual design. No further action
+needed on this ticket.
 **Type:** Client feature
 **Depends on:** backend **SESSION-37** (`modules/session/docs/BACKLOG_MVP.md`, `IN PROGRESS`) —
 changes `GET /api/sessions/discover`'s default page size from `20` to `10`.

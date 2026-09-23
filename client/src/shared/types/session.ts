@@ -25,6 +25,11 @@ export type ParticipantStatus = 'JOINED' | 'LEFT' | 'REQUESTED' | 'INVITED';
 // meaningful only when feeType is FIXED (null otherwise).
 export type FeeType = 'FREE' | 'SPLIT' | 'FIXED';
 
+// SESSION-25: direction for GET /sessions/discover's optional startTime filter, comparing only
+// the time-of-day component of scheduledStart. startTime alone defaults to AFTER_OR_EQUAL
+// server-side; startTimeFilter alone is a no-op (CLIENT-SESSION-22).
+export type StartTimeFilter = 'BEFORE_OR_EQUAL' | 'AFTER_OR_EQUAL';
+
 export interface Session {
   id: number;
   groupId: number | null;

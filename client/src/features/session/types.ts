@@ -12,6 +12,7 @@ export type {
   SessionStatus,
   ParticipantStatus,
   FeeType,
+  StartTimeFilter,
 } from '@/shared/types/session';
 
 export interface CreateSessionPayload {
@@ -74,6 +75,26 @@ export interface SessionListItem extends Session {
 }
 
 /** CLIENT-SESSION-6's Discover panel search-scope dropdown. Only 'sessions' is wired to real
- * client-side filtering — 'location'/'gear' render as disabled placeholders (no gear/equipment
- * domain exists in this app yet, per client/CLAUDE.md's phase roadmap). */
+ * filtering — server-side `title` search as of CLIENT-SESSION-22 (was a client-side substring
+ * filter before). 'location'/'gear' text search render as disabled placeholders (no gear/equipment
+ * domain exists in this app yet, per client/CLAUDE.md's phase roadmap; real location filtering is
+ * the separate, dedicated Location pill, not this dropdown). */
 export type SessionSearchMode = 'sessions' | 'location' | 'gear';
+
+/** CLIENT-SESSION-22 — one collapsible per-date section of the Discover results (replaces the old
+ * flat `sessions: SessionListItem[]` list). `count` comes from `GET /discover/counts` and is known
+ * even while collapsed/never-fetched; `sessions`/`isLoading`/`isError`/`hasMore`/`isFetchingMore`
+ * only become meaningful once `isExpanded` triggers this date's own `GET /discover` fetch. */
+export interface DiscoverDateSection {
+  /** `yyyy-MM-dd`, also the collapse-state identity. */
+  date: string;
+  /** 'Today' / 'Tomorrow' / 'dd/MM' — see `discoverDateLabel.ts`. */
+  label: string;
+  count: number;
+  isExpanded: boolean;
+  sessions: SessionListItem[];
+  isLoading: boolean;
+  isError: boolean;
+  hasMore: boolean;
+  isFetchingMore: boolean;
+}

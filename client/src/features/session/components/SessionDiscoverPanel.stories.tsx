@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
-import type { SessionListItem } from '../types';
+import type { DiscoverDateSection, SessionListItem } from '../types';
 import { SessionDiscoverPanel } from './SessionDiscoverPanel';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
@@ -62,10 +62,33 @@ function makeSession(overrides: Partial<SessionListItem> & Pick<SessionListItem,
   };
 }
 
-const sessions: SessionListItem[] = [
-  makeSession({ id: 1, title: 'Weekend 5-a-side' }),
-  makeSession({ id: 2, title: 'Sunday pickup run', sportId: 5, sportName: 'Football' }),
+function makeSection(overrides: Partial<DiscoverDateSection> & Pick<DiscoverDateSection, 'date' | 'label'>): DiscoverDateSection {
+  return {
+    count: 0,
+    isExpanded: true,
+    sessions: [],
+    isLoading: false,
+    isError: false,
+    hasMore: false,
+    isFetchingMore: false,
+    ...overrides,
+  };
+}
+
+const twoSessionSections: DiscoverDateSection[] = [
+  makeSection({
+    date: '2026-08-01',
+    label: 'Today',
+    count: 2,
+    sessions: [
+      makeSession({ id: 1, title: 'Weekend 5-a-side' }),
+      makeSession({ id: 2, title: 'Sunday pickup run', sportId: 5, sportName: 'Football' }),
+    ],
+  }),
+  makeSection({ date: '2026-08-02', label: 'Tomorrow', count: 3, isExpanded: false }),
 ];
+
+const favoriteLocations: Location[] = [makeLocation('Riverside Courts'), makeLocation('Downtown Turf')];
 
 const meta = {
   title: 'Session/SessionDiscoverPanel',
@@ -78,6 +101,32 @@ const meta = {
     onViewDetails: () => {},
     onParticipationAction: () => {},
     isParticipationActionPending: () => false,
+    searchMode: 'sessions',
+    searchText: '',
+    quickDates: ['2026-08-01', '2026-08-02', '2026-08-03'],
+    selectedDates: ['2026-08-01', '2026-08-02'],
+    onToggleDate: () => {},
+    dateOptionLabel: (date: string) =>
+      date === '2026-08-01' ? 'Today' : date === '2026-08-02' ? 'Tomorrow (02/08)' : date,
+    isDateSelectionAtMax: false,
+    isLocationFilterAvailable: true,
+    selectedLocations: [],
+    onToggleLocation: () => {},
+    favoriteLocations,
+    isFavoriteLocationsLoading: false,
+    locationSearchText: '',
+    onLocationSearchTextChange: () => {},
+    locationSearchResults: [],
+    isLocationSearchLoading: false,
+    startTimeFilter: undefined,
+    onStartTimeFilterChange: () => {},
+    startTime: undefined,
+    onStartTimeChange: () => {},
+    onClearTimeFilter: () => {},
+    onToggleExpanded: () => {},
+    onLoadMoreSection: () => {},
+    isCountsLoading: false,
+    isCountsError: false,
   },
   decorators: [(Story) => <div style={{ maxWidth: 640 }}>{Story()}</div>],
 } satisfies Meta<typeof SessionDiscoverPanel>;
@@ -86,27 +135,44 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-  args: { searchMode: 'sessions', searchText: '', sessions, isLoading: false, isError: false },
+  args: { dateSections: twoSessionSections },
 };
 
-export const Loading: Story = {
-  args: { searchMode: 'sessions', searchText: '', sessions: [], isLoading: true, isError: false },
-};
-
-export const ErrorState: Story = {
-  args: { searchMode: 'sessions', searchText: '', sessions: [], isLoading: false, isError: true },
-};
-
-export const EmptyNoQuery: Story = {
-  args: { searchMode: 'sessions', searchText: '', sessions: [], isLoading: false, isError: false },
-};
-
-export const EmptySearchNoMatch: Story = {
+export const CountsLoading: Story = {
   args: {
-    searchMode: 'sessions',
-    searchText: 'nonexistent',
-    sessions: [],
-    isLoading: false,
-    isError: false,
+    dateSections: [makeSection({ date: '2026-08-01', label: 'Today' })],
+    isCountsLoading: true,
+  },
+};
+
+export const CountsError: Story = {
+  args: {
+    dateSections: [makeSection({ date: '2026-08-01', label: 'Today' })],
+    isCountsError: true,
+  },
+};
+
+export const SectionLoading: Story = {
+  args: {
+    dateSections: [makeSection({ date: '2026-08-01', label: 'Today', isLoading: true })],
+  },
+};
+
+export const SectionError: Story = {
+  args: {
+    dateSections: [makeSection({ date: '2026-08-01', label: 'Today', isError: true })],
+  },
+};
+
+export const EmptySection: Story = {
+  args: {
+    dateSections: [makeSection({ date: '2026-08-01', label: 'Today' })],
+  },
+};
+
+export const LocationFilterUnavailable: Story = {
+  args: {
+    dateSections: [makeSection({ date: '2026-08-01', label: 'Today' })],
+    isLocationFilterAvailable: false,
   },
 };

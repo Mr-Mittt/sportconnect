@@ -1,0 +1,10 @@
+{
+  "name": "add-test-data",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Imports documentation/md/BADMINTON_STANDALONE_SESSIONS_TEST_DATA.xlsx's 75 standalone Badminton sessions into the local dev backend for a given date. See add-test-data.mjs's own header comment and the /addTestData slash command for usage.",
+  "type": "module",
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}

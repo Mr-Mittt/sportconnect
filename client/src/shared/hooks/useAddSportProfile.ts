@@ -51,11 +51,12 @@ export function useAddSportProfile(userId: string | undefined) {
       // `?includeInactive=true` list (`useResumableSports`) must drop it.
       queryClient.invalidateQueries({ queryKey: sportProfilesWithInactiveQueryKey });
       // GET /sessions/discover is gated server-side to sports the caller holds an active
-      // profile for (see useDiscoverSessions's own doc comment) — without this, a Discover
+      // profile for (see useDiscoverFilters's own doc comment) — without this, a Discover
       // view opened while the caller had zero profiles (e.g. SessionDiscoverModal/
       // CreateSessionModal's own "no sport profiles yet" gate) keeps serving its cached empty
       // result after a profile is added, since nothing else re-triggers that query. Partial key
-      // (no sportId suffix) invalidates every discover cache entry, not just one sportId's.
+      // (['session','discover'] prefix, matching both discoverCounts/discoverDate builders) —
+      // invalidates every discover-family cache entry, not just one sportId's.
       queryClient.invalidateQueries({ queryKey: [...sessionKeys.all, 'discover'] });
     },
   });

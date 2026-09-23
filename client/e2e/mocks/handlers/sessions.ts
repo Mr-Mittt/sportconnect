@@ -18,6 +18,7 @@ import {
   mockUserInvitedRow,
   mockUserRequestedRow,
 } from '../fixtures.ts';
+import { getOverrides } from '../overrides.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
 // CLIENT-SESSION-4: the only invitee identity this mock backend knows by id — same reasoning as
@@ -209,6 +210,35 @@ function transformSessionComment(
   };
 }
 
+// CLIENT-SESSION-22 — shared by /discover and /discover/counts below, mirroring SESSION-25's
+// filter set. `date` itself is deliberately NOT filtered here (never was, pre-22 either) — every
+// fixture session carries a fixed `scheduledStart` unrelated to "today", and this mock has always
+// returned its date-agnostic match set regardless of the caller's requested date; the client only
+// ever requests one date/window at a time, so this doesn't create any inconsistency a journey
+// would notice.
+function discoverableSessions(session: SessionsSession, url: URL) {
+  const sportIdParam = url.searchParams.get('sportId');
+  const sportId = sportIdParam !== null ? Number(sportIdParam) : null;
+  const title = url.searchParams.get('title');
+  const locationIds = url.searchParams.getAll('locationId').map(Number);
+  return session.sessionsState.filter((candidate) => {
+    if (candidate.groupId !== null || candidate.status !== 'SCHEDULED') return false;
+    if (candidate.createdBy === mockUser.id) return false;
+    if (sportId !== null && candidate.sportId !== sportId) return false;
+    if (title !== null && !(candidate.title ?? '').toLowerCase().includes(title.toLowerCase())) return false;
+    if (locationIds.length > 0 && !locationIds.includes(candidate.location?.id ?? -1)) return false;
+    // SESSION-42: mirrors the real backend's widened exclusion — a session the caller already
+    // requested to join or was invited to shouldn't still surface as newly discoverable, same
+    // as one they're already JOINED to (previously JOINED-only here).
+    const alreadyParticipating = (session.participantsState[candidate.id] ?? []).some(
+      (p) =>
+        p.userId === mockUser.id &&
+        (p.status === 'JOINED' || p.status === 'REQUESTED' || p.status === 'INVITED'),
+    );
+    return !alreadyParticipating;
+  });
+}
+
 export const sessionHandlers: HttpHandler[] = [
   http.post('/api/sessions', async ({ request }) => {
     const unauthorized = requireAuth(request);
@@ -297,8 +327,12 @@ export const sessionHandlers: HttpHandler[] = [
   http.get('/api/sessions/group/:groupId', ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
+    const sessionId = sessionIdFromRequest(request);
+    if (getOverrides(sessionId).sessionsEmpty) {
+      return HttpResponse.json(apiResponse(mockPageResponse([]), 'Sessions retrieved successfully'));
+    }
     const groupId = Number(params.groupId);
-    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const session = sessionsSessions.get(sessionId);
     const results = session.sessionsState
       .filter((candidate) => candidate.groupId === groupId)
       .map((candidate) => withCallerParticipation(session, candidate));
@@ -308,7 +342,11 @@ export const sessionHandlers: HttpHandler[] = [
   http.get('/api/sessions/mine', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
-    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const sessionId = sessionIdFromRequest(request);
+    if (getOverrides(sessionId).sessionsEmpty) {
+      return HttpResponse.json(apiResponse(mockPageResponse([]), 'Sessions retrieved successfully'));
+    }
+    const session = sessionsSessions.get(sessionId);
     const results = session.sessionsState
       .filter((candidate) => candidate.groupId === null && candidate.createdBy === mockUser.id)
       .map((candidate) => withCallerParticipation(session, candidate));
@@ -322,28 +360,37 @@ export const sessionHandlers: HttpHandler[] = [
   http.get('/api/sessions/discover', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
-    const sportIdParam = new URL(request.url).searchParams.get('sportId');
-    const sportId = sportIdParam !== null ? Number(sportIdParam) : null;
     const session = sessionsSessions.get(sessionIdFromRequest(request));
-    const results = session.sessionsState.filter((candidate) => {
-      if (candidate.groupId !== null || candidate.status !== 'SCHEDULED') return false;
-      if (candidate.createdBy === mockUser.id) return false;
-      if (sportId !== null && candidate.sportId !== sportId) return false;
-      // SESSION-42: mirrors the real backend's widened exclusion — a session the caller already
-      // requested to join or was invited to shouldn't still surface as newly discoverable, same
-      // as one they're already JOINED to (previously JOINED-only here).
-      const alreadyParticipating = (session.participantsState[candidate.id] ?? []).some(
-        (p) =>
-          p.userId === mockUser.id &&
-          (p.status === 'JOINED' || p.status === 'REQUESTED' || p.status === 'INVITED'),
-      );
-      return !alreadyParticipating;
-    });
+    const results = discoverableSessions(session, new URL(request.url));
     return HttpResponse.json(
       apiResponse(
         mockPageResponse(results.map((candidate) => withCallerParticipation(session, candidate))),
         'Sessions retrieved successfully',
       ),
+    );
+  }),
+
+  // SESSION-39 — shares /discover's filter set except date/pagination. `date` (repeated) picks the
+  // explicit dates to report on; omitted -> today + next 7 days, same default window as the real
+  // backend. Every matching session's full count is attributed to every date in the effective
+  // window/list (see discoverableSessions' own doc comment on why date isn't really filtered here).
+  http.get('/api/sessions/discover/counts', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const url = new URL(request.url);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const count = discoverableSessions(session, url).length;
+    const explicitDates = url.searchParams.getAll('date');
+    const dates =
+      explicitDates.length > 0
+        ? explicitDates
+        : Array.from({ length: 8 }, (_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() + i);
+            return date.toISOString().slice(0, 10);
+          });
+    return HttpResponse.json(
+      apiResponse({ counts: dates.map((date) => ({ date, count })) }, 'Discover date counts retrieved successfully'),
     );
   }),
 

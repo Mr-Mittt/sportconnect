@@ -4,7 +4,18 @@ import { act, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { sessionKeys } from '@/features/session/queryKeys';
+import type { DiscoverFilters } from '@/features/session/discoverParams';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
+
+const emptyDiscoverFilters: DiscoverFilters = {
+  sportId: undefined,
+  title: '',
+  locationIds: [],
+  feeType: undefined,
+  startTimeFilter: undefined,
+  startTime: undefined,
+  viewerZoneId: 'UTC',
+};
 import {
   sportProfilesQueryKey,
   sportProfilesWithInactiveQueryKey,
@@ -95,7 +106,7 @@ describe('useAddSportProfile', () => {
     // Simulates SessionDiscoverModal opening while the caller had zero profiles — cached empty.
     // The date suffix's exact value doesn't matter here — invalidation below matches on the
     // ['session', 'discover'] prefix, not the full key.
-    queryClient.setQueryData(sessionKeys.discover(undefined, '2026-01-01'), { content: [] });
+    queryClient.setQueryData(sessionKeys.discoverDate('2026-01-01', emptyDiscoverFilters), { content: [] });
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
     vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
       data: { success: true, message: '', data: profile({ id: 9 }), timestamp: '' },
@@ -107,7 +118,9 @@ describe('useAddSportProfile', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: [...sessionKeys.all, 'discover'] });
-    expect(queryClient.getQueryState(sessionKeys.discover(undefined, '2026-01-01'))?.isInvalidated).toBe(true);
+    expect(
+      queryClient.getQueryState(sessionKeys.discoverDate('2026-01-01', emptyDiscoverFilters))?.isInvalidated,
+    ).toBe(true);
   });
 
   it('does not touch the cache when userId is undefined', async () => {

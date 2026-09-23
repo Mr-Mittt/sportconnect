@@ -5,16 +5,14 @@ import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import { useDiscoverSessions } from './hooks/useDiscoverSessions';
 import { useGroupSessionsForGroups } from './hooks/useGroupSessions';
 import { useJoinedSessions } from './hooks/useJoinedSessions';
 import { useMySessions } from './hooks/useMySessions';
 import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
 import { dedupeSessionsById, groupSessionsByDate } from './groupSessionsByDate';
-import { filterDiscoverSessions } from './discoverSearch';
+import { useDiscoverFilters } from './useDiscoverFilters';
 import { useCreateSessionModalData } from './useCreateSessionModalData';
 import { useSessionDetailModalData } from './useSessionDetailModalData';
-import type { SessionListItem, SessionSearchMode } from './types';
 
 /**
  * The Matches page's data boundary — composes every session query/mutation this ticket needs
@@ -30,8 +28,8 @@ import type { SessionListItem, SessionSearchMode } from './types';
  * interaction shape here is a dialog, not a route — see CLIENT-SESSION-1's design decision).
  *
  * CLIENT-SESSION-6 split the old single merged list into two panels:
- *  - **Discover** (`useDiscoverSessions`) — joinable SCHEDULED sessions from other users,
- *    scoped by the active sport switcher pill.
+ *  - **Discover** (`useDiscoverFilters`, CLIENT-SESSION-22) — joinable sessions from other users,
+ *    scoped by the active sport switcher pill, with real Date/Location/Time filters.
  *  - **My sessions** — everything the caller created, manages via a group, or has joined, any
  *    status, grouped by calendar day. There's still no batch "sessions across my groups"
  *    endpoint (a real backend gap, flagged in CLIENT-SESSION-1's implementation summary), so
@@ -61,13 +59,9 @@ export function useMatchesPageData(initialSessionId: number | null) {
   const activeSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
 
   // --- Discover panel ---
-  const [searchText, setSearchText] = useState('');
-  const [searchMode, setSearchMode] = useState<SessionSearchMode>('sessions');
-  const discoverQuery = useDiscoverSessions(activeSportId, currentUserId !== undefined);
-  const discoverSessions = useMemo<SessionListItem[]>(
-    () => filterDiscoverSessions(discoverQuery.data?.content ?? [], searchMode, searchText),
-    [discoverQuery.data, searchMode, searchText],
-  );
+  // CLIENT-SESSION-22: owns the Date/Location/Time filter pills + per-date sections, shared with
+  // useDiscoverModalData so the inline panel and the rail modal never drift.
+  const discoverFilters = useDiscoverFilters(activeSportId, currentUserId !== undefined);
 
   // --- "My sessions" panel ---
   const groupsQuery = useUserGroups(currentUserId);
@@ -106,8 +100,6 @@ export function useMatchesPageData(initialSessionId: number | null) {
     return groupSessionsByDate(filtered);
   }, [groupSessionQueries, mySessionsQuery.data, joinedSessionsQuery.data, groups, activeSport]);
 
-  const isDiscoverLoading = discoverQuery.isLoading;
-  const isDiscoverError = discoverQuery.isError;
   const isMySessionsLoading =
     groupsQuery.isLoading ||
     mySessionsQuery.isLoading ||
@@ -139,13 +131,7 @@ export function useMatchesPageData(initialSessionId: number | null) {
     setActiveSport,
     sportsByKey,
 
-    discoverSessions,
-    isDiscoverLoading,
-    isDiscoverError,
-    searchText,
-    setSearchText,
-    searchMode,
-    setSearchMode,
+    ...discoverFilters,
 
     mySessionDateGroups,
     isMySessionsLoading,
