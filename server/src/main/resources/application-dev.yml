@@ -1,7 +1,16 @@
 # Development Profile Configuration
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/sportconnect_dev
+    # ?options=-c%20TimeZone%3DUTC — a defensive, best-effort attempt to pin this connection's own
+    # Postgres session timezone to UTC. Confirmed live (2026-09-23) that pgjdbc itself overrides
+    # this with its own "SET TIME ZONE <JVM default>" right after connecting, so this alone does
+    # NOT fix anything for this app — the real fix is TimeZone.setDefault("UTC") in
+    # SportConnectApplication.main(), which pgjdbc's own sync then honors. Kept here anyway as a
+    # harmless second layer for any other/future client that connects via this same url without
+    # pgjdbc's override behavior. See documentation/md/JDBC_SESSION_TIMEZONE_FIX.md for the full
+    # incident (a non-UTC host, this one included: SE Asia Standard Time / Java "Asia/Bangkok",
+    # silently broke SessionRepository.findDiscoverSessions's startTimeFilter).
+    url: jdbc:postgresql://localhost:5432/sportconnect_dev?options=-c%20TimeZone%3DUTC
     username: postgres
     password: sa
   

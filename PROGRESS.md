@@ -4820,6 +4820,64 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `UserSportProfileServiceImplSpec` cases, new `SportProfileResumeAndVisibilityIntegrationTest`
   (7 cases). Green: `:modules:sport:sport-impl:test`, `:modules:auth:auth-impl:test`, full
   `:server:test`, full `./gradlew build`.
+- **Client CLIENT-SESSION-22 (`DONE`, 2026-09-22,
+  `client/docs/MVP/CLIENT-SESSION-22_DISCOVER_SEARCH_FILTER_UI.md`):** wired Discover's previously-
+  inert Date/Time/Location pills to the real backend contract (SESSION-25/37/39). **Scope widened at
+  pickup** (absorbing **CLIENT-SESSION-25** and **CLIENT-SESSION-26**, both marked `SUPERSEDED`):
+  the Date pill is a multi-select (reuses `SessionStartTimePicker`'s Today/Tomorrow/next-5-days +
+  calendar pattern, capped at 8 to match `/discover/counts`), rendering results as collapsible
+  per-date sections (`DiscoverDateSection`), each with its own lazy `/discover` fetch + independent
+  `useInfiniteQuery` load-more; the earliest checked date is sent to `/discover`, all checked dates
+  to `/discover/counts`. New `useDiscoverFilters` (replaces `useDiscoverSessions`/
+  `filterDiscoverSessions`) shared by `useMatchesPageData`/`useDiscoverModalData`; `useDiscoverDateSections`
+  calls `useInfiniteQuery` a fixed, literal 8 times (no `useInfiniteQueries` in the installed
+  TanStack Query 5.101) rather than in a loop, keeping every call Rules-of-Hooks-compliant. The
+  Location pill combines favorites (`useFavoriteLocations`) and a typeahead search
+  (`useLocationSearch`) — reverses the ticket's own original "no location-search UI" framing since
+  both hooks already existed; disabled when the sport pill is "all" (both endpoints are sport-scoped).
+  `viewerZoneId` sent on every call (SESSION-33/34/35 shipped since filing), absorbing that slice of
+  **CLIENT-SESSION-24**'s scope (delta noted on its own file). Server-side `title` (debounced via
+  the existing `useDebouncedValue`) replaces the old client-side substring filter. Uses real Radix
+  `Popover` for every pill despite being nested inside `SessionDiscoverModal`'s own Dialog —
+  confirmed safe via `CreateSessionModal`'s `LocationFavoritesDropdown` precedent (`Popover` defaults
+  non-modal; only `DropdownMenu` needed `modal={false}`) — ⚠️ **this conclusion turned out
+  incomplete, see Delta 2 below**: it was right that `Popover`'s own modal focus-trap doesn't
+  conflict, but missed a separate `Dialog`-side pointer-events lock that made every pill unclickable
+  live. tsc/eslint clean; Vitest 1373/1373 green
+  (7 new test files); `e2e` 81 passed / 2 failed (2 pre-existing `friends-journey`/
+  `feed-groups-journey` parallel-load flakes, reproduced identically on stashed clean master); no
+  baselined visual-regression surface exists for the Matches page's Discover panel, so
+  `visual-regression` wasn't run.
+  **Delta (2026-09-22, same day, post-ship):** user requested 4 more changes on the same branch —
+  `DiscoverDatePicker`'s checklist rows now show Tomorrow's own date (`Tomorrow (dd/MM)`, new
+  `formatDiscoverDateOptionLabel`); `SessionDiscoverModal` (rail's "Join a match") simplified to
+  today-only — title "Discover today session", no `/discover/counts`, no date sections/pill, flat
+  list + `loadMore()` (new `useDiscoverModalFilters`/`useDiscoverTodaySessions`, `DiscoverSearchBox`/
+  `DiscoverResultsList` extracted and shared with the full-page panel); `DiscoverTimeFilter` trigger
+  label changed to `"Start before/after {time}"`, popover redesigned to a horizontal
+  `[Before][Hour][Minute][After]` row with Before/After as an on/off toggle and 24h-validated,
+  `now()`-prefilled number inputs; new "Discover more" footer link navigating `/matches`. Along the
+  way, fixed a self-inflicted cascading test failure in `DiscoverTimeFilter.test.tsx` (`userEvent` +
+  `vi.useFakeTimers()` hangs — this codebase's existing convention is `fireEvent` under fake timers,
+  per `FriendChatPanelView.test.tsx`'s precedent). Full suite re-verified: Vitest 187/187 files,
+  1383/1383 tests green; tsc/eslint clean; `e2e` 82 passed / 1 failed (the same pre-existing
+  `feed-groups-journey` flake, re-confirmed against clean master — the earlier-seen second failure
+  was parallel-worker contention on `matches-journey`, not a real regression).
+  **Delta 2 (2026-09-22, same day):** user reported `DiscoverTimeFilter`'s Before/After buttons
+  "can't be selected" — real, confirmed bug, not a misunderstanding. Root cause: a *modal* `Dialog`
+  sets `pointer-events: none` on `<body>` while open and restores `auto` only on its own Content
+  node; `Popover`'s portaled content is a *sibling* of that Content under `<body>`, not a
+  descendant, so it inherited `none` — visually on top, every click passed through to whatever
+  Dialog content sat underneath instead (a `SessionCard` title). Fixed at the shared primitive
+  (`shared/ui/popover.tsx`: `pointer-events-auto` on `PopoverContent`), covering every `Popover`
+  usage, not just this one. New real-browser e2e regression test (jsdom can't reproduce this class
+  of bug at all) in `home-feed-journey.spec.ts`, plus new `sessionsEmpty` MSW override
+  infrastructure (`SessionDiscoverModal` had zero prior e2e coverage — nothing ever opened it).
+  Verified the fix and the test both ways (revert → test fails with the real symptom; restore →
+  green). Two related, deferred findings from the same investigation filed as real backlog tickets
+  rather than left as prose: **CLIENT-SESSION-27** (Escape closes the whole modal, not just the
+  popover) and **CLIENT-SESSION-28** (the Location filter's search input can't be typed into in
+  this modal — a Dialog focus-trap issue, same root cause family, different Radix subsystem).
 - **Client CLIENT-SESSION-21 (`DONE`, 2026-09-14,
   `client/docs/MVP/CLIENT-SESSION-21_PREPARING_SESSION_WARNING_AND_COMPLETION.md`):** the client
   half of backend SESSION-24's new `PREPARING` session status. `CreateSessionModal`'s Location and
@@ -5196,6 +5254,25 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `1fb1cf1`); SHA-256 confirmed exactly those 3 changed, the other 84 byte-identical. Dedicated
   new-surface coverage (both dialogs, the switch's inactive state, muted pills) filed as follow-up
   **SPORT-12** (repo pattern — CLIENT-NOTIF-2 / CLIENT-SESSION-12 / GRP-10).
+
+- **Backend infra fix — JDBC session timezone (2026-09-23,
+  `documentation/md/JDBC_SESSION_TIMEZONE_FIX.md`):** `GET /api/sessions/discover`'s
+  `startTimeFilter`/`startTime` (SESSION-25/35) were silently returning wrong results on any
+  non-UTC host — found live via a deliberately paradoxical pair of queries (a 19:00 session
+  matched "before 10:28" *and* failed "after 05:00" simultaneously). Root cause: `pgjdbc` issues
+  its own `SET TIME ZONE <JVM default>` on every connection, which runs *after* and silently
+  overrides a JDBC-URL-level `?options=-c%20TimeZone%3DUTC` fix (confirmed both ways via a
+  temporary `SHOW TimeZone` diagnostic) — so the app's own DB connections were running in this
+  host's real OS timezone (`Asia/Bangkok`) instead of UTC, double-applying
+  `findDiscoverSessions`'s caller-zone-offset correction. **Fixed at the JVM level**
+  (`TimeZone.setDefault(UTC)`, first line of `SportConnectApplication.main()`), which is what
+  pgjdbc's own sync actually reads — not a per-query or per-environment fix. Verified end-to-end
+  against real seeded data (`documentation/scripts/add-test-data/`), both before/after and via a
+  from-scratch clean rebuild. Host-independent going forward — doesn't require any deployment
+  target (the planned AWS work, `infra/documentation/BACKLOG_MVP.md`'s INFRA-3..6) to separately
+  guarantee a UTC host OS. Not yet filed as a formal SESSION-* ticket in
+  `modules/session/docs/BACKLOG_MVP.md` — this was fixed directly at the user's request rather
+  than through the usual `/workon` ticket flow.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

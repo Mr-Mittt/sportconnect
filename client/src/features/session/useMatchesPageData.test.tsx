@@ -122,6 +122,7 @@ function mockGets(
     if (url === '/groups/user/user-1') return apiResponse(pageResponse([]));
     if (url === '/sessions/mine') return apiResponse(pageResponse([]));
     if (url === '/sessions/discover') return apiResponse(pageResponse([]));
+    if (url === '/sessions/discover/counts') return apiResponse({ counts: [] });
     if (url === '/sessions/joined') return apiResponse(pageResponse([]));
     throw new Error(`unexpected GET ${url}`);
   });
@@ -209,7 +210,8 @@ describe('useMatchesPageData', () => {
 
     const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
     await waitFor(() => expect(result.current.isMySessionsLoading).toBe(false));
-    await waitFor(() => expect(result.current.discoverSessions).toHaveLength(2));
+    // Only "Today" is expanded by default — its own /discover call is what's under test here.
+    await waitFor(() => expect(result.current.dateSections[0].sessions).toHaveLength(2));
     expect(result.current.mySessionDateGroups.flatMap((g) => g.sessions)).toHaveLength(2);
 
     act(() => useMatchesPageStore.getState().setActiveSport('basketball'));
@@ -218,27 +220,30 @@ describe('useMatchesPageData', () => {
       expect(result.current.mySessionDateGroups.flatMap((g) => g.sessions)).toHaveLength(1),
     );
     expect(result.current.mySessionDateGroups[0].sessions[0].id).toBe(1);
-    await waitFor(() => expect(result.current.discoverSessions).toHaveLength(1));
-    expect(result.current.discoverSessions[0].id).toBe(3);
+    await waitFor(() => expect(result.current.dateSections[0].sessions).toHaveLength(1));
+    expect(result.current.dateSections[0].sessions[0].id).toBe(3);
   });
 
-  it('discoverSessions filters by the search text (title or location name)', async () => {
+  it("sends the debounced search text as /discover's title param", async () => {
     mockGets({
-      '/sessions/discover': () =>
-        apiResponse(
-          pageResponse([
-            makeSession({ id: 1, status: 'SCHEDULED', scheduledStart: '2026-08-01T10:00:00', title: 'Sunday pickup run' }),
-            makeSession({ id: 2, status: 'SCHEDULED', scheduledStart: '2026-08-02T10:00:00', title: 'Evening scrimmage' }),
-          ]),
-        ),
+      '/sessions/discover': (config) => {
+        const title = config?.params?.title as string | undefined;
+        const all = [
+          makeSession({ id: 1, status: 'SCHEDULED', scheduledStart: '2026-08-01T10:00:00', title: 'Sunday pickup run' }),
+          makeSession({ id: 2, status: 'SCHEDULED', scheduledStart: '2026-08-02T10:00:00', title: 'Evening scrimmage' }),
+        ];
+        return apiResponse(
+          pageResponse(title === undefined ? all : all.filter((s) => s.title?.includes(title))),
+        );
+      },
     });
 
     const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
-    await waitFor(() => expect(result.current.discoverSessions).toHaveLength(2));
+    await waitFor(() => expect(result.current.dateSections[0].sessions).toHaveLength(2));
 
     act(() => result.current.setSearchText('pickup'));
-    await waitFor(() => expect(result.current.discoverSessions).toHaveLength(1));
-    expect(result.current.discoverSessions[0].id).toBe(1);
+    await waitFor(() => expect(result.current.dateSections[0].sessions).toHaveLength(1), { timeout: 2000 });
+    expect(result.current.dateSections[0].sessions[0].id).toBe(1);
   });
 
   it('toggleHistoryPanelCollapsed and toggleDateGroupCollapsed flip their own state', async () => {

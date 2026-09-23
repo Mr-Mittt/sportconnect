@@ -1,10 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
-import { filterDiscoverSessions } from './discoverSearch';
-import { useDiscoverSessions } from './hooks/useDiscoverSessions';
+import { useDiscoverModalFilters } from './useDiscoverModalFilters';
 import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
 import { useSessionDetailModalData } from './useSessionDetailModalData';
-import type { SessionListItem, SessionSearchMode } from './types';
 
 /**
  * Data boundary for `SessionDiscoverModal` — the rail's "Join a match" entry point on Home
@@ -38,13 +36,10 @@ export function useDiscoverModalData(sportId: number | undefined) {
   };
   const closeDiscoverModal = () => setIsDiscoverModalOpen(false);
 
-  const [searchText, setSearchText] = useState('');
-  const [searchMode, setSearchMode] = useState<SessionSearchMode>('sessions');
-  const discoverQuery = useDiscoverSessions(sportId, isDiscoverModalOpen);
-  const discoverSessions = useMemo<SessionListItem[]>(
-    () => filterDiscoverSessions(discoverQuery.data?.content ?? [], searchMode, searchText),
-    [discoverQuery.data, searchMode, searchText],
-  );
+  // CLIENT-SESSION-22 delta (2026-09-22): owns the Location/Time filter pills + today's flat
+  // session list — no Date pill, no per-date sections (that's the full `/matches` page's own
+  // `useDiscoverFilters`; this modal links out to it via "Discover more").
+  const discoverFilters = useDiscoverModalFilters(sportId, isDiscoverModalOpen);
 
   // Card-level participation action (SessionCard in the Discover results grid) — separate
   // mutation instance from the one useSessionDetailModalData owns internally for the modal's own
@@ -73,13 +68,7 @@ export function useDiscoverModalData(sportId: number | undefined) {
     isDiscoverModalOpen,
     openDiscoverModal,
     closeDiscoverModal,
-    searchText,
-    setSearchText,
-    searchMode,
-    setSearchMode,
-    discoverSessions,
-    isDiscoverLoading: discoverQuery.isLoading,
-    isDiscoverError: discoverQuery.isError,
+    ...discoverFilters,
     onViewDetails,
     onParticipationAction,
     isParticipationActionPending,

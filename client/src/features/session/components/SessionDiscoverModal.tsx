@@ -1,10 +1,17 @@
+import { useNavigate } from 'react-router-dom';
 import { AddSportFields, type AddSportProfileSubmission } from '@/shared/components/AddSportFields';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
+import type { StartTimeFilter } from '@/shared/types/session';
+import type { Location } from '@/shared/types/location';
+import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import type { SessionListItem, SessionSearchMode } from '../types';
-import { SessionDiscoverPanel } from './SessionDiscoverPanel';
+import { DiscoverSearchBox } from './DiscoverSearchBox';
+import { DiscoverLocationFilter } from './DiscoverLocationFilter';
+import { DiscoverTimeFilter } from './DiscoverTimeFilter';
+import { DiscoverResultsList } from './DiscoverResultsList';
 
 const NO_SPORTS_PROMPT = "Hey champ, add a sport first — can't join a match you don't even play! 🎯";
 
@@ -17,13 +24,35 @@ interface SessionDiscoverModalProps {
   searchText: string;
   onSearchTextChange: (text: string) => void;
 
+  isLocationFilterAvailable: boolean;
+  selectedLocations: Location[];
+  onToggleLocation: (location: Location) => void;
+  favoriteLocations: Location[];
+  isFavoriteLocationsLoading: boolean;
+  locationSearchText: string;
+  onLocationSearchTextChange: (text: string) => void;
+  locationSearchResults: Location[];
+  isLocationSearchLoading: boolean;
+
+  startTimeFilter: StartTimeFilter | undefined;
+  onStartTimeFilterChange: (filter: StartTimeFilter) => void;
+  startTime: string | undefined;
+  onStartTimeChange: (time: string) => void;
+  onClearTimeFilter: () => void;
+
+  /** Today's sessions only, flat — no date picker/sections here (CLIENT-SESSION-22 delta,
+   * 2026-09-22, see this component's own doc comment). */
   sessions: SessionListItem[];
   isLoading: boolean;
   isError: boolean;
+  hasMore: boolean;
+  isFetchingMore: boolean;
+  onLoadMore: () => void;
+
   sportsByKey: Record<SportKey, SportProfile>;
   currentUserId: string;
   onViewDetails: (sessionId: number) => void;
-  /** CLIENT-SESSION-9: threaded straight through to `SessionDiscoverPanel`. */
+  /** CLIENT-SESSION-9: threaded straight through to each `SessionCard`. */
   onParticipationAction: (sessionId: number, kind: ParticipationActionKind) => void;
   isParticipationActionPending: (sessionId: number) => boolean;
 
@@ -42,10 +71,18 @@ interface SessionDiscoverModalProps {
 /**
  * CLIENT-SESSION-7's rail-triggered entry point into Discover — the `UpcomingMatches` empty
  * state's "Join a match" CTA opens this instead of navigating to `/matches`, so a caller on Home
- * Feed/Groups/Friends can browse and join a session inline. Wraps `SessionDiscoverPanel`, the
- * same UI `MatchesPage` renders inline, so the two never drift. `onViewDetails` closes this
- * dialog (see `useDiscoverModalData`) before the host page opens `SessionDetailModal` — two
- * sequential top-level Dialogs, not one nested inside the other.
+ * Feed/Groups/Friends can browse and join a session inline. `onViewDetails` closes this dialog
+ * (see `useDiscoverModalData`) before the host page opens `SessionDetailModal` — two sequential
+ * top-level Dialogs, not one nested inside the other.
+ *
+ * **CLIENT-SESSION-22 delta (2026-09-22):** no longer wraps the shared `SessionDiscoverPanel` —
+ * this modal is deliberately scoped down to *today's* sessions only (titled "Discover today
+ * session"), with Location/Time filters but no Date pill/counts/sections; a "Find session for
+ * another date? Discover more" footer link (bottom-right) sends anyone who wants more than today
+ * to the full `/matches` page instead, which keeps the real multi-date browsing experience
+ * (`useDiscoverFilters`). Still shares `DiscoverSearchBox`/`DiscoverLocationFilter`/
+ * `DiscoverTimeFilter`/`DiscoverResultsList` with that page so the two don't drift on anything
+ * they still have in common.
  */
 export function SessionDiscoverModal({
   isOpen,
@@ -54,9 +91,26 @@ export function SessionDiscoverModal({
   onSearchModeChange,
   searchText,
   onSearchTextChange,
+  isLocationFilterAvailable,
+  selectedLocations,
+  onToggleLocation,
+  favoriteLocations,
+  isFavoriteLocationsLoading,
+  locationSearchText,
+  onLocationSearchTextChange,
+  locationSearchResults,
+  isLocationSearchLoading,
+  startTimeFilter,
+  onStartTimeFilterChange,
+  startTime,
+  onStartTimeChange,
+  onClearTimeFilter,
   sessions,
   isLoading,
   isError,
+  hasMore,
+  isFetchingMore,
+  onLoadMore,
   sportsByKey,
   currentUserId,
   onViewDetails,
@@ -69,6 +123,11 @@ export function SessionDiscoverModal({
   isAddSportError,
 }: SessionDiscoverModalProps) {
   const hasNoSportProfiles = Object.keys(sportsByKey).length === 0;
+  const navigate = useNavigate();
+  const discoverMore = () => {
+    onClose();
+    navigate('/matches');
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -80,7 +139,7 @@ export function SessionDiscoverModal({
         fixedHeight={!hasNoSportProfiles}
         className={hasNoSportProfiles ? 'max-w-md' : 'max-w-2xl'}
       >
-        <DialogHeader title="Discover sessions" className="border-hairline-b border-border px-4 py-3" />
+        <DialogHeader title="Discover today session" className="border-hairline-b border-border px-4 py-3" />
         {hasNoSportProfiles ? (
           <AddSportFields
             availableSports={availableSports}
@@ -91,22 +150,58 @@ export function SessionDiscoverModal({
             promptMessage={NO_SPORTS_PROMPT}
           />
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3.5">
-            <SessionDiscoverPanel
-              searchMode={searchMode}
-              onSearchModeChange={onSearchModeChange}
-              searchText={searchText}
-              onSearchTextChange={onSearchTextChange}
-              sessions={sessions}
-              isLoading={isLoading}
-              isError={isError}
-              sportsByKey={sportsByKey}
-              currentUserId={currentUserId}
-              onViewDetails={onViewDetails}
-              onParticipationAction={onParticipationAction}
-              isParticipationActionPending={isParticipationActionPending}
-            />
-          </div>
+          <>
+            <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-4 py-3.5">
+              <DiscoverSearchBox
+                searchMode={searchMode}
+                onSearchModeChange={onSearchModeChange}
+                searchText={searchText}
+                onSearchTextChange={onSearchTextChange}
+              />
+              <div className="flex flex-wrap gap-2">
+                <DiscoverTimeFilter
+                  startTimeFilter={startTimeFilter}
+                  onStartTimeFilterChange={onStartTimeFilterChange}
+                  startTime={startTime}
+                  onStartTimeChange={onStartTimeChange}
+                  onClear={onClearTimeFilter}
+                />
+                <DiscoverLocationFilter
+                  isAvailable={isLocationFilterAvailable}
+                  selectedLocations={selectedLocations}
+                  onToggleLocation={onToggleLocation}
+                  favoriteLocations={favoriteLocations}
+                  isFavoriteLocationsLoading={isFavoriteLocationsLoading}
+                  searchText={locationSearchText}
+                  onSearchTextChange={onLocationSearchTextChange}
+                  searchResults={locationSearchResults}
+                  isSearchLoading={isLocationSearchLoading}
+                />
+              </div>
+              <DiscoverResultsList
+                sessions={sessions}
+                isLoading={isLoading}
+                isError={isError}
+                hasMore={hasMore}
+                isFetchingMore={isFetchingMore}
+                onLoadMore={onLoadMore}
+                emptyMessage="No sessions to discover today."
+                errorMessage="Couldn't load today's sessions."
+                sportsByKey={sportsByKey}
+                currentUserId={currentUserId}
+                onViewDetails={onViewDetails}
+                onParticipationAction={onParticipationAction}
+                isParticipationActionPending={isParticipationActionPending}
+                gridClassName="grid grid-cols-1 gap-3 sm:grid-cols-2"
+              />
+            </div>
+            <div className="border-hairline-t flex items-center justify-end gap-2 border-border px-4 py-3">
+              <p className="text-2xs text-text-muted">Find session for another date?</p>
+              <Button variant="outline" size="sm" onClick={discoverMore}>
+                Discover more
+              </Button>
+            </div>
+          </>
         )}
       </DialogContent>
     </Dialog>

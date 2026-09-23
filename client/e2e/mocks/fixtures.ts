@@ -1057,6 +1057,16 @@ export async function seedEmptyNotificationsOnNextLoad(sessionId: string): Promi
 }
 
 /**
+ * Empties the Upcoming-matches rail (`/sessions/mine` + the per-group `/sessions/group/:groupId`
+ * fan-out `useUpcomingMatches` also queries) — the default fixture user always has real upcoming
+ * sessions otherwise, and `UpcomingMatches`' "Create a match"/"Join a match" CTAs only render in
+ * that empty state. Same `override/*Empty` shape as `seedEmptyFeedOnNextLoad`.
+ */
+export async function seedEmptyUpcomingMatchesOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/sessionsEmpty');
+}
+
+/**
  * CLIENT-NOTIF-2's with-load-more baseline — 11 notifications (one more than
  * the list's page size of 10), same shape as `seedPaginatedFeedOnNextLoad`.
  */

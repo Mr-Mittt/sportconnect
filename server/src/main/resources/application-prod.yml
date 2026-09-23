@@ -1,7 +1,13 @@
 # Production Profile Configuration
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    # ?options=-c%20TimeZone%3DUTC — defensive only; pgjdbc overrides it with its own "SET TIME
+    # ZONE <JVM default>" after connecting, so the real fix is TimeZone.setDefault("UTC") in
+    # SportConnectApplication.main() (applies here too — see documentation/md/
+    # JDBC_SESSION_TIMEZONE_FIX.md). Found via a dev-host bug (host OS timezone -> Java
+    # "Asia/Bangkok"), kept here too since prod's container OS timezone is an external assumption,
+    # not a guarantee.
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?options=-c%20TimeZone%3DUTC
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:

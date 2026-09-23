@@ -1,6 +1,12 @@
 # CLIENT-SESSION-25 · Discover panel/modal needs a real date picker
 
-**Status:** `TODO`
+**Status:** `SUPERSEDED` (2026-09-22, by CLIENT-SESSION-22)
+
+**Superseded 2026-09-22 (user decision, at CLIENT-SESSION-22's pickup):** CLIENT-SESSION-22's scope
+widened at pickup to build a multi-date select + per-date collapsible Discover sections, absorbing
+this ticket's entire "real date picker" scope (including its `viewerZoneId`/SESSION-39 notes below)
+rather than building it twice. See CLIENT-SESSION-22's own "Scope change (2026-09-22)" entry for
+the actual design. No further action needed on this ticket.
 **Type:** Client feature
 **Depends on:** backend **SESSION-35** (`modules/session/docs/BACKLOG_MVP.md`, `DONE`) — made
 `GET /api/sessions/discover`'s `date` param required. Should also pick up **CLIENT-SESSION-24**'s

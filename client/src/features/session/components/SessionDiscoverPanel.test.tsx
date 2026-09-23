@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
-import type { SessionListItem } from '../types';
+import type { DiscoverDateSection, SessionListItem } from '../types';
 import { SessionDiscoverPanel } from './SessionDiscoverPanel';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
@@ -63,6 +63,21 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
   };
 }
 
+function makeSection(overrides: Partial<DiscoverDateSection> = {}): DiscoverDateSection {
+  return {
+    date: '2026-08-01',
+    label: 'Today',
+    count: 1,
+    isExpanded: true,
+    sessions: [makeSession()],
+    isLoading: false,
+    isError: false,
+    hasMore: false,
+    isFetchingMore: false,
+    ...overrides,
+  };
+}
+
 const renderPanel = (overrides: Partial<React.ComponentProps<typeof SessionDiscoverPanel>> = {}) =>
   render(
     <SessionDiscoverPanel
@@ -70,9 +85,30 @@ const renderPanel = (overrides: Partial<React.ComponentProps<typeof SessionDisco
       onSearchModeChange={() => {}}
       searchText=""
       onSearchTextChange={() => {}}
-      sessions={[makeSession()]}
-      isLoading={false}
-      isError={false}
+      quickDates={['2026-08-01']}
+      selectedDates={['2026-08-01']}
+      onToggleDate={() => {}}
+      dateOptionLabel={() => 'Today'}
+      isDateSelectionAtMax={false}
+      isLocationFilterAvailable
+      selectedLocations={[]}
+      onToggleLocation={() => {}}
+      favoriteLocations={[]}
+      isFavoriteLocationsLoading={false}
+      locationSearchText=""
+      onLocationSearchTextChange={() => {}}
+      locationSearchResults={[]}
+      isLocationSearchLoading={false}
+      startTimeFilter={undefined}
+      onStartTimeFilterChange={() => {}}
+      startTime={undefined}
+      onStartTimeChange={() => {}}
+      onClearTimeFilter={() => {}}
+      dateSections={[makeSection()]}
+      onToggleExpanded={() => {}}
+      onLoadMoreSection={() => {}}
+      isCountsLoading={false}
+      isCountsError={false}
       sportsByKey={sportsByKey}
       currentUserId="user-2"
       onViewDetails={() => {}}
@@ -92,24 +128,81 @@ describe('SessionDiscoverPanel', () => {
     expect(onViewDetails).toHaveBeenCalledWith(1);
   });
 
-  it('shows loading state', () => {
-    renderPanel({ isLoading: true, sessions: [] });
+  it("shows a section's loading state", () => {
+    renderPanel({ dateSections: [makeSection({ isLoading: true, sessions: [] })] });
     expect(screen.getByText('Loading…')).toBeInTheDocument();
   });
 
-  it('shows an error state', () => {
-    renderPanel({ isError: true, sessions: [] });
-    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load sessions to discover.");
+  it("shows a section's error state", () => {
+    renderPanel({ dateSections: [makeSection({ isError: true, sessions: [] })] });
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load sessions for Today.");
   });
 
-  it('shows the empty state copy for an empty search box', () => {
-    renderPanel({ sessions: [], searchText: '' });
-    expect(screen.getByText('No sessions to discover for this sport yet.')).toBeInTheDocument();
+  it('shows the empty state copy for a section with no sessions', () => {
+    renderPanel({ dateSections: [makeSection({ sessions: [] })] });
+    expect(screen.getByText('No sessions to discover on Today.')).toBeInTheDocument();
   });
 
-  it('shows the empty state copy for a non-matching search', () => {
-    renderPanel({ sessions: [], searchText: 'nonexistent' });
-    expect(screen.getByText('No sessions match your search.')).toBeInTheDocument();
+  it("shows a section's load-more button and reports the date it belongs to", async () => {
+    const user = userEvent.setup();
+    const onLoadMoreSection = vi.fn();
+    renderPanel({ dateSections: [makeSection({ hasMore: true })], onLoadMoreSection });
+
+    await user.click(screen.getByRole('button', { name: 'Load more sessions' }));
+    expect(onLoadMoreSection).toHaveBeenCalledWith('2026-08-01');
+  });
+
+  it('reports which date was toggled when a section header is clicked', async () => {
+    const user = userEvent.setup();
+    const onToggleExpanded = vi.fn();
+    renderPanel({ onToggleExpanded });
+
+    await user.click(screen.getByRole('button', { name: /Collapse Today \(1\)/ }));
+    expect(onToggleExpanded).toHaveBeenCalledWith('2026-08-01');
+  });
+
+  it('shows the counts loading/error copy', () => {
+    const { rerender } = renderPanel({ isCountsLoading: true });
+    expect(screen.getByText('Loading session counts…')).toBeInTheDocument();
+
+    rerender(
+      <SessionDiscoverPanel
+        searchMode="sessions"
+        onSearchModeChange={() => {}}
+        searchText=""
+        onSearchTextChange={() => {}}
+        quickDates={['2026-08-01']}
+        selectedDates={['2026-08-01']}
+        onToggleDate={() => {}}
+        dateOptionLabel={() => 'Today'}
+        isDateSelectionAtMax={false}
+        isLocationFilterAvailable
+        selectedLocations={[]}
+        onToggleLocation={() => {}}
+        favoriteLocations={[]}
+        isFavoriteLocationsLoading={false}
+        locationSearchText=""
+        onLocationSearchTextChange={() => {}}
+        locationSearchResults={[]}
+        isLocationSearchLoading={false}
+        startTimeFilter={undefined}
+        onStartTimeFilterChange={() => {}}
+        startTime={undefined}
+        onStartTimeChange={() => {}}
+        onClearTimeFilter={() => {}}
+        dateSections={[makeSection()]}
+        onToggleExpanded={() => {}}
+        onLoadMoreSection={() => {}}
+        isCountsLoading={false}
+        isCountsError
+        sportsByKey={sportsByKey}
+        currentUserId="user-2"
+        onViewDetails={() => {}}
+        onParticipationAction={() => {}}
+        isParticipationActionPending={() => false}
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load session counts for these dates.");
   });
 
   it('reports search text/mode changes', async () => {
@@ -127,10 +220,15 @@ describe('SessionDiscoverPanel', () => {
     expect(screen.getByRole('combobox', { name: 'Search scope' })).toHaveValue('sessions');
   });
 
-  it('renders the Date/Time/Location filter pills as inert', () => {
+  it('renders the Date/Time/Location filter pills as interactive controls', () => {
     renderPanel();
-    for (const label of ['Date', 'Time', 'Location']) {
-      expect(screen.getByRole('button', { name: label })).toHaveAttribute('aria-disabled', 'true');
-    }
+    expect(screen.getByRole('button', { name: /^Date/ })).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByRole('button', { name: /^Time/ })).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByRole('button', { name: /^Location/ })).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('renders the Location pill disabled when unavailable (no specific sport selected)', () => {
+    renderPanel({ isLocationFilterAvailable: false });
+    expect(screen.getByRole('button', { name: 'Location' })).toHaveAttribute('aria-disabled', 'true');
   });
 });

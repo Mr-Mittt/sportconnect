@@ -8,8 +8,13 @@ spring:
     active: ${SPRING_PROFILE:dev}
   
   # Database Configuration
+  # ?options=-c%20TimeZone%3DUTC — defensive only; pgjdbc overrides it with its own "SET TIME
+  # ZONE <JVM default>" after connecting, so the real fix is TimeZone.setDefault("UTC") in
+  # SportConnectApplication.main(). See documentation/md/JDBC_SESSION_TIMEZONE_FIX.md.
+  # application-dev.yml/application-prod.yml each override this whole url and carry the same
+  # parameter themselves; this base value is what a profile without its own override would use.
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:sportconnect}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:sportconnect}?options=-c%20TimeZone%3DUTC
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver

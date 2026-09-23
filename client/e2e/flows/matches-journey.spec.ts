@@ -283,12 +283,13 @@ test('Matches journey', async ({ page }) => {
     await expect(mySessionsSection.getByText(mockDiscoverableSession.title!)).toBeVisible();
   });
 
-  await test.step('10. search filters Discover, and the panel toggle hides/shows My sessions', async () => {
+  await test.step('10. search filters Discover (server-side title param, CLIENT-SESSION-22), and the panel toggle hides/shows My sessions', async () => {
     await page.getByRole('button', { name: 'All', exact: true }).click();
     const discoverSection = page.getByRole('region', { name: 'Discover sessions' });
 
     await page.getByRole('textbox', { name: 'Search sessions' }).fill('nonexistent-session-title');
-    await expect(discoverSection.getByText('No sessions match your search.')).toBeVisible();
+    // Debounced (400ms) before the real GET /sessions/discover?title=... request fires.
+    await expect(discoverSection.getByText('No sessions to discover on Today.')).toBeVisible();
     await page.getByRole('textbox', { name: 'Search sessions' }).fill('');
 
     await expect(page.getByRole('region', { name: 'My sessions' })).toBeVisible();
@@ -297,6 +298,23 @@ test('Matches journey', async ({ page }) => {
 
     await page.getByRole('button', { name: 'Show my sessions' }).click();
     await expect(page.getByRole('region', { name: 'My sessions' })).toBeVisible();
+  });
+
+  await test.step('10b. the Date filter pill adds a second collapsible section (CLIENT-SESSION-22, absorbs CLIENT-SESSION-25)', async () => {
+    const discoverSection = page.getByRole('region', { name: 'Discover sessions' });
+
+    await discoverSection.getByRole('button', { name: 'Date' }).click();
+    // The checklist row's accessible name carries its own date, e.g. "Tomorrow (dd/MM)" —
+    // unlike the section header below, which stays bare "Tomorrow".
+    await page.getByRole('checkbox', { name: /^Tomorrow \(\d{2}\/\d{2}\)$/ }).check();
+    await expect(discoverSection.getByRole('button', { name: 'Date (2)' })).toBeVisible();
+    // Newly-checked dates start collapsed — a chevron + count header, no fetch until expanded.
+    await expect(discoverSection.getByRole('button', { name: /Expand Tomorrow \(\d+\)/ })).toBeVisible();
+
+    // Uncheck it again so later steps' assertions against the Discover grid aren't affected by a
+    // second open section.
+    await page.getByRole('checkbox', { name: /^Tomorrow \(\d{2}\/\d{2}\)$/ }).uncheck();
+    await page.keyboard.press('Escape');
   });
 
   await test.step('11. create without location/fee shows the Preparing warning; completing both via the detail modal flips it to Scheduled (CLIENT-SESSION-21, SESSION-24)', async () => {

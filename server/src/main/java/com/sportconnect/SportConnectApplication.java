@@ -7,9 +7,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
+import java.util.TimeZone;
+
 /**
  * Main Spring Boot application for SportConnect
- * 
+ *
  * This application provides a platform for sports enthusiasts to connect,
  * organize events, and manage their sports activities.
  */
@@ -21,7 +23,15 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 public class SportConnectApplication {
 
     public static void main(String[] args) {
-        
+        // Must run before SpringApplication.run(): the pgjdbc driver issues its own "SET TIME
+        // ZONE <JVM default>" on every new connection, which runs *after* connect and silently
+        // overrides any ?options=-c%20TimeZone%3DUTC on the JDBC url — confirmed live (2026-09-23):
+        // that url param alone left the app's own connections on the host's real OS timezone
+        // (SE Asia Standard Time -> Java's "Asia/Bangkok") despite being set to UTC. Pinning the
+        // JVM's own default here is what actually controls what pgjdbc syncs Postgres's session
+        // timezone to — see documentation/md/JDBC_SESSION_TIMEZONE_FIX.md for the full incident.
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+
         SpringApplication.run(SportConnectApplication.class, args);
     }
 

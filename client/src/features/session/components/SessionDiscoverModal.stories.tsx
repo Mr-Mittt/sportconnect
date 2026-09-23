@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
 import type { SessionListItem } from '../types';
@@ -72,18 +73,43 @@ const meta = {
     onSearchModeChange: () => {},
     searchText: '',
     onSearchTextChange: () => {},
+    isLocationFilterAvailable: true,
+    selectedLocations: [],
+    onToggleLocation: () => {},
+    favoriteLocations: [],
+    isFavoriteLocationsLoading: false,
+    locationSearchText: '',
+    onLocationSearchTextChange: () => {},
+    locationSearchResults: [],
+    isLocationSearchLoading: false,
+    startTimeFilter: undefined,
+    onStartTimeFilterChange: () => {},
+    startTime: undefined,
+    onStartTimeChange: () => {},
+    onClearTimeFilter: () => {},
+    isLoading: false,
+    isError: false,
+    hasMore: false,
+    isFetchingMore: false,
+    onLoadMore: () => {},
     sportsByKey,
     currentUserId: 'user-2',
     onViewDetails: () => {},
     onParticipationAction: () => {},
     isParticipationActionPending: () => false,
-    isLoading: false,
-    isError: false,
     availableSports: [],
     onAddSport: () => {},
     isAddingSport: false,
     isAddSportError: false,
   },
+  // SessionDiscoverModal's "Discover more" footer link uses react-router's useNavigate —
+  // same MemoryRouter decorator precedent CreatePostForm.stories.tsx already established.
+  decorators: [
+    (Story) => {
+      const router = createMemoryRouter([{ path: '/', element: <Story /> }]);
+      return <RouterProvider router={router} />;
+    },
+  ],
 } satisfies Meta<typeof SessionDiscoverModal>;
 
 export default meta;
@@ -104,6 +130,13 @@ export const Empty: Story = {
 
 export const Loading: Story = {
   args: { sessions: [], isLoading: true },
+};
+
+export const WithLoadMore: Story = {
+  args: {
+    sessions: [makeSession({ id: 1, title: 'Weekend 5-a-side' })],
+    hasMore: true,
+  },
 };
 
 /** CLIENT-SESSION-7 follow-up: zero sport profiles — the Discover panel is replaced by the

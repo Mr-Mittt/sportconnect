@@ -35,7 +35,14 @@ function PopoverContent({
         sideOffset={sideOffset}
         align={align}
         className={cn(
-          'shadow-menu z-50 rounded-[10px] border-hairline border-border-strong bg-surface-2 p-1.5 outline-none',
+          // pointer-events-auto: a *modal* Dialog (default `modal=true`) sets `pointer-events:
+          // none` on <body> while open and restores `auto` only on its own Content node. This
+          // Portal's content is a *sibling* of that Content under <body>, not a descendant, so
+          // without this it inherits `none` and is visually on top but unclickable — a real bug
+          // found live via CLIENT-SESSION-22's SessionDiscoverModal (both DiscoverTimeFilter and
+          // DiscoverLocationFilter): the popover opens, but every click passes through to
+          // whatever Dialog content sits underneath it instead.
+          'shadow-menu pointer-events-auto z-50 rounded-[10px] border-hairline border-border-strong bg-surface-2 p-1.5 outline-none',
           className,
         )}
         {...props}

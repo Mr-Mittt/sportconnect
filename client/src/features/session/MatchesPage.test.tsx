@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -118,6 +118,13 @@ function session(overrides: Record<string, unknown> = {}) {
  * `/sessions/discover` (the Discover grid) — most tests only care about one or the other.
  * `sportProfiles` defaults to the module-level fixture (one active Basketball profile) —
  * overridden to `[]` by the zero-sport-profile gate test below. */
+/** Real DTO shape for `discoverSessions` fixtures — subset with a `title`, so
+ * `/sessions/discover`'s mock below can simulate the real backend's server-side `title` filter. */
+interface DiscoverSessionFixture {
+  id: number;
+  title: string;
+}
+
 function mockGet({
   mySessions = [],
   discoverSessions = [],
@@ -127,16 +134,26 @@ function mockGet({
   discoverSessions?: unknown[];
   sportProfiles?: unknown[];
 }) {
-  return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-    if (url === '/sports/profiles') return apiResponse(sportProfilesOverride);
-    if (url === '/groups/user/user-1') return apiResponse(pageResponse([]));
-    if (url === '/sessions/mine') return apiResponse(pageResponse(mySessions));
-    if (url === '/sessions/discover') return apiResponse(pageResponse(discoverSessions));
-    if (url === '/sessions/joined') return apiResponse(pageResponse([]));
-    if (url === '/sessions/1') return apiResponse(session());
-    if (url === '/sessions/1/participants') return apiResponse(pageResponse([]));
-    throw new Error(`unexpected GET ${url}`);
-  });
+  return vi
+    .spyOn(apiClient, 'get')
+    .mockImplementation(async (url: string, config?: { params?: Record<string, unknown> }) => {
+      if (url === '/sports/profiles') return apiResponse(sportProfilesOverride);
+      if (url === '/groups/user/user-1') return apiResponse(pageResponse([]));
+      if (url === '/sessions/mine') return apiResponse(pageResponse(mySessions));
+      if (url === '/sessions/discover') {
+        const title = config?.params?.title as string | undefined;
+        const filtered =
+          title === undefined
+            ? discoverSessions
+            : (discoverSessions as DiscoverSessionFixture[]).filter((s) => s.title.includes(title));
+        return apiResponse(pageResponse(filtered));
+      }
+      if (url === '/sessions/discover/counts') return apiResponse({ counts: [] });
+      if (url === '/sessions/joined') return apiResponse(pageResponse([]));
+      if (url === '/sessions/1') return apiResponse(session());
+      if (url === '/sessions/1/participants') return apiResponse(pageResponse([]));
+      throw new Error(`unexpected GET ${url}`);
+    });
 }
 
 describe('MatchesPage', () => {
@@ -175,7 +192,7 @@ describe('MatchesPage', () => {
     mockGet({});
     render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
 
-    expect(await screen.findByText('No sessions to discover for this sport yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No sessions to discover on Today.')).toBeInTheDocument();
     expect(screen.getByText("You haven't created or joined any sessions yet.")).toBeInTheDocument();
   });
 
@@ -183,7 +200,7 @@ describe('MatchesPage', () => {
     const user = userEvent.setup();
     mockGet({});
     render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
-    await screen.findByText('No sessions to discover for this sport yet.');
+    await screen.findByText('No sessions to discover on Today.');
 
     await user.click(screen.getByRole('button', { name: 'Create session' }));
     expect(await screen.findByRole('heading', { name: 'Create your session' })).toBeInTheDocument();
@@ -244,8 +261,16 @@ describe('MatchesPage', () => {
 
     await user.type(screen.getByRole('textbox', { name: 'Search sessions' }), 'pickup');
 
-    expect(screen.getByText('Sunday pickup run')).toBeInTheDocument();
-    expect(screen.queryByText('Evening scrimmage')).not.toBeInTheDocument();
+    // Debounced (400ms) before the server-side `title` param actually fires — one `waitFor` for
+    // both assertions together, since the refetch's own brief loading state can otherwise satisfy
+    // "Evening scrimmage is gone" a render early, before "Sunday pickup run" reappears.
+    await waitFor(
+      () => {
+        expect(screen.getByText('Sunday pickup run')).toBeInTheDocument();
+        expect(screen.queryByText('Evening scrimmage')).not.toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
   });
 
   it('auto-opens the Add sport modal on page load when the caller has zero sport profiles', async () => {

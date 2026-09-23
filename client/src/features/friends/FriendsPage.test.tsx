@@ -336,6 +336,6 @@ describe('FriendsPage', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Join a match' }));
-    expect(await screen.findByRole('dialog', { name: 'Discover sessions' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Discover today session' })).toBeInTheDocument();
   });
 });

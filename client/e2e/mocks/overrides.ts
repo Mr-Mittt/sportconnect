@@ -25,6 +25,10 @@ export interface SessionOverrides {
   sportProfilesEmpty: boolean;
   createPostFailOnce: boolean;
   notificationsEmpty: boolean;
+  /** Empties the Upcoming-matches rail (`/sessions/mine` + `/sessions/group/:groupId` fan-out) —
+   * needed to reach `UpcomingMatches`' empty-state "Join a match" CTA in e2e, since the default
+   * fixture user always has real upcoming sessions otherwise. */
+  sessionsEmpty: boolean;
 }
 
 function defaultOverrides(): SessionOverrides {
@@ -38,6 +42,7 @@ function defaultOverrides(): SessionOverrides {
     sportProfilesEmpty: false,
     createPostFailOnce: false,
     notificationsEmpty: false,
+    sessionsEmpty: false,
   };
 }
 

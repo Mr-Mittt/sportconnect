@@ -1,4 +1,4 @@
-import { seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import { seedAuthenticatedSession, seedEmptyUpcomingMatchesOnNextLoad } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -189,4 +189,59 @@ test('Home Feed journey', async ({ page }) => {
     await page.getByRole('menuitem', { name: 'Delete post' }).click();
     await expect(page.getByRole('article')).toHaveCount(2);
   });
+});
+
+/*
+ * Regression test — found live 2026-09-22 investigating a user report that
+ * `DiscoverTimeFilter`'s Before/After buttons "can't be selected" on the rail's "Join a match"
+ * modal (`SessionDiscoverModal`). Root cause: a *modal* `Dialog` (default `modal=true`) sets
+ * `pointer-events: none` on `<body>` while open and restores `auto` only on its own Content node;
+ * `Popover`'s portaled content is a *sibling* of that Content under `<body>`, not a descendant, so
+ * it inherited `none` — visually on top, but every click passed straight through to whatever
+ * Dialog content sat underneath (here, a `SessionCard` title in the results grid). Fixed at the
+ * shared primitive (`shared/ui/popover.tsx`: `pointer-events-auto` on `PopoverContent`), so it
+ * covers every `Popover` usage, not just this one, including `DiscoverLocationFilter` in this same
+ * modal (its own trigger/popover opening and button-click interactions are covered below too).
+ *
+ * No unit/component (Vitest) test could have caught this: jsdom doesn't do real CSS
+ * cascade/pointer-events hit-testing, and this component's own jsdom test couldn't even get the
+ * popover to report `open` reliably once nested in a real Dialog. Only a real-browser test proves
+ * the click actually lands on the right element — hence a dedicated e2e spec rather than folding
+ * this into the main journey above, which never opens this modal at all (the main journey's
+ * fixture user always has non-empty upcoming matches, and "Join a match" only renders in the rail's
+ * empty state).
+ *
+ * Two further, related layering issues were found live while writing this test but are
+ * DELIBERATELY NOT covered/fixed here — filed as their own client backlog tickets instead of only
+ * living in this comment (CLAUDE.md's API Change Discipline "file the moment it comes out" rule
+ * extends to any deferred finding, not just API changes): (1) pressing Escape while the Time/
+ * Location popover is open closes the whole Dialog too, not just the popover; (2) clicking into
+ * `DiscoverLocationFilter`'s search text input focuses it only momentarily — the Dialog's own
+ * focus trap immediately yanks focus back inside itself since the input, like the popover it's in,
+ * lives outside the Dialog's DOM subtree, so typing into it is currently impossible. Both share
+ * this same "Popover portals outside the Dialog it's nested in" root cause but need Radix
+ * `FocusScope`/`DismissableLayer` fixes distinct from the pointer-events one above.
+ */
+test('Home Feed — the "Join a match" modal\'s Time filter popover is actually clickable', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedEmptyUpcomingMatchesOnNextLoad(mockSessionId);
+  await seedAuthenticatedSession(page);
+
+  await expect(page.getByText('No upcoming matches.')).toBeVisible();
+  await page.getByRole('button', { name: 'Join a match' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Discover today session' });
+  await expect(dialog).toBeVisible();
+  // A real discoverable session card renders underneath the filter pills — exactly the element
+  // the original bug's clicks silently landed on instead of the popover content.
+  await expect(dialog.getByText('Weekend 5-a-side')).toBeVisible();
+
+  await dialog.getByRole('button', { name: 'Time' }).click();
+  const beforeBtn = page.getByRole('button', { name: 'Before', exact: true });
+  await expect(beforeBtn).toBeVisible();
+  await beforeBtn.click();
+  await expect(beforeBtn).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByRole('button', { name: /^Start before \d{2}:\d{2}$/ })).toBeVisible();
 });

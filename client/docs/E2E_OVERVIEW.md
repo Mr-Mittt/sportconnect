@@ -35,7 +35,12 @@ button, derived from `session.callerParticipation`; extends `matches-journey.spe
 step 5b and disambiguates several existing steps' card-click selectors, `mocks/handlers/sessions.ts`
 now attaches `callerParticipation` to every session-returning response; same-day follow-up makes
 the Upcoming rail's "View details" open `SessionDetailModal` in place instead of navigating to
-`/matches`, rewriting `home-feed-journey.spec.ts` step 6).
+`/matches`, rewriting `home-feed-journey.spec.ts` step 6), `CLIENT-SESSION-22_DISCOVER_SEARCH_FILTER_UI.md`
+(wires Discover's Date/Location/Time filter pills to the real `GET /sessions/discover`/`GET
+/sessions/discover/counts` contract, replacing the old client-side title/location substring filter
+and the flat results grid with per-date collapsible sections; rewrites `matches-journey.spec.ts`
+step 10 and adds step 10b, new `mocks/handlers/sessions.ts` `GET /sessions/discover/counts` handler
+and `title`/`locationId` filtering on `GET /sessions/discover`).
 
 ---
 
@@ -202,7 +207,7 @@ e2e/
     post-deep-link.spec.ts
     group-chat.spec.ts        # CHAT-10
     direct-chat.spec.ts       # CHAT-10
-    matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9/CLIENT-SESSION-17
+    matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9/CLIENT-SESSION-17/CLIENT-SESSION-22
     notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
@@ -355,7 +360,7 @@ baselines only ever exercised a clean load, no save).
 |---|---|---|
 | `shell renders and NavTabs navigate between routes` | Seeds session → Home Feed heading + "SportHub" title visible → click Friends tab → Friends heading + `/friends` URL → click Home tab → back to Home Feed | Baseline shell smoke test, no edge cases |
 
-### `e2e/flows/home-feed-journey.spec.ts` (HF-11, one `test()`, 8 steps)
+### `e2e/flows/home-feed-journey.spec.ts` (HF-11, one main `test()` with 8 steps, plus one separate `test()`)
 
 Uses the **default** 3-post fixture set (`mockPost`/`mockGroupPost`/`mockBasketballPost`) — no seeding
 helpers called.
@@ -370,6 +375,12 @@ helpers called.
 | 6. match CTA | "View details" opens `SessionDetailModal` in place, no URL change → Close returns to the rail | CLIENT-SESSION-9 (same-day follow-up): previously navigated to `/matches?session={id}`, switching the user away from Home Feed — now reuses the page's own `discoverModalData.onViewDetails`, same as clicking a card inside the Discover modal. Matches come from `mocks/handlers/sessions.ts`'s default session fixture set (CLIENT-SESSION-12: grew from 3 to 5 upcoming sessions, rail still caps display at 4) |
 | 7. "Add sport" | Pill is **not** `aria-disabled`; clicking it opens `NoSportsToAddDialog` ("Nothing left to add"), dismissed with OK | **SPORT-5 reverses HF-2 here** — this step previously asserted `aria-disabled="true"`. A disabled control cannot explain itself, so the pill now always fires, re-reads the catalogue, and states the outcome. **SPORT-3:** still relies on the fixture user holding a profile for every sport the live catalog serves (2), not a numeric "3-sport cap" |
 | 8. delete | "..." menu only on the caller's own post (not Priya Shah's); delete removes it, count 3→2 | |
+
+**Separate test — Time filter popover regression, CLIENT-SESSION-22 Delta 2:**
+
+| Test | What it checks | Notes |
+|---|---|---|
+| `the "Join a match" modal's Time filter popover is actually clickable` | Seeds empty upcoming matches (`seedEmptyUpcomingMatchesOnNextLoad`, new `sessionsEmpty` override) → "Join a match" → `SessionDiscoverModal` opens with a real discoverable session card rendered → opens the Time filter, clicks "Before", asserts `aria-pressed="true"` and the trigger label updates | Found live: a *modal* `Dialog` sets `pointer-events: none` on `<body>`, restoring `auto` only on its own Content — `Popover`'s portaled content is a sibling of that Content, not a descendant, so clicks passed through to the session card underneath. Fixed at `shared/ui/popover.tsx` (`pointer-events-auto`). jsdom can't reproduce this class of bug (couldn't even get the popover to report `open` reliably nested in a real Dialog) — real-browser-only regression coverage. Two related, still-open findings from the same investigation filed as **CLIENT-SESSION-27** (Escape closes the whole Dialog too) and **CLIENT-SESSION-28** (the Location filter's search input can't be typed into in this modal) |
 
 ### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + GRP-3 + FRIEND-1 + PROFILE-7, several independent `test()`s)
 
@@ -615,7 +626,7 @@ path other specs already exercise incidentally.
 | `loading a shared post link directly renders the post + comments, even outside the feed's first page` | `seedPaginatedFeedOnNextLoad(mockSessionId)` (21-post fixture) → direct `seedAuthenticatedSession(page, '/posts/1020')` (post **1020**, index 20 — only reachable via "Load more" on page 0) → dialog renders the right post/comments on a cold load; closing returns to `/` with the normal Home Feed visible | Drives the real "shared link, not logged in yet" flow end-to-end (redirect to `/login`, bounce back) — the same generic mechanism AUTH-8's step 7 already covers, not something FEED-12 built itself. Proves the dialog doesn't depend on the feed having paginated the post into view first. |
 | `opening comments from the feed updates the URL, and closing returns to it` | Click a post's "View comments" from `/` → URL becomes `/posts/{id}` → Close → URL back to `/` | Confirms the in-feed path is also URL-addressable now (`navigate` push on open, `replace` on close), not just the direct-load path above |
 
-### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/…/CLIENT-SESSION-9, CLIENT-SESSION-17, CLIENT-SESSION-21, SPORT-10, one `test()` with 11 steps + steps 3b/3c/5b + 2 separate `test()`s)
+### `e2e/flows/matches-journey.spec.ts` (CLIENT-SESSION-1/…/CLIENT-SESSION-9, CLIENT-SESSION-17, CLIENT-SESSION-21, CLIENT-SESSION-22, SPORT-10, one `test()` with 11 steps + steps 3b/3c/5b/10b + 2 separate `test()`s)
 
 `/matches` (real page, replacing `ComingSoonPage`) — list/create/join/leave/cancel, plus
 CLIENT-SESSION-4's invite/auto-approve fields and approval queue, plus CLIENT-SESSION-5's
@@ -651,7 +662,12 @@ single-user mock can simulate that action directly (unlike step 7's REQUESTED ro
 all target sessions that render inside the "My sessions" panel (`region` "My sessions") — the
 Discover/"My sessions" split (CLIENT-SESSION-6) doesn't change where those assertions look, since
 `page.getByText`/`getByRole('button', ...)` finds them regardless of which region they're in;
-steps 9-11 are what's actually new.
+steps 9-11 (plus 10b) are what's actually new. **CLIENT-SESSION-22:** `mocks/handlers/sessions.ts`
+gained a shared `discoverableSessions()` helper (filters by `sportId`/`title`/`locationId`, reused
+by both `GET /sessions/discover` and the new `GET /sessions/discover/counts`) — `date` itself is
+still not filtered by this mock (never was; every fixture session carries a fixed `scheduledStart`
+unrelated to "today", and the client only ever requests one date/window at a time, so this doesn't
+create any inconsistency a journey would notice).
 
 | Step | What it checks | Notes |
 |---|---|---|
@@ -665,8 +681,9 @@ steps 9-11 are what's actually new.
 | 6. create | "Create session" → pick Pickleball → "Choose location" (opens the favorites dropdown) → "Choose a location…" → search "Riverside" → select `mockLocation` → fill start time/title → invite `mockFriend` (badge appears) → check "Auto approve join request" (warning appears) → submit → dialog closes, new session appears in the list | SPORT-3: renamed from Basketball. Two dialogs/a dropdown all open in sequence (`CreateSessionModal`, its `LocationFavoritesDropdown`, and the nested `LocationPicker`) — the dropdown's own menu items are queried via `page.getByRole('menuitem', ...)`, not scoped to `createDialog`, since `DropdownMenuContent` portals as a DOM sibling of the Dialog, not a descendant |
 | 7. approval queue | Open `mockOwnedGroupSession`'s ("Ladder night") detail → "Waiting for approval (2)" shows both requesters → Approve one (moves into Players) → Reject the other with a reason → section disappears | Only renders for `canManage`; reject reveals an inline optional-reason box, not a second dialog. CLIENT-SESSION-10 renamed the "Participants" section to "Players" |
 | 8. favorite a location, then pick it from the favorites dropdown | Open a new create form → dropdown shows "No favorites yet." → open `LocationPicker`, search "Riverside" → click the heart on `mockLocation`'s row (aria-label flips to "Unfavorite …") → select it → reopen the dropdown → the just-favorited location now lists instead of the empty state → selecting it sets the location again | Confirms `LocationFavoritesDropdown`'s real Radix `DropdownMenu` (`modal={false}`) actually works nested inside the Dialog — CLIENT-SESSION-2 had reverted an earlier attempt after it appeared broken live; CLIENT-SESSION-5 found and fixed the real cause (see its summary doc) |
-| 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → **CLIENT-SESSION-17: the read-only "Session detail" `region` shows the stored `#ref` values** (`LIST` `#ref` `match/racketModel` as chips "Yonex Astrox 99" / "Li-Ning Axforce 90", `SINGLE` `#ref` `match/racketBrand` as plain "Yonex", own node `match/format` as "Doubles") → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverSessions`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED`, `REQUESTED`, or `INVITED` row for (widened from `JOINED`-only by SESSION-42, matching the real backend's own widened exclusion — `mockDiscoverableSession` has no pre-seeded participant row for the test user, so this step's own assertions are unaffected by the widening). The `#ref` assertions prove `SessionAttributesSummary` maps a `#ref` node's stored shape onto the right render type by `cardinality`, not its inherited scalar `type` — `mockDiscoverableSession` now carries `attributes` |
-| 10. search filters Discover; the panel toggle hides/shows My sessions | Typing a non-matching string into the search box shows "No sessions match your search." in Discover; the "Hide my sessions"/"Show my sessions" button toggles the whole `region` "My sessions" | Search is client-side only (`useMatchesPageData`'s `discoverSessions` memo), not a new backend query |
+| 9. discover → join → moves to My sessions | `mockDiscoverableSession` visible in Discover, not in My sessions → open its detail → **CLIENT-SESSION-17: the read-only "Session detail" `region` shows the stored `#ref` values** (`LIST` `#ref` `match/racketModel` as chips "Yonex Astrox 99" / "Li-Ning Axforce 90", `SINGLE` `#ref` `match/racketBrand` as plain "Yonex", own node `match/format` as "Doubles") → Join → Leave button appears → close → now absent from Discover, present in My sessions | Both `useDiscoverFilters`/`useJoinedSessions` invalidate off the same `sessionKeys.all` root, so no manual reload/refetch is needed; the mock's `GET /sessions/discover` handler excludes any session the caller currently has a `JOINED`, `REQUESTED`, or `INVITED` row for (widened from `JOINED`-only by SESSION-42, matching the real backend's own widened exclusion — `mockDiscoverableSession` has no pre-seeded participant row for the test user, so this step's own assertions are unaffected by the widening). The `#ref` assertions prove `SessionAttributesSummary` maps a `#ref` node's stored shape onto the right render type by `cardinality`, not its inherited scalar `type` — `mockDiscoverableSession` now carries `attributes` |
+| 10. search filters Discover (server-side `title`, debounced); the panel toggle hides/shows My sessions | Typing a non-matching string into the search box shows "No sessions to discover on Today." (the Today section's own empty state) in Discover; the "Hide my sessions"/"Show my sessions" button toggles the whole `region` "My sessions" | **CLIENT-SESSION-22 delta:** was a client-side substring filter (`useMatchesPageData`'s old `discoverSessions` memo) asserting "No sessions match your search." — now a real, debounced `GET /sessions/discover?title=...` request; the mock's `discoverableSessions()` helper (`mocks/handlers/sessions.ts`) filters by `title` to match |
+| 10b. Date filter pill adds a second collapsible section | Open the "Date" pill → check the "Tomorrow (dd/MM)" checklist row → trigger shows "Date (2)" → a new collapsed "Tomorrow (N)" section header appears alongside "Today" → uncheck it again | CLIENT-SESSION-22 (absorbs CLIENT-SESSION-25's "real date picker" scope). A newly-checked date starts collapsed (no `/discover` fetch until expanded) — only the header + count (from `/discover/counts`) render; proves the multi-select Date pill and per-date section shell without depending on any particular session being discoverable on that date. **Delta (2026-09-22):** the checklist row's accessible name now carries its own date (`Tomorrow (dd/MM)`, `formatDiscoverDateOptionLabel`) — the section header below stays bare "Tomorrow" — so the checkbox selector matches `/^Tomorrow \(\d{2}\/\d{2}\)$/`, not the exact string `'Tomorrow'` |
 | 11. create without location/fee → Preparing warning → complete via the detail modal → Scheduled | Create a session leaving Location and Fee both blank → the amber "will be created as Preparing" banner shows → submit → the new card's detail modal shows status "Preparing" and a `region` "Complete session setup" naming "Location and Fee" as missing → choose a location via the completion form's own `LocationPicker` trigger (not the favorites dropdown step 6/8 use) → check "Free" → **Save** → status flips to "Scheduled", the completion `region` disappears | CLIENT-SESSION-21 (SESSION-24). Creates its own session live rather than using a pre-seeded fixture — see `sessions.ts`'s own note on why no static `PREPARING` fixture is seeded (would silently drop another rail-hosting spec's expected session out of `UpcomingMatches`' `maxVisible=4` cut). Step 6 now explicitly checks "Free" (no longer the default) so that session still lands `SCHEDULED`, not `PREPARING` |
 
 **Separate test — SPORT-10 §2e reactivate nudge ("Yes" path):**

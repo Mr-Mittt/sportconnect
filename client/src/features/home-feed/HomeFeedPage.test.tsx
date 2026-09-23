@@ -658,7 +658,7 @@ describe('HomeFeedPage', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Join a match' }));
-    expect(await screen.findByRole('dialog', { name: 'Discover sessions' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Discover today session' })).toBeInTheDocument();
   });
 // CLIENT-MODAL-1: the ticket's confirmed instance, driven through the real UI rather than
   // the hook, because the whole point is that the modal's own `key` remount looked like it

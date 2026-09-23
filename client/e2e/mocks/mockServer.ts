@@ -167,6 +167,7 @@ const OVERRIDE_NAMES: ReadonlySet<keyof SessionOverrides> = new Set([
   'sportProfilesEmpty',
   'createPostFailOnce',
   'notificationsEmpty',
+  'sessionsEmpty',
 ]);
 
 /**

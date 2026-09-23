@@ -57,6 +57,22 @@ Terraform/compose) is what eventually populates `infra/` for real.
 | Dev environment compose | ✅ `infra/docker-compose.dev.yml` (INFRA-2, 2026-07-08) — deps-only (Postgres+PostGIS, Redis); verified end-to-end via a full `./gradlew :server:bootRun` against it, not just `docker compose up` |
 | Deployment workflow / hosting | ✅ Hosting decision made (2026-07-08, `INFRA-3_HOSTING_DECISION.md`) — AWS free tier, single EC2 + RDS, split into INFRA-3..6; none implemented yet |
 
+## 3b. Known deployment-relevant fix: JDBC session timezone (2026-09-23)
+
+`server/`'s database connections used to silently pick up the **host OS's own timezone** instead
+of UTC (a `pgjdbc` driver behavior — it syncs the Postgres session's timezone to the JVM's default
+right after connecting), which broke any query reading a stored timestamp's hour/date components
+directly. Fixed at the JVM level (`TimeZone.setDefault(UTC)` in `SportConnectApplication.main()`),
+**not** via a JDBC-URL/container-timezone setting — full incident, root cause, and why the
+URL-parameter approach doesn't work against this driver:
+`documentation/md/JDBC_SESSION_TIMEZONE_FIX.md`.
+
+**Relevant to INFRA-3..6 (the AWS EC2/RDS work, not yet built):** this fix is host-independent —
+once implemented, the app's own DB session timezone is UTC regardless of the deployment
+container/VM's OS timezone, so standing up the real deployment target does not need a separate
+"ensure the host OS is UTC" step. Nothing further to do here; noted so it isn't rediscovered from
+scratch during that work.
+
 ## 4. Tickets
 
 Tracked in `infra/documentation/BACKLOG_MVP.md` (pick up via `/workon infra mvp`):
