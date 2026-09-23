@@ -923,7 +923,7 @@ Parameterized: 3 breakpoints × 7 states = **21 test instances**, `session detai
 | State | Setup | Expects |
 |---|---|---|
 | `not-joined` | `mockDiscoverableSession` ("Weekend 5-a-side"), View details | "Join" button visible. **CLIENT-SESSION-17:** the fixture now carries `attributes` (two `#ref` values + one own node), so this state also frames the read-only "Session detail" summary — its 3 baselines were regenerated via `/updatebaseline` (2026-09-09) and are current |
-| `already-joined` | `mockGroupSession` ("Friday 5-a-side"), joined live via the card's own Join button, View details | "Leave" button visible |
+| `already-joined` | `mockGroupSession` ("Friday 5-a-side"), joined live via the card's own Join button, View details | "Leave" button visible. Its 375px baseline was flagged by `client-ci` (2026-09-23) as a border/corner antialiasing drift (~0.25% of pixels, no content change) unrelated to any code on that PR — regenerated via `/updatebaseline` (2026-09-23) and is current |
 | `invited` | `mockInvitedSession` ("Tuesday drop-in", **new fixture** — mockUser's own pre-seeded `INVITED` row), View details | "Accept" and "Decline" buttons visible |
 | `requested` | `mockRequestedSession` ("Wednesday scrimmage", **new fixture** — mockUser's own pre-seeded `REQUESTED` row), View details | "Cancel" button visible |
 | `approval-queue` | `mockOwnedGroupSession` ("Ladder night" — 2 pre-seeded `REQUESTED` rows from other users, mockUser is group owner), View details | "Waiting for approval" region + "Alex Chen" visible |
@@ -955,7 +955,7 @@ Dialog-scoped, same shape as `app-session-detail-modal.spec.ts` above. Parameter
 |---|---|---|
 | `default` | Open "Create session" | Sport field visible, empty form |
 | `location-chosen` | Open, select Pickleball, LocationPicker search "Riverside" → pick `mockLocation`, fill title/duration/open-slot | Chosen location name visible |
-| `no-sport-profiles` | `seedZeroSportProfilesOnNextLoad(mockSessionId)` before `seedAuthenticatedSession`, close MatchesPage's own auto-prompted "Add a sport" dialog first (not the state under test), then open Create session | "add a sport first" gate text visible (`CreateSessionModal`'s own internal empty-profile prompt, distinct from the page-level auto-prompt) |
+| `no-sport-profiles` | `seedZeroSportProfilesOnNextLoad(mockSessionId)` before `seedAuthenticatedSession`, close MatchesPage's own auto-prompted "Add a sport" dialog first (not the state under test), then open Create session | "add a sport first" gate text visible (`CreateSessionModal`'s own internal empty-profile prompt, distinct from the page-level auto-prompt). Same as `already-joined` above — its 375px baseline was flagged by `client-ci` (2026-09-23) as border/corner antialiasing drift unrelated to any code on that PR, regenerated via `/updatebaseline` (2026-09-23) and is current |
 | `session-detail-ref` (**new, CLIENT-SESSION-17**) | Open, select **Badminton** (Pickleball has no session schema), expand "Session detail" | The two `#ref` controls render — a `LIST` multi-select with the profile-derived checkboxes (`Yonex Astrox 99` visible) and a `SINGLE` control in its "Nothing on your profile to pick from" empty state |
 
 Same clock-freeze / blur-before-screenshot / `document.fonts.ready` sequence and known-Windows-noise
