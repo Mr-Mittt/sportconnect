@@ -1,8 +1,8 @@
-import { IconChevronDown, IconX } from '@tabler/icons-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
+import { Popover, PopoverContent } from '@/shared/ui/popover';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import type { Location } from '@/shared/types/location';
+import { DiscoverFilterTrigger } from './DiscoverFilterTrigger';
 
 interface DiscoverLocationFilterProps {
   /** `false` when the hosting page's sport pill is 'all' — both `GET /locations/favorites` and
@@ -10,12 +10,19 @@ interface DiscoverLocationFilterProps {
   isAvailable: boolean;
   selectedLocations: Location[];
   onToggleLocation: (location: Location) => void;
+  /** Clears every selection at once — the filter pill's own reset "x" (2026-09-23 revision). */
+  onClearLocationFilter: () => void;
   favoriteLocations: Location[];
   isFavoriteLocationsLoading: boolean;
   searchText: string;
   onSearchTextChange: (text: string) => void;
   searchResults: Location[];
   isSearchLoading: boolean;
+  /** CLIENT-SESSION-29 — opens the full `LocationPicker` Dialog (search + "Add a new location"),
+   * same "Choose a location…" precedent `CreateSessionModal`'s `LocationFavoritesDropdown`
+   * already established. Selecting a result there calls the parent's `selectLocation` (dedup —
+   * never toggles an already-checked row off), not `onToggleLocation`. */
+  onOpenLocationPicker: () => void;
 }
 
 function LocationRow({
@@ -28,14 +35,17 @@ function LocationRow({
   onToggle: () => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-2sm text-text-primary hover:bg-surface-1">
+    <label
+      className="flex min-w-0 cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-2sm text-text-primary hover:bg-surface-1"
+      title={location.name}
+    >
       <input
         type="checkbox"
         checked={checked}
         onChange={onToggle}
-        className="size-4 accent-accent-solid"
+        className="size-4 shrink-0 accent-accent-solid"
       />
-      {location.name}
+      <span className="min-w-0 truncate">{location.name}</span>
     </label>
   );
 }
@@ -53,12 +63,14 @@ export function DiscoverLocationFilter({
   isAvailable,
   selectedLocations,
   onToggleLocation,
+  onClearLocationFilter,
   favoriteLocations,
   isFavoriteLocationsLoading,
   searchText,
   onSearchTextChange,
   searchResults,
   isSearchLoading,
+  onOpenLocationPicker,
 }: DiscoverLocationFilterProps) {
   if (!isAvailable) {
     return (
@@ -75,39 +87,27 @@ export function DiscoverLocationFilter({
 
   const selectedIds = new Set(selectedLocations.map((location) => location.id));
   const trimmedSearch = searchText.trim();
-  const rows = trimmedSearch === '' ? favoriteLocations : searchResults;
+  const favoriteIds = new Set(favoriteLocations.map((location) => location.id));
+  // 2026-09-23 revision — a location chosen via "Choose a location…" that isn't already a
+  // favorite still needs to show up (checked) in this checklist, same "selected-but-not-in-the-
+  // base-list still renders" precedent DiscoverDatePicker's own customDates already established.
+  const chosenNotFavorited = selectedLocations.filter((location) => !favoriteIds.has(location.id));
+  const rows =
+    trimmedSearch === '' ? [...favoriteLocations, ...chosenNotFavorited] : searchResults;
   const isLoadingRows = trimmedSearch === '' ? isFavoriteLocationsLoading : isSearchLoading;
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1">
-          Location{selectedLocations.length > 0 ? ` (${selectedLocations.length})` : ''}
-          <IconChevronDown className="size-3.5" aria-hidden="true" />
-        </Button>
-      </PopoverTrigger>
+      <DiscoverFilterTrigger
+        label={`Location${selectedLocations.length > 0 ? ` (${selectedLocations.length})` : ''}`}
+        isActive={selectedLocations.length > 0}
+        onClear={onClearLocationFilter}
+        clearLabel="Clear location filter"
+      />
       <PopoverContent align="start" className="w-72">
+        {/* No selected-locations chip row (2026-09-23 revision) — the checklist below already
+          shows selection via its own checkboxes; repeating it as removable chips was redundant. */}
         <div className="flex flex-col gap-2">
-          {selectedLocations.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {selectedLocations.map((location) => (
-                <span
-                  key={location.id}
-                  className="flex items-center gap-1 rounded-full bg-surface-1 py-1 pr-1.5 pl-2.5 text-2xs font-medium text-text-primary"
-                >
-                  {location.name}
-                  <button
-                    type="button"
-                    onClick={() => onToggleLocation(location)}
-                    aria-label={`Remove ${location.name}`}
-                    className="flex size-4 cursor-pointer items-center justify-center rounded-full text-text-muted hover:bg-surface-2 hover:text-text-primary"
-                  >
-                    <IconX className="size-3" aria-hidden="true" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
           <Input
             value={searchText}
             onChange={(event) => onSearchTextChange(event.target.value)}
@@ -121,7 +121,7 @@ export function DiscoverLocationFilter({
               {trimmedSearch === '' ? 'No favorites yet.' : 'No locations found.'}
             </p>
           ) : (
-            <fieldset className="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
+            <fieldset className="flex min-w-0 max-h-48 flex-col gap-0.5 overflow-y-auto">
               <legend className="sr-only">Locations to discover</legend>
               {rows.map((location) => (
                 <LocationRow
@@ -133,6 +133,15 @@ export function DiscoverLocationFilter({
               ))}
             </fieldset>
           )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="cursor-pointer justify-start"
+            onClick={onOpenLocationPicker}
+          >
+            Choose a location…
+          </Button>
         </div>
       </PopoverContent>
     </Popover>

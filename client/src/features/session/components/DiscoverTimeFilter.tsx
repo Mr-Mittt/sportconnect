@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { IconChevronDown } from '@tabler/icons-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
-import { Button } from '@/shared/ui/button';
+import { Popover, PopoverContent } from '@/shared/ui/popover';
 import { cn } from '@/shared/lib/utils';
 import type { StartTimeFilter } from '@/shared/types/session';
+import { DiscoverFilterTrigger } from './DiscoverFilterTrigger';
 
 function clampHour(value: string): string {
   const n = Math.min(23, Math.max(0, Number.parseInt(value, 10) || 0));
@@ -21,8 +20,8 @@ function nowHourMinute(): [string, string] {
 }
 
 const DIRECTION_LABELS: Record<StartTimeFilter, string> = {
-  BEFORE_OR_EQUAL: 'before',
-  AFTER_OR_EQUAL: 'after',
+  BEFORE_OR_EQUAL: 'Before',
+  AFTER_OR_EQUAL: 'After',
 };
 
 interface DiscoverTimeFilterProps {
@@ -85,12 +84,12 @@ export function DiscoverTimeFilter({
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1">
-          {isSet ? `Start ${DIRECTION_LABELS[startTimeFilter ?? 'AFTER_OR_EQUAL']} ${startTime}` : 'Time'}
-          <IconChevronDown className="size-3.5" aria-hidden="true" />
-        </Button>
-      </PopoverTrigger>
+      <DiscoverFilterTrigger
+        label={isSet ? `${DIRECTION_LABELS[startTimeFilter ?? 'AFTER_OR_EQUAL']} ${startTime}` : 'Time'}
+        isActive={isSet}
+        onClear={onClear}
+        clearLabel="Clear time filter"
+      />
       <PopoverContent align="start" className="w-auto">
         <div className="flex items-center gap-1.5">
           <button

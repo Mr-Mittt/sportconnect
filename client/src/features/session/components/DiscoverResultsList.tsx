@@ -72,15 +72,20 @@ export function DiscoverResultsList({
           ))}
         </div>
       )}
-      {hasMore && (
+      {!isLoading && !isError && hasMore && (
         <button
           type="button"
           onClick={onLoadMore}
           disabled={isFetchingMore}
           className="cursor-pointer self-center rounded-lg border-hairline border-border px-3 py-1.5 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
         >
-          {isFetchingMore ? 'Loading…' : 'Load more sessions'}
+          {isFetchingMore ? 'Loading…' : 'Load more'}
         </button>
+      )}
+      {/* 2026-09-23 revision — previously rendered nothing once the last page loaded, giving no
+        confirmation the list had actually ended vs. just not being re-checked. */}
+      {!isLoading && !isError && !hasMore && sessions.length > 0 && (
+        <p className="self-center text-2xs text-text-muted">No more to load.</p>
       )}
     </div>
   );

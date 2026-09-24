@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { buildDiscoverParams, serializeDiscoverFilters, type DiscoverFilters } from './discoverParams';
+import {
+  buildDiscoverParams,
+  serializeDiscoverFilters,
+  type DiscoverFilters,
+} from './discoverParams';
 
 function baseFilters(overrides: Partial<DiscoverFilters> = {}): DiscoverFilters {
   return {
     sportId: undefined,
     title: '',
     locationIds: [],
+    status: [],
+    minOpenSlots: undefined,
     feeType: undefined,
+    maxFeeAmountVnd: undefined,
     startTimeFilter: undefined,
     startTime: undefined,
     viewerZoneId: 'Asia/Ho_Chi_Minh',
@@ -39,7 +46,10 @@ describe('buildDiscoverParams', () => {
         sportId: 6,
         title: 'pickup',
         locationIds: [1, 2],
+        status: ['SCHEDULED', 'PREPARING'],
+        minOpenSlots: 2,
         feeType: 'FREE',
+        maxFeeAmountVnd: 50000,
         startTimeFilter: 'AFTER_OR_EQUAL',
         startTime: '18:00',
       }),
@@ -48,7 +58,10 @@ describe('buildDiscoverParams', () => {
       sportId: 6,
       title: 'pickup',
       locationId: [1, 2],
+      status: ['SCHEDULED', 'PREPARING'],
+      minOpenSlots: 2,
       feeType: 'FREE',
+      maxFeeAmountVnd: 50000,
       startTimeFilter: 'AFTER_OR_EQUAL',
       startTime: '18:00',
       viewerZoneId: 'Asia/Ho_Chi_Minh',
@@ -57,5 +70,17 @@ describe('buildDiscoverParams', () => {
 
   it('omits locationId entirely when locationIds is empty', () => {
     expect(buildDiscoverParams(baseFilters({ locationIds: [] }))).not.toHaveProperty('locationId');
+  });
+
+  it('omits status entirely when status is empty', () => {
+    expect(buildDiscoverParams(baseFilters({ status: [] }))).not.toHaveProperty('status');
+  });
+});
+
+describe('serializeDiscoverFilters status order', () => {
+  it('produces the same key regardless of status order', () => {
+    const a = serializeDiscoverFilters(baseFilters({ status: ['SCHEDULED', 'PREPARING'] }));
+    const b = serializeDiscoverFilters(baseFilters({ status: ['PREPARING', 'SCHEDULED'] }));
+    expect(a).toBe(b);
   });
 });

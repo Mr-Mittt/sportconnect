@@ -1,14 +1,68 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
 import type { SessionListItem } from '../types';
 import { SessionDiscoverModal } from './SessionDiscoverModal';
 
+// Same closed/inert stub CreateSessionModal.stories.tsx uses — the picker Dialog stays closed
+// (isOpen: false) in every story here, so only its shape needs to satisfy the prop type.
+const locationPicker: LocationPickerProps = {
+  isOpen: false,
+  onClose: () => {},
+  mode: 'search',
+  onSwitchToCreate: () => {},
+  onSwitchToSearch: () => {},
+  inputValue: '',
+  onInputChange: () => {},
+  onSearch: () => {},
+  results: [],
+  isSearching: false,
+  isSearchError: false,
+  onSelectResult: () => {},
+  favoriteLocationIds: new Set<number>(),
+  onToggleFavorite: () => {},
+  isTogglingFavorite: false,
+  onOpenGoogleMaps: () => {},
+  mapsUrlInput: '',
+  onMapsUrlChange: () => {},
+  onResolveUrl: () => {},
+  isResolving: false,
+  isResolveError: false,
+  resolvedNoCoordinates: false,
+  coordinates: null,
+  mapSeed: 0,
+  onMovePin: () => {},
+  name: '',
+  onNameChange: () => {},
+  address: '',
+  onAddressChange: () => {},
+  canSave: false,
+  onSave: () => {},
+  isSaving: false,
+  isSaveError: false,
+};
+
 const sportsByKey: Record<SportKey, SportProfile> = {
-  football: { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' },
-  basketball: { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'coral' },
-  tennis: { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'purple' },
+  football: {
+    key: 'football',
+    label: 'Football',
+    iconUrl: '/images/sports/football.png',
+    colorRamp: 'teal',
+  },
+  basketball: {
+    key: 'basketball',
+    label: 'Basketball',
+    iconUrl: '/images/sports/basketball.png',
+    colorRamp: 'coral',
+  },
+  tennis: {
+    key: 'tennis',
+    label: 'Tennis',
+    iconUrl: '/images/sports/tennis.png',
+    colorRamp: 'purple',
+  },
 };
 
 function makeLocation(name: string): Location {
@@ -28,7 +82,9 @@ function makeLocation(name: string): Location {
   };
 }
 
-function makeSession(overrides: Partial<SessionListItem> & Pick<SessionListItem, 'id'>): SessionListItem {
+function makeSession(
+  overrides: Partial<SessionListItem> & Pick<SessionListItem, 'id'>,
+): SessionListItem {
   return {
     groupId: null,
     sessionType: 'STANDALONE',
@@ -69,19 +125,35 @@ const meta = {
   args: {
     isOpen: true,
     onClose: () => {},
-    searchMode: 'sessions',
-    onSearchModeChange: () => {},
+    // Storybook doesn't run Vitest's global `sportCatalogStore` seed (src/test/setup.ts), so
+    // `DiscoverModalSportSearchBox`'s dropdown resolves no options here — same known limitation
+    // SessionDetailModal.stories.tsx's own sport-chip comment already documents.
+    sportId: undefined,
+    onSportIdChange: () => {},
     searchText: '',
     onSearchTextChange: () => {},
     isLocationFilterAvailable: true,
     selectedLocations: [],
     onToggleLocation: () => {},
+    onClearLocationFilter: () => {},
     favoriteLocations: [],
     isFavoriteLocationsLoading: false,
     locationSearchText: '',
     onLocationSearchTextChange: () => {},
     locationSearchResults: [],
     isLocationSearchLoading: false,
+    onOpenLocationPicker: () => {},
+    locationPicker,
+    selectedStatuses: [],
+    onToggleStatus: () => {},
+    minOpenSlotsText: '',
+    onMinOpenSlotsTextChange: () => {},
+    onClearOpenSlotsFilter: () => {},
+    feeType: undefined,
+    onToggleFeeType: () => {},
+    maxFeeAmountVndText: '',
+    onMaxFeeAmountVndChange: () => {},
+    onClearFeeFilter: () => {},
     startTimeFilter: undefined,
     onStartTimeFilterChange: () => {},
     startTime: undefined,

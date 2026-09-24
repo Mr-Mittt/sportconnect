@@ -243,5 +243,52 @@ test('Home Feed — the "Join a match" modal\'s Time filter popover is actually 
   await expect(beforeBtn).toBeVisible();
   await beforeBtn.click();
   await expect(beforeBtn).toHaveAttribute('aria-pressed', 'true');
-  await expect(dialog.getByRole('button', { name: /^Start before \d{2}:\d{2}$/ })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /^Before \d{2}:\d{2}$/ })).toBeVisible();
+});
+
+/**
+ * CLIENT-SESSION-29 (2026-09-23) — regression test for the fix underlying this ticket's item 5
+ * and CLIENT-SESSION-28: `shared/ui/floatingPortalContainer.ts` makes a `Popover` nested inside
+ * this app's own `Dialog` portal into the Dialog's own Content node instead of `document.body`,
+ * so it stops tripping the Dialog's `FocusScope` focus trap. Covers both symptoms that root cause
+ * produced — `DiscoverTimeFilter`'s Hour/Minute inputs not committing (this ticket) and
+ * `DiscoverLocationFilter`'s search input being untypeable (CLIENT-SESSION-28) — in one spec,
+ * since both are the same fix. Real browser only: jsdom can't reproduce `FocusScope`'s
+ * focus-trap interactions any more than it could reproduce the pointer-events bug above.
+ */
+test('Home Feed — the "Join a match" modal\'s Time/Location popovers stay focused and typeable', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedEmptyUpcomingMatchesOnNextLoad(mockSessionId);
+  await seedAuthenticatedSession(page);
+
+  await page.getByRole('button', { name: 'Badminton' }).click();
+  await page.getByRole('button', { name: 'Join a match' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Discover today session' });
+  await expect(dialog).toBeVisible();
+
+  // --- Time filter: Hour/Minute edits auto-apply once a direction is set ---
+  await dialog.getByRole('button', { name: 'Time' }).click();
+  await page.getByRole('button', { name: 'Before', exact: true }).click();
+  const hourInput = page.getByLabel('Hour');
+  await hourInput.click();
+  await expect(hourInput).toBeFocused();
+  await hourInput.fill('05');
+  await hourInput.blur();
+  await expect(hourInput).toHaveValue('05');
+  await expect(dialog.getByRole('button', { name: /^Before 05:\d{2}$/ })).toBeVisible();
+  // Closes the Time popover so it doesn't shadow the Location trigger below. The exact
+  // "Before HH:MM" pattern (not just /^Before/) disambiguates the trigger from the popover's own
+  // inner "Before" direction-toggle button, which also matches a bare /^Before/ prefix now that
+  // the trigger's own label dropped its "Start " prefix.
+  await page.getByRole('button', { name: /^Before \d{2}:\d{2}$/ }).click();
+
+  // --- Location filter: the search input actually accepts typed text ---
+  await dialog.getByRole('button', { name: /^Location/ }).click();
+  const searchInput = dialog.getByLabel('Search locations');
+  await searchInput.click();
+  await expect(searchInput).toBeFocused();
+  await searchInput.fill('river');
+  await expect(searchInput).toHaveValue('river');
 });

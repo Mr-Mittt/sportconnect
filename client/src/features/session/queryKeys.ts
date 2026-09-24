@@ -5,6 +5,11 @@ export const sessionKeys = {
   all: ['session'] as const,
   group: (groupId: number) => [...sessionKeys.all, 'group', groupId] as const,
   mine: () => [...sessionKeys.all, 'mine'] as const,
+  /** CLIENT-SESSION-29 — `GET /sessions/requested` (backend SESSION-42): the caller's own
+   * pending join requests, standalone or group-linked. Its own top-level key, not nested under
+   * `'discover'` — unlike the two builders below, this endpoint takes no filters at all, so it
+   * needs no `serializeDiscoverFilters` key piece. */
+  requested: () => [...sessionKeys.all, 'requested'] as const,
   /** CLIENT-SESSION-22 — both discover-family keys nest under `[...all, 'discover']` (kept from
    * the pre-22 shape) so `useAddSportProfile`'s existing broad `invalidateQueries({queryKey:
    * [...sessionKeys.all, 'discover']})` (GET /sessions/discover is gated to the caller's active

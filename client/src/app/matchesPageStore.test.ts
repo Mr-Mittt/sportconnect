@@ -3,11 +3,11 @@ import { useMatchesPageStore } from './matchesPageStore';
 
 describe('matchesPageStore', () => {
   beforeEach(() => {
-    useMatchesPageStore.setState({ activeSport: 'all' });
+    useMatchesPageStore.setState({ activeSport: null });
   });
 
-  it('starts with "all" active sport', () => {
-    expect(useMatchesPageStore.getState().activeSport).toBe('all');
+  it('starts with no active sport resolved yet', () => {
+    expect(useMatchesPageStore.getState().activeSport).toBeNull();
   });
 
   it('setActiveSport updates the sport', () => {

@@ -2,15 +2,67 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
 import type { SessionListItem } from '../types';
 import { SessionDiscoverModal } from './SessionDiscoverModal';
 
+const locationPicker: LocationPickerProps = {
+  isOpen: false,
+  onClose: () => {},
+  mode: 'search',
+  onSwitchToCreate: () => {},
+  onSwitchToSearch: () => {},
+  inputValue: '',
+  onInputChange: () => {},
+  onSearch: () => {},
+  results: [],
+  isSearching: false,
+  isSearchError: false,
+  onSelectResult: () => {},
+  favoriteLocationIds: new Set<number>(),
+  onToggleFavorite: () => {},
+  isTogglingFavorite: false,
+  onOpenGoogleMaps: () => {},
+  mapsUrlInput: '',
+  onMapsUrlChange: () => {},
+  onResolveUrl: () => {},
+  isResolving: false,
+  isResolveError: false,
+  resolvedNoCoordinates: false,
+  coordinates: null,
+  mapSeed: 0,
+  onMovePin: () => {},
+  name: '',
+  onNameChange: () => {},
+  address: '',
+  onAddressChange: () => {},
+  canSave: false,
+  onSave: () => {},
+  isSaving: false,
+  isSaveError: false,
+};
+
 const sportsByKey: Record<SportKey, SportProfile> = {
-  football: { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' },
-  basketball: { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'coral' },
-  tennis: { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'purple' },
+  football: {
+    key: 'football',
+    label: 'Football',
+    iconUrl: '/images/sports/football.png',
+    colorRamp: 'teal',
+  },
+  basketball: {
+    key: 'basketball',
+    label: 'Basketball',
+    iconUrl: '/images/sports/basketball.png',
+    colorRamp: 'coral',
+  },
+  tennis: {
+    key: 'tennis',
+    label: 'Tennis',
+    iconUrl: '/images/sports/tennis.png',
+    colorRamp: 'purple',
+  },
 };
 
 const location: Location = {
@@ -67,19 +119,32 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
 const baseProps = {
   isOpen: true,
   onClose: () => {},
-  searchMode: 'sessions' as const,
-  onSearchModeChange: () => {},
+  sportId: 5, // football — matches sportsByKey below, resolved via the global catalog seed
+  onSportIdChange: () => {},
   searchText: '',
   onSearchTextChange: () => {},
   isLocationFilterAvailable: true,
   selectedLocations: [],
   onToggleLocation: () => {},
+  onClearLocationFilter: () => {},
   favoriteLocations: [],
   isFavoriteLocationsLoading: false,
   locationSearchText: '',
   onLocationSearchTextChange: () => {},
   locationSearchResults: [],
   isLocationSearchLoading: false,
+  onOpenLocationPicker: () => {},
+  locationPicker,
+  selectedStatuses: [],
+  onToggleStatus: () => {},
+  minOpenSlotsText: '',
+  onMinOpenSlotsTextChange: () => {},
+  onClearOpenSlotsFilter: () => {},
+  feeType: undefined,
+  onToggleFeeType: () => {},
+  maxFeeAmountVndText: '',
+  onMaxFeeAmountVndChange: () => {},
+  onClearFeeFilter: () => {},
   startTimeFilter: undefined,
   onStartTimeFilterChange: () => {},
   startTime: undefined,
@@ -157,7 +222,7 @@ describe('SessionDiscoverModal', () => {
     const onLoadMore = vi.fn();
     renderModal({ hasMore: true, onLoadMore });
 
-    await user.click(screen.getByRole('button', { name: 'Load more sessions' }));
+    await user.click(screen.getByRole('button', { name: 'Load more' }));
     expect(onLoadMore).toHaveBeenCalledTimes(1);
   });
 
@@ -171,5 +236,24 @@ describe('SessionDiscoverModal', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(router.state.location.pathname).toBe('/matches');
+  });
+
+  // CLIENT-SESSION-29 revision (2026-09-23) — the sport dropdown replacing the old search-scope
+  // <select>, pre-filled from `sportId` and offering every key in `sportsByKey`.
+  it('shows the sport dropdown pre-filled from sportId, offering every held sport', () => {
+    renderModal();
+    const select = screen.getByRole('combobox', { name: 'Sport to discover' });
+    expect(select).toHaveValue('5'); // football
+    expect(screen.getByRole('option', { name: 'Football' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Basketball' })).toBeInTheDocument();
+  });
+
+  it('reports a picked sport via onSportIdChange', async () => {
+    const user = userEvent.setup();
+    const onSportIdChange = vi.fn();
+    renderModal({ onSportIdChange });
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sport to discover' }), 'Basketball');
+    expect(onSportIdChange).toHaveBeenCalledWith(6);
   });
 });

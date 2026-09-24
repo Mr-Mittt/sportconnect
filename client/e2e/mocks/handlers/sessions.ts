@@ -221,12 +221,28 @@ function discoverableSessions(session: SessionsSession, url: URL) {
   const sportId = sportIdParam !== null ? Number(sportIdParam) : null;
   const title = url.searchParams.get('title');
   const locationIds = url.searchParams.getAll('locationId').map(Number);
+  // CLIENT-SESSION-29: statuses (repeated `status` param), minOpenSlots, feeType, maxFeeAmountVnd
+  // — the three new Discover filters, same AND-combined semantics the real /discover endpoint uses.
+  const statuses = url.searchParams.getAll('status');
+  const minOpenSlotsParam = url.searchParams.get('minOpenSlots');
+  const minOpenSlots = minOpenSlotsParam !== null ? Number(minOpenSlotsParam) : null;
+  const feeType = url.searchParams.get('feeType');
+  const maxFeeAmountVndParam = url.searchParams.get('maxFeeAmountVnd');
+  const maxFeeAmountVnd = maxFeeAmountVndParam !== null ? Number(maxFeeAmountVndParam) : null;
   return session.sessionsState.filter((candidate) => {
     if (candidate.groupId !== null || candidate.status !== 'SCHEDULED') return false;
     if (candidate.createdBy === mockUser.id) return false;
     if (sportId !== null && candidate.sportId !== sportId) return false;
     if (title !== null && !(candidate.title ?? '').toLowerCase().includes(title.toLowerCase())) return false;
     if (locationIds.length > 0 && !locationIds.includes(candidate.location?.id ?? -1)) return false;
+    if (statuses.length > 0 && !statuses.includes(candidate.status)) return false;
+    if (minOpenSlots !== null && candidate.capacity - candidate.participantCount < minOpenSlots) return false;
+    if (feeType !== null && candidate.feeType !== feeType) return false;
+    if (
+      maxFeeAmountVnd !== null &&
+      (candidate.feeType !== 'FIXED' || (candidate.feeAmountVnd ?? 0) > maxFeeAmountVnd)
+    )
+      return false;
     // SESSION-42: mirrors the real backend's widened exclusion — a session the caller already
     // requested to join or was invited to shouldn't still surface as newly discoverable, same
     // as one they're already JOINED to (previously JOINED-only here).
@@ -403,6 +419,28 @@ export const sessionHandlers: HttpHandler[] = [
       if (statusParam !== null && candidate.status !== statusParam) return false;
       return (session.participantsState[candidate.id] ?? []).some(
         (p) => p.userId === mockUser.id && p.status === 'JOINED',
+      );
+    });
+    return HttpResponse.json(
+      apiResponse(
+        mockPageResponse(results.map((candidate) => withCallerParticipation(session, candidate))),
+        'Sessions retrieved successfully',
+      ),
+    );
+  }),
+
+  // CLIENT-SESSION-29 — `GET /sessions/requested` (backend SESSION-42): the caller's own pending
+  // REQUESTED rows, any status PREPARING/SCHEDULED/ONGOING, standalone or group-linked. No filter
+  // params at all (unlike /discover, /joined) — registered before the `:sessionId` catch-all,
+  // same route-ordering reasoning as /discover/joined above.
+  http.get('/api/sessions/requested', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const results = session.sessionsState.filter((candidate) => {
+      if (!['PREPARING', 'SCHEDULED', 'ONGOING'].includes(candidate.status)) return false;
+      return (session.participantsState[candidate.id] ?? []).some(
+        (p) => p.userId === mockUser.id && p.status === 'REQUESTED',
       );
     });
     return HttpResponse.json(

@@ -477,6 +477,21 @@ test('Groups — opening a group linked to a deactivated sport prompts the react
   await seedSoftDeletedSportProfileOnNextLoad(mockSessionId); // Pickleball soft-deleted
   await seedAuthenticatedSession(page, '/groups');
 
+  // Real, reproducible race (not flakiness) — found while investigating this test's own e2e
+  // failure, 2026-09-23: the group-nudge gate in GroupsPage.tsx's selectGroupAndShowPosts checks
+  // `inactiveSports` from useResumableSports() (its own separate `GET /sports/profiles?
+  // includeInactive=true` query), which is not what the Group-filter row's own rendering waits
+  // on — so a click fired before that query resolves silently selects the group with no nudge at
+  // all (confirmed via `page.getByRole('dialog')` never appearing, not just being slow). The
+  // muted "Reactivate Pickleball" Sport-filter pill depends on that exact same query, so waiting
+  // for it here is a real readiness signal, not an arbitrary delay — same pattern the "Home Feed —
+  // a deactivated sport pill..." test above already uses before its own click.
+  await expect(
+    page
+      .getByRole('group', { name: 'Sport filter' })
+      .getByRole('button', { name: 'Pickleball', description: 'Reactivate Pickleball' }),
+  ).toBeVisible();
+
   // "Weekend Tennis Ladder" is a Pickleball group (mockOwnedGroup, sportId 3).
   await page
     .getByRole('group', { name: 'Group filter' })

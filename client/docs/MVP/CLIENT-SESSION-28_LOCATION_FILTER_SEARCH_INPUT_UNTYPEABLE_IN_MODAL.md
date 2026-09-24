@@ -6,6 +6,26 @@
 Location filter redesign drops the search box this bug lives in entirely, replacing it with a
 "Choose a location" flow — this fix is moot once that ships. No further action needed on this
 ticket.
+
+**Actually fixed 2026-09-23, at CLIENT-SESSION-29's own pickup:** the "likely fix direction" below
+turned out to be right — CLIENT-SESSION-29's item 5 (a different, related bug: `DiscoverTimeFilter`'s
+Hour/Minute inputs not auto-applying) traced back to this exact same root cause, so it was fixed
+directly rather than deferred again. New `shared/ui/floatingPortalContainer.ts`: `DialogContent`
+now provides its own Content DOM node via context; `PopoverContent` portals into it (via
+`Popover.Portal`'s own `container` prop) instead of `document.body` whenever one is available —
+making the popover a real DOM *descendant* of the Dialog's Content, so `FocusScope`'s
+`container.contains(target)` check is `true` and the trap stops firing. Confirmed live (Playwright):
+`document.activeElement` correctly stays on the search input after clicking it, typed text sticks,
+and the popover isn't clipped/mispositioned despite the Dialog's `overflow-hidden`/`transform`
+(Radix Popper's `strategy: 'fixed'` already accounts for a transformed containing block). This
+ticket's own search box is being removed anyway by CLIENT-SESSION-29's redesign, but the fix is
+real and applies to every `Popover`-inside-`Dialog` case app-wide (5 consumers audited: chat's
+`EmojiPickerButton` and `NotificationBell` never render inside a `Dialog`, so no behavior change;
+`DiscoverDatePicker`'s calendar was click-only, already working, unaffected either way). Full
+Vitest 187 files/1385 green; e2e 83 passed (2 pre-existing parallel-load flakes — one confirmed
+failing identically on unmodified `master` via stash-and-rerun, the other passes isolated);
+visual-regression stash-and-rerun on `master` produced the exact same 111/111 Windows-noise-floor
+failure set, byte-for-byte — zero incremental diff from this change.
 **Type:** Bug Fix · **Depends on:** none ·
 **Filed:** 2026-09-22, found live while adding e2e regression coverage for `CLIENT-SESSION-22`'s
 pointer-events fix (`DiscoverTimeFilter`'s Before/After buttons being unclickable inside

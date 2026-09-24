@@ -21,6 +21,10 @@ function makeLocation(id: number, name: string): Location {
 
 const riverside = makeLocation(1, 'Riverside Courts');
 const downtown = makeLocation(2, 'Downtown Turf');
+const longName = makeLocation(
+  3,
+  'The Grand Community Sports & Recreation Centre — West Wing Badminton Courts',
+);
 
 const meta = {
   title: 'Session/DiscoverLocationFilter',
@@ -28,11 +32,13 @@ const meta = {
   args: {
     isAvailable: true,
     onToggleLocation: () => {},
+    onClearLocationFilter: () => {},
     onSearchTextChange: () => {},
     favoriteLocations: [riverside, downtown],
     isFavoriteLocationsLoading: false,
     searchResults: [],
     isSearchLoading: false,
+    onOpenLocationPicker: () => {},
   },
 } satisfies Meta<typeof DiscoverLocationFilter>;
 
@@ -57,4 +63,25 @@ export const NoFavoritesYet: Story = {
 
 export const Unavailable: Story = {
   args: { isAvailable: false, selectedLocations: [], searchText: '' },
+};
+
+// 2026-09-23 revision — a long name truncates to one line, full name on hover via `title`.
+export const LongLocationName: Story = {
+  args: {
+    selectedLocations: [],
+    searchText: '',
+    favoriteLocations: [longName, riverside],
+  },
+};
+
+// 2026-09-23 (second revision) — a location chosen via "Choose a location…" that isn't already a
+// favorite still shows up, checked, in the checklist (same "selected-but-not-in-the-base-list
+// still renders" precedent DiscoverDatePicker's own customDates uses).
+const chosenViaPicker = makeLocation(4, 'Lakeside Sports Hall');
+export const ChosenLocationNotFavorited: Story = {
+  args: {
+    selectedLocations: [chosenViaPicker],
+    searchText: '',
+    favoriteLocations: [riverside, downtown],
+  },
 };

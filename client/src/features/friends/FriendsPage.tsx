@@ -17,6 +17,7 @@ import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useTrendingHashtags } from '@/shared/hooks/useTrendingHashtags';
 import { useUpcomingMatches } from '@/shared/hooks/useUpcomingMatches';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
+import { sportIdForKey } from '@/features/feed/sportIdMap';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { FriendChatPanel } from './components/FriendChatPanel';
 import { FriendProfilePanel } from './components/FriendProfilePanel';
@@ -55,8 +56,9 @@ const noop = () => {};
  * below — `ModalAnchorProvider` here is anchored to the page's own (visually hidden) `h1`
  * instead, which keeps `CreateSessionModal`/`SessionDiscoverModal` positioned just under the
  * TopBar/NavTabs shell like every other page's modals, without adding a visible UI element.
- * `useDiscoverModalData` is given `sportId: undefined` (this page has no sport pill to scope
- * it) — the backend already treats that as "every active sport."
+ * `useDiscoverModalData` is seeded with the caller's first held sport (this page has no sport
+ * pill to scope it from) — CLIENT-SESSION-29's revision gave the modal its own sport dropdown,
+ * so this is only the pre-fill, not a fixed scope like it was before.
  */
 export function FriendsPage() {
   const navigate = useNavigate();
@@ -67,9 +69,10 @@ export function FriendsPage() {
   // `focusUnavailable`; the state persists on this history entry until the
   // "unavailable" dialog is dismissed (`clearFocusState`) or the user navigates
   // away, at which point `focusUnavailable` derives back to false on its own.
-  const focusState = location.state as
-    | { focusPersonId?: string; focusReason?: 'created' | 'accepted' }
-    | null;
+  const focusState = location.state as {
+    focusPersonId?: string;
+    focusReason?: 'created' | 'accepted';
+  } | null;
   const focusPersonId = focusState?.focusPersonId;
   const focusReason = focusState?.focusReason;
   const data = useFriendsPageData(focusPersonId, focusReason);
@@ -103,7 +106,13 @@ export function FriendsPage() {
   );
 
   const createSessionModalData = useCreateSessionModalData();
-  const discoverModalData = useDiscoverModalData(undefined);
+  // CLIENT-SESSION-29 revision (2026-09-23) — this page has no sport pill at all, so the seed is
+  // always the caller's first held sport (see HomeFeedPage's identical comment for the full
+  // reasoning; here there's no pill value to prefer over it).
+  const firstOwnedSportId = sportProfilesQuery.data[0]
+    ? sportIdForKey(sportProfilesQuery.data[0].key)
+    : undefined;
+  const discoverModalData = useDiscoverModalData(firstOwnedSportId);
   // CLIENT-SESSION-9: separate instance from discoverModalData's own — this one backs the rail
   // card's action button, that one backs the Discover modal's result-grid cards.
   const railParticipationAction = useSessionParticipationAction();
@@ -130,7 +139,9 @@ export function FriendsPage() {
   const sportCatalog = useSportCatalog();
   const availableSports = useMemo(
     () =>
-      sportCatalog.data.map((sport) => sport.key).filter((key) => !Object.keys(sportsByKey).includes(key)),
+      sportCatalog.data
+        .map((sport) => sport.key)
+        .filter((key) => !Object.keys(sportsByKey).includes(key)),
     [sportCatalog.data, sportsByKey],
   );
 
@@ -269,19 +280,32 @@ export function FriendsPage() {
         <SessionDiscoverModal
           isOpen={discoverModalData.isDiscoverModalOpen}
           onClose={closeDiscoverModal}
-          searchMode={discoverModalData.searchMode}
-          onSearchModeChange={discoverModalData.setSearchMode}
+          sportId={discoverModalData.sportId}
+          onSportIdChange={discoverModalData.onSportIdChange}
           searchText={discoverModalData.searchText}
           onSearchTextChange={discoverModalData.setSearchText}
           isLocationFilterAvailable={discoverModalData.isLocationFilterAvailable}
           selectedLocations={discoverModalData.selectedLocations}
           onToggleLocation={discoverModalData.toggleLocation}
+          onClearLocationFilter={discoverModalData.clearLocationFilter}
           favoriteLocations={discoverModalData.favoriteLocations}
           isFavoriteLocationsLoading={discoverModalData.isFavoriteLocationsLoading}
           locationSearchText={discoverModalData.locationSearchText}
           onLocationSearchTextChange={discoverModalData.setLocationSearchText}
           locationSearchResults={discoverModalData.locationSearchResults}
           isLocationSearchLoading={discoverModalData.isLocationSearchLoading}
+          onOpenLocationPicker={discoverModalData.onOpenLocationPicker}
+          locationPicker={discoverModalData.locationPicker}
+          selectedStatuses={discoverModalData.selectedStatuses}
+          onToggleStatus={discoverModalData.toggleStatus}
+          minOpenSlotsText={discoverModalData.minOpenSlotsText}
+          onMinOpenSlotsTextChange={discoverModalData.setMinOpenSlotsText}
+          onClearOpenSlotsFilter={discoverModalData.clearOpenSlotsFilter}
+          feeType={discoverModalData.feeType}
+          onToggleFeeType={discoverModalData.toggleFeeType}
+          maxFeeAmountVndText={discoverModalData.maxFeeAmountVndText}
+          onMaxFeeAmountVndChange={discoverModalData.setMaxFeeAmountVndText}
+          onClearFeeFilter={discoverModalData.clearFeeFilter}
           startTimeFilter={discoverModalData.startTimeFilter}
           onStartTimeFilterChange={discoverModalData.setStartTimeFilter}
           startTime={discoverModalData.startTime}
@@ -341,7 +365,10 @@ export function FriendsPage() {
           isRejectingParticipant={discoverModalData.isRejectingParticipant}
           onToggleLike={discoverModalData.onToggleLike}
           isTogglingLike={discoverModalData.isTogglingLike}
-          currentUser={{ fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
+          currentUser={{
+            fullName: `${user.firstName} ${user.lastName}`,
+            avatarUrl: user.avatarUrl,
+          }}
           comments={discoverModalData.comments}
           isCommentsLoading={discoverModalData.isCommentsLoading}
           isCommentsError={discoverModalData.isCommentsError}

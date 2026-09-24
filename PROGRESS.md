@@ -5274,6 +5274,72 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `modules/session/docs/BACKLOG_MVP.md` — this was fixed directly at the user's request rather
   than through the usual `/workon` ticket flow.
 
+- **CLIENT-SESSION-29 — complete the Discover session feature (2026-09-23,
+  `client/docs/MVP/CLIENT-SESSION-29_COMPLETE_DISCOVER_SESSION_FEATURE.md`):** Location filter
+  redesign (drop the search box, add a "Choose a location" flow reusing `CreateSessionModal`'s
+  `LocationPicker`, dedupe-select against the existing favorites checklist) on both Discover
+  surfaces; date labels switched to `<weekday>, <ordinal-day> <month>` (was `dd/MM`); three new
+  filters (status, open-slot count, fee) wired to already-real `/discover` query params; a new
+  "Requested sessions" section on `/matches` backed by the previously-unused `GET
+  /sessions/requested` (backend SESSION-42). **Also root-caused and fixed a real cross-cutting bug**
+  along the way: the ticket's own "Time filter doesn't auto-apply" symptom traced back to the same
+  `Popover`-portaled-outside-a-`Dialog`/`FocusScope` DOM-containment issue CLIENT-SESSION-28 had
+  already diagnosed but left unfixed — fixed at the shared primitive level (new `shared/ui/
+  floatingPortalContainer.ts`: `DialogContent` provides its own Content DOM node via context,
+  `PopoverContent` portals into it instead of `document.body` whenever available), which resolves
+  CLIENT-SESSION-28's bug too, app-wide, for every `Popover`-inside-`Dialog` case. Confirmed no
+  positioning/clipping regression from the change despite the Dialog's `overflow-hidden`/
+  `transform` (Radix Popper's `strategy: 'fixed'` already accounts for a transformed containing
+  block). CLIENT-SESSION-27's Escape-cascade bug is a different Radix subsystem
+  (`DismissableLayer`'s mount-order layer stack) and remains open. tsc/eslint clean; Vitest 191
+  files / 1405 green; e2e 83/85 (2 pre-existing, confirmed-unrelated flakes — one reproduces
+  identically on unmodified `master`, the other is a parallel-worker-load flake proven via
+  `--workers=1`); visual-regression stash-and-rerun: byte-identical 111/111 Windows-noise-floor
+  failure set on `master` (no `/matches`-page visual spec exists in this repo at all). Found and
+  flagged (not fixed — `CLIENT-SESSION-23`'s scope) a real live break: `useMySessions.ts` still
+  calls `GET /sessions/mine`, which backend SESSION-27 removed 2026-09-15. **Revision (same day,
+  post-build UI refinement):** modal's search-scope dropdown replaced by a sport picker
+  (`DiscoverModalSportSearchBox`) that can actually re-scope the query, not just the hosting page's
+  pill; page's dropdown dropped its two inert `location`/`gear` options; Date pill labels itself
+  with the picked date when exactly one is selected; Location filter dropped its selected-chips row
+  and truncates long names with a tooltip; Open-slots became a direct inline input (was
+  Popover-hidden) and moved last in the filter row; Status became single-select; Fee's trigger label
+  now reflects the max-amount too; "Load more sessions" → "Load more" plus a new "No more to load."
+  end state. Vitest 191/1413 green; e2e 83/85 (same 2 pre-existing flakes, re-confirmed).
+  **Revision 2 (same day):** Open-slots clamped `1..998`; Fee/Status trigger labels drop the
+  filter-name prefix once set ("Free" not "Fee (Free)"); Time filter's "Start before/after HH:MM"
+  shortened to "Before/after HH:MM"; Requested sessions made collapsible
+  ("Requested sessions (N)" header). **Also found and fixed a real bug** Revision 1 missed: the
+  Location filter's checklist rows weren't actually truncating despite carrying the right Tailwind
+  classes — `<fieldset>`'s browser-default `min-width: min-content` was overriding the popover's
+  fixed width, confirmed via a throwaway Playwright script against Storybook (browser extension
+  unavailable) showing the fieldset rendering at 519px inside a 288px popover; fixed with one
+  `min-w-0` class, re-confirmed via `scrollWidth`/`clientWidth` before/after.
+  **Revision 3 (same day):** a chosen-but-not-favorited location now also shows (checked) in the
+  Location checklist; open-slots clamp corrected to `1..999` with digit-only sanitization + auto-
+  reclamp on blur; every Discover filter pill now shows a `bg-filter-active` background (`#c3e5eb`,
+  corrected from an initial `#abdbe3`) and a red reset "x" once it carries a value (new shared
+  `DiscoverFilterTrigger` component) — the open-slots number input's native spinner buttons turned
+  out to ignore `background-color` entirely in current Chromium (confirmed empirically via
+  devtools), so they were replaced with hand-drawn up/down buttons instead of chasing a CSS
+  workaround that doesn't exist. **Revision 4 (same day) — bigger scope:** `/matches` drops the
+  "All" sport pill on direct user decision, mirroring `/profile`'s existing PROFILE-4 shape (new
+  `useMatchesActiveSport.ts`, `matchesPageStore.activeSport` now `SportKey | null` not
+  `SportKey | 'all'`) — defaults to the caller's first sport profile instead. Required a genuine
+  rewrite of `matches-journey.spec.ts`'s single continuous e2e test, which had interleaved
+  Pickleball and Badminton sessions across its whole 11-step flow relying on "All" showing both at
+  once; 4 explicit sport-pill-switch steps inserted where later steps need the other sport.
+  **Revision 5 (2026-09-23/24) — the "2 pre-existing e2e flakes" carried forward from earlier in
+  this session were real bugs, not flakes**, once actually investigated (user pushback: "why don't
+  we fix the e2e failed feed-groups-journey.spec.ts?"). `feed-groups-journey.spec.ts`'s
+  reactivate-nudge test failed 100% reproducibly in isolation — a real race between the group-click
+  and `useResumableSports`'s own async query, fixed by waiting for the query's own DOM signal (the
+  muted "Reactivate Pickleball" pill) before clicking, same pattern the sibling Home-Feed nudge test
+  already used. `matches-journey.spec.ts`'s step-11 "flake" was this session's own Revision 4
+  rewrite quietly pushing the suite's already-longest test to ~29.1s against a 30s default timeout
+  (confirmed by timing a passing run) — fixed with `test.setTimeout(60000)`, real headroom for
+  genuinely more work. Full `e2e` project: **85/85 passing**, zero failures.
+
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
 - `partner_matches` table: match score (0–100), accept/decline workflow

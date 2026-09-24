@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { IconChevronDown } from '@tabler/icons-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
-import { Button } from '@/shared/ui/button';
+import { Popover, PopoverContent } from '@/shared/ui/popover';
 import { MAX_DISCOVER_DATES } from '../discoverDateLabel';
+import { DiscoverFilterTrigger } from './DiscoverFilterTrigger';
 import { SessionStartTimeCalendar } from './SessionStartTimeCalendar';
 
 interface DiscoverDatePickerProps {
@@ -13,7 +12,17 @@ interface DiscoverDatePickerProps {
   /** Checklist-row label — "Tomorrow" also carries its date here (unlike the bare `dateLabel` a
    * section header uses), since a checkbox list has no other context making the date obvious. */
   dateOptionLabel: (date: string) => string;
+  /** Bare label ("Today"/"Tomorrow"/"Thu, 15th Oct", no parenthetical date) — same fn
+   * `useDiscoverFilters` gives each date section's own header. Used for the trigger button when
+   * exactly one date is selected (2026-09-23 revision, see doc comment below). */
+  dateLabel: (date: string) => string;
   isAtMax: boolean;
+  /** Date's own default isn't "unselected" (never allow zero selection — see
+   * `useDiscoverFilters.toggleDate`), it's `[today]`, so "is this filter active" and "reset to
+   * default" can't be derived from `selectedDates` alone the way every other Discover filter's
+   * can; both come from the hook, which already tracks `today` (2026-09-23 revision). */
+  isActive: boolean;
+  onReset: () => void;
 }
 
 /**
@@ -26,26 +35,39 @@ interface DiscoverDatePickerProps {
  * Dialog is safe — verified via `CreateSessionModal`'s `LocationFavoritesDropdown` precedent (a
  * `DropdownMenu`, which needed `modal={false}` explicitly since it defaults `true`; `Popover`
  * never had that problem at all).
+ *
+ * **Trigger label (2026-09-23 revision):** 0 selected → "Date"; exactly 1 → that date's own bare
+ * label ("Today"/"Thu, 15th Oct" — previously stayed the generic "Date" even with one picked,
+ * giving no indication which date was active without opening the popover); 2+ → "Date (N)".
  */
 export function DiscoverDatePicker({
   quickDates,
   selectedDates,
   onToggleDate,
   dateOptionLabel,
+  dateLabel,
   isAtMax,
+  isActive,
+  onReset,
 }: DiscoverDatePickerProps) {
   const [showCalendar, setShowCalendar] = useState(false);
   const selectedSet = new Set(selectedDates);
   const customDates = selectedDates.filter((date) => !quickDates.includes(date));
+  const triggerLabel =
+    selectedDates.length === 0
+      ? 'Date'
+      : selectedDates.length === 1
+        ? dateLabel(selectedDates[0])
+        : `Date (${selectedDates.length})`;
 
   return (
     <Popover onOpenChange={(open) => !open && setShowCalendar(false)}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1">
-          Date{selectedDates.length > 1 ? ` (${selectedDates.length})` : ''}
-          <IconChevronDown className="size-3.5" aria-hidden="true" />
-        </Button>
-      </PopoverTrigger>
+      <DiscoverFilterTrigger
+        label={triggerLabel}
+        isActive={isActive}
+        onClear={onReset}
+        clearLabel="Reset date filter"
+      />
       <PopoverContent align="start" className="w-64">
         {showCalendar ? (
           <div className="flex flex-col gap-2">

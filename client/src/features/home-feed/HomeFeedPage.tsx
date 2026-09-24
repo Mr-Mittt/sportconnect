@@ -205,7 +205,13 @@ export function HomeFeedPage() {
   // rail-hosting page gets one, scoped to that page's own active sport pill).
   const createSessionModalData = useCreateSessionModalData();
   const activeSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
-  const discoverModalData = useDiscoverModalData(activeSportId);
+  // CLIENT-SESSION-29 revision (2026-09-23) — the modal now pre-fills its own sport dropdown from
+  // this seed, falling back to the caller's first held sport when the pill is 'all' (no single
+  // sport to seed from).
+  const firstOwnedSportId = data.sportProfiles[0]
+    ? sportIdForKey(data.sportProfiles[0].key)
+    : undefined;
+  const discoverModalData = useDiscoverModalData(activeSportId ?? firstOwnedSportId);
 
   // CLIENT-MODAL-1: both modals embed the zero-sport-profile gate, which renders
   // `addSportMutation.isError` — so their close has to clear it too, not just
@@ -433,19 +439,32 @@ export function HomeFeedPage() {
         <SessionDiscoverModal
           isOpen={discoverModalData.isDiscoverModalOpen}
           onClose={closeDiscoverModal}
-          searchMode={discoverModalData.searchMode}
-          onSearchModeChange={discoverModalData.setSearchMode}
+          sportId={discoverModalData.sportId}
+          onSportIdChange={discoverModalData.onSportIdChange}
           searchText={discoverModalData.searchText}
           onSearchTextChange={discoverModalData.setSearchText}
           isLocationFilterAvailable={discoverModalData.isLocationFilterAvailable}
           selectedLocations={discoverModalData.selectedLocations}
           onToggleLocation={discoverModalData.toggleLocation}
+          onClearLocationFilter={discoverModalData.clearLocationFilter}
           favoriteLocations={discoverModalData.favoriteLocations}
           isFavoriteLocationsLoading={discoverModalData.isFavoriteLocationsLoading}
           locationSearchText={discoverModalData.locationSearchText}
           onLocationSearchTextChange={discoverModalData.setLocationSearchText}
           locationSearchResults={discoverModalData.locationSearchResults}
           isLocationSearchLoading={discoverModalData.isLocationSearchLoading}
+          onOpenLocationPicker={discoverModalData.onOpenLocationPicker}
+          locationPicker={discoverModalData.locationPicker}
+          selectedStatuses={discoverModalData.selectedStatuses}
+          onToggleStatus={discoverModalData.toggleStatus}
+          minOpenSlotsText={discoverModalData.minOpenSlotsText}
+          onMinOpenSlotsTextChange={discoverModalData.setMinOpenSlotsText}
+          onClearOpenSlotsFilter={discoverModalData.clearOpenSlotsFilter}
+          feeType={discoverModalData.feeType}
+          onToggleFeeType={discoverModalData.toggleFeeType}
+          maxFeeAmountVndText={discoverModalData.maxFeeAmountVndText}
+          onMaxFeeAmountVndChange={discoverModalData.setMaxFeeAmountVndText}
+          onClearFeeFilter={discoverModalData.clearFeeFilter}
           startTimeFilter={discoverModalData.startTimeFilter}
           onStartTimeFilterChange={discoverModalData.setStartTimeFilter}
           startTime={discoverModalData.startTime}
@@ -506,7 +525,10 @@ export function HomeFeedPage() {
           isRejectingParticipant={discoverModalData.isRejectingParticipant}
           onToggleLike={discoverModalData.onToggleLike}
           isTogglingLike={discoverModalData.isTogglingLike}
-          currentUser={{ fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
+          currentUser={{
+            fullName: `${user.firstName} ${user.lastName}`,
+            avatarUrl: user.avatarUrl,
+          }}
           comments={discoverModalData.comments}
           isCommentsLoading={discoverModalData.isCommentsLoading}
           isCommentsError={discoverModalData.isCommentsError}

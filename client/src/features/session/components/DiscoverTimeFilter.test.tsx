@@ -24,7 +24,7 @@ const renderFilter = (overrides: Partial<React.ComponentProps<typeof DiscoverTim
 
 /** Opens the popover — every control below lives inside it, same as `DiscoverDatePicker`'s own
  * "click the trigger first" test pattern (Radix `Popover` doesn't mount its content until open). */
-async function openPopover(user: ReturnType<typeof userEvent.setup>, triggerName: RegExp | string = /^(Time|Start)/) {
+async function openPopover(user: ReturnType<typeof userEvent.setup>, triggerName: RegExp | string = /^(Time|Before|After)/) {
   await user.click(screen.getByRole('button', { name: triggerName }));
 }
 
@@ -34,9 +34,10 @@ describe('DiscoverTimeFilter', () => {
     expect(screen.getByRole('button', { name: 'Time' })).toBeInTheDocument();
   });
 
-  it('shows "Start <direction> <time>" on the trigger once set', () => {
+  // 2026-09-23 revision — "Start before/after …" shortened to "Before/After …".
+  it('shows "<Direction> <time>" on the trigger once set', () => {
     renderFilter({ startTimeFilter: 'BEFORE_OR_EQUAL', startTime: '18:00' });
-    expect(screen.getByRole('button', { name: 'Start before 18:00' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Before 18:00' })).toBeInTheDocument();
   });
 
   it('pre-fills hour/minute with the current time when opened with no filter set', () => {
@@ -90,6 +91,17 @@ describe('DiscoverTimeFilter', () => {
 
     await openPopover(user);
     await user.click(screen.getByRole('button', { name: 'Before' }));
+    expect(onClear).toHaveBeenCalledTimes(1);
+  });
+
+  // 2026-09-23 (second revision) — the trigger's own reset "x", separate from the in-popover
+  // Before/After toggle-off behavior tested above.
+  it('shows a reset "x" once set, reporting via onClear', async () => {
+    const user = userEvent.setup();
+    const onClear = vi.fn();
+    renderFilter({ startTimeFilter: 'AFTER_OR_EQUAL', startTime: '09:00', onClear });
+
+    await user.click(screen.getByRole('button', { name: 'Clear time filter' }));
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 

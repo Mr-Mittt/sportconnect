@@ -109,11 +109,32 @@ function makeSession(overrides: Partial<Session> & Pick<Session, 'id' | 'status'
   };
 }
 
-/** Every test needs `/groups/user/user-1`, `/sessions/mine`, `/sessions/discover`, and
- * `/sessions/joined` mocked (all fire unconditionally once a user is set) — this fills in
- * empty-page defaults for whichever of those a test doesn't care about, so each test only
- * overrides what it's actually exercising. Overrides receive the request config so a test can
- * inspect e.g. `/sessions/discover`'s `sportId` query param. */
+/** A single Basketball (sportId 6) profile — CLIENT-SESSION-29 (2026-09-23): /matches no longer
+ * has an "all" sport state, so `useMatchesActiveSport` needs real `/sports/profiles` data to
+ * default to (same requirement `useProfileActiveSport`'s own tests already have). Basketball
+ * matches `makeSession`'s own default `sportId: 6`, so every existing fixture below (which never
+ * overrides `sportId`) keeps matching the auto-selected active sport unchanged. */
+function basketballProfile() {
+  return {
+    id: 1,
+    userId: 'user-1',
+    sportId: 6,
+    sportName: 'Basketball',
+    skillLevel: 'beginner',
+    yearsOfExperience: null,
+    bio: null,
+    attributes: null,
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00',
+    updatedAt: '2026-01-01T00:00:00',
+  };
+}
+
+/** Every test needs `/groups/user/user-1`, `/sessions/mine`, `/sessions/discover`,
+ * `/sessions/joined`, and `/sports/profiles` mocked (all fire unconditionally once a user is
+ * set) — this fills in empty/default-basketball defaults for whichever of those a test doesn't
+ * care about, so each test only overrides what it's actually exercising. Overrides receive the
+ * request config so a test can inspect e.g. `/sessions/discover`'s `sportId` query param. */
 function mockGets(
   overrides: Record<string, (config?: { params?: Record<string, unknown> }) => ReturnType<typeof apiResponse>>,
 ) {
@@ -124,6 +145,7 @@ function mockGets(
     if (url === '/sessions/discover') return apiResponse(pageResponse([]));
     if (url === '/sessions/discover/counts') return apiResponse({ counts: [] });
     if (url === '/sessions/joined') return apiResponse(pageResponse([]));
+    if (url === '/sports/profiles') return apiResponse([basketballProfile()]);
     throw new Error(`unexpected GET ${url}`);
   });
 }
@@ -132,7 +154,7 @@ describe('useMatchesPageData', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useAuthStore.setState({ user: testUser, accessToken: 'token', isBootstrapping: false });
-    useMatchesPageStore.setState({ activeSport: 'all' });
+    useMatchesPageStore.setState({ activeSport: null });
   });
 
   afterEach(() => {
@@ -185,8 +207,18 @@ describe('useMatchesPageData', () => {
     expect(result.current.mySessionDateGroups[0].sessions).toHaveLength(1);
   });
 
-  it('filters both panels by activeSport', async () => {
+  // CLIENT-SESSION-29 (2026-09-23) — rewritten for "no All sport" (user decision): /matches
+  // always has exactly one real sport active, defaulting to the caller's first profile, never
+  // "every sport at once". Two profiles here (football id5 first, basketball id6 second) so the
+  // initial auto-selected sport (football) and an explicit switch (to basketball) both narrow
+  // the panels to exactly one sport's sessions, never both at the same time.
+  it('filters both panels by activeSport, defaulting to the first sport profile', async () => {
     mockGets({
+      '/sports/profiles': () =>
+        apiResponse([
+          { ...basketballProfile(), id: 1, sportId: 5, sportName: 'Football' },
+          { ...basketballProfile(), id: 2, sportId: 6, sportName: 'Basketball' },
+        ]),
       '/sessions/mine': () =>
         apiResponse(
           pageResponse([
@@ -210,9 +242,11 @@ describe('useMatchesPageData', () => {
 
     const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
     await waitFor(() => expect(result.current.isMySessionsLoading).toBe(false));
-    // Only "Today" is expanded by default — its own /discover call is what's under test here.
-    await waitFor(() => expect(result.current.dateSections[0].sessions).toHaveLength(2));
-    expect(result.current.mySessionDateGroups.flatMap((g) => g.sessions)).toHaveLength(2);
+    // Defaults to the first profile (football, sportId 5) — only id 2/4 match, never both sports.
+    await waitFor(() => expect(result.current.dateSections[0].sessions).toHaveLength(1));
+    expect(result.current.dateSections[0].sessions[0].id).toBe(4);
+    expect(result.current.mySessionDateGroups.flatMap((g) => g.sessions)).toHaveLength(1);
+    expect(result.current.mySessionDateGroups[0].sessions[0].id).toBe(2);
 
     act(() => useMatchesPageStore.getState().setActiveSport('basketball'));
 

@@ -51,26 +51,51 @@ import { expect, test } from '../mocks/test.ts';
  * comment (`e2e/mocks/handlers/sessions.ts`'s `commentsState`) and posting a new one via
  * `POST /api/sessions/{sessionId}/comments`. 3c covers the heart button — like then unlike via
  * `POST`/`DELETE /api/sessions/{sessionId}/like`, asserting the count round-trips 0 -> 1 -> 0.
+ *
+ * CLIENT-SESSION-29 (2026-09-23, user decision): /matches drops the "All" sport pill — the
+ * switcher always has exactly one real sport active, defaulting to the caller's first sport
+ * profile (`mockSportProfiles`: Badminton, then Pickleball). Both Discover and "My sessions" now
+ * filter by that one active sport (`useMatchesPageData`'s `mySessionDateGroups` filter dropped its
+ * `activeSport === 'all'` branch), so this journey's fixtures — split across Badminton
+ * (`mockGroupSession`/"Friday 5-a-side", `mockDiscoverableSession`/"Weekend 5-a-side",
+ * `mockRequestedSession`/"Wednesday scrimmage") and Pickleball (`mockSession`/"Sunday pickup run",
+ * `mockOwnedGroupSession`/"Ladder night", every session created mid-test) — need an explicit pill
+ * switch inserted (steps 4b/5c/8d/10d) each time a later step needs the other sport's sessions
+ * visible. `mockRequestedSession`'s own section is the one exception: `GET /sessions/requested`
+ * has no `sportId` param, so "Requested sessions" (step 10c) is never sport-filtered.
  */
 
 test('Matches journey', async ({ page }) => {
+  // CLIENT-SESSION-29 (2026-09-23): this was already the suite's longest single test; the 4
+  // sport-pill-switch steps the "no All pill" rewrite added (4b/5c/8d/10d) pushed its real
+  // wall-clock time to ~29s against Playwright's 30s default — passing, but with no real margin,
+  // so any ordinary machine-load variance tips it into a timeout on the final step. This is a
+  // real regression this session's own rewrite introduced (found by actually timing a passing
+  // run with `--reporter=list`, not assumed) — the fix is more budget for genuinely more work,
+  // not a papered-over race.
+  test.setTimeout(60000);
   await seedAuthenticatedSession(page, '/matches');
 
-  await test.step('1. load — both my sessions and a discoverable session render', async () => {
-    await expect(page.getByText('Sunday pickup run')).toBeVisible();
+  await test.step('1. load — defaults to the first sport profile (Badminton); its own sessions render', async () => {
+    // CLIENT-SESSION-29 (2026-09-23, user decision) — /matches no longer has an "All" pill; the
+    // sport switcher defaults to the caller's first sport profile (mockSportProfiles: Badminton,
+    // then Pickleball). "Sunday pickup run" (mockSession, Pickleball) is NOT visible yet — only
+    // Badminton-sport sessions render until the caller switches pills.
+    await expect(page.getByRole('button', { name: 'All' })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'Badminton' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByText('Friday 5-a-side')).toBeVisible();
     await expect(
       page.getByRole('region', { name: 'Discover sessions' }).getByText('Weekend 5-a-side'),
     ).toBeVisible();
+    await expect(page.getByText('Sunday pickup run')).not.toBeVisible();
   });
 
-  await test.step('2. sport filter narrows the list, "All" restores it', async () => {
+  await test.step('2. sport filter narrows the list to the clicked sport (no "All" to restore)', async () => {
+    // Switches to Pickleball and stays there — steps 3/3b/3c below all operate on mockSession
+    // (Pickleball). There is no "All" pill to fall back to once a specific sport is picked.
     await page.getByRole('button', { name: 'Pickleball' }).click();
     await expect(page.getByText('Sunday pickup run')).toBeVisible();
     await expect(page.getByText('Friday 5-a-side')).not.toBeVisible();
-
-    await page.getByRole('button', { name: 'All', exact: true }).click();
-    await expect(page.getByText('Friday 5-a-side')).toBeVisible();
   });
 
   await test.step('3. join the standalone session (creator never sees Leave)', async () => {
@@ -133,6 +158,14 @@ test('Matches journey', async ({ page }) => {
   // 3c -> 5) rather than renumbering every later step + docs/E2E_OVERVIEW.md's table for a purely
   // cosmetic concern.
 
+  // mockGroupSession ("Friday 5-a-side") is Badminton — switch back from Pickleball (step 2).
+  // CLIENT-SESSION-29 (2026-09-23): with no "All" pill, every step touching a session from a
+  // different sport than the one currently active needs its own explicit pill switch.
+  await test.step('4b. switch back to Badminton for the group session steps', async () => {
+    await page.getByRole('button', { name: 'Badminton' }).click();
+    await expect(page.getByText('Friday 5-a-side')).toBeVisible();
+  });
+
   await test.step('5. a group session the caller only belongs to — Join/Leave still work', async () => {
     await page.getByRole('button', { name: /Friday 5-a-side — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Friday 5-a-side' });
@@ -147,6 +180,12 @@ test('Matches journey', async ({ page }) => {
 
     await page.getByRole('button', { name: /Friday 5-a-side — Leave/ }).click();
     await expect(page.getByRole('button', { name: /Friday 5-a-side — Join/ })).toBeVisible();
+  });
+
+  // Steps 6-8 create/manage Pickleball sessions (Ladder night is Pickleball too) — switch back.
+  await test.step('5c. switch back to Pickleball for the create/approval-queue steps', async () => {
+    await page.getByRole('button', { name: 'Pickleball' }).click();
+    await expect(page.getByText('Sunday pickup run')).toBeVisible();
   });
 
   await test.step('6. create a standalone session, searching an existing location', async () => {
@@ -250,6 +289,47 @@ test('Matches journey', async ({ page }) => {
     await createDialog.getByRole('button', { name: 'Close' }).click();
   });
 
+  // mockDiscoverableSession ("Weekend 5-a-side") is Badminton — switch back from Pickleball.
+  await test.step('8d. switch back to Badminton for the Discover-filter/join steps', async () => {
+    await page.getByRole('button', { name: 'Badminton' }).click();
+    await expect(
+      page.getByRole('region', { name: 'Discover sessions' }).getByText('Weekend 5-a-side'),
+    ).toBeVisible();
+  });
+
+  await test.step('8c. Status/Open slots/Fee filters narrow the Discover results (CLIENT-SESSION-29)', async () => {
+    const discoverSection = page.getByRole('region', { name: 'Discover sessions' });
+    // mockDiscoverableSession ("Weekend 5-a-side"): status SCHEDULED, capacity 10,
+    // participantCount 4 (6 open slots), feeType FREE. Run before step 9 joins it — once joined
+    // it drops out of Discover entirely, so this step must come first.
+    await expect(discoverSection.getByText('Weekend 5-a-side')).toBeVisible();
+
+    // Status: the mock's own baseline is SCHEDULED-only regardless of the param, so checking
+    // "Preparing" (never true here) proves the param round-trips without a false-positive match.
+    await discoverSection.getByRole('button', { name: 'Status' }).click();
+    await page.getByRole('checkbox', { name: 'Preparing' }).check();
+    await expect(discoverSection.getByText('No sessions to discover on Today.')).toBeVisible();
+    await page.getByRole('checkbox', { name: 'Preparing' }).uncheck();
+    await page.keyboard.press('Escape');
+    await expect(discoverSection.getByText('Weekend 5-a-side')).toBeVisible();
+
+    // Open slots: 7 excludes it (6 open < 7), 6 keeps it (6 open >= 6). Direct inline input
+    // (CLIENT-SESSION-29 revision, 2026-09-23) — no trigger button/Popover to open first.
+    await discoverSection.getByLabel('Minimum open slots').fill('7');
+    await expect(discoverSection.getByText('No sessions to discover on Today.')).toBeVisible();
+    await discoverSection.getByLabel('Minimum open slots').fill('6');
+    await expect(discoverSection.getByText('Weekend 5-a-side')).toBeVisible();
+    await discoverSection.getByRole('button', { name: 'Clear open slots filter' }).click();
+
+    // Fee: FREE matches, SPLIT doesn't.
+    await discoverSection.getByRole('button', { name: 'Fee' }).click();
+    await page.getByRole('checkbox', { name: 'Split cost' }).check();
+    await expect(discoverSection.getByText('No sessions to discover on Today.')).toBeVisible();
+    await page.getByRole('checkbox', { name: 'Split cost' }).uncheck();
+    await page.keyboard.press('Escape');
+    await expect(discoverSection.getByText('Weekend 5-a-side')).toBeVisible();
+  });
+
   await test.step('9. discover a session created by someone else, join it, and see it move into My sessions', async () => {
     const discoverSection = page.getByRole('region', { name: 'Discover sessions' });
     const mySessionsSection = page.getByRole('region', { name: 'My sessions' });
@@ -284,7 +364,9 @@ test('Matches journey', async ({ page }) => {
   });
 
   await test.step('10. search filters Discover (server-side title param, CLIENT-SESSION-22), and the panel toggle hides/shows My sessions', async () => {
-    await page.getByRole('button', { name: 'All', exact: true }).click();
+    // No "All" pill to click here anymore (CLIENT-SESSION-29) — this step is sport-agnostic
+    // (search text + panel toggle), so it just continues on whatever sport step 8d left active
+    // (Badminton).
     const discoverSection = page.getByRole('region', { name: 'Discover sessions' });
 
     await page.getByRole('textbox', { name: 'Search sessions' }).fill('nonexistent-session-title');
@@ -303,18 +385,39 @@ test('Matches journey', async ({ page }) => {
   await test.step('10b. the Date filter pill adds a second collapsible section (CLIENT-SESSION-22, absorbs CLIENT-SESSION-25)', async () => {
     const discoverSection = page.getByRole('region', { name: 'Discover sessions' });
 
-    await discoverSection.getByRole('button', { name: 'Date' }).click();
-    // The checklist row's accessible name carries its own date, e.g. "Tomorrow (dd/MM)" —
-    // unlike the section header below, which stays bare "Tomorrow".
-    await page.getByRole('checkbox', { name: /^Tomorrow \(\d{2}\/\d{2}\)$/ }).check();
+    // Trigger label is "Today" here, not "Date" — exactly one date (today) is selected by
+    // default, and CLIENT-SESSION-29 (2026-09-23) labels the trigger with that date itself
+    // rather than the generic "Date" whenever exactly one is selected.
+    await discoverSection.getByRole('button', { name: 'Today', exact: true }).click();
+    // The checklist row's accessible name carries its own date, e.g. "Tomorrow (2nd Aug)"
+    // (CLIENT-SESSION-29: <ordinal-day> <month-abbrev>, was "dd/MM") — unlike the section header
+    // below, which stays bare "Tomorrow".
+    const tomorrowOption = /^Tomorrow \(\d{1,2}(st|nd|rd|th) [A-Za-z]{3}\)$/;
+    await page.getByRole('checkbox', { name: tomorrowOption }).check();
     await expect(discoverSection.getByRole('button', { name: 'Date (2)' })).toBeVisible();
     // Newly-checked dates start collapsed — a chevron + count header, no fetch until expanded.
     await expect(discoverSection.getByRole('button', { name: /Expand Tomorrow \(\d+\)/ })).toBeVisible();
 
     // Uncheck it again so later steps' assertions against the Discover grid aren't affected by a
     // second open section.
-    await page.getByRole('checkbox', { name: /^Tomorrow \(\d{2}\/\d{2}\)$/ }).uncheck();
+    await page.getByRole('checkbox', { name: tomorrowOption }).uncheck();
     await page.keyboard.press('Escape');
+  });
+
+  await test.step('10c. Requested sessions section shows the caller\'s own pending request (CLIENT-SESSION-29, SESSION-42)', async () => {
+    const requestedSection = page.getByRole('region', { name: 'Requested sessions' });
+    await expect(requestedSection).toBeVisible();
+    // mockRequestedSession ("Wednesday scrimmage") — mockUser holds a pre-seeded REQUESTED row.
+    await expect(requestedSection.getByText('Wednesday scrimmage')).toBeVisible();
+    await expect(
+      requestedSection.getByRole('button', { name: /Wednesday scrimmage.*Cancel/s }),
+    ).toBeVisible();
+  });
+
+  // Step 11 creates a Pickleball session again — switch back from Badminton (step 8d).
+  await test.step('10d. switch back to Pickleball for the final create step', async () => {
+    await page.getByRole('button', { name: 'Pickleball' }).click();
+    await expect(page.getByText('Sunday pickup run')).toBeVisible();
   });
 
   await test.step('11. create without location/fee shows the Preparing warning; completing both via the detail modal flips it to Scheduled (CLIENT-SESSION-21, SESSION-24)', async () => {
