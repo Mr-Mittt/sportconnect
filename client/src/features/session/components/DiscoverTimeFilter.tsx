@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { startTransition, useState } from 'react';
 import { Popover, PopoverContent } from '@/shared/ui/popover';
 import { cn } from '@/shared/lib/utils';
 import type { StartTimeFilter } from '@/shared/types/session';
@@ -54,15 +54,22 @@ export function DiscoverTimeFilter({
   const [hour, setHour] = useState(startHour);
   const [minute, setMinute] = useState(startMinute);
 
+  // The parent update is a transition, not part of the blur itself (found 2026-09-24, CI + a
+  // real-browser repro): while Tab moves focus Hour -> Minute, `document.activeElement` is briefly
+  // `<body>`. Committing synchronously re-renders the discover results (new query key, no
+  // placeholder data), which removes the session-card grid inside that window — and the Dialog's
+  // FocusScope reacts to "body focused + node removed" by focusing the dialog container, which
+  // the nested popover reads as focus *outside* itself and dismisses. Deferring lets focus land on
+  // Minute first, so the removal happens with a real focused element and FocusScope ignores it.
   const commitHour = (raw: string) => {
     const next = clampHour(raw);
     setHour(next);
-    if (isSet) onStartTimeChange(`${next}:${minute}`);
+    if (isSet) startTransition(() => onStartTimeChange(`${next}:${minute}`));
   };
   const commitMinute = (raw: string) => {
     const next = clampMinute(raw);
     setMinute(next);
-    if (isSet) onStartTimeChange(`${hour}:${next}`);
+    if (isSet) startTransition(() => onStartTimeChange(`${hour}:${next}`));
   };
 
   const toggleDirection = (direction: StartTimeFilter) => {

@@ -448,3 +448,45 @@ full `e2e` project: 85/85 passed (`matches-journey.spec.ts` at 29.5s, still comf
 against its 60s budget). Cannot confirm this fixes the *specific* CI environment without another CI
 run, but the change removes the one plausible platform-sensitive element from the test without
 weakening what it actually verifies.
+
+### Revision 6, correction — the `Tab` change above did NOT fix it; the real cause was a product bug
+
+CI failed again on the `Tab` version (`getByLabel('Minute')` gone right after `Tab`), which proved
+the `.blur()` theory wrong: it was never about how focus leaves the Hour input. The user then
+reported it also happened in a real local browser — **only the Time popover closed** — and added
+temporary `onFocusOutside`/`onOpenChange` logging (removed afterwards), which showed the popover was
+dismissed by `focusOutside` whose target was the **Dialog's own content `<div role="dialog">`**.
+
+**Root cause (reproduced deterministically once the right condition was found):**
+1. Tab from Hour: `focusout` fires while `document.activeElement` is briefly `<body>` (traced:
+   Hour blur at 5.5ms, Minute focus at 13ms).
+2. The Hour commit changes the discover filters. `useDiscoverTodaySessions` has no
+   `placeholderData`, so a **non-empty** result grid is removed and replaced by "Loading…"
+   synchronously, inside that window.
+3. The Dialog's `FocusScope` reacts to "body focused + a node removed" by focusing its own
+   container.
+4. The nested Popover reads that as focus outside itself and dismisses; Minute never gets focus.
+
+**Why nothing reproduced it locally for hours:** the e2e mock's time filter *empties* the list at the
+moment of the commit (a "before 05:xx" filter excludes the fixture session), so there was nothing to
+remove. Real data has cards, and CI does depending on the hour it runs. Ruled out along the way
+(all passed): UTC timezone, browser clock at all 24 hours, `CI=true` + repeats, 8-worker parallel
+load, headed mode, slow (400ms/1200ms) discover responses. The reproduction that finally matched
+the user's log exactly (`popover=0`, `activeElement=DIV:dialog`) was forcing the results to stay
+non-empty by stripping `startTime`/`startTimeFilter` from the mocked request.
+
+**Fix, in two layers:**
+- `DiscoverTimeFilter`: the parent filter update in `commitHour`/`commitMinute` is wrapped in
+  `startTransition`, so the re-render (and the grid removal) happens after focus has landed on
+  Minute and FocusScope sees a real focused element.
+- `shared/ui/popover.tsx` (`PopoverContent`): `onFocusOutside` is prevented when the target is the
+  Dialog's own container (the `floatingPortalContainer` node). That is the Dialog protecting itself,
+  not the user leaving the popover — the same Popover-inside-Dialog family as the FocusScope fix
+  this ticket already shipped. Any other outside focus still dismisses. This also protects every
+  other Dialog-nested popover, and the synthetic `.blur()` path.
+
+**New regression test:** `home-feed-journey.spec.ts` — "tabbing out of the Time filter's Hour input
+keeps the popover open with results on screen" (forces non-empty results). Verified it **fails
+without the fix** (stashed the two source files, `toBeFocused` on Minute failed) and passes with it.
+Repro outcomes with the fix: `Tab` → popover open, focus on Minute; `.blur()` → popover open
+(focus on the dialog container, since a blur has no destination).

@@ -27,6 +27,7 @@ function PopoverContent({
   className,
   sideOffset = 8,
   align = 'end',
+  onFocusOutside,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   // CLIENT-SESSION-27/28/29 — when this Popover is nested inside this app's own Dialog, portal
@@ -41,6 +42,18 @@ function PopoverContent({
         data-slot="popover-content"
         sideOffset={sideOffset}
         align={align}
+        // A Dialog-nested popover must not dismiss itself just because the *Dialog* reclaimed
+        // focus. The Dialog's FocusScope focuses its own container whenever `document.activeElement`
+        // is `<body>` and a node is removed — which happens mid-Tab, when a re-render lands between
+        // the old field's blur and the next field's focus. That is the Dialog protecting itself, not
+        // the user leaving the popover (found 2026-09-24: Time filter closed on Tab out of Hour).
+        // Any other outside focus still dismisses as before.
+        onFocusOutside={(event) => {
+          onFocusOutside?.(event);
+          if (dialogContainer !== null && event.target === dialogContainer) {
+            event.preventDefault();
+          }
+        }}
         className={cn(
           // pointer-events-auto: a *modal* Dialog (default `modal=true`) sets `pointer-events:
           // none` on <body> while open and restores `auto` only on its own Content node. Kept as

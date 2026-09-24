@@ -298,3 +298,53 @@ test('Home Feed — the "Join a match" modal\'s Time/Location popovers stay focu
   await searchInput.fill('river');
   await expect(searchInput).toHaveValue('river');
 });
+
+/**
+ * CLIENT-SESSION-29 (2026-09-24) — regression for a bug CI caught and this suite had been unable to
+ * reproduce: tabbing out of the Time filter's Hour input closed the whole Time popover.
+ *
+ * Root cause: during Tab, `document.activeElement` is briefly `<body>` between the Hour blur and
+ * the Minute focus. Committing the Hour changes the discover filters, and — because the query has no
+ * placeholder data — a *non-empty* result grid is removed synchronously inside that window. The
+ * Dialog's FocusScope treats "body focused + node removed" as focus lost and focuses its own
+ * container, which the nested Popover read as focus outside itself and dismissed. Fixed twice:
+ * `DiscoverTimeFilter` defers the parent update (`startTransition`) so focus lands first, and the
+ * shared `PopoverContent` ignores focus landing on the Dialog's own container.
+ *
+ * Why every earlier run passed locally: the mock's time filter empties the list at the moment of the
+ * commit, so nothing was ever removed. Real data (and CI, depending on the hour) has cards. This test
+ * strips the time params from the request so the results stay non-empty — the exact condition that
+ * triggers the bug.
+ */
+test('Home Feed — tabbing out of the Time filter\'s Hour input keeps the popover open with results on screen', async ({
+  page,
+  mockSessionId,
+}) => {
+  await page.route('**/api/sessions/discover**', async (route) => {
+    const url = new URL(route.request().url());
+    url.searchParams.delete('startTime');
+    url.searchParams.delete('startTimeFilter');
+    await route.continue({ url: url.toString() });
+  });
+  await seedEmptyUpcomingMatchesOnNextLoad(mockSessionId);
+  await seedAuthenticatedSession(page);
+
+  await page.getByRole('button', { name: 'Badminton' }).click();
+  await page.getByRole('button', { name: 'Join a match' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Discover today session' });
+  await expect(dialog.getByText('Weekend 5-a-side')).toBeVisible();
+
+  await dialog.getByRole('button', { name: 'Time' }).click();
+  await page.getByRole('button', { name: 'Before', exact: true }).click();
+  // Results are non-empty here, so the Hour commit below has a card grid to remove.
+  await expect(dialog.getByText('Weekend 5-a-side')).toBeVisible();
+
+  const hourInput = page.getByLabel('Hour');
+  await hourInput.click();
+  await hourInput.fill('05');
+  await hourInput.press('Tab');
+
+  await expect(page.getByLabel('Minute')).toBeFocused();
+  await expect(hourInput).toHaveValue('05');
+  await expect(dialog.getByRole('button', { name: /^Before 05:\d{2}$/ })).toBeVisible();
+});
