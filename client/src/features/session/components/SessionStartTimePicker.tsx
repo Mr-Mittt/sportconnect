@@ -6,7 +6,7 @@ import { SessionStartTimeCalendar } from './SessionStartTimeCalendar';
 
 interface SessionStartTimePickerProps {
   /** `"yyyy-MM-dd'T'HH:mm"` — same shape the old native `datetime-local` input produced, so
-   * `CreateSessionModal`'s existing `${scheduledStart}:00` payload logic didn't need to change.
+   * `CreateSessionModal` turns it into an offset-aware ISO string on submit (`toOffsetAwareIso`).
    * `''` whenever any of the three pieces (date/hour/minute) isn't set yet. */
   value: string;
   onChange: (value: string) => void;

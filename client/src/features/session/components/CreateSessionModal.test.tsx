@@ -521,7 +521,8 @@ describe('CreateSessionModal', () => {
       description: undefined,
       locationId: 1,
       locationNote: undefined,
-      scheduledStart: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T19:00:00$/),
+      // CLIENT-SESSION-24: offset-aware (`Z` or `±HH:MM`) — a bare local datetime is a 400.
+      scheduledStart: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T19:00:00(Z|[+-]\d{2}:\d{2})$/),
       durationMinutes: 90,
       // Taken slot left blank -> defaults to 1 (the creator, who auto-joins) -> capacity = 1 + 10,
       // initialSlot = 1 - 1 = 0 (the creator's own auto-joined row already accounts for it).

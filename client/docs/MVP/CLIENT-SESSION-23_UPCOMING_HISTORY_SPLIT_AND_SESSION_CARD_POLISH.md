@@ -117,6 +117,16 @@ a new `app-session-detail-modal.spec.ts` state for `PREPARING`/`SessionPreparing
 the rail, and the new session-detail-modal state will all change (expected, regenerate via
 `/updatebaseline`).
 
+## Delta (2026-09-24, from CLIENT-SESSION-24's pickup)
+
+**Every `GET /api/sessions/upcoming?date=` and `GET /api/sessions/history?date=|dateCount=` call
+this ticket builds must send `viewerZoneId`** (the browser's IANA zone — reuse `getViewerZoneId()`
+from `features/session/discoverParams.ts`), per backend SESSION-34/35: without it the server
+buckets the day in `"UTC"` for every real user. No client caller of either endpoint existed when
+CLIENT-SESSION-24 was picked up, so that ticket deliberately left the wiring here (its own scope
+bullet: whichever of CLIENT-SESSION-23 or -24 wires those calls first sends it). The replacement
+MSW handlers for these two endpoints should accept the `viewerZoneId` param too.
+
 ---
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

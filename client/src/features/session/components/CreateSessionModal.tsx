@@ -26,6 +26,7 @@ import { Select } from '@/shared/ui/select';
 import { AddSportFields, type AddSportProfileSubmission } from '@/shared/components/AddSportFields';
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
+import { toOffsetAwareIso } from '@/shared/lib/scheduledStart';
 import type { CreateSessionPayload } from '../types';
 import { FeeTypeFields } from './FeeTypeFields';
 import { SessionStartTimePicker } from './SessionStartTimePicker';
@@ -566,7 +567,8 @@ export function CreateSessionModal({
       description: description.trim() || undefined,
       locationId: selectedLocation?.id,
       locationNote: locationNote.trim() || undefined,
-      scheduledStart: `${scheduledStart}:00`,
+      // CLIENT-SESSION-24: offset-aware — backend SESSION-33 requires an Instant.
+      scheduledStart: toOffsetAwareIso(scheduledStart),
       durationMinutes: Number(durationMinutes),
       // The backend's `capacity` is a single total — "Taken slot"/"Open slot" is a UI-only split
       // for creators who think in those terms.

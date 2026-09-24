@@ -35,6 +35,18 @@ function apiError(message: string): ApiResponse<null> {
   return { success: false, message, data: null, timestamp: new Date().toISOString() };
 }
 
+/**
+ * CLIENT-SESSION-24: mirrors backend SESSION-33 — `scheduledStart` is a `java.time.Instant`, so
+ * Jackson rejects an offset-less string (`2026-09-24T11:00:00`) with a 400 and only accepts `Z`
+ * or a `±HH:MM` offset. This mock used to accept any string, which is why e2e never caught the
+ * client still sending the old bare local datetime.
+ */
+const OFFSET_AWARE_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+function isOffsetAware(value: string): boolean {
+  return OFFSET_AWARE_ISO.test(value);
+}
+
 function requireAuth(request: Request): Response | null {
   if (!request.headers.get('Authorization')) {
     return HttpResponse.json(apiError('Unauthorized'), { status: 401 });
@@ -282,6 +294,9 @@ export const sessionHandlers: HttpHandler[] = [
     if (!body.scheduledStart || body.capacity === undefined) {
       return HttpResponse.json(apiError('Validation failed'), { status: 400 });
     }
+    if (!isOffsetAware(body.scheduledStart)) {
+      return HttpResponse.json(apiError('scheduledStart must include a UTC offset'), { status: 400 });
+    }
     const session = sessionsSessions.get(sessionIdFromRequest(request));
     const initialSlot = body.initialSlot ?? 0;
     const created: Session = {
@@ -484,6 +499,9 @@ export const sessionHandlers: HttpHandler[] = [
       feeAmountVnd?: number;
       initialSlot?: number;
     };
+    if (body.scheduledStart !== undefined && !isOffsetAware(body.scheduledStart)) {
+      return HttpResponse.json(apiError('scheduledStart must include a UTC offset'), { status: 400 });
+    }
     // SESSION-24: locationId/feeType are mutable via this endpoint only while PREPARING.
     if ((body.locationId !== undefined || body.feeType !== undefined) && existing.status !== 'PREPARING') {
       return HttpResponse.json(
