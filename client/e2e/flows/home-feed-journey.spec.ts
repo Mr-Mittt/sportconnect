@@ -393,3 +393,64 @@ test('Home Feed — Escape closes only the open Time/Location popover, then a se
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
 });
+
+/**
+ * CLIENT-SESSION-32 (2026-09-24) — a Dialog-nested filter popover must stay inside the dialog's
+ * own box on narrow screens.
+ *
+ * `DialogContent` is `overflow-hidden` and (since CLIENT-SESSION-29) a nested popover portals into
+ * that same node, so anything overhanging the dialog is clipped rather than escaping to `<body>`.
+ * Radix Popper only collided against the *viewport*, so at 375px the Location popover (`w-72`,
+ * started at the trigger's left edge) fit the viewport yet ran ~17px past the 343px-wide dialog and
+ * lost its right border. Fixed in the shared `PopoverContent` (`collisionBoundary` = the dialog's
+ * Content node + `max-w` of the available width). Real browser only — jsdom has no layout, so it
+ * can't measure this. 320px is the narrowest supported phone: there even `w-72` (288px) exceeds
+ * the 288px dialog, so the `max-w` cap (not just Radix's shift) is what's exercised.
+ */
+for (const viewportWidth of [375, 320]) {
+  test(`Home Feed — every "Join a match" filter popover stays inside the dialog @ ${viewportWidth}px`, async ({
+    page,
+    mockSessionId,
+  }) => {
+    await seedEmptyUpcomingMatchesOnNextLoad(mockSessionId);
+    await page.setViewportSize({ width: viewportWidth, height: 900 });
+    await seedAuthenticatedSession(page);
+
+    await page.getByRole('button', { name: 'Badminton' }).click();
+    await page.getByRole('button', { name: 'Join a match' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Discover today session' });
+    await expect(dialog.getByText('Weekend 5-a-side')).toBeVisible();
+
+    const triggers = [
+      dialog.getByRole('button', { name: 'Time', exact: true }),
+      dialog.getByRole('button', { name: /^Location/ }),
+      dialog.getByRole('button', { name: 'Status', exact: true }),
+      dialog.getByRole('button', { name: 'Fee', exact: true }),
+    ];
+    const popover = dialog.locator('[data-slot="popover-content"]');
+
+    for (const trigger of triggers) {
+      await trigger.click();
+      await expect(popover).toBeVisible();
+      // Let Radix's positioning settle (it measures after the first paint).
+      await expect
+        .poll(async () => {
+          const dialogBox = await dialog.boundingBox();
+          const popoverBox = await popover.boundingBox();
+          if (!dialogBox || !popoverBox) return 'not rendered';
+          const tolerance = 0.5;
+          const inside =
+            popoverBox.x >= dialogBox.x - tolerance &&
+            popoverBox.y >= dialogBox.y - tolerance &&
+            popoverBox.x + popoverBox.width <= dialogBox.x + dialogBox.width + tolerance &&
+            popoverBox.y + popoverBox.height <= dialogBox.y + dialogBox.height + tolerance;
+          return inside ? 'inside' : `outside: popover ${JSON.stringify(popoverBox)} dialog ${JSON.stringify(dialogBox)}`;
+        })
+        .toBe('inside');
+      // Escape closes only the popover (CLIENT-SESSION-27), so the next trigger is reachable.
+      await page.keyboard.press('Escape');
+      await expect(popover).toBeHidden();
+      await expect(dialog).toBeVisible();
+    }
+  });
+}
