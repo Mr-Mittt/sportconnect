@@ -320,4 +320,59 @@ describe('SessionCard', () => {
     );
     expect(screen.getByRole('button', { name: /join/i })).toBeDisabled();
   });
+
+  // CLIENT-SESSION-23 — jsdom has no layout engine, so these pin the classes that produce the
+  // behavior (Storybook "ActionsStickToBottomInStretchedRow"/"LongLocationName" show it rendered).
+  it.each(['full', 'compact'] as const)(
+    'pins the action row to the bottom of the card at size=%s (mt-auto in a flex-column wrapper)',
+    (size) => {
+      render(
+        <SessionCard
+          size={size}
+          session={makeSession()}
+          sportsByKey={sportsByKey}
+          currentUserId="user-2"
+          onViewDetails={() => {}}
+          onParticipationAction={noopParticipationAction}
+          isParticipationActionPending={noPendingAction}
+        />,
+      );
+      const actionsRow = screen.getByRole('button', { name: /view details/i }).parentElement!;
+      expect(actionsRow).toHaveClass('mt-auto');
+      expect(actionsRow.parentElement).toHaveClass('flex', 'flex-col');
+    },
+  );
+
+  it('renders the location on a single ellipsised line, with the full name as a title', () => {
+    const longName = 'Riverside Indoor Multi-Sport Courts & Community Recreation Centre, Building B';
+    render(
+      <SessionCard
+        session={makeSession({ location: { ...location, name: longName } })}
+        sportsByKey={sportsByKey}
+        currentUserId="user-2"
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+    const locationText = screen.getByText(longName);
+    expect(locationText).toHaveClass('truncate', 'min-w-0');
+    expect(locationText).toHaveAttribute('title', longName);
+  });
+
+  it('shows "Location pending" with no title attribute for a PREPARING session without a location', () => {
+    render(
+      <SessionCard
+        session={makeSession({ status: 'PREPARING', location: null })}
+        sportsByKey={sportsByKey}
+        currentUserId="user-2"
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+    const pending = screen.getByText('Location pending');
+    expect(pending).toHaveClass('truncate');
+    expect(pending).not.toHaveAttribute('title');
+  });
 });

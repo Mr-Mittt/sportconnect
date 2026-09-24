@@ -99,3 +99,21 @@ export interface DiscoverDateSection {
   hasMore: boolean;
   isFetchingMore: boolean;
 }
+
+/** CLIENT-SESSION-23 — one entry of `GET /sessions/history?dateCount=`'s `dates` (backend
+ * SESSION-27/43): a calendar date, in the caller's `viewerZoneId`, on which the caller has at
+ * least one `CANCELLED`/`COMPLETED` session they were `JOINED` to *for the requested sport*, and
+ * how many. Typed 1:1 against `SessionHistoryDateCount`. */
+export interface SessionHistoryDate {
+  /** `yyyy-MM-dd` — also the expand-state identity and the `date=` value that fetches its sessions. */
+  date: string;
+  count: number;
+}
+
+/** `GET /sessions/history?dateCount=` response body (`SessionHistoryDatesResponse`). Pagination is
+ * over distinct *dates*, most-recent-first; `hasMore` says a strictly-older date exists, and the
+ * last returned `date` is the next page's `before` cursor. */
+export interface SessionHistoryDatesResponse {
+  dates: SessionHistoryDate[];
+  hasMore: boolean;
+}

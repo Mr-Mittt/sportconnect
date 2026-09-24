@@ -1,96 +1,48 @@
 import { format } from 'date-fns';
-import type { SessionStatus } from '@/shared/types/session';
-import type { SessionListItem } from './types';
+import type { Session } from '@/shared/types/session';
 
 /**
- * Keeps the first occurrence of each session id. The "My sessions" panel merges several
- * sources that legitimately overlap (e.g. a standalone session I created is both in `mine` and
- * in `joined`, since `createSession` auto-JOINs the creator) — this collapses them back to one
- * card per session before grouping/rendering.
+ * "Today" for the given calendar day, else `MMM d, yyyy` (e.g. "Sep 20, 2026") — the one label
+ * format shared by the Upcoming section's day headers and the History section's date rows, so
+ * both read alike. `dateKey`/`today` are `yyyy-MM-dd`; parsed as local midnight (`T00:00:00`),
+ * never bare `new Date('yyyy-MM-dd')`, which is UTC midnight and shows the previous day in any
+ * zone west of UTC.
  */
-export function dedupeSessionsById(sessions: SessionListItem[]): SessionListItem[] {
-  const seen = new Map<number, SessionListItem>();
-  for (const session of sessions) {
-    if (!seen.has(session.id)) {
-      seen.set(session.id, session);
-    }
-  }
-  return [...seen.values()];
+export function formatSessionDayLabel(dateKey: string, today: string): string {
+  return dateKey === today ? 'Today' : format(new Date(`${dateKey}T00:00:00`), 'MMM d, yyyy');
 }
-
-/** `SCHEDULED`/`ONGOING`/`PREPARING` — a session that hasn't reached a terminal state
- * (CLIENT-SESSION-21: PREPARING is still being set up, not "done" — belongs in "active", not
- * "history"). Everything else (`COMPLETED`, `CANCELLED`) is "history". */
-const ACTIVE_STATUSES: ReadonlySet<SessionStatus> = new Set<SessionStatus>([
-  'SCHEDULED',
-  'ONGOING',
-  'PREPARING',
-]);
-
-export type SessionZone = 'active' | 'history';
 
 export interface SessionDateGroup {
-  /**
-   * Composite `${zone}:${yyyy-MM-dd}` — the collapse-state identity (consumed opaquely by
-   * `MatchesPage`/`SessionDateGroup`). It has to be zone-qualified because the same calendar day
-   * can appear in both zones (its active sessions up top, its completed ones down in history).
-   */
+  /** `yyyy-MM-dd` (local calendar day of `scheduledStart`) — the collapse-state identity. */
   dateKey: string;
-  zone: SessionZone;
-  /** "Today" for the current calendar day, else "MMM d, yyyy" — legitimately repeats now. */
+  /** "Today" or "MMM d, yyyy". */
   dateLabel: string;
-  sessions: SessionListItem[];
+  sessions: Session[];
 }
 
 /**
- * Groups the "My sessions" panel into two **status** zones (CLIENT-SESSION-20 — was two *date*
- * zones), each grouped by the local calendar day of `scheduledStart`:
+ * Groups the Upcoming section's sessions into one collapsible block per local calendar day of
+ * `scheduledStart`. CLIENT-SESSION-23: `GET /sessions/upcoming` is already server-sorted
+ * soonest-first (backend SESSION-27's non-overridable `ORDER BY`), so this **preserves input
+ * order** — days come out ascending and each day's sessions stay in start order without a
+ * client-side re-sort that could disagree with the server's `PREPARING`→`SCHEDULED`→`ONGOING`
+ * tiebreak. It replaces CLIENT-SESSION-20's dual active/history zone split: history is now its
+ * own endpoint (`GET /sessions/history`) and its own section, never date-grouped client-side.
  *
- * - **Active** (`SCHEDULED` + `ONGOING`): date groups ascending (soonest day first), each day's
- *   sessions ascending by start time. Renders first.
- * - **History** (`COMPLETED` + `CANCELLED`): date groups descending (most-recent day first), each
- *   day's sessions descending by start time — the whole zone reads newest → oldest. Renders after
- *   the active zone.
- *
- * A day with both active and terminal sessions therefore appears in both zones (e.g. a "Today"
- * group on top, another "Today" group further down). No zone divider — the per-day headers carry
- * it.
+ * Grouping runs over the flattened pages loaded so far, so a day that straddles a page boundary
+ * still comes out as one group once its next page loads.
  */
-export function groupSessionsByDate(
-  sessions: SessionListItem[],
-  now: Date = new Date(),
-): SessionDateGroup[] {
-  const todayKey = format(now, 'yyyy-MM-dd');
-
-  const activeByDate = new Map<string, SessionListItem[]>();
-  const historyByDate = new Map<string, SessionListItem[]>();
-
+export function groupSessionsByDate(sessions: Session[], now: Date = new Date()): SessionDateGroup[] {
+  const today = format(now, 'yyyy-MM-dd');
+  const groups = new Map<string, SessionDateGroup>();
   for (const session of sessions) {
     const dateKey = format(new Date(session.scheduledStart), 'yyyy-MM-dd');
-    const byDate = ACTIVE_STATUSES.has(session.status) ? activeByDate : historyByDate;
-    const group = byDate.get(dateKey);
+    const group = groups.get(dateKey);
     if (group) {
-      group.push(session);
+      group.sessions.push(session);
     } else {
-      byDate.set(dateKey, [session]);
+      groups.set(dateKey, { dateKey, dateLabel: formatSessionDayLabel(dateKey, today), sessions: [session] });
     }
   }
-
-  const toGroups = (byDate: Map<string, SessionListItem[]>, zone: SessionZone): SessionDateGroup[] => {
-    const dateAsc = zone === 'active';
-    return [...byDate.entries()]
-      .sort(([a], [b]) => (dateAsc ? a.localeCompare(b) : b.localeCompare(a)))
-      .map(([dateKey, groupSessions]) => ({
-        dateKey: `${zone}:${dateKey}`,
-        zone,
-        dateLabel: dateKey === todayKey ? 'Today' : format(new Date(dateKey), 'MMM d, yyyy'),
-        sessions: [...groupSessions].sort((a, b) =>
-          dateAsc
-            ? a.scheduledStart.localeCompare(b.scheduledStart)
-            : b.scheduledStart.localeCompare(a.scheduledStart),
-        ),
-      }));
-  };
-
-  return [...toGroups(activeByDate, 'active'), ...toGroups(historyByDate, 'history')];
+  return [...groups.values()];
 }

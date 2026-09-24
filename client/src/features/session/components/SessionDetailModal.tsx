@@ -40,7 +40,7 @@ import type { Session, SessionParticipant, UpdateSessionPayload } from '../types
 import { SessionAttributesSummary } from './SessionAttributesSummary';
 import { SessionCommentComposer } from './SessionCommentComposer';
 import { SessionCommentSection } from './SessionCommentSection';
-import { SessionPreparingCompletion } from './SessionPreparingCompletion';
+import { SessionPreparingCompletion, type CompletionFavorites } from './SessionPreparingCompletion';
 
 interface SessionDetailModalProps {
   isOpen: boolean;
@@ -81,6 +81,8 @@ interface SessionDetailModalProps {
   selectedCompletionLocation: Location | null;
   onOpenCompletionLocationPicker: () => void;
   completionLocationPicker: LocationPickerProps;
+  /** CLIENT-SESSION-23: favorites for the completion form's location dropdown. */
+  completionFavorites: CompletionFavorites;
   onCompleteSession: (payload: UpdateSessionPayload) => void;
   isCompletingSession: boolean;
   isCompleteSessionError: boolean;
@@ -272,6 +274,7 @@ export function SessionDetailModal({
   selectedCompletionLocation,
   onOpenCompletionLocationPicker,
   completionLocationPicker,
+  completionFavorites,
   onCompleteSession,
   isCompletingSession,
   isCompleteSessionError,
@@ -455,6 +458,7 @@ export function SessionDetailModal({
                   selectedLocation={selectedCompletionLocation}
                   onOpenLocationPicker={onOpenCompletionLocationPicker}
                   locationPicker={completionLocationPicker}
+                  favorites={completionFavorites}
                   onSubmit={onCompleteSession}
                   isSubmitting={isCompletingSession}
                   isError={isCompleteSessionError}

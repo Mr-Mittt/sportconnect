@@ -126,9 +126,9 @@ const trendingHashtagsPage = {
 // pass '/posts/broadcast' in a test's own `handlers` to override.
 const emptyBroadcastsPage = page<Post>([]);
 
-// CLIENT-SESSION-1: empty by default (most tests don't care about upcoming sessions) —
-// useUpcomingMatches (real now) fans out to /sessions/group/{id} for every returned group
-// plus /sessions/mine; pass either in a test's own `handlers` to override.
+// Empty by default (most tests don't care about upcoming sessions) — useUpcomingMatches is one
+// GET /sessions/upcoming call (CLIENT-SESSION-23; was a per-group fan-out + /sessions/mine); pass
+// it in a test's own `handlers` to override.
 const emptySessionsPage = page<unknown>([]);
 
 function mockGet(handlers: Record<string, unknown>) {
@@ -137,7 +137,7 @@ function mockGet(handlers: Record<string, unknown>) {
     if (url === '/sports/profiles') return apiResponse(sportProfiles);
     if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
     if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
-    if (url === '/sessions/mine' || url.startsWith('/sessions/group/')) {
+    if (url === '/sessions/upcoming') {
       return apiResponse(emptySessionsPage);
     }
     throw new Error(`unexpected GET ${url}`);
@@ -359,7 +359,7 @@ describe('useGroupsPageData', () => {
       if (url === '/sports/profiles') return apiResponse(sportProfiles);
       if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
       if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
-      if (url === '/sessions/mine' || url.startsWith('/sessions/group/')) {
+      if (url === '/sessions/upcoming') {
         return apiResponse(emptySessionsPage);
       }
       throw new Error(`unexpected GET ${url}`);
@@ -386,7 +386,7 @@ describe('useGroupsPageData', () => {
       if (url === '/posts/feed') return apiResponse(page([]));
       if (url === '/sports/profiles') return apiResponse(sportProfiles);
       if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
-      if (url === '/sessions/mine' || url.startsWith('/sessions/group/')) {
+      if (url === '/sessions/upcoming') {
         return apiResponse(emptySessionsPage);
       }
       throw new Error(`unexpected GET ${url}`);
@@ -415,7 +415,7 @@ describe('useGroupsPageData', () => {
       if (url === '/sports/profiles') return apiResponse(sportProfiles);
       if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
       if (url === '/posts/broadcast') return apiResponse(emptyBroadcastsPage);
-      if (url === '/sessions/mine' || url.startsWith('/sessions/group/')) {
+      if (url === '/sessions/upcoming') {
         return apiResponse(emptySessionsPage);
       }
       throw new Error(`unexpected GET ${url}`);

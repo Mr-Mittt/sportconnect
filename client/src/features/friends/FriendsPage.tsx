@@ -344,6 +344,7 @@ export function FriendsPage() {
           selectedCompletionLocation={discoverModalData.selectedCompletionLocation}
           onOpenCompletionLocationPicker={discoverModalData.onOpenCompletionLocationPicker}
           completionLocationPicker={discoverModalData.completionLocationPicker}
+          completionFavorites={discoverModalData.completionFavorites}
           onCompleteSession={discoverModalData.onCompleteSession}
           isCompletingSession={discoverModalData.isCompletingSession}
           isCompleteSessionError={discoverModalData.isCompleteSessionError}

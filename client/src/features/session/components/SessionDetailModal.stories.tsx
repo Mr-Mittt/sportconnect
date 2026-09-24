@@ -169,6 +169,7 @@ const meta = {
     selectedCompletionLocation: null,
     onOpenCompletionLocationPicker: () => {},
     completionLocationPicker: inertLocationPicker,
+  completionFavorites: { locations: [], isLoading: false, onSelect: () => {} },
     onCompleteSession: () => {},
     isCompletingSession: false,
     isCompleteSessionError: false,

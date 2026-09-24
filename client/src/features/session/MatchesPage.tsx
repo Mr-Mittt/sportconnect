@@ -14,16 +14,20 @@ import { PAGE_ACCESS_NO_SPORTS_PROMPT } from '@/shared/lib/noSportsPrompt';
 import { AddSportModal } from '@/shared/components/AddSportModal';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { CreateSessionModal } from './components/CreateSessionModal';
-import { SessionDateGroup } from './components/SessionDateGroup';
+import { HistoryDateSessions } from './components/HistoryDateSessions';
+import { HistorySection } from './components/HistorySection';
 import { SessionDetailModal } from './components/SessionDetailModal';
 import { SessionDiscoverPanel } from './components/SessionDiscoverPanel';
+import { UpcomingSessionsSection } from './components/UpcomingSessionsSection';
 import { useMatchesPageData } from './useMatchesPageData';
 
 /**
  * CLIENT-SESSION-6's Matches page (`/matches`) — redesigned from CLIENT-SESSION-1's single
  * merged list into two panels: a **Discover** grid (joinable sessions from other users, via
- * `GET /sessions/discover`) and a collapsible **My sessions** panel (everything the caller
- * created/manages/joined, any status, grouped by calendar day). Assembles
+ * `GET /sessions/discover`) and a collapsible **My sessions** panel, which CLIENT-SESSION-23 split
+ * into two independent sections: **Upcoming sessions** (`GET /sessions/upcoming`, day-grouped) and
+ * **History** (`GET /sessions/history`, one collapsed row per date). Both are scoped to the active
+ * sport pill. Assembles
  * `useMatchesPageData()`; owns only the one piece of page-level state that other pages'
  * `UpcomingMatches` rail card needs to reach into (`?session={id}` deep link, read once via
  * `useSearchParams` and handed to the data hook as its initial value — same
@@ -108,7 +112,7 @@ export function MatchesPage() {
     );
   };
 
-  const discoverGridClassName = data.isHistoryPanelCollapsed
+  const discoverGridClassName = data.isMySessionsPanelCollapsed
     ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3'
     : 'grid grid-cols-1 gap-3 sm:grid-cols-2';
 
@@ -206,13 +210,13 @@ export function MatchesPage() {
         <div className="relative hidden shrink-0 md:block md:w-px md:self-stretch md:bg-border">
           <button
             type="button"
-            title={data.isHistoryPanelCollapsed ? 'Show my sessions' : 'Hide my sessions'}
-            aria-label={data.isHistoryPanelCollapsed ? 'Show my sessions' : 'Hide my sessions'}
-            aria-expanded={!data.isHistoryPanelCollapsed}
-            onClick={data.toggleHistoryPanelCollapsed}
+            title={data.isMySessionsPanelCollapsed ? 'Show my sessions' : 'Hide my sessions'}
+            aria-label={data.isMySessionsPanelCollapsed ? 'Show my sessions' : 'Hide my sessions'}
+            aria-expanded={!data.isMySessionsPanelCollapsed}
+            onClick={data.toggleMySessionsPanelCollapsed}
             className="border-hairline absolute top-14 left-1/2 flex size-7.5 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-border-strong bg-surface-2 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
-            {data.isHistoryPanelCollapsed ? (
+            {data.isMySessionsPanelCollapsed ? (
               <IconChevronsLeft className="size-3.5 text-text-secondary" aria-hidden="true" />
             ) : (
               <IconChevronsRight className="size-3.5 text-text-secondary" aria-hidden="true" />
@@ -220,47 +224,52 @@ export function MatchesPage() {
           </button>
         </div>
 
-        {!data.isHistoryPanelCollapsed && (
+        {!data.isMySessionsPanelCollapsed && (
           <section
             aria-label="My sessions"
-            className="flex flex-col gap-3 md:w-[calc(33.333%-2rem)] md:shrink-0"
+            className="flex flex-col gap-6 md:w-[calc(33.333%-2rem)] md:shrink-0"
           >
-            <h2 className="text-2sm font-medium text-text-primary">My sessions</h2>
+            <UpcomingSessionsSection
+              groups={data.upcomingDateGroups}
+              isLoading={data.isUpcomingLoading}
+              isError={data.isUpcomingError}
+              hasMore={data.hasMoreUpcoming}
+              isFetchingMore={data.isFetchingMoreUpcoming}
+              onLoadMore={data.onLoadMoreUpcoming}
+              collapsedDateKeys={data.collapsedDateKeys}
+              onToggleDateGroupCollapsed={data.toggleDateGroupCollapsed}
+              sportsByKey={data.sportsByKey}
+              currentUserId={data.currentUserId ?? ''}
+              onViewDetails={data.onViewDetails}
+              onParticipationAction={data.onParticipationAction}
+              isParticipationActionPending={data.isParticipationActionPending}
+            />
 
-            {data.isMySessionsLoading && <p className="text-2sm text-text-muted">Loading…</p>}
-            {data.isMySessionsError && (
-              <p role="alert" className="text-2sm text-text-danger">
-                Couldn't load your sessions.
-              </p>
-            )}
-            {!data.isMySessionsLoading &&
-              !data.isMySessionsError &&
-              data.mySessionDateGroups.length === 0 && (
-                <p className="text-2sm text-text-muted">
-                  You haven't created or joined any sessions yet.
-                </p>
-              )}
-            {!data.isMySessionsLoading &&
-              !data.isMySessionsError &&
-              data.mySessionDateGroups.length > 0 && (
-                <div className="flex flex-col gap-4">
-                  {data.mySessionDateGroups.map((group) => (
-                    <SessionDateGroup
-                      key={group.dateKey}
-                      dateKey={group.dateKey}
-                      dateLabel={group.dateLabel}
-                      sessions={group.sessions}
-                      sportsByKey={data.sportsByKey}
-                      currentUserId={data.currentUserId ?? ''}
-                      isCollapsed={data.collapsedDateKeys.has(group.dateKey)}
-                      onToggleCollapsed={data.toggleDateGroupCollapsed}
-                      onViewDetails={data.onViewDetails}
-                      onParticipationAction={data.onParticipationAction}
-                      isParticipationActionPending={data.isParticipationActionPending}
-                    />
-                  ))}
-                </div>
-              )}
+            <HistorySection
+              dates={data.historyDates}
+              today={data.today}
+              expandedDates={data.expandedHistoryDates}
+              onToggleDate={data.toggleHistoryDate}
+              isLoading={data.isHistoryLoading}
+              isError={data.isHistoryError}
+              hasMore={data.hasMoreHistoryDates}
+              isFetchingMore={data.isFetchingMoreHistoryDates}
+              onLoadMore={data.onLoadMoreHistoryDates}
+              renderDateSessions={(date, dateLabel) =>
+                data.activeSportId !== undefined && (
+                  <HistoryDateSessions
+                    date={date}
+                    dateLabel={dateLabel}
+                    sportId={data.activeSportId}
+                    sportsByKey={data.sportsByKey}
+                    currentUserId={data.currentUserId ?? ''}
+                    onViewDetails={data.onViewDetails}
+                    onParticipationAction={data.onParticipationAction}
+                    isParticipationActionPending={data.isParticipationActionPending}
+                  />
+                )
+              }
+            />
           </section>
         )}
       </div>
@@ -314,6 +323,7 @@ export function MatchesPage() {
         selectedCompletionLocation={data.selectedCompletionLocation}
         onOpenCompletionLocationPicker={data.onOpenCompletionLocationPicker}
         completionLocationPicker={data.completionLocationPicker}
+        completionFavorites={data.completionFavorites}
         onCompleteSession={data.onCompleteSession}
         isCompletingSession={data.isCompletingSession}
         isCompleteSessionError={data.isCompleteSessionError}

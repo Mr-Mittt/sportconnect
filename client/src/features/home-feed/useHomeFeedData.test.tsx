@@ -196,7 +196,6 @@ const mySessionsPage = {
   numberOfElements: 1,
   empty: false,
 };
-const emptySessionsPage = { ...mySessionsPage, content: [], totalElements: 0, numberOfElements: 0, empty: true };
 
 /**
  * Mocks GET /posts/feed with `feedPage`; GET /sports/profiles,
@@ -221,8 +220,7 @@ function mockFeedAndSportProfiles(feedPage: PageResponse<Post>) {
     if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
     if (url === '/posts/broadcast') return apiResponse(broadcastsPage);
     if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
-    if (url === `/sessions/group/${fixtureGroup.id}`) return apiResponse(emptySessionsPage);
-    if (url === '/sessions/mine') return apiResponse(mySessionsPage);
+    if (url === '/sessions/upcoming') return apiResponse(mySessionsPage);
     throw new Error(`unexpected GET ${url}`);
   });
 }
@@ -347,8 +345,7 @@ describe('useHomeFeedData', () => {
       }
       if (url === '/posts/broadcast') return apiResponse(broadcastsPage);
       if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
-      if (url === `/sessions/group/${fixtureGroup.id}`) return apiResponse(emptySessionsPage);
-      if (url === '/sessions/mine') return apiResponse(mySessionsPage);
+      if (url === '/sessions/upcoming') return apiResponse(mySessionsPage);
       throw new Error(`unexpected GET ${url}`);
     });
 
@@ -373,8 +370,7 @@ describe('useHomeFeedData', () => {
         return apiResponse(broadcastsPage);
       }
       if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
-      if (url === `/sessions/group/${fixtureGroup.id}`) return apiResponse(emptySessionsPage);
-      if (url === '/sessions/mine') return apiResponse(mySessionsPage);
+      if (url === '/sessions/upcoming') return apiResponse(mySessionsPage);
       throw new Error(`unexpected GET ${url}`);
     });
 
@@ -398,8 +394,7 @@ describe('useHomeFeedData', () => {
       if (url === '/hashtags/trending') return apiResponse(trendingHashtagsPage);
       if (url === '/posts/broadcast') return apiResponse(broadcastsPage);
       if (url === '/groups/user/user-1') return apiResponse(userGroupsPage);
-      if (url === `/sessions/group/${fixtureGroup.id}`) return apiResponse(emptySessionsPage);
-      if (url === '/sessions/mine') return apiResponse(mySessionsPage);
+      if (url === '/sessions/upcoming') return apiResponse(mySessionsPage);
       throw new Error(`unexpected GET ${url}`);
     });
 

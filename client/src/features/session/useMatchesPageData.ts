@@ -1,16 +1,16 @@
+import { format } from 'date-fns';
 import { useMemo, useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
 import { useMatchesPageStore } from '@/app/matchesPageStore';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
-import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
+import { sportIdForKey } from '@/features/feed/sportIdMap';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import { useGroupSessionsForGroups } from './hooks/useGroupSessions';
-import { useJoinedSessions } from './hooks/useJoinedSessions';
-import { useMySessions } from './hooks/useMySessions';
+import { useHistoryDates } from './hooks/useHistoryDates';
 import { useRequestedSessions } from './hooks/useRequestedSessions';
 import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
-import { dedupeSessionsById, groupSessionsByDate } from './groupSessionsByDate';
+import { useUpcomingSessions } from './hooks/useUpcomingSessions';
+import { groupSessionsByDate } from './groupSessionsByDate';
 import { useDiscoverFilters } from './useDiscoverFilters';
 import { useCreateSessionModalData } from './useCreateSessionModalData';
 import { useMatchesActiveSport } from './useMatchesActiveSport';
@@ -18,7 +18,7 @@ import { useSessionDetailModalData } from './useSessionDetailModalData';
 
 /**
  * The Matches page's data boundary — composes every session query/mutation this ticket needs
- * (discover + "My sessions" list aggregation, create, detail, join/leave/cancel) plus
+ * (discover + the Upcoming/History sections, create, detail, join/leave/cancel) plus
  * `LocationPicker`'s data hook for the create form's required location field, so
  * `MatchesPage`/`SessionCard`/`CreateSessionModal`/`SessionDetailModal` all stay
  * presentational and controlled per `client/CLAUDE.md` — same "mega page-data hook" shape as
@@ -29,19 +29,23 @@ import { useSessionDetailModalData } from './useSessionDetailModalData';
  * for `/posts/:postId`, via a query param instead of a path segment since the primary
  * interaction shape here is a dialog, not a route — see CLIENT-SESSION-1's design decision).
  *
- * CLIENT-SESSION-6 split the old single merged list into two panels:
+ * CLIENT-SESSION-6 split the old single merged list into two panels, and CLIENT-SESSION-23 then
+ * split the second one again:
  *  - **Discover** (`useDiscoverFilters`, CLIENT-SESSION-22) — joinable sessions from other users,
  *    scoped by the active sport switcher pill, with real Date/Location/Time filters.
- *  - **My sessions** — everything the caller created, manages via a group, or has joined, any
- *    status, grouped by calendar day. There's still no batch "sessions across my groups"
- *    endpoint (a real backend gap, flagged in CLIENT-SESSION-1's implementation summary), so
- *    this fans out one query per group via `useGroupSessionsForGroups`, merged with `mine`
- *    (creator-only standalone sessions — kept even though a standalone creator auto-JOINs,
- *    because a creator who later *leaves* their own session would otherwise disappear from
- *    "My sessions" entirely) and `useJoinedSessions` (every status the caller has a JOINED row
- *    for — the piece that makes a session joined via Discover show up here afterward). These
- *    three sources legitimately overlap (a self-created standalone session is in both `mine`
- *    and `joined`), so the merge runs through `dedupeSessionsById` before grouping.
+ *  - **Upcoming sessions** (`GET /sessions/upcoming`, backend SESSION-27/43) — the caller's
+ *    `JOINED`/`INVITED` `PREPARING`/`SCHEDULED`/`ONGOING` sessions in the active sport, one
+ *    server-sorted infinite list, day-grouped client-side.
+ *  - **History** (`GET /sessions/history`) — one collapsed row per distinct history date
+ *    (`dateCount` pages, `before` cursor) for the active sport; a date's own sessions are fetched
+ *    lazily by `HistoryDateSessions` once expanded (see its doc comment for why that one fetch
+ *    lives in a component rather than here).
+ *  The old `mine` + `joined` + per-group `useQueries` fan-out, its `dedupeSessionsById` merge
+ *  and the client-side sport filter are all gone: the endpoints are participant-scoped (so a
+ *  group session the caller hasn't joined, or a standalone one they created then left, no longer
+ *  appears — user-accepted) and take `sportId` server-side, which is what keeps pagination and the
+ *  per-date history counts honest (a client-side filter over server-paged data returns short pages
+ *  and counts other sports' sessions).
  */
 export function useMatchesPageData(initialSessionId: number | null) {
   const currentUserId = useAuthStore((state) => state.user?.id);
@@ -68,17 +72,25 @@ export function useMatchesPageData(initialSessionId: number | null) {
   // useDiscoverModalData so the inline panel and the rail modal never drift.
   const discoverFilters = useDiscoverFilters(activeSportId, currentUserId !== undefined);
 
-  // --- "My sessions" panel ---
+  // --- Upcoming sessions + History (CLIENT-SESSION-23) ---
+  // Both need a resolved active sport (`sportId` is required by /history and is what scopes
+  // /upcoming here), so they stay disabled until the caller's sport profiles have loaded — a
+  // zero-profile caller never fires them (MatchesPage's own no-sports gate handles that page).
+  const isSignedIn = currentUserId !== undefined;
+  const upcomingQuery = useUpcomingSessions({
+    sportId: activeSportId,
+    enabled: isSignedIn && activeSportId !== undefined,
+  });
+  const historyDatesQuery = useHistoryDates(isSignedIn ? activeSportId : undefined);
+
+  // Groups are only still needed to resolve a Requested session's `groupName` — the Upcoming
+  // cards never read it, so the old per-group session fan-out is gone.
   const groupsQuery = useUserGroups(currentUserId);
   const groups = useMemo(() => groupsQuery.data?.content ?? [], [groupsQuery.data]);
-  const groupIds = useMemo(() => groups.map((group) => group.id), [groups]);
-  const groupSessionQueries = useGroupSessionsForGroups(groupIds);
-  const mySessionsQuery = useMySessions(currentUserId !== undefined);
-  const joinedSessionsQuery = useJoinedSessions(currentUserId !== undefined);
 
   // --- Requested sessions (CLIENT-SESSION-29) — the Discover panel's own section, not "My
   // sessions"; reuses this hook's already-fetched `groups` list for groupName resolution rather
-  // than fetching it a second time (same pattern mySessionDateGroups below already uses).
+  // than fetching it a second time (the Upcoming section no longer resolves group names at all).
   const requestedSessionsQuery = useRequestedSessions(currentUserId !== undefined);
   const requestedSessions = useMemo(
     () =>
@@ -91,8 +103,10 @@ export function useMatchesPageData(initialSessionId: number | null) {
     [requestedSessionsQuery.data, groups],
   );
 
-  const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(false);
-  const toggleHistoryPanelCollapsed = () => setIsHistoryPanelCollapsed((collapsed) => !collapsed);
+  const [isMySessionsPanelCollapsed, setIsMySessionsPanelCollapsed] = useState(false);
+  const toggleMySessionsPanelCollapsed = () => setIsMySessionsPanelCollapsed((collapsed) => !collapsed);
+
+  // Upcoming day-group collapse state (`yyyy-MM-dd` keys).
   const [collapsedDateKeys, setCollapsedDateKeys] = useState<Set<string>>(() => new Set());
   const toggleDateGroupCollapsed = (dateKey: string) =>
     setCollapsedDateKeys((keys) => {
@@ -105,34 +119,43 @@ export function useMatchesPageData(initialSessionId: number | null) {
       return next;
     });
 
-  const mySessionDateGroups = useMemo(() => {
-    const fromGroups = groupSessionQueries.flatMap((query) => query.data?.content ?? []);
-    const mine = mySessionsQuery.data?.content ?? [];
-    const joined = joinedSessionsQuery.data?.content ?? [];
-    const withGroupName = [...fromGroups, ...mine, ...joined].map((session) => ({
-      ...session,
-      groupName: groups.find((group) => group.id === session.groupId)?.groupName ?? null,
-    }));
-    const deduped = dedupeSessionsById(withGroupName);
-    // No 'all' branch (CLIENT-SESSION-29, 2026-09-23) — activeSport is only ever undefined
-    // transiently (before the first sport profile resolves) or for a zero-profile caller, in
-    // which case there's no sane sport to filter by, so this shows nothing rather than everything.
-    const filtered = deduped.filter(
-      (session) => activeSport !== undefined && sportKeyForId(session.sportId) === activeSport,
-    );
-    return groupSessionsByDate(filtered);
-  }, [groupSessionQueries, mySessionsQuery.data, joinedSessionsQuery.data, groups, activeSport]);
+  const upcomingDateGroups = useMemo(
+    () => groupSessionsByDate((upcomingQuery.data?.pages ?? []).flatMap((page) => page.content)),
+    [upcomingQuery.data],
+  );
+  const historyDates = useMemo(
+    () => (historyDatesQuery.data?.pages ?? []).flatMap((page) => page.dates),
+    [historyDatesQuery.data],
+  );
 
-  const isMySessionsLoading =
-    groupsQuery.isLoading ||
-    mySessionsQuery.isLoading ||
-    joinedSessionsQuery.isLoading ||
-    groupSessionQueries.some((query) => query.isLoading);
-  const isMySessionsError =
-    groupsQuery.isError ||
-    mySessionsQuery.isError ||
-    joinedSessionsQuery.isError ||
-    groupSessionQueries.some((query) => query.isError);
+  // History rows are collapsed by default; which are expanded is scoped to the sport they were
+  // expanded under, so switching pills starts every row collapsed again instead of carrying an
+  // expanded state across two unrelated date lists. Derived at render (same render-phase idiom
+  // `CreateSessionModal` uses) rather than reset in an effect.
+  const [expandedHistory, setExpandedHistory] = useState<{ sportId: number | undefined; dates: Set<string> }>(
+    { sportId: undefined, dates: new Set() },
+  );
+  const expandedHistoryDates = useMemo(
+    () => (expandedHistory.sportId === activeSportId ? expandedHistory.dates : new Set<string>()),
+    [expandedHistory, activeSportId],
+  );
+  const toggleHistoryDate = (date: string) =>
+    setExpandedHistory({
+      sportId: activeSportId,
+      dates: new Set(
+        expandedHistoryDates.has(date)
+          ? [...expandedHistoryDates].filter((expanded) => expanded !== date)
+          : [...expandedHistoryDates, date],
+      ),
+    });
+
+  // "Today" in the viewer's own zone — the browser's local calendar day, the same zone
+  // `viewerZoneId` tells the backend to bucket history dates in.
+  const today = format(new Date(), 'yyyy-MM-dd');
+
+  // Waiting on the sport profiles that resolve the active sport counts as loading — otherwise a
+  // caller whose profiles are still in flight would flash both sections' empty states first.
+  const isResolvingActiveSport = activeSportId === undefined && sportProfilesQuery.isLoading;
 
   // --- Create session ---
   // CLIENT-SESSION-7: extracted into its own hook so Home Feed/Groups/Friends' rail-triggered
@@ -156,9 +179,26 @@ export function useMatchesPageData(initialSessionId: number | null) {
 
     ...discoverFilters,
 
-    mySessionDateGroups,
-    isMySessionsLoading,
-    isMySessionsError,
+    activeSportId,
+    today,
+
+    upcomingDateGroups,
+    isUpcomingLoading: upcomingQuery.isLoading || isResolvingActiveSport,
+    isUpcomingError: upcomingQuery.isError,
+    hasMoreUpcoming: upcomingQuery.hasNextPage ?? false,
+    isFetchingMoreUpcoming: upcomingQuery.isFetchingNextPage,
+    onLoadMoreUpcoming: () => upcomingQuery.fetchNextPage(),
+    collapsedDateKeys,
+    toggleDateGroupCollapsed,
+
+    historyDates,
+    isHistoryLoading: historyDatesQuery.isLoading || isResolvingActiveSport,
+    isHistoryError: historyDatesQuery.isError,
+    hasMoreHistoryDates: historyDatesQuery.hasNextPage ?? false,
+    isFetchingMoreHistoryDates: historyDatesQuery.isFetchingNextPage,
+    onLoadMoreHistoryDates: () => historyDatesQuery.fetchNextPage(),
+    expandedHistoryDates,
+    toggleHistoryDate,
 
     requestedSessions,
     isRequestedSessionsLoading: requestedSessionsQuery.isLoading,
@@ -167,10 +207,8 @@ export function useMatchesPageData(initialSessionId: number | null) {
     isFetchingMoreRequestedSessions: requestedSessionsQuery.isFetchingNextPage,
     onLoadMoreRequestedSessions: () => requestedSessionsQuery.fetchNextPage(),
 
-    isHistoryPanelCollapsed,
-    toggleHistoryPanelCollapsed,
-    collapsedDateKeys,
-    toggleDateGroupCollapsed,
+    isMySessionsPanelCollapsed,
+    toggleMySessionsPanelCollapsed,
 
     ...createSessionModalData,
 

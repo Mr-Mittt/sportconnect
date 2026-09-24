@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
 import { useMatchesPageStore } from '@/app/matchesPageStore';
-import type { Group } from '@/features/feed/types';
 import type { Location } from '@/shared/types/location';
 import type { Session } from '@/shared/types/session';
 import { useMatchesPageData } from './useMatchesPageData';
@@ -41,24 +40,6 @@ function pageResponse<T>(content: T[]) {
     last: true,
     numberOfElements: content.length,
     empty: content.length === 0,
-  };
-}
-
-function makeGroup(overrides: Partial<Group> & Pick<Group, 'id' | 'groupName' | 'sportId'>): Group {
-  return {
-    description: null,
-    avatarUrl: null,
-    coverUrl: null,
-    isPrivate: false,
-    isActive: true,
-    createdBy: 'user-1',
-    createdByFullName: 'Jordan Lee',
-    memberCount: 5,
-    currentUserRole: 'group_member',
-    createdAt: '2026-06-01T10:00:00',
-    updatedAt: '2026-06-01T10:00:00',
-    pinnedPosts: null,
-    ...overrides,
   };
 }
 
@@ -130,8 +111,8 @@ function basketballProfile() {
   };
 }
 
-/** Every test needs `/groups/user/user-1`, `/sessions/mine`, `/sessions/discover`,
- * `/sessions/joined`, and `/sports/profiles` mocked (all fire unconditionally once a user is
+/** Every test needs `/groups/user/user-1`, `/sessions/upcoming`, `/sessions/history`,
+ * `/sessions/discover`, and `/sports/profiles` mocked (all fire once a user + active sport are
  * set) — this fills in empty/default-basketball defaults for whichever of those a test doesn't
  * care about, so each test only overrides what it's actually exercising. Overrides receive the
  * request config so a test can inspect e.g. `/sessions/discover`'s `sportId` query param. */
@@ -141,10 +122,15 @@ function mockGets(
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string, config?: { params?: Record<string, unknown> }) => {
     if (url in overrides) return overrides[url](config);
     if (url === '/groups/user/user-1') return apiResponse(pageResponse([]));
-    if (url === '/sessions/mine') return apiResponse(pageResponse([]));
+    if (url === '/sessions/upcoming') return apiResponse(pageResponse([]));
+    // /history is two shapes behind one path: `dateCount` -> distinct dates, `date` -> that date's sessions.
+    if (url === '/sessions/history') {
+      return config?.params?.dateCount !== undefined
+        ? apiResponse({ dates: [], hasMore: false })
+        : apiResponse(pageResponse([]));
+    }
     if (url === '/sessions/discover') return apiResponse(pageResponse([]));
     if (url === '/sessions/discover/counts') return apiResponse({ counts: [] });
-    if (url === '/sessions/joined') return apiResponse(pageResponse([]));
     if (url === '/sports/profiles') return apiResponse([basketballProfile()]);
     throw new Error(`unexpected GET ${url}`);
   });
@@ -161,101 +147,174 @@ describe('useMatchesPageData', () => {
     useAuthStore.setState({ user: null, accessToken: null, isBootstrapping: false });
   });
 
-  it('merges group / my / joined sessions into status zones — active (asc) above history (desc)', async () => {
-    mockGets({
-      '/groups/user/user-1': () =>
-        apiResponse(pageResponse([makeGroup({ id: 5, groupName: 'Riverside Ballers', sportId: 6 })])),
-      '/sessions/group/5': () =>
+  it('loads the active sport\'s upcoming sessions and groups them by local day, preserving server order', async () => {
+    const spy = mockGets({
+      '/sessions/upcoming': () =>
         apiResponse(
-          pageResponse([makeSession({ id: 1, groupId: 5, status: 'SCHEDULED', scheduledStart: '2026-08-05T19:00:00' })]),
+          pageResponse([
+            makeSession({ id: 1, status: 'PREPARING', scheduledStart: '2026-08-05T09:00:00' }),
+            makeSession({ id: 2, status: 'SCHEDULED', scheduledStart: '2026-08-05T18:00:00' }),
+            makeSession({ id: 3, status: 'ONGOING', scheduledStart: '2026-08-07T10:00:00' }),
+          ]),
         ),
-      '/sessions/mine': () =>
-        apiResponse(pageResponse([makeSession({ id: 2, status: 'ONGOING', scheduledStart: '2026-08-01T09:00:00' })])),
-      '/sessions/joined': () =>
-        apiResponse(pageResponse([makeSession({ id: 3, status: 'COMPLETED', scheduledStart: '2026-07-20T09:00:00' })])),
     });
 
     const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
 
-    await waitFor(() => expect(result.current.isMySessionsLoading).toBe(false));
-    // SCHEDULED (id 1) + ONGOING (id 2) -> active zone, dates ascending; COMPLETED (id 3) -> history.
-    expect(result.current.mySessionDateGroups.map((g) => g.dateKey)).toEqual([
-      'active:2026-08-01',
-      'active:2026-08-05',
-      'history:2026-07-20',
+    await waitFor(() => expect(result.current.isUpcomingLoading).toBe(false));
+    expect(result.current.upcomingDateGroups.map((g) => [g.dateKey, g.sessions.map((s) => s.id)])).toEqual([
+      ['2026-08-05', [1, 2]],
+      ['2026-08-07', [3]],
     ]);
-    expect(result.current.mySessionDateGroups[0].zone).toBe('active');
-    expect(result.current.mySessionDateGroups[0].sessions[0].id).toBe(2); // ONGOING, from /sessions/mine
-    expect(result.current.mySessionDateGroups[0].sessions[0].groupName).toBeNull();
-    // group-name enrichment still works (id 1 comes off /sessions/group/5)
-    expect(result.current.mySessionDateGroups[1].sessions[0].groupName).toBe('Riverside Ballers');
-    expect(result.current.mySessionDateGroups[2].zone).toBe('history');
+
+    // Server-side sport scoping (backend SESSION-43), one 20-row page, and — crucially — no
+    // viewerZoneId: the backend 400s on it without a `date`.
+    const call = spy.mock.calls.find(([url]) => url === '/sessions/upcoming')!;
+    expect(call[1]?.params).toEqual({ sportId: 6, page: 0, size: 20 });
+    expect(call[1]?.params).not.toHaveProperty('viewerZoneId');
   });
 
-  it('dedupes a self-created standalone session appearing in both mine and joined', async () => {
+  it('"Load more" fetches the next upcoming page and merges it into the same day groups', async () => {
     mockGets({
-      '/sessions/mine': () =>
-        apiResponse(pageResponse([makeSession({ id: 1, status: 'SCHEDULED', scheduledStart: '2026-08-05T09:00:00' })])),
-      '/sessions/joined': () =>
-        apiResponse(pageResponse([makeSession({ id: 1, status: 'SCHEDULED', scheduledStart: '2026-08-05T09:00:00' })])),
+      '/sessions/upcoming': (config) =>
+        config?.params?.page === 1
+          ? apiResponse({
+              ...pageResponse([makeSession({ id: 3, status: 'SCHEDULED', scheduledStart: '2026-08-05T20:00:00' })]),
+              number: 1,
+              last: true,
+            })
+          : apiResponse({
+              ...pageResponse([makeSession({ id: 1, status: 'SCHEDULED', scheduledStart: '2026-08-05T09:00:00' })]),
+              number: 0,
+              last: false,
+            }),
     });
 
     const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
-    await waitFor(() => expect(result.current.isMySessionsLoading).toBe(false));
+    await waitFor(() => expect(result.current.hasMoreUpcoming).toBe(true));
 
-    expect(result.current.mySessionDateGroups).toHaveLength(1);
-    expect(result.current.mySessionDateGroups[0].sessions).toHaveLength(1);
+    await act(async () => {
+      await result.current.onLoadMoreUpcoming();
+    });
+
+    await waitFor(() => expect(result.current.hasMoreUpcoming).toBe(false));
+    expect(result.current.upcomingDateGroups).toHaveLength(1);
+    expect(result.current.upcomingDateGroups[0].sessions.map((s) => s.id)).toEqual([1, 3]);
   });
 
-  // CLIENT-SESSION-29 (2026-09-23) — rewritten for "no All sport" (user decision): /matches
-  // always has exactly one real sport active, defaulting to the caller's first profile, never
-  // "every sport at once". Two profiles here (football id5 first, basketball id6 second) so the
-  // initial auto-selected sport (football) and an explicit switch (to basketball) both narrow
-  // the panels to exactly one sport's sessions, never both at the same time.
-  it('filters both panels by activeSport, defaulting to the first sport profile', async () => {
+  it('loads history dates for the active sport in the viewer zone, and pages further back with the last date as the before cursor', async () => {
+    const spy = mockGets({
+      '/sessions/history': (config) => {
+        if (config?.params?.before === '2026-09-10') {
+          return apiResponse({ dates: [{ date: '2026-09-05', count: 1 }], hasMore: false });
+        }
+        return apiResponse({
+          dates: [
+            { date: '2026-09-14', count: 2 },
+            { date: '2026-09-10', count: 1 },
+          ],
+          hasMore: true,
+        });
+      },
+    });
+
+    const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
+    await waitFor(() => expect(result.current.historyDates).toHaveLength(2));
+    expect(result.current.hasMoreHistoryDates).toBe(true);
+
+    const first = spy.mock.calls.find(([url, config]) => url === '/sessions/history' && config?.params?.dateCount !== undefined)!;
+    expect(first[1]?.params).toMatchObject({ dateCount: 20, sportId: 6 });
+    expect(typeof first[1]?.params?.viewerZoneId).toBe('string');
+    expect(first[1]?.params).not.toHaveProperty('before');
+
+    await act(async () => {
+      await result.current.onLoadMoreHistoryDates();
+    });
+    await waitFor(() => expect(result.current.historyDates.map((d) => d.date)).toEqual(['2026-09-14', '2026-09-10', '2026-09-05']));
+    expect(result.current.hasMoreHistoryDates).toBe(false);
+  });
+
+  it('history rows start collapsed, toggleHistoryDate expands/collapses one, and switching sport collapses them all again', async () => {
     mockGets({
       '/sports/profiles': () =>
         apiResponse([
           { ...basketballProfile(), id: 1, sportId: 5, sportName: 'Football' },
           { ...basketballProfile(), id: 2, sportId: 6, sportName: 'Basketball' },
         ]),
-      '/sessions/mine': () =>
-        apiResponse(
-          pageResponse([
-            makeSession({ id: 1, sportId: 6, status: 'SCHEDULED', scheduledStart: '2026-08-01T10:00:00' }),
-            makeSession({ id: 2, sportId: 5, status: 'SCHEDULED', scheduledStart: '2026-08-02T10:00:00' }),
-          ]),
-        ),
-      // Real backend filters by sportId server-side (no client-side sport filtering on
-      // discoverSessions) — this mock simulates that so switching sports actually narrows it.
+      '/sessions/history': () => apiResponse({ dates: [{ date: '2026-09-14', count: 2 }], hasMore: false }),
+    });
+
+    const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
+    await waitFor(() => expect(result.current.historyDates).toHaveLength(1));
+    expect(result.current.expandedHistoryDates.size).toBe(0);
+
+    act(() => result.current.toggleHistoryDate('2026-09-14'));
+    expect(result.current.expandedHistoryDates.has('2026-09-14')).toBe(true);
+    act(() => result.current.toggleHistoryDate('2026-09-14'));
+    expect(result.current.expandedHistoryDates.has('2026-09-14')).toBe(false);
+
+    act(() => result.current.toggleHistoryDate('2026-09-14'));
+    expect(result.current.expandedHistoryDates.has('2026-09-14')).toBe(true);
+    act(() => useMatchesPageStore.getState().setActiveSport('basketball'));
+    await waitFor(() => expect(result.current.expandedHistoryDates.size).toBe(0));
+  });
+
+  it('a caller with no sport profile never fires /upcoming or /history (both need a resolved sport)', async () => {
+    const spy = mockGets({ '/sports/profiles': () => apiResponse([]) });
+
+    const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
+    await waitFor(() => expect(result.current.isUpcomingLoading).toBe(false));
+
+    expect(spy.mock.calls.some(([url]) => url === '/sessions/upcoming')).toBe(false);
+    expect(spy.mock.calls.some(([url]) => url === '/sessions/history')).toBe(false);
+    expect(result.current.upcomingDateGroups).toEqual([]);
+    expect(result.current.historyDates).toEqual([]);
+  });
+
+  // CLIENT-SESSION-29 (2026-09-23) — "no All sport" (user decision): /matches always has exactly
+  // one real sport active, defaulting to the caller's first profile. CLIENT-SESSION-23: that
+  // sport now scopes Upcoming/History *server-side* (sportId param), so this proves the param
+  // follows the pill for all three lists — never a client-side filter over a returned page.
+  it('scopes Discover, Upcoming and History by the active sport, defaulting to the first sport profile', async () => {
+    const spy = mockGets({
+      '/sports/profiles': () =>
+        apiResponse([
+          { ...basketballProfile(), id: 1, sportId: 5, sportName: 'Football' },
+          { ...basketballProfile(), id: 2, sportId: 6, sportName: 'Basketball' },
+        ]),
+      '/sessions/upcoming': (config) => {
+        const all = [
+          makeSession({ id: 1, status: 'SCHEDULED', sportId: 6, scheduledStart: '2026-08-01T10:00:00' }),
+          makeSession({ id: 2, status: 'SCHEDULED', sportId: 5, scheduledStart: '2026-08-02T10:00:00' }),
+        ];
+        return apiResponse(pageResponse(all.filter((s) => s.sportId === config?.params?.sportId)));
+      },
       '/sessions/discover': (config) => {
         const all = [
           makeSession({ id: 3, sportId: 6, status: 'SCHEDULED', scheduledStart: '2026-08-03T10:00:00' }),
           makeSession({ id: 4, sportId: 5, status: 'SCHEDULED', scheduledStart: '2026-08-04T10:00:00' }),
         ];
         const sportId = config?.params?.sportId;
-        return apiResponse(
-          pageResponse(sportId === undefined ? all : all.filter((s) => s.sportId === sportId)),
-        );
+        return apiResponse(pageResponse(sportId === undefined ? all : all.filter((s) => s.sportId === sportId)));
       },
     });
 
     const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
-    await waitFor(() => expect(result.current.isMySessionsLoading).toBe(false));
     // Defaults to the first profile (football, sportId 5) — only id 2/4 match, never both sports.
     await waitFor(() => expect(result.current.dateSections[0].sessions).toHaveLength(1));
     expect(result.current.dateSections[0].sessions[0].id).toBe(4);
-    expect(result.current.mySessionDateGroups.flatMap((g) => g.sessions)).toHaveLength(1);
-    expect(result.current.mySessionDateGroups[0].sessions[0].id).toBe(2);
+    await waitFor(() => expect(result.current.upcomingDateGroups.flatMap((g) => g.sessions)).toHaveLength(1));
+    expect(result.current.upcomingDateGroups[0].sessions[0].id).toBe(2);
+    expect(result.current.activeSportId).toBe(5);
 
     act(() => useMatchesPageStore.getState().setActiveSport('basketball'));
 
-    await waitFor(() =>
-      expect(result.current.mySessionDateGroups.flatMap((g) => g.sessions)).toHaveLength(1),
-    );
-    expect(result.current.mySessionDateGroups[0].sessions[0].id).toBe(1);
-    await waitFor(() => expect(result.current.dateSections[0].sessions).toHaveLength(1));
-    expect(result.current.dateSections[0].sessions[0].id).toBe(3);
+    await waitFor(() => expect(result.current.upcomingDateGroups[0]?.sessions[0].id).toBe(1));
+    await waitFor(() => expect(result.current.dateSections[0].sessions[0]?.id).toBe(3));
+    expect(result.current.activeSportId).toBe(6);
+    expect(
+      spy.mock.calls.filter(([url]) => url === '/sessions/history').every(([, config]) => config?.params?.sportId !== undefined),
+    ).toBe(true);
   });
 
   it("sends the debounced search text as /discover's title param", async () => {
@@ -280,14 +339,14 @@ describe('useMatchesPageData', () => {
     expect(result.current.dateSections[0].sessions[0].id).toBe(1);
   });
 
-  it('toggleHistoryPanelCollapsed and toggleDateGroupCollapsed flip their own state', async () => {
+  it('toggleMySessionsPanelCollapsed and toggleDateGroupCollapsed flip their own state', async () => {
     mockGets({});
     const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
-    await waitFor(() => expect(result.current.isMySessionsLoading).toBe(false));
+    await waitFor(() => expect(result.current.isUpcomingLoading).toBe(false));
 
-    expect(result.current.isHistoryPanelCollapsed).toBe(false);
-    act(() => result.current.toggleHistoryPanelCollapsed());
-    expect(result.current.isHistoryPanelCollapsed).toBe(true);
+    expect(result.current.isMySessionsPanelCollapsed).toBe(false);
+    act(() => result.current.toggleMySessionsPanelCollapsed());
+    expect(result.current.isMySessionsPanelCollapsed).toBe(true);
 
     expect(result.current.collapsedDateKeys.has('2026-08-05')).toBe(false);
     act(() => result.current.toggleDateGroupCollapsed('2026-08-05'));
@@ -303,7 +362,7 @@ describe('useMatchesPageData', () => {
     });
 
     const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
-    await waitFor(() => expect(result.current.isMySessionsLoading).toBe(false));
+    await waitFor(() => expect(result.current.isUpcomingLoading).toBe(false));
 
     expect(result.current.selectedSessionId).toBeNull();
     act(() => result.current.onViewDetails(7));
@@ -371,7 +430,7 @@ describe('useMatchesPageData', () => {
     const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue(apiResponse(created));
 
     const { result } = renderHook(() => useMatchesPageData(null), { wrapper });
-    await waitFor(() => expect(result.current.isMySessionsLoading).toBe(false));
+    await waitFor(() => expect(result.current.isUpcomingLoading).toBe(false));
 
     act(() => result.current.openCreateModal());
     expect(result.current.isCreateModalOpen).toBe(true);

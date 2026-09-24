@@ -172,7 +172,7 @@ describe('App routing', () => {
       // empty; without these, they'd fall through to the post-shaped
       // fallback below and useGroupBroadcasts would crash trying to read
       // groupName off a Post it mistook for a Group.
-      if (url === '/posts/broadcast' || url === '/groups/user/1') {
+      if (url === '/posts/broadcast' || url === '/groups/user/1' || url === '/sessions/upcoming') {
         return {
           data: {
             success: true,

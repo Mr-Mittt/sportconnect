@@ -119,7 +119,7 @@ function mockGet(url: string): { data: unknown } {
   if (url === '/hashtags/trending') return emptyPage();
   if (url === '/posts/broadcast') return emptyPage();
   if (url === '/groups/user/user-1') return emptyPage();
-  if (url === '/sessions/mine') return emptyPage();
+  if (url === '/sessions/upcoming') return emptyPage();
   if (url === '/sports/5/attribute-schema') return apiResponse(null);
   throw new Error(`unexpected GET ${url}`);
 }
