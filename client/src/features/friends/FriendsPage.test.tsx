@@ -78,13 +78,12 @@ const receivedRequest: FriendRequest = {
 };
 
 /** Static (test-invariant) GET responses — right rail's page-independent hooks.
- * CLIENT-SESSION-1: useUpcomingMatches (matches rail) is real now — /groups/user/
- * returning empty means no group-session fan-out, but /sessions/mine still fires. */
+ * CLIENT-SESSION-23: useUpcomingMatches (matches rail) is one GET /sessions/upcoming call now. */
 function staticGetResponse(url: string): { data: unknown } | undefined {
   if (url === '/hashtags/trending') return emptyPage();
   if (url === '/posts/broadcast') return emptyPage();
   if (url.startsWith('/groups/user/')) return emptyPage();
-  if (url === '/sessions/mine') return emptyPage();
+  if (url === '/sessions/upcoming') return emptyPage();
   if (url === '/sessions/discover') return emptyPage();
   if (url === '/sports/profiles') return apiResponse([]); // SPORT-11: caller-scoped (A22)
   return undefined;

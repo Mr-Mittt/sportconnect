@@ -155,3 +155,36 @@ export const CallerRequested: Story = {
 export const ParticipationActionPending: Story = {
   args: { session: makeSession({ id: 14 }), isParticipationActionPending: () => true },
 };
+
+/** CLIENT-SESSION-23: a location name too long for one line is ellipsised (full name on hover via
+ * `title`), never wrapped to a second line. */
+export const LongLocationName: Story = {
+  args: {
+    session: makeSession({
+      id: 16,
+      location: {
+        ...location,
+        name: 'Riverside Indoor Multi-Sport Courts & Community Recreation Centre, Building B, Level 2',
+      },
+    }),
+  },
+};
+
+/** CLIENT-SESSION-23: in a grid row taller than a card's own content (here, the tall spacer in the
+ * third cell stretches the row), both cards stretch to the row height and their action buttons sit
+ * on the same bottom edge instead of floating mid-card. */
+export const ActionsStickToBottomInStretchedRow: Story = {
+  args: { session: makeSession({ id: 17 }) },
+  decorators: [
+    (_Story, context) => (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, maxWidth: 900 }}>
+        <SessionCard {...context.args} session={makeSession({ id: 17 })} />
+        <SessionCard
+          {...context.args}
+          session={makeSession({ id: 18, title: 'Short', location: { ...location, name: 'Court A' } })}
+        />
+        <div style={{ height: 280, border: '1px dashed currentColor' }} aria-hidden="true" />
+      </div>
+    ),
+  ],
+};

@@ -6,6 +6,17 @@ import type { FeeType, Session } from '@/shared/types/session';
 import { Button } from '@/shared/ui/button';
 import type { UpdateSessionPayload } from '../types';
 import { FeeTypeFields } from './FeeTypeFields';
+import { LocationFavoritesDropdown } from './LocationFavoritesDropdown';
+
+/** CLIENT-SESSION-23: the favorites data `LocationFavoritesDropdown` needs, bundled into one prop
+ * so the six hosts of `SessionDetailModal` thread a single value through instead of three. Owned by
+ * `useSessionDetailModalData` (it already runs the favorites query for the picker's hearts). */
+export interface CompletionFavorites {
+  locations: Location[];
+  isLoading: boolean;
+  /** Picking a favorite straight from the dropdown — bypasses the full `LocationPicker`. */
+  onSelect: (location: Location) => void;
+}
 
 interface SessionPreparingCompletionProps {
   /** Caller guarantees `status === 'PREPARING'` before rendering this at all — SESSION-24's own
@@ -14,6 +25,7 @@ interface SessionPreparingCompletionProps {
   selectedLocation: Location | null;
   onOpenLocationPicker: () => void;
   locationPicker: LocationPickerProps;
+  favorites: CompletionFavorites;
   onSubmit: (payload: UpdateSessionPayload) => void;
   isSubmitting: boolean;
   isError: boolean;
@@ -23,7 +35,10 @@ interface SessionPreparingCompletionProps {
  * CLIENT-SESSION-21: the "complete session setup" surface for a PREPARING session's own
  * creator/owner-admin (SESSION-24) — renders only whichever of location/fee is still missing,
  * reusing the exact same `LocationPicker` and `FeeTypeFields` widgets `CreateSessionModal` uses
- * for the same fields, rather than inventing a second location/fee-picking UI. No prior "edit
+ * for the same fields, rather than inventing a second location/fee-picking UI. CLIENT-SESSION-23:
+ * the location control is now the same favorites `DropdownMenu` `CreateSessionModal` uses
+ * (`LocationFavoritesDropdown`) — favorites as quick picks, a trailing "Choose a location…" item
+ * opening the full picker — instead of a bare button that always opened the full dialog. No prior "edit
  * session" pattern exists in this codebase to follow instead (the ticket's own scoping note).
  *
  * Submits only the field(s) actually being completed — never re-sends a field the session
@@ -39,6 +54,7 @@ export function SessionPreparingCompletion({
   selectedLocation,
   onOpenLocationPicker,
   locationPicker,
+  favorites,
   onSubmit,
   isSubmitting,
   isError,
@@ -101,9 +117,14 @@ export function SessionPreparingCompletion({
               {selectedLocation.name}
             </span>
           )}
-          <Button type="button" variant="outline" size="sm" onClick={onOpenLocationPicker}>
-            {selectedLocation === null ? 'Choose location' : 'Change location'}
-          </Button>
+          <LocationFavoritesDropdown
+            selectedLocation={selectedLocation}
+            favorites={favorites.locations}
+            isFavoritesLoading={favorites.isLoading}
+            disabled={false}
+            onSelectFavorite={favorites.onSelect}
+            onOpenLocationPicker={onOpenLocationPicker}
+          />
         </div>
       )}
 

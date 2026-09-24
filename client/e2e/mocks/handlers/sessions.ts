@@ -10,6 +10,7 @@ import {
   mockInvitedSession,
   mockLocation,
   mockOwnedGroupSession,
+  mockPreparingSession,
   mockRequestedSession,
   mockSecondSessionJoinRequest,
   mockSession,
@@ -83,6 +84,94 @@ function mockPageResponse<T>(content: T[]) {
   };
 }
 
+/**
+ * CLIENT-SESSION-23 — a real Spring `Page` slice of `all` for the request's `page`/`size` (default
+ * 0/20), unlike `mockPageResponse` above (always one page). `/upcoming` and `/history` need real
+ * paging: the client's "Load more" reads `last`/`number` off the page it just got.
+ */
+function slicePage<T>(all: T[], url: URL) {
+  const page = Number(url.searchParams.get('page') ?? 0);
+  const size = Number(url.searchParams.get('size') ?? 20);
+  const content = all.slice(page * size, (page + 1) * size);
+  const totalPages = Math.max(1, Math.ceil(all.length / size));
+  return {
+    content,
+    totalPages,
+    totalElements: all.length,
+    number: page,
+    size,
+    first: page === 0,
+    last: page >= totalPages - 1,
+    numberOfElements: content.length,
+    empty: content.length === 0,
+  };
+}
+
+/** `yyyy-MM-dd` of `scheduledStart` in `zone` — what the real backend's `viewerZoneId` bucketing
+ * (SESSION-34/35) does with a session's true instant. The fixtures' offset-less `scheduledStart`
+ * strings parse in this Node process's own zone, the same zone a default Playwright browser
+ * context reports, so a fixture's wall-clock day survives the round trip unchanged. */
+function dateInZone(scheduledStart: string, zone: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: zone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(scheduledStart));
+}
+
+/** The caller's own participant row on a session, or undefined — every "mine" list below is
+ * scoped by this, exactly like the real `/upcoming`/`/history` (backend SESSION-27). */
+function callerRow(session: SessionsSession, sessionId: number): SessionParticipant | undefined {
+  return (session.participantsState[sessionId] ?? []).find((p) => p.userId === mockUser.id);
+}
+
+const UPCOMING_STATUSES: ReadonlyArray<Session['status']> = ['PREPARING', 'SCHEDULED', 'ONGOING'];
+const HISTORY_STATUSES: ReadonlyArray<Session['status']> = ['CANCELLED', 'COMPLETED'];
+/** `/upcoming`'s tiebreak for sessions sharing an exact `scheduledStart`. */
+const UPCOMING_STATUS_RANK: Record<string, number> = { PREPARING: 0, SCHEDULED: 1, ONGOING: 2 };
+
+/**
+ * `overrides.historyVolume` (CLIENT-SESSION-23): synthesizes enough history for the client's two
+ * "Load more" levels without hand-writing 40+ fixtures — 22 distinct dates (one more page than
+ * `dateCount=20`) for the requested sport, one of which (the newest) holds 23 sessions (one more
+ * than a date's own page size of 20). Generated per request from `sportId`, so either sport pill
+ * sees it; not part of `sessionsState`, so they have no detail route (nothing needs one).
+ */
+function syntheticHistory(sportId: number): Session[] {
+  const template = mockCancelledSession;
+  const make = (id: number, day: number, minute: number): Session => ({
+    ...template,
+    id,
+    sportId,
+    title: `History session ${id}`,
+    status: 'COMPLETED',
+    cancelReason: null,
+    cancelledBy: null,
+    cancelledByFullName: null,
+    cancelledAt: null,
+    // Mid-day + minute steps: a wall-clock 10:xx never crosses a date line under any zone offset
+    // the mock server and the browser context could plausibly differ by.
+    scheduledStart: `2026-07-${String(day).padStart(2, '0')}T10:${String(minute).padStart(2, '0')}:00`,
+    callerParticipation: {
+      id: id,
+      sessionId: id,
+      userId: mockUser.id,
+      userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+      userAvatarUrl: mockUser.avatarUrl,
+      status: 'JOINED',
+      rejectReason: null,
+      createdAt: '2026-07-01T00:00:00',
+    },
+  });
+  const sessions: Session[] = [];
+  // Newest date (Jul 22): 23 sessions, 10:00-10:22 — more than one 20-row page.
+  for (let i = 0; i < 23; i++) sessions.push(make(1000 + i, 22, i));
+  // 21 older dates (Jul 1-21), one session each -> 22 distinct dates in total.
+  for (let day = 1; day <= 21; day++) sessions.push(make(2000 + day, day, 12));
+  return sessions;
+}
+
 interface SessionsSession {
   sessionsState: Session[];
   participantsState: Record<number, SessionParticipant[]>;
@@ -98,26 +187,40 @@ interface SessionsSession {
 
 // CLIENT-SESSION-1's own stateful fake backend, same "not a fixed responder"
 // reasoning as groups.ts/sport.ts — a created session must actually appear
-// in a later GET /sessions/mine, and join/leave/cancel must actually mutate
+// in a later GET /sessions/upcoming, and join/leave/cancel must actually mutate
 // state a later GET re-reads (useCreateSession/useJoinSession/etc.'s own
 // invalidateQueries would otherwise clobber a static fixture on refetch).
+function seededJoinedRow(sessionId: number, id: number): SessionParticipant {
+  return {
+    id,
+    sessionId,
+    userId: mockUser.id,
+    userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+    userAvatarUrl: mockUser.avatarUrl,
+    status: 'JOINED',
+    rejectReason: null,
+    createdAt: '2026-07-01T00:00:00',
+  };
+}
+
+// The seeded JOINED rows above must be reflected in each session's own `participantCount` (real
+// backend: JOINED rows + initialSlot), or a card would say "0/10" over a one-person Players list.
+function withJoinedCount(target: Session): Session {
+  return { ...target, participantCount: target.participantCount + 1 };
+}
+
 function defaultSessionsSession(): SessionsSession {
   return {
     sessionsState: [
-      { ...mockSession },
-      { ...mockGroupSession },
-      { ...mockOwnedGroupSession },
+      withJoinedCount(mockSession),
+      withJoinedCount(mockGroupSession),
+      withJoinedCount(mockOwnedGroupSession),
       { ...mockDiscoverableSession },
       { ...mockInvitedSession },
       { ...mockRequestedSession },
-      { ...mockCancelledSession },
-      // CLIENT-SESSION-21: no static PREPARING fixture is seeded here, unlike every session
-      // status above — UpcomingMatches' rail caps at maxVisible=4 by soonest-start, and every
-      // other e2e spec that asserts a specific session appears in that rail (home-feed/groups/
-      // friends/profile journeys) would silently start failing if an 8th standalone session
-      // pushed one of theirs out of view. matches-journey.spec.ts's own PREPARING step (11)
-      // creates its session live through the real create-session flow instead, exercising the
-      // POST/PUT handler logic below without touching this shared seed.
+      withJoinedCount(mockCancelledSession),
+      // CLIENT-SESSION-23: see the fixture's own note — soonest-first rail cap never shows it.
+      withJoinedCount(mockPreparingSession),
     ],
     // CLIENT-SESSION-4: mockOwnedGroupSession (mockUser is group_owner) starts with one
     // pre-seeded REQUESTED row, so the approval queue has something to show without needing a
@@ -126,7 +229,22 @@ function defaultSessionsSession(): SessionsSession {
     // one level down — the caller's own pending-invite/pending-approval view, not the owner's
     // queue.
     participantsState: {
-      [mockOwnedGroupSession.id]: [{ ...mockSessionJoinRequest }, { ...mockSecondSessionJoinRequest }],
+      // CLIENT-SESSION-23: /upcoming and /history are participant-scoped (backend SESSION-27), so a
+      // session only shows up in the fixture user's "My sessions"/rail once they hold a row on it.
+      // Seeded JOINED for the four sessions the pre-23 mock surfaced via the mine/group fan-out:
+      // mockSession (creator of a standalone session — the real backend auto-JOINs them),
+      // mockGroupSession (a group session they joined), mockOwnedGroupSession (their own group
+      // session, joined), and mockCancelledSession (creator, then cancelled — the History seed).
+      // mockDiscoverableSession is deliberately left un-joined: it is the Discover/join fixture.
+      [mockSession.id]: [seededJoinedRow(mockSession.id, 10)],
+      [mockGroupSession.id]: [seededJoinedRow(mockGroupSession.id, 11)],
+      [mockCancelledSession.id]: [seededJoinedRow(mockCancelledSession.id, 13)],
+      [mockPreparingSession.id]: [seededJoinedRow(mockPreparingSession.id, 14)],
+      [mockOwnedGroupSession.id]: [
+        seededJoinedRow(mockOwnedGroupSession.id, 12),
+        { ...mockSessionJoinRequest },
+        { ...mockSecondSessionJoinRequest },
+      ],
       [mockInvitedSession.id]: [{ ...mockUserInvitedRow }],
       [mockRequestedSession.id]: [{ ...mockUserRequestedRow }],
     },
@@ -319,10 +437,12 @@ export const sessionHandlers: HttpHandler[] = [
       cancelledBy: null,
       cancelledByFullName: null,
       cancelledAt: null,
-      // Real backend: participantCount = real JOINED rows + initialSlot. This mock doesn't
-      // simulate the creator auto-joining on create (a pre-existing gap, out of scope here), so
-      // the real-JOINED-rows half stays 0 — initialSlot is the only real addition this ticket makes.
-      participantCount: initialSlot,
+      // Real backend: participantCount = real JOINED rows + initialSlot, and a standalone
+      // session's creator is auto-JOINED (SESSION-14 rule 8). CLIENT-SESSION-23 now simulates that
+      // (it has to: /upcoming is participant-scoped, so a freshly created session would otherwise
+      // never appear in the creator's own list) — a group-linked session's creator is not
+      // auto-joined, matching the real backend.
+      participantCount: initialSlot + (body.groupId === undefined ? 1 : 0),
       capacity: body.capacity,
       feeType: body.feeType ?? null,
       feeAmountVnd: body.feeType === 'FIXED' ? (body.feeAmountVnd ?? null) : null,
@@ -331,26 +451,46 @@ export const sessionHandlers: HttpHandler[] = [
       attributes: body.attributes ?? null,
       likeCount: 0,
       isLikedByCurrentUser: false,
-      // Creator auto-join isn't simulated (see the comment above) — no row exists yet either way.
+      // The POST response itself is never read for this field — every list/detail GET resolves
+      // `callerParticipation` per response from `participantsState` (withCallerParticipation).
       callerParticipation: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     session.sessionsState = [created, ...session.sessionsState];
+    if (body.groupId === undefined) {
+      session.participantsState[created.id] = [
+        {
+          id: session.nextParticipantId++,
+          sessionId: created.id,
+          userId: mockUser.id,
+          userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+          userAvatarUrl: mockUser.avatarUrl,
+          status: 'JOINED',
+          rejectReason: null,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+    }
     // SESSION-6: pre-create an INVITED row per deduped invitee id (excluding the creator's own),
     // resolved only by that user's own later joinSession call, which bypasses autoApprove entirely.
     const dedupedInviteeIds = [...new Set(body.inviteeIds ?? [])].filter((id) => id !== mockUser.id);
     if (dedupedInviteeIds.length > 0) {
-      session.participantsState[created.id] = dedupedInviteeIds.map((inviteeId) => ({
-        id: session.nextParticipantId++,
-        sessionId: created.id,
-        userId: inviteeId,
-        userFullName: KNOWN_USER_NAMES[inviteeId] ?? 'Invited user',
-        userAvatarUrl: null,
-        status: 'INVITED',
-        rejectReason: null,
-        createdAt: new Date().toISOString(),
-      }));
+      session.participantsState[created.id] = [
+        ...(session.participantsState[created.id] ?? []),
+        ...dedupedInviteeIds.map(
+          (inviteeId): SessionParticipant => ({
+            id: session.nextParticipantId++,
+            sessionId: created.id,
+            userId: inviteeId,
+            userFullName: KNOWN_USER_NAMES[inviteeId] ?? 'Invited user',
+            userAvatarUrl: null,
+            status: 'INVITED',
+            rejectReason: null,
+            createdAt: new Date().toISOString(),
+          }),
+        ),
+      ];
     }
     return HttpResponse.json(apiResponse(created, 'Session created successfully'), { status: 201 });
   }),
@@ -370,23 +510,117 @@ export const sessionHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(mockPageResponse(results), 'Sessions retrieved successfully'));
   }),
 
-  http.get('/api/sessions/mine', ({ request }) => {
+  // CLIENT-SESSION-23 — `GET /sessions/upcoming` (backend SESSION-27/43), replacing the removed
+  // `/mine`: sessions where the caller holds a JOINED or INVITED row, status
+  // PREPARING/SCHEDULED/ONGOING, standalone or group-linked; optional `sportId` (absent = all sports)
+  // and `date` (+ `viewerZoneId`, 400 without `date`); `scheduledStart` ASC with a
+  // PREPARING→SCHEDULED→ONGOING tiebreak; real page/size paging. Registered before the
+  // `:sessionId` catch-all, same route-ordering reasoning as /discover below.
+  http.get('/api/sessions/upcoming', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
+    const url = new URL(request.url);
+    const date = url.searchParams.get('date');
+    const viewerZoneId = url.searchParams.get('viewerZoneId');
+    if (date === null && viewerZoneId !== null) {
+      return HttpResponse.json(apiError('viewerZoneId is only valid alongside date'), { status: 400 });
+    }
     const sessionId = sessionIdFromRequest(request);
     if (getOverrides(sessionId).sessionsEmpty) {
-      return HttpResponse.json(apiResponse(mockPageResponse([]), 'Sessions retrieved successfully'));
+      return HttpResponse.json(apiResponse(slicePage([], url), 'Sessions retrieved successfully'));
     }
+    const sportIdParam = url.searchParams.get('sportId');
     const session = sessionsSessions.get(sessionId);
     const results = session.sessionsState
-      .filter((candidate) => candidate.groupId === null && candidate.createdBy === mockUser.id)
+      .filter((candidate) => {
+        if (!UPCOMING_STATUSES.includes(candidate.status)) return false;
+        const row = callerRow(session, candidate.id);
+        if (row?.status !== 'JOINED' && row?.status !== 'INVITED') return false;
+        if (sportIdParam !== null && candidate.sportId !== Number(sportIdParam)) return false;
+        if (date !== null && dateInZone(candidate.scheduledStart, viewerZoneId ?? 'UTC') !== date) return false;
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          Date.parse(a.scheduledStart) - Date.parse(b.scheduledStart) ||
+          UPCOMING_STATUS_RANK[a.status] - UPCOMING_STATUS_RANK[b.status],
+      )
       .map((candidate) => withCallerParticipation(session, candidate));
-    return HttpResponse.json(apiResponse(mockPageResponse(results), 'Sessions retrieved successfully'));
+    return HttpResponse.json(apiResponse(slicePage(results, url), 'Sessions retrieved successfully'));
+  }),
+
+  // CLIENT-SESSION-23 — `GET /sessions/history` (backend SESSION-27/34/35/43), replacing the
+  // removed `/joined`. `sportId` REQUIRED; exactly one of `date` (that day's CANCELLED/COMPLETED
+  // sessions the caller was JOINED to, `scheduledStart` DESC, paged) or `dateCount` (the last N
+  // distinct dates, most-recent-first, with per-date counts, `before` = exclusive cursor,
+  // `hasMore` from fetching one extra). Both bucket by `viewerZoneId` (UTC when omitted).
+  http.get('/api/sessions/history', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const url = new URL(request.url);
+    const sportIdParam = url.searchParams.get('sportId');
+    const date = url.searchParams.get('date');
+    const dateCountParam = url.searchParams.get('dateCount');
+    const before = url.searchParams.get('before');
+    if (sportIdParam === null) {
+      return HttpResponse.json(apiError('sportId is required'), { status: 400 });
+    }
+    if ((date === null) === (dateCountParam === null)) {
+      return HttpResponse.json(apiError('Exactly one of date or dateCount is required'), { status: 400 });
+    }
+    if (dateCountParam === null && before !== null) {
+      return HttpResponse.json(apiError('before is only valid alongside dateCount'), { status: 400 });
+    }
+    const dateCount = dateCountParam !== null ? Number(dateCountParam) : null;
+    if (dateCount !== null && !(dateCount > 0)) {
+      return HttpResponse.json(apiError('dateCount must be positive'), { status: 400 });
+    }
+
+    const sessionId = sessionIdFromRequest(request);
+    const zone = url.searchParams.get('viewerZoneId') ?? 'UTC';
+    const sportId = Number(sportIdParam);
+    const session = sessionsSessions.get(sessionId);
+    const fromState = session.sessionsState
+      .filter(
+        (candidate) =>
+          HISTORY_STATUSES.includes(candidate.status) &&
+          candidate.sportId === sportId &&
+          callerRow(session, candidate.id)?.status === 'JOINED',
+      )
+      .map((candidate) => withCallerParticipation(session, candidate));
+    const candidates = [
+      ...fromState,
+      ...(getOverrides(sessionId).historyVolume ? syntheticHistory(sportId) : []),
+    ];
+
+    if (date !== null) {
+      const results = candidates
+        .filter((candidate) => dateInZone(candidate.scheduledStart, zone) === date)
+        .sort((a, b) => Date.parse(b.scheduledStart) - Date.parse(a.scheduledStart));
+      return HttpResponse.json(apiResponse(slicePage(results, url), 'Sessions retrieved successfully'));
+    }
+
+    const countsByDate = new Map<string, number>();
+    for (const candidate of candidates) {
+      const day = dateInZone(candidate.scheduledStart, zone);
+      countsByDate.set(day, (countsByDate.get(day) ?? 0) + 1);
+    }
+    const allDates = [...countsByDate.entries()]
+      .map(([day, count]) => ({ date: day, count }))
+      .filter((entry) => before === null || entry.date < before)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const limit = dateCount ?? 0;
+    return HttpResponse.json(
+      apiResponse(
+        { dates: allDates.slice(0, limit), hasMore: allDates.length > limit },
+        'History dates retrieved successfully',
+      ),
+    );
   }),
 
   // CLIENT-SESSION-6: registered before the `:sessionId` catch-all below, same route-ordering
   // lesson CLIENT-SESSION-5 found for /locations/favorites — MSW matches in array order, and
-  // `:sessionId` would otherwise swallow the literal strings "discover"/"joined" as a bogus id
+  // `:sessionId` would otherwise swallow the literal strings "discover"/"upcoming" as a bogus id
   // (Number("discover") is NaN, so it'd fall through to a false "Session not found").
   http.get('/api/sessions/discover', ({ request }) => {
     const unauthorized = requireAuth(request);
@@ -425,29 +659,10 @@ export const sessionHandlers: HttpHandler[] = [
     );
   }),
 
-  http.get('/api/sessions/joined', ({ request }) => {
-    const unauthorized = requireAuth(request);
-    if (unauthorized) return unauthorized;
-    const statusParam = new URL(request.url).searchParams.get('status');
-    const session = sessionsSessions.get(sessionIdFromRequest(request));
-    const results = session.sessionsState.filter((candidate) => {
-      if (statusParam !== null && candidate.status !== statusParam) return false;
-      return (session.participantsState[candidate.id] ?? []).some(
-        (p) => p.userId === mockUser.id && p.status === 'JOINED',
-      );
-    });
-    return HttpResponse.json(
-      apiResponse(
-        mockPageResponse(results.map((candidate) => withCallerParticipation(session, candidate))),
-        'Sessions retrieved successfully',
-      ),
-    );
-  }),
-
   // CLIENT-SESSION-29 — `GET /sessions/requested` (backend SESSION-42): the caller's own pending
   // REQUESTED rows, any status PREPARING/SCHEDULED/ONGOING, standalone or group-linked. No filter
-  // params at all (unlike /discover, /joined) — registered before the `:sessionId` catch-all,
-  // same route-ordering reasoning as /discover/joined above.
+  // params at all (unlike /discover, /upcoming) — registered before the `:sessionId` catch-all,
+  // same route-ordering reasoning as /discover above.
   http.get('/api/sessions/requested', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;

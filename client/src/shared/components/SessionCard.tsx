@@ -35,13 +35,18 @@ const ACTION_BUTTON_CLASSES =
   'border-hairline flex-1 cursor-pointer rounded-lg border-border-strong py-1.25 text-xs text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-not-allowed disabled:opacity-60';
 
 /**
+ * CLIENT-SESSION-23: the wrapper is a flex column at both sizes and `actionsRow` carries
+ * `mt-auto`, so the action buttons sit at the card's bottom edge however tall its content is —
+ * a grid row stretches every card to the row's height, and without this a card with less content
+ * left its buttons floating mid-card at a different height than its neighbour's.
+ *
  * CLIENT-SESSION-11: per-size class sets, one entry per JSX slot that differs between the two
  * contexts this card renders in — reproduces `UpcomingMatches`' old inline row and
  * `SessionListCard` exactly (same pixel spacing/colors each already had), not a new design.
  */
 const SIZE_STYLES = {
   compact: {
-    wrapper: 'border-hairline rounded-lg border-border p-2.5',
+    wrapper: 'border-hairline flex flex-col rounded-lg border-border p-2.5',
     header: 'mb-1 flex items-center gap-1.5',
     badge: 'flex size-5.5 shrink-0 items-center justify-center rounded-full',
     icon: 'size-3',
@@ -50,7 +55,7 @@ const SIZE_STYLES = {
     detailIcon: 'size-3 shrink-0',
     feeRow: 'mb-2 flex items-center justify-between gap-2 text-2xs text-text-secondary',
     showParticipantIcon: false,
-    actionsRow: 'flex gap-2',
+    actionsRow: 'mt-auto flex gap-2',
   },
   full: {
     wrapper:
@@ -63,7 +68,7 @@ const SIZE_STYLES = {
     detailIcon: 'size-3.5 shrink-0',
     feeRow: 'flex items-center justify-between gap-2 text-2xs text-text-muted',
     showParticipantIcon: true,
-    actionsRow: 'mt-1 flex gap-2',
+    actionsRow: 'mt-auto flex gap-2 pt-1',
   },
 } as const;
 
@@ -122,8 +127,12 @@ export function SessionCard({
 
       <div className={s.detailRow}>
         <IconMapPin className={s.detailIcon} aria-hidden="true" />
-        {/* SESSION-24: null on a PREPARING session created without a location. */}
-        {session.location?.name ?? 'Location pending'}
+        {/* SESSION-24: null on a PREPARING session created without a location. CLIENT-SESSION-23:
+            single line, ellipsised — never wraps to a second line (which is what made cards in
+            one grid row differ in height); the full name stays available on hover via `title`. */}
+        <span className="min-w-0 truncate" title={session.location?.name}>
+          {session.location?.name ?? 'Location pending'}
+        </span>
       </div>
 
       <div className={s.feeRow}>

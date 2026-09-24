@@ -3,8 +3,20 @@ import { serializeDiscoverFilters, type DiscoverFilters } from './discoverParams
 // Single source of truth for this feature's TanStack Query keys — same shape as feedKeys/locationKeys.
 export const sessionKeys = {
   all: ['session'] as const,
-  group: (groupId: number) => [...sessionKeys.all, 'group', groupId] as const,
-  mine: () => [...sessionKeys.all, 'mine'] as const,
+  /** CLIENT-SESSION-23 — `GET /sessions/upcoming` (backend SESSION-27/43), replacing the retired
+   * `mine`/`joined`/per-group fan-out keys. `sportId: undefined` = all sports (the
+   * `UpcomingMatches` rail); the Matches page always passes its active sport. No `viewerZoneId`
+   * piece — the un-dated call never sends one (the backend 400s on it without `date`). */
+  upcoming: (sportId: number | undefined) =>
+    [...sessionKeys.all, 'upcoming', sportId ?? 'all'] as const,
+  /** CLIENT-SESSION-23 — `GET /sessions/history?dateCount=`: the distinct history dates (+ counts)
+   * for one sport, in the viewer's zone (`viewerZoneId` is part of the key because it changes
+   * which calendar date a session lands on, exactly what the key must reflect). */
+  historyDates: (sportId: number, viewerZoneId: string) =>
+    [...sessionKeys.all, 'history', 'dates', sportId, viewerZoneId] as const,
+  /** CLIENT-SESSION-23 — `GET /sessions/history?date=`: one date's own session list. */
+  historyDate: (sportId: number, date: string, viewerZoneId: string) =>
+    [...sessionKeys.all, 'history', 'date', sportId, date, viewerZoneId] as const,
   /** CLIENT-SESSION-29 — `GET /sessions/requested` (backend SESSION-42): the caller's own
    * pending join requests, standalone or group-linked. Its own top-level key, not nested under
    * `'discover'` — unlike the two builders below, this endpoint takes no filters at all, so it
@@ -27,10 +39,6 @@ export const sessionKeys = {
    * instead of serving yesterday's results — same reasoning the pre-22 single-date key had. */
   discoverDate: (date: string, filters: DiscoverFilters) =>
     [...sessionKeys.all, 'discover', 'date', date, serializeDiscoverFilters(filters)] as const,
-  /** CLIENT-SESSION-6: one cache entry for every status now that GET /sessions/joined's
-   * `status` param is optional (SESSION-4 delta, 2026-08-05) — the "My sessions" panel needs
-   * the caller's whole joined history/upcoming at once, not one query per SessionStatus. */
-  joined: () => [...sessionKeys.all, 'joined'] as const,
   detail: (sessionId: number) => [...sessionKeys.all, 'detail', sessionId] as const,
   participants: (sessionId: number) => [...sessionKeys.all, 'participants', sessionId] as const,
   /** Separate cache entry from `participants` above — that one is always JOINED-only (the public

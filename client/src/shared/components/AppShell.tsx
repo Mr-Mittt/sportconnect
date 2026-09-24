@@ -138,6 +138,7 @@ export function AppShell() {
         selectedCompletionLocation={sessionDetailData.selectedCompletionLocation}
         onOpenCompletionLocationPicker={sessionDetailData.onOpenCompletionLocationPicker}
         completionLocationPicker={sessionDetailData.completionLocationPicker}
+        completionFavorites={sessionDetailData.completionFavorites}
         onCompleteSession={sessionDetailData.onCompleteSession}
         isCompletingSession={sessionDetailData.isCompletingSession}
         isCompleteSessionError={sessionDetailData.isCompleteSessionError}

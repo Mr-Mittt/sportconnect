@@ -25,10 +25,14 @@ export interface SessionOverrides {
   sportProfilesEmpty: boolean;
   createPostFailOnce: boolean;
   notificationsEmpty: boolean;
-  /** Empties the Upcoming-matches rail (`/sessions/mine` + `/sessions/group/:groupId` fan-out) —
-   * needed to reach `UpcomingMatches`' empty-state "Join a match" CTA in e2e, since the default
-   * fixture user always has real upcoming sessions otherwise. */
+  /** Empties `GET /sessions/upcoming` (the `UpcomingMatches` rail and the Matches page's Upcoming
+   * section) — needed to reach `UpcomingMatches`' empty-state "Join a match" CTA in e2e, since the
+   * default fixture user always has real upcoming sessions otherwise. */
   sessionsEmpty: boolean;
+  /** CLIENT-SESSION-23: `GET /sessions/history` also returns 22 synthetic history dates (the newest
+   * holding 23 sessions) for the requested sport — enough to reach both "Load more" levels
+   * (dates past `dateCount=20`, sessions past a date's page size of 20). */
+  historyVolume: boolean;
 }
 
 function defaultOverrides(): SessionOverrides {
@@ -43,6 +47,7 @@ function defaultOverrides(): SessionOverrides {
     createPostFailOnce: false,
     notificationsEmpty: false,
     sessionsEmpty: false,
+    historyVolume: false,
   };
 }
 

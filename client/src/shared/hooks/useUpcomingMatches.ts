@@ -1,24 +1,25 @@
 import { useMemo } from 'react';
 import { useAuthStore } from '@/app/authStore';
-import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
-import { useGroupSessionsForGroups } from '@/features/session/hooks/useGroupSessions';
-import { useMySessions } from '@/features/session/hooks/useMySessions';
+import { useUpcomingSessions } from '@/features/session/hooks/useUpcomingSessions';
 import type { Session } from '@/shared/types/session';
 
 /**
- * CLIENT-SESSION-1: real hook against `modules/session` (`features/session/hooks/*`),
- * replacing the mock array that used to live here. Same `{ data, isLoading, isError }` shape as
- * before (client/CLAUDE.md's data layer convention) — `UpcomingMatches`, `HomeFeedPage`,
- * `GroupsPage`, and `FriendsPage` don't change their own call shape.
+ * The `UpcomingMatches` rail's data hook (Home Feed / Groups / Friends / Profile). Same
+ * `{ data, isLoading, isError }` shape callers have always had (client/CLAUDE.md's data layer
+ * convention) — `UpcomingMatches` itself and every host page are unchanged.
  *
- * There is no batch "sessions across my groups" endpoint (a real backend gap — see
- * `client/docs/MVP/CLIENT-SESSION-1_SESSION_UI.md`), so this fans out one query per group the
- * caller belongs to (`useGroupSessionsForGroups`, `useQueries`) and merges with the caller's
- * own standalone sessions (`useMySessions` — `GET /sessions/mine` only returns sessions the
- * caller *created*, not ones they joined; another flagged gap, not solved here). `COMPLETED`/
- * `CANCELLED` sessions are dropped — this is the "Upcoming" rail, not a full history — and the
- * rest are sorted by `scheduledStart` ascending. `UpcomingMatches` itself still applies its own
- * `maxVisible` cap on top of this.
+ * CLIENT-SESSION-23: one `GET /sessions/upcoming` call (all sports — no `sportId`), replacing
+ * CLIENT-SESSION-1's `useUserGroups` + per-group `GET /sessions/group/{id}` fan-out merged with
+ * `GET /sessions/mine`. The endpoint already returns standalone and group-linked sessions in
+ * one server-sorted (soonest-first) list, already status-filtered to `PREPARING`/`SCHEDULED`/
+ * `ONGOING` — so the old client-side `SCHEDULED`/`ONGOING`-only filter (the bug that kept a
+ * `PREPARING` session out of the rail) and the client-side sort are both gone rather than
+ * re-implemented. Only the first page (20) is read: `UpcomingMatches` caps itself at
+ * `maxVisible` on top of this, well inside one page, so the rail never needs "load more".
+ *
+ * Behavior change vs. the fan-out (user-accepted, CLIENT-SESSION-23): the endpoint is scoped by
+ * the caller's own participant row (`JOINED`/`INVITED`), so a group session the caller hasn't
+ * joined, and a standalone session they created and then left, no longer appear here.
  */
 export function useUpcomingMatches(): {
   data: Session[];
@@ -26,27 +27,9 @@ export function useUpcomingMatches(): {
   isError: boolean;
 } {
   const userId = useAuthStore((state) => state.user?.id);
-  const groupsQuery = useUserGroups(userId);
-  const groupIds = useMemo(
-    () => (groupsQuery.data?.content ?? []).map((group) => group.id),
-    [groupsQuery.data],
-  );
-  const groupSessionQueries = useGroupSessionsForGroups(groupIds);
-  const mySessionsQuery = useMySessions(userId !== undefined);
+  const query = useUpcomingSessions({ sportId: undefined, enabled: userId !== undefined });
 
-  const data = useMemo<Session[]>(() => {
-    const fromGroups = groupSessionQueries.flatMap((query) => query.data?.content ?? []);
-    const mine = mySessionsQuery.data?.content ?? [];
-    return [...fromGroups, ...mine]
-      .filter((session) => session.status === 'SCHEDULED' || session.status === 'ONGOING')
-      .sort((a, b) => a.scheduledStart.localeCompare(b.scheduledStart));
-  }, [groupSessionQueries, mySessionsQuery.data]);
+  const data = useMemo<Session[]>(() => query.data?.pages[0]?.content ?? [], [query.data]);
 
-  return {
-    data,
-    isLoading:
-      groupsQuery.isLoading || mySessionsQuery.isLoading || groupSessionQueries.some((query) => query.isLoading),
-    isError:
-      groupsQuery.isError || mySessionsQuery.isError || groupSessionQueries.some((query) => query.isError),
-  };
+  return { data, isLoading: query.isLoading, isError: query.isError };
 }

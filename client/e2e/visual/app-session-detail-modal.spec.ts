@@ -7,10 +7,12 @@ import { expect, test } from '../mocks/test.ts';
  * (the dimmed backdrop behind it is Matches/Home Feed/Groups content already covered by their own
  * full-page specs), across the standard 3 breakpoints.
  *
- * 7 states, all reached via real seeded MSW data or a live click, never a Storybook-style direct
+ * 8 states, all reached via real seeded MSW data or a live click, never a Storybook-style direct
  * prop injection:
  *  - not-joined: mockDiscoverableSession, fresh (never joined).
- *  - already-joined: mockGroupSession, joined live via the real Join button first.
+ *  - already-joined: mockGroupSession — seeded JOINED for mockUser (CLIENT-SESSION-23: /upcoming is
+ *    participant-scoped, so the mock backend now starts the fixture user joined on it; it used to be
+ *    joined live via the card's Join button first).
  *  - invited: mockInvitedSession — mockUser's own pre-seeded INVITED row (new fixture; this mock
  *    backend has no second live identity to actually invite as, same "pre-seed the other side"
  *    precedent as mockSessionJoinRequest for the approval-queue state below).
@@ -22,7 +24,18 @@ import { expect, test } from '../mocks/test.ts';
  *    SESSION_SYSTEM entry (CLIENT-SESSION-13), so the crop covers both row kinds.
  *  - cancelled: mockCancelledSession (new fixture, pre-set status CANCELLED) — SessionDetailModal's
  *    Cancel session button was removed entirely (CLIENT-SESSION-10), so there is no live UI path
- *    left to reach a CANCELLED session from a fresh SCHEDULED one.
+ *    left to reach a CANCELLED session from a fresh SCHEDULED one. CLIENT-SESSION-23: it is a
+ *    History row now, so it is reached by expanding its "Aug 7, 2026 (1)" date row.
+ *  - preparing (CLIENT-SESSION-23): mockPreparingSession ("Court booking pending", Badminton) — a
+ *    PREPARING standalone session mockUser created with neither location nor fee, so as creator (`canManage`)
+ *    the dialog shows "Complete session setup". The coverage gap CLIENT-SESSION-21 left: this state
+ *    (and the PREPARING status colour) had Storybook + Vitest only, no Playwright baseline.
+ *
+ * "Pickleball" pill: /matches defaults to the caller's first sport profile (Badminton,
+ * CLIENT-SESSION-29 dropped the "All" pill), and mockSession/mockOwnedGroupSession/
+ * mockCancelledSession are Pickleball — the discussion, approval-queue and cancelled states
+ * therefore switch pills first. mockPreparingSession is Badminton (see its fixture note), so the
+ * preparing state needs no switch.
  *
  * Clock frozen at the same instant as every other visual-regression spec in this suite, for
  * consistency (formatRelativeTime determinism — this modal renders "starts in..."-style relative
@@ -52,7 +65,6 @@ for (const width of breakpoints) {
     await page.setViewportSize({ width, height: 900 });
     await seedAuthenticatedSession(page, '/matches');
 
-    await page.getByRole('button', { name: /Friday 5-a-side — Join/ }).click();
     await expect(page.getByRole('button', { name: /Friday 5-a-side — Leave/ })).toBeVisible();
     await page.getByRole('button', { name: /Friday 5-a-side — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Friday 5-a-side' });
@@ -97,6 +109,7 @@ for (const width of breakpoints) {
     await page.setViewportSize({ width, height: 900 });
     await seedAuthenticatedSession(page, '/matches');
 
+    await page.getByRole('button', { name: 'Pickleball' }).click();
     await page.getByRole('button', { name: /Ladder night — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Ladder night' });
     await expect(dialog.getByRole('region', { name: 'Waiting for approval' })).toBeVisible();
@@ -112,6 +125,7 @@ for (const width of breakpoints) {
     await page.setViewportSize({ width, height: 900 });
     await seedAuthenticatedSession(page, '/matches');
 
+    await page.getByRole('button', { name: 'Pickleball' }).click();
     await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
     await expect(dialog.getByRole('region', { name: 'Discussion' })).toBeVisible();
@@ -131,6 +145,8 @@ for (const width of breakpoints) {
     await page.setViewportSize({ width, height: 900 });
     await seedAuthenticatedSession(page, '/matches');
 
+    await page.getByRole('button', { name: 'Pickleball' }).click();
+    await page.getByRole('region', { name: 'History' }).getByRole('button', { name: 'Expand Aug 7, 2026 (1)' }).click();
     await page.getByRole('button', { name: /Monday night run — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Monday night run' });
     await expect(dialog.getByText('Court unavailable due to maintenance.')).toBeVisible();
@@ -141,5 +157,24 @@ for (const width of breakpoints) {
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`session-detail-cancelled-${width}.png`);
+  });
+
+  test(`session detail modal — preparing / complete setup (creator view) @ ${width}px`, async ({ page }) => {
+    await page.clock.setFixedTime(FROZEN_TIME);
+    await page.setViewportSize({ width, height: 900 });
+    await seedAuthenticatedSession(page, '/matches');
+
+    await page.getByRole('button', { name: /Court booking pending — View details/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Court booking pending' });
+    const completion = dialog.getByRole('region', { name: 'Complete session setup' });
+    await expect(completion).toBeVisible();
+    // Neither location nor fee is set, so the amber notice names both and both controls render.
+    await expect(completion.getByText('Location and Fee', { exact: true })).toBeVisible();
+    await expect(completion.getByRole('button', { name: 'Choose location' })).toBeVisible();
+    await expect(completion.getByRole('checkbox', { name: 'Free' })).toBeVisible();
+    await page.evaluate('document.activeElement && document.activeElement.blur()');
+    await page.evaluate('document.fonts.ready');
+
+    await expect(dialog).toHaveScreenshot(`session-detail-preparing-${width}.png`);
   });
 }

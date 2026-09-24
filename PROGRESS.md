@@ -5353,6 +5353,25 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (confirmed by timing a passing run) — fixed with `test.setTimeout(60000)`, real headroom for
   genuinely more work. Full `e2e` project: **85/85 passing**, zero failures.
 
+- **CLIENT-SESSION-23 (`DONE`, 2026-09-24,
+  `client/docs/MVP/CLIENT-SESSION-23_UPCOMING_HISTORY_SPLIT_AND_SESSION_CARD_POLISH.md`):** "My sessions"
+  on `/matches` becomes two independent, sport-scoped sections on the real participant-scoped endpoints —
+  **Upcoming sessions** (`GET /sessions/upcoming`, day-grouped, Load more) and **History** (`GET
+  /sessions/history`: collapsed `<date> (<count>)` rows via `dateCount=20` + `before`, each date lazily
+  fetched by `HistoryDateSessions` on expand, nested Load more) — replacing the removed `/sessions/mine`
+  /`/joined` + per-group fan-out (a live break). Backend **SESSION-43** (`sportId`: optional on `/upcoming`,
+  required on `/history`) was filed and merged first as its own PR. The `UpcomingMatches` rail is now one
+  all-sports `/upcoming` call, which closes the "PREPARING never appears in the rail" bug. `SessionCard`:
+  action row pinned to the bottom, location on one truncated line. `LocationFavoritesDropdown` extracted and
+  reused in `SessionPreparingCompletion`. MSW made faithfully participant-scoped (seeded JOINED rows, creator
+  auto-join, real paging/validation, `historyVolume` override); new `PREPARING` visual state. Green: tsc,
+  eslint, Vitest 197 files / 1482, `storybook build`, e2e 87/87, real-backend contract check. Visual baselines
+  legitimately change (3 new + rail/participant-count ones) — regenerate via `update-baselines`.
+- **Agent token-cost notes (2026-09-24, `documentation/md/AGENT_TOKEN_COST_NOTES.md`):** standing rule adopted after
+  CLIENT-SESSION-23 — no forked subagents for verification, no full Vitest/Playwright runs by default (scoped, inline,
+  filtered output; `/workon`'s mandatory e2e gets a scoped subset, stated plainly in the summary). Records the two fork
+  data points (~431k and ~551k subagent tokens, dominated by re-reading the inherited conversation) and the open
+  questions to measure later. Append-only log for later statistical analysis.
 - **CLIENT-SESSION-24 — offset-aware `scheduledStart` (2026-09-24,
   `client/docs/MVP/CLIENT-SESSION-24_SUBMIT_OFFSET_AWARE_SCHEDULEDSTART_AND_CALLER_ZONE.md`):**
   fixes a live break — backend SESSION-33 made `scheduledStart` an `Instant`, so every client

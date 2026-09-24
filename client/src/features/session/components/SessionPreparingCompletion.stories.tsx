@@ -98,6 +98,7 @@ const meta = {
     selectedLocation: null,
     onOpenLocationPicker: () => {},
     locationPicker: inertLocationPicker,
+    favorites: { locations: [], isLoading: false, onSelect: () => {} },
     onSubmit: () => {},
     isSubmitting: false,
     isError: false,
@@ -127,4 +128,24 @@ export const SubmitError: Story = {
 
 export const Submitting: Story = {
   args: { session: makeSession({ feeType: 'FREE' }), selectedLocation: location, isSubmitting: true },
+};
+
+/** CLIENT-SESSION-23: the location control is the favorites dropdown — open it to see the quick
+ * picks plus the trailing "Choose a location…" item. */
+export const WithFavorites: Story = {
+  args: {
+    session: makeSession({ feeType: 'FREE' }),
+    favorites: {
+      locations: [location, { ...location, id: 2, name: 'Lakeside Courts' }],
+      isLoading: false,
+      onSelect: () => {},
+    },
+  },
+};
+
+export const FavoritesLoading: Story = {
+  args: {
+    session: makeSession({ feeType: 'FREE' }),
+    favorites: { locations: [], isLoading: true, onSelect: () => {} },
+  },
 };

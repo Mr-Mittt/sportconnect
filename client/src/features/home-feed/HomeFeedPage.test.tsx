@@ -287,13 +287,10 @@ function staticGetResponse(url: string): { data: unknown } | undefined {
   if (url === '/groups/user/user-1') {
     return { data: { success: true, message: '', data: feedPage([fixtureGroup]), timestamp: '' } };
   }
-  // CLIENT-SESSION-1: useUpcomingMatches is real now — fans out to every group the user
-  // belongs to (just fixtureGroup here, empty) plus the caller's own standalone sessions
-  // (sessionFixtures, matching the old mock's 3-row shape).
-  if (url === `/sessions/group/${fixtureGroup.id}`) {
-    return { data: { success: true, message: '', data: feedPage([]), timestamp: '' } };
-  }
-  if (url === '/sessions/mine') {
+  // CLIENT-SESSION-23: useUpcomingMatches is one GET /sessions/upcoming call now (was the
+  // CLIENT-SESSION-1 group fan-out + /sessions/mine) — sessionFixtures matches the old mock's
+  // 3-row shape.
+  if (url === '/sessions/upcoming') {
     return { data: { success: true, message: '', data: feedPage(sessionFixtures), timestamp: '' } };
   }
   return undefined;
@@ -624,10 +621,7 @@ describe('HomeFeedPage', () => {
   // matches, unlike this file's other tests (sessionFixtures always renders 3).
   it('empty upcoming matches: "Create a match"/"Join a match" open their own modals', async () => {
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
-      if (url === `/sessions/group/${fixtureGroup.id}`) {
-        return { data: { success: true, message: '', data: feedPage([]), timestamp: '' } };
-      }
-      if (url === '/sessions/mine') {
+      if (url === '/sessions/upcoming') {
         return { data: { success: true, message: '', data: feedPage([]), timestamp: '' } };
       }
       if (url === '/users/friends') {

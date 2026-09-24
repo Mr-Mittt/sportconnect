@@ -1,6 +1,6 @@
 # CLIENT-SESSION-23 · "My sessions" → Upcoming/History split, SessionCard polish, completion favorites
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE` (2026-09-24)
 **Type:** Client feature
 **Depends on:** backend **SESSION-43** (added 2026-09-24 — see "Scope change" below) and **SESSION-27** (`modules/session/docs/BACKLOG_MVP.md`) — hard, for the
 "Upcoming sessions"/"History" scope only (items 2-3 below). Items 1, 4, and 5 have no backend
@@ -155,6 +155,111 @@ to `/history` and to `/upcoming?date=` only).
 group session the caller hasn't joined, and a standalone session the caller created then left, no
 longer appear in "My sessions" or the rail (the SESSION-27-flagged group-owner gap; stays out of
 scope).
+
+## Delta (2026-09-24, from the build)
+
+- **The Delta above about `viewerZoneId` applies to `/history` only.** The Upcoming section and the rail
+  call `/upcoming` *without* `date`, and the backend 400s on `viewerZoneId` without `date` — verified
+  live — so neither sends it. No client caller of `/upcoming?date=` exists, so nothing sends it there either.
+- **`/upcoming` `sportId` is optional, `/history` `sportId` is required** (backend SESSION-43 as shipped, not
+  the "optional on both" the first scope-change note said). The Matches page sends its active sport to
+  both; the `UpcomingMatches` rail sends none (all sports — Home Feed keeps its "All" pill).
+- **Rail page size:** `useUpcomingMatches` reads only the first page (20) of `/upcoming`; `maxVisible` caps
+  well inside that, so the rail never needs "load more".
+- **The retired "My sessions" panel state was renamed** `isHistoryPanelCollapsed` → `isMySessionsPanelCollapsed`
+  (it collapses the whole right panel, and "history" now names a real section).
+
+## Implementation summary (2026-09-24)
+
+### Approved design (restated)
+Both new sections are server-scoped to the active sport pill (backend **SESSION-43**, filed and merged first
+as its own PR). Data layer: `useUpcomingSessions` (infinite, size 20), `useHistoryDates` (infinite over
+`dateCount=20` with a `before` cursor), `useHistoryDateSessions` (infinite, size 20, one date). The rail
+(`useUpcomingMatches`) becomes one all-sports `/upcoming` call. UI: `UpcomingSessionsSection`,
+`HistorySection` (collapsed `<date> (<count>)` rows) and `HistoryDateSessions`; `SessionCard` polish;
+`LocationFavoritesDropdown` extracted and reused in `SessionPreparingCompletion`; MSW rewritten to be
+participant-scoped (user decision: *faithful*, not an approximation of the old set); a `PREPARING` visual
+state added.
+
+### What was built
+- **Data layer** (`features/session/hooks/`): the three hooks above; `queryKeys.ts` swaps `mine`/`joined`/`group`
+  for `upcoming`/`historyDates`/`historyDate` (all under `sessionKeys.all`, so existing invalidations still
+  cover them). `useMySessions`, `useJoinedSessions`, `useGroupSessions` and `dedupeSessionsById` are deleted.
+  `useMatchesPageData` composes the two sections; the per-group fan-out, client-side sport filter and dual
+  active/history zone grouping are gone. `groupSessionsByDate` is now a single-zone, **order-preserving** day
+  grouper (the server owns the sort, including its `PREPARING`→`SCHEDULED`→`ONGOING` tiebreak).
+- **Components:** `UpcomingSessionsSection`, `HistorySection`, `HistoryDateSessions`, `LoadMoreButton` (extracted
+  from `DiscoverResultsList`, which now reuses it), `LocationFavoritesDropdown` (extracted from
+  `CreateSessionModal`). `MatchesPage` keeps its collapsible panel and toggle; its body is the two sections.
+  `SessionCard`: flex-column wrapper + `mt-auto` action row at both sizes; location on one truncated line
+  with a `title`. `SessionDetailModal` gained one `completionFavorites` prop (bundled so the six hosts
+  changed by one line each).
+- **Tests:** new Vitest for every new piece; `useMatchesPageData`, `MatchesPage`, `useUpcomingMatches`
+  (incl. the **`PREPARING`-appears regression test** for the bug this closes), `groupSessionsByDate`,
+  `SessionCard` (sticky-bottom + truncation), `SessionPreparingCompletion` (the dropdown) rewritten/extended;
+  the `/sessions/mine` mocks in the Home Feed / Friends / Groups / Profile / App tests repointed
+  (`App.test.tsx` had a post-shaped catch-all the old client-side status filter had been silently
+  discarding — it now gets an explicit empty `/sessions/upcoming`). Storybook stories for every new
+  component and state; `storybook build` passes.
+- **MSW / e2e** (`e2e/mocks/handlers/sessions.ts`): `/mine` and `/joined` replaced by `/upcoming` and
+  `/history` with the real contract (real `page`/`size`, the two 400s, `viewerZoneId` bucketing, `before`
+  cursor). Faithful participation: seeded JOINED rows for `mockSession` (creator), `mockGroupSession`,
+  `mockOwnedGroupSession`, `mockCancelledSession`; the create handler simulates a standalone creator's
+  auto-JOIN. New `mockPreparingSession` fixture, new `historyVolume` override.
+  `matches-journey.spec.ts`: steps 3/5/5b/11 rewritten, new step 5d, new separate History-pagination test.
+  `app-session-detail-modal.spec.ts`: new `preparing` state (×3 breakpoints). `E2E_OVERVIEW.md` updated.
+
+### Key decisions and non-obvious constraints
+- **`HistoryDateSessions` is a deliberate, narrow exception to "components are presentational".** The number
+  of History date rows is unbounded and TanStack Query has no infinite counterpart of `useQueries`, so
+  `useDiscoverDateSections`' unrolled fixed-slot trick can't scale. `HistorySection` mounts the connected
+  child only while a row is expanded (mounting *is* the laziness) via a `renderDateSessions` render prop,
+  keeping `HistorySection` itself fully presentational. Sign-off given at plan approval.
+- **Faithful MSW cost:** the fixture user now starts JOINED on four sessions, and an un-joined group session
+  is unreachable from the list (real behavior) — so the journey no longer "joins the session you created"
+  and leaving a session removes its card. Chosen over an approximating mock (user decision) so the mock
+  matches the contract; the rail-dependent Home/Groups/Friends/Profile journeys needed **no** assertion
+  changes.
+- **`mockPreparingSession` is Badminton, not Pickleball** — the rail applies the sport filter *before* its
+  cap, and `home-feed-journey` asserts the Pickleball-filtered rail shows exactly 2 cards; a Pickleball
+  fixture made it 3 (caught by the first full e2e run).
+- **Behavior change vs. the fan-out (accepted):** a group session the caller hasn't joined, and a standalone
+  session they created then left, no longer appear in "My sessions" or the rail.
+- **Pre-existing staleness fixed in passing:** three `app-session-detail-modal` states (discussion,
+  approval-queue, cancelled) targeted Pickleball sessions without switching off `/matches`' default
+  Badminton pill (stale since CLIENT-SESSION-29 dropped "All") — they now switch pills.
+- **Deviations from the approved plan:** none in design. Two things surfaced during the build and were handled
+  inline: the `PREPARING`-fixture sport (above) and the `App.test.tsx` catch-all.
+
+### Verification
+- `tsc -b` clean; ESLint on `src`/`e2e`: 0 errors (2 pre-existing warnings in `SessionStartTimePicker.tsx`,
+  untouched); Vitest **197 files / 1482 tests passed**; `storybook build` succeeds.
+- **Real backend** (dev Postgres, backend SESSION-43 merged code): every request shape the client sends
+  returns 200 with the DTO shapes the types mirror — `/upcoming` with and without `sportId`,
+  `/history?dateCount=20&sportId&viewerZoneId` (+ `before`), `/history?date=…&sportId&viewerZoneId&page&size`
+  (paged, `last`/`number` present), an unknown `sportId` → empty; and `/upcoming` **with**
+  `viewerZoneId` → 400 (why it isn't sent). Contract check via minted token, not a logged-in browser
+  session (no known dev credentials) — the UI itself was exercised by Playwright below.
+- **E2E:** `e2e` project **87 passed, 0 failed** (1.4 min, no retries) — includes the rewritten
+  `matches-journey` steps, the new step 5d and the new History pagination test, and the untouched
+  `home-feed-journey` (Pickleball-filtered rail still 2 cards). `E2E_OVERVIEW.md` updated for the added/
+  changed cases.
+- **Visual-regression expectation:** baselines **do** legitimately change, so a failing `visual-regression`
+  run is expected until the `update-baselines` GitHub dispatch regenerates them (Windows can't). (1) Three
+  **new** files, `session-detail-preparing-{375,768,1280}.png` (the `PREPARING` creator state). (2) Existing
+  baselines whose content changes because the fixture user now holds seeded JOINED rows (participant count
+  0→1, and card action buttons Join→Leave / none): `session-detail-discussion-*`,
+  `session-detail-approval-queue-*`, `session-detail-cancelled-*`, plus — where the rail is in frame — the
+  full-page `home-feed-*`, `groups-*` and `profile-*` baselines (list to be confirmed by the dispatch).
+  `session-detail-already-joined-*` (same dialog, reached by seed instead of a live join),
+  `-not-joined-*`, `-invited-*`, `-requested-*` and every other baseline (create-session, notification-bell,
+  post-modal, sport-*, reactivate-*) are expected byte-identical. **What I ran:** the changed
+  `app-session-detail-modal.spec.ts` on this Windows host — all 24 instances reach their
+  `toHaveScreenshot` step (setup and assertions pass; 21 fail the Windows font-rendering noise floor, 3
+  fail as new/missing baselines) — and I eyeballed the rendered `preparing` frame (correct). I did **not** do
+  the stash-and-rerun noise-floor proof: the noise floor was already recorded as wholesale on this host
+  (CLIENT-SESSION-29: 111/111 fail identically), so it cannot separate signal here. The Windows-rendered
+  `preparing` PNGs Playwright wrote were deleted rather than committed.
 
 ---
 

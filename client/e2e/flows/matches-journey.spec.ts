@@ -4,6 +4,7 @@ import {
   mockFriend,
   mockLocation,
   seedAuthenticatedSession,
+  seedHistoryVolumeOnNextLoad,
   seedSoftDeletedSportProfileOnNextLoad,
 } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
@@ -63,6 +64,16 @@ import { expect, test } from '../mocks/test.ts';
  * switch inserted (steps 4b/5c/8d/10d) each time a later step needs the other sport's sessions
  * visible. `mockRequestedSession`'s own section is the one exception: `GET /sessions/requested`
  * has no `sportId` param, so "Requested sessions" (step 10c) is never sport-filtered.
+ *
+ * CLIENT-SESSION-23: "My sessions" is now two sections — "Upcoming sessions" (`GET /sessions/upcoming`)
+ * and "History" (`GET /sessions/history`, collapsed date rows) — and both endpoints are
+ * **participant-scoped**, so the mock backend (`e2e/mocks/handlers/sessions.ts`) now seeds the
+ * fixture user's own JOINED rows instead of the old creator/group-membership fan-out: mockSession
+ * (creator, auto-joined), mockGroupSession ("Friday 5-a-side") and mockOwnedGroupSession ("Ladder
+ * night") start JOINED, mockInvitedSession ("Tuesday drop-in") INVITED, mockCancelledSession
+ * ("Monday night run") a JOINED history row. Steps 3/5/5b/11 changed accordingly (no more
+ * "join the session you created"; leaving a group session removes its card), step 5d covers the
+ * History section, and the final test covers both History "Load more" levels.
  */
 
 test('Matches journey', async ({ page }) => {
@@ -98,21 +109,20 @@ test('Matches journey', async ({ page }) => {
     await expect(page.getByText('Friday 5-a-side')).not.toBeVisible();
   });
 
-  await test.step('3. join the standalone session (creator never sees Leave)', async () => {
+  await test.step('3. the standalone session the caller created is already joined (creator never sees Join or Leave)', async () => {
     await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Sunday pickup run' });
     // mockSession has a real chosen capacity (10, CLIENT-SESSION-3) — not the 9999 "uncapped"
     // sentinel — so Players shows "N/10", not the plain "N" the sentinel would render.
-    // CLIENT-SESSION-10 renamed the section "Participants" -> "Players".
-    await expect(dialog.getByText('Players (0/10)')).toBeVisible();
-
-    await dialog.getByRole('button', { name: 'Join' }).click();
+    // CLIENT-SESSION-10 renamed the section "Participants" -> "Players". CLIENT-SESSION-23: the
+    // real backend auto-JOINs a standalone session's creator, which the mock now seeds/simulates
+    // (GET /sessions/upcoming is participant-scoped, so it has to) — so this starts at 1/10 with
+    // the creator already listed, and there is no Join step here any more. The Join mutation is
+    // still covered e2e by step 9 (a Discover session) and step 5b's Accept-from-the-card.
     await expect(dialog.getByText('Players (1/10)')).toBeVisible();
     await expect(dialog.getByText('Jordan Lee', { exact: true })).toBeVisible();
-    // mockSession is created by the test user themselves — once JOINED, the creator doesn't get
-    // the plain participant Leave action (CLIENT-SESSION-10 post-ship), so neither Join nor Leave
-    // shows here. The Leave mutation itself is still exercised e2e on a session the test user
-    // didn't create — step 5b, mockGroupSession's card.
+    // The creator doesn't get the plain participant Leave action either (CLIENT-SESSION-10
+    // post-ship), so neither Join nor Leave shows.
     await expect(dialog.getByRole('button', { name: 'Leave' })).not.toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Join' })).not.toBeVisible();
 
@@ -166,26 +176,46 @@ test('Matches journey', async ({ page }) => {
     await expect(page.getByText('Friday 5-a-side')).toBeVisible();
   });
 
-  await test.step('5. a group session the caller only belongs to — Join/Leave still work', async () => {
+  await test.step('5. a group session the caller already joined — the dialog offers Leave, not Join', async () => {
     await page.getByRole('button', { name: /Friday 5-a-side — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Friday 5-a-side' });
 
-    await expect(dialog.getByRole('button', { name: 'Join' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Leave' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Join' })).not.toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
   });
 
-  await test.step('5b. Join and Leave directly from the session card, no dialog required (CLIENT-SESSION-9)', async () => {
-    await page.getByRole('button', { name: /Friday 5-a-side — Join/ }).click();
-    await expect(page.getByRole('button', { name: /Friday 5-a-side — Leave/ })).toBeVisible();
+  await test.step('5b. Accept an invite and Leave directly from the session card, no dialog required (CLIENT-SESSION-9)', async () => {
+    // "Tuesday drop-in" (mockInvitedSession): an INVITED row shows Accept on the card.
+    await page.getByRole('button', { name: /Tuesday drop-in — Accept/ }).click();
+    await expect(page.getByRole('button', { name: /Tuesday drop-in — Leave/ })).toBeVisible();
 
+    // CLIENT-SESSION-23: /upcoming is participant-scoped, so leaving a session removes its card
+    // from the list outright — the old client-side group fan-out kept showing it with a Join
+    // button, which is no longer the contract.
     await page.getByRole('button', { name: /Friday 5-a-side — Leave/ }).click();
-    await expect(page.getByRole('button', { name: /Friday 5-a-side — Join/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Friday 5-a-side/ })).toHaveCount(0);
   });
 
   // Steps 6-8 create/manage Pickleball sessions (Ladder night is Pickleball too) — switch back.
   await test.step('5c. switch back to Pickleball for the create/approval-queue steps', async () => {
     await page.getByRole('button', { name: 'Pickleball' }).click();
     await expect(page.getByText('Sunday pickup run')).toBeVisible();
+  });
+
+  await test.step('5d. History — a collapsed date row expands to that date\'s sessions and collapses again (CLIENT-SESSION-23)', async () => {
+    const history = page.getByRole('region', { name: 'History' });
+    // mockCancelledSession ("Monday night run", Pickleball) — the fixture user's one history row.
+    const row = history.getByRole('button', { name: 'Expand Aug 7, 2026 (1)' });
+    await expect(row).toBeVisible();
+    await expect(history.getByText('Monday night run')).not.toBeVisible();
+
+    await row.click();
+    await expect(history.getByText('Monday night run')).toBeVisible();
+    await expect(history.getByText('Cancelled', { exact: true })).toBeVisible();
+
+    await history.getByRole('button', { name: 'Collapse Aug 7, 2026 (1)' }).click();
+    await expect(history.getByText('Monday night run')).not.toBeVisible();
   });
 
   await test.step('6. create a standalone session, searching an existing location', async () => {
@@ -438,11 +468,10 @@ test('Matches journey', async ({ page }) => {
     const completion = dialog.getByRole('region', { name: 'Complete session setup' });
     await expect(completion.getByText('Location and Fee', { exact: true })).toBeVisible();
 
+    // CLIENT-SESSION-23: the completion form's location control is the same favorites dropdown
+    // the create form has. Step 8 favorited this location (Pickleball), so it's a quick pick here.
     await completion.getByRole('button', { name: 'Choose location' }).click();
-    const locationDialog = page.getByRole('dialog', { name: 'Choose a location' });
-    await locationDialog.getByLabel('Search locations').fill('Riverside');
-    await locationDialog.getByRole('button', { name: 'Search' }).click();
-    await locationDialog.getByText(mockLocation.name, { exact: true }).click();
+    await page.getByRole('menuitem', { name: mockLocation.name }).click();
     await expect(completion.getByText(mockLocation.name)).toBeVisible();
 
     await completion.getByRole('checkbox', { name: 'Free' }).check();
@@ -450,6 +479,57 @@ test('Matches journey', async ({ page }) => {
 
     await expect(dialog.getByText('Scheduled')).toBeVisible();
     await expect(dialog.getByRole('region', { name: 'Complete session setup' })).not.toBeVisible();
+  });
+});
+
+/*
+ * CLIENT-SESSION-23: both History "Load more" levels, which the fixtures alone can't reach —
+ * `overrides.historyVolume` makes `GET /sessions/history` also return 22 synthetic dates for the
+ * requested sport (the newest, Jul 22, holding 23 sessions): one page of `dateCount=20` dates plus
+ * two more, and one date with one more session than its page size of 20. Its own `test()` so the
+ * journey above keeps its clean, un-inflated History for step 5d.
+ */
+test('Matches — History pages further back and pages a busy date (CLIENT-SESSION-23)', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedHistoryVolumeOnNextLoad(mockSessionId);
+  await seedAuthenticatedSession(page, '/matches');
+
+  const history = page.getByRole('region', { name: 'History' });
+  const dateRows = history.getByRole('button', { name: /^(Expand|Collapse) [A-Z][a-z]{2} \d{1,2}, 2026 \(\d+\)$/ });
+  const sessionCards = history.getByRole('button', { name: /^History session \d+ — View details$/ });
+
+  await test.step('first page: 20 collapsed date rows, newest first, with more to load', async () => {
+    await expect(dateRows).toHaveCount(20);
+    await expect(history.getByRole('button', { name: 'Expand Jul 22, 2026 (23)' })).toBeVisible();
+    await expect(sessionCards).toHaveCount(0);
+    await expect(history.getByRole('button', { name: 'Load more history dates' })).toBeVisible();
+  });
+
+  await test.step('expand the busy date: 20 sessions first, its own Load more fetches the rest', async () => {
+    await history.getByRole('button', { name: 'Expand Jul 22, 2026 (23)' }).click();
+    await expect(sessionCards).toHaveCount(20);
+
+    await history.getByRole('button', { name: 'Load more sessions for Jul 22, 2026' }).click();
+    await expect(sessionCards).toHaveCount(23);
+    await expect(history.getByRole('button', { name: 'Load more sessions for Jul 22, 2026' })).not.toBeVisible();
+  });
+
+  await test.step('collapse hides them; re-expanding shows all 23 again straight from the cache', async () => {
+    await history.getByRole('button', { name: 'Collapse Jul 22, 2026 (23)' }).click();
+    await expect(sessionCards).toHaveCount(0);
+
+    await history.getByRole('button', { name: 'Expand Jul 22, 2026 (23)' }).click();
+    await expect(sessionCards).toHaveCount(23);
+    await history.getByRole('button', { name: 'Collapse Jul 22, 2026 (23)' }).click();
+  });
+
+  await test.step('"Load more history dates" pages further back (before cursor) and then goes away', async () => {
+    await history.getByRole('button', { name: 'Load more history dates' }).click();
+    await expect(dateRows).toHaveCount(22);
+    await expect(history.getByRole('button', { name: 'Expand Jul 1, 2026 (1)' })).toBeVisible();
+    await expect(history.getByRole('button', { name: 'Load more history dates' })).not.toBeVisible();
   });
 });
 

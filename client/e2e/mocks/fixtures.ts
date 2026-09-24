@@ -1067,6 +1067,15 @@ export async function seedEmptyUpcomingMatchesOnNextLoad(sessionId: string): Pro
 }
 
 /**
+ * CLIENT-SESSION-23 — makes `GET /sessions/history` return 22 synthetic history dates (the newest
+ * with 23 sessions) on top of the fixtures, so an e2e run can reach both History "Load more"
+ * levels: paging further back past `dateCount=20`, and a single date past its own page size of 20.
+ */
+export async function seedHistoryVolumeOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/historyVolume');
+}
+
+/**
  * CLIENT-NOTIF-2's with-load-more baseline — 11 notifications (one more than
  * the list's page size of 10), same shape as `seedPaginatedFeedOnNextLoad`.
  */
@@ -1134,3 +1143,33 @@ export async function simulateGroupsErrorOnNextLoad(sessionId: string): Promise<
 export async function simulateCreatePostFailOnce(sessionId: string): Promise<void> {
   await postAdmin(sessionId, 'override/createPostFailOnce');
 }
+
+// CLIENT-SESSION-23: the `PREPARING` + creator (`canManage`) state the visual-regression suite had
+// no coverage for (CLIENT-SESSION-21 shipped `SessionPreparingCompletion` with Storybook/Vitest
+// only) — a standalone Badminton session mockUser created with neither location nor fee, so
+// SessionDetailModal renders its "Complete session setup" section. Seeded (unlike CLIENT-SESSION-21's
+// first attempt, which created one live per spec) with a `scheduledStart` later than every other
+// upcoming fixture, so `UpcomingMatches`' `maxVisible=4` cap (soonest-first) never shows it in the
+// unfiltered rail. It is Badminton, not Pickleball, on purpose: the rail applies the sport filter
+// *before* its cap, and home-feed-journey.spec.ts asserts the Pickleball-filtered rail shows exactly
+// 2 cards (a Pickleball PREPARING fixture made it 3). Badminton is also /matches' default pill, so
+// the specs that reach it need no pill switch. mockUser holds a seeded JOINED row (real backend
+// auto-JOINs a standalone creator), which `GET /sessions/upcoming` needs to list it at all.
+export const mockPreparingSession: Session = {
+  ...mockCancelledSession,
+  id: 8,
+  sportId: 1,
+  sportName: 'Badminton',
+  title: 'Court booking pending',
+  location: null,
+  locationNote: null,
+  scheduledStart: '2026-08-20T19:00:00', // fixed — see mockSession's note on hoursFromNow()
+  status: 'PREPARING',
+  cancelReason: null,
+  cancelledBy: null,
+  cancelledByFullName: null,
+  cancelledAt: null,
+  participantCount: 0,
+  feeType: null,
+  feeAmountVnd: null,
+};

@@ -96,6 +96,7 @@ const baseProps = {
   selectedLocation: null as Location | null,
   onOpenLocationPicker: () => {},
   locationPicker: inertLocationPicker,
+  favorites: { locations: [] as Location[], isLoading: false, onSelect: () => {} },
   onSubmit: () => {},
   isSubmitting: false,
   isError: false,
@@ -195,5 +196,65 @@ describe('SessionPreparingCompletion', () => {
       />,
     );
     expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+  });
+
+  // CLIENT-SESSION-23 — the location control is CreateSessionModal's favorites dropdown, not a bare
+  // button that always opened the full picker.
+  describe('location favorites dropdown', () => {
+    it('lists favorite locations, and picking one calls favorites.onSelect', async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      const favorite = { ...location, id: 2, name: 'Lakeside Courts' };
+      render(
+        <SessionPreparingCompletion
+          {...baseProps}
+          session={makeSession({ feeType: 'FREE' })}
+          favorites={{ locations: [favorite], isLoading: false, onSelect }}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Choose location' }));
+      await user.click(screen.getByRole('menuitem', { name: 'Lakeside Courts' }));
+      expect(onSelect).toHaveBeenCalledWith(favorite);
+    });
+
+    it('"Choose a location…" opens the full picker via onOpenLocationPicker', async () => {
+      const user = userEvent.setup();
+      const onOpenLocationPicker = vi.fn();
+      render(
+        <SessionPreparingCompletion
+          {...baseProps}
+          session={makeSession({ feeType: 'FREE' })}
+          onOpenLocationPicker={onOpenLocationPicker}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Choose location' }));
+      await user.click(screen.getByRole('menuitem', { name: 'Choose a location…' }));
+      expect(onOpenLocationPicker).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the empty and loading states', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <SessionPreparingCompletion {...baseProps} session={makeSession({ feeType: 'FREE' })} />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Choose location' }));
+      expect(screen.getByText('No favorites yet.')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+
+      rerender(
+        <SessionPreparingCompletion
+          {...baseProps}
+          session={makeSession({ feeType: 'FREE' })}
+          favorites={{ locations: [], isLoading: true, onSelect: () => {} }}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Choose location' }));
+      expect(screen.getByText('Loading…')).toBeInTheDocument();
+    });
+
+    it('does not render the dropdown at all when only the fee is missing', () => {
+      render(<SessionPreparingCompletion {...baseProps} session={makeSession({ location })} />);
+      expect(screen.queryByRole('button', { name: /choose location|change location/i })).not.toBeInTheDocument();
+    });
   });
 });

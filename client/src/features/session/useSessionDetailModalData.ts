@@ -101,6 +101,14 @@ export function useSessionDetailModalData(sessionId: number | null) {
       completionFavoriteLocationMutation.mutate(payload);
     }
   };
+  // CLIENT-SESSION-23: the same favorites list the picker's hearts use, surfaced as quick picks
+  // in SessionPreparingCompletion's LocationFavoritesDropdown (same shape CreateSessionModal's own
+  // dropdown gets from useCreateSessionModalData).
+  const completionFavorites = {
+    locations: completionFavoriteLocationsQuery.data?.content ?? [],
+    isLoading: completionFavoriteLocationsQuery.isLoading,
+    onSelect: (location: Location) => setSelectedCompletionLocation(location),
+  };
   const completionLocationPickerData = useLocationPickerData(
     sessionSportId ?? 0,
     isCompletionLocationPickerOpen,
@@ -173,6 +181,7 @@ export function useSessionDetailModalData(sessionId: number | null) {
     selectedCompletionLocation,
     onOpenCompletionLocationPicker: () => setIsCompletionLocationPickerOpen(true),
     completionLocationPicker,
+    completionFavorites,
     onCompleteSession,
     isCompletingSession: updateSessionMutation.isPending,
     isCompleteSessionError: updateSessionMutation.isError,
