@@ -5404,6 +5404,13 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (39 new incl. CLIENT-SESSION-23's never-generated `session-detail-preparing-*`, 60 changed = the 23/30 predictions +
   one unpredicted sub-pixel drift), 51 byte-identical, SHA-256 verified. Filed **CLIENT-SESSION-32**: the Location
   popover is clipped by the "Join a match" modal at 375px (its baseline records the clipped state).
+- **CLIENT-SESSION-32 — Discover-modal filter popovers stay inside the dialog at narrow widths (`DONE`, 2026-09-24,
+  `client/docs/MVP/CLIENT-SESSION-32_DISCOVER_MODAL_LOCATION_POPOVER_CLIPPED_AT_375PX.md`):** Radix Popper collided against
+  the viewport only, so a fixed-width popover overhung the `overflow-hidden` dialog (Location `w-72` at 375px; Time also at
+  320px). Fixed once in the shared `PopoverContent`: when nested in a Dialog, `collisionBoundary` = the Dialog's Content
+  node + 8px `collisionPadding`, plus `max-w` of the available width. New `home-feed-journey.spec.ts` e2e (375/320px, all
+  four filters; fails without the fix). Only the `discover-modal-location-popover-375` baseline changes — regenerate via
+  `update-baselines`.
 - **CLIENT-SESSION-27 — Escape closes only the open Discover filter popover, not the whole modal (`DONE`, 2026-09-24,
   `client/docs/MVP/CLIENT-SESSION-27_ESCAPE_CLOSES_WHOLE_MODAL_INSTEAD_OF_JUST_THE_POPOVER.md`):** root cause was not the
   ticket's DOM-portal theory but two installed copies of `@radix-ui/react-dismissable-layer` (Dialog/Menu on 1.1.15,

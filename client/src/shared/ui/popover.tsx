@@ -42,6 +42,17 @@ function PopoverContent({
         data-slot="popover-content"
         sideOffset={sideOffset}
         align={align}
+        // CLIENT-SESSION-32 — Radix Popper collides against the viewport only unless told
+        // otherwise, but a Dialog-nested popover is *clipped* by the Dialog's `overflow-hidden`
+        // Content box, which at narrow widths (375px: dialog 343px wide) is smaller than the
+        // viewport — a fixed-width popover (e.g. Location's `w-72`) fit the viewport yet overhung
+        // the dialog's right edge and got cut off. Making the Dialog's own Content the collision
+        // boundary makes Radix shift/flip the popover to stay inside it (and feeds
+        // `--radix-popover-content-available-width` below). Deliberately not "move the popover back
+        // out of the Dialog" — that reintroduces the FocusScope bug (floatingPortalContainer.ts).
+        // Callers can still override either prop; `undefined` outside a Dialog keeps Radix defaults.
+        collisionBoundary={dialogContainer ?? undefined}
+        collisionPadding={dialogContainer !== null ? 8 : undefined}
         // A Dialog-nested popover must not dismiss itself just because the *Dialog* reclaimed
         // focus. The Dialog's FocusScope focuses its own container whenever `document.activeElement`
         // is `<body>` and a node is removed — which happens mid-Tab, when a re-render lands between
@@ -61,6 +72,10 @@ function PopoverContent({
           // node (inheriting `pointer-events: auto` naturally as a descendant) — this still
           // matters for any Popover portaled to document.body with no Dialog ancestor at all. See
           // CLIENT-SESSION-22's SessionDiscoverModal for the bug this was originally found in.
+          // CLIENT-SESSION-32: never wider than the room left inside the collision boundary (the
+          // Dialog box when nested in one, the viewport otherwise), so a fixed `w-*` shrinks on
+          // very narrow screens instead of overhanging. A caller's own `max-w-*` wins via cn().
+          'max-w-[var(--radix-popover-content-available-width)]',
           'shadow-menu pointer-events-auto z-50 rounded-[10px] border-hairline border-border-strong bg-surface-2 p-1.5 outline-none',
           className,
         )}
