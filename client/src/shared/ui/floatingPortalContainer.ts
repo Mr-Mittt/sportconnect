@@ -11,8 +11,12 @@ import * as React from 'react';
  * back — this is what broke `DiscoverLocationFilter`'s search input (CLIENT-SESSION-28) and
  * `DiscoverTimeFilter`'s Hour/Minute inputs (CLIENT-SESSION-29 item 5), and this fix resolves
  * both, confirmed live. CLIENT-SESSION-27's Escape-cascades bug is a *different* mechanism
- * (`@radix-ui/react-dismissable-layer`'s global mount-order layer stack, not DOM containment) —
- * this change does not touch it; it stays open as its own ticket.
+ * (`@radix-ui/react-dismissable-layer`'s global layer stack, not DOM containment) — this
+ * portal does not touch it. Its cause was two installed copies of that package (Dialog on 1.1.15,
+ * Popover on 1.1.19, so two independent stacks); fixed by the `pnpm.overrides` entry in
+ * `client/package.json`. `@radix-ui/react-focus-scope` has the same split-copy duplication
+ * (Dialog/Menu on 1.1.12, Popover on 1.1.16) and is deliberately left alone — this portal is what
+ * makes it harmless today; see its own follow-up ticket.
  *
  * Fix: `DialogContent` provides its own Content DOM node through this context;
  * `PopoverContent` (if rendered inside one) portals into that node via `Popover.Portal`'s own

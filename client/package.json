@@ -73,6 +73,9 @@
     "vitest": "^4.1.10"
   },
   "pnpm": {
+    "overrides": {
+      "@radix-ui/react-dismissable-layer": "1.1.19"
+    },
     "onlyBuiltDependencies": [
       "esbuild",
       "@tailwindcss/oxide"

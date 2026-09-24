@@ -23,7 +23,8 @@ import { clipAround, settle } from './discoverClip.ts';
  *
  * No Date pill in this modal — it is today-only (CLIENT-SESSION-22 delta) — so no date-popover
  * state here; the Date popover is covered by app-discover-panel.spec.ts. Popovers are opened by
- * click and never dismissed with Escape: that closes the whole modal (CLIENT-SESSION-27, open).
+ * click and never dismissed with Escape (Escape closing the whole modal was CLIENT-SESSION-27,
+ * fixed and covered in flows/home-feed-journey.spec.ts — kept click-only here, screenshots don't need it).
  */
 
 const FROZEN_TIME = new Date('2026-07-07T19:00:00');

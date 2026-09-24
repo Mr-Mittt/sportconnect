@@ -5404,6 +5404,12 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (39 new incl. CLIENT-SESSION-23's never-generated `session-detail-preparing-*`, 60 changed = the 23/30 predictions +
   one unpredicted sub-pixel drift), 51 byte-identical, SHA-256 verified. Filed **CLIENT-SESSION-32**: the Location
   popover is clipped by the "Join a match" modal at 375px (its baseline records the clipped state).
+- **CLIENT-SESSION-27 — Escape closes only the open Discover filter popover, not the whole modal (`DONE`, 2026-09-24,
+  `client/docs/MVP/CLIENT-SESSION-27_ESCAPE_CLOSES_WHOLE_MODAL_INSTEAD_OF_JUST_THE_POPOVER.md`):** root cause was not the
+  ticket's DOM-portal theory but two installed copies of `@radix-ui/react-dismissable-layer` (Dialog/Menu on 1.1.15,
+  Popover on 1.1.19) — its layer stack is module-level, so two copies = two stacks and both layers answered one Escape.
+  Fixed by a `pnpm.overrides` pin (no component code changed); new `home-feed-journey.spec.ts` e2e (failed before, passes
+  after); e2e 88/88. Filed **CLIENT-SESSION-33**: `react-focus-scope` has the same split-copy duplication.
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

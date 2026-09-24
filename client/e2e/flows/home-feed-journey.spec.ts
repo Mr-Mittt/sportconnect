@@ -348,3 +348,48 @@ test('Home Feed — tabbing out of the Time filter\'s Hour input keeps the popov
   await expect(hourInput).toHaveValue('05');
   await expect(dialog.getByRole('button', { name: /^Before 05:\d{2}$/ })).toBeVisible();
 });
+
+/**
+ * CLIENT-SESSION-27 (2026-09-24) — regression for Escape closing the whole "Join a match" Dialog
+ * along with the filter popover that was open inside it.
+ *
+ * Root cause: `@radix-ui/react-dialog` (and `react-menu`) resolved `react-dismissable-layer` to
+ * 1.1.15 while `react-popover` resolved 1.1.19. The layer stack ("only the highest layer answers
+ * Escape") is a module-level context, so two installed copies meant two independent stacks — the
+ * Dialog and the Popover each saw themselves as the only, hence highest, layer and both handled
+ * the same Escape `keydown`. Fixed by a `pnpm.overrides` entry pinning a single copy, so this is
+ * a dependency-graph regression: any future install that re-splits the copies fails here. Real
+ * browser only — jsdom has no bearing on it (Radix's own layer wiring, not DOM or CSS).
+ */
+test('Home Feed — Escape closes only the open Time/Location popover, then a second Escape closes the "Join a match" modal', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedEmptyUpcomingMatchesOnNextLoad(mockSessionId);
+  await seedAuthenticatedSession(page);
+
+  await page.getByRole('button', { name: 'Badminton' }).click();
+  await page.getByRole('button', { name: 'Join a match' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Discover today session' });
+  await expect(dialog).toBeVisible();
+
+  // --- Time filter ---
+  await dialog.getByRole('button', { name: 'Time' }).click();
+  const beforeBtn = page.getByRole('button', { name: 'Before', exact: true });
+  await expect(beforeBtn).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(beforeBtn).toBeHidden();
+  await expect(dialog).toBeVisible();
+
+  // --- Location filter ---
+  await dialog.getByRole('button', { name: /^Location/ }).click();
+  const searchInput = dialog.getByLabel('Search locations');
+  await expect(searchInput).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(searchInput).toBeHidden();
+  await expect(dialog).toBeVisible();
+
+  // --- With no popover open, Escape still dismisses the Dialog itself ---
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+});

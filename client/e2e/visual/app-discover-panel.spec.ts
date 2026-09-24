@@ -23,9 +23,8 @@ import { clipAround, pinDiscoverCountsToDate, settle } from './discoverClip.ts';
  *
  * /matches defaults to the caller's first sport profile (Badminton, CLIENT-SESSION-29 dropped the
  * "All" pill), which owns both discoverable and requested fixtures, so no pill switch is needed.
- * Popovers are opened by click and never dismissed with Escape *while inside a Dialog*
- * (CLIENT-SESSION-27) — on this page there is no Dialog, so Escape is safe for the multi-date
- * step's popover.
+ * Popovers are opened by click; on this page there is no Dialog, so Escape is safe for the
+ * multi-date step's popover (Escape inside a Dialog, CLIENT-SESSION-27, is fixed too).
  *
  * Clock frozen at the same instant as every other visual-regression spec in this suite.
  */
