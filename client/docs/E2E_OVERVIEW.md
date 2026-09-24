@@ -46,7 +46,10 @@ and `title`/`locationId` filtering on `GET /sessions/discover`), `CLIENT-SESSION
 `/sessions/joined` handlers, seeds the fixture user's JOINED/INVITED participation rows, simulates a standalone
 creator's auto-JOIN, adds the `historyVolume` override + `seedHistoryVolumeOnNextLoad`; rewrites
 `matches-journey.spec.ts` steps 3/5/5b/11, adds step 5d and a separate History "Load more" test; adds a
-`preparing` state to `app-session-detail-modal.spec.ts`).
+`preparing` state to `app-session-detail-modal.spec.ts`), `CLIENT-SESSION-31_DISCOVER_VISUAL_REGRESSION_AND_BASELINE_REFRESH.md`
+(adds `app-discover-panel.spec.ts` + `app-discover-modal.spec.ts` + the `discoverClip.ts` helper — the Discover surfaces'
+first visual-regression coverage — and the `discoverVolume` override + `seedDiscoverVolumeOnNextLoad`, which makes
+`GET /sessions/discover` page for real).
 
 ---
 
@@ -222,6 +225,9 @@ e2e/
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
     app-session-detail-modal.spec.ts  # CLIENT-SESSION-12/CLIENT-SESSION-23
+    app-discover-panel.spec.ts  # CLIENT-SESSION-31
+    app-discover-modal.spec.ts  # CLIENT-SESSION-31
+    discoverClip.ts           # CLIENT-SESSION-31 — shared helpers (clipAround, settle, pinDiscoverCountsToDate), not a spec
     app-create-session-modal.spec.ts  # CLIENT-SESSION-12
     app-notification-bell.spec.ts  # CLIENT-NOTIF-2
     app-profile.spec.ts       # PROFILE-7
@@ -702,6 +708,12 @@ pending", Badminton, PREPARING, creator) — scheduled after every other upcomin
 are untouched. New override `historyVolume` (`seedHistoryVolumeOnNextLoad`): `/history` also returns 22
 synthetic dates for the requested sport, the newest (Jul 22) holding 23 sessions.
 
+**CLIENT-SESSION-31 — `discoverVolume`.** New override (`seedDiscoverVolumeOnNextLoad`): `discoverableSessions` appends 25
+synthetic Badminton sessions cloned from `mockDiscoverableSession` (ids 3000+, "Discover session N", varying participant
+counts; no detail route, like `syntheticHistory`), and — only with the flag on — `GET /sessions/discover` pages them with
+`slicePage` (client page size 10) instead of the always-one-page `mockPageResponse`. `/discover/counts` reads the same pool. Off
+by default: no existing spec sets it, so every journey's `/discover` behaviour is unchanged.
+
 **CLIENT-SESSION-30 — 24h range, join pop-ups, approval hints.** `mockSession` is the one fixture with a
 `scheduledEndAt` (2026-08-01T21:00, start 19:00 — shows as "19:00 – 21:00"); every other fixture is open-ended. Any join
 now opens the app-level "Got it" pop-up (`role="dialog"` named "You joined the session" / "Join request sent"), which
@@ -996,6 +1008,51 @@ otherwise-identical consecutive local runs, on top of the already-known Windows 
 noise) → waits for `document.fonts.ready` → dialog screenshot compared against
 `e2e/visual/__screenshots__/session-detail-{state}-{width}.png`. Same known-Windows-noise caveat as
 `app-home-feed.spec.ts` above.
+
+### `e2e/visual/app-discover-panel.spec.ts` + `app-discover-modal.spec.ts` (CLIENT-SESSION-31, `visual-regression` project)
+
+The Discover surfaces' first visual coverage (CLIENT-SESSION-22 had recorded "no spec exists for the Matches page's
+Discover panel"), written against the UI as CLIENT-SESSION-29/30 left it. Both freeze the clock at the same instant as
+every other visual spec, blur the active element and `settle(page)` (fonts **and** every `<img>` — see below) before
+each screenshot. **36 test instances** (3 breakpoints × 12 states).
+
+**`app-discover-panel.spec.ts`** — 8 states × 3, scoped to `region "Discover sessions"` on `/matches` (Badminton is the
+default pill, and owns both the discoverable and the requested fixtures):
+
+| State | Setup | Expects |
+|---|---|---|
+| `default` | Load `/matches` | "Weekend 5-a-side" (Today section) and the "Requested sessions" region both visible |
+| `multi-date` | Date popover → tick "Tomorrow" → Escape (safe here: no Dialog on this page) | "Date (2)" trigger, a collapsed "Tomorrow (1)" section, counts/section loading finished |
+| `empty` | Search `zzz-no-match` | "No sessions to discover on Today." |
+| `load-more` | `seedDiscoverVolumeOnNextLoad(mockSessionId)` | First 10 cards + "Load more" |
+| `requested` (`discover-requested-{w}.png`) | Load `/matches` | `region "Requested sessions"` alone — "Wednesday scrimmage" with View details / Cancel |
+| `date-popover` / `time-popover` / `location-popover` | Open each by click | Popover framed together with the region via `clipAround` |
+
+**`app-discover-modal.spec.ts`** — 4 states × 3, scoped to `dialog "Discover today session"`. Reached like
+`home-feed-journey.spec.ts` does: `seedEmptyUpcomingMatchesOnNextLoad` (the rail's "Join a match" CTA only renders when
+upcoming is empty) → Badminton pill → "Join a match". States: `default` (flat list + "Discover more" footer), `empty`
+("No sessions to discover today."), `time-popover`, `location-popover`. No Date pill (the modal is today-only), so no
+date-popover state; popovers are opened by click and never dismissed with Escape (CLIENT-SESSION-27 — Escape closes the
+whole modal).
+
+**Why the helpers exist (`discoverClip.ts`):**
+- `clipAround(page, container, popover)` — a Discover popover portals outside its region (to `<body>` on the panel;
+  into the dialog's Content node in the modal, where it can overhang). It returns a page-coordinate clip of the union, so
+  the baseline holds the popover *and* its trigger without dragging rail/top-bar chrome in. The scroll offset is added
+  *before* the union (opening a popover can scroll the page; clamping first cropped the container's top).
+- `settle(page)` — also waits for `<img>` load. A sport icon still in flight is a blank circle; the first local frames
+  differed run to run because of it.
+- `pinDiscoverCountsToDate(page, '2026-07-07')` — the mock computes `/discover/counts`' default window from the *real*
+  clock while these specs freeze the browser's, so "today" was never in it and every header read "Today (0)" above a visible
+  card. Pinning the request's `date` to the frozen day makes the mock echo it. (The panel specs' `beforeEach`.)
+- The popover tests `waitForPanelLoaded` before measuring: the clip is measured once, and the region was still growing as
+  cards landed (565px vs 592px tall) — this failed 2 of 72 runs under `--repeat-each=2` before the wait was added.
+
+**Verified locally (Windows, frames deleted afterwards — never committed):** `--update-snapshots` → all 36 frames viewed;
+re-run without the flag `--repeat-each=4` → 144/144 green (same-machine determinism); a deliberate class change in
+`DiscoverResultsList` ("No more to load." colour) failed both the panel and modal `default` specs, then reverted. Real
+baselines come from the `update-baselines` dispatch → `/updatebaseline`, same as every other visual spec.
+**Executed 2026-09-24:** the dispatch's 36 `discover-*` baselines (plus CLIENT-SESSION-23's `session-detail-preparing-*`) are committed and current; `discover-modal-location-popover-375` records a known clipped popover (CLIENT-SESSION-32).
 
 ### `e2e/visual/app-create-session-modal.spec.ts` (CLIENT-SESSION-12 / CLIENT-SESSION-17, `visual-regression` project)
 

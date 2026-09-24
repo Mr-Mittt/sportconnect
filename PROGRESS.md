@@ -5394,6 +5394,16 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (standing no-fork/no-full-suite rule): tsc + eslint clean, 15 Vitest files green, e2e `matches-journey` 4/4 + 10 other
   session-touching flow specs 67/67; visual baselines change (24h text everywhere) → regenerate via `update-baselines`.
   Filed backend **SESSION-44**: `joinSession`/approve/reject don't reject a `COMPLETED` session (found by code review).
+- **CLIENT-SESSION-31 — Discover visual-regression coverage + baseline refresh (`DONE`, 2026-09-24,
+  `client/docs/MVP/CLIENT-SESSION-31_DISCOVER_VISUAL_REGRESSION_AND_BASELINE_REFRESH.md`):** test-only. New
+  `e2e/visual/app-discover-panel.spec.ts` (default, multi-date, empty, load-more, requested, date/time/location popover)
+  and `app-discover-modal.spec.ts` (default, empty, time/location popover) — 36 baselines — with `discoverClip.ts`
+  helpers (`clipAround`, `settle`, `pinDiscoverCountsToDate`) and a `discoverVolume` mock override so `/discover` pages
+  for real. Local frames caught a frozen-clock/mock-clock mismatch ("Today (0)" over a visible card), unloaded icons and
+  two clip bugs before any baseline was committed. One `update-baselines` dispatch → `/updatebaseline` applied 99 files
+  (39 new incl. CLIENT-SESSION-23's never-generated `session-detail-preparing-*`, 60 changed = the 23/30 predictions +
+  one unpredicted sub-pixel drift), 51 byte-identical, SHA-256 verified. Filed **CLIENT-SESSION-32**: the Location
+  popover is clipped by the "Join a match" modal at 375px (its baseline records the clipped state).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

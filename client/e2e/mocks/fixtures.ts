@@ -1078,6 +1078,15 @@ export async function seedHistoryVolumeOnNextLoad(sessionId: string): Promise<vo
 }
 
 /**
+ * CLIENT-SESSION-31 — makes `GET /sessions/discover` (and `/discover/counts`) also include 25
+ * synthetic discoverable Badminton sessions and page `/discover` for real, so a Discover section
+ * shows its "Load more" (client page size 10). Used by the Discover visual-regression spec.
+ */
+export async function seedDiscoverVolumeOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/discoverVolume');
+}
+
+/**
  * CLIENT-NOTIF-2's with-load-more baseline — 11 notifications (one more than
  * the list's page size of 10), same shape as `seedPaginatedFeedOnNextLoad`.
  */

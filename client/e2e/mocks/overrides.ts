@@ -33,6 +33,10 @@ export interface SessionOverrides {
    * holding 23 sessions) for the requested sport — enough to reach both "Load more" levels
    * (dates past `dateCount=20`, sessions past a date's page size of 20). */
   historyVolume: boolean;
+  /** CLIENT-SESSION-31: `GET /sessions/discover` (and `/discover/counts`) also see 25 synthetic
+   * Badminton sessions, and `/discover` pages them for real (client page size 10) — enough to reach
+   * a Discover section's "Load more". Off by default: `/discover` otherwise always returns one page. */
+  discoverVolume: boolean;
 }
 
 function defaultOverrides(): SessionOverrides {
@@ -48,6 +52,7 @@ function defaultOverrides(): SessionOverrides {
     notificationsEmpty: false,
     sessionsEmpty: false,
     historyVolume: false,
+    discoverVolume: false,
   };
 }
 
