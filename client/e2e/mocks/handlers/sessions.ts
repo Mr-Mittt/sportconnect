@@ -832,9 +832,15 @@ export const sessionHandlers: HttpHandler[] = [
     const sessionId = Number(params.sessionId);
     const session = sessionsSessions.get(sessionIdFromRequest(request));
     const participants = session.participantsState[sessionId] ?? [];
-    const row = participants.find((p) => p.userId === mockUser.id && p.status === 'JOINED');
+    // Real backend (SESSION-9): the same endpoint also serves Decline (INVITED) and Cancel-my-request
+    // (REQUESTED), not only leaving a JOINED row. CLIENT-SESSION-30's e2e cancels a pending request.
+    const row = participants.find(
+      (p) =>
+        p.userId === mockUser.id &&
+        (p.status === 'JOINED' || p.status === 'INVITED' || p.status === 'REQUESTED'),
+    );
     if (!row) {
-      return HttpResponse.json(apiError('Not currently joined'), { status: 400 });
+      return HttpResponse.json(apiError('Not currently a participant in this session'), { status: 400 });
     }
     row.status = 'LEFT';
     session.sessionsState = session.sessionsState.map((candidate) =>

@@ -188,3 +188,22 @@ export const ActionsStickToBottomInStretchedRow: Story = {
     ),
   ],
 };
+
+/** CLIENT-SESSION-30: a session with an end time shows "start – end" in 24h. */
+export const WithEndTime: Story = {
+  args: { session: makeSession({ id: 19, scheduledEndAt: '2026-08-01T21:00:00' }) },
+};
+
+/** CLIENT-SESSION-30: an overnight session adds the end date so it can't be misread. */
+export const EndsNextDay: Story = {
+  args: { session: makeSession({ id: 20, scheduledStart: '2026-08-01T22:00:00', scheduledEndAt: '2026-08-02T01:00:00' }) },
+};
+
+/** CLIENT-SESSION-30: the same overnight range in the narrow rail card — it ellipsises, full text on hover. */
+export const EndsNextDayCompact: Story = {
+  args: {
+    size: 'compact',
+    session: makeSession({ id: 21, scheduledStart: '2026-08-01T22:00:00', scheduledEndAt: '2026-08-02T01:00:00' }),
+  },
+  decorators: [(Story) => <div style={{ width: 240 }}>{Story()}</div>],
+};

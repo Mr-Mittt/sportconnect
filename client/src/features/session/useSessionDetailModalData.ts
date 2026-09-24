@@ -58,7 +58,8 @@ export function useSessionDetailModalData(sessionId: number | null) {
     return group?.currentUserRole !== null && CAN_MANAGE_ROLES.has(group?.currentUserRole ?? '');
   }, [sessionQuery.data, currentUserId, groups]);
 
-  const { joinMutation, leaveMutation } = useSessionParticipationAction();
+  // CLIENT-SESSION-30: a join from inside the detail doesn't offer "Open session" on its pop-up.
+  const { joinMutation, leaveMutation } = useSessionParticipationAction({ offerOpenSession: false });
   const cancelMutation = useCancelSession();
   const likeMutation = useLikeSession();
   const unlikeMutation = useUnlikeSession();

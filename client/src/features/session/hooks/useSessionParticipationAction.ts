@@ -9,9 +9,15 @@ import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation'
  * INVITED/REQUESTED rows too). `isParticipationActionPending` is keyed off each mutation's own
  * `variables` so a shared instance across a list of cards only shows the pending state on the
  * one card actually in flight.
+ *
+ * CLIENT-SESSION-30: `offerOpenSession` (default true — this hook's callers are the session cards)
+ * makes the post-join pop-up offer an "Open session" button. `useSessionDetailModalData` passes
+ * false: the join there already happens inside the detail.
  */
-export function useSessionParticipationAction() {
-  const joinMutation = useJoinSession();
+export function useSessionParticipationAction({
+  offerOpenSession = true,
+}: { offerOpenSession?: boolean } = {}) {
+  const joinMutation = useJoinSession({ offerOpenSession });
   const leaveMutation = useLeaveSession();
 
   const onParticipationAction = (sessionId: number, kind: ParticipationActionKind) => {

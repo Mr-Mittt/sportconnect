@@ -6,7 +6,7 @@ import { formatParticipantCount } from '@/shared/lib/sessionCapacity';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import { getParticipationAction } from '@/shared/lib/sessionParticipation';
 import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
-import { formatStartTime } from '@/shared/lib/startTime';
+import { formatSessionTimeRange } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Session } from '@/shared/types/session';
@@ -102,6 +102,7 @@ export function SessionCard({
   const action = getParticipationAction(session);
   const isActionPending = isParticipationActionPending(session.id);
   const isLeaveHiddenForCreator = action?.kind === 'LEAVE' && session.createdBy === currentUserId;
+  const timeRange = formatSessionTimeRange(session.scheduledStart, session.scheduledEndAt);
 
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
@@ -122,7 +123,11 @@ export function SessionCard({
 
       <div className={s.detailRow}>
         <IconClock className={s.detailIcon} aria-hidden="true" />
-        {formatStartTime(session.scheduledStart)}
+        {/* CLIENT-SESSION-30: "start – end" in 24h; a multi-day range can be long, so it ellipsises
+            like the location line rather than wrapping (the compact rail card is narrow). */}
+        <span className="min-w-0 truncate" title={timeRange}>
+          {timeRange}
+        </span>
       </div>
 
       <div className={s.detailRow}>

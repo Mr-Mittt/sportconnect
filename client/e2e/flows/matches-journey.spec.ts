@@ -120,6 +120,9 @@ test('Matches journey', async ({ page }) => {
     // the creator already listed, and there is no Join step here any more. The Join mutation is
     // still covered e2e by step 9 (a Discover session) and step 5b's Accept-from-the-card.
     await expect(dialog.getByText('Players (1/10)')).toBeVisible();
+    // CLIENT-SESSION-30: 24h "start – end" in the header, and the approval mode ahead of the creator.
+    await expect(dialog.getByText(/Sat, Aug 1 · 19:00 – 21:00/)).toBeVisible();
+    await expect(dialog.getByText('Auto approval. Created by Jordan Lee')).toBeVisible();
     await expect(dialog.getByText('Jordan Lee', { exact: true })).toBeVisible();
     // The creator doesn't get the plain participant Leave action either (CLIENT-SESSION-10
     // post-ship), so neither Join nor Leave shows.
@@ -188,6 +191,18 @@ test('Matches journey', async ({ page }) => {
   await test.step('5b. Accept an invite and Leave directly from the session card, no dialog required (CLIENT-SESSION-9)', async () => {
     // "Tuesday drop-in" (mockInvitedSession): an INVITED row shows Accept on the card.
     await page.getByRole('button', { name: /Tuesday drop-in — Accept/ }).click();
+    // CLIENT-SESSION-30: accepting an invitation resolves straight to JOINED — the app-level
+    // pop-up appears over whatever page the card is on. It came from a card, so it also offers
+    // "Open session", which closes the pop-up and opens that session's detail.
+    const joinedPopup = page.getByRole('dialog', { name: 'You joined the session' });
+    await expect(joinedPopup.getByText('You successfully joined the session. Enjoy your games!')).toBeVisible();
+    await expect(joinedPopup.getByRole('button', { name: 'Got it' })).toBeVisible();
+    await joinedPopup.getByRole('button', { name: 'Open session' }).click();
+    await expect(joinedPopup).toHaveCount(0);
+    const acceptedDetail = page.getByRole('dialog', { name: 'Tuesday drop-in' });
+    await expect(acceptedDetail.getByRole('button', { name: 'Leave' })).toBeVisible();
+    await acceptedDetail.getByRole('button', { name: 'Close' }).click();
+    await expect(acceptedDetail).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Tuesday drop-in — Leave/ })).toBeVisible();
 
     // CLIENT-SESSION-23: /upcoming is participant-scoped, so leaving a session removes its card
@@ -384,6 +399,13 @@ test('Matches journey', async ({ page }) => {
     await expect(detailSummary.getByText('Doubles')).toBeVisible();
 
     await dialog.getByRole('button', { name: 'Join' }).click();
+    // CLIENT-SESSION-30: an auto-approve session → the "joined" pop-up opens on top of the detail.
+    // The join came from the detail itself, so there is no "Open session" button (it is already open).
+    const joinedPopup = page.getByRole('dialog', { name: 'You joined the session' });
+    await expect(joinedPopup.getByText('You successfully joined the session. Enjoy your games!')).toBeVisible();
+    await expect(joinedPopup.getByRole('button', { name: 'Open session' })).toHaveCount(0);
+    await joinedPopup.getByRole('button', { name: 'Got it' }).click();
+    await expect(joinedPopup).toHaveCount(0);
     await expect(dialog.getByRole('button', { name: 'Leave' })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
 
@@ -442,6 +464,34 @@ test('Matches journey', async ({ page }) => {
     await expect(
       requestedSection.getByRole('button', { name: /Wednesday scrimmage.*Cancel/s }),
     ).toBeVisible();
+  });
+
+  await test.step('10c-2. a pending request shows the approval hint; cancel then re-request shows the "request sent" pop-up (CLIENT-SESSION-30)', async () => {
+    const requestedSection = page.getByRole('region', { name: 'Requested sessions' });
+    await requestedSection.getByRole('button', { name: /Wednesday scrimmage — View details/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Wednesday scrimmage' });
+
+    // mockRequestedSession is autoApprove=false, and the caller's row is REQUESTED.
+    await expect(dialog.getByText(/Need host approval\. Created by/)).toBeVisible();
+    await expect(dialog.getByText('Waiting for host approval.')).toBeVisible();
+
+    // Cancel the request → back to Join, hint gone.
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog.getByRole('button', { name: 'Join' })).toBeVisible();
+    await expect(dialog.getByText('Waiting for host approval.')).toHaveCount(0);
+
+    // Request again → REQUESTED, so the "request sent" pop-up (not the joined one) opens on top.
+    await dialog.getByRole('button', { name: 'Join' }).click();
+    const requestSentPopup = page.getByRole('dialog', { name: 'Join request sent' });
+    await expect(
+      requestSentPopup.getByText('Waiting for host approval. Feel free to chat while you wait.'),
+    ).toBeVisible();
+    await expect(requestSentPopup.getByRole('button', { name: 'Open session' })).toHaveCount(0);
+    await requestSentPopup.getByRole('button', { name: 'Got it' }).click();
+    await expect(requestSentPopup).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    await expect(dialog.getByText('Waiting for host approval.')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close' }).click();
   });
 
   // Step 11 creates a Pickleball session again — switch back from Badminton (step 8d).
