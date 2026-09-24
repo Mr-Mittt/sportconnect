@@ -40,9 +40,10 @@ export interface DiscoverFilters {
   viewerZoneId: string;
 }
 
-export function getViewerZoneId(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone;
-}
+// Moved to shared/lib in CLIENT-SESSION-24 so the My-sessions history/upcoming calls
+// (CLIENT-SESSION-23) can send the same zone without importing from Discover; re-exported so
+// every existing importer keeps working.
+export { getViewerZoneId } from '@/shared/lib/viewerZone';
 
 /** Stable, cache-key-safe serialization — sorts `locationIds`/`status` so checking the same
  * values in a different order doesn't miss the cache. Used by both `queryKeys.ts`'s discover

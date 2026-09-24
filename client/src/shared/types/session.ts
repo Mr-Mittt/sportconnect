@@ -43,7 +43,7 @@ export interface Session {
   /** SESSION-24: null on a PREPARING session created without a location. */
   location: Location | null;
   locationNote: string | null;
-  scheduledStart: string; // ISO, LocalDateTime (no timezone)
+  scheduledStart: string; // ISO-8601 Instant (offset/Z) — SESSION-33
   scheduledEndAt: string | null;
   status: SessionStatus;
   cancelReason: string | null;

@@ -5340,6 +5340,18 @@ explicit go-ahead at each step (full story in A3's summary doc):
   (confirmed by timing a passing run) — fixed with `test.setTimeout(60000)`, real headroom for
   genuinely more work. Full `e2e` project: **85/85 passing**, zero failures.
 
+- **CLIENT-SESSION-24 — offset-aware `scheduledStart` (2026-09-24,
+  `client/docs/MVP/CLIENT-SESSION-24_SUBMIT_OFFSET_AWARE_SCHEDULEDSTART_AND_CALLER_ZONE.md`):**
+  fixes a live break — backend SESSION-33 made `scheduledStart` an `Instant`, so every client
+  create-session got `400 "Malformed request"` (confirmed against the running backend); e2e missed
+  it because the MSW mock accepted any string. New `shared/lib/scheduledStart.ts`
+  (`toOffsetAwareIso` → `2026-09-24T11:00:00+07:00`, offset computed per selected instant via
+  `date-fns` `formatISO`, DST gap/overlap pinned by tests) wired into `CreateSessionModal`;
+  `getViewerZoneId()` moved to `shared/lib/viewerZone.ts` (re-exported from `discoverParams.ts`);
+  MSW create/update now reject offset-less values like the real backend. `/history` and `/upcoming`
+  `viewerZoneId` wiring has no client caller yet → filed as a Delta on CLIENT-SESSION-23. tsc/eslint
+  clean; Vitest 194 files / 1445 green; e2e 86/86; no baselined surface touched.
+
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status
 - `partner_matches` table: match score (0–100), accept/decline workflow

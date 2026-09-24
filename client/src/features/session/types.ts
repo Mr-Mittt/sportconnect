@@ -25,7 +25,7 @@ export interface CreateSessionPayload {
   /** SESSION-24: omitted -> the session is created PREPARING instead of SCHEDULED (CLIENT-SESSION-21). */
   locationId?: number;
   locationNote?: string;
-  scheduledStart: string; // LocalDateTime, e.g. "2026-08-01T19:00:00"
+  scheduledStart: string; // Instant — offset-aware ISO-8601, e.g. "2026-08-01T19:00:00+07:00" (SESSION-33)
   durationMinutes?: number;
   /** Mandatory on the real backend (SESSION-5) — no default fallback for a missing field. */
   capacity: number;
@@ -55,6 +55,7 @@ export interface UpdateSessionPayload {
   description?: string;
   locationId?: number;
   locationNote?: string;
+  /** Offset-aware ISO-8601 (`toOffsetAwareIso`) — an offset-less value is a 400 (SESSION-33). */
   scheduledStart?: string;
   durationMinutes?: number;
   capacity?: number;

@@ -1,10 +1,10 @@
 # CLIENT-SESSION-24 · Submit offset-aware `scheduledStart` and the browser's own timezone
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-24)
 **Depends on:** backend SESSION-33 (offset-aware `scheduledStart` contract), SESSION-34
-(`viewerZoneId` on `/history?dateCount` — done, see below), and SESSION-35 (`viewerZoneId` on
-`/discover`, `/upcoming?date`, and `/history?date` — done, see below) — **hard-blocked** on all
-three; the request shapes this ticket builds against don't exist until they ship.
+(`viewerZoneId` on `/history?dateCount`), and SESSION-35 (`viewerZoneId` on `/discover`,
+`/upcoming?date`, and `/history?date`) — all three **shipped** (the original "hard-blocked"
+wording is stale; refreshed at pickup 2026-09-24).
 **Filed:** 2026-09-16, spawned from `documentation/md/LOCATION_TIMEZONE_DESIGN.md`. **Scope extended
 2026-09-17/18** once SESSION-34 shipped its own caller-zone param (`/history` scope bullet below).
 **Scope extended again 2026-09-18** once SESSION-35 also added `viewerZoneId` to `/upcoming?date`
@@ -58,6 +58,64 @@ CLIENT-SESSION-22 was picked up. When this ticket is picked up, skip the "Discov
 entirely (verify it's still wired, don't re-add it) and focus on session create/update's offset-aware
 `scheduledStart` plus `/history?dateCount`/`/upcoming?date`/`/history?date`'s `viewerZoneId`, which
 remain unbuilt.
+
+## Implementation summary (2026-09-24)
+
+**Why it was urgent:** backend SESSION-33 made `scheduledStart` a `java.time.Instant`, so the real
+backend answered every client create with `400 "Malformed request"` (Jackson rejects the bare
+`2026-09-24T11:00:00` the client sent). e2e never caught it because the MSW mock accepted any
+string.
+
+**Scope decision (Phase 1 gate, 2026-09-24):** no add/remove. The `/history?dateCount`,
+`/upcoming?date` and `/history?date` calls have **no client caller yet** (that UI is
+CLIENT-SESSION-23), so this ticket ships the shared zone helper and files the requirement there
+(a **Delta** on CLIENT-SESSION-23's ticket: every such call must send `viewerZoneId`); the ticket's
+own bullet already allowed "whichever of 23/24 wires those calls first". The Discover bullet was
+already done via CLIENT-SESSION-22 and was verified still wired, not re-added.
+
+**Design (as approved, no divergence):**
+- `src/shared/lib/scheduledStart.ts` — `toOffsetAwareIso("yyyy-MM-ddTHH:mm")` →
+  `formatISO(parse(...))`, e.g. `2026-09-24T11:00:00+07:00` (`Z` in UTC). No new dependency
+  (`date-fns` already present, `date-fns-tz` not needed): the offset comes from the browser's own
+  zone for the *selected* instant, so it is computed per selection (DST-correct for a date weeks
+  out) and can never disagree with `viewerZoneId`. Spring-forward gap times resolve forward,
+  fall-back overlaps to the earlier occurrence (ECMAScript `Date` rules, pinned by tests). Throws on
+  an incomplete value (callers already gate on `scheduledStart !== ''`).
+- `src/shared/lib/viewerZone.ts` — `getViewerZoneId()` moved here from
+  `features/session/discoverParams.ts` (re-exported there; every existing importer unchanged) so
+  CLIENT-SESSION-23 can use it without importing from Discover.
+- `CreateSessionModal.tsx` payload now `scheduledStart: toOffsetAwareIso(scheduledStart)`.
+  `UpdateSessionPayload`/`Session` type comments corrected (no LocalDateTime). No client code sends
+  `scheduledStart` on update today, so nothing else needed changing there.
+- MSW `sessions.ts`: create and update handlers now return 400 for an offset-less `scheduledStart`
+  (mirrors SESSION-33). The existing create steps in `matches-journey.spec.ts` are the e2e proof —
+  no new spec needed.
+
+**Census:** response-side readers (`formatStartTime`, `formatSessionHeaderDateTime`,
+`groupSessionsByDate`, `useUpcomingMatches`, `SessionDetailModal`) all go through `new Date(iso)` →
+compatible as-is with offset/`Z` strings; e2e fixtures keep naive strings on purpose (converting
+them to `Z` would shift rendered times per host zone and churn baselines for no gain).
+
+**Real-backend check:** against the running dev backend, two deliberately invalid-elsewhere
+`POST /api/sessions` probes (no session created): offset-less → `400 "Malformed request"`
+(parse failure); `+07:00` → got past parsing and failed only the planted `capacity must be >= 0`
+validation.
+
+**Tests:** new `scheduledStart.test.ts` (8: Ho Chi Minh offset, round-trip instant, UTC `Z`, per-date
+DST offset EST vs EDT, spring-forward gap, fall-back overlap, throws on incomplete, zone-name
+shape); `CreateSessionModal.test.tsx` payload assertion now requires an offset suffix. Zone is pinned
+per test via `process.env.TZ`.
+
+**Verification:** `tsc -b` and eslint (touched files) clean; scoped Vitest 38 files / 351 green;
+full Vitest **194 files / 1445 passed**.
+
+**E2E:** `e2e` project **86 passed, 0 failed** (includes `matches-journey.spec.ts` "Matches journey"
+and the `#ref` attributes create-payload test, both creating sessions through the now
+offset-strict mock).
+
+**Visual-regression expectation:** no baselined surface touched (no rendered change) — no baseline
+change expected; a failing `visual-regression` run is the Windows noise floor plus the known
+`/matches` gap awaiting CLIENT-SESSION-23, not a regression. Not run for this ticket.
 
 ---
 
