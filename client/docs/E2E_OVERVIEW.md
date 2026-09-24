@@ -1052,6 +1052,7 @@ whole modal).
 re-run without the flag `--repeat-each=4` → 144/144 green (same-machine determinism); a deliberate class change in
 `DiscoverResultsList` ("No more to load." colour) failed both the panel and modal `default` specs, then reverted. Real
 baselines come from the `update-baselines` dispatch → `/updatebaseline`, same as every other visual spec.
+**Executed 2026-09-24:** the dispatch's 36 `discover-*` baselines (plus CLIENT-SESSION-23's `session-detail-preparing-*`) are committed and current; `discover-modal-location-popover-375` records a known clipped popover (CLIENT-SESSION-32).
 
 ### `e2e/visual/app-create-session-modal.spec.ts` (CLIENT-SESSION-12 / CLIENT-SESSION-17, `visual-regression` project)
 

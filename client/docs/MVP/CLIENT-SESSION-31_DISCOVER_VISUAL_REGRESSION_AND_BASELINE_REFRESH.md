@@ -1,6 +1,6 @@
 # CLIENT-SESSION-31 · Visual regression coverage for the Discover surfaces + baseline refresh
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE` (2026-09-24)
 **Type:** Infrastructure (Testing)
 **Depends on:** none (CLIENT-SESSION-22, -29 and -30 are all `DONE`)
 **Filed:** 2026-09-24, closing the gap `CLIENT-SESSION-22` explicitly noted: *"`visual-regression`
@@ -49,9 +49,8 @@ to one Discover surface fails it.
 
 ## Implementation summary (2026-09-24)
 
-**Status of the ticket:** the specs, mock support and docs are built and verified; the
-**baselines are not yet generated** — that needs the Linux CI dispatch, which only the user can run
-(steps below). The ticket stays `IN PROGRESS` until that round lands.
+**Status of the ticket:** `DONE` — specs, mock support, docs and (see **Executed** at the end) the
+Linux-rendered baselines are all in.
 
 **Design (approved Phase 3 plan, as built):**
 
@@ -112,10 +111,24 @@ where cards/participant counts/the detail header render) are expected to differ 
 everything else must come back byte-identical. No baselined surface is changed by *this* ticket's
 own code (test-only), so any diff beyond that predicted list is to be investigated, not accepted.
 
-**Remaining to close this ticket (user actions — cannot be done from this host):**
-1. Push this branch (only when you ask me to commit/push).
-2. GitHub → Actions → `client-ci` → *Run workflow* on this branch with `update-baselines=true`;
-   download the `visual-baselines` artifact.
-3. `/updatebaseline` to apply it; compare the changed-file list with the prediction above.
-4. Then mark the ticket `DONE`, move its row to **Done**, and add the `PROGRESS.md` line
-   (deferred until then — it isn't finished until the baselines exist).
+## Executed (2026-09-24) — baselines applied
+
+`client-ci` `update-baselines` dispatch on this branch → `visual-baselines` artifact (150 PNGs) → `/updatebaseline`.
+SHA-256 against the committed set (111 files): **60 changed, 39 new, 51 byte-identical, 0 missing.** Applied
+exactly the 99 changed+new files (`a566952`).
+
+- **New (39):** the 36 `discover-*` baselines as designed, plus `session-detail-preparing-{375,768,1280}` — the
+  `PREPARING` creator state CLIENT-SESSION-23 added a spec case for but never had baselines generated.
+- **Changed (60), all predicted by CLIENT-SESSION-23/30:** all 7 pre-existing `session-detail-*` states (21),
+  `groups-*` (18), `home-feed-default`/`-pickleball` (6; `-empty` stayed identical), and `profile-*` (14:
+  edit-profile-modal 768/1280, memories, posts, settings, settings-inactive). The 51 identical ones confirm the local
+  Windows diffs on everything else were pure noise floor.
+- **One unpredicted change, applied on the user's decision:** `create-session-no-sport-profiles-1280.png` (both
+  tickets said create-session stays identical). Same 448×424 size and content on inspection; sub-pixel Linux
+  antialiasing drift, the same class as the `already-joined-375` drift recorded in `E2E_OVERVIEW.md`. Applied because
+  CI rendered it differently from the committed file, so the PR's own visual job would otherwise fail on it.
+- **Eyeball check (CI-rendered frames):** discover panel shows "Today (1)" with icons loaded; session detail shows the
+  24h range, the "Waiting for host approval." hint beside Cancel, the "Need host approval." label, and the new Preparing
+  state; the Home rail shows the seeded JOINED rows ("Leave" / no button). Nothing drifted beyond the prediction.
+- **Known:** `discover-modal-location-popover-375` records the popover clipped by the dialog's right edge —
+  **CLIENT-SESSION-32** owns fixing that and regenerating it.
