@@ -103,7 +103,9 @@ export function ProfilePage() {
   // SPORT-10: which sport the Settings tab edits, when it isn't the page's active sport — set
   // by clicking a *deactivated* `SportSwitcher` pill (which also switches to the Settings tab).
   // Cleared whenever an active pill is picked, so the tab follows the active sport again.
-  const [settingsSportOverride, setSettingsSportOverride] = useState<SportKey | undefined>(undefined);
+  const [settingsSportOverride, setSettingsSportOverride] = useState<SportKey | undefined>(
+    undefined,
+  );
   // SPORT-10: the Active toggle's confirm dialog. `null` = closed.
   const [statusToggle, setStatusToggle] = useState<{
     mode: 'deactivate' | 'reactivate';
@@ -170,7 +172,11 @@ export function ProfilePage() {
 
   const createSessionModalData = useCreateSessionModalData();
   const activeSportId = activeSport !== undefined ? sportIdForKey(activeSport) : undefined;
-  const discoverModalData = useDiscoverModalData(activeSportId);
+  // CLIENT-SESSION-29 revision (2026-09-23) — see HomeFeedPage's identical comment.
+  const firstOwnedSportId = sportProfilesQuery.data[0]
+    ? sportIdForKey(sportProfilesQuery.data[0].key)
+    : undefined;
+  const discoverModalData = useDiscoverModalData(activeSportId ?? firstOwnedSportId);
   const railParticipationAction = useSessionParticipationAction();
 
   // CLIENT-MODAL-1: both modals embed the zero-sport-profile gate, which renders
@@ -418,19 +424,32 @@ export function ProfilePage() {
         <SessionDiscoverModal
           isOpen={discoverModalData.isDiscoverModalOpen}
           onClose={closeDiscoverModal}
-          searchMode={discoverModalData.searchMode}
-          onSearchModeChange={discoverModalData.setSearchMode}
+          sportId={discoverModalData.sportId}
+          onSportIdChange={discoverModalData.onSportIdChange}
           searchText={discoverModalData.searchText}
           onSearchTextChange={discoverModalData.setSearchText}
           isLocationFilterAvailable={discoverModalData.isLocationFilterAvailable}
           selectedLocations={discoverModalData.selectedLocations}
           onToggleLocation={discoverModalData.toggleLocation}
+          onClearLocationFilter={discoverModalData.clearLocationFilter}
           favoriteLocations={discoverModalData.favoriteLocations}
           isFavoriteLocationsLoading={discoverModalData.isFavoriteLocationsLoading}
           locationSearchText={discoverModalData.locationSearchText}
           onLocationSearchTextChange={discoverModalData.setLocationSearchText}
           locationSearchResults={discoverModalData.locationSearchResults}
           isLocationSearchLoading={discoverModalData.isLocationSearchLoading}
+          onOpenLocationPicker={discoverModalData.onOpenLocationPicker}
+          locationPicker={discoverModalData.locationPicker}
+          selectedStatuses={discoverModalData.selectedStatuses}
+          onToggleStatus={discoverModalData.toggleStatus}
+          minOpenSlotsText={discoverModalData.minOpenSlotsText}
+          onMinOpenSlotsTextChange={discoverModalData.setMinOpenSlotsText}
+          onClearOpenSlotsFilter={discoverModalData.clearOpenSlotsFilter}
+          feeType={discoverModalData.feeType}
+          onToggleFeeType={discoverModalData.toggleFeeType}
+          maxFeeAmountVndText={discoverModalData.maxFeeAmountVndText}
+          onMaxFeeAmountVndChange={discoverModalData.setMaxFeeAmountVndText}
+          onClearFeeFilter={discoverModalData.clearFeeFilter}
           startTimeFilter={discoverModalData.startTimeFilter}
           onStartTimeFilterChange={discoverModalData.setStartTimeFilter}
           startTime={discoverModalData.startTime}
@@ -491,7 +510,10 @@ export function ProfilePage() {
           isRejectingParticipant={discoverModalData.isRejectingParticipant}
           onToggleLike={discoverModalData.onToggleLike}
           isTogglingLike={discoverModalData.isTogglingLike}
-          currentUser={{ fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
+          currentUser={{
+            fullName: `${user.firstName} ${user.lastName}`,
+            avatarUrl: user.avatarUrl,
+          }}
           comments={discoverModalData.comments}
           isCommentsLoading={discoverModalData.isCommentsLoading}
           isCommentsError={discoverModalData.isCommentsError}

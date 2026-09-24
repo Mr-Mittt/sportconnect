@@ -99,10 +99,13 @@ export function MatchesPage() {
 
   const closeDetail = () => {
     data.closeDetail();
-    setSearchParams((params) => {
-      params.delete('session');
-      return params;
-    }, { replace: true });
+    setSearchParams(
+      (params) => {
+        params.delete('session');
+        return params;
+      },
+      { replace: true },
+    );
   };
 
   const discoverGridClassName = data.isHistoryPanelCollapsed
@@ -115,11 +118,17 @@ export function MatchesPage() {
       <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
         <SportSwitcher
           sports={Object.values(data.sportsByKey)}
-          active={data.activeSport}
-          onChange={data.setActiveSport}
+          active={data.activeSport ?? 'all'}
+          onChange={(key) => {
+            // 'all' can never actually be clicked (showAllPill={false} drops that pill), but
+            // SportSwitcher's onChange type still allows it — same guard /profile's own
+            // ProfilePage.tsx uses for its identical no-'all' SportSwitcher.
+            if (key !== 'all') data.setActiveSport(key);
+          }}
           maxSports={sportCatalog.data.length || undefined}
           isCheckingCatalog={addSportLauncher.isCheckingCatalog}
           onAddSport={addSportLauncher.launch}
+          showAllPill={false}
           inactiveSports={inactiveSports}
           onInactiveSelect={inactiveSportPill.onInactiveSelect}
         />
@@ -144,21 +153,43 @@ export function MatchesPage() {
           selectedDates={data.selectedDates}
           onToggleDate={data.toggleDate}
           dateOptionLabel={data.dateOptionLabel}
+          dateLabel={data.dateLabel}
           isDateSelectionAtMax={data.isDateSelectionAtMax}
+          isDateFilterActive={data.isDateFilterActive}
+          resetDateSelection={data.resetDateSelection}
           isLocationFilterAvailable={data.isLocationFilterAvailable}
           selectedLocations={data.selectedLocations}
           onToggleLocation={data.toggleLocation}
+          onClearLocationFilter={data.clearLocationFilter}
           favoriteLocations={data.favoriteLocations}
           isFavoriteLocationsLoading={data.isFavoriteLocationsLoading}
           locationSearchText={data.locationSearchText}
           onLocationSearchTextChange={data.setLocationSearchText}
           locationSearchResults={data.locationSearchResults}
           isLocationSearchLoading={data.isLocationSearchLoading}
+          onOpenLocationPicker={data.onOpenLocationPicker}
+          locationPicker={data.locationPicker}
+          selectedStatuses={data.selectedStatuses}
+          onToggleStatus={data.toggleStatus}
+          minOpenSlotsText={data.minOpenSlotsText}
+          onMinOpenSlotsTextChange={data.setMinOpenSlotsText}
+          onClearOpenSlotsFilter={data.clearOpenSlotsFilter}
+          feeType={data.feeType}
+          onToggleFeeType={data.toggleFeeType}
+          maxFeeAmountVndText={data.maxFeeAmountVndText}
+          onMaxFeeAmountVndChange={data.setMaxFeeAmountVndText}
+          onClearFeeFilter={data.clearFeeFilter}
           startTimeFilter={data.startTimeFilter}
           onStartTimeFilterChange={data.setStartTimeFilter}
           startTime={data.startTime}
           onStartTimeChange={data.setStartTime}
           onClearTimeFilter={data.clearTimeFilter}
+          requestedSessions={data.requestedSessions}
+          isRequestedSessionsLoading={data.isRequestedSessionsLoading}
+          isRequestedSessionsError={data.isRequestedSessionsError}
+          hasMoreRequestedSessions={data.hasMoreRequestedSessions}
+          isFetchingMoreRequestedSessions={data.isFetchingMoreRequestedSessions}
+          onLoadMoreRequestedSessions={data.onLoadMoreRequestedSessions}
           dateSections={data.dateSections}
           onToggleExpanded={data.toggleExpanded}
           onLoadMoreSection={data.loadMoreSection}
@@ -190,7 +221,10 @@ export function MatchesPage() {
         </div>
 
         {!data.isHistoryPanelCollapsed && (
-          <section aria-label="My sessions" className="flex flex-col gap-3 md:w-[calc(33.333%-2rem)] md:shrink-0">
+          <section
+            aria-label="My sessions"
+            className="flex flex-col gap-3 md:w-[calc(33.333%-2rem)] md:shrink-0"
+          >
             <h2 className="text-2sm font-medium text-text-primary">My sessions</h2>
 
             {data.isMySessionsLoading && <p className="text-2sm text-text-muted">Loading…</p>}
@@ -199,28 +233,34 @@ export function MatchesPage() {
                 Couldn't load your sessions.
               </p>
             )}
-            {!data.isMySessionsLoading && !data.isMySessionsError && data.mySessionDateGroups.length === 0 && (
-              <p className="text-2sm text-text-muted">You haven't created or joined any sessions yet.</p>
-            )}
-            {!data.isMySessionsLoading && !data.isMySessionsError && data.mySessionDateGroups.length > 0 && (
-              <div className="flex flex-col gap-4">
-                {data.mySessionDateGroups.map((group) => (
-                  <SessionDateGroup
-                    key={group.dateKey}
-                    dateKey={group.dateKey}
-                    dateLabel={group.dateLabel}
-                    sessions={group.sessions}
-                    sportsByKey={data.sportsByKey}
-                    currentUserId={data.currentUserId ?? ''}
-                    isCollapsed={data.collapsedDateKeys.has(group.dateKey)}
-                    onToggleCollapsed={data.toggleDateGroupCollapsed}
-                    onViewDetails={data.onViewDetails}
-                    onParticipationAction={data.onParticipationAction}
-                    isParticipationActionPending={data.isParticipationActionPending}
-                  />
-                ))}
-              </div>
-            )}
+            {!data.isMySessionsLoading &&
+              !data.isMySessionsError &&
+              data.mySessionDateGroups.length === 0 && (
+                <p className="text-2sm text-text-muted">
+                  You haven't created or joined any sessions yet.
+                </p>
+              )}
+            {!data.isMySessionsLoading &&
+              !data.isMySessionsError &&
+              data.mySessionDateGroups.length > 0 && (
+                <div className="flex flex-col gap-4">
+                  {data.mySessionDateGroups.map((group) => (
+                    <SessionDateGroup
+                      key={group.dateKey}
+                      dateKey={group.dateKey}
+                      dateLabel={group.dateLabel}
+                      sessions={group.sessions}
+                      sportsByKey={data.sportsByKey}
+                      currentUserId={data.currentUserId ?? ''}
+                      isCollapsed={data.collapsedDateKeys.has(group.dateKey)}
+                      onToggleCollapsed={data.toggleDateGroupCollapsed}
+                      onViewDetails={data.onViewDetails}
+                      onParticipationAction={data.onParticipationAction}
+                      isParticipationActionPending={data.isParticipationActionPending}
+                    />
+                  ))}
+                </div>
+              )}
           </section>
         )}
       </div>

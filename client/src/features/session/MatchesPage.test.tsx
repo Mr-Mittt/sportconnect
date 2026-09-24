@@ -160,7 +160,10 @@ describe('MatchesPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useAuthStore.setState({ user: testUser, accessToken: 'token', isBootstrapping: false });
-    useMatchesPageStore.setState({ activeSport: 'all' });
+    // CLIENT-SESSION-29 (2026-09-23) — no 'all' state; null lets useMatchesActiveSport resolve
+    // to the fixture's own single Basketball profile, same sportId every session fixture defaults
+    // to, so nothing else in this file needs to change.
+    useMatchesPageStore.setState({ activeSport: null });
   });
 
   afterEach(() => {
@@ -287,5 +290,16 @@ describe('MatchesPage', () => {
 
     await screen.findByText('Sunday pickup run');
     expect(screen.queryByRole('dialog', { name: 'Add a sport' })).not.toBeInTheDocument();
+  });
+
+  // CLIENT-SESSION-29 (2026-09-23, user decision) — /matches drops the "All" sport pill; the
+  // sport switcher only ever offers real sports, defaulting to the caller's first profile.
+  it('has no "All" sport pill, defaulting to the first sport profile as active', async () => {
+    mockGet({ mySessions: [session()] });
+    render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
+
+    await screen.findByText('Sunday pickup run');
+    expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Basketball' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

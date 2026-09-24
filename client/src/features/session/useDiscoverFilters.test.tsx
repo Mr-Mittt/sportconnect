@@ -184,6 +184,24 @@ describe('useDiscoverFilters', () => {
     expect(result.current.selectedLocations).toHaveLength(0);
   });
 
+  it('CLIENT-SESSION-29: "Choose a location" dedupes instead of toggling off an already-selected one', async () => {
+    mockGets({
+      '/locations/favorites': () => apiResponse(pageResponse([location])),
+    });
+
+    const { result } = renderHook(() => useDiscoverFilters(6, true), { wrapper });
+    await waitFor(() => expect(result.current.favoriteLocations).toHaveLength(1));
+
+    act(() => result.current.toggleLocation(location));
+    expect(result.current.selectedLocations).toHaveLength(1);
+
+    // Re-picking the same, already-checked location via the LocationPicker's onSelectResult
+    // (unlike toggleLocation) must not remove it — it should stay selected.
+    act(() => result.current.locationPicker.onSelectResult(location));
+    expect(result.current.selectedLocations).toHaveLength(1);
+    expect(result.current.selectedLocations[0]).toEqual(location);
+  });
+
   it('sends the debounced search text as the /discover and /discover/counts title param', async () => {
     mockGets({});
     const { result } = renderHook(() => useDiscoverFilters(6, true), { wrapper });

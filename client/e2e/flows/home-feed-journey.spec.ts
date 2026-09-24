@@ -243,5 +243,108 @@ test('Home Feed — the "Join a match" modal\'s Time filter popover is actually 
   await expect(beforeBtn).toBeVisible();
   await beforeBtn.click();
   await expect(beforeBtn).toHaveAttribute('aria-pressed', 'true');
-  await expect(dialog.getByRole('button', { name: /^Start before \d{2}:\d{2}$/ })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /^Before \d{2}:\d{2}$/ })).toBeVisible();
+});
+
+/**
+ * CLIENT-SESSION-29 (2026-09-23) — regression test for the fix underlying this ticket's item 5
+ * and CLIENT-SESSION-28: `shared/ui/floatingPortalContainer.ts` makes a `Popover` nested inside
+ * this app's own `Dialog` portal into the Dialog's own Content node instead of `document.body`,
+ * so it stops tripping the Dialog's `FocusScope` focus trap. Covers both symptoms that root cause
+ * produced — `DiscoverTimeFilter`'s Hour/Minute inputs not committing (this ticket) and
+ * `DiscoverLocationFilter`'s search input being untypeable (CLIENT-SESSION-28) — in one spec,
+ * since both are the same fix. Real browser only: jsdom can't reproduce `FocusScope`'s
+ * focus-trap interactions any more than it could reproduce the pointer-events bug above.
+ */
+test('Home Feed — the "Join a match" modal\'s Time/Location popovers stay focused and typeable', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedEmptyUpcomingMatchesOnNextLoad(mockSessionId);
+  await seedAuthenticatedSession(page);
+
+  await page.getByRole('button', { name: 'Badminton' }).click();
+  await page.getByRole('button', { name: 'Join a match' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Discover today session' });
+  await expect(dialog).toBeVisible();
+
+  // --- Time filter: Hour/Minute edits auto-apply once a direction is set ---
+  await dialog.getByRole('button', { name: 'Time' }).click();
+  await page.getByRole('button', { name: 'Before', exact: true }).click();
+  const hourInput = page.getByLabel('Hour');
+  await hourInput.click();
+  await expect(hourInput).toBeFocused();
+  await hourInput.fill('05');
+  // Tab to the Minute input (still inside the same popover), not a bare `.blur()` — CI (Linux)
+  // reported `getByLabel('Hour')` gone entirely after `.blur()` (not a value mismatch, a genuine
+  // absence for the full retry window), never reproduced locally across several runs. `.blur()`
+  // doesn't move focus anywhere specific, unlike a real user action; Tab is deterministic and
+  // matches how a caller would actually move between the two fields.
+  await hourInput.press('Tab');
+  await expect(page.getByLabel('Minute')).toBeFocused();
+  await expect(hourInput).toHaveValue('05');
+  await expect(dialog.getByRole('button', { name: /^Before 05:\d{2}$/ })).toBeVisible();
+  // Closes the Time popover so it doesn't shadow the Location trigger below. The exact
+  // "Before HH:MM" pattern (not just /^Before/) disambiguates the trigger from the popover's own
+  // inner "Before" direction-toggle button, which also matches a bare /^Before/ prefix now that
+  // the trigger's own label dropped its "Start " prefix.
+  await page.getByRole('button', { name: /^Before \d{2}:\d{2}$/ }).click();
+
+  // --- Location filter: the search input actually accepts typed text ---
+  await dialog.getByRole('button', { name: /^Location/ }).click();
+  const searchInput = dialog.getByLabel('Search locations');
+  await searchInput.click();
+  await expect(searchInput).toBeFocused();
+  await searchInput.fill('river');
+  await expect(searchInput).toHaveValue('river');
+});
+
+/**
+ * CLIENT-SESSION-29 (2026-09-24) — regression for a bug CI caught and this suite had been unable to
+ * reproduce: tabbing out of the Time filter's Hour input closed the whole Time popover.
+ *
+ * Root cause: during Tab, `document.activeElement` is briefly `<body>` between the Hour blur and
+ * the Minute focus. Committing the Hour changes the discover filters, and — because the query has no
+ * placeholder data — a *non-empty* result grid is removed synchronously inside that window. The
+ * Dialog's FocusScope treats "body focused + node removed" as focus lost and focuses its own
+ * container, which the nested Popover read as focus outside itself and dismissed. Fixed twice:
+ * `DiscoverTimeFilter` defers the parent update (`startTransition`) so focus lands first, and the
+ * shared `PopoverContent` ignores focus landing on the Dialog's own container.
+ *
+ * Why every earlier run passed locally: the mock's time filter empties the list at the moment of the
+ * commit, so nothing was ever removed. Real data (and CI, depending on the hour) has cards. This test
+ * strips the time params from the request so the results stay non-empty — the exact condition that
+ * triggers the bug.
+ */
+test('Home Feed — tabbing out of the Time filter\'s Hour input keeps the popover open with results on screen', async ({
+  page,
+  mockSessionId,
+}) => {
+  await page.route('**/api/sessions/discover**', async (route) => {
+    const url = new URL(route.request().url());
+    url.searchParams.delete('startTime');
+    url.searchParams.delete('startTimeFilter');
+    await route.continue({ url: url.toString() });
+  });
+  await seedEmptyUpcomingMatchesOnNextLoad(mockSessionId);
+  await seedAuthenticatedSession(page);
+
+  await page.getByRole('button', { name: 'Badminton' }).click();
+  await page.getByRole('button', { name: 'Join a match' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Discover today session' });
+  await expect(dialog.getByText('Weekend 5-a-side')).toBeVisible();
+
+  await dialog.getByRole('button', { name: 'Time' }).click();
+  await page.getByRole('button', { name: 'Before', exact: true }).click();
+  // Results are non-empty here, so the Hour commit below has a card grid to remove.
+  await expect(dialog.getByText('Weekend 5-a-side')).toBeVisible();
+
+  const hourInput = page.getByLabel('Hour');
+  await hourInput.click();
+  await hourInput.fill('05');
+  await hourInput.press('Tab');
+
+  await expect(page.getByLabel('Minute')).toBeFocused();
+  await expect(hourInput).toHaveValue('05');
+  await expect(dialog.getByRole('button', { name: /^Before 05:\d{2}$/ })).toBeVisible();
 });

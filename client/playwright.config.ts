@@ -76,6 +76,15 @@ export default defineConfig({
       // the same shape whether the target is this mock server or the real
       // Go service.
       env: { VITE_API_PROXY_TARGET: MOCK_SERVER_URL, VITE_CHAT_PROXY_TARGET: MOCK_SERVER_URL },
+      // Vite's HMR WebSocket proxy logs a "ws proxy error"/"ws proxy socket error" pair
+      // (ECONNABORTED) to stderr basically every time Playwright's browser navigates/closes a
+      // connection mid-flight — harmless (HMR isn't used in a headless e2e run at all), but
+      // `stderr` defaults to `'pipe'`, so every one of those pairs streams into every test run's
+      // terminal output. Found 2026-09-24 while tracing why routine e2e runs were costing far more
+      // tokens than the actual pass/fail result should — this was the single biggest offender,
+      // interleaving 40-60 lines of stack trace into `tail`-piped output regardless of window
+      // size. `stdout` is left on its default (`'ignore'`) — unaffected either way.
+      stderr: 'ignore',
     },
   ],
 });

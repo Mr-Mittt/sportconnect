@@ -8,10 +8,12 @@ import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { useGroupSessionsForGroups } from './hooks/useGroupSessions';
 import { useJoinedSessions } from './hooks/useJoinedSessions';
 import { useMySessions } from './hooks/useMySessions';
+import { useRequestedSessions } from './hooks/useRequestedSessions';
 import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
 import { dedupeSessionsById, groupSessionsByDate } from './groupSessionsByDate';
 import { useDiscoverFilters } from './useDiscoverFilters';
 import { useCreateSessionModalData } from './useCreateSessionModalData';
+import { useMatchesActiveSport } from './useMatchesActiveSport';
 import { useSessionDetailModalData } from './useSessionDetailModalData';
 
 /**
@@ -43,7 +45,10 @@ import { useSessionDetailModalData } from './useSessionDetailModalData';
  */
 export function useMatchesPageData(initialSessionId: number | null) {
   const currentUserId = useAuthStore((state) => state.user?.id);
-  const activeSport = useMatchesPageStore((state) => state.activeSport);
+  // CLIENT-SESSION-29 (2026-09-23) — /matches no longer offers an "All sports" pill (user
+  // decision); `useMatchesActiveSport` defaults to the caller's first sport profile instead of a
+  // `'all'` state (same shape as /profile's own PROFILE-4 delta).
+  const { activeSport } = useMatchesActiveSport();
   const setActiveSport = useMatchesPageStore((state) => state.setActiveSport);
 
   const sportProfilesQuery = useSportProfiles();
@@ -56,7 +61,7 @@ export function useMatchesPageData(initialSessionId: number | null) {
     [sportProfilesQuery.data],
   );
 
-  const activeSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
+  const activeSportId = activeSport !== undefined ? sportIdForKey(activeSport) : undefined;
 
   // --- Discover panel ---
   // CLIENT-SESSION-22: owns the Date/Location/Time filter pills + per-date sections, shared with
@@ -70,6 +75,21 @@ export function useMatchesPageData(initialSessionId: number | null) {
   const groupSessionQueries = useGroupSessionsForGroups(groupIds);
   const mySessionsQuery = useMySessions(currentUserId !== undefined);
   const joinedSessionsQuery = useJoinedSessions(currentUserId !== undefined);
+
+  // --- Requested sessions (CLIENT-SESSION-29) — the Discover panel's own section, not "My
+  // sessions"; reuses this hook's already-fetched `groups` list for groupName resolution rather
+  // than fetching it a second time (same pattern mySessionDateGroups below already uses).
+  const requestedSessionsQuery = useRequestedSessions(currentUserId !== undefined);
+  const requestedSessions = useMemo(
+    () =>
+      (requestedSessionsQuery.data?.pages ?? []).flatMap((page) =>
+        page.content.map((session) => ({
+          ...session,
+          groupName: groups.find((group) => group.id === session.groupId)?.groupName ?? null,
+        })),
+      ),
+    [requestedSessionsQuery.data, groups],
+  );
 
   const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(false);
   const toggleHistoryPanelCollapsed = () => setIsHistoryPanelCollapsed((collapsed) => !collapsed);
@@ -94,8 +114,11 @@ export function useMatchesPageData(initialSessionId: number | null) {
       groupName: groups.find((group) => group.id === session.groupId)?.groupName ?? null,
     }));
     const deduped = dedupeSessionsById(withGroupName);
+    // No 'all' branch (CLIENT-SESSION-29, 2026-09-23) — activeSport is only ever undefined
+    // transiently (before the first sport profile resolves) or for a zero-profile caller, in
+    // which case there's no sane sport to filter by, so this shows nothing rather than everything.
     const filtered = deduped.filter(
-      (session) => activeSport === 'all' || sportKeyForId(session.sportId) === activeSport,
+      (session) => activeSport !== undefined && sportKeyForId(session.sportId) === activeSport,
     );
     return groupSessionsByDate(filtered);
   }, [groupSessionQueries, mySessionsQuery.data, joinedSessionsQuery.data, groups, activeSport]);
@@ -136,6 +159,14 @@ export function useMatchesPageData(initialSessionId: number | null) {
     mySessionDateGroups,
     isMySessionsLoading,
     isMySessionsError,
+
+    requestedSessions,
+    isRequestedSessionsLoading: requestedSessionsQuery.isLoading,
+    isRequestedSessionsError: requestedSessionsQuery.isError,
+    hasMoreRequestedSessions: requestedSessionsQuery.hasNextPage ?? false,
+    isFetchingMoreRequestedSessions: requestedSessionsQuery.isFetchingNextPage,
+    onLoadMoreRequestedSessions: () => requestedSessionsQuery.fetchNextPage(),
+
     isHistoryPanelCollapsed,
     toggleHistoryPanelCollapsed,
     collapsedDateKeys,

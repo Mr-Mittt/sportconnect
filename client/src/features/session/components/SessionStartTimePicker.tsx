@@ -1,6 +1,7 @@
 import { addDays, format, startOfDay } from 'date-fns';
 import { useEffect, useState } from 'react';
 import { Select } from '@/shared/ui/select';
+import { formatDiscoverDateOptionLabel } from '../discoverDateLabel';
 import { SessionStartTimeCalendar } from './SessionStartTimeCalendar';
 
 interface SessionStartTimePickerProps {
@@ -47,7 +48,11 @@ const MINUTE_STEP = 5;
  * via `onChange` on mount so the parent's validity check reflects it immediately — same reasoning
  * as the Sport field's own pre-selection.
  */
-export function SessionStartTimePicker({ value, onChange, now = new Date() }: SessionStartTimePickerProps) {
+export function SessionStartTimePicker({
+  value,
+  onChange,
+  now = new Date(),
+}: SessionStartTimePickerProps) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [datePart, setDatePart] = useState(() =>
     value !== '' ? value.slice(0, 10) : format(startOfDay(now), 'yyyy-MM-dd'),
@@ -64,6 +69,7 @@ export function SessionStartTimePicker({ value, onChange, now = new Date() }: Se
   }, []);
 
   const floor = startOfDay(now);
+  const todayKey = format(floor, 'yyyy-MM-dd');
   const quickDates = Array.from({ length: 7 }, (_, i) => addDays(floor, i));
   const quickDateValues = quickDates.map((date) => format(date, 'yyyy-MM-dd'));
   const isCustomDate = datePart !== '' && !quickDateValues.includes(datePart);
@@ -73,7 +79,9 @@ export function SessionStartTimePicker({ value, onChange, now = new Date() }: Se
     setHourPart(nextHour);
     setMinutePart(nextMinute);
     onChange(
-      nextDate !== '' && nextHour !== '' && nextMinute !== '' ? `${nextDate}T${nextHour}:${nextMinute}` : '',
+      nextDate !== '' && nextHour !== '' && nextMinute !== ''
+        ? `${nextDate}T${nextHour}:${nextMinute}`
+        : '',
     );
   };
 
@@ -87,7 +95,9 @@ export function SessionStartTimePicker({ value, onChange, now = new Date() }: Se
   };
 
   const hourOptions = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0'));
-  const minuteOptions = Array.from({ length: 60 / MINUTE_STEP }, (_, i) => String(i * MINUTE_STEP).padStart(2, '0'));
+  const minuteOptions = Array.from({ length: 60 / MINUTE_STEP }, (_, i) =>
+    String(i * MINUTE_STEP).padStart(2, '0'),
+  );
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -100,11 +110,14 @@ export function SessionStartTimePicker({ value, onChange, now = new Date() }: Se
           <option value="" disabled>
             Date
           </option>
-          {quickDates.map((date, i) => (
-            <option key={date.toISOString()} value={format(date, 'yyyy-MM-dd')}>
-              {i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : format(date, 'dd/MM')}
-            </option>
-          ))}
+          {quickDates.map((date) => {
+            const dateKey = format(date, 'yyyy-MM-dd');
+            return (
+              <option key={date.toISOString()} value={dateKey}>
+                {formatDiscoverDateOptionLabel(dateKey, todayKey)}
+              </option>
+            );
+          })}
           {isCustomDate && (
             <option value={CUSTOM_DATE_VALUE}>
               {format(new Date(`${datePart}T00:00:00`), 'dd/MM/yyyy')}

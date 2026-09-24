@@ -1,9 +1,8 @@
-import { useState } from 'react';
-import { IconChevronDown } from '@tabler/icons-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
-import { Button } from '@/shared/ui/button';
+import { startTransition, useState } from 'react';
+import { Popover, PopoverContent } from '@/shared/ui/popover';
 import { cn } from '@/shared/lib/utils';
 import type { StartTimeFilter } from '@/shared/types/session';
+import { DiscoverFilterTrigger } from './DiscoverFilterTrigger';
 
 function clampHour(value: string): string {
   const n = Math.min(23, Math.max(0, Number.parseInt(value, 10) || 0));
@@ -21,8 +20,8 @@ function nowHourMinute(): [string, string] {
 }
 
 const DIRECTION_LABELS: Record<StartTimeFilter, string> = {
-  BEFORE_OR_EQUAL: 'before',
-  AFTER_OR_EQUAL: 'after',
+  BEFORE_OR_EQUAL: 'Before',
+  AFTER_OR_EQUAL: 'After',
 };
 
 interface DiscoverTimeFilterProps {
@@ -55,15 +54,22 @@ export function DiscoverTimeFilter({
   const [hour, setHour] = useState(startHour);
   const [minute, setMinute] = useState(startMinute);
 
+  // The parent update is a transition, not part of the blur itself (found 2026-09-24, CI + a
+  // real-browser repro): while Tab moves focus Hour -> Minute, `document.activeElement` is briefly
+  // `<body>`. Committing synchronously re-renders the discover results (new query key, no
+  // placeholder data), which removes the session-card grid inside that window — and the Dialog's
+  // FocusScope reacts to "body focused + node removed" by focusing the dialog container, which
+  // the nested popover reads as focus *outside* itself and dismisses. Deferring lets focus land on
+  // Minute first, so the removal happens with a real focused element and FocusScope ignores it.
   const commitHour = (raw: string) => {
     const next = clampHour(raw);
     setHour(next);
-    if (isSet) onStartTimeChange(`${next}:${minute}`);
+    if (isSet) startTransition(() => onStartTimeChange(`${next}:${minute}`));
   };
   const commitMinute = (raw: string) => {
     const next = clampMinute(raw);
     setMinute(next);
-    if (isSet) onStartTimeChange(`${hour}:${next}`);
+    if (isSet) startTransition(() => onStartTimeChange(`${hour}:${next}`));
   };
 
   const toggleDirection = (direction: StartTimeFilter) => {
@@ -85,12 +91,12 @@ export function DiscoverTimeFilter({
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1">
-          {isSet ? `Start ${DIRECTION_LABELS[startTimeFilter ?? 'AFTER_OR_EQUAL']} ${startTime}` : 'Time'}
-          <IconChevronDown className="size-3.5" aria-hidden="true" />
-        </Button>
-      </PopoverTrigger>
+      <DiscoverFilterTrigger
+        label={isSet ? `${DIRECTION_LABELS[startTimeFilter ?? 'AFTER_OR_EQUAL']} ${startTime}` : 'Time'}
+        isActive={isSet}
+        onClear={onClear}
+        clearLabel="Clear time filter"
+      />
       <PopoverContent align="start" className="w-auto">
         <div className="flex items-center gap-1.5">
           <button

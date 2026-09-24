@@ -139,7 +139,7 @@ describe('DiscoverDateSection', () => {
     const onLoadMore = vi.fn();
     renderSection({ section: makeSection({ hasMore: true }), onLoadMore });
 
-    await user.click(screen.getByRole('button', { name: 'Load more sessions' }));
+    await user.click(screen.getByRole('button', { name: 'Load more' }));
     expect(onLoadMore).toHaveBeenCalledWith('2026-08-01');
   });
 

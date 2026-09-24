@@ -1,13 +1,23 @@
+import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
+import { LocationPicker } from '@/features/location/components/LocationPicker';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
-import type { StartTimeFilter } from '@/shared/types/session';
+import type { FeeType, SessionStatus, StartTimeFilter } from '@/shared/types/session';
 import type { Location } from '@/shared/types/location';
-import type { DiscoverDateSection as DiscoverDateSectionData, SessionSearchMode } from '../types';
+import type {
+  DiscoverDateSection as DiscoverDateSectionData,
+  SessionListItem,
+  SessionSearchMode,
+} from '../types';
 import { DiscoverDatePicker } from './DiscoverDatePicker';
+import { DiscoverFeeFilter } from './DiscoverFeeFilter';
 import { DiscoverLocationFilter } from './DiscoverLocationFilter';
+import { DiscoverOpenSlotsFilter } from './DiscoverOpenSlotsFilter';
+import { DiscoverStatusFilter } from './DiscoverStatusFilter';
 import { DiscoverTimeFilter } from './DiscoverTimeFilter';
 import { DiscoverDateSection } from './DiscoverDateSection';
 import { DiscoverSearchBox } from './DiscoverSearchBox';
+import { RequestedSessionsSection } from './RequestedSessionsSection';
 
 const DEFAULT_GRID_CLASS_NAME = 'grid grid-cols-1 gap-3 sm:grid-cols-2';
 
@@ -22,18 +32,40 @@ interface SessionDiscoverPanelProps {
   selectedDates: string[];
   onToggleDate: (date: string) => void;
   dateOptionLabel: (date: string) => string;
+  dateLabel: (date: string) => string;
   isDateSelectionAtMax: boolean;
+  isDateFilterActive: boolean;
+  resetDateSelection: () => void;
 
   // Location filter
   isLocationFilterAvailable: boolean;
   selectedLocations: Location[];
   onToggleLocation: (location: Location) => void;
+  onClearLocationFilter: () => void;
   favoriteLocations: Location[];
   isFavoriteLocationsLoading: boolean;
   locationSearchText: string;
   onLocationSearchTextChange: (text: string) => void;
   locationSearchResults: Location[];
   isLocationSearchLoading: boolean;
+  onOpenLocationPicker: () => void;
+  locationPicker: LocationPickerProps;
+
+  // Status filter
+  selectedStatuses: SessionStatus[];
+  onToggleStatus: (status: SessionStatus) => void;
+
+  // Open-slot count filter
+  minOpenSlotsText: string;
+  onMinOpenSlotsTextChange: (value: string) => void;
+  onClearOpenSlotsFilter: () => void;
+
+  // Fee filter
+  feeType: FeeType | undefined;
+  onToggleFeeType: (feeType: FeeType) => void;
+  maxFeeAmountVndText: string;
+  onMaxFeeAmountVndChange: (value: string) => void;
+  onClearFeeFilter: () => void;
 
   // Time filter
   startTimeFilter: StartTimeFilter | undefined;
@@ -41,6 +73,14 @@ interface SessionDiscoverPanelProps {
   startTime: string | undefined;
   onStartTimeChange: (time: string) => void;
   onClearTimeFilter: () => void;
+
+  // Requested sessions (CLIENT-SESSION-29) — below the filter row, above the results below.
+  requestedSessions: SessionListItem[];
+  isRequestedSessionsLoading: boolean;
+  isRequestedSessionsError: boolean;
+  hasMoreRequestedSessions: boolean;
+  isFetchingMoreRequestedSessions: boolean;
+  onLoadMoreRequestedSessions: () => void;
 
   // Results — one collapsible section per checked date (CLIENT-SESSION-22), replacing the old
   // flat `sessions: SessionListItem[]` grid.
@@ -78,21 +118,43 @@ export function SessionDiscoverPanel({
   selectedDates,
   onToggleDate,
   dateOptionLabel,
+  dateLabel,
   isDateSelectionAtMax,
+  isDateFilterActive,
+  resetDateSelection,
   isLocationFilterAvailable,
   selectedLocations,
   onToggleLocation,
+  onClearLocationFilter,
   favoriteLocations,
   isFavoriteLocationsLoading,
   locationSearchText,
   onLocationSearchTextChange,
   locationSearchResults,
   isLocationSearchLoading,
+  onOpenLocationPicker,
+  locationPicker,
+  selectedStatuses,
+  onToggleStatus,
+  minOpenSlotsText,
+  onMinOpenSlotsTextChange,
+  onClearOpenSlotsFilter,
+  feeType,
+  onToggleFeeType,
+  maxFeeAmountVndText,
+  onMaxFeeAmountVndChange,
+  onClearFeeFilter,
   startTimeFilter,
   onStartTimeFilterChange,
   startTime,
   onStartTimeChange,
   onClearTimeFilter,
+  requestedSessions,
+  isRequestedSessionsLoading,
+  isRequestedSessionsError,
+  hasMoreRequestedSessions,
+  isFetchingMoreRequestedSessions,
+  onLoadMoreRequestedSessions,
   dateSections,
   onToggleExpanded,
   onLoadMoreSection,
@@ -121,7 +183,10 @@ export function SessionDiscoverPanel({
             selectedDates={selectedDates}
             onToggleDate={onToggleDate}
             dateOptionLabel={dateOptionLabel}
+            dateLabel={dateLabel}
             isAtMax={isDateSelectionAtMax}
+            isActive={isDateFilterActive}
+            onReset={resetDateSelection}
           />
           <DiscoverTimeFilter
             startTimeFilter={startTimeFilter}
@@ -134,19 +199,53 @@ export function SessionDiscoverPanel({
             isAvailable={isLocationFilterAvailable}
             selectedLocations={selectedLocations}
             onToggleLocation={onToggleLocation}
+            onClearLocationFilter={onClearLocationFilter}
             favoriteLocations={favoriteLocations}
             isFavoriteLocationsLoading={isFavoriteLocationsLoading}
             searchText={locationSearchText}
             onSearchTextChange={onLocationSearchTextChange}
             searchResults={locationSearchResults}
             isSearchLoading={isLocationSearchLoading}
+            onOpenLocationPicker={onOpenLocationPicker}
+          />
+          <DiscoverStatusFilter
+            selectedStatuses={selectedStatuses}
+            onToggleStatus={onToggleStatus}
+          />
+          <DiscoverFeeFilter
+            feeType={feeType}
+            onToggleFeeType={onToggleFeeType}
+            maxFeeAmountVndText={maxFeeAmountVndText}
+            onMaxFeeAmountVndChange={onMaxFeeAmountVndChange}
+            onClear={onClearFeeFilter}
+          />
+          {/* Last in the row (2026-09-23 revision) — the only direct-input (non-Popover) filter,
+            so it reads better trailing the button-triggered ones instead of sitting mid-row. */}
+          <DiscoverOpenSlotsFilter
+            value={minOpenSlotsText}
+            onChange={onMinOpenSlotsTextChange}
+            onClear={onClearOpenSlotsFilter}
           />
         </div>
       </div>
+      <LocationPicker {...locationPicker} />
 
-      {isCountsLoading && (
-        <p className="mb-2 text-2sm text-text-muted">Loading session counts…</p>
-      )}
+      <RequestedSessionsSection
+        sessions={requestedSessions}
+        isLoading={isRequestedSessionsLoading}
+        isError={isRequestedSessionsError}
+        hasMore={hasMoreRequestedSessions}
+        isFetchingMore={isFetchingMoreRequestedSessions}
+        onLoadMore={onLoadMoreRequestedSessions}
+        sportsByKey={sportsByKey}
+        currentUserId={currentUserId}
+        onViewDetails={onViewDetails}
+        onParticipationAction={onParticipationAction}
+        isParticipationActionPending={isParticipationActionPending}
+        gridClassName={gridClassName}
+      />
+
+      {isCountsLoading && <p className="mb-2 text-2sm text-text-muted">Loading session counts…</p>}
       {isCountsError && (
         <p role="alert" className="mb-2 text-2sm text-text-danger">
           Couldn't load session counts for these dates.

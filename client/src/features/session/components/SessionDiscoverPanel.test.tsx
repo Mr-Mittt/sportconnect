@@ -1,15 +1,67 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
 import type { DiscoverDateSection, SessionListItem } from '../types';
 import { SessionDiscoverPanel } from './SessionDiscoverPanel';
 
+const locationPicker: LocationPickerProps = {
+  isOpen: false,
+  onClose: () => {},
+  mode: 'search',
+  onSwitchToCreate: () => {},
+  onSwitchToSearch: () => {},
+  inputValue: '',
+  onInputChange: () => {},
+  onSearch: () => {},
+  results: [],
+  isSearching: false,
+  isSearchError: false,
+  onSelectResult: () => {},
+  favoriteLocationIds: new Set<number>(),
+  onToggleFavorite: () => {},
+  isTogglingFavorite: false,
+  onOpenGoogleMaps: () => {},
+  mapsUrlInput: '',
+  onMapsUrlChange: () => {},
+  onResolveUrl: () => {},
+  isResolving: false,
+  isResolveError: false,
+  resolvedNoCoordinates: false,
+  coordinates: null,
+  mapSeed: 0,
+  onMovePin: () => {},
+  name: '',
+  onNameChange: () => {},
+  address: '',
+  onAddressChange: () => {},
+  canSave: false,
+  onSave: () => {},
+  isSaving: false,
+  isSaveError: false,
+};
+
 const sportsByKey: Record<SportKey, SportProfile> = {
-  football: { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' },
-  basketball: { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'coral' },
-  tennis: { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'purple' },
+  football: {
+    key: 'football',
+    label: 'Football',
+    iconUrl: '/images/sports/football.png',
+    colorRamp: 'teal',
+  },
+  basketball: {
+    key: 'basketball',
+    label: 'Basketball',
+    iconUrl: '/images/sports/basketball.png',
+    colorRamp: 'coral',
+  },
+  tennis: {
+    key: 'tennis',
+    label: 'Tennis',
+    iconUrl: '/images/sports/tennis.png',
+    colorRamp: 'purple',
+  },
 };
 
 const location: Location = {
@@ -89,16 +141,38 @@ const renderPanel = (overrides: Partial<React.ComponentProps<typeof SessionDisco
       selectedDates={['2026-08-01']}
       onToggleDate={() => {}}
       dateOptionLabel={() => 'Today'}
+      dateLabel={() => 'Today'}
       isDateSelectionAtMax={false}
+      isDateFilterActive={false}
+      resetDateSelection={() => {}}
       isLocationFilterAvailable
       selectedLocations={[]}
       onToggleLocation={() => {}}
+      onClearLocationFilter={() => {}}
       favoriteLocations={[]}
       isFavoriteLocationsLoading={false}
       locationSearchText=""
       onLocationSearchTextChange={() => {}}
       locationSearchResults={[]}
       isLocationSearchLoading={false}
+      onOpenLocationPicker={() => {}}
+      locationPicker={locationPicker}
+      selectedStatuses={[]}
+      onToggleStatus={() => {}}
+      minOpenSlotsText=""
+      onMinOpenSlotsTextChange={() => {}}
+      onClearOpenSlotsFilter={() => {}}
+      feeType={undefined}
+      onToggleFeeType={() => {}}
+      maxFeeAmountVndText=""
+      onMaxFeeAmountVndChange={() => {}}
+      onClearFeeFilter={() => {}}
+      requestedSessions={[]}
+      isRequestedSessionsLoading={false}
+      isRequestedSessionsError={false}
+      hasMoreRequestedSessions={false}
+      isFetchingMoreRequestedSessions={false}
+      onLoadMoreRequestedSessions={() => {}}
       startTimeFilter={undefined}
       onStartTimeFilterChange={() => {}}
       startTime={undefined}
@@ -148,7 +222,7 @@ describe('SessionDiscoverPanel', () => {
     const onLoadMoreSection = vi.fn();
     renderPanel({ dateSections: [makeSection({ hasMore: true })], onLoadMoreSection });
 
-    await user.click(screen.getByRole('button', { name: 'Load more sessions' }));
+    await user.click(screen.getByRole('button', { name: 'Load more' }));
     expect(onLoadMoreSection).toHaveBeenCalledWith('2026-08-01');
   });
 
@@ -175,16 +249,38 @@ describe('SessionDiscoverPanel', () => {
         selectedDates={['2026-08-01']}
         onToggleDate={() => {}}
         dateOptionLabel={() => 'Today'}
+        dateLabel={() => 'Today'}
         isDateSelectionAtMax={false}
+        isDateFilterActive={false}
+        resetDateSelection={() => {}}
         isLocationFilterAvailable
         selectedLocations={[]}
         onToggleLocation={() => {}}
+        onClearLocationFilter={() => {}}
         favoriteLocations={[]}
         isFavoriteLocationsLoading={false}
         locationSearchText=""
         onLocationSearchTextChange={() => {}}
         locationSearchResults={[]}
         isLocationSearchLoading={false}
+        onOpenLocationPicker={() => {}}
+        locationPicker={locationPicker}
+        selectedStatuses={[]}
+        onToggleStatus={() => {}}
+        minOpenSlotsText=""
+        onMinOpenSlotsTextChange={() => {}}
+        onClearOpenSlotsFilter={() => {}}
+        feeType={undefined}
+        onToggleFeeType={() => {}}
+        maxFeeAmountVndText=""
+        onMaxFeeAmountVndChange={() => {}}
+        onClearFeeFilter={() => {}}
+        requestedSessions={[]}
+        isRequestedSessionsLoading={false}
+        isRequestedSessionsError={false}
+        hasMoreRequestedSessions={false}
+        isFetchingMoreRequestedSessions={false}
+        onLoadMoreRequestedSessions={() => {}}
         startTimeFilter={undefined}
         onStartTimeFilterChange={() => {}}
         startTime={undefined}
@@ -202,7 +298,9 @@ describe('SessionDiscoverPanel', () => {
         isParticipationActionPending={() => false}
       />,
     );
-    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load session counts for these dates.");
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      "Couldn't load session counts for these dates.",
+    );
   });
 
   it('reports search text/mode changes', async () => {
@@ -215,20 +313,53 @@ describe('SessionDiscoverPanel', () => {
     expect(onSearchTextChange).toHaveBeenCalledWith('x');
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Search scope' }), 'sessions');
-    // 'sessions' is already selected — 'location'/'gear' are disabled options, so this just
-    // confirms the select is wired without asserting a no-op value.
+    // 'sessions' is the dropdown's only option (2026-09-23 revision dropped 'location'/'gear'),
+    // so this just confirms the select is wired without asserting a no-op value.
     expect(screen.getByRole('combobox', { name: 'Search scope' })).toHaveValue('sessions');
   });
 
   it('renders the Date/Time/Location filter pills as interactive controls', () => {
-    renderPanel();
+    renderPanel({ selectedDates: [] }); // Date's own label is exercised separately below
     expect(screen.getByRole('button', { name: /^Date/ })).not.toHaveAttribute('aria-disabled');
     expect(screen.getByRole('button', { name: /^Time/ })).not.toHaveAttribute('aria-disabled');
     expect(screen.getByRole('button', { name: /^Location/ })).not.toHaveAttribute('aria-disabled');
   });
 
+  // CLIENT-SESSION-29 revision (2026-09-23) — the Date pill's trigger label.
+  it('labels the Date pill with the date itself when exactly one is selected', () => {
+    renderPanel({ selectedDates: ['2026-08-01'] });
+    expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
+  });
+
+  it('labels the Date pill with a count once more than one is selected', () => {
+    renderPanel({ selectedDates: ['2026-08-01', '2026-08-02'] });
+    expect(screen.getByRole('button', { name: 'Date (2)' })).toBeInTheDocument();
+  });
+
+  // 2026-09-23 (second revision) — active-filter reset "x"s, threaded through from the panel.
+  it('reports the Date reset via resetDateSelection', async () => {
+    const user = userEvent.setup();
+    const resetDateSelection = vi.fn();
+    renderPanel({ isDateFilterActive: true, resetDateSelection });
+
+    await user.click(screen.getByRole('button', { name: 'Reset date filter' }));
+    expect(resetDateSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the Location clear-all via onClearLocationFilter', async () => {
+    const user = userEvent.setup();
+    const onClearLocationFilter = vi.fn();
+    renderPanel({ selectedLocations: [location], onClearLocationFilter });
+
+    await user.click(screen.getByRole('button', { name: 'Clear location filter' }));
+    expect(onClearLocationFilter).toHaveBeenCalledTimes(1);
+  });
+
   it('renders the Location pill disabled when unavailable (no specific sport selected)', () => {
     renderPanel({ isLocationFilterAvailable: false });
-    expect(screen.getByRole('button', { name: 'Location' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Location' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 });

@@ -49,7 +49,17 @@ describe('SessionStartTimePicker', () => {
     render(<SessionStartTimePicker value="" onChange={vi.fn()} now={now} />);
     const dateSelect = screen.getByLabelText('Date');
     const optionLabels = Array.from(dateSelect.querySelectorAll('option')).map((option) => option.textContent);
-    expect(optionLabels).toEqual(['Date', 'Today', 'Tomorrow', '05/08', '06/08', '07/08', '08/08', '09/08', 'Pick a date…']);
+    expect(optionLabels).toEqual([
+      'Date',
+      'Today',
+      'Tomorrow (4th Aug)',
+      'Wed, 5th Aug',
+      'Thu, 6th Aug',
+      'Fri, 7th Aug',
+      'Sat, 8th Aug',
+      'Sun, 9th Aug',
+      'Pick a date…',
+    ]);
   });
 
   it('reflects an existing value across all three selects', () => {

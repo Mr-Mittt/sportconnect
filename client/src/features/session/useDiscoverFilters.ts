@@ -50,6 +50,10 @@ export function useDiscoverFilters(sportId: number | undefined, enabled: boolean
       return [...current, date];
     });
   };
+  // 2026-09-23 revision — the Date pill's own reset ("x"): unlike every other Discover filter,
+  // Date's default isn't "unselected", it's "[today]" (never allow zero selection, see toggleDate
+  // above), so resetting means going back to that, not clearing to `[]`.
+  const resetDateSelection = () => setSelectedDates([today]);
   const toggleExpanded = (date: string) => {
     setExpandedDates((current) => {
       const next = new Set(current);
@@ -102,6 +106,8 @@ export function useDiscoverFilters(sportId: number | undefined, enabled: boolean
     dateLabel: (date: string) => formatDiscoverDateLabel(date, today),
     dateOptionLabel: (date: string) => formatDiscoverDateOptionLabel(date, today),
     isDateSelectionAtMax: sortedDates.length >= MAX_DISCOVER_DATES,
+    isDateFilterActive: hasExplicitDateSelection,
+    resetDateSelection,
     toggleExpanded,
 
     // Results

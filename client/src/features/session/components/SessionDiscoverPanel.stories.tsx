@@ -1,13 +1,67 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Location } from '@/shared/types/location';
 import type { DiscoverDateSection, SessionListItem } from '../types';
 import { SessionDiscoverPanel } from './SessionDiscoverPanel';
 
+// Same closed/inert stub CreateSessionModal.stories.tsx uses — the picker Dialog stays closed
+// (isOpen: false) in every story here, so only its shape needs to satisfy the prop type.
+const locationPicker: LocationPickerProps = {
+  isOpen: false,
+  onClose: () => {},
+  mode: 'search',
+  onSwitchToCreate: () => {},
+  onSwitchToSearch: () => {},
+  inputValue: '',
+  onInputChange: () => {},
+  onSearch: () => {},
+  results: [],
+  isSearching: false,
+  isSearchError: false,
+  onSelectResult: () => {},
+  favoriteLocationIds: new Set<number>(),
+  onToggleFavorite: () => {},
+  isTogglingFavorite: false,
+  onOpenGoogleMaps: () => {},
+  mapsUrlInput: '',
+  onMapsUrlChange: () => {},
+  onResolveUrl: () => {},
+  isResolving: false,
+  isResolveError: false,
+  resolvedNoCoordinates: false,
+  coordinates: null,
+  mapSeed: 0,
+  onMovePin: () => {},
+  name: '',
+  onNameChange: () => {},
+  address: '',
+  onAddressChange: () => {},
+  canSave: false,
+  onSave: () => {},
+  isSaving: false,
+  isSaveError: false,
+};
+
 const sportsByKey: Record<SportKey, SportProfile> = {
-  football: { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' },
-  basketball: { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'coral' },
-  tennis: { key: 'tennis', label: 'Tennis', iconUrl: '/images/sports/tennis.png', colorRamp: 'purple' },
+  football: {
+    key: 'football',
+    label: 'Football',
+    iconUrl: '/images/sports/football.png',
+    colorRamp: 'teal',
+  },
+  basketball: {
+    key: 'basketball',
+    label: 'Basketball',
+    iconUrl: '/images/sports/basketball.png',
+    colorRamp: 'coral',
+  },
+  tennis: {
+    key: 'tennis',
+    label: 'Tennis',
+    iconUrl: '/images/sports/tennis.png',
+    colorRamp: 'purple',
+  },
 };
 
 function makeLocation(name: string): Location {
@@ -27,7 +81,9 @@ function makeLocation(name: string): Location {
   };
 }
 
-function makeSession(overrides: Partial<SessionListItem> & Pick<SessionListItem, 'id'>): SessionListItem {
+function makeSession(
+  overrides: Partial<SessionListItem> & Pick<SessionListItem, 'id'>,
+): SessionListItem {
   return {
     groupId: null,
     sessionType: 'STANDALONE',
@@ -62,7 +118,9 @@ function makeSession(overrides: Partial<SessionListItem> & Pick<SessionListItem,
   };
 }
 
-function makeSection(overrides: Partial<DiscoverDateSection> & Pick<DiscoverDateSection, 'date' | 'label'>): DiscoverDateSection {
+function makeSection(
+  overrides: Partial<DiscoverDateSection> & Pick<DiscoverDateSection, 'date' | 'label'>,
+): DiscoverDateSection {
   return {
     count: 0,
     isExpanded: true,
@@ -88,7 +146,10 @@ const twoSessionSections: DiscoverDateSection[] = [
   makeSection({ date: '2026-08-02', label: 'Tomorrow', count: 3, isExpanded: false }),
 ];
 
-const favoriteLocations: Location[] = [makeLocation('Riverside Courts'), makeLocation('Downtown Turf')];
+const favoriteLocations: Location[] = [
+  makeLocation('Riverside Courts'),
+  makeLocation('Downtown Turf'),
+];
 
 const meta = {
   title: 'Session/SessionDiscoverPanel',
@@ -107,17 +168,40 @@ const meta = {
     selectedDates: ['2026-08-01', '2026-08-02'],
     onToggleDate: () => {},
     dateOptionLabel: (date: string) =>
-      date === '2026-08-01' ? 'Today' : date === '2026-08-02' ? 'Tomorrow (02/08)' : date,
+      date === '2026-08-01' ? 'Today' : date === '2026-08-02' ? 'Tomorrow (2nd Aug)' : date,
+    dateLabel: (date: string) =>
+      date === '2026-08-01' ? 'Today' : date === '2026-08-02' ? 'Tomorrow' : date,
     isDateSelectionAtMax: false,
+    isDateFilterActive: true,
+    resetDateSelection: () => {},
     isLocationFilterAvailable: true,
     selectedLocations: [],
     onToggleLocation: () => {},
+    onClearLocationFilter: () => {},
     favoriteLocations,
     isFavoriteLocationsLoading: false,
     locationSearchText: '',
     onLocationSearchTextChange: () => {},
     locationSearchResults: [],
     isLocationSearchLoading: false,
+    onOpenLocationPicker: () => {},
+    locationPicker,
+    selectedStatuses: [],
+    onToggleStatus: () => {},
+    minOpenSlotsText: '',
+    onMinOpenSlotsTextChange: () => {},
+    onClearOpenSlotsFilter: () => {},
+    feeType: undefined,
+    onToggleFeeType: () => {},
+    maxFeeAmountVndText: '',
+    onMaxFeeAmountVndChange: () => {},
+    onClearFeeFilter: () => {},
+    requestedSessions: [],
+    isRequestedSessionsLoading: false,
+    isRequestedSessionsError: false,
+    hasMoreRequestedSessions: false,
+    isFetchingMoreRequestedSessions: false,
+    onLoadMoreRequestedSessions: () => {},
     startTimeFilter: undefined,
     onStartTimeFilterChange: () => {},
     startTime: undefined,

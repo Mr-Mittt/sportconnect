@@ -3,6 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as React from 'react';
 import { cn } from '@/shared/lib/utils';
 import { useModalAnchor } from '@/shared/lib/modalAnchor';
+import { FloatingPortalContainerContext } from './floatingPortalContainer';
 
 /** Gap (px) between the page anchor's bottom edge and an anchored modal's top edge. */
 const ANCHOR_GAP_PX = 12;
@@ -89,6 +90,11 @@ function DialogContent({
   const anchored =
     !centered && anchorBottom !== null && anchorBottom > 0 && anchorBottom < window.innerHeight;
 
+  // See floatingPortalContainer.ts's own doc comment — this Content node becomes the Portal
+  // container any nested Popover renders into, so it stops fighting this Dialog's FocusScope
+  // trap. State (not a plain ref) because Portal needs a re-render once the DOM node exists.
+  const [contentEl, setContentEl] = React.useState<HTMLDivElement | null>(null);
+
   let computedStyle: React.CSSProperties | undefined;
   if (anchored) {
     const top = anchorBottom + ANCHOR_GAP_PX;
@@ -107,6 +113,7 @@ function DialogContent({
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
+        ref={setContentEl}
         data-slot="dialog-content"
         style={{ ...computedStyle, ...style }}
         className={cn(
@@ -121,7 +128,9 @@ function DialogContent({
         )}
         {...props}
       >
-        {children}
+        <FloatingPortalContainerContext.Provider value={contentEl}>
+          {children}
+        </FloatingPortalContainerContext.Provider>
       </DialogPrimitive.Content>
     </DialogPortal>
   );
