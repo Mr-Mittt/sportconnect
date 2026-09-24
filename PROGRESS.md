@@ -4247,6 +4247,19 @@ explicit go-ahead at each step (full story in A3's summary doc):
   `SessionDiscoverDateCountsIntegrationTest`/`SessionListingIntegrationTest` (new REQUESTED/INVITED
   exclusion + `/requested` coverage, 89 tests combined) + full `:server:test` (0 failures) + client
   `tsc -b` clean + `matches-journey.spec.ts` e2e re-verified against the widened mock.
+- **SESSION-43 (`DONE`, 2026-09-24,
+  `modules/session/docs/MVP/SESSION-43_UPCOMING_AND_HISTORY_SPORTID_FILTER.md`):** `sportId` on
+  `GET /sessions/upcoming` (**optional** — the all-sports `UpcomingMatches` rail needs one
+  unfiltered call) and `GET /sessions/history` (**required**, both the `date=` list and the
+  `dateCount=` counts shape, so counts/`hasMore`/`before` agree with the lists; `sessions.sport_id`
+  is `NOT NULL`, so no optional-param guard there). Plain equality, deliberately **no**
+  active-`UserSportProfile` gate like `/discover`'s — these are scoped by the caller's own
+  participant row. Filed and built as the backend blocker for client CLIENT-SESSION-23's
+  sport-scoped Upcoming/History sections. `/history` going required is a deliberate breaking
+  change (no client caller existed). Green: `SessionServiceImplSpec` (169, 6 new), 
+  `SessionListingIntegrationTest` (48; all 28 existing `/history` requests updated to send
+  `sportId`, 9 new sport-filter cases) + full `:server:test` (0 failures) + live check against
+  real dev Postgres (the `/upcoming` optional cast is H2-untestable) — recorded in the ticket.
 - **SESSION-29 (`TODO`, documentation only, 2026-09-15,
   `modules/session/docs/MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md`):** old
   `CANCELLED`/`COMPLETED` session storage raised as a concern alongside SESSION-28 — a naive

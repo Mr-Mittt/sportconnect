@@ -1,8 +1,8 @@
 # CLIENT-SESSION-23 · "My sessions" → Upcoming/History split, SessionCard polish, completion favorites
 
-**Status:** `TODO`
+**Status:** `IN PROGRESS`
 **Type:** Client feature
-**Depends on:** backend **SESSION-27** (`modules/session/docs/BACKLOG_MVP.md`) — hard, for the
+**Depends on:** backend **SESSION-43** (added 2026-09-24 — see "Scope change" below) and **SESSION-27** (`modules/session/docs/BACKLOG_MVP.md`) — hard, for the
 "Upcoming sessions"/"History" scope only (items 2-3 below). Items 1, 4, and 5 have no backend
 dependency and can be built first if this ticket is picked up before SESSION-27 ships.
 **Filed:** 2026-09-15, user request — bundled with the SESSION-27 backend work as one client
@@ -126,6 +126,35 @@ buckets the day in `"UTC"` for every real user. No client caller of either endpo
 CLIENT-SESSION-24 was picked up, so that ticket deliberately left the wiring here (its own scope
 bullet: whichever of CLIENT-SESSION-23 or -24 wires those calls first sends it). The replacement
 MSW handlers for these two endpoints should accept the `viewerZoneId` param too.
+
+## Scope change (2026-09-24, user request at pickup) — backend `sportId` param first
+
+**Added to scope:** both new sections ("Upcoming sessions", "History") are scoped to `/matches`'
+always-active sport pill (`useMatchesActiveSport`; CLIENT-SESSION-29 removed the "All sports"
+pill, so there is always exactly one active sport — same as the "My sessions" list today). The
+client sends `sportId` on **every** `/upcoming` and `/history` call the Matches page makes
+(alongside the `date`/`dateCount`/`before`/`viewerZoneId` params).
+
+**Why:** neither endpoint took a sport, and a client-side filter over server-paginated data returns
+short/empty pages while `hasNext` is true and makes `dateCount` per-date counts wrong (they count
+every sport). User decision: extend the backend first, no client-side stopgap.
+
+**New hard dependency:** backend **SESSION-43** (`modules/session/docs/BACKLOG_MVP.md`, filed
+2026-09-24) — `sportId` on `GET /sessions/upcoming` (**optional**) and `GET /sessions/history` (**required**, both
+shapes). Must land before scope item 2 is built against the real endpoint. Items 1, 4, 5 are
+independent of it.
+
+**Unchanged:** the `UpcomingMatches` rail (item 3) stays all-sports — it calls `/upcoming` with no
+`sportId` (that is exactly why the param stayed optional there; Home Feed keeps its "All" pill).
+
+**Note for the build:** `/upcoming` returns a 400 for `viewerZoneId` without `date`, so the
+no-`date` Upcoming-section and rail calls must **not** send it (the 2026-09-24 Delta above applies
+to `/history` and to `/upcoming?date=` only).
+
+**Accepted behavior change (user, 2026-09-24):** moving to the participant-scoped endpoints means a
+group session the caller hasn't joined, and a standalone session the caller created then left, no
+longer appear in "My sessions" or the rail (the SESSION-27-flagged group-owner gap; stays out of
+scope).
 
 ---
 

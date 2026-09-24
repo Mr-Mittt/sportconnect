@@ -318,6 +318,14 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      * for {@code GET /api/sessions/requested} too, passing {@code List.of(REQUESTED)} instead; no
      * new repository method needed for that endpoint.
      *
+     * <p><b>SESSION-43:</b> {@code sportId} is optional — {@code null} means no sport filter (the
+     * all-sports {@code UpcomingMatches} rail and {@code /requested} pass {@code null}). The
+     * {@code CAST(:sportId AS long) IS NULL} guard tests whether the <em>param</em> was omitted, not
+     * the column ({@code sessions.sport_id} is {@code NOT NULL}); same pattern as
+     * {@code findDiscoverSessions}'s optional filters. Plain equality only — no active-sport-profile
+     * gate like {@code /discover}'s, since these rows are already scoped by the caller's own
+     * participant row.
+     *
      * <p>{@code ORDER BY} is static and deliberately ignores whatever {@code Sort} the caller's
      * {@code Pageable} carries (the service passes an unsorted one) — {@code scheduledStart ASC}
      * primary, then a {@code PREPARING}→{@code SCHEDULED}→{@code ONGOING} tiebreaker for sessions
@@ -325,6 +333,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      * tie instead of depending on Postgres's unspecified tie order.
      */
     @Query("SELECT s FROM Session s WHERE s.status IN :statuses "
+            + "AND (CAST(:sportId AS long) IS NULL OR s.sportId = :sportId) "
             + "AND s.id IN (SELECT sp.sessionId FROM SessionParticipant sp "
             + "    WHERE sp.userId = :userId AND sp.status IN :participantStatuses) "
             + "ORDER BY s.scheduledStart ASC, "
@@ -335,6 +344,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("participantStatuses") List<ParticipantStatus> participantStatuses,
             @Param("preparingStatus") SessionStatus preparingStatus,
             @Param("scheduledStatus") SessionStatus scheduledStatus,
+            @Param("sportId") Long sportId,
             Pageable pageable);
 
     /** Same as {@link #findUpcomingSessions} narrowed to one calendar day
@@ -342,6 +352,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      * {@code (status, scheduled_start)} index still applies). */
     @Query("SELECT s FROM Session s WHERE s.status IN :statuses "
             + "AND s.scheduledStart >= :dayStart AND s.scheduledStart < :dayEnd "
+            + "AND (CAST(:sportId AS long) IS NULL OR s.sportId = :sportId) "
             + "AND s.id IN (SELECT sp.sessionId FROM SessionParticipant sp "
             + "    WHERE sp.userId = :userId AND sp.status IN :participantStatuses) "
             + "ORDER BY s.scheduledStart ASC, "
@@ -354,6 +365,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("scheduledStatus") SessionStatus scheduledStatus,
             @Param("dayStart") Instant dayStart,
             @Param("dayEnd") Instant dayEnd,
+            @Param("sportId") Long sportId,
             Pageable pageable);
 
     /**
@@ -362,10 +374,13 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      * history"), restricted to {@code statuses} ({@code CANCELLED}/{@code COMPLETED}), narrowed to
      * one calendar day (same half-open range as {@link #findUpcomingSessionsByDate}). Sorted
      * {@code scheduledStart DESC}, static like {@link #findUpcomingSessions} — the service passes
-     * an unsorted {@code Pageable}.
+     * an unsorted {@code Pageable}. SESSION-43: {@code sportId} is required (plain equality, no
+     * optional-param guard) — see {@link #findUpcomingSessions} for why there is no
+     * active-sport-profile gate.
      */
     @Query("SELECT s FROM Session s WHERE s.status IN :statuses "
             + "AND s.scheduledStart >= :dayStart AND s.scheduledStart < :dayEnd "
+            + "AND s.sportId = :sportId "
             + "AND s.id IN (SELECT sp.sessionId FROM SessionParticipant sp "
             + "    WHERE sp.userId = :userId AND sp.status = :joinedStatus) "
             + "ORDER BY s.scheduledStart DESC")
@@ -375,13 +390,16 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("joinedStatus") ParticipantStatus joinedStatus,
             @Param("dayStart") Instant dayStart,
             @Param("dayEnd") Instant dayEnd,
+            @Param("sportId") Long sportId,
             Pageable pageable);
 
     /**
      * SESSION-27/34 — the caller's last {@code limit} distinct calendar dates (most-recent-first) on
      * which they have at least one {@code CANCELLED}/{@code COMPLETED} session they were
      * {@code JOINED} to, each with its own count. {@code before} (nullable) restricts to dates
-     * strictly earlier than it, for paging further back. Native — {@code GROUP BY} a date cast
+     * strictly earlier than it, for paging further back. SESSION-43: only sessions of {@code
+     * sportId} (required) are counted, so the counts and the {@code before} cursor stay consistent
+     * with {@link #findHistorySessionsByDate}. Native — {@code GROUP BY} a date cast
      * with a {@code LIMIT} has no portable JPQL equivalent; same precedent as {@code
      * ProcessedMessageRepository.insertIfAbsent}, this module's Postgres-only tables. The service
      * requests {@code dateCount + 1} rows so it can compute {@code hasMore} and trim to
@@ -426,6 +444,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             + "    AS sessionDate, COUNT(*) AS count "
             + "FROM sessions s "
             + "WHERE s.status IN (:statuses) "
+            + "AND s.sport_id = :sportId "
             + "AND s.id IN (SELECT sp.session_id FROM session_participants sp "
             + "    WHERE sp.user_id = :userId AND sp.status = :joinedStatus) "
             + "AND (CAST(:before AS date) IS NULL OR "
@@ -441,6 +460,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("joinedStatus") String joinedStatus,
             @Param("before") LocalDate before,
             @Param("zoneId") String zoneId,
+            @Param("sportId") Long sportId,
             @Param("limit") int limit);
 
     interface SessionDateCountProjection {

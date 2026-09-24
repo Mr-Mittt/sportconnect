@@ -88,13 +88,19 @@ class SessionListingIntegrationTest extends BaseIT {
      * LocalDateTime for every call site's readability, converting via the JVM's own zone only
      * here at the write. */
     private Long createSession(SessionStatus status, LocalDateTime scheduledStart) {
+        return createSession(status, scheduledStart, 1L);
+    }
+
+    /** SESSION-43 — same as {@link #createSession(SessionStatus, LocalDateTime)} but for an
+     * explicit sport, so the {@code sportId} filter tests can mix sports for one caller. */
+    private Long createSession(SessionStatus status, LocalDateTime scheduledStart, Long sportId) {
         Session session = Session.builder()
                 .groupId(null)
                 .isPublic(true)
                 .postId(postIdSeq.getAndIncrement())
                 .sessionType(SessionType.STANDALONE)
                 .createdBy(callerId)
-                .sportId(1L)
+                .sportId(sportId)
                 .locationId(status == SessionStatus.PREPARING ? null : 1L)
                 .scheduledStart(scheduledStart.atZone(ZoneId.systemDefault()).toInstant())
                 .status(status)
@@ -112,13 +118,18 @@ class SessionListingIntegrationTest extends BaseIT {
      * date under a given {@code viewerZoneId} — a session lands on, independent of whatever zone
      * this test JVM happens to run in. */
     private Long createSessionAtInstant(SessionStatus status, Instant scheduledStart) {
+        return createSessionAtInstant(status, scheduledStart, 1L);
+    }
+
+    /** SESSION-43 — {@link #createSessionAtInstant(SessionStatus, Instant)} for an explicit sport. */
+    private Long createSessionAtInstant(SessionStatus status, Instant scheduledStart, Long sportId) {
         Session session = Session.builder()
                 .groupId(null)
                 .isPublic(true)
                 .postId(postIdSeq.getAndIncrement())
                 .sessionType(SessionType.STANDALONE)
                 .createdBy(callerId)
-                .sportId(1L)
+                .sportId(sportId)
                 .locationId(status == SessionStatus.PREPARING ? null : 1L)
                 .scheduledStart(scheduledStart)
                 .status(status)
@@ -462,7 +473,7 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(invitedOnlyId, ParticipantStatus.INVITED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("date", "2026-09-14"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("date", "2026-09-14"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(2))
                 .andExpect(jsonPath("$.data.content[0].id").value(laterId))
@@ -478,7 +489,7 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(groupLinkedId, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("date", "2026-09-14"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("date", "2026-09-14"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(2))
                 .andExpect(jsonPath("$.data.content[0].id").value(groupLinkedId))
@@ -497,14 +508,14 @@ class SessionListingIntegrationTest extends BaseIT {
 
         authenticateAs(callerId);
         // DESC order: thirdId, secondId, firstId — page size 2 puts firstId alone on page 1.
-        mockMvc.perform(get("/api/sessions/history")
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1")
                         .param("date", "2026-09-14").param("page", "0").param("size", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(2))
                 .andExpect(jsonPath("$.data.content[0].id").value(thirdId))
                 .andExpect(jsonPath("$.data.content[1].id").value(secondId));
 
-        mockMvc.perform(get("/api/sessions/history")
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1")
                         .param("date", "2026-09-14").param("page", "1").param("size", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
@@ -514,7 +525,7 @@ class SessionListingIntegrationTest extends BaseIT {
     @Test
     void history_withDateReturnsEmptyPageNotErrorWhenNoMatchingSessions() throws Exception {
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("date", "2026-09-14"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("date", "2026-09-14"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(0))
                 .andExpect(jsonPath("$.data.totalElements").value(0));
@@ -532,7 +543,7 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(d2, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("dateCount", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.dates.length()").value(2))
                 .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"))
@@ -552,14 +563,14 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(d3, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("dateCount", "2"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("dateCount", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.dates.length()").value(2))
                 .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"))
                 .andExpect(jsonPath("$.data.dates[1].date").value("2026-09-10"))
                 .andExpect(jsonPath("$.data.hasMore").value(true));
 
-        mockMvc.perform(get("/api/sessions/history").param("dateCount", "2").param("before", "2026-09-10"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("dateCount", "2").param("before", "2026-09-10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.dates.length()").value(1))
                 .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-05"))
@@ -578,7 +589,7 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(d3, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("dateCount", "3"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("dateCount", "3"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.dates.length()").value(3))
                 .andExpect(jsonPath("$.data.hasMore").value(false));
@@ -593,7 +604,7 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(sessionId, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("dateCount", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.dates.length()").value(1))
                 .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"))
@@ -609,10 +620,10 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(sessionId, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("dateCount", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-15"));
-        mockMvc.perform(get("/api/sessions/history")
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1")
                         .param("dateCount", "5")
                         .param("viewerZoneId", "America/Los_Angeles"))
                 .andExpect(status().isOk())
@@ -631,12 +642,12 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(sessionB, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("dateCount", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.dates.length()").value(2))
                 .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-15"))
                 .andExpect(jsonPath("$.data.dates[1].date").value("2026-09-14"));
-        mockMvc.perform(get("/api/sessions/history")
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1")
                         .param("dateCount", "5")
                         .param("viewerZoneId", "America/Los_Angeles"))
                 .andExpect(status().isOk())
@@ -656,14 +667,14 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(newer, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history")
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1")
                         .param("dateCount", "5")
                         .param("viewerZoneId", "America/Los_Angeles"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.dates.length()").value(2))
                 .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"))
                 .andExpect(jsonPath("$.data.dates[1].date").value("2026-09-09"));
-        mockMvc.perform(get("/api/sessions/history")
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1")
                         .param("dateCount", "5")
                         .param("before", "2026-09-14")
                         .param("viewerZoneId", "America/Los_Angeles"))
@@ -682,7 +693,7 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(sessionId, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history")
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1")
                         .param("dateCount", "5")
                         .param("viewerZoneId", "America/Los_Angeles"))
                 .andExpect(status().isOk())
@@ -699,7 +710,7 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(groupLinkedId, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("dateCount", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.dates.length()").value(1))
                 .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"))
@@ -709,7 +720,7 @@ class SessionListingIntegrationTest extends BaseIT {
     @Test
     void history_dateCountRejectsInvalidViewerZoneId() throws Exception {
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history")
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1")
                         .param("dateCount", "5")
                         .param("viewerZoneId", "Not/AZone"))
                 .andExpect(status().isBadRequest());
@@ -725,7 +736,7 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(sessionId, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("date", "2026-09-15"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("date", "2026-09-15"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
                 .andExpect(jsonPath("$.data.content[0].id").value(sessionId));
@@ -740,13 +751,13 @@ class SessionListingIntegrationTest extends BaseIT {
         participate(sessionId, ParticipantStatus.JOINED);
 
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history")
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1")
                         .param("date", "2026-09-14")
                         .param("viewerZoneId", "America/Los_Angeles"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
                 .andExpect(jsonPath("$.data.content[0].id").value(sessionId));
-        mockMvc.perform(get("/api/sessions/history")
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1")
                         .param("date", "2026-09-14"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(0));
@@ -755,7 +766,7 @@ class SessionListingIntegrationTest extends BaseIT {
     @Test
     void history_dateRejectsAnInvalidViewerZoneId() throws Exception {
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history")
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1")
                         .param("date", "2026-09-14")
                         .param("viewerZoneId", "Not/AZone"))
                 .andExpect(status().isBadRequest());
@@ -764,10 +775,173 @@ class SessionListingIntegrationTest extends BaseIT {
     @Test
     void history_dateCountReturnsEmptyNotErrorWhenNoHistoryExists() throws Exception {
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("dateCount", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.dates.length()").value(0))
                 .andExpect(jsonPath("$.data.hasMore").value(false));
+    }
+
+    // ── sportId filter (SESSION-43) ─────────────────────────────────────────
+    //
+    // /upcoming: sportId optional (absent = all sports — the UpcomingMatches rail). /history:
+    // sportId required. Plain equality on both — no active-UserSportProfile gate like /discover's,
+    // and this test class never creates a UserSportProfile row for the caller at all, so every
+    // "returns the sport's sessions" assertion below also proves that.
+
+    @Test
+    void upcoming_sportIdNarrowsToThatSportOnly() throws Exception {
+        LocalDateTime start = LocalDateTime.of(2026, 9, 20, 12, 0);
+        Long sport1 = createSession(SessionStatus.SCHEDULED, start, 1L);
+        Long sport2 = createSession(SessionStatus.SCHEDULED, start.plusHours(1), 2L);
+        participate(sport1, ParticipantStatus.JOINED);
+        participate(sport2, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/upcoming").param("sportId", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(sport2))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void upcoming_withoutSportIdStillReturnsEverySport() throws Exception {
+        LocalDateTime start = LocalDateTime.of(2026, 9, 20, 12, 0);
+        Long sport1 = createSession(SessionStatus.SCHEDULED, start, 1L);
+        Long sport2 = createSession(SessionStatus.SCHEDULED, start.plusHours(1), 2L);
+        participate(sport1, ParticipantStatus.JOINED);
+        participate(sport2, ParticipantStatus.INVITED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/upcoming"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(2))
+                .andExpect(jsonPath("$.data.content[0].id").value(sport1))
+                .andExpect(jsonPath("$.data.content[1].id").value(sport2));
+    }
+
+    @Test
+    void upcoming_sportIdIsValidWithoutDateAndCombinesWithDateAndViewerZoneId() throws Exception {
+        // Explicit instants + viewerZoneId=UTC so the day bucket is deterministic regardless of the
+        // JVM's own zone.
+        Instant noonUtc = Instant.parse("2026-09-20T12:00:00Z");
+        Long sport1OnDay = createSessionAtInstant(SessionStatus.SCHEDULED, noonUtc, 1L);
+        Long sport2OnDay = createSessionAtInstant(SessionStatus.SCHEDULED, noonUtc.plusSeconds(60), 2L);
+        Long sport2OtherDay = createSessionAtInstant(SessionStatus.SCHEDULED, noonUtc.plusSeconds(86400), 2L);
+        participate(sport1OnDay, ParticipantStatus.JOINED);
+        participate(sport2OnDay, ParticipantStatus.JOINED);
+        participate(sport2OtherDay, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/upcoming")
+                        .param("date", "2026-09-20").param("viewerZoneId", "UTC").param("sportId", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(sport2OnDay));
+    }
+
+    @Test
+    void upcoming_unknownSportIdReturnsEmptyPageNotError() throws Exception {
+        Long id = createSession(SessionStatus.SCHEDULED, LocalDateTime.of(2026, 9, 20, 12, 0), 1L);
+        participate(id, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/upcoming").param("sportId", "999999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(0))
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+    }
+
+    @Test
+    void requested_stillReturnsEverySportSinceSportIdIsNotWiredThereYet() throws Exception {
+        Long sport1 = createSession(SessionStatus.SCHEDULED, LocalDateTime.of(2026, 9, 20, 12, 0), 1L);
+        Long sport2 = createSession(SessionStatus.SCHEDULED, LocalDateTime.of(2026, 9, 20, 13, 0), 2L);
+        participate(sport1, ParticipantStatus.REQUESTED);
+        participate(sport2, ParticipantStatus.REQUESTED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/requested"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(2));
+    }
+
+    @Test
+    void history_dateSportIdNarrowsTheSessionListToThatSport() throws Exception {
+        Long sport1 = createSession(SessionStatus.COMPLETED, LocalDateTime.of(2026, 9, 14, 12, 0), 1L);
+        Long sport2 = createSession(SessionStatus.COMPLETED, LocalDateTime.of(2026, 9, 14, 13, 0), 2L);
+        participate(sport1, ParticipantStatus.JOINED);
+        participate(sport2, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history").param("date", "2026-09-14").param("sportId", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(sport2));
+    }
+
+    @Test
+    void history_dateCountSportIdFiltersCountsDatesHasMoreAndBeforeCursor() throws Exception {
+        // sport 1: 09-14 x2, 09-10 x1.  sport 2: 09-14 x1, 09-12 x1 (a date holding ONLY sport 2).
+        Long s1a = createSession(SessionStatus.COMPLETED, LocalDateTime.of(2026, 9, 14, 11, 0), 1L);
+        Long s1b = createSession(SessionStatus.CANCELLED, LocalDateTime.of(2026, 9, 14, 13, 0), 1L);
+        Long s1c = createSession(SessionStatus.COMPLETED, LocalDateTime.of(2026, 9, 10, 12, 0), 1L);
+        Long s2a = createSession(SessionStatus.COMPLETED, LocalDateTime.of(2026, 9, 14, 12, 0), 2L);
+        Long s2b = createSession(SessionStatus.COMPLETED, LocalDateTime.of(2026, 9, 12, 12, 0), 2L);
+        for (Long id : new Long[] {s1a, s1b, s1c, s2a, s2b}) {
+            participate(id, ParticipantStatus.JOINED);
+        }
+
+        authenticateAs(callerId);
+        // sport 1: counts exclude sport 2's 09-14 session, and 09-12 (sport 2 only) never appears.
+        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5").param("sportId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dates.length()").value(2))
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"))
+                .andExpect(jsonPath("$.data.dates[0].count").value(2))
+                .andExpect(jsonPath("$.data.dates[1].date").value("2026-09-10"))
+                .andExpect(jsonPath("$.data.dates[1].count").value(1))
+                .andExpect(jsonPath("$.data.hasMore").value(false));
+        // sport 1, dateCount=1: hasMore reflects sport 1's own older date (09-10), and the
+        // before cursor pages straight to it — not to 09-12, which only sport 2 has.
+        mockMvc.perform(get("/api/sessions/history").param("dateCount", "1").param("sportId", "1"))
+                .andExpect(jsonPath("$.data.dates.length()").value(1))
+                .andExpect(jsonPath("$.data.hasMore").value(true));
+        mockMvc.perform(get("/api/sessions/history")
+                        .param("dateCount", "5").param("before", "2026-09-14").param("sportId", "1"))
+                .andExpect(jsonPath("$.data.dates.length()").value(1))
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-10"))
+                .andExpect(jsonPath("$.data.hasMore").value(false));
+        // sport 2: 09-14 (1), 09-12 (1); sport 1's 09-10 never appears.
+        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5").param("sportId", "2"))
+                .andExpect(jsonPath("$.data.dates.length()").value(2))
+                .andExpect(jsonPath("$.data.dates[0].date").value("2026-09-14"))
+                .andExpect(jsonPath("$.data.dates[0].count").value(1))
+                .andExpect(jsonPath("$.data.dates[1].date").value("2026-09-12"))
+                .andExpect(jsonPath("$.data.hasMore").value(false));
+    }
+
+    @Test
+    void history_unknownSportIdReturnsEmptyForBothShapesNotAnError() throws Exception {
+        Long id = createSession(SessionStatus.COMPLETED, LocalDateTime.of(2026, 9, 14, 12, 0), 1L);
+        participate(id, ParticipantStatus.JOINED);
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history").param("date", "2026-09-14").param("sportId", "999999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(0));
+        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5").param("sportId", "999999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dates.length()").value(0))
+                .andExpect(jsonPath("$.data.hasMore").value(false));
+    }
+
+    @Test
+    void history_missingSportIdIsRejectedForBothShapes() throws Exception {
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/history").param("date", "2026-09-14"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/sessions/history").param("dateCount", "5"))
+                .andExpect(status().isBadRequest());
     }
 
     // ── /history param-combination 400s ────────────────────────────────────
@@ -775,28 +949,28 @@ class SessionListingIntegrationTest extends BaseIT {
     @Test
     void history_rejectsBothDateAndDateCountTogether() throws Exception {
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("date", "2026-09-14").param("dateCount", "5"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("date", "2026-09-14").param("dateCount", "5"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void history_rejectsNeitherDateNorDateCount() throws Exception {
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void history_rejectsBeforeWithoutDateCount() throws Exception {
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("date", "2026-09-14").param("before", "2026-09-10"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("date", "2026-09-14").param("before", "2026-09-10"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void history_rejectsNonPositiveDateCount() throws Exception {
         authenticateAs(callerId);
-        mockMvc.perform(get("/api/sessions/history").param("dateCount", "0"))
+        mockMvc.perform(get("/api/sessions/history").param("sportId", "1").param("dateCount", "0"))
                 .andExpect(status().isBadRequest());
     }
 }

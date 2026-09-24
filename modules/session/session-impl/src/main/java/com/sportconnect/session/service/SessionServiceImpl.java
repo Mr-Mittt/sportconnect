@@ -326,12 +326,18 @@ public class SessionServiceImpl implements SessionService {
      * {@code getSessionHistory}'s {@code date} filters are. No-op when {@code date} is null, since
      * {@code findUpcomingSessions} (the no-date branch) has no day boundary to compute at all.
      *
+     * <p>SESSION-43: {@code sportId} (nullable — {@code null} means all sports) is passed straight
+     * to the repository as a plain equality filter. Deliberately not narrowed to the caller's active
+     * sport profiles the way {@code discoverSessions}' is ({@code resolveEffectiveSportIds}): this
+     * list is scoped by the caller's own participant row, so a since-dropped sport profile must not
+     * hide sessions they already joined.
+     *
      * @throws BadRequestException if {@code viewerZoneId} is non-null but not a valid IANA zone id
      */
     @Override
     @Transactional(readOnly = true)
     public Page<SessionResponse> getUpcomingSessions(
-            UUID userId, LocalDate date, String viewerZoneId, Pageable pageable) {
+            UUID userId, LocalDate date, String viewerZoneId, Long sportId, Pageable pageable) {
         Pageable effectivePageable = unsorted(pageable);
         Page<Session> sessions;
         if (date != null) {
@@ -339,11 +345,11 @@ public class SessionServiceImpl implements SessionService {
             sessions = sessionRepository.findUpcomingSessionsByDate(UPCOMING_SESSION_STATUSES, userId,
                     UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
                     date.atStartOfDay(zone).toInstant(),
-                    date.plusDays(1).atStartOfDay(zone).toInstant(), effectivePageable);
+                    date.plusDays(1).atStartOfDay(zone).toInstant(), sportId, effectivePageable);
         } else {
             sessions = sessionRepository.findUpcomingSessions(UPCOMING_SESSION_STATUSES, userId,
                     UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                    effectivePageable);
+                    sportId, effectivePageable);
         }
         return toResponsePage(sessions, userId);
     }
@@ -369,7 +375,7 @@ public class SessionServiceImpl implements SessionService {
     public Page<SessionResponse> getRequestedSessions(UUID userId, Pageable pageable) {
         Page<Session> sessions = sessionRepository.findUpcomingSessions(UPCOMING_SESSION_STATUSES, userId,
                 REQUESTED_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                unsorted(pageable));
+                null, unsorted(pageable));
         return toResponsePage(sessions, userId);
     }
 
@@ -379,17 +385,21 @@ public class SessionServiceImpl implements SessionService {
      * zone — same caller-relative treatment as {@code discoverSessions}'/
      * {@code getUpcomingSessions}'s {@code date} filters.
      *
+     * <p>SESSION-43: {@code sportId} (required) is a plain equality filter — no active-sport-profile
+     * gate, same reasoning as {@link #getUpcomingSessions}.
+     *
      * @throws BadRequestException if {@code viewerZoneId} is non-null but not a valid IANA zone id
      */
     @Override
     @Transactional(readOnly = true)
     public Page<SessionResponse> getSessionHistory(
-            UUID userId, LocalDate date, String viewerZoneId, Pageable pageable) {
+            UUID userId, LocalDate date, String viewerZoneId, Long sportId, Pageable pageable) {
         ZoneId zone = resolveZone(viewerZoneId);
         Instant dayStart = date.atStartOfDay(zone).toInstant();
         Instant dayEnd = date.plusDays(1).atStartOfDay(zone).toInstant();
         Page<Session> sessions = sessionRepository.findHistorySessionsByDate(
-                HISTORY_SESSION_STATUSES, userId, ParticipantStatus.JOINED, dayStart, dayEnd, unsorted(pageable));
+                HISTORY_SESSION_STATUSES, userId, ParticipantStatus.JOINED, dayStart, dayEnd, sportId,
+                unsorted(pageable));
         return toResponsePage(sessions, userId);
     }
 
@@ -423,16 +433,20 @@ public class SessionServiceImpl implements SessionService {
      * is omitted (every caller today, until CLIENT-SESSION-24 ships) rather than failing the
      * request outright.
      *
+     * <p>SESSION-43: only {@code sportId}'s sessions (required) are counted, so a date holding
+     * solely other sports' sessions never appears and {@code hasMore}/the {@code before} cursor stay
+     * consistent with {@link #getSessionHistory}. Plain equality, no active-sport-profile gate.
+     *
      * @throws BadRequestException if {@code viewerZoneId} is non-null but not a valid IANA zone id
      */
     @Override
     @Transactional(readOnly = true)
     public SessionHistoryDatesResponse getSessionHistoryDates(
-            UUID userId, int dateCount, LocalDate before, String viewerZoneId) {
+            UUID userId, int dateCount, LocalDate before, String viewerZoneId, Long sportId) {
         String zoneId = resolveZone(viewerZoneId).getId();
         List<SessionDateCountProjection> rows = sessionRepository.findHistoryDateCounts(
                 HISTORY_SESSION_STATUS_NAMES, userId, ParticipantStatus.JOINED.name(), before, zoneId,
-                dateCount + 1);
+                sportId, dateCount + 1);
         boolean hasMore = rows.size() > dateCount;
         List<SessionHistoryDateCount> dates = rows.stream()
                 .limit(dateCount)
