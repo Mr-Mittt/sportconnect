@@ -376,3 +376,35 @@ describe('SessionCard', () => {
     expect(pending).not.toHaveAttribute('title');
   });
 });
+
+describe('SessionCard time line (CLIENT-SESSION-30)', () => {
+  const renderCard = (session: Session) =>
+    render(
+      <SessionCard
+        session={session}
+        sportsByKey={sportsByKey}
+        currentUserId="someone-else"
+        onViewDetails={vi.fn()}
+        onParticipationAction={vi.fn()}
+        isParticipationActionPending={() => false}
+      />,
+    );
+
+  it('shows the start and end in 24h, with the full range as the title', () => {
+    renderCard(makeSession({ scheduledStart: '2026-08-01T19:00:00', scheduledEndAt: '2026-08-01T21:30:00' }));
+    const range = screen.getByText(/19:00 – 21:30/);
+    expect(range).toHaveAttribute('title', range.textContent ?? '');
+    expect(screen.queryByText(/PM|AM/)).not.toBeInTheDocument();
+  });
+
+  it('shows only the start when the session has no end time', () => {
+    renderCard(makeSession({ scheduledStart: '2026-08-01T19:00:00', scheduledEndAt: null }));
+    expect(screen.getByText(/19:00/)).toBeInTheDocument();
+    expect(screen.queryByText(/–/)).not.toBeInTheDocument();
+  });
+
+  it('adds the end date when the session ends on another day', () => {
+    renderCard(makeSession({ scheduledStart: '2026-08-01T22:00:00', scheduledEndAt: '2026-08-02T01:00:00' }));
+    expect(screen.getByText(/22:00 – Aug 2, 01:00/)).toBeInTheDocument();
+  });
+});

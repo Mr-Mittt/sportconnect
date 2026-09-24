@@ -5383,6 +5383,17 @@ explicit go-ahead at each step (full story in A3's summary doc):
   MSW create/update now reject offset-less values like the real backend. `/history` and `/upcoming`
   `viewerZoneId` wiring has no client caller yet → filed as a Delta on CLIENT-SESSION-23. tsc/eslint
   clean; Vitest 194 files / 1445 green; e2e 86/86; no baselined surface touched.
+- **CLIENT-SESSION-30 — 24h time range, join pop-ups, approval hints (`DONE`, 2026-09-24,
+  `client/docs/MVP/CLIENT-SESSION-30_TIME_RANGE_JOIN_FEEDBACK_AND_APPROVAL_HINTS.md`):** session card + detail show
+  `start – end` in 24h (end date only when it differs; no end → start only); the detail leads "Created by" with
+  "Auto approval." / "Need host approval." and shows "Waiting for host approval." beside Cancel for a `REQUESTED` caller
+  (detail only, not the card). Every join goes through `useJoinSession`, which now reads the session back and opens an
+  app-level "Got it" pop-up (`joinFeedbackStore` + `JoinFeedbackDialog` in `AppShell`) — "joined" for auto-approve /
+  accepted invite, "waiting for host approval" for a join request; one extra `GET` per join. Pop-up is centered with background-less buttons, and a card-triggered join also shows "Open session" (closes it and opens that session's detail via the `AppShell` modal; `useJoinSession({ offerOpenSession })`, off for joins made inside the detail). MSW: `mockSession` gets an
+  end time and `DELETE .../leave` accepts `INVITED`/`REQUESTED` rows like the real backend. Scoped verification only
+  (standing no-fork/no-full-suite rule): tsc + eslint clean, 15 Vitest files green, e2e `matches-journey` 4/4 + 10 other
+  session-touching flow specs 67/67; visual baselines change (24h text everywhere) → regenerate via `update-baselines`.
+  Filed backend **SESSION-44**: `joinSession`/approve/reject don't reject a `COMPLETED` session (found by code review).
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

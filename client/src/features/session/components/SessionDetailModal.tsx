@@ -379,7 +379,7 @@ export function SessionDetailModal({
               <span className={cn('font-medium', SESSION_STATUS_CLASSES[session.status])}>
                 {SESSION_STATUS_LABEL[session.status]}
               </span>
-              <span className="text-text-muted"> · {formatSessionHeaderDateTime(session.scheduledStart)}</span>
+              <span className="text-text-muted"> · {formatSessionHeaderDateTime(session.scheduledStart, session.scheduledEndAt)}</span>
             </div>
           )}
         </div>
@@ -670,7 +670,9 @@ export function SessionDetailModal({
               )}
 
               <div className="flex items-center gap-2 self-end">
-                <span className="text-2xs text-text-muted">Created by {session.createdByFullName}</span>
+                <span className="text-2xs text-text-muted">
+                  {session.autoApprove ? 'Auto approval' : 'Need host approval'}. Created by {session.createdByFullName}
+                </span>
                 {!isCommentsForbidden && (
                   <button
                     type="button"
@@ -734,6 +736,10 @@ export function SessionDetailModal({
 
             {participationAction !== null && !isLeaveHiddenForCreator && (
               <div className="flex justify-center gap-2">
+                {participationAction.kind === 'CANCEL' && (
+                  // CLIENT-SESSION-30: REQUESTED → the one action is Cancel; say why it's still pending.
+                  <p className="self-center text-2xs text-text-muted">Waiting for host approval.</p>
+                )}
                 {participationAction.kind === 'ACCEPT' && (
                   <Button variant="outline" disabled={isJoining || isLeaving} onClick={onLeave}>
                     <ActionButtonContent

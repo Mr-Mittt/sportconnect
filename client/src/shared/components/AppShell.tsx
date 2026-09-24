@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
+import { useJoinFeedbackStore } from '@/app/joinFeedbackStore';
 import { useLogout } from '@/features/auth/useLogout';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { useNotificationBellData } from '@/features/notifications/useNotificationBellData';
@@ -12,6 +13,7 @@ import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { AuthLoadingState } from './AuthLoadingState';
+import { JoinFeedbackDialog } from './JoinFeedbackDialog';
 import { NavTabs, type NavTabKey } from './NavTabs';
 import { TopBar } from './TopBar';
 
@@ -68,6 +70,11 @@ function initialsOf(firstName: string, lastName: string): string {
  * or `'accepted'`) so the Friends page can pre-select them — or, for a
  * `'created'` focus only, explain via a dialog that the request is no longer
  * available.
+ *
+ * CLIENT-SESSION-30: also hosts the one `JoinFeedbackDialog` ("You joined" / "Request sent"),
+ * fed by `joinFeedbackStore` — every join, from any page's card or any detail modal, goes through
+ * `useJoinSession`, which sets it. A card-driven join also gets an "Open session" button, which
+ * opens this shell's own `SessionDetailModal` for that session.
  */
 export function AppShell() {
   const navigate = useNavigate();
@@ -81,6 +88,10 @@ export function AppShell() {
   // cache; only rendered here (inside the authenticated shell), matching
   // the fact that every page under it already assumes a logged-in user.
   useNotificationLiveSocket();
+
+  const joinFeedbackKind = useJoinFeedbackStore((state) => state.kind);
+  const joinFeedbackOpenSessionId = useJoinFeedbackStore((state) => state.openSessionId);
+  const dismissJoinFeedback = useJoinFeedbackStore((state) => state.dismiss);
 
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const sessionDetailData = useSessionDetailModalData(selectedSessionId);
@@ -173,6 +184,21 @@ export function AppShell() {
         isPostingComment={sessionDetailData.isPostingComment}
         onDeleteComment={sessionDetailData.onDeleteComment}
         onToggleCommentLike={sessionDetailData.onToggleCommentLike}
+      />
+
+      <JoinFeedbackDialog
+        kind={joinFeedbackKind}
+        onDismiss={dismissJoinFeedback}
+        onOpenSession={
+          joinFeedbackOpenSessionId === null
+            ? undefined
+            : () => {
+                // Closes the pop-up and opens this shell's detail modal (the same one a session
+                // notification opens) for the session whose card fired the join.
+                setSelectedSessionId(joinFeedbackOpenSessionId);
+                dismissJoinFeedback();
+              }
+        }
       />
     </div>
   );

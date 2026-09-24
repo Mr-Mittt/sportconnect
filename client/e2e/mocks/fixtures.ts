@@ -591,7 +591,9 @@ export const mockSession: Session = {
   // causing its baselines to look randomly stale (same class of bug HF-11's fixtures already
   // avoid — every other timestamp in this file is a literal string for the same reason).
   scheduledStart: '2026-08-01T19:00:00',
-  scheduledEndAt: null,
+  // CLIENT-SESSION-30: the one fixture with an end time, so the card/detail "start – end" 24h range
+  // is covered e2e + visually; every other fixture stays open-ended (start time only).
+  scheduledEndAt: '2026-08-01T21:00:00',
   status: 'SCHEDULED',
   cancelReason: null,
   cancelledBy: null,

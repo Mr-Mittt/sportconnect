@@ -224,6 +224,16 @@ export const RequestedPendingApproval: Story = {
   args: { session: makeSession({ callerParticipation: makeCallerParticipation('REQUESTED') }) },
 };
 
+/** CLIENT-SESSION-30: header shows "start – end" in 24h, and the creator line leads with "Auto approval." */
+export const AutoApprovalWithEndTime: Story = {
+  args: { session: makeSession({ autoApprove: true, scheduledEndAt: '2026-08-01T21:00:00' }) },
+};
+
+/** CLIENT-SESSION-30: an overnight session shows the end weekday/date too. */
+export const EndsNextDay: Story = {
+  args: { session: makeSession({ scheduledEndAt: '2026-08-02T01:00:00' }) },
+};
+
 export const Loading: Story = {
   args: { session: undefined, isLoading: true, participants: [] },
 };

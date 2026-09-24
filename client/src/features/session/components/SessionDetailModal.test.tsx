@@ -211,11 +211,28 @@ describe('SessionDetailModal', () => {
     expect(screen.getByText('Scheduled')).toBeInTheDocument();
     // CLIENT-SESSION-10: header status row always shows weekday + date + time (design reference),
     // distinct from formatStartTime's relative "Today"/"Tomorrow" shorthand used elsewhere.
-    expect(screen.getByText(/Sat, Aug 1 · 7:00 PM/)).toBeInTheDocument();
+    expect(screen.getByText(/Sat, Aug 1 · 19:00/)).toBeInTheDocument();
     expect(screen.getByText('Riverside Courts')).toBeInTheDocument();
     expect(screen.getByText('12 River Rd')).toBeInTheDocument();
     expect(screen.getByText('Casual 5v5, all levels welcome.')).toBeInTheDocument();
-    expect(screen.getByText('Created by Jordan Lee')).toBeInTheDocument();
+    // CLIENT-SESSION-30: the approval mode leads the creator line (makeSession → autoApprove false).
+    expect(screen.getByText('Need host approval. Created by Jordan Lee')).toBeInTheDocument();
+  });
+
+  it('shows "Auto approval" ahead of the creator for an auto-approve session', () => {
+    render(<SessionDetailModal {...baseProps} session={makeSession({ autoApprove: true })} />);
+    expect(screen.getByText('Auto approval. Created by Jordan Lee')).toBeInTheDocument();
+    expect(screen.queryByText(/Need host approval/)).not.toBeInTheDocument();
+  });
+
+  it('shows the end time in the header when the session has one (same day)', () => {
+    render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledEndAt: '2026-08-01T21:00:00' })} />);
+    expect(screen.getByText(/Sat, Aug 1 · 19:00 – 21:00/)).toBeInTheDocument();
+  });
+
+  it('shows the end date too when the session runs past midnight', () => {
+    render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledEndAt: '2026-08-02T01:00:00' })} />);
+    expect(screen.getByText(/Sat, Aug 1 · 19:00 – Sun, Aug 2 · 01:00/)).toBeInTheDocument();
   });
 
   it('shows a Get Directions link with the right href when coordinates exist', () => {
@@ -343,8 +360,29 @@ describe('SessionDetailModal', () => {
       />,
     );
     expect(screen.queryByRole('button', { name: 'Join' })).not.toBeInTheDocument();
+    // CLIENT-SESSION-30: says why the only action is Cancel.
+    expect(screen.getByText('Waiting for host approval.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onLeave).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the "Waiting for host approval." hint only for a REQUESTED caller', () => {
+    const { rerender } = render(<SessionDetailModal {...baseProps} />);
+    expect(screen.queryByText('Waiting for host approval.')).not.toBeInTheDocument();
+    rerender(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ callerParticipation: makeCallerParticipation('JOINED') })}
+      />,
+    );
+    expect(screen.queryByText('Waiting for host approval.')).not.toBeInTheDocument();
+    rerender(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ callerParticipation: makeCallerParticipation('INVITED') })}
+      />,
+    );
+    expect(screen.queryByText('Waiting for host approval.')).not.toBeInTheDocument();
   });
 
   it('hides the participation action for a COMPLETED or CANCELLED session regardless of caller status', () => {
