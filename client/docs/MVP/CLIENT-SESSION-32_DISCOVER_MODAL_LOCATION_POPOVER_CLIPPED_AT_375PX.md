@@ -103,6 +103,11 @@ No backend, DTO, enum or notification impact; no follow-up tickets.
   byte-identical. Checked on this Windows host (where the whole project fails on the font-rendering noise floor) by
   running `app-discover-modal.spec.ts` and `app-discover-panel.spec.ts` with and without the `popover.tsx` change and
   diffing per-test pixel-diff counts: the **only** difference is the Location-375 frame (the size change); all other
-  frames are identical. Regeneration is a user-triggered follow-up (`update-baselines` → `/updatebaseline`), not done here.
+  frames are identical.
+- **Executed (2026-09-24, `/updatebaseline`):** the `update-baselines` dispatch's `visual-baselines` artifact (150 PNGs) was
+  applied, SHA-256 confirmed **exactly the predicted 1 file changed** — `discover-modal-location-popover-375.png` — and the
+  other **149 byte-identical** (0 NEW, 0 MISSING), so every other local Windows diff was pure noise floor. Human visual
+  check of the CI frame: 343px wide, popover fully inside the dialog with its right border intact (Fee wraps to a second
+  filter row under Linux font metrics — expected, not a regression). Committed as `cf40a8d`.
 - **Manual walk:** the happy path was exercised by the Playwright tests in a real Chromium, and the new 375px frame
   was inspected by eye. No separate Vite-dev-server / live-backend session — no API contract is involved.

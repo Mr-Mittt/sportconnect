@@ -5409,8 +5409,8 @@ explicit go-ahead at each step (full story in A3's summary doc):
   the viewport only, so a fixed-width popover overhung the `overflow-hidden` dialog (Location `w-72` at 375px; Time also at
   320px). Fixed once in the shared `PopoverContent`: when nested in a Dialog, `collisionBoundary` = the Dialog's Content
   node + 8px `collisionPadding`, plus `max-w` of the available width. New `home-feed-journey.spec.ts` e2e (375/320px, all
-  four filters; fails without the fix). Only the `discover-modal-location-popover-375` baseline changes — regenerate via
-  `update-baselines`.
+  four filters; fails without the fix). Only the `discover-modal-location-popover-375` baseline changed — regenerated via
+  `update-baselines` (SHA-256 verified: exactly 1 changed, 149 byte-identical).
 - **CLIENT-SESSION-27 — Escape closes only the open Discover filter popover, not the whole modal (`DONE`, 2026-09-24,
   `client/docs/MVP/CLIENT-SESSION-27_ESCAPE_CLOSES_WHOLE_MODAL_INSTEAD_OF_JUST_THE_POPOVER.md`):** root cause was not the
   ticket's DOM-portal theory but two installed copies of `@radix-ui/react-dismissable-layer` (Dialog/Menu on 1.1.15,
