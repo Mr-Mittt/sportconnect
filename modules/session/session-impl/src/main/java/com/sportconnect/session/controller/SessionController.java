@@ -109,7 +109,7 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
-    @Operation(summary = "List the caller's upcoming sessions", description = "SESSION-27 — replaces GET /api/sessions/mine. Standalone or group-linked sessions where the caller currently has a JOINED or INVITED participant row, status PREPARING/SCHEDULED/ONGOING. Optional date narrows to one calendar day. viewerZoneId (an IANA zone id, only valid alongside date) is the zone that day's boundaries are computed in — falls back to UTC when omitted. Sorted scheduledStart ASC with a PREPARING->SCHEDULED->ONGOING tiebreaker; the caller's own Pageable sort is ignored.")
+    @Operation(summary = "List the caller's upcoming sessions", description = "SESSION-27 — replaces GET /api/sessions/mine. Standalone or group-linked sessions where the caller currently has a JOINED or INVITED participant row, status PREPARING/SCHEDULED/ONGOING. Optional date narrows to one calendar day. viewerZoneId (an IANA zone id, only valid alongside date) is the zone that day's boundaries are computed in — falls back to UTC when omitted. Sorted scheduledStart ASC with a PREPARING->SCHEDULED->ONGOING tiebreaker; the caller's own Pageable sort is ignored. SESSION-43: optional sportId narrows to that sport (omitted = all sports); plain equality, not gated on the caller's active sport profiles (these are sessions they already joined/were invited to); an unknown sportId yields an empty page.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "viewerZoneId given without date, or an invalid viewerZoneId"),
@@ -121,12 +121,13 @@ public class SessionController {
             Authentication authentication,
             @RequestParam(required = false) LocalDate date,
             @RequestParam(required = false) String viewerZoneId,
+            @RequestParam(required = false) Long sportId,
             @PageableDefault(size = 20) Pageable pageable) {
         if (date == null && viewerZoneId != null) {
             throw new BadRequestException("viewerZoneId is only valid alongside date");
         }
         Page<SessionResponse> response = sessionService.getUpcomingSessions(
-                SecurityUtils.extractUserId(authentication), date, viewerZoneId, pageable);
+                SecurityUtils.extractUserId(authentication), date, viewerZoneId, sportId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
@@ -145,10 +146,10 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
-    @Operation(summary = "List the caller's session history, or its distinct history dates", description = "SESSION-27/34/35 — exactly one of date or dateCount is required. date: paginated CANCELLED/COMPLETED sessions the caller was JOINED to, for that calendar day, scheduledStart DESC. dateCount: the last N distinct history dates (most-recent-first) with per-date counts; before (exclusive, only valid alongside dateCount) pages further back. viewerZoneId (an IANA zone id, valid alongside either date or dateCount) is the zone the day boundary/date bucketing is computed in — falls back to UTC when omitted.")
+    @Operation(summary = "List the caller's session history, or its distinct history dates", description = "SESSION-27/34/35 — exactly one of date or dateCount is required. date: paginated CANCELLED/COMPLETED sessions the caller was JOINED to, for that calendar day, scheduledStart DESC. dateCount: the last N distinct history dates (most-recent-first) with per-date counts; before (exclusive, only valid alongside dateCount) pages further back. viewerZoneId (an IANA zone id, valid alongside either date or dateCount) is the zone the day boundary/date bucketing is computed in — falls back to UTC when omitted. SESSION-43: sportId is required and restricts both shapes (the date list and the dateCount counts/hasMore/before cursor) to that sport; plain equality, not gated on the caller's active sport profiles; an unknown sportId yields an empty result.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions, or history dates (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "date/dateCount both given or neither, before without dateCount, dateCount <= 0, or an invalid viewerZoneId"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "sportId missing, date/dateCount both given or neither, before without dateCount, dateCount <= 0, or an invalid viewerZoneId"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/history")
@@ -159,6 +160,7 @@ public class SessionController {
             @RequestParam(required = false) Integer dateCount,
             @RequestParam(required = false) LocalDate before,
             @RequestParam(required = false) String viewerZoneId,
+            @RequestParam Long sportId,
             @PageableDefault(size = 20) Pageable pageable) {
         if ((date == null) == (dateCount == null)) {
             throw new BadRequestException("Exactly one of date or dateCount is required");
@@ -172,11 +174,11 @@ public class SessionController {
 
         UUID userId = SecurityUtils.extractUserId(authentication);
         if (date != null) {
-            Page<SessionResponse> response = sessionService.getSessionHistory(userId, date, viewerZoneId, pageable);
+            Page<SessionResponse> response = sessionService.getSessionHistory(userId, date, viewerZoneId, sportId, pageable);
             return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
         }
         SessionHistoryDatesResponse response =
-                sessionService.getSessionHistoryDates(userId, dateCount, before, viewerZoneId);
+                sessionService.getSessionHistoryDates(userId, dateCount, before, viewerZoneId, sportId);
         return ResponseEntity.ok(ApiResponse.success("History dates retrieved successfully", response));
     }
 

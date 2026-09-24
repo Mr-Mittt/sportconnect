@@ -93,8 +93,16 @@ public interface SessionService {
      * rather than the JVM's own zone — a caller-relative "today", not a server-relative one.
      * {@code viewerZoneId} given without {@code date} is rejected by the controller (it would have
      * no effect). Invalid (unparseable) values are rejected with a {@code BadRequestException}.
+     *
+     * <p>SESSION-43: {@code sportId} (nullable) narrows to that sport's sessions; {@code null} means
+     * all sports (what the {@code UpcomingMatches} rail needs). Plain equality — deliberately
+     * <b>not</b> gated on the caller's active {@code UserSportProfile}s the way {@code
+     * discoverSessions}' {@code sportId} is, since this list is already scoped by the caller's own
+     * participant row: a user who dropped a sport profile still sees sessions they'd already joined.
+     * An unknown {@code sportId} yields an empty page, not an error.
      */
-    Page<SessionResponse> getUpcomingSessions(UUID userId, LocalDate date, String viewerZoneId, Pageable pageable);
+    Page<SessionResponse> getUpcomingSessions(
+            UUID userId, LocalDate date, String viewerZoneId, Long sportId, Pageable pageable);
 
     /**
      * SESSION-42 — "my pending requests": every session (standalone or group-linked) where the
@@ -124,8 +132,13 @@ public interface SessionService {
      * an IANA zone id, falling back to {@code "UTC"} when omitted) rather than the JVM's own zone —
      * same caller-relative treatment as {@link #getUpcomingSessions}. Invalid (unparseable) values
      * are rejected with a {@code BadRequestException}.
+     *
+     * <p>SESSION-43: {@code sportId} (required, non-null) restricts to that sport's sessions — plain
+     * equality, no active-sport-profile gate (see {@link #getUpcomingSessions}). An unknown
+     * {@code sportId} yields an empty page, not an error.
      */
-    Page<SessionResponse> getSessionHistory(UUID userId, LocalDate date, String viewerZoneId, Pageable pageable);
+    Page<SessionResponse> getSessionHistory(
+            UUID userId, LocalDate date, String viewerZoneId, Long sportId, Pageable pageable);
 
     /**
      * SESSION-27/34 — the last {@code dateCount} distinct calendar dates (most-recent-first) on
@@ -147,9 +160,14 @@ public interface SessionService {
      * {@code BadRequestException}. Nullable only because today's client doesn't send it yet
      * (CLIENT-SESSION-24) — when omitted, this falls back to {@code "UTC"} rather than failing the
      * request outright, since every existing caller omits it until that client ticket ships.
+     *
+     * <p>SESSION-43: {@code sportId} (required, non-null) restricts the counted sessions to that
+     * sport, so the per-date counts, {@code hasMore} and the {@code before} cursor all agree with
+     * {@link #getSessionHistory} for the same sport — a date holding only other sports' sessions
+     * never appears. Plain equality, no active-sport-profile gate.
      */
     SessionHistoryDatesResponse getSessionHistoryDates(
-            UUID userId, int dateCount, LocalDate before, String viewerZoneId);
+            UUID userId, int dateCount, LocalDate before, String viewerZoneId, Long sportId);
 
     /**
      * Standalone → creator-only. Group-linked → owner/admin via canManageMembers.

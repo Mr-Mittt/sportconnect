@@ -1822,7 +1822,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 20)
 
         when:
-        sessionService.getUpcomingSessions(userId, null, null, pageable)
+        sessionService.getUpcomingSessions(userId, null, null, null, pageable)
 
         then:
         1 * sessionRepository.findUpcomingSessions(
@@ -1830,7 +1830,7 @@ class SessionServiceImplSpec extends Specification {
                 userId,
                 [ParticipantStatus.JOINED, ParticipantStatus.INVITED],
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                pageable) >> new PageImpl([])
+                null, pageable) >> new PageImpl([])
         0 * sessionRepository.findUpcomingSessionsByDate(*_)
     }
 
@@ -1840,11 +1840,11 @@ class SessionServiceImplSpec extends Specification {
         def sortedPageable = PageRequest.of(1, 5, Sort.by(Sort.Direction.DESC, "createdAt"))
 
         when:
-        sessionService.getUpcomingSessions(userId, null, null, sortedPageable)
+        sessionService.getUpcomingSessions(userId, null, null, null, sortedPageable)
 
         then:
         1 * sessionRepository.findUpcomingSessions(*_) >> { args ->
-            Pageable used = args[5]
+            Pageable used = args[6]
             assert used.pageNumber == 1
             assert used.pageSize == 5
             assert used.sort.isUnsorted()
@@ -1859,7 +1859,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 20)
 
         when:
-        sessionService.getUpcomingSessions(userId, date, null, pageable)
+        sessionService.getUpcomingSessions(userId, date, null, null, pageable)
 
         then:
         1 * sessionRepository.findUpcomingSessionsByDate(
@@ -1869,7 +1869,7 @@ class SessionServiceImplSpec extends Specification {
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
-                pageable) >> new PageImpl([])
+                null, pageable) >> new PageImpl([])
         0 * sessionRepository.findUpcomingSessions(*_)
     }
 
@@ -1881,7 +1881,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 20)
 
         when:
-        sessionService.getUpcomingSessions(userId, date, "America/New_York", pageable)
+        sessionService.getUpcomingSessions(userId, date, "America/New_York", null, pageable)
 
         then:
         1 * sessionRepository.findUpcomingSessionsByDate(
@@ -1891,7 +1891,7 @@ class SessionServiceImplSpec extends Specification {
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
                 date.atStartOfDay(zone).toInstant(),
                 date.plusDays(1).atStartOfDay(zone).toInstant(),
-                pageable) >> new PageImpl([])
+                null, pageable) >> new PageImpl([])
     }
 
     def "getUpcomingSessions rejects an invalid viewerZoneId"() {
@@ -1901,7 +1901,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 20)
 
         when:
-        sessionService.getUpcomingSessions(userId, date, "Not/AZone", pageable)
+        sessionService.getUpcomingSessions(userId, date, "Not/AZone", null, pageable)
 
         then:
         thrown(BadRequestException)
@@ -1909,6 +1909,72 @@ class SessionServiceImplSpec extends Specification {
     }
 
     // SESSION-42 â€” "my pending requests", reusing findUpcomingSessions unchanged.
+
+    // SESSION-43 — optional sportId on /upcoming (null = all sports), passed through as plain equality.
+
+    def "getUpcomingSessions passes a non-null sportId through to findUpcomingSessions"() {
+        given:
+        def userId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        sessionService.getUpcomingSessions(userId, null, null, 7L, pageable)
+
+        then:
+        1 * sessionRepository.findUpcomingSessions(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING],
+                userId,
+                [ParticipantStatus.JOINED, ParticipantStatus.INVITED],
+                SessionStatus.PREPARING, SessionStatus.SCHEDULED,
+                7L, pageable) >> new PageImpl([])
+        0 * sessionRepository.findUpcomingSessionsByDate(*_)
+    }
+
+    def "getUpcomingSessions passes a non-null sportId through to findUpcomingSessionsByDate"() {
+        given:
+        def userId = UUID.randomUUID()
+        def date = LocalDate.of(2026, 9, 20)
+        def pageable = PageRequest.of(0, 20)
+
+        when:
+        sessionService.getUpcomingSessions(userId, date, null, 7L, pageable)
+
+        then:
+        1 * sessionRepository.findUpcomingSessionsByDate(
+                [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING],
+                userId,
+                [ParticipantStatus.JOINED, ParticipantStatus.INVITED],
+                SessionStatus.PREPARING, SessionStatus.SCHEDULED,
+                date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
+                7L, pageable) >> new PageImpl([])
+        0 * sessionRepository.findUpcomingSessions(*_)
+    }
+
+    def "getUpcomingSessions does not consult the caller's sport profiles or SportService — sportId is plain equality"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getUpcomingSessions(userId, null, null, 7L, PageRequest.of(0, 20))
+
+        then:
+        1 * sessionRepository.findUpcomingSessions(*_) >> new PageImpl([])
+        0 * sportService._
+        0 * userSportProfileService._
+    }
+
+    def "getRequestedSessions passes a null sportId (no sport filter on /requested)"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getRequestedSessions(userId, PageRequest.of(0, 20))
+
+        then:
+        1 * sessionRepository.findUpcomingSessions(_, userId, [ParticipantStatus.REQUESTED], _, _, null, _) >>
+                new PageImpl([])
+    }
 
     def "getRequestedSessions queries REQUESTED-only across PREPARING/SCHEDULED/ONGOING"() {
         given:
@@ -1924,7 +1990,7 @@ class SessionServiceImplSpec extends Specification {
                 userId,
                 [ParticipantStatus.REQUESTED],
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                pageable) >> new PageImpl([])
+                null, pageable) >> new PageImpl([])
     }
 
     def "getRequestedSessions strips any client-supplied sort, keeping only page/size"() {
@@ -1937,7 +2003,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findUpcomingSessions(*_) >> { args ->
-            Pageable used = args[5]
+            Pageable used = args[6]
             assert used.pageNumber == 1
             assert used.pageSize == 5
             assert used.sort.isUnsorted()
@@ -1952,7 +2018,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 20)
 
         when:
-        sessionService.getSessionHistory(userId, date, null, pageable)
+        sessionService.getSessionHistory(userId, date, null, 7L, pageable)
 
         then:
         1 * sessionRepository.findHistorySessionsByDate(
@@ -1960,7 +2026,7 @@ class SessionServiceImplSpec extends Specification {
                 userId, ParticipantStatus.JOINED,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
-                pageable) >> new PageImpl([])
+                7L, pageable) >> new PageImpl([])
     }
 
     def "getSessionHistory with a viewerZoneId narrows to that calendar day in the given zone"() {
@@ -1971,7 +2037,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 20)
 
         when:
-        sessionService.getSessionHistory(userId, date, "America/New_York", pageable)
+        sessionService.getSessionHistory(userId, date, "America/New_York", 7L, pageable)
 
         then:
         1 * sessionRepository.findHistorySessionsByDate(
@@ -1979,7 +2045,7 @@ class SessionServiceImplSpec extends Specification {
                 userId, ParticipantStatus.JOINED,
                 date.atStartOfDay(zone).toInstant(),
                 date.plusDays(1).atStartOfDay(zone).toInstant(),
-                pageable) >> new PageImpl([])
+                7L, pageable) >> new PageImpl([])
     }
 
     def "getSessionHistory rejects an invalid viewerZoneId"() {
@@ -1989,7 +2055,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 20)
 
         when:
-        sessionService.getSessionHistory(userId, date, "Not/AZone", pageable)
+        sessionService.getSessionHistory(userId, date, "Not/AZone", 7L, pageable)
 
         then:
         thrown(BadRequestException)
@@ -2003,11 +2069,11 @@ class SessionServiceImplSpec extends Specification {
         def sortedPageable = PageRequest.of(2, 10, Sort.by(Sort.Direction.ASC, "id"))
 
         when:
-        sessionService.getSessionHistory(userId, date, null, sortedPageable)
+        sessionService.getSessionHistory(userId, date, null, 7L, sortedPageable)
 
         then:
         1 * sessionRepository.findHistorySessionsByDate(*_) >> { args ->
-            Pageable used = args[5]
+            Pageable used = args[6]
             assert used.pageNumber == 2
             assert used.pageSize == 10
             assert used.sort.isUnsorted()
@@ -2020,12 +2086,12 @@ class SessionServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
 
         when:
-        def result = sessionService.getSessionHistoryDates(userId, 3, null, null)
+        def result = sessionService.getSessionHistoryDates(userId, 3, null, null, 7L)
 
         then:
         1 * sessionRepository.findHistoryDateCounts(
                 [SessionStatus.CANCELLED.name(), SessionStatus.COMPLETED.name()],
-                userId, ParticipantStatus.JOINED.name(), null, "UTC", 4) >> [
+                userId, ParticipantStatus.JOINED.name(), null, "UTC", 7L, 4) >> [
                 stubDateCount(LocalDate.of(2026, 9, 14), 2L),
                 stubDateCount(LocalDate.of(2026, 9, 10), 1L)
         ]
@@ -2040,10 +2106,10 @@ class SessionServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
 
         when:
-        def result = sessionService.getSessionHistoryDates(userId, 2, null, null)
+        def result = sessionService.getSessionHistoryDates(userId, 2, null, null, 7L)
 
         then:
-        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, _, 3) >> [
+        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, _, 7L, 3) >> [
                 stubDateCount(LocalDate.of(2026, 9, 14), 2L),
                 stubDateCount(LocalDate.of(2026, 9, 10), 1L),
                 stubDateCount(LocalDate.of(2026, 9, 5), 1L)
@@ -2058,10 +2124,10 @@ class SessionServiceImplSpec extends Specification {
         def before = LocalDate.of(2026, 9, 10)
 
         when:
-        sessionService.getSessionHistoryDates(userId, 5, before, null)
+        sessionService.getSessionHistoryDates(userId, 5, before, null, 7L)
 
         then:
-        1 * sessionRepository.findHistoryDateCounts(_, userId, _, before, _, 6) >> []
+        1 * sessionRepository.findHistoryDateCounts(_, userId, _, before, _, 7L, 6) >> []
     }
 
     def "getSessionHistoryDates defaults to UTC when viewerZoneId is omitted"() {
@@ -2069,10 +2135,10 @@ class SessionServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
 
         when:
-        sessionService.getSessionHistoryDates(userId, 5, null, null)
+        sessionService.getSessionHistoryDates(userId, 5, null, null, 7L)
 
         then:
-        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, "UTC", _) >> []
+        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, "UTC", 7L, _) >> []
     }
 
     def "getSessionHistoryDates passes a valid viewerZoneId through to the repository"() {
@@ -2080,10 +2146,35 @@ class SessionServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
 
         when:
-        sessionService.getSessionHistoryDates(userId, 5, null, "America/Los_Angeles")
+        sessionService.getSessionHistoryDates(userId, 5, null, "America/Los_Angeles", 7L)
 
         then:
-        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, "America/Los_Angeles", _) >> []
+        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, "America/Los_Angeles", 7L, _) >> []
+    }
+
+    def "getSessionHistory passes the sportId through to findHistorySessionsByDate"() {
+        given:
+        def userId = UUID.randomUUID()
+        def date = LocalDate.of(2026, 9, 14)
+
+        when:
+        sessionService.getSessionHistory(userId, date, null, 42L, PageRequest.of(0, 20))
+
+        then:
+        1 * sessionRepository.findHistorySessionsByDate(_, userId, _, _, _, 42L, _) >> new PageImpl([])
+        0 * sportService._
+    }
+
+    def "getSessionHistoryDates passes the sportId through to findHistoryDateCounts"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getSessionHistoryDates(userId, 5, null, null, 42L)
+
+        then:
+        1 * sessionRepository.findHistoryDateCounts(_, userId, _, _, _, 42L, _) >> []
+        0 * sportService._
     }
 
     def "getSessionHistoryDates rejects an invalid viewerZoneId"() {
@@ -2091,7 +2182,7 @@ class SessionServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
 
         when:
-        sessionService.getSessionHistoryDates(userId, 5, null, "Not/AZone")
+        sessionService.getSessionHistoryDates(userId, 5, null, "Not/AZone", 7L)
 
         then:
         0 * sessionRepository.findHistoryDateCounts(*_)
