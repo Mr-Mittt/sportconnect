@@ -346,7 +346,23 @@ function transformSessionComment(
 // returned its date-agnostic match set regardless of the caller's requested date; the client only
 // ever requests one date/window at a time, so this doesn't create any inconsistency a journey
 // would notice.
-function discoverableSessions(session: SessionsSession, url: URL) {
+/**
+ * `overrides.discoverVolume` (CLIENT-SESSION-31): 25 extra discoverable Badminton sessions cloned
+ * from `mockDiscoverableSession`, so a Discover section has more than one client page (size 10)
+ * and shows "Load more". They pass every filter `discoverableSessions` applies (standalone,
+ * SCHEDULED, someone else's, no caller participation) and are not part of `sessionsState`, so —
+ * like `syntheticHistory` — they have no detail route.
+ */
+function syntheticDiscoverable(): Session[] {
+  return Array.from({ length: 25 }, (_, i) => ({
+    ...mockDiscoverableSession,
+    id: 3000 + i,
+    title: `Discover session ${i + 1}`,
+    participantCount: i % 8,
+  }));
+}
+
+function discoverableSessions(session: SessionsSession, sessionId: string, url: URL) {
   const sportIdParam = url.searchParams.get('sportId');
   const sportId = sportIdParam !== null ? Number(sportIdParam) : null;
   const title = url.searchParams.get('title');
@@ -359,7 +375,10 @@ function discoverableSessions(session: SessionsSession, url: URL) {
   const feeType = url.searchParams.get('feeType');
   const maxFeeAmountVndParam = url.searchParams.get('maxFeeAmountVnd');
   const maxFeeAmountVnd = maxFeeAmountVndParam !== null ? Number(maxFeeAmountVndParam) : null;
-  return session.sessionsState.filter((candidate) => {
+  const pool = getOverrides(sessionId).discoverVolume
+    ? [...session.sessionsState, ...syntheticDiscoverable()]
+    : session.sessionsState;
+  return pool.filter((candidate) => {
     if (candidate.groupId !== null || candidate.status !== 'SCHEDULED') return false;
     if (candidate.createdBy === mockUser.id) return false;
     if (sportId !== null && candidate.sportId !== sportId) return false;
@@ -625,14 +644,16 @@ export const sessionHandlers: HttpHandler[] = [
   http.get('/api/sessions/discover', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
-    const session = sessionsSessions.get(sessionIdFromRequest(request));
-    const results = discoverableSessions(session, new URL(request.url));
-    return HttpResponse.json(
-      apiResponse(
-        mockPageResponse(results.map((candidate) => withCallerParticipation(session, candidate))),
-        'Sessions retrieved successfully',
-      ),
+    const sessionId = sessionIdFromRequest(request);
+    const session = sessionsSessions.get(sessionId);
+    const url = new URL(request.url);
+    const results = discoverableSessions(session, sessionId, url).map((candidate) =>
+      withCallerParticipation(session, candidate),
     );
+    // CLIENT-SESSION-31: only `discoverVolume` pages for real — every other run keeps the
+    // always-one-page response the journeys were written against.
+    const body = getOverrides(sessionId).discoverVolume ? slicePage(results, url) : mockPageResponse(results);
+    return HttpResponse.json(apiResponse(body, 'Sessions retrieved successfully'));
   }),
 
   // SESSION-39 — shares /discover's filter set except date/pagination. `date` (repeated) picks the
@@ -643,8 +664,9 @@ export const sessionHandlers: HttpHandler[] = [
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const url = new URL(request.url);
-    const session = sessionsSessions.get(sessionIdFromRequest(request));
-    const count = discoverableSessions(session, url).length;
+    const sessionId = sessionIdFromRequest(request);
+    const session = sessionsSessions.get(sessionId);
+    const count = discoverableSessions(session, sessionId, url).length;
     const explicitDates = url.searchParams.getAll('date');
     const dates =
       explicitDates.length > 0
