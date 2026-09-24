@@ -417,3 +417,34 @@ stash-and-rerun result. Neither was actually random:
 **Both fixes verified together:** tsc/eslint clean; full `e2e` project run: **85/85 passed, zero
 failures** (previously reported as "84/85, 1 pre-existing flake" across several runs this
 session — that framing undersold it; both were fixable, and now fixed).
+
+## Revision 6 (2026-09-24) — a CI-only failure this session's own work introduced
+
+After Revision 5's push, CI reported `home-feed-journey.spec.ts`'s "Time/Location popovers stay
+focused and typeable" test failing on `getByLabel('Hour')` — not a value mismatch,
+`Error: element(s) not found` for the full 5s retry window, right after `hourInput.blur()`.
+Investigated the same way as Revision 5's two bugs (never accepted as "just CI flakiness" without
+evidence): ran it isolated, file-scoped, and under the full 8-worker suite locally — passed every
+time (Windows/Chromium), and a throwaway diagnostic spec confirmed the popover and Hour input both
+survive `.blur()` reliably here (focus lands on `<body>`, nothing closes). Could not reproduce
+locally, so this is a genuine cross-platform (CI is Linux) behavior difference, not something
+provably fixed by direct repro.
+
+The one real suspect in the *test itself*: `.blur()` is a synthetic call with no specific focus
+destination, unlike a real user action — exactly the kind of interaction that can behave
+differently across Chromium builds/OSes when something (here, Radix's own focus tracking) cares
+where focus actually lands. This test itself was new code from earlier in this session (the
+FocusScope regression test), so it had never actually run in CI before this push — its own
+`.blur()` pattern was unproven there, not a previously-passing check that broke.
+
+**Fix:** replaced `hourInput.blur()` with `hourInput.press('Tab')`, asserting focus lands on the
+Minute input (still inside the same popover) before checking the committed value — a deterministic,
+realistic interaction instead of an ambiguous one, and arguably a better test of the FocusScope
+fix's actual intent (focus moving naturally within the Dialog-nested Popover) than a blur to
+nowhere in particular.
+
+**Verification:** tsc/eslint clean; the specific test run 3x isolated + once file-scoped, all green;
+full `e2e` project: 85/85 passed (`matches-journey.spec.ts` at 29.5s, still comfortable margin
+against its 60s budget). Cannot confirm this fixes the *specific* CI environment without another CI
+run, but the change removes the one plausible platform-sensitive element from the test without
+weakening what it actually verifies.

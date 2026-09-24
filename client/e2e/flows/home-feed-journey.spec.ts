@@ -275,7 +275,13 @@ test('Home Feed — the "Join a match" modal\'s Time/Location popovers stay focu
   await hourInput.click();
   await expect(hourInput).toBeFocused();
   await hourInput.fill('05');
-  await hourInput.blur();
+  // Tab to the Minute input (still inside the same popover), not a bare `.blur()` — CI (Linux)
+  // reported `getByLabel('Hour')` gone entirely after `.blur()` (not a value mismatch, a genuine
+  // absence for the full retry window), never reproduced locally across several runs. `.blur()`
+  // doesn't move focus anywhere specific, unlike a real user action; Tab is deterministic and
+  // matches how a caller would actually move between the two fields.
+  await hourInput.press('Tab');
+  await expect(page.getByLabel('Minute')).toBeFocused();
   await expect(hourInput).toHaveValue('05');
   await expect(dialog.getByRole('button', { name: /^Before 05:\d{2}$/ })).toBeVisible();
   // Closes the Time popover so it doesn't shadow the Location trigger below. The exact
