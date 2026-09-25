@@ -391,3 +391,35 @@ CREATE TABLE IF NOT EXISTS processed_messages (
     message_id VARCHAR(255) PRIMARY KEY,
     processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- REF-1 (reference-impl): the three reference tables (V072). Deliberately NO seed rows here — the seed
+-- lives in V073__seed_reference_data.sql and ReferenceApiIntegrationTest runs that real file, so the
+-- mirror cannot drift from what the migration inserts.
+CREATE TABLE IF NOT EXISTS languages (
+    id BIGSERIAL PRIMARY KEY,
+    code VARCHAR(35) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    native_name VARCHAR(100) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS countries (
+    id BIGSERIAL PRIMARY KEY,
+    iso2 VARCHAR(2) NOT NULL UNIQUE,
+    iso3 VARCHAR(3) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    -- V074: default language per country. V074 itself is run by ReferenceApiIntegrationTest
+    -- (ADD COLUMN IF NOT EXISTS), so the column being here already is safe.
+    default_language_code VARCHAR(35) REFERENCES languages (code)
+);
+
+CREATE TABLE IF NOT EXISTS regions (
+    id BIGSERIAL PRIMARY KEY,
+    country_id BIGINT NOT NULL REFERENCES countries (id),
+    iso_code VARCHAR(10) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    native_name VARCHAR(100) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
+);

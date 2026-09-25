@@ -27,6 +27,10 @@ The shared, presentational building block used by both sign-up and profile edit.
 - **`useGeoLocaleFieldsData()`** (the page-level data hook): on mount a **silent** resolve (locales + timezone) pre-fills
   only fields the user has not touched; the button resolves with coordinates and overwrites only untouched fields; the
   coordinates stay in the hook's state for the caller to submit.
+  **Default language (backend REF-1 scope change 2, 2026-09-25):** `CountryResponse.defaultLanguageCode` (nullable). When a
+  country is set — picked by hand or resolved — and Language is **still empty**, pre-fill Language from that code, but only
+  if it is in the active `useLanguages()` set; **never overwrite** a value the user chose or the browser detected (browser
+  language list > country default).
 - **MSW:** `e2e/mocks/handlers/reference.ts` (+ fixtures: `en`/`vi`, a few countries incl. Vietnam and one with no regions,
   Vietnam's regions, a resolve handler with a coordinates-aware response and a timezone-only one).
 - **A11y:** every control labelled, the button keyboard reachable with visible focus, the hint announced politely

@@ -110,6 +110,11 @@ public class SecurityConfig {
                                 "/api/sports/profiles/*",
                                 "/api/sports/profiles/sport/*").authenticated()
                         .requestMatchers("/api/sports/**").permitAll()
+                        // REF-1: languages / countries / regions are public, read-only reference data — the
+                        // sign-up form needs its dropdowns before an account exists. GET only (a later
+                        // POST /api/reference/resolve, REF-2, gets its own explicit entry). Ordered before
+                        // anyRequest (first-match-wins), same as the /api/sports/** permit above.
+                        .requestMatchers(HttpMethod.GET, "/api/reference/**").permitAll()
                         // U11: no longer public — every GET under /api/users/** now either already
                         // had its own @PreAuthorize (search, friends/**, me/preferences) or gained
                         // one this ticket (the id/email/username lookups, the check/* endpoints,

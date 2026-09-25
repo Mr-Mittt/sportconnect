@@ -38,6 +38,8 @@ dependencies {
     implementation project(':modules:session:session-api')
     implementation project(':modules:notification:notification-impl')
     implementation project(':modules:notification:notification-api')
+    implementation project(':modules:reference:reference-impl')
+    implementation project(':modules:reference:reference-api')
     implementation project(':modules:common')
     
     // Spring Boot Starters

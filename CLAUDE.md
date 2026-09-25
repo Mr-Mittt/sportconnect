@@ -169,6 +169,9 @@ modules/
     post-impl/     # Post, Comment, PostLike, UserFollow entities
     group-api/
     group-impl/    # Group, GroupMember, GroupRole, GroupSettings entities
+  reference/
+    reference-api/   # ReferenceService interface, Language/Country/Region DTOs
+    reference-impl/  # Language, Country, Region entities (public, read-only reference data; depends on common only)
 server/            # Main application entry point; depends on all *-impl modules
 client/            # New SportHub client — Vite + React 18 + TS + Tailwind v4 + pnpm (scaffolded by HF-00; old CRA app removed 2026-07-06)
 services/
@@ -186,7 +189,7 @@ The `server` module is the Spring Boot assembly point — it holds `SportConnect
 
 All REST responses use `ApiResponse<T>` from `modules/common` (`common/src/main/java/com/sportconnect/common/dto/ApiResponse.java`). Use `ApiResponse.success(message, data)` or `ApiResponse.error(message)`.
 
-Base API path is `/api`. Public endpoints: `/api/auth/**`, `/api/sports/**`. All others require a Bearer JWT — including every `GET /api/users/**` endpoint (U11 removed the earlier blanket permit-all for this path; lookups by id/email/username now return a PII-free `UserInfoResponse` rather than being closed off).
+Base API path is `/api`. Public endpoints: `/api/auth/**`, `/api/sports/**`, `GET /api/reference/**`. All others require a Bearer JWT — including every `GET /api/users/**` endpoint (U11 removed the earlier blanket permit-all for this path; lookups by id/email/username now return a PII-free `UserInfoResponse` rather than being closed off).
 
 ### API Change Discipline
 

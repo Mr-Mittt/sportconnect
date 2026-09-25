@@ -64,6 +64,7 @@ the note in root `CLAUDE.md`'s Testing section — **try that fix first** before
 | `NotificationStompIntegrationTest` | `RabbitMqStompTestContainerBase` | RabbitMQ + STOMP | 1 | NTF-3's live-delivery path end to end: a session event on a real broker → `SessionEventsConsumer` → `SessionEventProcessor` → `NotificationService.recordEvent` → `NotificationLiveUpdateListener` (AFTER_COMMIT) → a real STOMP frame on the recipient's subscribed destination. |
 | `PostAccessGateIntegrationTest` | `RedisBaseIT` | Redis | 19 | A14's `PostGate` — real `PostController`/`PostServiceImpl`/`CommentServiceImpl`/`PostGate`/`GroupServiceImpl`/`UserFriendServiceImpl` beans, real DB round trip. |
 | `PostControllerIntegrationTest` | `RedisBaseIT` | Redis | 2 | Post/comment endpoints against real repositories (`PostRepository`, `CommentRepository`, `HashtagRepository`, etc.) — no mocked collaborators. |
+| `ReferenceApiIntegrationTest` | `BaseIT` | none (H2 only) | 12 | REF-1 — the public `GET /api/reference/**` reads through the real `SecurityConfig` chain (anonymous allowed, non-GET still rejected), 404 for an unknown/inactive country, active-only lists, and the `ReferenceService` batch/validation contract against real rows. Executes the **real** `V073__seed_reference_data.sql` against H2 and asserts its content (Vietnam only, 63 regions, `en`/`vi`). |
 | `SessionAttributeSchemaIntegrationTest` | `BaseIT` | none (H2 only) | 11 | A17 — session-attribute-schema endpoints, an authorization boundary (admin writes + active-only member GET); proves `@PreAuthorize` actually fires through real wiring. |
 | `SessionAttributesIntegrationTest` | `RedisBaseIT` | Redis | 6 | SESSION-23 — a session-attributes write through the real `SessionController`/`SessionServiceImpl` → `SportService.getSessionAttributeSchemaRaw` → `SessionAttributeFilter` → the real `sessions.attributes` JSON column and back out on `SessionResponse`. |
 | `SessionEventsConsumerIntegrationTest` | `RabbitMqTestContainerBase` | RabbitMQ (plain) | 4 (+2 parameterized invocations) | NTF-2's `SessionEventsConsumer` wiring — publishes directly onto a real broker, asserts a real `Notification` row through the actual exchange/queue/binding/listener path. This is SESSION-22's documented locally-flaky class (passed cleanly in the CI run verified 2026-09-14). |
@@ -84,7 +85,7 @@ value). Don't treat the sum of this column as the number JUnit reports at the en
 
 ## Summary
 
-- **9 classes** use no Testcontainer at all (H2 only, via plain `BaseIT`).
+- **9 classes** use no Testcontainer at all (H2 only, via plain `BaseIT`) — plus `ReferenceApiIntegrationTest` (REF-1), added after the totals below were taken.
 - **6 classes** use Redis via `RedisBaseIT`; **1 more** (`InternalServiceFilterScopeIT`) uses Redis
   standalone via `RedisTestContainerBase` — all 7 share the same single `SharedRedisContainer`
   instance.
