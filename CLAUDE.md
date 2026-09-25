@@ -189,7 +189,7 @@ The `server` module is the Spring Boot assembly point — it holds `SportConnect
 
 All REST responses use `ApiResponse<T>` from `modules/common` (`common/src/main/java/com/sportconnect/common/dto/ApiResponse.java`). Use `ApiResponse.success(message, data)` or `ApiResponse.error(message)`.
 
-Base API path is `/api`. Public endpoints: `/api/auth/**`, `/api/sports/**`, `GET /api/reference/**`. All others require a Bearer JWT — including every `GET /api/users/**` endpoint (U11 removed the earlier blanket permit-all for this path; lookups by id/email/username now return a PII-free `UserInfoResponse` rather than being closed off).
+Base API path is `/api`. Public endpoints: `/api/auth/**`, `/api/sports/**`, `GET /api/reference/**`, and the one exact `POST /api/reference/resolve` (REF-2). All others require a Bearer JWT — including every `GET /api/users/**` endpoint (U11 removed the earlier blanket permit-all for this path; lookups by id/email/username now return a PII-free `UserInfoResponse` rather than being closed off).
 
 ### API Change Discipline
 
