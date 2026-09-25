@@ -1,0 +1,32 @@
+plugins {
+    id 'groovy'
+}
+
+dependencies {
+    // Module dependencies — the reference domain depends on common only; every other domain depends on
+    // reference-api, never the reverse.
+    implementation project(':modules:reference:reference-api')
+    implementation project(':modules:common')
+
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // OpenAPI/Swagger annotations for controller documentation — same version as sport-impl
+    compileOnly 'io.swagger.core.v3:swagger-annotations-jakarta:2.2.19'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation platform('org.spockframework:spock-bom:2.3-groovy-4.0')
+    testImplementation 'org.spockframework:spock-core'
+    testImplementation 'org.spockframework:spock-spring'
+    testImplementation 'org.apache.groovy:groovy:4.0.15'
+}
+
+test {
+    useJUnitPlatform()
+}

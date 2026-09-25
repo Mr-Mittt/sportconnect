@@ -1,0 +1,8 @@
+dependencies {
+    // Common module (BadRequestException / ResourceNotFoundException are thrown by the contract)
+    implementation project(':modules:common')
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+}

@@ -5418,14 +5418,15 @@ explicit go-ahead at each step (full story in A3's summary doc):
   Fixed by a `pnpm.overrides` pin (no component code changed); new `home-feed-journey.spec.ts` e2e (failed before, passes
   after); e2e 88/88. Filed **CLIENT-SESSION-33**: `react-focus-scope` has the same split-copy duplication.
 
-### Reference Data — Language / Country / Region + client i18n (designed, not implemented, 2026-09-25)
+### Reference Data — Language / Country / Region + client i18n (designed 2026-09-25; **REF-1 implemented**)
+- **REF-1 DONE (2026-09-25):** `reference` module (`languages`/`countries`/`regions`, V072 + V073 seed: `en`+`vi`, **Vietnam only** country, 63 Vietnam regions) + public `GET /api/reference/{languages,countries,countries/{id}/regions}`; a nullable per-country **default language** (`countries.default_language_code`, Vietnam → `vi`, V074; browser language list still wins, REF-2/CLIENT-REF-1 apply it); 21 Spock + `ReferenceApiIntegrationTest` (14), `:server:test` 317 green, verified on real Postgres. Countries narrowed to Vietnam at pickup → **REF-4** seeds the rest. Summary: `modules/reference/docs/MVP/REF-1_REFERENCE_MODULE_TABLES_SEEDS_AND_PUBLIC_READS.md`
 - Design + decision record + every declined alternative: `documentation/md/REFERENCE_DATA_DESIGN.md` ("zone" = region/state/province, **not** a timezone)
-- New `reference` domain: `languages` / `countries` (~250) / `regions` (**Vietnam only** — deliberate, see design § 8) + public `GET /api/reference/**`
+- New `reference` domain: `languages` / `countries` (**Vietnam only for now** — REF-4 seeds the rest) / `regions` (**Vietnam only** — deliberate, see design § 8) + public `GET /api/reference/**`
 - `POST /api/reference/resolve`: client sends `navigator.languages` + browser timezone (+ coordinates only after an explicit "Use my current location" click); server matches
   to rows — coordinates (offline JTS point-in-polygon, Natural Earth) > timezone > locale subtag. **No IP geolocation.** Sign-up coordinates are saved to `User.location`
 - Users/venues link by id: `users.country_id`/`region_id` (free-text `country` write dropped), `locations.country_id`/`region_id` (nullable, auto-derived, backfilled)
 - Client i18n (`react-i18next`, `en` + `vi`); `Accept-Language` follows the in-app locale; only sign-up + profile-edit translated first
-- Tickets filed: `reference` **REF-1..3**, `user` **U16**, `location` **LOC-5**, `sport` **A24**, client **CLIENT-I18N-1** (supersedes V1 `I18N-1`), **CLIENT-REF-1..3**, **CLIENT-I18N-2**
+- Tickets filed: `reference` **REF-1..4**, `user` **U16**, `location` **LOC-5**, `sport` **A24**, client **CLIENT-I18N-1** (supersedes V1 `I18N-1`), **CLIENT-REF-1..3**, **CLIENT-I18N-2**
 
 ### Partner Finding System (designed, not implemented)
 - `partner_requests` table: sport, skill level, location, preferred dates/times, status

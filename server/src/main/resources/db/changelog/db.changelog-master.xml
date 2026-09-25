@@ -198,4 +198,12 @@
          predicate swap from group_id IS NULL to is_public = true. -->
     <include file="db/changelog/changes/V071__add_is_public_to_sessions_and_swap_standalone_index.sql" relativeToChangelogFile="false"/>
 
+    <!-- REF-1: the reference domain (languages / countries / regions) — DDL, then seed data in its own
+         changelog so ReferenceApiIntegrationTest can run exactly the seed file against H2. -->
+    <include file="db/changelog/changes/V072__create_reference_tables.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V073__seed_reference_data.sql" relativeToChangelogFile="false"/>
+    <!-- REF-1 scope change 2: countries.default_language_code (+ Vietnam -> vi). A separate changelog because
+         V072/V073 were already applied locally. -->
+    <include file="db/changelog/changes/V074__add_default_language_to_countries.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

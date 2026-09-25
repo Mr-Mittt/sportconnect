@@ -39,7 +39,7 @@ field (`UserPreference.timezone`, `Location.timezone`, `client/src/shared/lib/vi
 | Zone | Region/state/province, child of Country |
 | Which `Location` | The **venue** `Location` entity (`location-impl`), not the user's own point |
 | "Server knows it" | Client sends raw detected values to a public resolve endpoint; the server **matches them to rows**. No IP geolocation |
-| Seed coverage | All ~250 countries; regions for **Vietnam only**; languages `en` + `vi` |
+| Seed coverage | ~~All ~250 countries~~ → **countries: Vietnam only (2026-09-25, REF-1 pickup; the rest is REF-4)**; regions for **Vietnam only**; languages `en` + `vi` |
 | Coordinates → country/region | Bundled Natural Earth polygons, JTS in memory, lazy-loaded |
 | Geolocation UX | Silent detection first; explicit **"Use my current location"** button; coordinates **saved to `User.location`** |
 | Venue links | Nullable `countryId`/`regionId`, auto-derived on create, existing rows backfilled once, never blocks creation |
@@ -53,11 +53,20 @@ references are IDs only — CLAUDE.md).
 
 ```
 languages(id, code UNIQUE /* BCP 47: en, vi */, name, native_name, is_active, sort_order)
-countries(id, iso2 UNIQUE, iso3 UNIQUE, name /* English */, is_active)
+countries(id, iso2 UNIQUE, iso3 UNIQUE, name /* English */, is_active,
+          default_language_code FK→languages(code) NULL /* V074 */)
 regions  (id, country_id FK→countries, iso_code UNIQUE /* ISO 3166-2, e.g. VN-SG */,
           name, native_name, is_active)
 ```
 
+- **Default language per country (added 2026-09-25, REF-1 scope change 2, migration V074):** a nullable
+  `countries.default_language_code` (intra-domain FK to `languages.code`; Vietnam → `vi`). One default per country is
+  enough while only `en` + `vi` exist; a `country_languages` join table (several languages per country, with an
+  `is_default` flag) is the upgrade path for multilingual countries and can be added without breaking the API. Rejected:
+  a hardcoded country → language map in the client (drifts from the data), and deriving it in the browser with
+  `Intl.Locale.maximize()` (can yield languages the app does not support and splits the logic across client and server).
+  **Priority:** explicit user choice > a supported language from `navigator.languages` > the country default > none;
+  a hand-picked country fills Language from the default only while Language is empty.
 - Country names are localized **client-side** with `Intl.DisplayNames` (no per-language country data to seed
   or maintain). Regions have no such browser API, hence `native_name`.
 - Language is keyed by BCP 47 **code**, matching A13's attribute-label locales — two locale-code schemes side by
@@ -161,6 +170,13 @@ Natural Earth release ships, and refresh via the follow-up ticket (**REF-3**).
 3. Extend the resolver spec: every seeded region code has a polygon; a known coordinate resolves to the expected region.
 4. Add native-name display checks on the client if the language differs.
 5. No client or API change is needed — the dropdown is data-driven.
+
+**Delta (2026-09-25, at REF-1 pickup, user decision):** the *countries* seed is narrowed to **Vietnam only** as well —
+"the rest is later" (**REF-4** seeds the remaining ISO 3166-1 countries; data-only, no schema/API/client change). The
+schema, the `requireValidSelection` rules and the resolver contract are unchanged. Effects: the country dropdown lists
+Vietnam only until REF-4; a detected country with no seeded row resolves to `null` (REF-2); the U16 legacy-text backfill
+matches Vietnam only and other users keep the legacy text. The first paragraph above ("all ~250 countries are seeded")
+is the original decision, kept for the record.
 
 ## 9. Client localization (i18n)
 
