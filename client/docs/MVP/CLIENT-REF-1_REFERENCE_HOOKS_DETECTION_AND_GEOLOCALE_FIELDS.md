@@ -53,3 +53,26 @@ delivered with the integrations (CLIENT-REF-2/3); this ticket adds no page, so n
 
 **Out of scope:** embedding it in any form (CLIENT-REF-2/3); translating strings beyond what the component itself
 renders (its own labels go through CLIENT-I18N-1's `t()`); IP geolocation; saving anything.
+
+## Delta — backend REF-2 shipped (2026-09-25)
+
+The contract this ticket is blocked on now exists (`POST /api/reference/resolve`, public). Verified against the running backend,
+not just the design doc:
+
+- **Request:** `{ locales?: string[] (≤10, each ≤35 chars), timeZoneId?: string (≤64), latitude?, longitude? }`; send latitude and
+  longitude **together or not at all** (else `400`). Range: lat ±90, lon ±180.
+- **Response** (inside the usual `ApiResponse` `data`): `{ language: {code,name,nativeName}|null, country: {id,iso2,iso3,name,defaultLanguageCode}|null,
+  region: {id,countryId,isoCode,name,nativeName}|null, source: "COORDINATES"|"TIMEZONE"|"LOCALE"|null }` — the same shapes as the three `GET`
+  DTOs. Every part nullable; an unresolved request is a `200` with all-null. `source` is `null` exactly when `country` is.
+  **`source` is a new mirrored union — add it to the client types (`'COORDINATES' | 'TIMEZONE' | 'LOCALE'`).**
+- **Default language is already applied by the server inside `resolve`:** `language` comes from the first supported locale, and when none
+  matches it falls back to the resolved country's `defaultLanguageCode` (only if that language is active). So the silent resolve needs no
+  client-side default-language step. The client still applies `defaultLanguageCode` itself for the *hand-picked-country* case (no resolve
+  call is made when the user picks a country) — exactly as this ticket already specifies.
+- **`region` is only ever set when coordinates won the country**, so a silent (locales + timezone) resolve never returns one.
+- **Only Vietnam is a seeded country today (REF-4 seeds the rest):** a Paris coordinate or an `en-US`-only browser resolves to an all-null
+  `200`. Design the pre-fill and the MSW fixtures for "country null" as the common non-Vietnam outcome, not an edge.
+- **Timezone caveat:** merged IANA zones (`Asia/Tokyo`, `Europe/Paris`, `Asia/Bangkok`) deliberately resolve to no country; `Asia/Saigon` and
+  `Asia/Ho_Chi_Minh` both resolve to VN. Expect the locale subtag to do the work for those users.
+- **A `400` body is not for display:** validation errors carry field keys such as `data.coordinatePairComplete`. Map any `400` from resolve to a
+  generic non-blocking hint (or ignore it — the fields are optional); never render the field names.

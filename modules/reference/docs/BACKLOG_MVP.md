@@ -1,8 +1,8 @@
 # Reference Module — Feature Backlog
 
 **Version:** MVP v1
-**Module:** `modules/reference` (`reference-api` / `reference-impl` — not yet created; REF-1 creates it)
-**Last updated:** 2026-09-25 (backlog created; REF-1, REF-2, REF-3 filed; REF-4 filed at REF-1 pickup — countries seed narrowed to Vietnam; REF-1 DONE)
+**Module:** `modules/reference` (`reference-api` / `reference-impl`)
+**Last updated:** 2026-09-25 (backlog created; REF-1, REF-2, REF-3 filed; REF-4 filed at REF-1 pickup — countries seed narrowed to Vietnam; REF-1 DONE; REF-2 DONE — `countries.tsv` ships all countries, so REF-4 is rows only)
 
 ---
 
@@ -35,9 +35,8 @@ each names its REF prerequisite:
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [REF-2](MVP/REF-2_BOUNDARY_RESOLVER_AND_RESOLVE_ENDPOINT.md) | Offline boundary resolver (JTS) + public `POST /api/reference/resolve` (coordinates > timezone > locale) | `TODO` |
-| 2 | [REF-3](MVP/REF-3_VIETNAM_PROVINCE_DATA_REFRESH.md) | Refresh Vietnam's regions and boundaries to the current province list (63 → 34 merger) | `TODO` |
-| 3 | [REF-4](MVP/REF-4_SEED_REMAINING_COUNTRIES.md) | Seed the remaining ISO 3166-1 countries (REF-1 seeds Vietnam only) | `TODO` |
+| 1 | [REF-3](MVP/REF-3_VIETNAM_PROVINCE_DATA_REFRESH.md) | Refresh Vietnam's regions and boundaries to the current province list (63 → 34 merger) | `TODO` |
+| 2 | [REF-4](MVP/REF-4_SEED_REMAINING_COUNTRIES.md) | Seed the remaining ISO 3166-1 countries (REF-1 seeds Vietnam only; polygons already ship, rows only) | `TODO` |
 
 ---
 
@@ -45,4 +44,5 @@ each names its REF prerequisite:
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [REF-1](MVP/REF-1_REFERENCE_MODULE_TABLES_SEEDS_AND_PUBLIC_READS.md) | New `reference` module — `languages`/`countries`/`regions` tables, seeds (Vietnam country + regions, `en`+`vi`), public read endpoints, security config | `DONE` (2026-09-25) |
+| 1 | [REF-2](MVP/REF-2_BOUNDARY_RESOLVER_AND_RESOLVE_ENDPOINT.md) | Offline boundary resolver (JTS) + public `POST /api/reference/resolve` (coordinates > timezone > locale) | `DONE` (2026-09-25) |
+| 2 | [REF-1](MVP/REF-1_REFERENCE_MODULE_TABLES_SEEDS_AND_PUBLIC_READS.md) | New `reference` module — `languages`/`countries`/`regions` tables, seeds (Vietnam country + regions, `en`+`vi`), public read endpoints, security config | `DONE` (2026-09-25) |
