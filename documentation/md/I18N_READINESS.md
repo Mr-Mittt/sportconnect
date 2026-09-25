@@ -53,7 +53,7 @@ strings without deliberate work:
 
 ### I18N-1 · No app-wide i18n exists — this file's own reason to exist
 **Date added:** 2026-08-24
-**Status:** `CANDIDATE`
+**Status:** `CONFIRMED` (2026-09-25 — scoped as client **CLIENT-I18N-1**, which supersedes the old V1 `I18N-1` placeholder ticket; design in `documentation/md/REFERENCE_DATA_DESIGN.md` § 9)
 **Source:** `documentation/md/ARCHITECTURE_PROPOSAL.md`'s unanswered "Multi-language Support" question, surfaced while scoping A13
 
 Nothing is built or designed. Whoever picks this up first needs to answer, at minimum: which
@@ -62,7 +62,7 @@ whether it's a v1-MVP requirement or a later phase.
 
 ### I18N-2 · The UI's chosen locale must drive `Accept-Language` on attribute-schema requests
 **Date added:** 2026-08-24
-**Status:** `CANDIDATE`
+**Status:** `CONFIRMED` (2026-09-25 — built by **CLIENT-I18N-1**: an `apiClient` interceptor sends `Accept-Language` from the in-app locale, and locale-dependent query keys include it)
 **Source:** A13 (`modules/sport/sport-impl/docs/MVP/A13_LOCALIZED_ATTRIBUTE_SCHEMA_LABELS.md`)
 
 Whatever mechanism app-wide i18n uses to pick the in-app language (URL locale prefix, cookie,
@@ -79,7 +79,7 @@ response.
 
 ### I18N-3 · `User.preferredLocale` doesn't exist yet — building it here should also wire it into A13
 **Date added:** 2026-08-24
-**Status:** `CANDIDATE`
+**Status:** `CONFIRMED` (2026-09-25 — backend **A24**, `modules/sport/sport-impl`. Correction to the entry below: the stored language is the **existing** `UserPreference.language` column, validated against the new `languages` table by **U16**, not a new `User.preferredLocale` field. Only an *explicitly stored* language should override `Accept-Language`; the auto-created default `"en"` must not.)
 **Source:** A13 design doc §7.5
 
 A13 explicitly deferred a persisted per-user locale preference. If app-wide i18n adds a locale
@@ -108,7 +108,7 @@ scoped, not decided here:
 
 ### I18N-5 · Client-mirrored backend enums are also translatable surface
 **Date added:** 2026-08-24
-**Status:** `CANDIDATE`
+**Status:** `CANDIDATE` (2026-09-25 — sized into client **CLIENT-I18N-2**, item 4; still unbuilt)
 **Source:** the `/workon` skill's "client-visible enum or event type check" — the client hand-mirrors
 ~15 backend enums into display text (e.g. `getNotificationText`, post/comment type rendering)
 
@@ -120,10 +120,39 @@ partway through.
 
 ### I18N-6 · Library choice is constrained by the actual client stack
 **Date added:** 2026-08-24
-**Status:** `CANDIDATE`
+**Status:** `CONFIRMED` (2026-09-25 — `i18next` + `react-i18next`, per CLIENT-I18N-1)
 **Source:** `client/CLAUDE.md` (Vite + React 18 + TS, not Next.js)
 
 Some popular React i18n solutions (e.g. `next-intl`) are Next.js-specific and don't fit this stack.
 A Vite-compatible option (e.g. `react-i18next`, FormatJS/`react-intl`) is the natural fit — not a
 final decision, just a constraint to check against whatever gets proposed, per `client/CLAUDE.md`'s
 "no second styling system / test runner / icon set" spirit applied to i18n libraries too.
+
+### I18N-7 · The phased rollout leaves visible English seams by design
+**Date added:** 2026-09-25
+**Status:** `CONFIRMED`
+**Source:** `/feature` session "Language, country and zone" (`documentation/md/REFERENCE_DATA_DESIGN.md` § 9)
+
+The first pass translates only the sign-up form, `EditProfileModal` and the new geo/locale fields. Until
+**CLIENT-I18N-2** lands, a user who picks Vietnamese sees an English `LoginForm`, shell and feature pages next to
+Vietnamese sign-up copy, and server messages shown verbatim (I18N-4) stay English. This is a knowingly accepted
+seam, not a bug — do not "fix" it by widening a ticket beyond its scope.
+
+### I18N-8 · Country/region names use two mechanisms
+**Date added:** 2026-09-25
+**Status:** `CONFIRMED`
+**Source:** same session
+
+Country names are localized on the client with `Intl.DisplayNames({ type: 'region' })` from the ISO code, so no
+per-language country data is stored or translated. Regions have no such browser API, so the `regions` table carries
+`native_name` and the client shows it when the UI locale is `vi`. Adding a locale beyond `en`/`vi` therefore needs
+region names for that locale (a column or a translations table) in addition to a bundle and a `languages` row.
+
+### I18N-9 · Tests stay pinned to English
+**Date added:** 2026-09-25
+**Status:** `CONFIRMED`
+**Source:** CLIENT-I18N-1 (answers V1 `I18N-1` question 5)
+
+Vitest/RTL assertions match many literal English strings. The test setup initialises i18n with `en` so existing tests keep
+passing; new tests that exercise Vietnamese select it explicitly and prefer roles/labels over raw text. A small "no missing
+keys between `en` and `vi`" test guards bundle drift.

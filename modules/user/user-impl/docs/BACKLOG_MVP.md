@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/user/user-impl`  
-**Last updated:** 2026-09-04 (U15 filed)
+**Last updated:** 2026-09-25 (U16 filed)
 
 ---
 
@@ -19,7 +19,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| — | — | _(none — all MVP tickets done)_ | — |
+| 1 | [U16](MVP/U16_USER_COUNTRY_REGION_LANGUAGE_LINKS.md) | Link users to Country / Region / Language — `users.country_id`/`region_id`, profile update (drops free-text `country`), validated `UserPreference.language`, optional sign-up details (`RegisterRequest` → `createUser` overload, saves coordinates to `User.location`). Needs REF-1 (`reference` backlog). Part of `documentation/md/REFERENCE_DATA_DESIGN.md` | `TODO` |
 
 ---
 

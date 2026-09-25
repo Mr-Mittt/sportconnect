@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/location/location-impl`
-**Last updated:** 2026-09-16
+**Last updated:** 2026-09-25 (LOC-5 filed)
 
 ---
 
@@ -19,6 +19,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 1 | [LOC-5](MVP/LOC-5_VENUE_COUNTRY_REGION_LINKS.md) | Venue `Location` gains nullable `country_id`/`region_id`, auto-derived from coordinates on create (never rejects) + idempotent one-time backfill runner; new `location-impl` → `reference-api` edge. Needs REF-1 + REF-2 (`reference` backlog). Part of `documentation/md/REFERENCE_DATA_DESIGN.md` | `TODO` |
 
 ---
 
