@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-09-24
+**Last updated:** 2026-09-25
 
 ---
 
@@ -74,6 +74,11 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 4 | [GRP-11](MVP/GRP-11_GROUP_COVER_BANNER_PENDING_SELECTION_PLACEHOLDER.md) | `GroupCoverBanner` shows a placeholder instead of the discovery panel while a cross-page-navigated group selection is still loading — found alongside `PROFILE-12` | `TODO` |
 | 5 | [CLIENT-SESSION-18](MVP/CLIENT-SESSION-18_REF_OTHER_MODAL_SUGGESTED_RESULTS.md) | Suggested-results typeahead inside the `CLIENT-SESSION-17` `#ref` "Other…" add-modal — debounced backend search over an aggregated value pool, shared with `SPORT-6`. **Hard-blocked on backend `A14`** (postponed) — same block as `SPORT-6`, sequence together. Split out of the CLIENT-SESSION-17 pickup (user decision 2026-09-08). | `TODO` |
 | 6 | [CLIENT-SESSION-33](MVP/CLIENT-SESSION-33_DEDUPE_RADIX_FOCUS_SCOPE_COPIES.md) | Two installed copies of `@radix-ui/react-focus-scope` (Dialog/Menu on 1.1.12, Popover on 1.1.16) — same split-copy duplication that caused CLIENT-SESSION-27's Escape bug for `dismissable-layer`; add a `pnpm.overrides` entry, re-run the popover-focus e2e, then re-evaluate whether the CLIENT-SESSION-29 portal workaround is still needed — found while root-causing CLIENT-SESSION-27, deliberately not folded into it | `TODO` |
+| 7 | [CLIENT-I18N-1](MVP/CLIENT-I18N-1_I18N_INFRASTRUCTURE_AND_LOCALE_STORE.md) | i18n infrastructure — `react-i18next`, `en`+`vi` bundles, `localeStore`, `Accept-Language` follows the in-app locale, locale-keyed queries. **Supersedes V1 `I18N-1`**. Part of `documentation/md/REFERENCE_DATA_DESIGN.md` | `TODO` |
+| 8 | [CLIENT-REF-1](MVP/CLIENT-REF-1_REFERENCE_HOOKS_DETECTION_AND_GEOLOCALE_FIELDS.md) | Reference hooks (`useLanguages`/`useCountries`/`useRegions`/`useResolveGeo`), browser detection (never auto-prompts), `GeoLocaleFields` component + MSW handlers. **Hard-blocked on backend REF-1 + REF-2** (`reference` backlog) | `TODO` |
+| 9 | [CLIENT-REF-2](MVP/CLIENT-REF-2_SIGNUP_LANGUAGE_COUNTRY_REGION.md) | Sign-up: optional Language/Country/Region pre-filled by detection, "Use my current location" button, translated sign-up strings. **Hard-blocked on backend U16** (`user` backlog) | `TODO` |
+| 10 | [CLIENT-REF-3](MVP/CLIENT-REF-3_PROFILE_EDIT_LANGUAGE_COUNTRY_REGION.md) | Profile edit: `GeoLocaleFields` replaces the free-text Country input (ids + language via preferences), translated. **Hard-blocked on backend U16** | `TODO` |
+| 11 | [CLIENT-I18N-2](MVP/CLIENT-I18N-2_TRANSLATE_THE_REST_OF_THE_APP.md) | Translate the rest of the app incrementally (Login first, then shell, features, client-mirrored enums) — expect to split per feature at pickup | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against

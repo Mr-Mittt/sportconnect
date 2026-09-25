@@ -22,7 +22,7 @@ that filed an entry here, before picking anything up.
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | ANON-1 | Decide and scope anonymous/logged-out post viewing | `TODO` |
-| 2 | I18N-1 | Introduce i18n / multi-language UI text support | `TODO` |
+| 2 | I18N-1 | Introduce i18n / multi-language UI text support — **superseded 2026-09-25 by MVP ticket [CLIENT-I18N-1](MVP/CLIENT-I18N-1_I18N_INFRASTRUCTURE_AND_LOCALE_STORE.md)**, which answers this ticket's six open questions | `SUPERSEDED` |
 | 3 | ADMIN-3 | Replace the attribute-schema textarea with a real JSON editor — **deferred out of MVP 2026-08-21** mid-pickup; the tree-vs-text product question outranks the dependency choice | `TODO` |
 
 **Chat (CHAT-2, CHAT-4) archived 2026-07-26** (user decision) — moved to
@@ -98,7 +98,9 @@ Not applicable yet — write these when the ticket is actually scoped into an im
 ---
 
 ### I18N-1 · Introduce i18n / multi-language UI text support
-**Status:** `TODO` · **Type:** Infrastructure (Foundation) · **Filed:** 2026-07-21, raised during
+**Status:** `SUPERSEDED` (2026-09-25) by **CLIENT-I18N-1** in `client/docs/BACKLOG_MVP.md` — scoped during the `/feature` session "Language, country and zone" (`documentation/md/REFERENCE_DATA_DESIGN.md` § 9); its six questions are answered inline in `client/docs/MVP/CLIENT-I18N-1_I18N_INFRASTRUCTURE_AND_LOCALE_STORE.md`. Kept for history; do not pick this up.
+
+(original status: `TODO`) · **Type:** Infrastructure (Foundation) · **Filed:** 2026-07-21, raised during
 GRP-2 scoping then deliberately deferred out of it — GRP-2 is scoped narrowly (Settings tab data
 set), and app-wide i18n is a cross-cutting foundation change, not a per-tab feature.
 

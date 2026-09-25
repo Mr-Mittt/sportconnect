@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/sport/sport-impl`  
-**Last updated:** 2026-09-08 (A23 done — attribute framework repointed onto `common.attributes`; A14 is the only open ticket, postponed)  
+**Last updated:** 2026-09-25 (A24 filed) — previously 2026-09-08 (A23 done — attribute framework repointed onto `common.attributes`; A14 is the only open ticket, postponed)  
 
 ---
 
@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [A14](MVP/A14_ATTRIBUTE_VALUE_SUGGESTIONS_AND_SEARCH_SCOPE.md) | Attribute-value suggestions + `searchScope` — typeahead pooled from what users already typed, so free text converges *before* an Equipment catalogue exists; results carry an optional `id` from day one so the client never changes when it does. **Postponed at 2026-08-25 pickup** — the aggregation strategy needs more design investigation before implementation (see the ticket's own Investigation notes) | `TODO` |
+| 2 | [A24](MVP/A24_ATTRIBUTE_LABEL_LOCALE_PREFERS_STORED_LANGUAGE.md) | Attribute-label locale prefers the caller's explicitly stored language over `Accept-Language` (I18N_READINESS I18N-3). Needs U16 (`user` backlog) and client CLIENT-I18N-1. Part of `documentation/md/REFERENCE_DATA_DESIGN.md` | `TODO` |
 
 ---
 
