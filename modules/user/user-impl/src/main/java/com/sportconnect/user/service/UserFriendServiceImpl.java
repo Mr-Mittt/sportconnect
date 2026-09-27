@@ -5,8 +5,7 @@ import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.NotFoundException;
 import com.sportconnect.user.api.dto.FriendRequestResponse;
 import com.sportconnect.user.api.dto.FriendRequestStatus;
-import com.sportconnect.user.api.dto.LocationResponse;
-import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.dto.UserInfoResponse;
 import com.sportconnect.user.api.event.FriendRequestAcceptedEvent;
 import com.sportconnect.user.api.event.FriendRequestCreatedEvent;
 import com.sportconnect.user.api.service.UserFriendService;
@@ -274,7 +273,7 @@ public class UserFriendServiceImpl implements UserFriendService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<UserResponse> getFriends(UUID userId) {
+    public List<UserInfoResponse> getFriends(UUID userId) {
         List<UUID> friendIds = friendshipRepository.findByUserId(userId)
                 .stream()
                 .map(Friendship::getFriendId)
@@ -283,7 +282,7 @@ public class UserFriendServiceImpl implements UserFriendService {
         return userRepository.findAllById(friendIds)
                 .stream()
                 .filter(u -> Boolean.TRUE.equals(u.getIsActive()))
-                .map(this::toUserResponse)
+                .map(this::toUserInfoResponse)
                 .collect(Collectors.toList());
     }
 
@@ -353,24 +352,15 @@ public class UserFriendServiceImpl implements UserFriendService {
                 .build();
     }
 
-    private UserResponse toUserResponse(User user) {
-        Set<String> roles = user.getRoles().stream()
-                .map(r -> r.getName())
-                .collect(Collectors.toSet());
-
-        return UserResponse.builder()
+    private UserInfoResponse toUserInfoResponse(User user) {
+        return UserInfoResponse.builder()
                 .id(user.getId())
-                .email(user.getEmail())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
+                .fullName(user.getFullName())
                 .username(user.getUsername())
                 .avatarUrl(user.getAvatarUrl())
+                .coverUrl(user.getCoverUrl())
                 .bio(user.getBio())
-                .location(user.getLocation() != null
-                        ? LocationResponse.of(user.getLocation().getY(), user.getLocation().getX()) : null)
-                .isActive(user.getIsActive())
-                .roles(roles)
-                .createdAt(user.getCreatedAt())
+                .activeSportIds(List.of())
                 .build();
     }
 }

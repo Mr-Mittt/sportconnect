@@ -4,7 +4,7 @@ import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.common.auth.SecurityUtils;
 import com.sportconnect.user.api.dto.FriendRequestResponse;
 import com.sportconnect.user.api.dto.SendFriendRequestRequest;
-import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.dto.UserInfoResponse;
 import com.sportconnect.user.api.service.UserFriendService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -118,16 +118,16 @@ public class UserFriendController {
         return ResponseEntity.ok(ApiResponse.success("Friend removed", null));
     }
 
-    @Operation(summary = "List the caller's friends")
+    @Operation(summary = "List the caller's friends", description = "PII-free (U17) — the same UserInfoResponse shape every non-owner user lookup returns; no email or precise location.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Friends (possibly empty)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getFriends(Authentication authentication) {
+    public ResponseEntity<ApiResponse<List<UserInfoResponse>>> getFriends(Authentication authentication) {
         UUID userId = SecurityUtils.extractUserId(authentication);
-        List<UserResponse> friends = userFriendService.getFriends(userId);
+        List<UserInfoResponse> friends = userFriendService.getFriends(userId);
         return ResponseEntity.ok(ApiResponse.success("Friends retrieved", friends));
     }
 
