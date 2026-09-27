@@ -16,7 +16,7 @@ import com.sportconnect.social.post.api.service.PostService
 import com.sportconnect.sport.api.dto.SportResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.api.service.UserSportProfileService
-import com.sportconnect.user.api.dto.UserResponse
+import com.sportconnect.user.api.dto.UserSummaryResponse
 import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.api.service.UserService
 import org.springframework.data.domain.PageImpl
@@ -85,7 +85,7 @@ class GroupServiceImplSpec extends Specification {
     GroupRole adminRole
     GroupRole memberRole
     GroupType defaultGroupType
-    UserResponse testUser
+    UserSummaryResponse testUser
 
     def setup() {
         // Default every test's group to active — isGroupOwner/isGroupAdmin/isGroupMember (B18) all
@@ -93,11 +93,9 @@ class GroupServiceImplSpec extends Specification {
         // with a more specific stub, which Spock resolves in declaration order (last wins).
         groupRepository.existsByIdAndIsActiveTrue(_) >> true
 
-        testUser = UserResponse.builder()
+        testUser = UserSummaryResponse.builder()
                 .id(userId)
-                .email("test@example.com")
-                .firstName("Test")
-                .lastName("User")
+                .fullName("Test User")
                 .build()
 
         testGroup = Group.builder()
@@ -158,7 +156,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.save(_ as GroupMember) >> new GroupMember()
         1 * groupTypeRepository.findByTypeName("DEFAULT") >> Optional.of(defaultGroupType)
         1 * groupSettingsRepository.save({ GroupSettings s -> s.groupTypeId == defaultGroupType.id }) >> new GroupSettings()
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >>
                 Optional.of(GroupMember.builder().roleId(ownerRole.id).build())
@@ -245,7 +243,7 @@ class GroupServiceImplSpec extends Specification {
 
         then: "group is retrieved with pinned posts"
         1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 5L
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >>
                 Optional.of(GroupMember.builder().roleId(memberRole.id).build())
@@ -288,7 +286,7 @@ class GroupServiceImplSpec extends Specification {
 
         and: "exception is thrown before any response data is built"
         thrown(BadRequestException)
-        0 * userService.getUsersByIds(_)
+        0 * userService.getUserSummariesByIds(_)
         0 * pinnedPostRepository.findTop3ByGroupIdOrderByPinnedAtDesc(_)
     }
 
@@ -324,7 +322,7 @@ class GroupServiceImplSpec extends Specification {
         then: "membership is confirmed and full details are returned"
         1 * groupRepository.findByIdAndIsActiveTrue(privateGroup.id) >> Optional.of(privateGroup)
         1 * groupMemberRepository.existsByGroupIdAndUserId(privateGroup.id, userId) >> true
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
         1 * groupMemberRepository.countByGroupId(privateGroup.id) >> 5L
         1 * groupMemberRepository.findByGroupIdAndUserId(privateGroup.id, userId) >>
                 Optional.of(GroupMember.builder().roleId(memberRole.id).build())
@@ -344,7 +342,7 @@ class GroupServiceImplSpec extends Specification {
         then: "no membership check is performed and full details are returned"
         1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
         0 * groupMemberRepository.existsByGroupIdAndUserId(_, _)
-        1 * userService.getUsersByIds(_) >> [(otherUserId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(otherUserId): testUser]
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 5L
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
         1 * pinnedPostRepository.findTop3ByGroupIdOrderByPinnedAtDesc(testGroup.id) >> []
@@ -377,7 +375,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
         1 * groupRepository.save(_ as Group) >> testGroup
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
 
@@ -434,7 +432,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
         1 * groupRepository.save(_ as Group) >> testGroup
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
 
@@ -464,7 +462,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
         1 * groupRepository.save({ Group g -> g.isPrivate == true }) >> testGroup
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
     }
@@ -599,7 +597,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         1 * joinRequestRepository.save(_ as GroupJoinRequest) >> savedRequest
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
-        _ * userService.getUsersByIds(_) >> [(userId): testUser]
+        _ * userService.getUserSummariesByIds(_) >> [(userId): testUser]
 
         and: "response is correct"
         response != null
@@ -687,8 +685,8 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.save({ it.status == "accepted" })
         1 * joinRequestRepository.save({ it.status == "accepted" && it.reviewedBy == approverId }) >> savedJoinRequest
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
-        1 * userService.getUsersByIds([userId, otherUserId]) >> [(userId): testUser, (otherUserId): testUser]
-        1 * userService.getUsersByIds([userId, approverId]) >> [(userId): testUser, (approverId): testUser]
+        1 * userService.getUserSummariesByIds([userId, otherUserId]) >> [(userId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds([userId, approverId]) >> [(userId): testUser, (approverId): testUser]
 
         and: "no ordinary pending join request is ever created"
         0 * joinRequestRepository.existsByGroupIdAndUserIdAndStatus(_, _, _)
@@ -738,7 +736,7 @@ class GroupServiceImplSpec extends Specification {
         1 * joinRequestRepository.save({ GroupJoinRequest req -> req.status == "accepted" })
 
         and: "welcome post is created, authored by the owner"
-        1 * userService.getUsersByIds([otherUserId]) >> [(otherUserId): testUser]
+        1 * userService.getUserSummariesByIds([otherUserId]) >> [(otherUserId): testUser]
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
         1 * postService.createSystemPost(testGroup.id, userId, _ as String)
     }
@@ -1147,7 +1145,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.findByUserIdAndGroupIsActiveTrue(userId, pageable) >> memberships
         // page-level batching: one findGroupsWithMemberCounts call, one getUsersByIds call, one findAllById call
         1 * groupRepository.findGroupsWithMemberCounts([testGroup.id]) >> [[testGroup, 1L] as Object[]]
-        1 * userService.getUsersByIds([userId]) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds([userId]) >> [(userId): testUser]
         1 * groupRoleRepository.findAllById([memberRole.id]) >> [memberRole]
 
         and: "result contains groups"
@@ -1522,7 +1520,7 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         1 * groupRepository.save({ Group g -> g.rules == "Be respectful" && g.schedule == "Weekends only" }) >> testGroup
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         _ * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
     }
@@ -1635,7 +1633,7 @@ class GroupServiceImplSpec extends Specification {
         then: "anonymous query is used"
         1 * groupRepository.searchPublicGroupsAnon(null, null, pageable) >> rawPage
         0 * groupRepository.searchPublicGroupsWithCounts(_, _, _, _)
-        1 * userService.getUsersByIds({ it.contains(userId) }) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds({ it.contains(userId) }) >> [(userId): testUser]
 
         and: "results are returned with isMember false"
         result != null
@@ -1654,7 +1652,7 @@ class GroupServiceImplSpec extends Specification {
 
         then: "anonymous query is called with sportId"
         1 * groupRepository.searchPublicGroupsAnon([1L], null, pageable) >> rawPage
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
 
         and: "results are returned with correct sportId"
         result != null
@@ -1678,7 +1676,7 @@ class GroupServiceImplSpec extends Specification {
 
         then: "anonymous query is called with keyword"
         1 * groupRepository.searchPublicGroupsAnon(null, "warrior", pageable) >> rawPage
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
 
         and: "matching group is returned"
         result.totalElements == 1
@@ -1696,7 +1694,7 @@ class GroupServiceImplSpec extends Specification {
 
         then: "anonymous query is called with both filters"
         1 * groupRepository.searchPublicGroupsAnon([1L], "test", pageable) >> rawPage
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
 
         and: "result is returned"
         result.totalElements == 1
@@ -1714,7 +1712,7 @@ class GroupServiceImplSpec extends Specification {
         then: "authenticated query is called with userId"
         1 * groupRepository.searchPublicGroupsWithCounts(userId, null, null, pageable) >> rawPage
         0 * groupRepository.searchPublicGroupsAnon(_, _, _)
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
 
         and: "isMember is true"
         result.content[0].isMember == true
@@ -1741,7 +1739,7 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * groupRepository.searchPublicGroupsWithCounts(userId, null, null, pageable) >> rawPage
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
 
         and: "Alpha (member) appears before Beta (non-member)"
         result.content[0].groupName == "Alpha Group"
@@ -1760,7 +1758,7 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * groupRepository.searchPublicGroupsAnon(null, "xyznonexistent", pageable) >> rawPage
-        0 * userService.getUsersByIds(_)
+        0 * userService.getUserSummariesByIds(_)
 
         and: "empty page is returned"
         result.totalElements == 0
@@ -1779,7 +1777,7 @@ class GroupServiceImplSpec extends Specification {
 
         then: "anonymous query is called with the sportIds list"
         1 * groupRepository.searchPublicGroupsAnon([1L, 2L], null, pageable) >> rawPage
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
 
         and: "results are returned"
         result.totalElements == 1
@@ -1795,7 +1793,7 @@ class GroupServiceImplSpec extends Specification {
 
         then: "the anonymous query receives no sport filter, same as omitting both params"
         1 * groupRepository.searchPublicGroupsAnon(null, null, pageable) >> rawPage
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
 
         and: "results are returned"
         result.totalElements == 1
@@ -1811,7 +1809,7 @@ class GroupServiceImplSpec extends Specification {
 
         then: "the legacy sportId is used, wrapped as a single-element list"
         1 * groupRepository.searchPublicGroupsAnon([1L], null, pageable) >> rawPage
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
 
         and: "results are returned"
         result.totalElements == 1
@@ -1827,7 +1825,7 @@ class GroupServiceImplSpec extends Specification {
 
         then: "sportIds wins — the legacy sportId is ignored, not combined/ORed"
         1 * groupRepository.searchPublicGroupsAnon([1L, 2L], null, pageable) >> rawPage
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
 
         and: "results are returned"
         result.totalElements == 1
@@ -2219,7 +2217,7 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.save(_ as GroupInvitation) >> savedInvitation
         1 * invitationInviterRepository.save(_)
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (inviteeId): testUser]
         response.status == "pending_owner"
         response.groupId == testGroup.id
         response.sportId == testGroup.sportId
@@ -2337,7 +2335,7 @@ class GroupServiceImplSpec extends Specification {
         0 * invitationInviterRepository.save(_)
         0 * invitationRepository.save(_)
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (otherUserId): testUser]
         response.id == 99L
     }
 
@@ -2349,7 +2347,7 @@ class GroupServiceImplSpec extends Specification {
                 .id(99L).groupId(testGroup.id).inviterId(userId).inviteeId(otherUserId)
                 .status("pending_owner").createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
         def memberBId = UUID.randomUUID()
-        def otherTestUser = UserResponse.builder().id(memberBId).firstName("Other").lastName("Member").build()
+        def otherTestUser = UserSummaryResponse.builder().id(memberBId).fullName("Other Member").build()
 
         when:
         def response = groupService.createInvitation(testGroup.id, memberBId, request)
@@ -2376,7 +2374,7 @@ class GroupServiceImplSpec extends Specification {
                 GroupInvitationInviter.builder().invitationId(99L).inviterId(userId).createdAt(LocalDateTime.now().minusMinutes(5)).build(),
                 GroupInvitationInviter.builder().invitationId(99L).inviterId(memberBId).createdAt(LocalDateTime.now()).build(),
         ]
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser, (memberBId): otherTestUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (otherUserId): testUser, (memberBId): otherTestUser]
         response.status == "pending_owner"
         response.inviterFullNames == [testUser.fullName, otherTestUser.fullName]
     }
@@ -2412,7 +2410,7 @@ class GroupServiceImplSpec extends Specification {
 
         and:
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([99L]) >> []
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (otherUserId): testUser]
         response.status == "pending_user"
     }
 
@@ -2459,7 +2457,7 @@ class GroupServiceImplSpec extends Specification {
 
         and:
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([99L]) >> []
-        _ * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        _ * userService.getUserSummariesByIds(_) >> [(userId): testUser, (otherUserId): testUser]
         response.status == "accepted"
     }
 
@@ -2492,7 +2490,7 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.save(_ as GroupInvitation) >> savedInvitation
         1 * invitationInviterRepository.save({ it.invitationId == 2L && it.inviterId == userId })
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (otherUserId): testUser]
         response.status == "pending_owner"
     }
 
@@ -2525,7 +2523,7 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.save(_ as GroupInvitation) >> savedInvitation
         1 * invitationInviterRepository.save({ it.invitationId == 3L && it.inviterId == userId })
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (otherUserId): testUser]
         response.status == "pending_owner"
     }
 
@@ -2558,7 +2556,7 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.save({ it.status == "pending_user" && it.reviewedBy == userId }) >> savedInvitation
         1 * invitationInviterRepository.save(_)
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt(_) >> []
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (otherUserId): testUser]
 
         and: "no side-effect membership is created — this is still just an invitation awaiting the invitee"
         0 * groupMemberRepository.save(_)
@@ -2612,8 +2610,8 @@ class GroupServiceImplSpec extends Specification {
         1 * joinRequestRepository.save({ it.status == "accepted" && it.reviewedBy == userId })
 
         and:
-        1 * userService.getUsersByIds([otherUserId, userId]) >> [(userId): testUser, (otherUserId): testUser]
-        1 * userService.getUsersByIds([userId, otherUserId]) >> [(userId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds([otherUserId, userId]) >> [(userId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds([userId, otherUserId]) >> [(userId): testUser, (otherUserId): testUser]
         response.status == "accepted"
     }
 
@@ -2698,7 +2696,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.save({ it.userId == inviteeId && it.roleId == memberRole.id })
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
         1 * postService.createSystemPost(testGroup.id, userId, _ as String)
-        1 * userService.getUsersByIds([inviteeId, otherUserId]) >> [(inviteeId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds([inviteeId, otherUserId]) >> [(inviteeId): testUser, (otherUserId): testUser]
 
         and: "the pre-existing join request is closed out as accepted by the approving owner, not left dangling"
         1 * joinRequestRepository.save({ it.status == "accepted" && it.reviewedBy == userId })
@@ -2727,7 +2725,7 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.save({ it.status == "accepted" })
 
         and: "welcome post mentions the inviter, authored by the owner"
-        1 * userService.getUsersByIds([inviteeId, otherUserId]) >> [(inviteeId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds([inviteeId, otherUserId]) >> [(inviteeId): testUser, (otherUserId): testUser]
         1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
         1 * postService.createSystemPost(testGroup.id, userId, _ as String)
@@ -2868,7 +2866,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
         1 * invitationRepository.findByGroupIdAndStatus(testGroup.id, "pending_owner", pageable) >> page
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([1L]) >> []
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (inviteeId): testUser]
         response.content.size() == 1
         response.content[0].sportId == testGroup.sportId
     }
@@ -2924,7 +2922,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
         1 * invitationRepository.findByGroupIdAndStatus(testGroup.id, "declined_by_user", pageable) >> page
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([1L]) >> []
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (inviteeId): testUser]
         response.content.size() == 1
         response.content[0].rejectReason == "Schedule doesn't work for me"
         response.content[0].sportId == testGroup.sportId
@@ -2966,7 +2964,7 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.findByGroupIdAndCoInviterIdAndStatusIn(
                 testGroup.id, userId, ["pending_owner", "pending_user"], pageable) >> page
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([1L, 2L]) >> []
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (inviteeId1): testUser, (inviteeId2): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (inviteeId1): testUser, (inviteeId2): testUser]
         response.content.size() == 2
         response.content*.status as Set == ["pending_owner", "pending_user"] as Set
         response.content.every { it.sportId == testGroup.sportId }
@@ -2994,7 +2992,7 @@ class GroupServiceImplSpec extends Specification {
                 GroupInvitationInviter.builder().invitationId(5L).inviterId(otherUserId).createdAt(LocalDateTime.now().minusMinutes(3)).build(),
                 GroupInvitationInviter.builder().invitationId(5L).inviterId(userId).createdAt(LocalDateTime.now()).build(),
         ]
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser, (inviteeId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (otherUserId): testUser, (inviteeId): testUser]
         response.content.size() == 1
         response.content[0].inviterFullNames.size() == 2
     }
@@ -3021,7 +3019,7 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.findByInviteeIdAndStatus(otherUserId, "pending_user", pageable) >> page
         1 * groupRepository.findAllById([testGroup.id, otherGroup.id]) >> [testGroup, otherGroup]
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([1L, 2L]) >> []
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (otherUserId): testUser]
         response.content.size() == 2
         response.content.find { it.groupId == testGroup.id }.sportId == testGroup.sportId
         response.content.find { it.groupId == otherGroup.id }.sportId == otherGroup.sportId
@@ -3042,7 +3040,7 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.findByInviteeIdAndStatus(otherUserId, "pending_user", pageable) >> page
         1 * groupRepository.findAllById([999L]) >> []
         1 * invitationInviterRepository.findByInvitationIdInOrderByCreatedAt([9L]) >> []
-        1 * userService.getUsersByIds(_) >> [(userId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser, (otherUserId): testUser]
         response.content.size() == 1
         response.content[0].groupName == "Unknown Group"
         response.content[0].sportId == null
@@ -3301,7 +3299,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.save(_ as GroupMember) >> new GroupMember()
         1 * groupTypeRepository.findByTypeName("DEFAULT") >> Optional.of(defaultGroupType)
         1 * groupSettingsRepository.save(_ as GroupSettings) >> new GroupSettings()
-        1 * userService.getUsersByIds(_) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds(_) >> [(userId): testUser]
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> 1L
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >>
                 Optional.of(GroupMember.builder().roleId(ownerRole.id).build())
@@ -3344,7 +3342,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
         1 * groupMemberRepository.save(_ as GroupMember)
         1 * joinRequestRepository.save({ GroupJoinRequest req -> req.status == "accepted" })
-        1 * userService.getUsersByIds([otherUserId]) >> [(otherUserId): testUser]
+        1 * userService.getUserSummariesByIds([otherUserId]) >> [(otherUserId): testUser]
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
         1 * postService.createSystemPost(testGroup.id, userId, _ as String)
 
@@ -3580,7 +3578,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [adminMember]
         1 * postService.createSystemPost(testGroup.id, userId, _ as String)
-        1 * userService.getUsersByIds([otherUserId, userId]) >> [(userId): testUser, (otherUserId): testUser]
+        1 * userService.getUserSummariesByIds([otherUserId, userId]) >> [(userId): testUser, (otherUserId): testUser]
 
         and: "the pre-existing join request is closed out as accepted, not left dangling"
         1 * joinRequestRepository.save({ it.status == "accepted" && it.reviewedBy == userId })
@@ -3790,7 +3788,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         1 * groupMemberRepository.findByGroupId(testGroup.id, pageable) >> membersPage
         // page-level batching: one getUsersByIds call and one findAllById call for the whole page
-        1 * userService.getUsersByIds([otherUserId]) >> [(otherUserId): testUser]
+        1 * userService.getUserSummariesByIds([otherUserId]) >> [(otherUserId): testUser]
         1 * groupRoleRepository.findAllById([memberRole.id]) >> [memberRole]
 
         and:
@@ -4074,7 +4072,7 @@ class GroupServiceImplSpec extends Specification {
         1 * joinRequestRepository.findByUserIdAndStatus(userId, "pending", pageable) >> requestsPage
         // page-level batching: one findAllById call (groupName) and one batched getUsersByIds call
         1 * groupRepository.findAllById([testGroup.id]) >> [testGroup]
-        1 * userService.getUsersByIds([userId]) >> [(userId): testUser]
+        1 * userService.getUserSummariesByIds([userId]) >> [(userId): testUser]
 
         and:
         result.totalElements == 1
@@ -4092,7 +4090,7 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * joinRequestRepository.findByUserIdAndStatus(userId, "pending", pageable) >> new PageImpl<>([])
         0 * groupRepository.findAllById(_)
-        0 * userService.getUsersByIds(_)
+        0 * userService.getUserSummariesByIds(_)
 
         and:
         result.totalElements == 0

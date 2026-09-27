@@ -239,6 +239,23 @@ is the original decision, kept for the record.
 | `LocationResponse` gains `countryId`/`regionId` | session-impl, group-impl (via `getLocationsByIds`), client `location/types.ts` | additive, compatible |
 | DB: nullable columns on `users`, `locations` | entities/JPQL naming those tables | compatible |
 
+**Delta (2026-09-26, U16 implemented)** — how the census above resolved, and what it missed:
+
+- `UserResponse` gained `countryId`, `regionId`, `regionName`; `country` is the resolved name, else the legacy text. The **producers** were
+  more than the table named: `UserServiceImpl.toUserResponse` (single reads — resolved, two lookups at most), `searchUsers`
+  (`UserSearchResponse.country`, resolved with one lookup per page — without it a user who picked a country by id would show a blank
+  country in search), and `getUsersByIds`, which **deliberately does not resolve names** (ids only): it is the hot batch call behind
+  feed / comments / group and session lists (Discover included) and none of them shows a country. `UserFriendServiceImpl.getFriends`
+  builds a partial `UserResponse` with no geo fields and was left as is.
+- `UpdateProfileRequest`: `country` removed, `countryId`/`regionId` added. The old field is silently ignored (verified through real Jackson
+  binding in `ProfileGeoUpdateIntegrationTest`), so an old `EditProfileModal` appears to save a country but does nothing until CLIENT-REF-3.
+- `RegisterRequest` gained the optional fields; `AuthServiceImplSpec`'s `createUser(_,_,_,_,_)` stub became six arguments. All validation
+  runs before the user is saved, so a `400` persists nothing (`RegistrationGeoIntegrationTest`).
+- `UserPreference.language` is now validated (`400`) and `user_preferences.language` widened to `VARCHAR(35)`; both preference calls now
+  reject a deactivated caller (`404`). No client code writes `language` (grep of `client/src` and `client/e2e`).
+- `V075` (columns, widening, backfill) applied cleanly on the real dev Postgres and linked the two existing legacy rows ("Vietnam",
+  "Viet Nam") to `VN`. The backfill only matches countries seeded at the time, so **REF-4 re-runs it** (added to that ticket).
+
 ## 12. Ticket map
 
 Order: REF-1 → REF-2 → (U16, LOC-5) on the backend; CLIENT-I18N-1 in parallel with backend work; CLIENT-REF-1

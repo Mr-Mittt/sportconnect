@@ -17,6 +17,7 @@ import com.sportconnect.social.post.repository.CommentLikeRepository
 import com.sportconnect.social.post.repository.CommentRepository
 import com.sportconnect.social.post.repository.PostRepository
 import com.sportconnect.user.api.dto.UserResponse
+import com.sportconnect.user.api.dto.UserSummaryResponse
 import com.sportconnect.user.api.service.UserService
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
@@ -83,10 +84,9 @@ class CommentServiceImplSpec extends Specification {
                 .build()
 
         and: "a user"
-        def user = UserResponse.builder()
+        def user = UserSummaryResponse.builder()
                 .id(userId)
-                .firstName("Test")
-                .lastName("User")
+                .fullName("Test User")
                 .build()
 
         when: "creating a comment"
@@ -100,10 +100,11 @@ class CommentServiceImplSpec extends Specification {
         // countByCommentId called once from mapToResponse, once from buildPreviewResponse in addToPreviewCache
         2 * commentLikeRepository.countByCommentId(commentId) >> 0L
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
-        // mapToResponse resolves the author via the batched getUsersByIds (single-id list at this call site);
-        // buildPreviewResponse (addToPreviewCache) still uses the single-item getUserById, unchanged
-        1 * userService.getUsersByIds([userId]) >> [(userId): user]
-        1 * userService.getUserById(userId) >> user
+        // mapToResponse resolves the author via the batched getUserSummariesByIds (single-id list at this call
+        // site); buildPreviewResponse (addToPreviewCache) still uses the single-item getUserById (different
+        // method, real UserResponse — untouched by U18), so it needs its own fixture, not `user`.
+        1 * userService.getUserSummariesByIds([userId]) >> [(userId): user]
+        1 * userService.getUserById(userId) >> UserResponse.builder().id(userId).firstName("Test").lastName("User").build()
         // a freshly created comment can never have replies yet — createComment passes an empty
         // replies map directly instead of querying
         0 * commentRepository.findByParentCommentIdAndIsActiveTrueOrderByCreatedAtAsc(_)
@@ -176,10 +177,9 @@ class CommentServiceImplSpec extends Specification {
                 .build()
 
         and: "a user"
-        def user = UserResponse.builder()
+        def user = UserSummaryResponse.builder()
                 .id(userId)
-                .firstName("Test")
-                .lastName("User")
+                .fullName("Test User")
                 .build()
 
         when: "creating a reply"
@@ -195,7 +195,7 @@ class CommentServiceImplSpec extends Specification {
         1 * stringRedisTemplate.execute(_ as RedisScript, ["comment:" + parentCommentId + ":replies"])
         1 * commentLikeRepository.countByCommentId(commentId) >> 0L
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
-        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        1 * userService.getUserSummariesByIds([userId]) >> [(userId): user]
         0 * userService.getUserById(_)
         0 * commentRepository.findByParentCommentIdAndIsActiveTrueOrderByCreatedAtAsc(_)
         0 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc(_)
@@ -245,10 +245,9 @@ class CommentServiceImplSpec extends Specification {
         def page = new PageImpl<>([comment])
 
         and: "a user"
-        def user = UserResponse.builder()
+        def user = UserSummaryResponse.builder()
                 .id(userId)
-                .firstName("Test")
-                .lastName("User")
+                .fullName("Test User")
                 .build()
 
         when: "getting post comments"
@@ -263,7 +262,7 @@ class CommentServiceImplSpec extends Specification {
         1 * commentLikeRepository.countByCommentId(commentId) >> 3L
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> true
         1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([commentId]) >> []
-        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        1 * userService.getUserSummariesByIds([userId]) >> [(userId): user]
 
         and: "result is correct"
         result.content.size() == 1
@@ -488,10 +487,9 @@ class CommentServiceImplSpec extends Specification {
                 .build()
 
         and: "a user"
-        def user = UserResponse.builder()
+        def user = UserSummaryResponse.builder()
                 .id(userId)
-                .firstName("Test")
-                .lastName("User")
+                .fullName("Test User")
                 .build()
 
         when: "getting post comments"
@@ -503,7 +501,7 @@ class CommentServiceImplSpec extends Specification {
         1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([parentComment])
         1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([1L]) >> [replyComment]
         // both parent and reply are authored by the same user here — one batched call covers both
-        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        1 * userService.getUserSummariesByIds([userId]) >> [(userId): user]
         1 * commentLikeRepository.countByCommentId(1L) >> 0L
         1 * commentLikeRepository.existsByCommentIdAndUserId(1L, userId) >> false
         1 * commentLikeRepository.countByCommentId(2L) >> 0L
@@ -528,7 +526,7 @@ class CommentServiceImplSpec extends Specification {
                 .isActive(true)
                 .createdAt(LocalDateTime.now())
                 .build()
-        def user = UserResponse.builder().id(userId).firstName("Test").lastName("User").build()
+        def user = UserSummaryResponse.builder().id(userId).fullName("Test User").build()
 
         when:
         def result = commentService.getPostComments(postId, userId, pageable)
@@ -543,7 +541,7 @@ class CommentServiceImplSpec extends Specification {
         0 * commentRepository.countByParentCommentIdAndIsActiveTrue(_)
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
         1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([commentId]) >> []
-        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        1 * userService.getUserSummariesByIds([userId]) >> [(userId): user]
         result.content[0].likeCount == 4L
         result.content[0].replyCount == 6L
     }
@@ -575,7 +573,7 @@ class CommentServiceImplSpec extends Specification {
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
         1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([commentId]) >> []
         // getUsersByIds never throws — a missing id is simply absent from the returned map
-        1 * userService.getUsersByIds([userId]) >> [:]
+        1 * userService.getUserSummariesByIds([userId]) >> [:]
 
         and: "the fallback name is used instead of a 500"
         result.content[0].userFullName == "Unknown User"
@@ -589,7 +587,7 @@ class CommentServiceImplSpec extends Specification {
         def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
         def savedComment = Comment.builder().id(commentId).postId(postId).userId(userId)
                 .content(request.content).isActive(true).createdAt(LocalDateTime.now()).build()
-        def user = UserResponse.builder().id(userId).firstName("Test").lastName("User").build()
+        def user = UserSummaryResponse.builder().id(userId).fullName("Test User").build()
 
         when:
         def result = commentService.createSessionComment(postId, userId, request)
@@ -601,8 +599,8 @@ class CommentServiceImplSpec extends Specification {
         // countByCommentId called once from mapToResponse, once from buildPreviewResponse in addToPreviewCache
         2 * commentLikeRepository.countByCommentId(commentId) >> 0L
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
-        1 * userService.getUsersByIds([userId]) >> [(userId): user]
-        1 * userService.getUserById(userId) >> user
+        1 * userService.getUserSummariesByIds([userId]) >> [(userId): user]
+        1 * userService.getUserById(userId) >> UserResponse.builder().id(userId).firstName("Test").lastName("User").build()
         result.content == request.content
     }
 
@@ -640,7 +638,7 @@ class CommentServiceImplSpec extends Specification {
         def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
         def comment = Comment.builder().id(commentId).postId(postId).userId(userId)
                 .content("hi").isActive(true).createdAt(LocalDateTime.now()).build()
-        def user = UserResponse.builder().id(userId).firstName("Test").lastName("User").build()
+        def user = UserSummaryResponse.builder().id(userId).fullName("Test User").build()
 
         when:
         def result = commentService.getSessionPostComments(postId, userId, pageable)
@@ -652,7 +650,7 @@ class CommentServiceImplSpec extends Specification {
         1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([commentId]) >> []
         1 * commentLikeRepository.countByCommentId(commentId) >> 0L
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
-        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        1 * userService.getUserSummariesByIds([userId]) >> [(userId): user]
         result.content.size() == 1
     }
 
@@ -923,7 +921,7 @@ class CommentServiceImplSpec extends Specification {
         def post = Post.builder().id(postId).postType(PostType.SESSION_POST).isActive(true).build()
         def comment = Comment.builder().id(commentId).postId(postId).userId(userId)
                 .content("hi").isActive(true).createdAt(LocalDateTime.now()).build()
-        def user = UserResponse.builder().id(userId).firstName("Test").lastName("User").build()
+        def user = UserSummaryResponse.builder().id(userId).fullName("Test User").build()
 
         when:
         def result = commentService.getSessionPostComments(postId, userId, pageable)
@@ -934,7 +932,7 @@ class CommentServiceImplSpec extends Specification {
         1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([commentId]) >> []
         1 * commentLikeRepository.countByCommentId(commentId) >> 0L
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
-        1 * userService.getUsersByIds([userId]) >> [(userId): user]
+        1 * userService.getUserSummariesByIds([userId]) >> [(userId): user]
         result.content[0].commentType == CommentType.USER
     }
 }

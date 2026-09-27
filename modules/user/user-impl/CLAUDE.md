@@ -10,6 +10,7 @@ User entity with UUID PK and PostGIS geolocation, role management, profile CRUD,
 | `modules/common` | ApiResponse<T>, shared exceptions |
 | `modules/auth/auth-api` | `AuthService.logout()` — U12 session revocation on deactivation (`@Lazy`, cycle) |
 | `modules/sport/sport-api` | U15: `UserSportProfileService.getUserProfiles(id)` — the target's active sport ids for `UserInfoResponse.activeSportIds` (no cycle; `sport-api` → only `common`) |
+| `modules/reference/reference-api` | U16: `ReferenceService` — `requireValidSelection`, `isActiveLanguage`, batch `getCountriesByIds` / `getRegionsByIds` (no cycle; `reference-api` → only `common`) |
 | Hibernate Spatial 6.4.0 | Maps `geography(Point,4326)` to JTS `Point` |
 | JTS 1.19.0 | `GeometryFactory`, `Point`, `Coordinate` |
 
@@ -56,5 +57,30 @@ DELETE /api/users/{userId}               ROLE_ADMIN
 - `leetcode.java` and `leetcodeSpec.groovy` are scratch files — not application code, ignore them.
 - `UserServiceImpl.createUser()` fetches the `USER` role by name and throws `RuntimeException` if missing — V001 migration seeds it.
 - `updateUserPassword()` receives a **pre-hashed** value from auth-impl — never hash it again here.
-- `UserPreference` entity and table (V001) exist but have **no service or controller** yet.
+- **Country / region / language (U16).** `users.country_id` / `region_id` are plain ids into the reference domain (no FK, no JPA
+  relation). `users.country` (free text) is **legacy**: never written any more, kept only as the display fallback for users whose text
+  matched no country row. `UserResponse.country` is the linked country's English name, else that legacy text.
+  - **`getUsersByIds` deliberately does not resolve display names** — it returns `countryId`/`regionId` only (`country` = legacy text,
+    `regionName` = `null`). It is the hot batch call behind feed, comments, group and session lists (Discover included), none of which
+    shows a country; resolving would add up to two reference queries to each. A caller that needs names collects the ids and calls
+    `ReferenceService.getCountriesByIds` / `getRegionsByIds` once. Every single-user read and `searchUsers` **do** resolve (`GeoNames`),
+    with one lookup per page, never per row. `UserFriendServiceImpl.getFriends` builds its own PII-free `UserInfoResponse` (U17), not
+    `UserResponse` at all.
+  - **Display-name-only callers should use `getUserSummariesByIds`, not `getUsersByIds` (U18).** A census of every real cross-domain
+    `getUsersByIds` call site (`notification-impl`, `session-impl`, `group-impl`, `post-impl` — 16 sites) found none reading anything
+    beyond `fullName`/`avatarUrl`; all were migrated to the new method, which returns `UserSummaryResponse { id, fullName, avatarUrl }`
+    (no PII, no geo fields, nothing that grows unnoticed the way `UserResponse` has). Same one-query, no-active-filter contract as
+    `getUsersByIds`. Keep new batch-by-id callers on this method unless they genuinely need more of `UserResponse`.
+  - **Profile update rule:** `countryId` present → `regionId` *replaces* the region (absent = cleared, so clients send both); a lone
+    `regionId` is validated against the stored country; validated with `ReferenceService.requireValidSelection` (→ `400`) **before** any
+    other field is applied. An old client's free-text `country` is silently ignored by Jackson (not rejected). Clearing a country is unsupported.
+  - **Register:** `createUser(..., UserRegistrationDetails)` validates selection, then language, then coordinates, all **before** the user
+    is saved (a `400` persists nothing); it sets the ids, the location point (X = longitude) and, when a language was given, a
+    `UserPreference` row. The 5-argument `createUser` delegates with `null`.
+  - **Preferences:** `language` must be an active reference language code (`400`); both `getPreferences` and `updatePreferences` reject a
+    deactivated caller with `404` before any row is created (the read auto-creates one, and the JWT filter does not recheck `isActive` — U12).
+  - **`V075` backfill** links `users.country` text to a country by name / iso2 / iso3, case- and space-insensitive, only where
+    `country_id IS NULL` — so it is safe to re-run, and **REF-4 must re-run it** once more countries are seeded. `users.region_id` is not backfilled.
+- `UserPreference` entity and table (V001): `UserPreferenceServiceImpl` serves `GET`/`PUT /api/users/me/preferences`; the row is created lazily
+  on first access, or at register when a language is given. `language` is `VARCHAR(35)` (matches `languages.code`) since V075.
 - Always use `findByIdAndIsActiveTrue()` in new queries — `findById()` returns soft-deleted users too.

@@ -8,7 +8,7 @@ import com.sportconnect.notification.api.service.NotificationService;
 import com.sportconnect.notification.entity.Notification;
 import com.sportconnect.notification.repository.NotificationRepository;
 import com.sportconnect.session.api.service.SessionService;
-import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.service.UserService;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,9 +52,10 @@ public class NotificationServiceImpl implements NotificationService {
                 .flatMap(n -> n.getActorIds().stream())
                 .distinct()
                 .collect(Collectors.toList());
-        Map<UUID, UserResponse> usersById = actorIds.isEmpty()
+        // U18: getUserSummariesByIds — only fullName is ever read here, never the full UserResponse.
+        Map<UUID, UserSummaryResponse> usersById = actorIds.isEmpty()
                 ? Collections.emptyMap()
-                : userService.getUsersByIds(actorIds);
+                : userService.getUserSummariesByIds(actorIds);
 
         List<Long> sessionIds = notifications.getContent().stream()
                 .filter(n -> ENTITY_TYPE_SESSION.equals(n.getEntityType()))
@@ -126,7 +127,7 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     private NotificationResponse toResponse(
-            Notification notification, Map<UUID, UserResponse> usersById, Map<Long, String> sessionTitlesById) {
+            Notification notification, Map<UUID, UserSummaryResponse> usersById, Map<Long, String> sessionTitlesById) {
         List<NotificationActorSummary> actors = notification.getActorIds().stream()
                 .map(usersById::get)
                 .filter(Objects::nonNull)

@@ -78,8 +78,17 @@ public class User {
     @Column(length = 100)
     private String city;
 
+    /** Legacy free-text country. No longer written (U16); kept as the display fallback for users whose text matched no country row. */
     @Column(length = 100)
     private String country;
+
+    /** {@code countries.id} in the reference domain. A plain id, no FK and no JPA relation (cross-domain, U16). */
+    @Column(name = "country_id")
+    private Long countryId;
+
+    /** {@code regions.id} in the reference domain — same rules as {@link #countryId}. */
+    @Column(name = "region_id")
+    private Long regionId;
 
     @Column(name = "height_cm")
     private Integer heightCm;

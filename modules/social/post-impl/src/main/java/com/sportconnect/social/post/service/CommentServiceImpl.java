@@ -18,7 +18,7 @@ import com.sportconnect.social.post.entity.Post;
 import com.sportconnect.social.post.repository.CommentLikeRepository;
 import com.sportconnect.social.post.repository.CommentRepository;
 import com.sportconnect.social.post.repository.PostRepository;
-import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -104,7 +104,7 @@ public class CommentServiceImpl implements CommentService {
         }
         log.info("Created comment {} on post {}", comment.getId(), postId);
 
-        return mapToResponse(comment, userId, userService.getUsersByIds(List.of(userId)), Map.of());
+        return mapToResponse(comment, userId, userService.getUserSummariesByIds(List.of(userId)), Map.of());
     }
 
     /** SESSION-10/A17 bypass precheck — existence/active AND {@code postType == SESSION_POST}, no
@@ -252,9 +252,9 @@ public class CommentServiceImpl implements CommentService {
             }
         }
         List<UUID> distinctUserIds = userIds.stream().distinct().collect(Collectors.toList());
-        Map<UUID, UserResponse> usersById = distinctUserIds.isEmpty()
+        Map<UUID, UserSummaryResponse> usersById = distinctUserIds.isEmpty()
                 ? Map.of()
-                : userService.getUsersByIds(distinctUserIds);
+                : userService.getUserSummariesByIds(distinctUserIds);
 
         return rootCommentsPage.map(comment -> mapToResponse(comment, currentUserId, usersById, repliesByParentId));
     }
@@ -427,14 +427,14 @@ public class CommentServiceImpl implements CommentService {
      * {@code post-impl/docs/BACKLOG_MVP.md}).
      */
     private CommentResponse mapToResponse(Comment comment, UUID currentUserId,
-                                           Map<UUID, UserResponse> usersById,
+                                           Map<UUID, UserSummaryResponse> usersById,
                                            Map<Long, List<Comment>> repliesByParentId) {
         long likeCount = getCount("comment:" + comment.getId() + ":likes", () -> commentLikeRepository.countByCommentId(comment.getId()));
         long replyCount = getCount("comment:" + comment.getId() + ":replies", () -> commentRepository.countByParentCommentIdAndIsActiveTrue(comment.getId()));
         boolean isLiked = currentUserId != null &&
                          commentLikeRepository.existsByCommentIdAndUserId(comment.getId(), currentUserId);
 
-        UserResponse user = usersById.get(comment.getUserId());
+        UserSummaryResponse user = usersById.get(comment.getUserId());
         String userFullName = user != null ? user.getFullName() : "Unknown User";
 
         List<CommentResponse> replies = repliesByParentId.getOrDefault(comment.getId(), List.of())

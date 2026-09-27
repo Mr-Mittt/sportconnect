@@ -6,7 +6,7 @@ import com.sportconnect.notification.access.NotificationGate
 import com.sportconnect.notification.entity.Notification
 import com.sportconnect.notification.repository.NotificationRepository
 import com.sportconnect.session.api.service.SessionService
-import com.sportconnect.user.api.dto.UserResponse
+import com.sportconnect.user.api.dto.UserSummaryResponse
 import com.sportconnect.user.api.service.UserService
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
@@ -248,7 +248,7 @@ class NotificationServiceImplSpec extends Specification {
 
         then:
         result.content.isEmpty()
-        0 * userService.getUsersByIds(_)
+        0 * userService.getUserSummariesByIds(_)
         0 * sessionService.getSessionTitlesByIds(_)
     }
 
@@ -267,13 +267,13 @@ class NotificationServiceImplSpec extends Specification {
                 .build()
         notificationRepository.findByRecipientUserIdOrderByUpdatedAtDesc(recipientId, pageable) >>
                 new PageImpl<>([notification])
-        def actorUser = new UserResponse(id: actorId, firstName: "Alice", lastName: "Nguyen")
+        def actorUser = new UserSummaryResponse(id: actorId, fullName: "Alice Nguyen")
 
         when:
         def result = notificationService.getNotifications(recipientId, pageable)
 
         then:
-        1 * userService.getUsersByIds([actorId]) >> [(actorId): actorUser]
+        1 * userService.getUserSummariesByIds([actorId]) >> [(actorId): actorUser]
         1 * sessionService.getSessionTitlesByIds([42L]) >> [(42L): "Friday Pickup Game"]
         result.content.size() == 1
         result.content[0].id == 1L
@@ -304,7 +304,7 @@ class NotificationServiceImplSpec extends Specification {
         def result = notificationService.getNotifications(recipientId, pageable)
 
         then:
-        1 * userService.getUsersByIds([actorId]) >> [:]
+        1 * userService.getUserSummariesByIds([actorId]) >> [:]
         0 * sessionService.getSessionTitlesByIds(_)
         result.content[0].actors.isEmpty()
         result.content[0].entityTitle == null

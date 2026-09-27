@@ -29,7 +29,7 @@ public class UserPreferenceController {
 
     private final UserPreferenceService userPreferenceService;
 
-    @Operation(summary = "Get the caller's preferences", description = "Auto-creates defaults on first access — never 404s for an authenticated user.")
+    @Operation(summary = "Get the caller's preferences", description = "Auto-creates defaults on first access. A deactivated caller gets 404 and no row is created (U16).")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Preferences (defaults if never set)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
@@ -45,7 +45,8 @@ public class UserPreferenceController {
     @Operation(summary = "Update the caller's preferences")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Preferences updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or language is not an active reference language code (U16)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Caller is deactivated (U16)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PutMapping

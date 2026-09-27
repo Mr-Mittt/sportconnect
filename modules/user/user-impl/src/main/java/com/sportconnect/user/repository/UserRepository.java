@@ -27,6 +27,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByIdAndIsActiveTrue(UUID id);
 
+    /** U16: cheap "is this caller still active?" check (no entity load) for paths that only need the gate. */
+    boolean existsByIdAndIsActiveTrue(UUID id);
+
     /**
      * U12: exclusive row lock ({@code SELECT ... FOR UPDATE}), held for the caller's whole
      * transaction. Used by {@code deleteUser()} so a concurrent {@code findByIdAndIsActiveTrueForShare}

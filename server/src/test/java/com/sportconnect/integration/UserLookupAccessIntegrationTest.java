@@ -4,9 +4,14 @@ import com.sportconnect.sport.entity.Sport;
 import com.sportconnect.sport.entity.UserSportProfile;
 import com.sportconnect.sport.repository.SportRepository;
 import com.sportconnect.sport.repository.UserSportProfileRepository;
+import com.sportconnect.user.entity.Friendship;
 import com.sportconnect.user.entity.User;
+import com.sportconnect.user.repository.FriendshipRepository;
 import com.sportconnect.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.PrecisionModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +41,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code UserController}'s {@code @PreAuthorize} annotations proves the endpoints are actually
  * gated, and only a real serialized JSON body proves {@code UserInfoResponse} narrows what a
  * caller actually receives over the wire.
+ *
+ * <p><strong>U17:</strong> {@code GET /api/users/friends} (a different controller, {@code UserFriendController})
+ * gets the same never-leaks-PII coverage here, since it is the same class of question — "does a JSON body this
+ * app returns to another user carry {@code email}/{@code location}" — and used to fail it (its own private mapper
+ * predated U11 and was never updated to match).
  */
 class UserLookupAccessIntegrationTest extends BaseIT {
 
@@ -50,6 +60,9 @@ class UserLookupAccessIntegrationTest extends BaseIT {
 
     @Autowired
     private CacheManager cacheManager;
+
+    @Autowired
+    private FriendshipRepository friendshipRepository;
 
     private UUID targetUserId;
     private UUID callerId;
@@ -82,6 +95,14 @@ class UserLookupAccessIntegrationTest extends BaseIT {
                 .isActive(true)
                 .build()).getId();
 
+        // U17: a real, non-null location on the target proves getFriends doesn't leak it, not just
+        // that a null field is absent.
+        User target = userRepository.findById(targetUserId).orElseThrow();
+        target.setLocation(new GeometryFactory(new PrecisionModel(), 4326)
+                .createPoint(new Coordinate(106.7009, 10.7769)));
+        userRepository.save(target);
+        friendshipRepository.save(Friendship.builder().userId(callerId).friendId(targetUserId).build());
+
         // U15: the target holds active profiles in two sports and one soft-deleted profile in a
         // third — activeSportIds must carry exactly the two active sport ids.
         badmintonId = sportRepository.save(Sport.builder().name("U15 Badminton").isActive(true).build()).getId();
@@ -105,6 +126,7 @@ class UserLookupAccessIntegrationTest extends BaseIT {
     }
 
     private void clearAll() {
+        friendshipRepository.deleteAll();
         profileRepository.deleteAll();
         sportRepository.deleteAll();
         userRepository.deleteAll();
@@ -216,6 +238,43 @@ class UserLookupAccessIntegrationTest extends BaseIT {
                 .andExpect(jsonPath("$.data.id").value(callerId.toString()))
                 .andExpect(jsonPath("$.data.email").value("u11-caller@example.com"))
                 .andExpect(jsonPath("$.data.username").value("u11caller"));
+    }
+
+    // ---------- U17: GET /api/users/friends must never leak PII ----------
+
+    @Test
+    void getFriends_withoutAuth_returnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/users/friends").with(anonymous()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getFriends_returnsTheSameSafeSubsetAsGetUserById_neverEmailOrLocation() throws Exception {
+        authenticateAs(callerId);
+
+        mockMvc.perform(get("/api/users/friends"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].id").value(targetUserId.toString()))
+                .andExpect(jsonPath("$.data[0].fullName").value("Target User"))
+                .andExpect(jsonPath("$.data[0].username").value("u11target"))
+                .andExpect(jsonPath("$.data[0].avatarUrl").value("https://example.com/avatar.png"))
+                .andExpect(jsonPath("$.data[0].coverUrl").value("https://example.com/cover.png"))
+                .andExpect(jsonPath("$.data[0].bio").value("Weekend baller."))
+                // No per-friend cross-domain call here (see UserFriendService#getFriends) — always empty.
+                .andExpect(jsonPath("$.data[0].activeSportIds", hasSize(0)))
+                .andExpect(jsonPath("$.data[0].email").doesNotExist())
+                .andExpect(jsonPath("$.data[0].phoneNumber").doesNotExist())
+                .andExpect(jsonPath("$.data[0].dateOfBirth").doesNotExist())
+                .andExpect(jsonPath("$.data[0].gender").doesNotExist())
+                .andExpect(jsonPath("$.data[0].heightCm").doesNotExist())
+                .andExpect(jsonPath("$.data[0].weightKg").doesNotExist())
+                .andExpect(jsonPath("$.data[0].shoeSizeCm").doesNotExist())
+                .andExpect(jsonPath("$.data[0].location").doesNotExist())
+                .andExpect(jsonPath("$.data[0].lastLoginAt").doesNotExist())
+                .andExpect(jsonPath("$.data[0].roles").doesNotExist())
+                .andExpect(jsonPath("$.data[0].isEmailVerified").doesNotExist())
+                .andExpect(jsonPath("$.data[0].isActive").doesNotExist());
     }
 
     @Test

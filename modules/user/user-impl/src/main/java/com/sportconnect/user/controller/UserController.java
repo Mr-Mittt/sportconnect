@@ -104,10 +104,10 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", userService.toPublicUserInfo(response)));
     }
 
-    @Operation(summary = "Update a user's profile", description = "Ownership-gated — the caller must be updating their own profile.")
+    @Operation(summary = "Update a user's profile", description = "Ownership-gated — the caller must be updating their own profile. Country and region are set with countryId/regionId (U16): with countryId present, regionId replaces the region (absent clears it); a lone regionId is checked against the stored country. The old free-text country field was removed and is silently ignored.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Profile updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed (including height/weight/shoe-size range checks)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed (height/weight/shoe-size ranges), or an invalid countryId/regionId selection: unknown or inactive country/region, a region outside the country, or a region with no country (U16)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the profile owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")

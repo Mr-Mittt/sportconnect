@@ -53,7 +53,7 @@ import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.sport.api.service.UserSportProfileService;
-import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -741,10 +741,11 @@ public class SessionServiceImpl implements SessionService {
                 .map(SessionParticipant::getUserId)
                 .distinct()
                 .collect(Collectors.toList());
-        Map<UUID, UserResponse> users = userIds.isEmpty() ? Collections.emptyMap() : userService.getUsersByIds(userIds);
+        // U18: only fullName/avatarUrl are read below — getUserSummariesByIds, not getUsersByIds.
+        Map<UUID, UserSummaryResponse> users = userIds.isEmpty() ? Collections.emptyMap() : userService.getUserSummariesByIds(userIds);
 
         return participants.map(p -> {
-            UserResponse user = users.get(p.getUserId());
+            UserSummaryResponse user = users.get(p.getUserId());
             return SessionParticipantResponse.builder()
                     .id(p.getId())
                     .sessionId(p.getSessionId())
@@ -1182,7 +1183,7 @@ public class SessionServiceImpl implements SessionService {
      * a later rename won't rewrite history in the thread.
      */
     private String resolveParticipantName(UUID userId) {
-        UserResponse user = userService.getUsersByIds(List.of(userId)).get(userId);
+        UserSummaryResponse user = userService.getUserSummariesByIds(List.of(userId)).get(userId);
         return user != null ? user.getFullName() : "A participant";
     }
 
@@ -1230,7 +1231,8 @@ public class SessionServiceImpl implements SessionService {
         List<Long> sessionIds = sessions.stream().map(Session::getId).collect(Collectors.toList());
         List<Long> postIds = sessions.stream().map(Session::getPostId).distinct().collect(Collectors.toList());
 
-        Map<UUID, UserResponse> users = userService.getUsersByIds(userIds);
+        // U18: createdByFullName/cancelledByFullName below read only fullName.
+        Map<UUID, UserSummaryResponse> users = userService.getUserSummariesByIds(userIds);
         Map<Long, SportResponse> sports = sportIds.isEmpty() ? Collections.emptyMap() : sportService.getActiveSportsByIds(sportIds);
         Map<Long, LocationResponse> locations = locationService.getLocationsByIds(locationIds);
         Map<Long, Long> participantCounts = sessionParticipantRepository
@@ -1260,7 +1262,7 @@ public class SessionServiceImpl implements SessionService {
                         .sessionType(session.getSessionType())
                         .createdBy(session.getCreatedBy())
                         .createdByFullName(Optional.ofNullable(users.get(session.getCreatedBy()))
-                                .map(UserResponse::getFullName).orElse(null))
+                                .map(UserSummaryResponse::getFullName).orElse(null))
                         .sportId(session.getSportId())
                         .sportName(Optional.ofNullable(session.getSportId())
                                 .map(sports::get).map(SportResponse::getName).orElse(null))
@@ -1274,7 +1276,7 @@ public class SessionServiceImpl implements SessionService {
                         .cancelReason(session.getCancelReason())
                         .cancelledBy(session.getCancelledBy())
                         .cancelledByFullName(Optional.ofNullable(session.getCancelledBy())
-                                .map(users::get).map(UserResponse::getFullName).orElse(null))
+                                .map(users::get).map(UserSummaryResponse::getFullName).orElse(null))
                         .cancelledAt(session.getCancelledAt())
                         // initialSlot (participants already accounted for outside the app) sits on
                         // top of the real JOINED count — not a raw participant-table count.

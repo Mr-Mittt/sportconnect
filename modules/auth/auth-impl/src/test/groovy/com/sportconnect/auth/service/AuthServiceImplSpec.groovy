@@ -8,7 +8,9 @@ import com.sportconnect.auth.entity.RefreshToken
 import com.sportconnect.auth.repository.EmailVerificationRepository
 import com.sportconnect.auth.repository.PasswordResetTokenRepository
 import com.sportconnect.auth.repository.RefreshTokenRepository
+import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.UnauthorizedException
+import com.sportconnect.user.api.dto.UserRegistrationDetails
 import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserService
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -78,7 +80,7 @@ class AuthServiceImplSpec extends Specification {
         userResponse.getUsername() >> null
         userResponse.getRoles() >> new HashSet<>(["USER"])
         userResponse.getIsActive() >> true
-        userService.createUser(_, _, _, _, _) >> userResponse
+        userService.createUser(_, _, _, _, _, _) >> userResponse
 
         and: "jwt service generates tokens"
         jwtTokenService.generateAccessToken(_) >> "access-token"
@@ -94,6 +96,81 @@ class AuthServiceImplSpec extends Specification {
         result.accessToken == "access-token"
         result.refreshToken == "refresh-token"
         1 * refreshTokenRepository.save(_)
+    }
+
+    // ---------- U16: optional sign-up geo/language details ----------
+
+    private UserResponse registeredUser(String email) {
+        def userResponse = Mock(UserResponse)
+        userResponse.getId() >> UUID.randomUUID()
+        userResponse.getEmail() >> email
+        userResponse.getFirstName() >> "John"
+        userResponse.getLastName() >> "Doe"
+        userResponse.getRoles() >> new HashSet<>(["USER"])
+        userResponse.getIsActive() >> true
+        return userResponse
+    }
+
+    def "register passes the optional language, country, region and coordinates through to createUser"() {
+        given:
+        def request = RegisterRequest.builder()
+                .email("geo@example.com").password("password123").fullName("Geo User")
+                .languageCode("vi").countryId(7L).regionId(80L).latitude(10.78d).longitude(106.70d)
+                .build()
+        userService.existsByEmail(request.email) >> false
+        passwordEncoder.encode(request.password) >> "encoded-password"
+        jwtTokenService.generateAccessToken(_) >> "access-token"
+        jwtTokenService.generateRefreshToken(_) >> "refresh-token"
+        jwtTokenService.getRefreshExpiration() >> 604800000L
+        jwtProperties.getExpiration() >> 3600000L
+
+        when:
+        authService.register(request)
+
+        then:
+        1 * userService.createUser("geo@example.com", "encoded-password", "Geo", "User", null,
+                { UserRegistrationDetails d ->
+                    d.languageCode == "vi" && d.countryId == 7L && d.regionId == 80L &&
+                            d.latitude == 10.78d && d.longitude == 106.70d
+                }) >> registeredUser("geo@example.com")
+    }
+
+    def "register without any extras sends all-null details, exactly what an old client gets"() {
+        given:
+        def request = RegisterRequest.builder().email("plain@example.com").password("password123").fullName("Plain User").build()
+        userService.existsByEmail(request.email) >> false
+        passwordEncoder.encode(request.password) >> "encoded-password"
+        jwtTokenService.generateAccessToken(_) >> "access-token"
+        jwtTokenService.generateRefreshToken(_) >> "refresh-token"
+        jwtTokenService.getRefreshExpiration() >> 604800000L
+        jwtProperties.getExpiration() >> 3600000L
+
+        when:
+        authService.register(request)
+
+        then:
+        1 * userService.createUser(_, _, _, _, _,
+                { UserRegistrationDetails d ->
+                    d.languageCode == null && d.countryId == null && d.regionId == null &&
+                            d.latitude == null && d.longitude == null
+                }) >> registeredUser("plain@example.com")
+    }
+
+    def "a bad selection surfaces as the 400 createUser throws, and no token or refresh row is created"() {
+        given:
+        def request = RegisterRequest.builder().email("bad@example.com").password("password123").fullName("Bad Region")
+                .countryId(7L).regionId(999L).build()
+        userService.existsByEmail(request.email) >> false
+        passwordEncoder.encode(request.password) >> "encoded-password"
+
+        when:
+        authService.register(request)
+
+        then:
+        1 * userService.createUser(*_) >> { throw new BadRequestException("Region 999 is unknown") }
+        thrown(BadRequestException)
+        0 * jwtTokenService.generateAccessToken(_)
+        0 * refreshTokenRepository.save(_)
     }
 
     def "should login user successfully"() {

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.user.api.dto.FriendRequestStatus
+import com.sportconnect.user.api.dto.UserInfoResponse
 import com.sportconnect.user.api.event.FriendRequestAcceptedEvent
 import com.sportconnect.user.api.event.FriendRequestCreatedEvent
 import com.sportconnect.user.entity.FriendRequest
@@ -12,6 +13,9 @@ import com.sportconnect.user.entity.User
 import com.sportconnect.user.repository.FriendRequestRepository
 import com.sportconnect.user.repository.FriendshipRepository
 import com.sportconnect.user.repository.UserRepository
+import org.locationtech.jts.geom.Coordinate
+import org.locationtech.jts.geom.GeometryFactory
+import org.locationtech.jts.geom.PrecisionModel
 import org.springframework.data.redis.connection.stream.MapRecord
 import org.springframework.data.redis.core.StreamOperations
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -437,7 +441,52 @@ class UserFriendServiceImplSpec extends Specification {
         1 * userRepository.findAllById([friendId]) >> [friendUser]
 
         result.size() == 1
-        result[0].firstName == "Jane"
+        result[0].fullName == "Jane Doe"
+    }
+
+    def "getFriends never returns PII (email, location) — U17"() {
+        given:
+        def friendId = UUID.randomUUID()
+        def friendship = Friendship.builder().userId(senderId).friendId(friendId).build()
+        def friendUser = user(friendId, "Jane", "Doe")
+        friendUser.email = "jane@example.com"
+        friendUser.location = new GeometryFactory(new PrecisionModel(), 4326).createPoint(new Coordinate(106.7, 10.8))
+
+        when:
+        def result = service.getFriends(senderId)
+
+        then:
+        1 * friendshipRepository.findByUserId(senderId) >> [friendship]
+        1 * userRepository.findAllById([friendId]) >> [friendUser]
+
+        result[0] instanceof UserInfoResponse
+        !result[0].hasProperty("email")
+        !result[0].hasProperty("location")
+        result[0].id == friendId
+        result[0].fullName == "Jane Doe"
+        result[0].activeSportIds == []
+    }
+
+    def "getFriends filters out deactivated friends"() {
+        given:
+        def activeId = UUID.randomUUID()
+        def inactiveId = UUID.randomUUID()
+        def active = user(activeId, "Active", "One")
+        def inactive = user(inactiveId, "Inactive", "Two")
+        inactive.isActive = false
+
+        when:
+        def result = service.getFriends(senderId)
+
+        then:
+        1 * friendshipRepository.findByUserId(senderId) >> [
+                Friendship.builder().userId(senderId).friendId(activeId).build(),
+                Friendship.builder().userId(senderId).friendId(inactiveId).build()
+        ]
+        1 * userRepository.findAllById([activeId, inactiveId]) >> [active, inactive]
+
+        result.size() == 1
+        result[0].id == activeId
     }
 
     def "areFriends should return true when friendship exists"() {

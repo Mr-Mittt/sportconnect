@@ -5,6 +5,9 @@ import com.sportconnect.auth.api.service.AuthService
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
+import com.sportconnect.reference.api.dto.CountryResponse
+import com.sportconnect.reference.api.dto.RegionResponse
+import com.sportconnect.reference.api.service.ReferenceService
 import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.UserSportProfileService
 import com.sportconnect.user.api.dto.FriendRequestResponse
@@ -14,8 +17,11 @@ import com.sportconnect.user.api.dto.UserFriendshipStatus
 import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.entity.Role
+import com.sportconnect.user.api.dto.UserRegistrationDetails
 import com.sportconnect.user.entity.User
+import com.sportconnect.user.entity.UserPreference
 import com.sportconnect.user.repository.RoleRepository
+import com.sportconnect.user.repository.UserPreferenceRepository
 import com.sportconnect.user.repository.UserRepository
 import org.locationtech.jts.geom.Coordinate
 import org.locationtech.jts.geom.GeometryFactory
@@ -40,13 +46,15 @@ class UserServiceImplSpec extends Specification {
     AuthService authService = Mock()
     UserSportProfileService userSportProfileService = Mock()
     StringRedisTemplate stringRedisTemplate = Mock()
+    ReferenceService referenceService = Mock()
+    UserPreferenceRepository userPreferenceRepository = Mock()
     // Real instance, not a Mock() — a pure value-converter with no side effects, and using the
     // real one lets tests assert on the actual serialized payload publishDomainEvent produces.
     ObjectMapper objectMapper = new ObjectMapper()
     GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326)
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, authService, userSportProfileService, stringRedisTemplate, objectMapper)
+    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, authService, userSportProfileService, stringRedisTemplate, objectMapper, referenceService, userPreferenceRepository)
 
     def "getUserById should return user when found and active"() {
         given:
@@ -258,6 +266,8 @@ class UserServiceImplSpec extends Specification {
 
     def "updateProfile should update all fields when provided"() {
         given:
+        referenceService.getCountriesByIds(_) >> [:]
+        referenceService.getRegionsByIds(_) >> [:]
         def userId = UUID.randomUUID()
         def user = User.builder()
                 .id(userId)
@@ -279,13 +289,15 @@ class UserServiceImplSpec extends Specification {
                 .avatarUrl("https://example.com/avatar.jpg")
                 .coverUrl("https://example.com/cover.jpg")
                 .city("New York")
-                .country("USA")
+                .countryId(7L)
+                .regionId(80L)
                 .build()
 
         when:
         def result = userService.updateProfile(userId, userId, request)
 
         then:
+        1 * referenceService.requireValidSelection(7L, 80L)
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
         1 * userRepository.save(_) >> { User savedUser ->
             assert savedUser.firstName == "New"
@@ -295,7 +307,8 @@ class UserServiceImplSpec extends Specification {
             assert savedUser.gender == "Male"
             assert savedUser.bio == "Updated bio"
             assert savedUser.city == "New York"
-            assert savedUser.country == "USA"
+            assert savedUser.countryId == 7L
+            assert savedUser.regionId == 80L
             return savedUser
         }
         result.firstName == "New"
@@ -1088,5 +1101,331 @@ class UserServiceImplSpec extends Specification {
         1 * userFriendService.getAcceptedFriendIds(callerId) >> []
         1 * userFriendService.getPendingSentRequests(callerId) >> []
         1 * userFriendService.getPendingReceivedRequests(callerId) >> []
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // U16 — country / region / language links
+    // ══════════════════════════════════════════════════════════════════════
+
+    private static final Role USER_ROLE = new Role(id: 1, name: "USER")
+
+    private User linkedUser(UUID id, Long countryId, Long regionId, String legacyCountry = null) {
+        User.builder()
+                .id(id).email("linked@example.com").firstName("Lin").lastName("Ked")
+                .isActive(true).roles([USER_ROLE] as Set)
+                .countryId(countryId).regionId(regionId).country(legacyCountry)
+                .build()
+    }
+
+    private static CountryResponse country(Long id, String name) {
+        CountryResponse.builder().id(id).iso2("VN").iso3("VNM").name(name).build()
+    }
+
+    private static RegionResponse region(Long id, String name) {
+        RegionResponse.builder().id(id).countryId(7L).isoCode("VN-SG").name(name).nativeName(name).build()
+    }
+
+    // ---------- createUser with sign-up details ----------
+
+    def "createUser with details validates first, then saves the ids, the location point and a preference row"() {
+        given:
+        def savedId = UUID.randomUUID()
+        def details = UserRegistrationDetails.builder()
+                .languageCode("vi").countryId(7L).regionId(80L).latitude(10.7769d).longitude(106.7009d).build()
+        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+        referenceService.isActiveLanguage("vi") >> true
+        referenceService.getCountriesByIds({ it as Set == [7L] as Set }) >> [(7L): country(7L, "Vietnam")]
+        referenceService.getRegionsByIds({ it as Set == [80L] as Set }) >> [(80L): region(80L, "Ho Chi Minh")]
+
+        when:
+        def result = userService.createUser("geo@example.com", "hashedPw", "Geo", "User", null, details)
+
+        then: "the selection is validated before anything is saved"
+        1 * referenceService.requireValidSelection(7L, 80L)
+
+        then: "the user carries the ids and a point with X = longitude, Y = latitude"
+        1 * userRepository.save({ User u ->
+            u.countryId == 7L && u.regionId == 80L &&
+                    u.location.x == 106.7009d && u.location.y == 10.7769d && u.location.SRID == 4326
+        }) >> { User u -> u.id = savedId; u }
+
+        then: "a preference row holds the language"
+        1 * userPreferenceRepository.save({ UserPreference p -> p.userId == savedId && p.language == "vi" }) >> { UserPreference p -> p }
+
+        and: "the response resolves the display names"
+        result.countryId == 7L
+        result.regionId == 80L
+        result.country == "Vietnam"
+        result.regionName == "Ho Chi Minh"
+    }
+
+    def "createUser with no details is exactly the old behavior: an empty selection, no language check, no preference row, no point"() {
+        given:
+        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+
+        when:
+        def result = userService.createUser("plain@example.com", "hashedPw", "Plain", "User", null)
+
+        then:
+        1 * referenceService.requireValidSelection(null, null)
+        0 * referenceService.isActiveLanguage(_)
+        1 * userRepository.save({ User u -> u.countryId == null && u.regionId == null && u.location == null }) >> { User u -> u.id = UUID.randomUUID(); u }
+        0 * userPreferenceRepository.save(_)
+        result.countryId == null
+        result.country == null
+    }
+
+    def "createUser treats a blank language code as none"() {
+        given:
+        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+
+        when:
+        userService.createUser("blank@example.com", "hashedPw", "B", "L", null, UserRegistrationDetails.builder().languageCode("   ").build())
+
+        then:
+        0 * referenceService.isActiveLanguage(_)
+        1 * userRepository.save(_) >> { User u -> u.id = UUID.randomUUID(); u }
+        0 * userPreferenceRepository.save(_)
+    }
+
+    def "createUser creates nothing when the country/region selection is invalid"() {
+        given:
+        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+        referenceService.requireValidSelection(7L, 999L) >> { throw new BadRequestException("Region 999 is unknown") }
+
+        when:
+        userService.createUser("bad@example.com", "hashedPw", "B", "R", null,
+                UserRegistrationDetails.builder().countryId(7L).regionId(999L).languageCode("vi").build())
+
+        then:
+        thrown(BadRequestException)
+        0 * userRepository.save(_)
+        0 * userPreferenceRepository.save(_)
+    }
+
+    def "createUser creates nothing when the language is unknown or inactive"() {
+        given:
+        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+        referenceService.isActiveLanguage("zz") >> false
+
+        when:
+        userService.createUser("lang@example.com", "hashedPw", "L", "G", null, UserRegistrationDetails.builder().languageCode("zz").build())
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains("zz")
+        0 * userRepository.save(_)
+        0 * userPreferenceRepository.save(_)
+    }
+
+    def "createUser rejects a half-supplied or out-of-range coordinate pair and creates nothing"() {
+        given:
+        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+
+        when:
+        userService.createUser("coord@example.com", "hashedPw", "C", "O", null,
+                UserRegistrationDetails.builder().latitude(lat).longitude(lon).build())
+
+        then:
+        thrown(BadRequestException)
+        0 * userRepository.save(_)
+
+        where:
+        lat    | lon
+        10.7d  | null
+        null   | 106.7d
+        91.0d  | 0.0d
+        -90.5d | 0.0d
+        0.0d   | 181.0d
+        0.0d   | -180.5d
+    }
+
+    // ---------- updateProfile geo rules ----------
+
+    def "updateProfile with a country sets both ids, and an absent regionId clears the stored region"() {
+        given:
+        referenceService.getCountriesByIds(_) >> [:]
+        referenceService.getRegionsByIds(_) >> [:]
+        def userId = UUID.randomUUID()
+        def user = linkedUser(userId, 7L, 80L)
+
+        when:
+        userService.updateProfile(userId, userId, UpdateProfileRequest.builder().countryId(7L).build())
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * referenceService.requireValidSelection(7L, null)
+        1 * userRepository.save({ User u -> u.countryId == 7L && u.regionId == null }) >> { User u -> u }
+    }
+
+    def "updateProfile with only a regionId validates it against the stored country"() {
+        given:
+        referenceService.getCountriesByIds(_) >> [:]
+        referenceService.getRegionsByIds(_) >> [:]
+        def userId = UUID.randomUUID()
+        def user = linkedUser(userId, 7L, null)
+
+        when:
+        userService.updateProfile(userId, userId, UpdateProfileRequest.builder().regionId(80L).build())
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * referenceService.requireValidSelection(7L, 80L)
+        1 * userRepository.save({ User u -> u.countryId == 7L && u.regionId == 80L }) >> { User u -> u }
+    }
+
+    def "updateProfile with a region but no stored country is rejected and saves nothing"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = linkedUser(userId, null, null)
+        referenceService.requireValidSelection(null, 80L) >> { throw new BadRequestException("A region cannot be selected without a country") }
+
+        when:
+        userService.updateProfile(userId, userId, UpdateProfileRequest.builder().regionId(80L).build())
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        thrown(BadRequestException)
+        0 * userRepository.save(_)
+    }
+
+    def "updateProfile rejects an invalid selection before applying any other field"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = linkedUser(userId, null, null)
+        referenceService.requireValidSelection(99L, null) >> { throw new BadRequestException("Unknown or inactive country: 99") }
+
+        when:
+        userService.updateProfile(userId, userId, UpdateProfileRequest.builder().firstName("Changed").countryId(99L).build())
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        thrown(BadRequestException)
+        user.firstName == "Lin"
+        0 * userRepository.save(_)
+    }
+
+    def "updateProfile that names neither country nor region leaves the geo fields and the reference domain alone"() {
+        given:
+        referenceService.getCountriesByIds(_) >> [:]
+        referenceService.getRegionsByIds(_) >> [:]
+        def userId = UUID.randomUUID()
+        def user = linkedUser(userId, 7L, 80L)
+
+        when:
+        userService.updateProfile(userId, userId, UpdateProfileRequest.builder().bio("only the bio").build())
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        0 * referenceService.requireValidSelection(*_)
+        1 * userRepository.save({ User u -> u.countryId == 7L && u.regionId == 80L && u.bio == "only the bio" }) >> { User u -> u }
+    }
+
+    // ---------- responses: resolved names, legacy fallback, batching ----------
+
+    def "a single-user read resolves country and region names with one lookup each"() {
+        given:
+        def userId = UUID.randomUUID()
+        userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(linkedUser(userId, 7L, 80L, "old text"))
+
+        when:
+        def result = userService.getUserById(userId)
+
+        then:
+        1 * referenceService.getCountriesByIds({ it as Set == [7L] as Set }) >> [(7L): country(7L, "Vietnam")]
+        1 * referenceService.getRegionsByIds({ it as Set == [80L] as Set }) >> [(80L): region(80L, "Ho Chi Minh")]
+        result.country == "Vietnam"       // the linked name wins over the legacy text
+        result.countryId == 7L
+        result.regionId == 80L
+        result.regionName == "Ho Chi Minh"
+    }
+
+    def "a user with only legacy country text shows it, and the reference domain is not called at all"() {
+        given:
+        def userId = UUID.randomUUID()
+        userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(linkedUser(userId, null, null, "Viet Nam (typed)"))
+
+        when:
+        def result = userService.getUserById(userId)
+
+        then:
+        0 * referenceService._
+        result.country == "Viet Nam (typed)"
+        result.countryId == null
+        result.regionName == null
+    }
+
+    def "a linked id the reference domain cannot resolve falls back to the legacy text and a null region name"() {
+        given:
+        def userId = UUID.randomUUID()
+        userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(linkedUser(userId, 7L, 80L, "legacy"))
+
+        when:
+        def result = userService.getUserById(userId)
+
+        then:
+        1 * referenceService.getCountriesByIds(_) >> [:]
+        1 * referenceService.getRegionsByIds(_) >> [:]
+        result.country == "legacy"
+        result.countryId == 7L
+        result.regionName == null
+    }
+
+    def "getUsersByIds sets the ids but deliberately does not call the reference domain (hot-path cost)"() {
+        given:
+        def a = linkedUser(UUID.randomUUID(), 7L, 80L, "legacy a")
+        def b = linkedUser(UUID.randomUUID(), null, null, null)
+        userRepository.findAllById(_) >> [a, b]
+
+        when:
+        def result = userService.getUsersByIds([a.id, b.id])
+
+        then:
+        0 * referenceService._
+        result[a.id].countryId == 7L
+        result[a.id].regionId == 80L
+        result[a.id].country == "legacy a"   // unresolved: the legacy text, never a looked-up name
+        result[a.id].regionName == null
+        result[b.id].countryId == null
+    }
+
+    def "searchUsers resolves every country name on the page with ONE lookup, however many rows"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+        def u1 = linkedUser(UUID.randomUUID(), 7L, null)
+        def u2 = linkedUser(UUID.randomUUID(), 7L, null)          // same country as u1: still one id
+        def u3 = linkedUser(UUID.randomUUID(), 8L, null)
+        def u4 = linkedUser(UUID.randomUUID(), null, null, "Typed Land")
+        def u5 = linkedUser(UUID.randomUUID(), null, null, null)
+        userRepository.searchActiveUsers(callerId, "lin", pageable) >> new PageImpl<>([u1, u2, u3, u4, u5])
+        userFriendService.getAcceptedFriendIds(callerId) >> []
+        userFriendService.getPendingSentRequests(callerId) >> []
+        userFriendService.getPendingReceivedRequests(callerId) >> []
+
+        when:
+        def result = userService.searchUsers(callerId, "lin", pageable)
+
+        then:
+        1 * referenceService.getCountriesByIds({ it as Set == [7L, 8L] as Set }) >> [(7L): country(7L, "Vietnam"), (8L): country(8L, "Thailand")]
+        0 * referenceService.getRegionsByIds(_)
+        result.content*.country == ["Vietnam", "Vietnam", "Thailand", "Typed Land", null]
+    }
+
+    def "searchUsers makes no reference call when nobody on the page has a linked country"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 20)
+        userRepository.searchActiveUsers(callerId, "lin", pageable) >> new PageImpl<>([linkedUser(UUID.randomUUID(), null, null, "Typed Land")])
+        userFriendService.getAcceptedFriendIds(callerId) >> []
+        userFriendService.getPendingSentRequests(callerId) >> []
+        userFriendService.getPendingReceivedRequests(callerId) >> []
+
+        when:
+        def result = userService.searchUsers(callerId, "lin", pageable)
+
+        then:
+        0 * referenceService._
+        result.content[0].country == "Typed Land"
     }
 }

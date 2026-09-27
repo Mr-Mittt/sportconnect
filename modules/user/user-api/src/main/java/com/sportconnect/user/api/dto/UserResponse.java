@@ -30,7 +30,23 @@ public class UserResponse {
     private String coverUrl;
     private LocationResponse location;
     private String city;
+
+    /**
+     * Display name of the user's country: the linked country's English name when {@link #countryId} is set, else the
+     * legacy free text (U16), else {@code null}. <strong>Not resolved by {@code UserService.getUsersByIds}</strong> —
+     * see that method: it returns the ids only, because its hot-path callers (feed, comments, group and session
+     * lists) never show a country. The single-user reads and {@code searchUsers} do resolve it.
+     */
     private String country;
+
+    /** {@code countries.id} in the reference domain, or {@code null}. Set on every path, including the batch lookup. */
+    private Long countryId;
+
+    /** {@code regions.id} in the reference domain, or {@code null}. Set on every path, including the batch lookup. */
+    private Long regionId;
+
+    /** English name of {@link #regionId}'s region, or {@code null}. Resolved on the same paths as {@link #country}. */
+    private String regionName;
     private Integer heightCm;
     private BigDecimal weightKg;
     private Integer shoeSizeCm;

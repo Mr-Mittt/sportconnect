@@ -13,6 +13,8 @@ dependencies {
     // U15: toPublicUserInfo() reads the target user's active sport ids via UserSportProfileService
     // — sport-api only (interface + DTOs); sport-api depends solely on :modules:common, so no cycle.
     implementation project(':modules:sport:sport-api')
+    // U16: country/region/language links and validation. reference-api depends only on common, so no cycle.
+    implementation project(':modules:reference:reference-api')
     
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'

@@ -23,12 +23,30 @@ CREATE TABLE IF NOT EXISTS users (
     location GEOMETRY(Point, 4326),
     city VARCHAR(100),
     country VARCHAR(100),
+    country_id BIGINT,
+    region_id BIGINT,
     is_email_verified BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
     last_login_at TIMESTAMP,
     height_cm INTEGER,
     weight_kg NUMERIC(5,2),
     shoe_size_cm INTEGER,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP
+);
+
+-- U16: user_preferences (language is now validated against the reference languages). Mirrors the V001 table.
+CREATE TABLE IF NOT EXISTS user_preferences (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL UNIQUE,
+    language VARCHAR(35) DEFAULT 'en',
+    timezone VARCHAR(50) DEFAULT 'UTC',
+    distance_unit VARCHAR(10) DEFAULT 'km',
+    notification_email BOOLEAN DEFAULT TRUE,
+    notification_push BOOLEAN DEFAULT TRUE,
+    notification_sms BOOLEAN DEFAULT FALSE,
+    privacy_profile VARCHAR(20) DEFAULT 'public',
+    privacy_location VARCHAR(20) DEFAULT 'friends',
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP
 );
@@ -186,6 +204,16 @@ CREATE TABLE IF NOT EXISTS friendships (
     CONSTRAINT unique_friendship_pair UNIQUE(user_id, friend_id),
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (friend_id) REFERENCES users(id)
+);
+
+-- U16: friend_requests — GET /api/users/search resolves the caller's friendship state through it. Mirrors the entity.
+CREATE TABLE IF NOT EXISTS friend_requests (
+    id UUID PRIMARY KEY,
+    sender_id UUID NOT NULL,
+    receiver_id UUID NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP
 );
 
 -- Create posts table

@@ -34,6 +34,14 @@ has a free-text **Country** input; replace it with `GeoLocaleFields`.
 - Existing users whose legacy free text was not matched to a country: `country` shows the legacy text read-only in the modal
   until they pick a real country (the Country select starts empty).
 - Country changed → region cleared client-side before submit. A country without regions → region select disabled.
+- **Contract shipped (backend U16, 2026-09-26), verified live:** `PUT /users/{id}/profile` takes `countryId` / `regionId` (the free-text
+  `country` is gone); a bad selection is a `400` with a readable `message` and applies **nothing** (not even other fields in the same
+  request). `UserResponse` returns `country` (resolved name, else legacy text), `countryId`, `regionId`, `regionName`. `PUT /users/me/preferences`
+  now `400`s on a `language` that is not an active reference language code; both preference calls `404` for a deactivated caller.
+- **Gap between backend U16 and this ticket (accepted 2026-09-26):** once U16 merges, the *current* `EditProfileModal` still sends
+  free-text `country`, which the server now silently ignores — a typed country appears to save but does nothing. Ship this ticket
+  promptly after U16, or hide the country field until it lands. Also: on the profile update, `countryId` present means `regionId`
+  *replaces* the region, so an absent `regionId` clears it — always send both together (as the both-together rule above already says).
 - The deactivated-user case is server-side (U16); a `404`/`403` on save surfaces the server message.
 - **Placement note:** Language could later move to `ACCOUNT-1`'s account-settings modal (TopBar avatar dropdown). Not decided
   here — if ACCOUNT-1 is picked up first, revisit where the Language select belongs before building it twice.
