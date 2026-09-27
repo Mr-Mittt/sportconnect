@@ -49,7 +49,7 @@ import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.sport.api.service.UserSportProfileService;
-import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.api.service.UserService;
 import lombok.extern.slf4j.Slf4j;
@@ -312,7 +312,8 @@ public class GroupServiceImpl implements GroupService {
                 .map(Group::getCreatedBy)
                 .distinct()
                 .collect(Collectors.toList());
-        Map<UUID, UserResponse> creatorsById = creatorIds.isEmpty() ? Map.of() : userService.getUsersByIds(creatorIds);
+        // U18: only fullName/avatarUrl read below.
+        Map<UUID, UserSummaryResponse> creatorsById = creatorIds.isEmpty() ? Map.of() : userService.getUserSummariesByIds(creatorIds);
 
         List<Integer> roleIds = memberships.getContent().stream()
                 .map(GroupMember::getRoleId)
@@ -350,8 +351,8 @@ public class GroupServiceImpl implements GroupService {
         Set<UUID> creatorIds = rawPage.getContent().stream()
                 .map(row -> ((Group) row[0]).getCreatedBy())
                 .collect(Collectors.toSet());
-        Map<UUID, String> creatorNames = userService.getUsersByIds(new ArrayList<>(creatorIds)).values().stream()
-                .collect(Collectors.toMap(UserResponse::getId, UserResponse::getFullName));
+        Map<UUID, String> creatorNames = userService.getUserSummariesByIds(new ArrayList<>(creatorIds)).values().stream()
+                .collect(Collectors.toMap(UserSummaryResponse::getId, UserSummaryResponse::getFullName));
 
         List<GroupSearchResponse> sorted = rawPage.getContent().stream()
                 .map(row -> {
@@ -588,7 +589,7 @@ public class GroupServiceImpl implements GroupService {
                 .map(GroupMember::getUserId)
                 .distinct()
                 .collect(Collectors.toList());
-        Map<UUID, UserResponse> usersById = userIds.isEmpty() ? Map.of() : userService.getUsersByIds(userIds);
+        Map<UUID, UserSummaryResponse> usersById = userIds.isEmpty() ? Map.of() : userService.getUserSummariesByIds(userIds);
 
         List<Integer> roleIds = membersPage.getContent().stream()
                 .map(GroupMember::getRoleId)
@@ -709,7 +710,7 @@ public class GroupServiceImpl implements GroupService {
         List<UUID> idsToResolve = joinRequest.getReviewedBy() != null
                 ? List.of(userId, joinRequest.getReviewedBy())
                 : List.of(userId);
-        Map<UUID, UserResponse> usersById = userService.getUsersByIds(idsToResolve);
+        Map<UUID, UserSummaryResponse> usersById = userService.getUserSummariesByIds(idsToResolve);
         return mapToJoinRequestResponse(joinRequest, groupsById, usersById);
     }
 
@@ -1651,7 +1652,7 @@ public class GroupServiceImpl implements GroupService {
                         .collect(Collectors.toMap(Group::getId, group -> group));
 
         Map<Long, List<UUID>> coInviterIdsByInvitation = buildCoInviterIdsByInvitation(invitationsPage.getContent());
-        Map<UUID, UserResponse> usersById =
+        Map<UUID, UserSummaryResponse> usersById =
                 buildInviterInviteeUserMap(invitationsPage.getContent(), coInviterIdsByInvitation);
 
         return invitationsPage.map(inv -> mapToGroupInvitationResponse(
@@ -1689,7 +1690,7 @@ public class GroupServiceImpl implements GroupService {
      */
     private Page<GroupInvitationResponse> mapInvitationPage(Page<GroupInvitation> invitationsPage, Group group) {
         Map<Long, List<UUID>> coInviterIdsByInvitation = buildCoInviterIdsByInvitation(invitationsPage.getContent());
-        Map<UUID, UserResponse> usersById =
+        Map<UUID, UserSummaryResponse> usersById =
                 buildInviterInviteeUserMap(invitationsPage.getContent(), coInviterIdsByInvitation);
         return invitationsPage.map(inv -> mapToGroupInvitationResponse(inv, group, usersById, coInviterIdsByInvitation));
     }
@@ -1735,9 +1736,9 @@ public class GroupServiceImpl implements GroupService {
 
     // Helper methods
     private GroupResponse mapToGroupResponse(Group group, UUID currentUserId) {
-        String createdByFullName = userService.getUsersByIds(List.of(group.getCreatedBy())).values().stream()
+        String createdByFullName = userService.getUserSummariesByIds(List.of(group.getCreatedBy())).values().stream()
                 .findFirst()
-                .map(UserResponse::getFullName)
+                .map(UserSummaryResponse::getFullName)
                 .orElse("Unknown User");
 
         long memberCount = groupMemberRepository.countByGroupId(group.getId());
@@ -1763,11 +1764,11 @@ public class GroupServiceImpl implements GroupService {
     }
 
     private GroupResponse mapToGroupResponse(Group group,
-                                              Map<UUID, UserResponse> creatorsById,
+                                              Map<UUID, UserSummaryResponse> creatorsById,
                                               Map<Long, Long> memberCountsById,
                                               Map<Integer, GroupRole> rolesById,
                                               Integer currentUserRoleId) {
-        UserResponse creator = creatorsById.get(group.getCreatedBy());
+        UserSummaryResponse creator = creatorsById.get(group.getCreatedBy());
         String createdByFullName = creator != null ? creator.getFullName() : "Unknown User";
 
         long memberCount = memberCountsById.getOrDefault(group.getId(), 0L);
@@ -1794,9 +1795,9 @@ public class GroupServiceImpl implements GroupService {
     }
 
     private GroupMemberResponse mapToGroupMemberResponse(GroupMember member,
-                                                          Map<UUID, UserResponse> usersById,
+                                                          Map<UUID, UserSummaryResponse> usersById,
                                                           Map<Integer, GroupRole> rolesById) {
-        UserResponse memberUser = usersById.get(member.getUserId());
+        UserSummaryResponse memberUser = usersById.get(member.getUserId());
         String userFullName = memberUser != null ? memberUser.getFullName() : "Unknown User";
         String userAvatarUrl = memberUser != null ? memberUser.getAvatarUrl() : null;
 
@@ -1833,26 +1834,26 @@ public class GroupServiceImpl implements GroupService {
             }
         }
         List<UUID> distinctUserIds = userIds.stream().distinct().collect(Collectors.toList());
-        Map<UUID, UserResponse> usersById = distinctUserIds.isEmpty()
+        Map<UUID, UserSummaryResponse> usersById = distinctUserIds.isEmpty()
                 ? Map.of()
-                : userService.getUsersByIds(distinctUserIds);
+                : userService.getUserSummariesByIds(distinctUserIds);
 
         return requestsPage.map(request -> mapToJoinRequestResponse(request, groupsById, usersById));
     }
 
     private JoinRequestResponse mapToJoinRequestResponse(GroupJoinRequest request,
                                                           Map<Long, Group> groupsById,
-                                                          Map<UUID, UserResponse> usersById) {
+                                                          Map<UUID, UserSummaryResponse> usersById) {
         Group group = groupsById.get(request.getGroupId());
         String groupName = group != null ? group.getGroupName() : "Unknown Group";
 
-        UserResponse requestUser = usersById.get(request.getUserId());
+        UserSummaryResponse requestUser = usersById.get(request.getUserId());
         String userFullName = requestUser != null ? requestUser.getFullName() : "Unknown User";
         String userAvatarUrl = requestUser != null ? requestUser.getAvatarUrl() : null;
 
         String reviewedByFullName = null;
         if (request.getReviewedBy() != null) {
-            UserResponse reviewer = usersById.get(request.getReviewedBy());
+            UserSummaryResponse reviewer = usersById.get(request.getReviewedBy());
             reviewedByFullName = reviewer != null ? reviewer.getFullName() : "Unknown User";
         }
 
@@ -1893,7 +1894,7 @@ public class GroupServiceImpl implements GroupService {
         return result;
     }
 
-    private Map<UUID, UserResponse> buildInviterInviteeUserMap(List<GroupInvitation> invitations,
+    private Map<UUID, UserSummaryResponse> buildInviterInviteeUserMap(List<GroupInvitation> invitations,
                                                                 Map<Long, List<UUID>> coInviterIdsByInvitation) {
         List<UUID> userIds = new ArrayList<>();
         for (GroupInvitation invitation : invitations) {
@@ -1902,7 +1903,7 @@ public class GroupServiceImpl implements GroupService {
         }
         coInviterIdsByInvitation.values().forEach(userIds::addAll);
         List<UUID> distinctUserIds = userIds.stream().distinct().collect(Collectors.toList());
-        return distinctUserIds.isEmpty() ? Map.of() : userService.getUsersByIds(distinctUserIds);
+        return distinctUserIds.isEmpty() ? Map.of() : userService.getUserSummariesByIds(distinctUserIds);
     }
 
     /**
@@ -1912,7 +1913,7 @@ public class GroupServiceImpl implements GroupService {
      */
     private GroupInvitationResponse mapSingleInvitationResponse(GroupInvitation invitation, Group group) {
         Map<Long, List<UUID>> coInviterIdsByInvitation = buildCoInviterIdsByInvitation(List.of(invitation));
-        Map<UUID, UserResponse> usersById = buildInviterInviteeUserMap(List.of(invitation), coInviterIdsByInvitation);
+        Map<UUID, UserSummaryResponse> usersById = buildInviterInviteeUserMap(List.of(invitation), coInviterIdsByInvitation);
         return mapToGroupInvitationResponse(invitation, group, usersById, coInviterIdsByInvitation);
     }
 
@@ -1923,12 +1924,12 @@ public class GroupServiceImpl implements GroupService {
      * missed (defensive, same "Unknown Group" convention as the name fallback).
      */
     private GroupInvitationResponse mapToGroupInvitationResponse(GroupInvitation invitation, Group group,
-                                                                  Map<UUID, UserResponse> usersById,
+                                                                  Map<UUID, UserSummaryResponse> usersById,
                                                                   Map<Long, List<UUID>> coInviterIdsByInvitation) {
         String groupName = group != null ? group.getGroupName() : "Unknown Group";
         Long sportId = group != null ? group.getSportId() : null;
-        UserResponse inviter = usersById.get(invitation.getInviterId());
-        UserResponse invitee = usersById.get(invitation.getInviteeId());
+        UserSummaryResponse inviter = usersById.get(invitation.getInviterId());
+        UserSummaryResponse invitee = usersById.get(invitation.getInviteeId());
         String inviterFullName = inviter != null ? inviter.getFullName() : "Unknown User";
         String inviteeFullName = invitee != null ? invitee.getFullName() : "Unknown User";
 
@@ -1938,7 +1939,7 @@ public class GroupServiceImpl implements GroupService {
         List<UUID> coInviterIds = coInviterIdsByInvitation.getOrDefault(invitation.getId(), List.of(invitation.getInviterId()));
         List<String> inviterFullNames = coInviterIds.stream()
                 .map(id -> {
-                    UserResponse user = usersById.get(id);
+                    UserSummaryResponse user = usersById.get(id);
                     return user != null ? user.getFullName() : "Unknown User";
                 })
                 .collect(Collectors.toList());
@@ -2044,7 +2045,7 @@ public class GroupServiceImpl implements GroupService {
         List<UUID> idsToResolve = inviterId != null
                 ? List.of(newMemberId, inviterId)
                 : List.of(newMemberId);
-        Map<UUID, UserResponse> usersById = userService.getUsersByIds(idsToResolve);
+        Map<UUID, UserSummaryResponse> usersById = userService.getUserSummariesByIds(idsToResolve);
         String newMemberName = usersById.get(newMemberId).getFullName();
 
         String content = inviterId != null

@@ -17,6 +17,7 @@ import com.sportconnect.reference.api.service.ReferenceService;
 import com.sportconnect.user.api.dto.UserInfoResponse;
 import com.sportconnect.user.api.dto.UserRegistrationDetails;
 import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.dto.UserSearchResponse;
 import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.api.service.UserService;
@@ -156,6 +157,18 @@ public class UserServiceImpl implements UserService {
         // U16: intentionally NOT resolved (GeoNames.NONE) — see the interface Javadoc. The ids are still set.
         return userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, user -> toUserResponse(user, GeoNames.NONE)));
+    }
+
+    /** {@inheritDoc} Same one-query, no-active-filter contract as {@link #getUsersByIds}, narrowed to the DTO. */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, UserSummaryResponse> getUserSummariesByIds(List<UUID> userIds) {
+        return userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, user -> UserSummaryResponse.builder()
+                        .id(user.getId())
+                        .fullName(user.getFullName())
+                        .avatarUrl(user.getAvatarUrl())
+                        .build()));
     }
 
     @Override

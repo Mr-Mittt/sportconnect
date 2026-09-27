@@ -15,7 +15,7 @@ import com.sportconnect.social.post.repository.CommentRepository
 import com.sportconnect.social.post.repository.PostHashtagRepository
 import com.sportconnect.social.post.repository.PostLikeRepository
 import com.sportconnect.social.post.repository.PostRepository
-import com.sportconnect.user.api.dto.UserResponse
+import com.sportconnect.user.api.dto.UserSummaryResponse
 import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.api.service.UserService
 import org.springframework.data.domain.PageImpl
@@ -59,7 +59,7 @@ class PostServiceImplSpec extends Specification {
         hashtagService.decrementHashtagsForPost(_) >> {}
         // Default: no author resolves — existing tests don't assert on this field, so they
         // keep passing unchanged with the "Unknown User" fallback (A9).
-        userService.getUsersByIds(_) >> [:]
+        userService.getUserSummariesByIds(_) >> [:]
     }
 
     UUID userId = UUID.randomUUID()
@@ -129,10 +129,9 @@ class PostServiceImplSpec extends Specification {
     def "createPost resolves userFullName/userAvatarUrl from the batch-resolved author"() {
         given:
         def request = CreatePostRequest.builder().content("Hello world").build()
-        def author = UserResponse.builder()
+        def author = UserSummaryResponse.builder()
                 .id(userId)
-                .firstName("Jordan")
-                .lastName("Lee")
+                .fullName("Jordan Lee")
                 .avatarUrl("https://example.com/avatar.png")
                 .build()
 
@@ -142,7 +141,7 @@ class PostServiceImplSpec extends Specification {
         then:
         1 * postRepository.save(_ as Post) >> savedPost()
         stubCounts()
-        userService.getUsersByIds([userId]) >> [(userId): author]
+        userService.getUserSummariesByIds([userId]) >> [(userId): author]
         result.userFullName == "Jordan Lee"
         result.userAvatarUrl == "https://example.com/avatar.png"
     }
@@ -157,7 +156,7 @@ class PostServiceImplSpec extends Specification {
         then:
         1 * postRepository.save(_ as Post) >> savedPost()
         stubCounts()
-        // setup()'s default userService.getUsersByIds(_) >> [:] applies — no override needed
+        // setup()'s default userService.getUserSummariesByIds(_) >> [:] applies — no override needed
         result.userFullName == "Unknown User"
         result.userAvatarUrl == null
     }

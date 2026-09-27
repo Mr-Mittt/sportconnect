@@ -64,7 +64,13 @@ DELETE /api/users/{userId}               ROLE_ADMIN
     `regionName` = `null`). It is the hot batch call behind feed, comments, group and session lists (Discover included), none of which
     shows a country; resolving would add up to two reference queries to each. A caller that needs names collects the ids and calls
     `ReferenceService.getCountriesByIds` / `getRegionsByIds` once. Every single-user read and `searchUsers` **do** resolve (`GeoNames`),
-    with one lookup per page, never per row. `UserFriendServiceImpl.getFriends` builds its own partial `UserResponse` with no geo fields.
+    with one lookup per page, never per row. `UserFriendServiceImpl.getFriends` builds its own PII-free `UserInfoResponse` (U17), not
+    `UserResponse` at all.
+  - **Display-name-only callers should use `getUserSummariesByIds`, not `getUsersByIds` (U18).** A census of every real cross-domain
+    `getUsersByIds` call site (`notification-impl`, `session-impl`, `group-impl`, `post-impl` — 16 sites) found none reading anything
+    beyond `fullName`/`avatarUrl`; all were migrated to the new method, which returns `UserSummaryResponse { id, fullName, avatarUrl }`
+    (no PII, no geo fields, nothing that grows unnoticed the way `UserResponse` has). Same one-query, no-active-filter contract as
+    `getUsersByIds`. Keep new batch-by-id callers on this method unless they genuinely need more of `UserResponse`.
   - **Profile update rule:** `countryId` present → `regionId` *replaces* the region (absent = cleared, so clients send both); a lone
     `regionId` is validated against the stored country; validated with `ReferenceService.requireValidSelection` (→ `400`) **before** any
     other field is applied. An old client's free-text `country` is silently ignored by Jackson (not rejected). Clearing a country is unsupported.

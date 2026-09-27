@@ -4,6 +4,7 @@ import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserInfoResponse;
 import com.sportconnect.user.api.dto.UserRegistrationDetails;
 import com.sportconnect.user.api.dto.UserResponse;
+import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.dto.UserSearchResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -45,6 +46,16 @@ public interface UserService {
      * call {@code ReferenceService.getCountriesByIds} / {@code getRegionsByIds} once, or use a single-user read.
      */
     Map<UUID, UserResponse> getUsersByIds(List<UUID> userIds);
+
+    /**
+     * U18 — the same batch-by-id contract as {@link #getUsersByIds} (one query, unknown/inactive ids simply
+     * absent, no exception), narrowed to {@link UserSummaryResponse} ({@code id}/{@code fullName}/{@code avatarUrl}).
+     * Prefer this over {@link #getUsersByIds} at any call site that only resolves a display name and avatar —
+     * which is every current cross-domain caller (post/comment authors, group members, session
+     * creators/participants, notification actors). No reference-domain or other cross-domain call is added by
+     * using this instead — both methods cost exactly one {@code userRepository} query.
+     */
+    Map<UUID, UserSummaryResponse> getUserSummariesByIds(List<UUID> userIds);
 
     /**
      * Get user by email

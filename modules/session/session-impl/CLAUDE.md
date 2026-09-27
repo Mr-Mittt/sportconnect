@@ -12,7 +12,7 @@ fields. See `modules/location/location-impl/CLAUDE.md` for that side of the boun
 | `modules/common` | ApiResponse<T>, shared exceptions |
 | `modules/social/group-api` | Permission checks (`canManageMembers`/`isGroupMember`), `getGroup` for private-group visibility |
 | `modules/social/post-api` | Originally needed only because `group-api`'s `GroupResponse` references `PostResponse` (pinned posts). SESSION-10 gave it a second, real reason: `createSession` calls `PostService.createSessionPost` inline to create each session's companion `SESSION_POST`, and the comment-proxy methods (`createSessionComment` etc.) call `CommentService`'s bypass methods. Plain `@RequiredArgsConstructor` — no `@Lazy` needed, since `post-impl` has no dependency back on this module (unlike `group-impl`'s `postService` field, which mirrors a real bidirectional dependency with `post-impl`) |
-| `modules/user/user-api` | Batch `UserService.getUsersByIds` — creator/participant enrichment |
+| `modules/user/user-api` | Batch `UserService.getUserSummariesByIds` (U18) — creator/participant name+avatar enrichment |
 | `modules/sport/sport-api` | Batch `SportService.getSportsByIds` — `sportName` enrichment |
 | `modules/location/location-api` | Batch `LocationService.getLocationsByIds`/single `getLocation` — location enrichment + sport-match validation |
 

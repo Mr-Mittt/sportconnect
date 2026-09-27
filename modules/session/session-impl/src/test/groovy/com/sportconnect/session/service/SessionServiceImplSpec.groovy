@@ -44,7 +44,7 @@ import com.sportconnect.sport.api.dto.SportResponse
 import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.api.service.UserSportProfileService
-import com.sportconnect.user.api.dto.UserResponse
+import com.sportconnect.user.api.dto.UserSummaryResponse
 import com.sportconnect.user.api.service.UserService
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.data.domain.PageImpl
@@ -97,7 +97,7 @@ class SessionServiceImplSpec extends Specification {
         // SESSION-21: joinSession/leaveSession/approveParticipant now resolve the participant's
         // display name for the system comment's content. Same lenient-default rationale â€” the
         // tests that actually care about the name stub it themselves in their then-block.
-        userService.getUsersByIds(_) >> [:]
+        userService.getUserSummariesByIds(_) >> [:]
         // A7: createSession now resolves a caller-supplied sportId to check it is still active.
         // Lenient default for the same reason as above â€” 40+ createSession tests pass a sportId
         // without caring about sport status; the one test that does care overrides this.
@@ -105,7 +105,7 @@ class SessionServiceImplSpec extends Specification {
     }
 
     private void stubBatchEnrichment() {
-        userService.getUsersByIds(_) >> [:]
+        userService.getUserSummariesByIds(_) >> [:]
         sportService.getActiveSportsByIds(_) >> [:]
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
         sessionParticipantRepository.countBySessionIdsAndStatus(_, _) >> []
@@ -2314,7 +2314,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * locationService.getLocation(1L) >> basketballLocation
         1 * sessionRepository.save(_) >> saved
-        userService.getUsersByIds(_) >> [:]
+        userService.getUserSummariesByIds(_) >> [:]
         sportService.getActiveSportsByIds(_) >> [:]
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
         sessionParticipantRepository.findBySessionIdInAndUserId(_, _) >> []
@@ -2890,7 +2890,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionDetailGate.require(session, userId, _, _) >> session
-        userService.getUsersByIds(_) >> [:]
+        userService.getUserSummariesByIds(_) >> [:]
         sportService.getActiveSportsByIds(_) >> [:]
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
         sessionParticipantRepository.countBySessionIdsAndStatus(_, _) >> []
@@ -2927,7 +2927,7 @@ class SessionServiceImplSpec extends Specification {
         def creatorId = UUID.randomUUID()
         def joinerId = UUID.randomUUID()
         def session = Session.builder().id(1L).postId(999L).createdBy(creatorId).autoApprove(true).build()
-        def joiner = UserResponse.builder().id(joinerId).firstName("Alice").lastName("Nguyen").build()
+        def joiner = UserSummaryResponse.builder().id(joinerId).fullName("Alice Nguyen").build()
 
         when:
         sessionService.joinSession(1L, joinerId)
@@ -2936,7 +2936,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, joinerId) >> Optional.empty()
         1 * sessionParticipantRepository.save(_) >> { SessionParticipant p -> p }
-        1 * userService.getUsersByIds([joinerId]) >> [(joinerId): joiner]
+        1 * userService.getUserSummariesByIds([joinerId]) >> [(joinerId): joiner]
 
         and: "the entry is authored by the creator, not the joiner it is about"
         1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen joined the session")
@@ -2983,7 +2983,7 @@ class SessionServiceImplSpec extends Specification {
         def session = Session.builder().id(1L).postId(999L).createdBy(creatorId).groupId(5L).build()
         def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(leaverId)
                 .status(ParticipantStatus.JOINED).build()
-        def leaver = UserResponse.builder().id(leaverId).firstName("Alice").lastName("Nguyen").build()
+        def leaver = UserSummaryResponse.builder().id(leaverId).fullName("Alice Nguyen").build()
 
         when:
         sessionService.leaveSession(1L, leaverId)
@@ -2992,7 +2992,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, leaverId) >> Optional.of(participant)
         1 * sessionParticipantRepository.save(_) >> participant
-        1 * userService.getUsersByIds([leaverId]) >> [(leaverId): leaver]
+        1 * userService.getUserSummariesByIds([leaverId]) >> [(leaverId): leaver]
         1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen left the session")
         0 * sessionOutboxWriter.record("session.comment.created", _)
     }
@@ -3024,7 +3024,7 @@ class SessionServiceImplSpec extends Specification {
                 .status(SessionStatus.SCHEDULED).build()
         def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(requesterId)
                 .status(ParticipantStatus.REQUESTED).build()
-        def requester = UserResponse.builder().id(requesterId).firstName("Alice").lastName("Nguyen").build()
+        def requester = UserSummaryResponse.builder().id(requesterId).fullName("Alice Nguyen").build()
 
         when:
         sessionService.approveParticipant(1L, creatorId, requesterId)
@@ -3033,7 +3033,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, requesterId) >> Optional.of(participant)
         1 * sessionParticipantRepository.save(_) >> participant
-        1 * userService.getUsersByIds([requesterId]) >> [(requesterId): requester]
+        1 * userService.getUserSummariesByIds([requesterId]) >> [(requesterId): requester]
         1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen joined the session")
         0 * sessionOutboxWriter.record("session.comment.created", _)
     }
@@ -3070,7 +3070,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, joinerId) >> Optional.empty()
         1 * sessionParticipantRepository.save(_) >> { SessionParticipant p -> p }
-        1 * userService.getUsersByIds([joinerId]) >> [:]
+        1 * userService.getUserSummariesByIds([joinerId]) >> [:]
 
         and: "an unresolvable name never fails an otherwise valid join"
         1 * commentService.createSystemSessionComment(999L, creatorId, "A participant joined the session")
