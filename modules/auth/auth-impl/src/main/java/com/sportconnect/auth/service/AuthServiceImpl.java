@@ -12,6 +12,7 @@ import com.sportconnect.auth.repository.PasswordResetTokenRepository;
 import com.sportconnect.auth.repository.RefreshTokenRepository;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.UnauthorizedException;
+import com.sportconnect.user.api.dto.UserRegistrationDetails;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -63,7 +64,16 @@ public class AuthServiceImpl implements AuthService {
                 encodedPassword,
                 firstName,
                 lastName,
-                request.getPhoneNumber()
+                request.getPhoneNumber(),
+                // U16: the optional language / country / region / coordinates. Validated inside createUser, before
+                // the user is saved, so a bad selection is a 400 that creates nothing.
+                UserRegistrationDetails.builder()
+                        .languageCode(request.getLanguageCode())
+                        .countryId(request.getCountryId())
+                        .regionId(request.getRegionId())
+                        .latitude(request.getLatitude())
+                        .longitude(request.getLongitude())
+                        .build()
         );
 
         log.info("Registered new user: {}", userResponse.getEmail());

@@ -42,7 +42,21 @@ public class UpdateProfileRequest {
 
     private String city;
 
-    private String country;
+    /**
+     * {@code countries.id} from the reference domain. Replaces the free-text {@code country} field this request
+     * used to carry (U16): an old client that still sends {@code "country"} has it silently ignored, not rejected.
+     *
+     * <p>When present, {@link #regionId} <strong>replaces</strong> the stored region — so an absent {@code regionId}
+     * clears it; send both together. Validated by {@code ReferenceService.requireValidSelection} ({@code 400}).
+     * Clearing a country once set is not supported.
+     */
+    private Long countryId;
+
+    /**
+     * {@code regions.id}. With {@link #countryId} it is the new region (nullable = none). Alone, it is validated
+     * against the user's stored country ({@code 400} if there is none or the region belongs elsewhere).
+     */
+    private Long regionId;
 
     private Integer heightCm;
 

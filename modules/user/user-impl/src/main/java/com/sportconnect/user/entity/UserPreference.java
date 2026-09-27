@@ -33,7 +33,8 @@ public class UserPreference {
     @Column(name = "user_id", unique = true, nullable = false)
     private UUID userId;
 
-    @Column(length = 10)
+    /** A {@code languages.code} (BCP 47); validated against the reference languages on write (U16). */
+    @Column(length = 35)
     @Builder.Default
     private String language = "en";
 

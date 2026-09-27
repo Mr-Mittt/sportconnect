@@ -1,19 +1,33 @@
 package com.sportconnect.user.service
 
+import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ResourceNotFoundException
+import com.sportconnect.reference.api.service.ReferenceService
 import com.sportconnect.user.api.dto.UpdateUserPreferenceRequest
 import com.sportconnect.user.entity.UserPreference
 import com.sportconnect.user.repository.UserPreferenceRepository
+import com.sportconnect.user.repository.UserRepository
 import spock.lang.Specification
 import spock.lang.Subject
 
 class UserPreferenceServiceImplSpec extends Specification {
 
     UserPreferenceRepository userPreferenceRepository = Mock()
+    UserRepository userRepository = Mock()
+    ReferenceService referenceService = Mock()
 
     @Subject
-    UserPreferenceServiceImpl userPreferenceService = new UserPreferenceServiceImpl(userPreferenceRepository)
+    UserPreferenceServiceImpl userPreferenceService = new UserPreferenceServiceImpl(userPreferenceRepository, userRepository, referenceService)
 
     UUID userId = UUID.randomUUID()
+
+    // U16 defaults: the caller is active and en/vi are the active languages. A feature that needs the opposite
+    // declares its own interaction in a then: block, which takes precedence over these.
+    def setup() {
+        userRepository.existsByIdAndIsActiveTrue(userId) >> true
+        referenceService.isActiveLanguage("en") >> true
+        referenceService.isActiveLanguage("vi") >> true
+    }
 
     private UserPreference existingPreference() {
         UserPreference.builder()
@@ -144,5 +158,66 @@ class UserPreferenceServiceImplSpec extends Specification {
         1 * userPreferenceRepository.findByUserId(userId) >> Optional.of(preference)
         1 * userPreferenceRepository.save(_) >> { UserPreference p -> p }
         result.distanceUnit == "mi"
+    }
+
+    // ---------- U16: active-language validation ----------
+
+    def "updatePreferences rejects a language that is not an active reference language, before touching any row"() {
+        given:
+        def request = UpdateUserPreferenceRequest.builder().language(language).build()
+
+        when:
+        userPreferenceService.updatePreferences(userId, request)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.message.contains(language)
+        0 * userPreferenceRepository._
+
+        where:
+        language << ["zz", "fr", "VI", "not-a-language"]
+    }
+
+    def "updatePreferences accepts an active language and stores it"() {
+        given:
+        def preference = existingPreference()
+
+        when:
+        def result = userPreferenceService.updatePreferences(userId, UpdateUserPreferenceRequest.builder().language("vi").build())
+
+        then:
+        1 * userPreferenceRepository.findByUserId(userId) >> Optional.of(preference)
+        1 * userPreferenceRepository.save({ UserPreference p -> p.language == "vi" }) >> { UserPreference p -> p }
+        result.language == "vi"
+    }
+
+    def "updatePreferences does not consult the reference languages when no language is supplied"() {
+        when:
+        userPreferenceService.updatePreferences(userId, UpdateUserPreferenceRequest.builder().timezone("UTC").build())
+
+        then:
+        1 * userPreferenceRepository.findByUserId(userId) >> Optional.of(existingPreference())
+        1 * userPreferenceRepository.save(_) >> { UserPreference p -> p }
+        0 * referenceService.isActiveLanguage(_)
+    }
+
+    // ---------- U16: a deactivated caller gets no further interaction ----------
+
+    def "a deactivated (or unknown) caller is rejected on #action, before any row is created"() {
+        when:
+        switch (action) {
+            case "read": userPreferenceService.getPreferences(userId); break
+            case "write": userPreferenceService.updatePreferences(userId, UpdateUserPreferenceRequest.builder().timezone("UTC").build()); break
+            case "write-language": userPreferenceService.updatePreferences(userId, UpdateUserPreferenceRequest.builder().language("vi").build()); break
+        }
+
+        then:
+        1 * userRepository.existsByIdAndIsActiveTrue(userId) >> false
+        thrown(ResourceNotFoundException)
+        0 * userPreferenceRepository._
+        0 * referenceService._
+
+        where:
+        action << ["read", "write", "write-language"]
     }
 }

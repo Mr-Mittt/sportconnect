@@ -25,6 +25,22 @@ detection, and translate the sign-up surface.
 - Update MSW `auth.ts` register handler for the new fields; keep `auth.ts` fixtures and the typed contract 1:1 with
   `RegisterRequest`.
 
+## Delta — backend U16 shipped (2026-09-26)
+
+The register contract this ticket was blocked on now exists. Verified against a running backend on the real dev database:
+
+- **`POST /api/auth/register` additive optional fields:** `languageCode` (a `languages.code`, ≤ 35 chars), `countryId`, `regionId`, `latitude`,
+  `longitude`. Omitting all of them is exactly the old request.
+- **Validation → `400`, and a `400` creates no user:** a region without a country, an unknown or inactive country/region, a region that belongs
+  to another country, an unknown or inactive `languageCode`, only one of latitude/longitude, or a coordinate out of range (lat ±90, lon ±180).
+  The message is in `message` (e.g. `Unknown or inactive language: zz`); the both-or-neither failure instead carries
+  `data.coordinatePairComplete` — **never render field names**, map any `400` from the optional block to a generic hint.
+- **Saved coordinates may disagree with the chosen country/region** (a traveller signing up abroad); the server tolerates it and the dropdown
+  choices win. Coordinates go to the profile location only when the user pressed "Use my current location".
+- A supplied `languageCode` becomes the user's stored preference language (`GET /api/users/me/preferences` returns it right after sign-up).
+  Without one, no preference row exists yet (created lazily on first access, default `en`).
+- The register response's `data.user` is a full `UserResponse` including `country` (resolved name), `countryId`, `regionId`, `regionName`.
+
 ## Edge cases
 
 - Unsupported browser language → language stays blank, UI stays `en`.

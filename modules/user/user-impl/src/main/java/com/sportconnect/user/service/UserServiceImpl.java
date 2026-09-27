@@ -11,14 +11,20 @@ import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.UserSportProfileService;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserFriendshipStatus;
+import com.sportconnect.reference.api.dto.CountryResponse;
+import com.sportconnect.reference.api.dto.RegionResponse;
+import com.sportconnect.reference.api.service.ReferenceService;
 import com.sportconnect.user.api.dto.UserInfoResponse;
+import com.sportconnect.user.api.dto.UserRegistrationDetails;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.dto.UserSearchResponse;
 import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.api.service.UserService;
 import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
+import com.sportconnect.user.entity.UserPreference;
 import com.sportconnect.user.repository.RoleRepository;
+import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -38,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,6 +66,9 @@ public class UserServiceImpl implements UserService {
     private final UserSportProfileService userSportProfileService;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    // U16: cross-domain, interface only (reference-api depends on common alone, so no bean cycle).
+    private final ReferenceService referenceService;
+    private final UserPreferenceRepository userPreferenceRepository;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
     /**
@@ -80,7 +90,11 @@ public class UserServiceImpl implements UserService {
             @Lazy AuthService authService,
             UserSportProfileService userSportProfileService,
             StringRedisTemplate stringRedisTemplate,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ReferenceService referenceService,
+            UserPreferenceRepository userPreferenceRepository) {
+        this.referenceService = referenceService;
+        this.userPreferenceRepository = userPreferenceRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
@@ -139,8 +153,9 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public Map<UUID, UserResponse> getUsersByIds(List<UUID> userIds) {
+        // U16: intentionally NOT resolved (GeoNames.NONE) — see the interface Javadoc. The ids are still set.
         return userRepository.findAllById(userIds).stream()
-                .collect(Collectors.toMap(User::getId, this::toUserResponse));
+                .collect(Collectors.toMap(User::getId, user -> toUserResponse(user, GeoNames.NONE)));
     }
 
     @Override
@@ -188,6 +203,9 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByIdAndIsActiveTrue(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
+        // U16: validated first so a bad selection fails before any other field is touched.
+        applyGeoSelection(user, request);
+
         // Captured before mutation so the publish below only fires when a field services/chat
         // actually displays (name/username/avatar) really changed — not on every profile save.
         String previousFirstName = user.getFirstName();
@@ -230,9 +248,6 @@ public class UserServiceImpl implements UserService {
         }
         if (request.getCity() != null) {
             user.setCity(request.getCity());
-        }
-        if (request.getCountry() != null) {
-            user.setCountry(request.getCountry());
         }
         if (request.getHeightCm() != null) {
             if (request.getHeightCm() < 50 || request.getHeightCm() > 300) {
@@ -306,15 +321,46 @@ public class UserServiceImpl implements UserService {
         return userRepository.existsByUsername(username);
     }
 
+    /** {@inheritDoc} Delegates to the detailed overload with no extras. */
     @Override
     @Transactional
     public UserResponse createUser(String email, String passwordHash, String firstName, String lastName, String phoneNumber) {
+        return createUser(email, passwordHash, firstName, lastName, phoneNumber, null);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Validation order matters: the geo selection and the language are checked, and the coordinate pair
+     * verified, <em>before</em> {@code userRepository.save} — so a {@code 400} leaves no user behind (and the
+     * enclosing {@code register} transaction rolls back regardless). The optional {@link UserPreference} row is
+     * written in the same transaction as the user.
+     */
+    @Override
+    @Transactional
+    public UserResponse createUser(String email, String passwordHash, String firstName, String lastName, String phoneNumber,
+                                   UserRegistrationDetails details) {
+        UserRegistrationDetails extras = details != null ? details : new UserRegistrationDetails();
+
+        referenceService.requireValidSelection(extras.getCountryId(), extras.getRegionId());
+
+        String languageCode = extras.getLanguageCode() == null || extras.getLanguageCode().isBlank()
+                ? null : extras.getLanguageCode().trim();
+        if (languageCode != null && !referenceService.isActiveLanguage(languageCode)) {
+            throw new BadRequestException("Unknown or inactive language: " + languageCode);
+        }
+
+        Point location = toPoint(extras.getLatitude(), extras.getLongitude());
+
         User user = User.builder()
                 .email(email)
                 .passwordHash(passwordHash)
                 .firstName(firstName)
                 .lastName(lastName)
                 .phoneNumber(phoneNumber)
+                .countryId(extras.getCountryId())
+                .regionId(extras.getRegionId())
+                .location(location)
                 .isEmailVerified(false)
                 .isActive(true)
                 .build();
@@ -325,8 +371,47 @@ public class UserServiceImpl implements UserService {
         user.addRole(userRole);
 
         User savedUser = userRepository.save(user);
+        if (languageCode != null) {
+            userPreferenceRepository.save(UserPreference.builder()
+                    .userId(savedUser.getId())
+                    .language(languageCode)
+                    .build());
+        }
         log.info("Created new user: {}", email);
         return toUserResponse(savedUser);
+    }
+
+    /**
+     * U16: applies the country/region part of a profile update. Nothing to do unless the request names a country
+     * or a region. A present {@code countryId} makes {@code regionId} <em>replace</em> the stored region (absent =
+     * cleared); a lone {@code regionId} is validated against the stored country. The rules themselves live in
+     * {@link ReferenceService#requireValidSelection}, which throws {@code BadRequestException}.
+     */
+    private void applyGeoSelection(User user, UpdateProfileRequest request) {
+        if (request.getCountryId() == null && request.getRegionId() == null) {
+            return;
+        }
+        Long countryId = request.getCountryId() != null ? request.getCountryId() : user.getCountryId();
+        referenceService.requireValidSelection(countryId, request.getRegionId());
+        user.setCountryId(countryId);
+        user.setRegionId(request.getRegionId());
+    }
+
+    /**
+     * A WGS 84 point (X = longitude, Y = latitude) or {@code null} for neither. Only one of the pair, or a value
+     * out of range, is a {@code 400} — the request DTO validates the same rules, this guards direct callers.
+     */
+    private Point toPoint(Double latitude, Double longitude) {
+        if (latitude == null && longitude == null) {
+            return null;
+        }
+        if (latitude == null || longitude == null) {
+            throw new BadRequestException("latitude and longitude must be provided together");
+        }
+        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+            throw new BadRequestException("latitude must be between -90 and 90 and longitude between -180 and 180");
+        }
+        return geometryFactory.createPoint(new Coordinate(longitude, latitude));
     }
 
     @Override
@@ -401,13 +486,16 @@ public class UserServiceImpl implements UserService {
                 .map(FriendRequestResponse::getSenderId)
                 .collect(Collectors.toSet());
 
+        // U16: resolve every country name on the page with ONE reference lookup, before the per-row map (N+1 rule).
+        GeoNames geoNames = resolveGeoNames(users.getContent());
+
         return users.map(user -> UserSearchResponse.builder()
                 .id(user.getId())
                 .fullName(buildFullName(user))
                 .username(user.getUsername())
                 .avatarUrl(user.getAvatarUrl())
                 .city(user.getCity())
-                .country(user.getCountry())
+                .country(geoNames.countryName(user))
                 .friendshipStatus(resolveFriendshipStatus(user.getId(), friendIds, pendingSentTo, pendingReceivedFrom))
                 .build());
     }
@@ -433,7 +521,49 @@ public class UserServiceImpl implements UserService {
         return user.getUsername() != null ? user.getUsername() : "Unknown";
     }
 
+    /**
+     * Country / region display names for a set of users, resolved from the reference domain. {@link #NONE} is
+     * the "do not resolve" instance used by {@link #getUsersByIds}. The fallback is the legacy free text, so a user
+     * whose text matched no country row (or who has not linked one) still shows what they typed.
+     */
+    private record GeoNames(Map<Long, CountryResponse> countries, Map<Long, RegionResponse> regions) {
+
+        static final GeoNames NONE = new GeoNames(Map.of(), Map.of());
+
+        /** Linked country's English name, else the legacy text, else {@code null}. */
+        String countryName(User user) {
+            CountryResponse country = user.getCountryId() != null ? countries.get(user.getCountryId()) : null;
+            return country != null ? country.getName() : user.getCountry();
+        }
+
+        String regionName(User user) {
+            RegionResponse region = user.getRegionId() != null ? regions.get(user.getRegionId()) : null;
+            return region != null ? region.getName() : null;
+        }
+    }
+
+    /**
+     * One {@code getCountriesByIds} and one {@code getRegionsByIds} call for all the users, however many — and no
+     * call at all when none has a link. The batch lookups include deactivated rows, so a user still shows the name
+     * of a since-deactivated country or region.
+     */
+    private GeoNames resolveGeoNames(Collection<User> users) {
+        Set<Long> countryIds = users.stream().map(User::getCountryId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> regionIds = users.stream().map(User::getRegionId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (countryIds.isEmpty() && regionIds.isEmpty()) {
+            return GeoNames.NONE;
+        }
+        return new GeoNames(
+                countryIds.isEmpty() ? Map.of() : referenceService.getCountriesByIds(countryIds),
+                regionIds.isEmpty() ? Map.of() : referenceService.getRegionsByIds(regionIds));
+    }
+
+    /** Single-user mapping: resolves the names (at most two reference lookups). */
     private UserResponse toUserResponse(User user) {
+        return toUserResponse(user, resolveGeoNames(List.of(user)));
+    }
+
+    private UserResponse toUserResponse(User user, GeoNames geoNames) {
         return UserResponse.builder()
                 .id(user.getId())
                 .email(user.getEmail())
@@ -449,7 +579,10 @@ public class UserServiceImpl implements UserService {
                 .location(user.getLocation() != null ?
                     LocationResponse.of(user.getLocation().getY(), user.getLocation().getX()) : null)
                 .city(user.getCity())
-                .country(user.getCountry())
+                .country(geoNames.countryName(user))
+                .countryId(user.getCountryId())
+                .regionId(user.getRegionId())
+                .regionName(geoNames.regionName(user))
                 .heightCm(user.getHeightCm())
                 .weightKg(user.getWeightKg())
                 .shoeSizeCm(user.getShoeSizeCm())

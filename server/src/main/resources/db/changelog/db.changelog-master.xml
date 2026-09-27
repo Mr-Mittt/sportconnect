@@ -205,5 +205,8 @@
     <!-- REF-1 scope change 2: countries.default_language_code (+ Vietnam -> vi). A separate changelog because
          V072/V073 were already applied locally. -->
     <include file="db/changelog/changes/V074__add_default_language_to_countries.sql" relativeToChangelogFile="false"/>
+    <!-- U16: users.country_id / region_id (no FK — cross-domain ids only), user_preferences.language widened to 35,
+         and the one-time users.country -> country_id backfill (re-run by REF-4). -->
+    <include file="db/changelog/changes/V075__add_country_region_links_to_users.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

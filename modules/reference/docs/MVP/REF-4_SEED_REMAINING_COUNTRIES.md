@@ -20,6 +20,11 @@ one Liquibase data migration. The schema, API and client are unchanged — the d
 - Restore the REF-2 fixture relaxed for the Vietnam-only period: `ReferenceApiIntegrationTest.resolve_coordinatesInAnUnseededCountry_isAnAllNullOkNotAnError` (Paris) becomes France with no region. Also check `boundaryData_matchesTheSeededRowsOneToOne` — the country side is one-directional (every seeded country has a polygon), so it stays green, but every newly seeded `iso2` must exist in `countries.tsv`.
 - **Timezone caveat (REF-2 finding):** `tz-country.tsv` keeps only single-country zones (`zone1970.tab` + `backward` aliases), so merged zones (`Asia/Tokyo` = `JP,AU`, `Europe/Paris` = `FR,MC`, `Europe/Berlin`, ...) resolve to no country and the locale subtag takes over. When seeding a country whose main zone is merged, decide whether that loss matters. The regenerator is `reference-impl/geo-data/build-geo-data.mjs`.
 
+- **Re-run the `users.country` backfill (filed 2026-09-26, from U16 pickup):** U16's one-time migration matches `users.country` free
+  text to `countries` by name / `iso2` / `iso3` (case-insensitive) and could only match countries seeded at that time (Vietnam). Once
+  the remaining countries are inserted, unmatched legacy users stay unlinked unless the same `UPDATE ... WHERE country_id IS NULL`
+  runs again — add it to this ticket's migration (idempotent by construction: it only touches rows with `country_id IS NULL`).
+
 ## Edge cases
 
 - Safe on a database where a row already exists (`iso2` is UNIQUE) — guard with a precondition or `NOT EXISTS`.

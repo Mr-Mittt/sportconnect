@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/user/user-impl`  
-**Last updated:** 2026-09-25 (U16 filed)
+**Last updated:** 2026-09-26 (U16 DONE)
 
 ---
 
@@ -19,7 +19,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [U16](MVP/U16_USER_COUNTRY_REGION_LANGUAGE_LINKS.md) | Link users to Country / Region / Language — `users.country_id`/`region_id`, profile update (drops free-text `country`), validated `UserPreference.language`, optional sign-up details (`RegisterRequest` → `createUser` overload, saves coordinates to `User.location`). Needs REF-1 (`reference` backlog). Part of `documentation/md/REFERENCE_DATA_DESIGN.md` | `TODO` |
+| — | — | No open tickets | — |
 
 ---
 
@@ -27,21 +27,23 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [U15](MVP/U15_ACTIVE_SPORT_IDS_ON_USER_INFO_RESPONSE.md) | `activeSportIds: List<Long>` on `UserInfoResponse` (2026-09-04) — PII-free sport-id list a non-owner read needs (friend-profile sport pills), via a new cross-domain `user-impl → sport-api` call (`getUserProfiles(id)`, active-only) in a new `UserService.toPublicUserInfo(UserResponse)`. Fills the gap A22 left removing `GET /sports/profiles/user/{id}`. Unblocks client SPORT-11. Green: `:modules:user:user-impl:test` + full `:server:test` + live smoke | `DONE` |
-| 2 | [U14](MVP/U14_DEDICATED_FRIENDS_DIRECTORY_PROFILE_ENDPOINT.md) | Dedicated Friends-directory profile endpoint — resolved to **no backend change**: U11's `UserInfoResponse` already is the contract Friends needs; client cleanup handed to `FRIEND-2` | `DONE` |
-| 3 | [U13](MVP/U13_NOTIFICATION_OUTBOX_WIRING_FRIEND_REQUEST_RECEIVED_ACCEPTED.md) | Notification outbox wiring — friend request received/accepted | `DONE` |
-| 4 | [U12](MVP/U12_REVOKE_SESSIONS_WHEN_A_USER_IS_DEACTIVATED.md) | Revoke sessions when a user is deactivated | `DONE` |
-| 5 | [U11](MVP/U11_PROTECT_USER_DATA_SCOPE_PUBLIC_USER_LOOKUP_ENDPOINTS.md) | Protect user data — scope public user-lookup endpoints away from full PII | `DONE` |
-| 6 | [U8](MVP/U8_FIX_N1_PENDING_REQUESTS.md) | Fix N+1 in UserFriendServiceImpl pending-request mappers | `DONE` |
-| 7 | [U2](MVP/U2_JWT_IDENTITY_AND_SOFT_DELETE_FIX.md) | JWT-based identity + soft-delete query fix | `DONE` |
-| 8 | [U3](MVP/U3_USER_PREFERENCE_ENDPOINTS.md) | UserPreference endpoints | `DONE` |
-| 9 | [U4](MVP/U4_PASSWORD_CHANGE_ENDPOINT.md) | Password change endpoint | `DONE` |
-| 10 | [U5](MVP/U5_TEST_COVERAGE_BACKFILL.md) | Test coverage backfill | `DONE` |
-| 11 | [U6](MVP/U6_USER_DISCOVERY.md) | User discovery — find people to add as friends | `DONE` |
-| 12 | [U7](MVP/U7_GENERAL_PHYSICAL_PROFILE_STATS.md) | General physical profile stats | `DONE` |
-| 13 | [U1](MVP/U1_FRIENDSHIP_SYSTEM.md) | Friendship system | `DONE` |
-| 14 | [U9](MVP/U9_FIX_SENDFRIENDREQUEST_CRASH_ON_RE_SEND_AFTER_DECLINE.md) | Fix sendFriendRequest crash on re-send after decline/cancel/unfriend | `DONE` |
-| 15 | [U10](MVP/U10_CROSSED_FRIEND_REQUESTS_ESTABLISH_FRIENDSHIP_IMMEDIATELY.md) | Crossed friend requests establish friendship immediately | `DONE` |
+| 1 | [U17](MVP/U17_STOP_LEAKING_EMAIL_AND_LOCATION_FROM_GET_USERS_FRIENDS.md) | Stop `GET /api/users/friends` leaking email and precise location — reuses U11's `UserInfoResponse`, found via the U16 `getUsersByIds` discussion | `DONE` |
+| 2 | [U16](MVP/U16_USER_COUNTRY_REGION_LANGUAGE_LINKS.md) | Link users to Country / Region / Language (2026-09-26) — `users.country_id`/`region_id` (V075, ids only, re-runnable backfill of the legacy `country` text), profile update takes `countryId`/`regionId` (free-text `country` dropped, silently ignored), `UserResponse` + `countryId`/`regionId`/`regionName` with `country` = resolved name, optional language/country/region/coordinates at register (validated before the user is saved), validated `UserPreference.language`, deactivated caller rejected on both preference calls. New `user-impl → reference-api` edge. `getUsersByIds` deliberately does not resolve names (hot path); `searchUsers` resolves one lookup per page. Unblocks CLIENT-REF-2/3 and A24. Green: user-impl 162 + auth-impl 59 Spock, +30 IT, full `:server:test` 359, live on real Postgres | `DONE` |
+| 3 | [U15](MVP/U15_ACTIVE_SPORT_IDS_ON_USER_INFO_RESPONSE.md) | `activeSportIds: List<Long>` on `UserInfoResponse` (2026-09-04) — PII-free sport-id list a non-owner read needs (friend-profile sport pills), via a new cross-domain `user-impl → sport-api` call (`getUserProfiles(id)`, active-only) in a new `UserService.toPublicUserInfo(UserResponse)`. Fills the gap A22 left removing `GET /sports/profiles/user/{id}`. Unblocks client SPORT-11. Green: `:modules:user:user-impl:test` + full `:server:test` + live smoke | `DONE` |
+| 4 | [U14](MVP/U14_DEDICATED_FRIENDS_DIRECTORY_PROFILE_ENDPOINT.md) | Dedicated Friends-directory profile endpoint — resolved to **no backend change**: U11's `UserInfoResponse` already is the contract Friends needs; client cleanup handed to `FRIEND-2` | `DONE` |
+| 5 | [U13](MVP/U13_NOTIFICATION_OUTBOX_WIRING_FRIEND_REQUEST_RECEIVED_ACCEPTED.md) | Notification outbox wiring — friend request received/accepted | `DONE` |
+| 6 | [U12](MVP/U12_REVOKE_SESSIONS_WHEN_A_USER_IS_DEACTIVATED.md) | Revoke sessions when a user is deactivated | `DONE` |
+| 7 | [U11](MVP/U11_PROTECT_USER_DATA_SCOPE_PUBLIC_USER_LOOKUP_ENDPOINTS.md) | Protect user data — scope public user-lookup endpoints away from full PII | `DONE` |
+| 8 | [U8](MVP/U8_FIX_N1_PENDING_REQUESTS.md) | Fix N+1 in UserFriendServiceImpl pending-request mappers | `DONE` |
+| 9 | [U2](MVP/U2_JWT_IDENTITY_AND_SOFT_DELETE_FIX.md) | JWT-based identity + soft-delete query fix | `DONE` |
+| 10 | [U3](MVP/U3_USER_PREFERENCE_ENDPOINTS.md) | UserPreference endpoints | `DONE` |
+| 11 | [U4](MVP/U4_PASSWORD_CHANGE_ENDPOINT.md) | Password change endpoint | `DONE` |
+| 12 | [U5](MVP/U5_TEST_COVERAGE_BACKFILL.md) | Test coverage backfill | `DONE` |
+| 13 | [U6](MVP/U6_USER_DISCOVERY.md) | User discovery — find people to add as friends | `DONE` |
+| 14 | [U7](MVP/U7_GENERAL_PHYSICAL_PROFILE_STATS.md) | General physical profile stats | `DONE` |
+| 15 | [U1](MVP/U1_FRIENDSHIP_SYSTEM.md) | Friendship system | `DONE` |
+| 16 | [U9](MVP/U9_FIX_SENDFRIENDREQUEST_CRASH_ON_RE_SEND_AFTER_DECLINE.md) | Fix sendFriendRequest crash on re-send after decline/cancel/unfriend | `DONE` |
+| 17 | [U10](MVP/U10_CROSSED_FRIEND_REQUESTS_ESTABLISH_FRIENDSHIP_IMMEDIATELY.md) | Crossed friend requests establish friendship immediately | `DONE` |
 
 ---
 
@@ -68,6 +70,15 @@ U15 (DONE 2026-09-04) added a new user-impl → sport-api dependency (interface 
   `UserInfoResponse` gained `activeSportIds`; new `UserService.toPublicUserInfo(UserResponse)`
   does the cross-domain `getUserProfiles(id)` read. Unblocks client SPORT-11 (friend-profile
   sport pills rewire onto the new field).
+U16 (DONE 2026-09-26) added a new user-impl → reference-api dependency (interface + DTOs only;
+  reference-api depends solely on :modules:common, so no cycle) and a user-api `UserRegistrationDetails`
+  consumed by auth-impl. `users.country_id`/`region_id` are plain ids (no FK). `getUsersByIds` returns the ids
+  but deliberately does NOT resolve country/region names (hot batch call) — see U16's doc. Client changes
+  are CLIENT-REF-2 (sign-up) and CLIENT-REF-3 (profile), both unblocked.
+U17 (DONE 2026-09-27) fixed GET /api/users/friends leaking email/location (found while discussing
+  U16's getUsersByIds decision). Reused U11's UserInfoResponse; getFriends' return type changed
+  List<UserResponse> -> List<UserInfoResponse> (one backend caller, updated in place; client was
+  already a strict subset, compatible as-is). No schema change.
 ```
 
 ---
