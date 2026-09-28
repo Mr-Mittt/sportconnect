@@ -14,4 +14,7 @@ export const profileKeys = {
   // derives the caller from the auth principal, so there's only ever one
   // "my posts" cache entry at a time.
   myPosts: () => [...feedKeys.all, 'my-posts'] as const,
+  // CLIENT-I18N-1: GET /users/me/preferences — no userId param, same reasoning as myPosts (the
+  // caller is derived from the auth principal server-side).
+  preferences: () => [...profileKeys.all, 'preferences'] as const,
 };

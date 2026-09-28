@@ -87,7 +87,8 @@ describe('useSessionAttributeSchema', () => {
     expect(result.current.data).toBeNull();
   });
 
-  it('keys the query by sport id', () => {
-    expect(sessionAttributeSchemaQueryKey(7)).toEqual(['sessionAttributeSchema', 7]);
+  it('keys the query by sport id and locale (CLIENT-I18N-1)', () => {
+    expect(sessionAttributeSchemaQueryKey(7, 'en')).toEqual(['sessionAttributeSchema', 7, 'en']);
+    expect(sessionAttributeSchemaQueryKey(7, 'vi')).toEqual(['sessionAttributeSchema', 7, 'vi']);
   });
 });

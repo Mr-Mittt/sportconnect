@@ -1,5 +1,6 @@
 import { IconChevronDown, IconLogout, IconSearch } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Avatar, AvatarFallback } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import {
@@ -31,6 +32,9 @@ interface TopBarProps {
 }
 
 export function TopBar({ user, onSearchClick, onLogout, notificationBell }: TopBarProps) {
+  // CLIENT-I18N-1's proof-of-integration string — the app's other real, visible strings stay
+  // English until CLIENT-REF-2/3 (sign-up, profile edit) and CLIENT-I18N-2 (everything else).
+  const { t } = useTranslation();
   return (
     <header className="flex items-center justify-between py-3">
       <div className="text-lg font-medium text-text-primary">SportHub</div>
@@ -65,7 +69,7 @@ export function TopBar({ user, onSearchClick, onLogout, notificationBell }: TopB
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onLogout}>
               <IconLogout className="size-4 text-text-secondary" aria-hidden="true" />
-              Log out
+              {t('logOut')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

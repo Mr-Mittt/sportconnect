@@ -1,13 +1,28 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach, beforeEach } from 'vitest';
+import { afterEach, beforeAll, beforeEach } from 'vitest';
+import i18n from '@/app/i18n';
+import { useLocaleStore } from '@/app/localeStore';
 import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
+
+// CLIENT-I18N-1 (answers V1 I18N-1 question 5): pin every Vitest/RTL run to `en` regardless of
+// jsdom's own navigator.language default, so existing literal-English assertions keep passing.
+// A test exercising Vietnamese calls i18n.changeLanguage('vi')/useLocaleStore's setters itself
+// and it reverts here after — the store is a singleton for the file's whole test run, same as
+// useSportCatalogStore below.
+beforeAll(async () => {
+  await i18n.changeLanguage('en');
+});
 
 // Vitest runs without globals (explicit imports, see vitest.config.ts), so RTL
 // can't register its automatic cleanup — do it explicitly or the DOM
 // accumulates across tests within a file.
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  if (useLocaleStore.getState().locale !== 'en') {
+    useLocaleStore.getState().setLocale('en');
+    await i18n.changeLanguage('en');
+  }
 });
 
 // SPORT-3: sportIdMap.ts's sportIdForKey/sportKeyForId now resolve against this store instead

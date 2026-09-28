@@ -27,6 +27,30 @@ const fixtureAuthResponse = {
   },
 };
 
+// CLIENT-I18N-1: RootLayout's useSyncUserLocale unconditionally fetches this once a session is
+// authenticated (next to useSessionBootstrap) — every apiClient.get mock in this file that
+// reaches an authenticated render needs this branch, same precedent as SPORT-3/NTF-3 below.
+// `language: null` (never set) so no test in this file accidentally changes localeStore.
+const preferencesResponse = {
+  data: {
+    success: true,
+    message: '',
+    data: {
+      language: null,
+      timezone: null,
+      distanceUnit: null,
+      notificationEmail: null,
+      notificationPush: null,
+      notificationSms: null,
+      privacyProfile: null,
+      privacyLocation: null,
+      createdAt: null,
+      updatedAt: null,
+    },
+    timestamp: '',
+  },
+};
+
 // RootLayout calls useSessionBootstrap() on mount (AUTH-3), and every route
 // under AppShell is gated by ProtectedRoute (AUTH-4) — main.tsx provides a
 // QueryClientProvider at the real app root, so every test rendering the
@@ -70,6 +94,10 @@ describe('App routing', () => {
             timestamp: '',
           },
         };
+      }
+      // CLIENT-I18N-1: useSyncUserLocale (RootLayout) fetches this unconditionally too.
+      if (url === '/users/me/preferences') {
+        return preferencesResponse;
       }
       throw new Error(`unmocked GET ${url} — this test needs its own apiClient.get mock for it`);
     });
@@ -145,6 +173,10 @@ describe('App routing', () => {
       // straight into TopBar's badge instead of a number.
       if (url === '/notifications/unread-count') {
         return { data: { success: true, message: '', data: 0, timestamp: '' } };
+      }
+      // CLIENT-I18N-1: useSyncUserLocale (RootLayout) fetches this unconditionally too.
+      if (url === '/users/me/preferences') {
+        return preferencesResponse;
       }
       // FEED-6: real GET /hashtags/trending — an empty page here since this
       // test only asserts the shell/feed render, not the trending card.
@@ -270,6 +302,10 @@ describe('App routing', () => {
       if (url === '/notifications/unread-count') {
         return { data: { success: true, message: '', data: 0, timestamp: '' } };
       }
+      // CLIENT-I18N-1: useSyncUserLocale (RootLayout) fetches this unconditionally too.
+      if (url === '/users/me/preferences') {
+        return preferencesResponse;
+      }
       if (url === '/groups/user/1') {
         return {
           data: {
@@ -394,6 +430,10 @@ describe('App routing', () => {
       // straight into TopBar's badge instead of a number.
       if (url === '/notifications/unread-count') {
         return { data: { success: true, message: '', data: 0, timestamp: '' } };
+      }
+      // CLIENT-I18N-1: useSyncUserLocale (RootLayout) fetches this unconditionally too.
+      if (url === '/users/me/preferences') {
+        return preferencesResponse;
       }
       if (url === '/groups/user/1') {
         return {
