@@ -25,11 +25,20 @@ export interface LoginPayload {
   password: string;
 }
 
+// CLIENT-REF-2 / backend U16: optional geo/language extras on RegisterRequest. `countryId`/
+// `regionId` mirror `CountryResponse.id`/`RegionResponse.id` (both `number` client-side, `Long`
+// server-side, same convention as the reference types). Coordinates are sent together or not at
+// all — only after a successful "Use my current location" click, never on their own.
 export interface RegisterPayload {
   email: string;
   password: string;
   fullName: string;
   phoneNumber?: string;
+  languageCode?: string;
+  countryId?: number;
+  regionId?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 // Matches AuthResponse (auth-api) as actually serialized: `refreshToken` is

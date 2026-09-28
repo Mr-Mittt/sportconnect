@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | [A5](MVP/A5_LOGIN_REGISTRATION_RATE_LIMITING.md) | Login/registration rate limiting | `TODO` |
 | 2 | [A7](MVP/A7_AUDIT_PUBLIC_API_SURFACE_AND_REMOVE_UNUSED_ENDPOINTS.md) | Audit the public API surface and clean up unused endpoints — `permitAll` allowlist dates to the initial commit and was never reviewed; 13 public endpoints have no client caller | `TODO` |
+| 3 | [A8](MVP/A8_STRUCTURED_ERROR_CODES_ON_APIRESPONSE_ERROR.md) | Structured error codes on `ApiResponse.error()` for known auth failures (starting with register's "Email already registered") so the client can translate them instead of showing the server's raw English text — found during client CLIENT-REF-2 | `TODO` |
 
 ---
 

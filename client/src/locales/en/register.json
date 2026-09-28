@@ -1,0 +1,41 @@
+{
+  "tagline": "Your teams, matches, and crew — all in one place.",
+  "heading": "Create your account",
+  "subheading": "Join SportHub - Join your sport community.",
+  "form": {
+    "email": {
+      "label": "Email",
+      "error": {
+        "required": "Email is required.",
+        "invalid": "Enter a valid email address."
+      }
+    },
+    "password": {
+      "label": "Password",
+      "showAction": "Show password",
+      "hideAction": "Hide password",
+      "error": {
+        "tooShort": "Password must be at least 8 characters."
+      }
+    },
+    "fullName": {
+      "label": "Full name",
+      "error": {
+        "required": "Full name is required."
+      }
+    },
+    "phoneNumber": {
+      "label": "Phone number"
+    },
+    "submit": "Create account",
+    "submitting": "Creating account…",
+    "or": "or",
+    "oauth": {
+      "facebook": "Continue with Facebook",
+      "google": "Continue with Google",
+      "apple": "Continue with Apple"
+    },
+    "alreadyHaveAccount": "Already have an account?",
+    "logIn": "Log in"
+  }
+}

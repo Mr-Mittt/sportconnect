@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocaleStore } from '@/app/localeStore';
 import { getBrowserLocales, isGeolocationSupported, requestBrowserPosition } from '@/shared/lib/detectEnvironment';
 import { getViewerZoneId } from '@/shared/lib/viewerZone';
 import type { CountryResponse, LanguageResponse, RegionResponse } from '@/shared/types/reference';
@@ -63,14 +64,31 @@ export interface GeoLocaleFieldsData {
  * **Default language.** The backend already applies `CountryResponse.defaultLanguageCode` inside
  * `resolve` itself (silent or coordinate-triggered), so this hook only has to apply it for the one
  * case the server can't see: the user picking a country by hand with no resolve call involved. It
- * only fires when `languageCode` is still `null` (an already-set value, however it got set, is
- * left alone) and only when that code names a currently active language.
+ * only fires when `language` is still untouched (an already-set value, however it got set, is left
+ * alone) and only when that code names a currently active language.
+ *
+ * **Initial language (2026-09-28 fix).** `languageCode` starts seeded from `localeStore`'s active
+ * UI locale, not `null` — see its own field comment for why (a page already rendering translated
+ * must not show this field defaulting to something else). It is deliberately left *untouched* at
+ * seed time so the country-hand-pick default above still fires normally; instead, the mount's own
+ * silent resolve is the one told to skip language entirely, since that resolve's detection would
+ * otherwise silently race the seed. See `applyResolvedFields`'s doc comment for the full reasoning.
  */
 export function useGeoLocaleFieldsData(): GeoLocaleFieldsData {
   const { data: languages, isLoading: isLanguagesLoading, isError: isLanguagesError } = useLanguages();
   const { data: countries, isLoading: isCountriesLoading, isError: isCountriesError } = useCountries();
 
-  const [languageCode, setLanguageCode] = useState<string | null>(null);
+  // Seeded from the active UI locale (2026-09-28 fix), not `null` — a page already rendering in
+  // Vietnamese (e.g. `localeStore`'s persisted choice from an earlier visit) must not show this
+  // field defaulting to whatever the browser's raw signals separately resolve to (often English,
+  // since it's re-detected fresh from `navigator.languages` on every mount independent of any
+  // persisted override) — that mismatch (page in Vietnamese, this field showing "English") is
+  // confusing and was reported against sign-up. Left un-touched (not added to `touchedRef` below):
+  // the mount's silent resolve is instead told to skip language entirely (see its own call below),
+  // which fixes the mismatch without disabling the country-hand-pick default-language feature,
+  // whose own gating still reads `touchedRef`, not "is languageCode null" (that check would always
+  // be false now that this is never `null` to begin with).
+  const [languageCode, setLanguageCode] = useState<string | null>(() => useLocaleStore.getState().locale);
   const [countryId, setCountryId] = useState<number | null>(null);
   const [regionId, setRegionId] = useState<number | null>(null);
   const touchedRef = useRef<Set<TouchedField>>(new Set());
@@ -85,11 +103,26 @@ export function useGeoLocaleFieldsData(): GeoLocaleFieldsData {
 
   /** Applies a resolve result, honoring `touchedRef` — shared by the silent mount resolve and the
    * coordinate-triggered one from the location button; the only difference between the two is
-   * which signals go into the request, not how the response gets applied. */
+   * which signals go into the request, not how the response gets applied.
+   *
+   * `applyLanguage` (2026-09-28 fix) — the mount call below passes `false`: `languageCode` is
+   * already seeded from `localeStore`'s active UI locale (see its own comment above), and the
+   * mount resolve's own language detection reads the same raw browser signal `localeStore` itself
+   * used, so it can only ever agree with the seed or, if `localeStore` is instead following a
+   * *persisted* explicit choice from an earlier visit, silently contradict a value the page is
+   * already visibly rendered in — exactly the mismatch reported (page in Vietnamese, this field
+   * showing "English"). The button-triggered call omits this option (defaults `true`): a click is
+   * a deliberate, current action, and its result can carry a country/coordinate-derived default
+   * language meaningfully more specific than the coarse initial seed, still gated by `touched` so
+   * an explicit pick is never overwritten either way. */
   const applyResolvedFields = useCallback(
-    (result: { language: LanguageResponse | null; country: CountryResponse | null; region: RegionResponse | null }) => {
+    (
+      result: { language: LanguageResponse | null; country: CountryResponse | null; region: RegionResponse | null },
+      options?: { applyLanguage?: boolean },
+    ) => {
       const touched = touchedRef.current;
-      if (result.language && !touched.has('language')) {
+      const applyLanguage = options?.applyLanguage ?? true;
+      if (applyLanguage && result.language && !touched.has('language')) {
         setLanguageCode(result.language.code);
       }
       if (result.country && !touched.has('country')) {
@@ -106,10 +139,11 @@ export function useGeoLocaleFieldsData(): GeoLocaleFieldsData {
   // happens from a user-initiated button click). Runs once regardless of StrictMode's dev
   // double-invoke: `resolve` (mutateAsync) has no side effect worth guarding beyond the one
   // extra network call, which mirrors how every other mount-effect fetch in this codebase is
-  // written (e.g. `useSessionBootstrap`).
+  // written (e.g. `useSessionBootstrap`). `applyLanguage: false` — see `applyResolvedFields`'s own
+  // doc comment.
   useEffect(() => {
     void resolve({ locales: getBrowserLocales(), timeZoneId: getViewerZoneId() }).then(
-      applyResolvedFields,
+      (result) => applyResolvedFields(result, { applyLanguage: false }),
       () => {
         // A resolve failure pre-fills nothing — see useResolveGeo's doc comment.
       },
@@ -129,7 +163,11 @@ export function useGeoLocaleFieldsData(): GeoLocaleFieldsData {
       setCountryId(id);
       setRegionId(null);
 
-      if (id === null || languageCode !== null) {
+      // `touchedRef.has('language')`, not "is languageCode null" — `languageCode` is now always
+      // seeded from `localeStore` (see its own comment above) and so is never `null` to begin
+      // with; "untouched" is what actually means "the user hasn't made a real language decision
+      // yet" here.
+      if (id === null || touchedRef.current.has('language')) {
         return;
       }
       const country = countries.find((candidate) => candidate.id === id);
@@ -142,7 +180,7 @@ export function useGeoLocaleFieldsData(): GeoLocaleFieldsData {
         setLanguageCode(defaultCode);
       }
     },
-    [countries, languages, languageCode],
+    [countries, languages],
   );
 
   const onRegionChange = useCallback((id: number | null) => {

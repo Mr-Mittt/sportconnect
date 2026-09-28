@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthShell } from './components/AuthShell';
 import { RegisterForm } from './components/RegisterForm';
@@ -10,6 +11,7 @@ import { useRegister } from './useRegister';
  * otherwise Home Feed. Same redirect-back behavior as LoginPage.
  */
 export function RegisterPage() {
+  const { t } = useTranslation('register');
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? '/';
@@ -18,7 +20,9 @@ export function RegisterPage() {
   });
 
   return (
-    <AuthShell>
+    // CLIENT-REF-2: translated tagline — see AuthShell's doc comment for why this is a prop
+    // rather than AuthShell translating its own default (which LoginPage also renders).
+    <AuthShell tagline={t('tagline')}>
       <RegisterForm onSubmit={register} isPending={isPending} errorMessage={errorMessage} />
     </AuthShell>
   );

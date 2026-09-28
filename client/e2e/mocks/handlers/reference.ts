@@ -85,7 +85,13 @@ export const referenceHandlers: HttpHandler[] = [
     if (body.latitude === COORDINATES_TEST_LATITUDE && body.longitude === COORDINATES_TEST_LONGITUDE) {
       return HttpResponse.json(apiResponse(coordinatesResult, 'Geo resolved successfully'));
     }
-    if (body.timeZoneId === 'Asia/Ho_Chi_Minh') {
+    // CLIENT-REF-2 finding: a Playwright context's `timezoneId: 'Asia/Ho_Chi_Minh'` option is
+    // itself an alias — Chromium's Intl canonicalizes it and the browser actually reports
+    // `Asia/Saigon` via `getViewerZoneId()`. The real backend already treats both IANA names as
+    // equivalent (see this file's own module doc: "Asia/Saigon and Asia/Ho_Chi_Minh both resolve
+    // to VN"); this mock only checked one of the two, which silently broke any e2e test asking
+    // for the Ho Chi Minh timezone (it always got the all-null fallback instead).
+    if (body.timeZoneId === 'Asia/Ho_Chi_Minh' || body.timeZoneId === 'Asia/Saigon') {
       return HttpResponse.json(apiResponse(timezoneOnlyResult, 'Geo resolved successfully'));
     }
     return HttpResponse.json(apiResponse(allNullResult, 'Geo resolved successfully'));

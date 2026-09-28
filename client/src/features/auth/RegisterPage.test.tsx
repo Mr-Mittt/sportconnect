@@ -1,6 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { apiClient } from '@/app/apiClient';
 import { RegisterPage } from './RegisterPage';
 import { useRegister } from './useRegister';
 import type { User } from './types';
@@ -18,6 +20,35 @@ const fixtureUser: User = {
   roles: ['USER'],
 };
 
+function apiResponse<T>(data: T) {
+  return { data: { success: true, message: '', data, timestamp: '' } };
+}
+
+/**
+ * CLIENT-REF-2: RegisterForm now wires `useGeoLocaleFieldsData()` itself (real TanStack Query
+ * hooks), so rendering RegisterPage for real needs both a QueryClientProvider and the same
+ * apiClient-mocking approach used elsewhere (no msw-storybook-addon/MSW in Vitest — see
+ * RegisterForm.test.tsx/.stories.tsx). An all-null resolve keeps every existing assertion below
+ * unaffected — the geo fields render disabled-until-loaded and stay empty.
+ */
+beforeEach(() => {
+  vi.spyOn(apiClient, 'get').mockImplementation(async (url: unknown) => {
+    const path = url as string;
+    if (path === '/reference/languages') return apiResponse([]);
+    if (path === '/reference/countries') return apiResponse([]);
+    if (path.startsWith('/reference/countries/')) return apiResponse([]);
+    throw new Error(`unexpected GET ${path}`);
+  });
+  vi.spyOn(apiClient, 'post').mockResolvedValue(
+    apiResponse({ language: null, country: null, region: null, source: null }),
+  );
+});
+
+function withProviders(children: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+
 function renderAt(initialEntries: Array<string | { pathname: string; state?: unknown }>) {
   let capturedOnSuccess: ((user: User) => void) | undefined;
   vi.mocked(useRegister).mockImplementation((options) => {
@@ -26,13 +57,15 @@ function renderAt(initialEntries: Array<string | { pathname: string; state?: unk
   });
 
   render(
-    <MemoryRouter initialEntries={initialEntries}>
-      <Routes>
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/" element={<div>Home Feed</div>} />
-        <Route path="/groups" element={<div>Groups</div>} />
-      </Routes>
-    </MemoryRouter>,
+    withProviders(
+      <MemoryRouter initialEntries={initialEntries}>
+        <Routes>
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/" element={<div>Home Feed</div>} />
+          <Route path="/groups" element={<div>Groups</div>} />
+        </Routes>
+      </MemoryRouter>,
+    ),
   );
 
   return { triggerSuccess: () => act(() => capturedOnSuccess?.(fixtureUser)) };
@@ -43,9 +76,11 @@ describe('RegisterPage', () => {
     vi.mocked(useRegister).mockReturnValue({ register: vi.fn(), isPending: false, errorMessage: null });
 
     render(
-      <MemoryRouter initialEntries={['/register']}>
-        <RegisterPage />
-      </MemoryRouter>,
+      withProviders(
+        <MemoryRouter initialEntries={['/register']}>
+          <RegisterPage />
+        </MemoryRouter>,
+      ),
     );
 
     expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument();

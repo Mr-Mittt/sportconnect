@@ -1,0 +1,41 @@
+{
+  "tagline": "Đồng đội, trận đấu và hội bạn — tất cả trong một nơi.",
+  "heading": "Tạo tài khoản của bạn",
+  "subheading": "Tham gia SportHub - Tham gia cộng đồng thể thao của bạn.",
+  "form": {
+    "email": {
+      "label": "Email",
+      "error": {
+        "required": "Vui lòng nhập email.",
+        "invalid": "Địa chỉ email không hợp lệ."
+      }
+    },
+    "password": {
+      "label": "Mật khẩu",
+      "showAction": "Hiện mật khẩu",
+      "hideAction": "Ẩn mật khẩu",
+      "error": {
+        "tooShort": "Mật khẩu phải có ít nhất 8 ký tự."
+      }
+    },
+    "fullName": {
+      "label": "Họ và tên",
+      "error": {
+        "required": "Vui lòng nhập họ và tên."
+      }
+    },
+    "phoneNumber": {
+      "label": "Số điện thoại"
+    },
+    "submit": "Tạo tài khoản",
+    "submitting": "Đang tạo tài khoản…",
+    "or": "hoặc",
+    "oauth": {
+      "facebook": "Tiếp tục với Facebook",
+      "google": "Tiếp tục với Google",
+      "apple": "Tiếp tục với Apple"
+    },
+    "alreadyHaveAccount": "Đã có tài khoản?",
+    "logIn": "Đăng nhập"
+  }
+}

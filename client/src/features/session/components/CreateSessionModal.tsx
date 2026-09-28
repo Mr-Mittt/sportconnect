@@ -17,6 +17,7 @@ import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
 import { AddSportFields, type AddSportProfileSubmission } from '@/shared/components/AddSportFields';
+import { RequiredMark } from '@/shared/components/RequiredMark';
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import { toOffsetAwareIso } from '@/shared/lib/scheduledStart';
@@ -37,16 +38,6 @@ function initialsFor(fullName: string): string {
     .join('')
     .slice(0, 2)
     .toUpperCase();
-}
-
-/** Visual-only marker for a required field — screen readers get the real signal from each
- * field's own `aria-required`/error text, not this asterisk (hence `aria-hidden`). */
-function RequiredMark() {
-  return (
-    <span className="text-text-danger" aria-hidden="true">
-      {' *'}
-    </span>
-  );
 }
 
 const ALLOWED_DIGITS_ONLY_KEYS = new Set([

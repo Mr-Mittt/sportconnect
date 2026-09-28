@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
+import { useLocaleStore } from '@/app/localeStore';
 import type { CountryResponse, LanguageResponse, RegionResponse, ResolvedGeoResponse } from '@/shared/types/reference';
 
 vi.mock('@/shared/lib/detectEnvironment', async (importOriginal) => {
@@ -66,27 +67,43 @@ describe('useGeoLocaleFieldsData', () => {
     mockReferenceGets();
   });
 
-  it('silently pre-fills language and country from the mount resolve (locales + timezone only, no coordinates)', async () => {
+  it('silently pre-fills country from the mount resolve (locales + timezone only, no coordinates) but never language', async () => {
+    // 2026-09-28 fix: the mount's silent resolve deliberately never touches language (it's already
+    // seeded from localeStore — see the two tests below) even when it detects a different one.
     vi.spyOn(apiClient, 'post').mockResolvedValueOnce(apiResponse(timezoneResult));
 
     const { result } = renderHook(() => useGeoLocaleFieldsData(), { wrapper });
 
     await waitFor(() => expect(result.current.countryId).toBe(1));
-    expect(result.current.languageCode).toBe('vi');
+    expect(result.current.languageCode).toBe('en'); // the seed (test setup pins locale to 'en'), not 'vi' from timezoneResult
     expect(apiClient.post).toHaveBeenCalledWith('/reference/resolve', {
       locales: ['en-US'],
       timeZoneId: 'Asia/Ho_Chi_Minh',
     });
   });
 
-  it('pre-fills nothing when the mount resolve is all-null', async () => {
+  it('pre-fills nothing else when the mount resolve is all-null, but languageCode still carries the localeStore seed', async () => {
     vi.spyOn(apiClient, 'post').mockResolvedValueOnce(apiResponse(allNull));
 
     const { result } = renderHook(() => useGeoLocaleFieldsData(), { wrapper });
 
     await waitFor(() => expect(apiClient.post).toHaveBeenCalled());
-    expect(result.current.languageCode).toBeNull();
+    expect(result.current.languageCode).toBe('en');
     expect(result.current.countryId).toBeNull();
+  });
+
+  it('seeds languageCode from the active UI locale on mount, and the silent resolve never overrides it even when it disagrees (2026-09-28 fix)', async () => {
+    useLocaleStore.getState().setLocale('vi');
+    // A resolve result that would set 'en' if language weren't seeded+protected — the exact
+    // mismatch reported (page already in Vietnamese, this field silently switching to English).
+    const englishTimezoneResult: ResolvedGeoResponse = { language: languages[0], country: vietnam, region: null, source: 'TIMEZONE' };
+    vi.spyOn(apiClient, 'post').mockResolvedValueOnce(apiResponse(englishTimezoneResult));
+
+    const { result } = renderHook(() => useGeoLocaleFieldsData(), { wrapper });
+
+    expect(result.current.languageCode).toBe('vi'); // seeded synchronously, before the resolve even settles
+    await waitFor(() => expect(result.current.countryId).toBe(1)); // country still applies normally
+    expect(result.current.languageCode).toBe('vi'); // unchanged — the mount resolve never touches language
   });
 
   it('never overwrites a field the user already touched, even when the resolve later disagrees', async () => {
@@ -157,7 +174,7 @@ describe('useGeoLocaleFieldsData', () => {
     act(() => {
       result.current.onCountryChange(3); // France, defaultLanguageCode 'fr' — not in `languages`
     });
-    expect(result.current.languageCode).toBeNull();
+    expect(result.current.languageCode).toBe('en'); // untouched — stays at the localeStore seed, never 'fr'
   });
 
   it('onUseMyLocation: denied sets geoHint and never calls resolve again', async () => {
@@ -245,13 +262,13 @@ describe('useGeoLocaleFieldsData', () => {
     expect(result.current.languageCode).toBe('en'); // touched, never overwritten
   });
 
-  it('a failed resolve call pre-fills nothing and never throws', async () => {
+  it('a failed resolve call pre-fills nothing (beyond the languageCode seed) and never throws', async () => {
     vi.spyOn(apiClient, 'post').mockRejectedValueOnce(new Error('network error'));
 
     const { result } = renderHook(() => useGeoLocaleFieldsData(), { wrapper });
 
     await waitFor(() => expect(apiClient.post).toHaveBeenCalled());
-    expect(result.current.languageCode).toBeNull();
+    expect(result.current.languageCode).toBe('en'); // the seed — a failed resolve never touched it anyway
     expect(result.current.countryId).toBeNull();
   });
 });

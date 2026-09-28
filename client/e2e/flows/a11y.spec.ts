@@ -218,12 +218,17 @@ test('/register: Tab reaches every control in order', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible();
 
   await page.keyboard.press('Tab');
-  await expect(page.getByLabel('Email', { exact: true })).toBeFocused();
+  // Not `{ exact: true }` here (unlike /login below) — Email/Password/Full name carry a visual
+  // RequiredMark ("Email *"), and `getByLabel`'s exact match compares the raw label text rather
+  // than the accessible-name computation that correctly excludes the mark's `aria-hidden` span.
+  // Non-exact "Email" still only matches this one field.
+  await expect(page.getByLabel('Email')).toBeFocused();
 
   await page.keyboard.press('Tab');
-  // exact: true — getByLabel does substring matching by default, and
-  // "Password" is a substring of the toggle button's aria-label "Show password".
-  await expect(page.getByLabel('Password', { exact: true })).toBeFocused();
+  // `/^Password/` (not `{ exact: true }`, same reason as Email above) — anchored so it still
+  // excludes the "Show/Hide password" toggle buttons' aria-labels, same disambiguation
+  // `{ exact: true }` gave `/login`'s equivalent assertion.
+  await expect(page.getByLabel(/^Password/)).toBeFocused();
 
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Show password' })).toBeFocused();
@@ -231,8 +236,22 @@ test('/register: Tab reaches every control in order', async ({ page }) => {
   await page.keyboard.press('Tab');
   await expect(page.getByLabel('Full name')).toBeFocused();
 
+  // CLIENT-REF-2: Country shares its grid column with the icon-only "Use my current location"
+  // button (user decision) — DOM order is the button, then Country, then Region in the next
+  // column. A real browser always has navigator.geolocation, so the button is always in tab
+  // order here. Region itself is skipped: it's disabled (native `disabled`, same tab-order
+  // exclusion as the OAuth row below) until a country is picked, and none is picked here.
   await page.keyboard.press('Tab');
-  await expect(page.getByLabel('Phone number (optional)')).toBeFocused();
+  await expect(page.getByRole('button', { name: /use my current location/i })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Country')).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Phone number')).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Language')).toBeFocused();
 
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Create account' })).toBeFocused();
