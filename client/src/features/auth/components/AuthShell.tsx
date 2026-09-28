@@ -4,6 +4,15 @@ import { CommunityIllustration } from './CommunityIllustration';
 
 interface AuthShellProps {
   children: ReactNode;
+  /**
+   * CLIENT-REF-2: defaults to the hardcoded English tagline so `LoginPage` (which never passes
+   * this prop) is untouched. `RegisterPage` passes a translated string instead of this component
+   * calling `t()` itself — `AuthShell` is the same instance `LoginPage` renders, and `LoginForm`
+   * stays English until CLIENT-I18N-2, so translating the tagline unconditionally here would show
+   * a translated shell around an English Login form after a sign-up language switch. Decided
+   * 2026-09-28, see CLIENT-REF-2's ticket doc.
+   */
+  tagline?: string;
 }
 
 /**
@@ -12,7 +21,10 @@ interface AuthShellProps {
  * card layout is shared with AUTH-2's Register page"). Illustration + tagline
  * on the left, `children` (the form) on the right.
  */
-export function AuthShell({ children }: AuthShellProps) {
+export function AuthShell({
+  children,
+  tagline = 'Your teams, matches, and crew — all in one place.',
+}: AuthShellProps) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-8">
       <div className="shadow-card grid w-[900px] max-w-full grid-cols-1 overflow-hidden rounded-2xl border-hairline border-border bg-surface-2 md:grid-cols-2">
@@ -27,7 +39,7 @@ export function AuthShell({ children }: AuthShellProps) {
             <CommunityIllustration />
           </div>
           <p className="max-w-[320px] text-2xl font-semibold tracking-tight text-text-primary">
-            Your teams, matches, and crew — all in one place.
+            {tagline}
           </p>
         </div>
 

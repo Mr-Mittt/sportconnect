@@ -53,6 +53,13 @@ function sessionFor(refreshToken: string | undefined): AuthResult | null {
 }
 
 export const authHandlers: HttpHandler[] = [
+  // CLIENT-REF-2: `body` is typed against the widened `RegisterPayload` (adds optional
+  // languageCode/countryId/regionId/latitude/longitude, 1:1 with backend U16's RegisterRequest),
+  // but this handler still only validates the original three required fields — the new ones are
+  // genuinely optional and the response's `user` doesn't echo them back either (verified against
+  // AuthServiceImpl.toUserResponse(), see CLIENT-REF-2's ticket doc), so there's nothing else for
+  // this handler to do with them. e2e specs assert what was actually sent via the real outgoing
+  // request (`page.on('request')`), not via anything this handler echoes.
   http.post('/api/auth/register', async ({ request }) => {
     const body = (await request.json()) as RegisterPayload;
     if (!body.email || !body.password || !body.fullName) {

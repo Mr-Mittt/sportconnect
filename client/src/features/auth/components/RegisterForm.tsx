@@ -1,10 +1,65 @@
 import { IconBrandApple, IconBrandFacebook, IconBrandGoogle, IconEye, IconEyeOff } from '@tabler/icons-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { useLocaleStore } from '@/app/localeStore';
+import { mapToSupportedLocale } from '@/shared/lib/locale';
+import {
+  GeoLocaleCountrySelect,
+  GeoLocaleLanguageField,
+  GeoLocaleLocationButton,
+  GeoLocaleLocationHint,
+  GeoLocaleReferenceError,
+  GeoLocaleRegionField,
+} from '@/shared/components/GeoLocaleFields';
+import { RequiredMark } from '@/shared/components/RequiredMark';
+import { useGeoLocaleFieldsData } from '@/shared/hooks/useGeoLocaleFieldsData';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import type { RegisterPayload } from '../types';
+
+// Same navigation/edit keys CreateSessionModal.tsx's own digits-only guard allows through —
+// blocking a keystroke should never also block Tab/Backspace/arrow navigation etc.
+const PHONE_NUMBER_ALLOWED_KEYS = new Set([
+  'Backspace',
+  'Delete',
+  'Tab',
+  'Escape',
+  'Enter',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Home',
+  'End',
+]);
+
+// Digits plus the punctuation a phone number actually uses — `RegisterRequest.phoneNumber` has no
+// server-side format validation beyond `@Size(max = 20)`, so this is purely a client-side typing
+// guard preventing obviously-wrong input (letters, stray punctuation), not a full phone format.
+const PHONE_NUMBER_CHAR_PATTERN = /^[0-9+\-() ]$/;
+
+function handlePhoneNumberKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+  if (event.ctrlKey || event.metaKey || event.altKey || PHONE_NUMBER_ALLOWED_KEYS.has(event.key)) {
+    return;
+  }
+  if (!PHONE_NUMBER_CHAR_PATTERN.test(event.key)) {
+    event.preventDefault();
+  }
+}
+
+// A `type="tel"` input doesn't validate a pasted string at all (pasting "call me!" leaves it
+// showing verbatim) — reject the whole paste unless every character is one this field allows.
+function handlePhoneNumberPaste(event: React.ClipboardEvent<HTMLInputElement>) {
+  if (!/^[0-9+\-() ]+$/.test(event.clipboardData.getData('text'))) {
+    event.preventDefault();
+  }
+}
+
+// Same simple shape `@Email` accepts server-side — not a full RFC 5322 parser, just enough to
+// catch an obviously incomplete address before it round-trips to the server.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface RegisterFormProps {
   onSubmit: (payload: RegisterPayload) => void;
@@ -17,31 +72,95 @@ interface RegisterFormProps {
  * only the form's own field values and the password-visibility toggle
  * (ephemeral UI state). Client-side length constraints mirror
  * RegisterRequest's server-side validation (password min 8, full name max
- * 200, phone number max 20) via native HTML validation; the server response
- * is the source of truth for anything it can't check client-side (e.g. email
- * already taken).
+ * 200, phone number max 20); the server response is the source of truth for
+ * anything it can't check client-side (e.g. email already taken, itself
+ * shown untranslated — see below).
+ *
+ * **Validation is entirely custom (`noValidate` on the `<form>`), not native HTML constraint
+ * validation** (2026-09-28 fix) — a browser's own "Please fill out this field" / "Please lengthen
+ * this text…" popups render in the *browser's* language, never this app's `i18next` locale, so
+ * switching to Vietnamese never translated them. Same `hasAttemptedSubmit` pattern
+ * `CreateSessionModal.tsx` already uses: the submit button is always clickable; clicking it while
+ * invalid sets `hasAttemptedSubmit` and reveals translated inline error text beside each invalid
+ * field's own label (user decision — not under the input) instead of submitting, recomputed from
+ * current state every render (not separate "touched" flags), so each message clears itself the
+ * moment its field becomes valid. `aria-required` replaces the native `required` attribute for the
+ * same a11y signal without the untranslatable popup. **The server's own error message
+ * (`errorMessage`, e.g. "Email already registered") is a
+ * known, accepted exception** — it is arbitrary free text from the backend with no key/i18n
+ * contract, so the client has nothing to translate it *into*; showing a generic localized fallback
+ * instead would hide genuinely useful specific errors, which is worse.
+ *
+ * CLIENT-REF-2: wires `useGeoLocaleFieldsData()` directly (not lifted to
+ * RegisterPage — matches this form's own existing convention of owning its
+ * field state locally, unlike the prop-driven LocationPicker/
+ * useLocationPickerData split used inside session modals). Picking a
+ * language that maps to a supported UI locale (`mapToSupportedLocale`)
+ * switches the app's locale immediately via `localeStore`, so the rest of
+ * the form re-renders translated — the point of offering Language on
+ * sign-up. Coordinates are only ever included in the submitted payload after
+ * a successful "Use my current location" click; every optional field is
+ * omitted (not sent as null/empty) when unset.
+ *
+ * **Field layout (user decision, 2026-09-28):** Country + Region sit in one horizontal row
+ * directly under Full name; Language pairs with Phone number in its own horizontal row below.
+ * Country's own column is two rows: its "Country" label, then a second row with the icon-only
+ * "Use my current location" button beside the select (`GeoLocaleCountrySelect`, the one field
+ * rendered without its own `Label` — see `GeoLocaleFields.tsx`'s doc comment on it). This is why
+ * `GeoLocaleFields.tsx` exports each field as its own small component instead of one fixed-layout
+ * component — see that file's module doc. Email/Password/Full name get a visual `RequiredMark`;
+ * every other field has no "(optional)" suffix, so absence of the mark is itself the signal.
  */
 export function RegisterForm({ onSubmit, isPending, errorMessage }: RegisterFormProps) {
+  const { t } = useTranslation('register');
+  const setLocale = useLocaleStore((state) => state.setLocale);
+  const geoLocale = useGeoLocaleFieldsData();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+
+  const isEmailEmpty = email.trim() === '';
+  const isEmailInvalid = !isEmailEmpty && !EMAIL_PATTERN.test(email.trim());
+  const isPasswordTooShort = password.length < 8;
+  const isFullNameEmpty = fullName.trim() === '';
+  const isValid = !isEmailEmpty && !isEmailInvalid && !isPasswordTooShort && !isFullNameEmpty;
+
+  function handleLanguageChange(code: string | null) {
+    geoLocale.onLanguageChange(code);
+    const mapped = mapToSupportedLocale(code);
+    if (mapped) {
+      setLocale(mapped);
+    }
+  }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isValid) {
+      setHasAttemptedSubmit(true);
+      return;
+    }
     onSubmit({
       email,
       password,
       fullName,
       ...(phoneNumber ? { phoneNumber } : {}),
+      ...(geoLocale.languageCode ? { languageCode: geoLocale.languageCode } : {}),
+      ...(geoLocale.countryId !== null ? { countryId: geoLocale.countryId } : {}),
+      ...(geoLocale.regionId !== null ? { regionId: geoLocale.regionId } : {}),
+      ...(geoLocale.latitude !== null && geoLocale.longitude !== null
+        ? { latitude: geoLocale.latitude, longitude: geoLocale.longitude }
+        : {}),
     });
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h1 className="mb-1 text-xl font-semibold tracking-tight text-text-primary">Create your account</h1>
-      <p className="mb-6 text-2sm text-text-secondary">Join SportHub and find your next game.</p>
+    <form onSubmit={handleSubmit} noValidate>
+      <h1 className="mb-1 text-xl font-semibold tracking-tight text-text-primary">{t('heading')}</h1>
+      <p className="mb-6 text-2sm text-text-secondary">{t('subheading')}</p>
 
       {errorMessage && (
         <div
@@ -53,35 +172,53 @@ export function RegisterForm({ onSubmit, isPending, errorMessage }: RegisterForm
       )}
 
       <div className="mb-4">
-        <Label htmlFor="register-email">Email</Label>
+        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+          <Label htmlFor="register-email" className="mb-0">
+            {t('form.email.label')}
+            <RequiredMark />
+          </Label>
+          {hasAttemptedSubmit && isEmailEmpty && (
+            <span className="text-2xs text-text-danger">{t('form.email.error.required')}</span>
+          )}
+          {hasAttemptedSubmit && isEmailInvalid && (
+            <span className="text-2xs text-text-danger">{t('form.email.error.invalid')}</span>
+          )}
+        </div>
         <Input
           id="register-email"
           name="email"
           type="email"
           autoComplete="email"
-          required
+          aria-required="true"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
       </div>
 
       <div className="mb-4">
-        <Label htmlFor="register-password">Password</Label>
+        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+          <Label htmlFor="register-password" className="mb-0">
+            {t('form.password.label')}
+            <RequiredMark />
+          </Label>
+          {hasAttemptedSubmit && isPasswordTooShort && (
+            <span className="text-2xs text-text-danger">{t('form.password.error.tooShort')}</span>
+          )}
+        </div>
         <div className="relative">
           <Input
             id="register-password"
             name="password"
             type={showPassword ? 'text' : 'password'}
             autoComplete="new-password"
-            required
-            minLength={8}
+            aria-required="true"
             className="pr-10"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
           <button
             type="button"
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            aria-label={showPassword ? t('form.password.hideAction') : t('form.password.showAction')}
             onClick={() => setShowPassword((prev) => !prev)}
             className="absolute top-1/2 right-1 -translate-y-1/2 cursor-pointer p-2 text-text-muted"
           >
@@ -95,39 +232,108 @@ export function RegisterForm({ onSubmit, isPending, errorMessage }: RegisterForm
       </div>
 
       <div className="mb-4">
-        <Label htmlFor="register-full-name">Full name</Label>
+        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+          <Label htmlFor="register-full-name" className="mb-0">
+            {t('form.fullName.label')}
+            <RequiredMark />
+          </Label>
+          {hasAttemptedSubmit && isFullNameEmpty && (
+            <span className="text-2xs text-text-danger">{t('form.fullName.error.required')}</span>
+          )}
+        </div>
         <Input
           id="register-full-name"
           name="fullName"
           type="text"
           autoComplete="name"
-          required
+          aria-required="true"
           maxLength={200}
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
         />
       </div>
 
-      <div className="mb-5">
-        <Label htmlFor="register-phone-number">Phone number (optional)</Label>
-        <Input
-          id="register-phone-number"
-          name="phoneNumber"
-          type="tel"
-          autoComplete="tel"
-          maxLength={20}
-          value={phoneNumber}
-          onChange={(e) => setPhoneNumber(e.target.value)}
+      {/* Country + Region: one horizontal row directly under Full name, 7:5 column ratio (user
+          decision — Country's column is wider since it also holds the location button). Country's
+          column is two rows (user decision, 2026-09-28): the "Country" label on its own row, then
+          a second row with the icon-only "Use my current location" button beside the select,
+          vertically centered (`items-center`) against just the select's own height, not the label
+          above it. Stacks to one column below `sm` (640px) — the AuthShell card's right panel only
+          narrows below the viewport's own width starting at `md` (768px), so `sm:` is always at
+          least as wide as the true container here.
+
+          The `geoHint` result (denied/unavailable/timeout) renders as its own full-width row below
+          this whole grid (`GeoLocaleLocationHint`, 2026-09-28 fix) — it used to render inside the
+          button's own `shrink-0` flex slot, where a full sentence forced that fixed-width slot wide
+          open and broke the row's layout. */}
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-[7fr_5fr]">
+        <div>
+          {/* Explicit `common:` namespace prefix — this `t` defaults to the `register` namespace
+              (see useTranslation('register') above), but this one label is the shared
+              GeoLocaleFields string living in `common.json` (GeoLocaleCountrySelect has no Label
+              of its own — see that component's doc comment for why). */}
+          <Label htmlFor="geo-locale-country">{t('common:geoLocaleFields.country')}</Label>
+          <div className="flex items-center gap-2">
+            <GeoLocaleLocationButton
+              isGeolocationSupported={geoLocale.isGeolocationSupported}
+              isRequestingLocation={geoLocale.isRequestingLocation}
+              onUseMyLocation={geoLocale.onUseMyLocation}
+              className="shrink-0"
+            />
+            <div className="min-w-0 flex-1">
+              <GeoLocaleCountrySelect
+                countries={geoLocale.countries}
+                isReferenceError={geoLocale.isReferenceError}
+                countryId={geoLocale.countryId}
+                onCountryChange={geoLocale.onCountryChange}
+              />
+            </div>
+          </div>
+        </div>
+        <GeoLocaleRegionField
+          regions={geoLocale.regions}
+          countryId={geoLocale.countryId}
+          isReferenceError={geoLocale.isReferenceError}
+          isRegionsError={geoLocale.isRegionsError}
+          regionId={geoLocale.regionId}
+          onRegionChange={geoLocale.onRegionChange}
+        />
+      </div>
+      <GeoLocaleLocationHint geoHint={geoLocale.geoHint} />
+      <GeoLocaleReferenceError isReferenceError={geoLocale.isReferenceError} />
+
+      {/* Phone number + Language: one horizontal row, same 7:5 column ratio as Country/Region
+          above (user decision) and same sm:-and-up breakpoint collapse. */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-[7fr_5fr]">
+        <div>
+          <Label htmlFor="register-phone-number">{t('form.phoneNumber.label')}</Label>
+          <Input
+            id="register-phone-number"
+            name="phoneNumber"
+            type="tel"
+            autoComplete="tel"
+            maxLength={20}
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            onKeyDown={handlePhoneNumberKeyDown}
+            onPaste={handlePhoneNumberPaste}
+          />
+        </div>
+        <GeoLocaleLanguageField
+          languages={geoLocale.languages}
+          isReferenceError={geoLocale.isReferenceError}
+          languageCode={geoLocale.languageCode}
+          onLanguageChange={handleLanguageChange}
         />
       </div>
 
       <Button type="submit" variant="primary" className="w-full" disabled={isPending}>
-        {isPending ? 'Creating account…' : 'Create account'}
+        {isPending ? t('form.submitting') : t('form.submit')}
       </Button>
 
       <div className="my-5 flex items-center gap-3">
         <div className="border-hairline-t flex-1 border-border" />
-        <span className="text-xs text-text-muted">or</span>
+        <span className="text-xs text-text-muted">{t('form.or')}</span>
         <div className="border-hairline-t flex-1 border-border" />
       </div>
 
@@ -136,22 +342,22 @@ export function RegisterForm({ onSubmit, isPending, errorMessage }: RegisterForm
             present for parity with Login, but non-functional until then. */}
         <Button variant="outline" className="w-full" disabled aria-disabled="true">
           <IconBrandFacebook className="size-4" aria-hidden="true" />
-          Continue with Facebook
+          {t('form.oauth.facebook')}
         </Button>
         <Button variant="outline" className="w-full" disabled aria-disabled="true">
           <IconBrandGoogle className="size-4" aria-hidden="true" />
-          Continue with Google
+          {t('form.oauth.google')}
         </Button>
         <Button variant="outline" className="w-full" disabled aria-disabled="true">
           <IconBrandApple className="size-4" aria-hidden="true" />
-          Continue with Apple
+          {t('form.oauth.apple')}
         </Button>
       </div>
 
       <p className="mt-6 text-center text-2sm text-text-secondary">
-        Already have an account?{' '}
+        {t('form.alreadyHaveAccount')}{' '}
         <Link to="/login" className="text-text-accent hover:underline">
-          Log in
+          {t('form.logIn')}
         </Link>
       </p>
     </form>

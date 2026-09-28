@@ -40,8 +40,14 @@ import { expect, test } from '../mocks/test.ts';
 test('Auth journey — register, logout, login', async ({ page }) => {
   await test.step('1. register with valid details — lands authenticated (AUTH-2: auto-login)', async () => {
     await page.goto('/register');
-    await page.getByLabel('Email', { exact: true }).fill('new-player@example.com');
-    await page.getByLabel('Password', { exact: true }).fill(mockPassword);
+    // CLIENT-REF-2: Register's Email/Password/Full name carry a visual RequiredMark ("Email *") —
+    // `getByLabel`'s exact match compares the raw label text (unlike `getByRole`'s accessible-name
+    // computation, which correctly excludes the mark's `aria-hidden` span), so `{ exact: true }`
+    // against the bare word no longer matches here. Non-exact "Email" still only matches this one
+    // field; `/^Password/` anchors past the mark while still excluding the "Show/Hide password"
+    // toggle buttons' aria-labels, the same disambiguation `{ exact: true }` used to provide.
+    await page.getByLabel('Email').fill('new-player@example.com');
+    await page.getByLabel(/^Password/).fill(mockPassword);
     await page.getByLabel('Full name').fill('New Player');
     await page.getByRole('button', { name: 'Create account' }).click();
 

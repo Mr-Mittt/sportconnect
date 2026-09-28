@@ -225,6 +225,7 @@ e2e/
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
     profile-journey.spec.ts   # PROFILE-8
     locale.spec.ts            # CLIENT-I18N-1
+    signup-locale.spec.ts     # CLIENT-REF-2
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -258,6 +259,7 @@ e2e/
       sessions.ts                # CLIENT-SESSION-1
       notifications.ts           # CLIENT-NOTIF-1, CLIENT-NOTIF-5
       preferences.ts              # CLIENT-I18N-1 — GET /users/me/preferences, language: null
+      reference.ts                # CLIENT-REF-1 — languages/countries/regions/resolve (missed in this listing at the time, added retroactively by CLIENT-REF-2)
 ```
 
 ---
@@ -961,6 +963,29 @@ unconditional fetch on every authenticated session — doesn't 404 across the re
 its `null` response never overrides the seeded locale in either test here.
 
 Related doc: `client/docs/MVP/CLIENT-I18N-1_I18N_INFRASTRUCTURE_AND_LOCALE_STORE.md`.
+
+### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
+
+Sign-up's optional Language/Country/Region (`GeoLocaleFields`, wired via `useGeoLocaleFieldsData()`
+directly inside `RegisterForm`) and the Language field switching the UI locale live. Reuses
+`e2e/mocks/handlers/reference.ts`'s existing CLIENT-REF-1 fixtures verbatim — no new MSW handler.
+
+| Test | What it checks |
+|---|---|
+| `timezone-based pre-fill` → pre-fills Language/Country | `test.use({ timezoneId: 'Asia/Ho_Chi_Minh' })` → the silent mount resolve pre-fills Country=Vietnam, Language=`vi`, Region stays empty (never set by a non-coordinate resolve) — and the heading stays English, since a passive pre-fill never calls `setLocale` on its own |
+| `timezone-based pre-fill` → geolocation denied keeps the timezone pre-fill | No permission granted (Chromium auto-denies in headless) → the denied hint shows, Country/Language stay at their timezone pre-fill, registration still succeeds with `latitude`/`longitude` omitted from the request body |
+| geolocation granted — fills region and posts coordinates | `context.grantPermissions(['geolocation'])` + `setGeolocation` to the exact `COORDINATES_TEST_LATITUDE/LONGITUDE` fixture → Region fills to Ho Chi Minh City, and the real `/api/auth/register` request body carries `latitude`/`longitude`/`countryId`/`regionId` |
+| choosing a language switches visible copy and the header | Selecting "Tiếng Việt" flips the heading text immediately (no pre-fill in this test — default timezone) and the eventual register request's `Accept-Language` header is `vi`, `languageCode: 'vi'` in the body |
+
+The two timezone-dependent tests are scoped inside their own `test.describe` with
+`test.use({ timezoneId: 'Asia/Ho_Chi_Minh' })` so the other two tests (which each need an explicit,
+change-triggering `selectOption('vi')`) don't inherit a pre-filled `'vi'` value that would make
+their own selection a no-op. Coordinates/header assertions read the real outgoing request via
+`page.waitForRequest`/`postDataJSON()`, not anything the MSW handler echoes back — confirmed against
+real backend source that `AuthResponse.user` doesn't carry these fields either (see the ticket's
+Delta correction), so there's nothing to assert against in the response.
+
+Related doc: `client/docs/MVP/CLIENT-REF-2_SIGNUP_LANGUAGE_COUNTRY_REGION.md`.
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 
