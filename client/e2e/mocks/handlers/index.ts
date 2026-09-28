@@ -7,6 +7,7 @@ import { groupHandlers } from './groups.ts';
 import { locationHandlers } from './locations.ts';
 import { notificationHandlers } from './notifications.ts';
 import { preferenceHandlers } from './preferences.ts';
+import { referenceHandlers } from './reference.ts';
 import { sessionHandlers } from './sessions.ts';
 import { sportHandlers } from './sport.ts';
 
@@ -21,4 +22,5 @@ export const handlers: HttpHandler[] = [
   ...sessionHandlers,
   ...notificationHandlers,
   ...preferenceHandlers,
+  ...referenceHandlers,
 ];

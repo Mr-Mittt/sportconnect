@@ -1,3 +1,21 @@
 {
-  "logOut": "Đăng xuất"
+  "logOut": "Đăng xuất",
+  "geoLocaleFields": {
+    "language": "Ngôn ngữ",
+    "country": "Quốc gia",
+    "region": "Khu vực",
+    "selectLanguage": "Chọn ngôn ngữ",
+    "selectCountry": "Chọn quốc gia",
+    "selectRegion": "Chọn khu vực",
+    "noRegions": "Quốc gia này không có khu vực nào",
+    "regionsLoadError": "Không thể tải danh sách khu vực lúc này",
+    "referenceLoadError": "Không thể tải danh sách ngôn ngữ và quốc gia lúc này",
+    "useMyLocation": "Dùng vị trí hiện tại của tôi",
+    "locating": "Đang định vị…",
+    "hint": {
+      "denied": "Quyền truy cập vị trí đã bị từ chối — bạn vẫn có thể chọn thủ công.",
+      "unavailable": "Vị trí hiện không khả dụng — bạn vẫn có thể chọn thủ công.",
+      "timeout": "Việc định vị mất quá nhiều thời gian — bạn vẫn có thể chọn thủ công."
+    }
+  }
 }
