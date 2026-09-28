@@ -5,6 +5,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios';
 import { useAuthStore } from '@/app/authStore';
+import { useLocaleStore } from '@/app/localeStore';
 import type { ApiResponse } from '@/shared/types/api';
 import type { AuthResult } from '@/features/auth/types';
 
@@ -18,6 +19,20 @@ export function attachAuthHeader(config: InternalAxiosRequestConfig): InternalAx
   if (accessToken) {
     config.headers.set('Authorization', `Bearer ${accessToken}`);
   }
+  return config;
+}
+
+/**
+ * CLIENT-I18N-1 (`I18N_READINESS.md` I18N-2): sends the in-app locale as `Accept-Language` so
+ * server-side, locale-resolved responses (A13's attribute-schema labels) follow the UI's chosen
+ * language rather than the browser's own `Accept-Language`, which may disagree with it. Exported
+ * separately for the same testability reason as `attachAuthHeader`.
+ */
+export function attachAcceptLanguageHeader(
+  config: InternalAxiosRequestConfig,
+): InternalAxiosRequestConfig {
+  const { locale } = useLocaleStore.getState();
+  config.headers.set('Accept-Language', locale);
   return config;
 }
 
@@ -40,6 +55,7 @@ export function createAuthenticatedClient(baseURL: string): AxiosInstance {
   });
 
   client.interceptors.request.use(attachAuthHeader);
+  client.interceptors.request.use(attachAcceptLanguageHeader);
   client.interceptors.response.use(
     (response) => response,
     (error: AxiosError) => handleResponseError(error, client),

@@ -42,3 +42,24 @@ export interface UserResponse {
   // Server-computed (UserResponse.getFullName()), always present.
   fullName: string;
 }
+
+/**
+ * `GET /api/users/me/preferences` (U3/U16, `UserPreferenceResponse`). The row is created lazily
+ * on first access, so every field can genuinely be `null` for a brand-new user, not just the
+ * ones that look optional. CLIENT-I18N-1 only reads `language` (a validated, active
+ * `languages.code`, or `null` when never set) to seed `localeStore`'s tier-1 source; the rest
+ * exist here for CLIENT-REF-3 and later preference-editing tickets to read/write, typed 1:1
+ * against the Java DTO now rather than guessed piecemeal later.
+ */
+export interface UserPreferenceResponse {
+  language: string | null;
+  timezone: string | null;
+  distanceUnit: string | null;
+  notificationEmail: boolean | null;
+  notificationPush: boolean | null;
+  notificationSms: boolean | null;
+  privacyProfile: string | null;
+  privacyLocation: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}

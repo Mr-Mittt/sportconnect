@@ -1,7 +1,8 @@
 import { AxiosHeaders, type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiClient, attachAuthHeader, handleResponseError } from './apiClient';
+import { apiClient, attachAcceptLanguageHeader, attachAuthHeader, handleResponseError } from './apiClient';
 import { useAuthStore } from './authStore';
+import { useLocaleStore } from './localeStore';
 
 function fakeConfig(): InternalAxiosRequestConfig {
   return { headers: new AxiosHeaders() } as InternalAxiosRequestConfig;
@@ -76,6 +77,26 @@ describe('attachAuthHeader', () => {
     const config = attachAuthHeader(fakeConfig());
 
     expect(config.headers.get('Authorization')).toBeUndefined();
+  });
+});
+
+describe('attachAcceptLanguageHeader', () => {
+  afterEach(() => {
+    useLocaleStore.getState().setLocale('en');
+  });
+
+  it("sends Accept-Language from the store's current locale", () => {
+    useLocaleStore.getState().setLocale('vi');
+
+    const config = attachAcceptLanguageHeader(fakeConfig());
+
+    expect(config.headers.get('Accept-Language')).toBe('vi');
+  });
+
+  it('defaults to en', () => {
+    const config = attachAcceptLanguageHeader(fakeConfig());
+
+    expect(config.headers.get('Accept-Language')).toBe('en');
   });
 });
 

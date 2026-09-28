@@ -203,6 +203,22 @@ describe('logout from /admin (ADMIN-4)', () => {
       if (url === '/sports/all/1/session-attribute-schema') {
         return apiResponse(badmintonSessionSchema);
       }
+      // CLIENT-I18N-1: useSyncUserLocale (RootLayout) fetches this unconditionally too, on
+      // every route including /admin — `language: null` so it never touches localeStore here.
+      if (url === '/users/me/preferences') {
+        return apiResponse({
+          language: null,
+          timezone: null,
+          distanceUnit: null,
+          notificationEmail: null,
+          notificationPush: null,
+          notificationSms: null,
+          privacyProfile: null,
+          privacyLocation: null,
+          createdAt: null,
+          updatedAt: null,
+        });
+      }
       throw new Error(`unexpected GET ${url}`);
     });
   }

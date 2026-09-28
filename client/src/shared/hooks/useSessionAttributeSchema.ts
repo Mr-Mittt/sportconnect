@@ -1,10 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
+import { useLocaleStore } from '@/app/localeStore';
+import type { LocaleCode } from '@/shared/lib/locale';
 import type { ApiResponse } from '@/shared/types/api';
 import type { ResolvedSportAttributeSchema } from '@/shared/types/sport';
 
-export const sessionAttributeSchemaQueryKey = (sportId: number) =>
-  ['sessionAttributeSchema', sportId] as const;
+// CLIENT-I18N-1: locale is part of the key (not just sent via the `Accept-Language` interceptor)
+// so switching the UI language refetches rather than serving the previous language's cached
+// labels — TanStack Query treats a new key as a new query.
+export const sessionAttributeSchemaQueryKey = (sportId: number, locale: LocaleCode) =>
+  ['sessionAttributeSchema', sportId, locale] as const;
 
 /**
  * CLIENT-SESSION-14: reads one sport's **session** attribute schema, via the member-facing
@@ -23,8 +28,9 @@ export function useSessionAttributeSchema(sportId: number | undefined): {
   isLoading: boolean;
   isError: boolean;
 } {
+  const locale = useLocaleStore((state) => state.locale);
   const query = useQuery({
-    queryKey: sessionAttributeSchemaQueryKey(sportId ?? -1),
+    queryKey: sessionAttributeSchemaQueryKey(sportId ?? -1, locale),
     queryFn: async () => {
       const response = await apiClient.get<ApiResponse<ResolvedSportAttributeSchema | null>>(
         `/sports/${sportId}/session-attribute-schema`,

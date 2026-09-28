@@ -224,6 +224,7 @@ e2e/
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
     profile-journey.spec.ts   # PROFILE-8
+    locale.spec.ts            # CLIENT-I18N-1
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -256,6 +257,7 @@ e2e/
       locations.ts               # CLIENT-SESSION-1
       sessions.ts                # CLIENT-SESSION-1
       notifications.ts           # CLIENT-NOTIF-1, CLIENT-NOTIF-5
+      preferences.ts              # CLIENT-I18N-1 — GET /users/me/preferences, language: null
 ```
 
 ---
@@ -937,6 +939,28 @@ session-scoped `myProfileState` field so a save actually changes what the next `
 Related docs: `client/docs/MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md`,
 `client/docs/MVP/SPORT-10_ADD_SPORT_RESUME_REACTIVATION_FLOW.md`,
 `client/docs/MVP/CLIENT-SESSION-19_ADD_MODAL_FOR_PROFILE_DEFINITION_LIST.md`.
+
+### `e2e/flows/locale.spec.ts` (CLIENT-I18N-1, 2 `test()`s)
+
+Proves `Accept-Language` actually follows `localeStore`'s active locale on real outgoing
+requests — no language-picker UI ships in this ticket (CLIENT-REF-1/3 build one later), so
+"switching locale" here means seeding `localStorage`'s `locale-storage` key via
+`page.addInitScript` before the app's first script runs, the same storage key a future picker's
+`setLocale` call would write.
+
+| Test | What it checks |
+|---|---|
+| defaults to `en` with nothing stored | Fresh context, log in via the real form — every captured `/api/` request's `Accept-Language` header is `en` |
+| follows a locale stored before the app loads | `addInitScript` seeds `locale-storage` = `{"state":{"locale":"vi"},"version":0}` → `<html lang="vi">` on `/login` before any login attempt, and every captured request (incl. the pre-login `/auth/refresh`) carries `Accept-Language: vi` |
+
+Headers are captured via Playwright's own `page.on('request')`, not a dedicated MSW handler
+inspecting the header — simpler and equally reliable, a deliberate deviation from the ticket's
+"MSW handler inspection" wording. `e2e/mocks/handlers/preferences.ts` (`GET
+/users/me/preferences`, `language: null`) exists so `RootLayout`'s `useSyncUserLocale` — now an
+unconditional fetch on every authenticated session — doesn't 404 across the rest of this suite;
+its `null` response never overrides the seeded locale in either test here.
+
+Related doc: `client/docs/MVP/CLIENT-I18N-1_I18N_INFRASTRUCTURE_AND_LOCALE_STORE.md`.
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 

@@ -45,6 +45,7 @@ The old client stored both the access token and refresh token in `localStorage` 
 | E2E + visual regression | Playwright — one config, two projects: `visual-regression` (screenshot diffing) and `e2e` (functional flows) |
 | E2E network layer | Mock Service Worker (MSW) — E2E never hits the real backend; handlers mirror the documented API contracts |
 | Icons | Tabler icons, outline style only |
+| i18n | `i18next` + `react-i18next` (CLIENT-I18N-1) — `en`/`vi` bundles in `src/locales/`, active locale in `src/app/localeStore.ts`, `Accept-Language` follows it via an `apiClient` interceptor. The one new-dependency category this convention permits. |
 | Package manager | pnpm (decided at HF-00 — pinned via `packageManager` in `package.json`; don't mix in npm/yarn) |
 
 Don't introduce a second styling system, a second test runner, or a second icon set for a new page "because it was faster." If the stack above genuinely doesn't fit a new requirement, that's a conversation to have and record here, not a silent per-page exception.
