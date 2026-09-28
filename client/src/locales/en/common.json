@@ -1,3 +1,21 @@
 {
-  "logOut": "Log out"
+  "logOut": "Log out",
+  "geoLocaleFields": {
+    "language": "Language",
+    "country": "Country",
+    "region": "Region",
+    "selectLanguage": "Select a language",
+    "selectCountry": "Select a country",
+    "selectRegion": "Select a region",
+    "noRegions": "No regions available for this country",
+    "regionsLoadError": "Couldn't load regions right now",
+    "referenceLoadError": "Couldn't load languages and countries right now",
+    "useMyLocation": "Use my current location",
+    "locating": "Locating…",
+    "hint": {
+      "denied": "Location access was denied — you can still pick these manually.",
+      "unavailable": "Location isn't available right now — you can still pick these manually.",
+      "timeout": "Location took too long to respond — you can still pick these manually."
+    }
+  }
 }
