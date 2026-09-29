@@ -1,0 +1,65 @@
+{
+  "page": {
+    "heading": "Friends",
+    "selectPrompt": "Select a friend to view their profile and chat."
+  },
+  "rail": {
+    "searchPlaceholder": "Search friends",
+    "searchLabel": "Search friends",
+    "clearSearch": "Clear search",
+    "addFriend": "Add friend",
+    "backToList": "Back to friend list",
+    "searching": "Searching…",
+    "searchError": "Couldn't search right now.",
+    "matchesFor": "Matches for \"{{query}}\"",
+    "noUsersFor": "No users found for \"{{query}}\"",
+    "empty": "Nothing here yet.",
+    "noMatches": "No matches.",
+    "sections": {
+      "online": "Online",
+      "friendRequests": "Friend Requests",
+      "offline": "Offline",
+      "blocked": "Blocked"
+    }
+  },
+  "profile": {
+    "achievements": "Achievements",
+    "comingSoon": "Coming soon.",
+    "friend": "Friend",
+    "unfriend": "Unfriend"
+  },
+  "chat": {
+    "loading": "Loading…",
+    "loadError": "Couldn't load this conversation.",
+    "loadOlderError": "Couldn't load earlier messages.",
+    "retry": "Retry",
+    "loadOlder": "Load earlier messages",
+    "empty": "No messages yet.",
+    "deleted": "Message deleted",
+    "edited": "(edited)",
+    "editContentLabel": "Edit message content",
+    "saveEdit": "Save edit",
+    "save": "Save",
+    "cancelEdit": "Cancel edit",
+    "cancel": "Cancel",
+    "edit": "Edit message",
+    "delete": "Delete message",
+    "placeholder": "Message…",
+    "messageLabel": "Message",
+    "send": "Send",
+    "sending": "Sending…"
+  },
+  "unfriendDialog": {
+    "srTitle": "Unfriend {{personName}}?",
+    "question": "Do you really want to unfriend {{personName}}?",
+    "error": "Couldn't unfriend {{personName}}. Please try again.",
+    "submit": "Unfriend",
+    "submitting": "Unfriending…",
+    "cancel": "Cancel"
+  },
+  "unavailableDialog": {
+    "title": "Friend request unavailable",
+    "body": "This friend request is no longer available.",
+    "dismiss": "Got it"
+  }
+}

@@ -1,6 +1,7 @@
 import i18next from 'i18next';
 import { useState } from 'react';
 import { IconChevronDown } from '@tabler/icons-react';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
@@ -25,6 +26,8 @@ function initialsFor(fullName: string): string {
 }
 
 interface FriendProfilePanelProps {
+  /** CLIENT-I18N-8: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   person: SelectedPerson;
   sports: SportProfile[];
   isSportsLoading: boolean;
@@ -64,11 +67,11 @@ interface FriendProfilePanelProps {
  * CLIENT-I18N-5: the `NONE`/`PENDING_SENT`/`PENDING_RECEIVED` action text above — the strings that
  * literally differ per `friendshipStatus` value — read `enums:friendship.*` via the i18next
  * singleton directly (`i18next.t()`), matching this ticket's other client-mirrored-enum call
- * sites. The `FRIENDS`-state "Friend"/"Unfriend" menu below and "Achievements"/"Coming soon." are
- * general Friends-page copy, not a per-status label, so they stay out of this ticket's scope
- * (`CLIENT-I18N-6`'s job when that feature's Friends slice is picked up).
+ * sites. CLIENT-I18N-8: the `FRIENDS`-state "Friend"/"Unfriend" menu and "Achievements"/"Coming soon." are
+ * general Friends-page copy, read from the `friends` namespace via `useOverridableText`.
  */
 export function FriendProfilePanel({
+  i18nOverridePrefix,
   person,
   sports,
   isSportsLoading,
@@ -81,6 +84,7 @@ export function FriendProfilePanel({
   isUnfriendError,
   isActionPending,
 }: FriendProfilePanelProps) {
+  const t = useOverridableText('friends', i18nOverridePrefix);
   const [isAchievementsOpen, setIsAchievementsOpen] = useState(false);
   const [isUnfriendConfirmOpen, setIsUnfriendConfirmOpen] = useState(false);
 
@@ -128,10 +132,10 @@ export function FriendProfilePanel({
           className="border-hairline-t border-border pt-2.5 pb-3.5"
         >
           <CollapsibleTrigger>
-            <span className="text-2sm font-medium text-text-primary">Achievements</span>
+            <span className="text-2sm font-medium text-text-primary">{t('profile.achievements')}</span>
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-1">
-            <p className="text-2xs text-text-muted">Coming soon.</p>
+            <p className="text-2xs text-text-muted">{t('profile.comingSoon')}</p>
           </CollapsibleContent>
         </Collapsible>
       </div>
@@ -175,7 +179,7 @@ export function FriendProfilePanel({
                 className="h-7"
                 disabled={isActionPending}
               >
-                Friend
+                {t('profile.friend')}
                 <IconChevronDown className="ml-0.5 size-3.5" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
@@ -184,7 +188,7 @@ export function FriendProfilePanel({
                 onSelect={() => setIsUnfriendConfirmOpen(true)}
                 className="py-1.5 text-text-danger"
               >
-                Unfriend
+                {t('profile.unfriend')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -195,6 +199,7 @@ export function FriendProfilePanel({
             isSubmitting={isActionPending}
             isError={isUnfriendError}
             personName={person.fullName}
+            i18nOverridePrefix={i18nOverridePrefix}
           />
         </div>
       )}

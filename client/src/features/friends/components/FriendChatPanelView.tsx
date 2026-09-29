@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EmojiPickerButton } from '@/features/chat/components/EmojiPickerButton';
 import type { ChatMessage } from '@/features/chat/types';
 import { formatTypingLabel, type TypingUser } from '@/features/chat/typingLabel';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { useAutoResizeTextarea } from '@/shared/lib/useAutoResizeTextarea';
 import { useInfiniteScrollSentinel } from '@/shared/lib/useInfiniteScrollSentinel';
 import { Button } from '@/shared/ui/button';
@@ -37,6 +38,8 @@ export interface FriendChatPanelViewProps {
    * at most one entry, a 1:1 DM having exactly one other participant. */
   typingUsers: TypingUser[];
   sendTyping: (isTyping: boolean) => void;
+  /** CLIENT-I18N-8: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -69,7 +72,9 @@ export function FriendChatPanelView({
   loadOlderMessages,
   typingUsers,
   sendTyping,
+  i18nOverridePrefix,
 }: FriendChatPanelViewProps) {
+  const t = useOverridableText('friends', i18nOverridePrefix);
   const [draft, setDraft] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
@@ -203,10 +208,10 @@ export function FriendChatPanelView({
     <div className="flex h-full flex-col">
       <div className="border-hairline flex flex-1 flex-col overflow-hidden rounded-xl border-border bg-surface-2">
         <div ref={containerRef} className="flex-1 overflow-y-auto p-3.5">
-          {isLoading && <p className="text-2sm text-text-muted">Loading…</p>}
+          {isLoading && <p className="text-2sm text-text-muted">{t('chat.loading')}</p>}
           {isError && (
             <p role="alert" className="text-2sm text-text-danger">
-              Couldn't load this conversation.
+              {t('chat.loadError')}
             </p>
           )}
           {!isLoading && !isError && (
@@ -214,13 +219,13 @@ export function FriendChatPanelView({
               <div ref={sentinelRef} aria-hidden="true" />
               {hasOlderMessages && isLoadOlderMessagesError && (
                 <div className="mb-2.5 flex flex-col items-center gap-1.5">
-                  <p className="text-2xs text-text-danger">Couldn't load earlier messages.</p>
+                  <p className="text-2xs text-text-danger">{t('chat.loadOlderError')}</p>
                   <button
                     type="button"
                     onClick={handleLoadOlderMessages}
                     className="cursor-pointer rounded-lg border-hairline border-border px-3 py-1 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                   >
-                    Retry
+                    {t('chat.retry')}
                   </button>
                 </div>
               )}
@@ -231,11 +236,11 @@ export function FriendChatPanelView({
                   disabled={isLoadingOlderMessages}
                   className="mb-2.5 w-full cursor-pointer rounded-lg border-hairline border-border py-1 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                 >
-                  {isLoadingOlderMessages ? 'Loading…' : 'Load earlier messages'}
+                  {isLoadingOlderMessages ? t('chat.loading') : t('chat.loadOlder')}
                 </button>
               )}
               {(messages?.length ?? 0) === 0 ? (
-                <p className="text-2sm text-text-muted">No messages yet.</p>
+                <p className="text-2sm text-text-muted">{t('chat.empty')}</p>
               ) : (
                 <div className="flex flex-col gap-1">
                   {(() => {
@@ -288,7 +293,7 @@ export function FriendChatPanelView({
                                   }}
                                   rows={1}
                                   className="min-h-0 resize-none break-words py-1.5 text-2sm"
-                                  aria-label="Edit message content"
+                                  aria-label={t('chat.editContentLabel')}
                                 />
                                 <div
                                   className="absolute bottom-0 right-0.5 z-10 flex translate-y-1/2 gap-0.5"
@@ -298,8 +303,8 @@ export function FriendChatPanelView({
                                     type="button"
                                     onClick={saveEdit}
                                     disabled={editDraft.trim().length === 0}
-                                    aria-label="Save edit"
-                                    title="Save"
+                                    aria-label={t('chat.saveEdit')}
+                                    title={t('chat.save')}
                                     className="cursor-pointer rounded p-0.5 text-text-accent hover:text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                                   >
                                     <IconCheck className="size-4.5" aria-hidden="true" />
@@ -307,8 +312,8 @@ export function FriendChatPanelView({
                                   <button
                                     type="button"
                                     onClick={cancelEditing}
-                                    aria-label="Cancel edit"
-                                    title="Cancel"
+                                    aria-label={t('chat.cancelEdit')}
+                                    title={t('chat.cancel')}
                                     className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                                   >
                                     <IconX className="size-4.5" aria-hidden="true" />
@@ -316,12 +321,12 @@ export function FriendChatPanelView({
                                 </div>
                               </div>
                             ) : isDeleted ? (
-                              <span className="italic text-text-muted">Message deleted</span>
+                              <span className="italic text-text-muted">{t('chat.deleted')}</span>
                             ) : (
                               <>
                                 {message.content}
                                 {message.editedAt !== null && (
-                                  <span className="ml-1 text-2xs text-text-muted">(edited)</span>
+                                  <span className="ml-1 text-2xs text-text-muted">{t('chat.edited')}</span>
                                 )}
                               </>
                             )}
@@ -331,7 +336,7 @@ export function FriendChatPanelView({
                                   type="button"
                                   onClick={() => startEditing(message)}
                                   disabled={isEditing || isDeleting}
-                                  aria-label="Edit message"
+                                  aria-label={t('chat.edit')}
                                   className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                                 >
                                   <IconPencil className="size-4.5" aria-hidden="true" />
@@ -340,7 +345,7 @@ export function FriendChatPanelView({
                                   type="button"
                                   onClick={() => deleteMessage(message.id)}
                                   disabled={isEditing || isDeleting}
-                                  aria-label="Delete message"
+                                  aria-label={t('chat.delete')}
                                   className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                                 >
                                   <IconTrash className="size-4.5" aria-hidden="true" />
@@ -378,8 +383,8 @@ export function FriendChatPanelView({
                 }
               }}
               onBlur={stopTypingNow}
-              placeholder="Message…"
-              aria-label="Message"
+              placeholder={t('chat.placeholder')}
+              aria-label={t('chat.messageLabel')}
               disabled={inputDisabled}
               rows={1}
               className="min-h-0 resize-none break-words py-2 pr-9"
@@ -400,7 +405,7 @@ export function FriendChatPanelView({
             onClick={send}
             disabled={draft.trim().length === 0 || isSending || inputDisabled}
           >
-            {isSending ? 'Sending…' : 'Send'}
+            {isSending ? t('chat.sending') : t('chat.send')}
           </Button>
         </div>
       </div>

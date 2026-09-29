@@ -1,0 +1,65 @@
+{
+  "page": {
+    "heading": "Bạn bè",
+    "selectPrompt": "Chọn một người bạn để xem hồ sơ và trò chuyện."
+  },
+  "rail": {
+    "searchPlaceholder": "Tìm bạn bè",
+    "searchLabel": "Tìm bạn bè",
+    "clearSearch": "Xóa tìm kiếm",
+    "addFriend": "Thêm bạn",
+    "backToList": "Quay lại danh sách bạn bè",
+    "searching": "Đang tìm…",
+    "searchError": "Hiện không thể tìm kiếm.",
+    "matchesFor": "Kết quả cho \"{{query}}\"",
+    "noUsersFor": "Không tìm thấy người dùng nào cho \"{{query}}\"",
+    "empty": "Chưa có gì ở đây.",
+    "noMatches": "Không có kết quả phù hợp.",
+    "sections": {
+      "online": "Trực tuyến",
+      "friendRequests": "Lời mời kết bạn",
+      "offline": "Ngoại tuyến",
+      "blocked": "Đã chặn"
+    }
+  },
+  "profile": {
+    "achievements": "Thành tích",
+    "comingSoon": "Sắp ra mắt.",
+    "friend": "Bạn bè",
+    "unfriend": "Hủy kết bạn"
+  },
+  "chat": {
+    "loading": "Đang tải…",
+    "loadError": "Không thể tải cuộc trò chuyện này.",
+    "loadOlderError": "Không thể tải các tin nhắn cũ hơn.",
+    "retry": "Thử lại",
+    "loadOlder": "Tải tin nhắn cũ hơn",
+    "empty": "Chưa có tin nhắn nào.",
+    "deleted": "Tin nhắn đã bị xóa",
+    "edited": "(đã chỉnh sửa)",
+    "editContentLabel": "Chỉnh sửa nội dung tin nhắn",
+    "saveEdit": "Lưu chỉnh sửa",
+    "save": "Lưu",
+    "cancelEdit": "Hủy chỉnh sửa",
+    "cancel": "Hủy",
+    "edit": "Chỉnh sửa tin nhắn",
+    "delete": "Xóa tin nhắn",
+    "placeholder": "Nhắn tin…",
+    "messageLabel": "Tin nhắn",
+    "send": "Gửi",
+    "sending": "Đang gửi…"
+  },
+  "unfriendDialog": {
+    "srTitle": "Hủy kết bạn với {{personName}}?",
+    "question": "Bạn có thật sự muốn hủy kết bạn với {{personName}}?",
+    "error": "Không thể hủy kết bạn với {{personName}}. Vui lòng thử lại.",
+    "submit": "Hủy kết bạn",
+    "submitting": "Đang hủy kết bạn…",
+    "cancel": "Hủy"
+  },
+  "unavailableDialog": {
+    "title": "Lời mời kết bạn không khả dụng",
+    "body": "Lời mời kết bạn này không còn khả dụng.",
+    "dismiss": "Đã hiểu"
+  }
+}

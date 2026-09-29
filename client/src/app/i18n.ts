@@ -2,6 +2,7 @@ import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import commonEn from '@/locales/en/common.json';
 import enumsEn from '@/locales/en/enums.json';
+import friendsEn from '@/locales/en/friends.json';
 import groupsEn from '@/locales/en/groups.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
 import loginEn from '@/locales/en/login.json';
@@ -13,6 +14,7 @@ import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
 import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
 import enumsVi from '@/locales/vi/enums.json';
+import friendsVi from '@/locales/vi/friends.json';
 import groupsVi from '@/locales/vi/groups.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
 import loginVi from '@/locales/vi/login.json';
@@ -83,6 +85,10 @@ import { useLocaleStore } from './localeStore';
  * line in `common` (`typing.*`, shared with the Friends chat panel). `formatNameList` and
  * `getPageAccessNoSportsPrompt` are plain functions, so they read the i18next singleton directly.
  *
+ * CLIENT-I18N-8: `friends` holds the Friends feature's own copy (`FriendsPage`, `FriendRail`, `FriendProfilePanel`,
+ * `FriendChatPanelView`, and the two dialogs). The per-`FriendshipStatus` action text stays in `enums`
+ * (CLIENT-I18N-5); the chat typing line stays in `common` (`typing.*`).
+ *
  * Imported once, for its side effect, from `main.tsx` (the app entry) — importing it anywhere
  * else risks a second, redundant `init()` call.
  */
@@ -100,6 +106,7 @@ void i18next.use(initReactI18next).init({
       sharedComponents: sharedComponentsEn,
       enums: enumsEn,
       groups: groupsEn,
+      friends: friendsEn,
     },
     vi: {
       common: commonVi,
@@ -113,12 +120,13 @@ void i18next.use(initReactI18next).init({
       sharedComponents: sharedComponentsVi,
       enums: enumsVi,
       groups: groupsVi,
+      friends: friendsVi,
     },
   },
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups'],
+  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });

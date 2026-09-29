@@ -1,3 +1,4 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/dialog';
 
@@ -8,6 +9,8 @@ interface UnfriendConfirmDialogProps {
   isSubmitting: boolean;
   isError: boolean;
   personName: string;
+  /** CLIENT-I18N-8: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -33,7 +36,9 @@ export function UnfriendConfirmDialog({
   isSubmitting,
   isError,
   personName,
+  i18nOverridePrefix,
 }: UnfriendConfirmDialogProps) {
+  const t = useOverridableText('friends', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
@@ -41,13 +46,13 @@ export function UnfriendConfirmDialog({
         className="p-4"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <DialogTitle className="sr-only">Unfriend {personName}?</DialogTitle>
+        <DialogTitle className="sr-only">{t('unfriendDialog.srTitle', { personName })}</DialogTitle>
         <p className="mb-3 text-sm font-medium text-text-primary">
-          Do you really want to unfriend {personName}?
+          {t('unfriendDialog.question', { personName })}
         </p>
         {isError && (
           <p role="alert" className="mb-2 text-2sm text-text-danger">
-            Couldn't unfriend {personName}. Please try again.
+            {t('unfriendDialog.error', { personName })}
           </p>
         )}
         <div className="flex justify-end gap-2">
@@ -58,10 +63,10 @@ export function UnfriendConfirmDialog({
             disabled={isSubmitting}
             className="border-text-danger text-text-danger hover:bg-bg-accent"
           >
-            {isSubmitting ? 'Unfriending…' : 'Unfriend'}
+            {isSubmitting ? t('unfriendDialog.submitting') : t('unfriendDialog.submit')}
           </Button>
           <Button variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
-            Cancel
+            {t('unfriendDialog.cancel')}
           </Button>
         </div>
       </DialogContent>

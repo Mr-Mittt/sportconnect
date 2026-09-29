@@ -5,6 +5,8 @@ interface FriendChatPanelProps {
   /** The other person's id — opens (or resumes) the 1:1 conversation with them. */
   userId: string;
   currentUserId: string;
+  /** CLIENT-I18N-8: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -15,7 +17,12 @@ interface FriendChatPanelProps {
  * selection — that mount/unmount is what drives `useDirectChatData`'s
  * WebSocket connect/disconnect lifecycle.
  */
-export function FriendChatPanel({ userId, currentUserId }: FriendChatPanelProps) {
+export function FriendChatPanel({ userId, currentUserId, i18nOverridePrefix }: FriendChatPanelProps) {
   const { data: messages, ...chatData } = useDirectChatData(userId);
-  return <FriendChatPanelView currentUserId={currentUserId} messages={messages} {...chatData} />;
+  return <FriendChatPanelView
+      currentUserId={currentUserId}
+      messages={messages}
+      i18nOverridePrefix={i18nOverridePrefix}
+      {...chatData}
+    />;
 }
