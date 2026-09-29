@@ -1,10 +1,13 @@
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { getNotificationText } from '../notificationText';
 import type { Notification } from '../types';
 
 interface NotificationRowProps {
   notification: Notification;
   onSelect: (notification: Notification) => void;
+  /** CLIENT-I18N-9: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -24,7 +27,8 @@ interface NotificationRowProps {
  * original size) + gray content (both `text-secondary`) — dimmed as a unit
  * once acknowledged, rather than disappearing entirely.
  */
-export function NotificationRow({ notification, onSelect }: NotificationRowProps) {
+export function NotificationRow({ notification, onSelect, i18nOverridePrefix }: NotificationRowProps) {
+  const t = useOverridableText('notifications', i18nOverridePrefix);
   const segments = getNotificationText(notification);
 
   return (
@@ -49,7 +53,7 @@ export function NotificationRow({ notification, onSelect }: NotificationRowProps
           {formatRelativeTime(notification.updatedAt)}
         </span>
       </span>
-      {!notification.isRead && <span className="sr-only">Unread</span>}
+      {!notification.isRead && <span className="sr-only">{t('row.unread')}</span>}
     </button>
   );
 }

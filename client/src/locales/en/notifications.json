@@ -1,0 +1,15 @@
+{
+  "bell": {
+    "label": "Notifications",
+    "unreadBadge": "{{count}} unread notifications",
+    "heading": "Notifications",
+    "markAllRead": "Mark all read",
+    "loading": "Loading…",
+    "loadError": "Couldn't load notifications.",
+    "caughtUp": "You're all caught up.",
+    "loadMore": "Load more"
+  },
+  "row": {
+    "unread": "Unread"
+  }
+}

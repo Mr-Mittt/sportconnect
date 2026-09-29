@@ -122,3 +122,25 @@ test('Friends page renders Vietnamese copy under a stored vi locale', async ({ p
   await expect(page.getByRole('button', { name: /Lời mời kết bạn \(\d+\)/ })).toBeVisible();
   await expect(page.getByText('Chọn một người bạn để xem hồ sơ và trò chuyện.')).toBeVisible();
 });
+
+/**
+ * CLIENT-I18N-9: the notification bell renders translated under a stored `vi` locale — the
+ * trigger's accessible name, the dropdown heading and its empty state read from the
+ * `notifications` namespace.
+ */
+test('Notification bell renders Vietnamese copy under a stored vi locale', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
+  });
+
+  await page.goto('/login');
+  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
+  await page.getByRole('button', { name: 'Đăng nhập' }).click();
+  await page.waitForURL('/');
+
+  await page.getByRole('button', { name: 'Thông báo' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText('Thông báo', { exact: true })).toBeVisible();
+});

@@ -5,6 +5,7 @@ import friendsEn from '@/locales/en/friends.json';
 import groupsEn from '@/locales/en/groups.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
 import loginEn from '@/locales/en/login.json';
+import notificationsEn from '@/locales/en/notifications.json';
 import profileEn from '@/locales/en/profile.json';
 import profilePageEn from '@/locales/en/profilePage.json';
 import registerEn from '@/locales/en/register.json';
@@ -17,6 +18,7 @@ import friendsVi from '@/locales/vi/friends.json';
 import groupsVi from '@/locales/vi/groups.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
 import loginVi from '@/locales/vi/login.json';
+import notificationsVi from '@/locales/vi/notifications.json';
 import profileVi from '@/locales/vi/profile.json';
 import profilePageVi from '@/locales/vi/profilePage.json';
 import registerVi from '@/locales/vi/register.json';
@@ -57,6 +59,7 @@ const namespacePairs: Record<string, [en: unknown, vi: unknown]> = {
   enums: [enumsEn, enumsVi],
   groups: [groupsEn, groupsVi],
   friends: [friendsEn, friendsVi],
+  notifications: [notificationsEn, notificationsVi],
 };
 
 describe('i18n bundle key parity (en vs vi)', () => {
