@@ -104,7 +104,37 @@ scoped, not decided here:
 2. The backend grows a message catalog and does `Accept-Language`-based resolution for its own
    error/validation messages — a generalized version of what A13 built specifically for schema
    labels, at a much larger surface area (every `throw new BadRequestException(...)` site in the
-   app today).
+   app today). A13's own resolution mechanism (`Locale` param, Spring's default
+   `AcceptHeaderLocaleResolver`) is reusable as-is; what A13 doesn't give for free is a catalog for
+   *developer-authored, fixed* strings the way A13's per-document `Map<String,String>` fits
+   *admin-authored, dynamic* labels — the natural fit here is Spring's own `MessageSource` +
+   `.properties` bundles (and Jakarta Validation's `{key}`-style `@Size(message=...)` resolution
+   against the same bundle), not a bespoke resolver. The real size of this direction is rewriting
+   every throw site to a message key and authoring every translation, not the plumbing.
+
+**Consumer census (2026-09-29, from the `login`/`register` follow-up discussion at CLIENT-I18N-2's
+pickup) — every client form currently showing a server-authored message verbatim, kept updated as
+each client localization ticket (`CLIENT-I18N-3`/`4`/`5`/beyond) touches new ground, so this list is
+current whenever I18N-4 itself finally gets scoped:**
+
+| Page | Form/flow | Hook |
+|---|---|---|
+| `/login` | Log in | `useLogin` |
+| `/register` | Sign up | `useRegister` |
+| `/profile` | Edit Profile modal | `useEditProfileSave` (wraps `useUpdateMyProfile` + `useUpdateMyPreferences`) |
+| `/profile` | Settings tab — per-sport profile editor | `useUpdateSportProfile` |
+| `/profile` | Settings tab — deactivate/reactivate a sport profile | `useDeactivateSportProfile` |
+| Groups page | Invite Friend modal | `useInviteFriendModalData` |
+| Admin | Sport fields editor | `useUpdateSport` |
+| Admin | Sport attribute-schema editor | `useReplaceSportAttributeSchema` |
+| Admin | Session attribute-schema editor | `useReplaceSessionAttributeSchema` |
+
+Home Feed, Friends (aside from the invite modal), Sessions/Matches, and Notifications don't
+currently surface a raw server message anywhere. **Whoever picks up `CLIENT-I18N-3`/`4`/`5` (or any
+later translation ticket): if the form you're translating shows a server error verbatim, add its row
+here** rather than just noting it locally in that ticket (per I18N-10) — this table is the census
+I18N-4 needs the moment it's scoped for real, and it only stays trustworthy if every ticket updates
+it, not just states the fact once and forgets it.
 
 ### I18N-5 · Client-mirrored backend enums are also translatable surface
 **Date added:** 2026-08-24
@@ -186,5 +216,7 @@ one is a string literal sitting in the component's own JSX:
 **Checklist for every future translation ticket** (`CLIENT-I18N-3`/`4`/`5` and anything after them)
 touching a form: for each one, explicitly check (a) does it use native `required`/constraint
 validation, and if so convert it to the pattern above; (b) does it render a server error message
-verbatim, and if so say so in the ticket's summary as a deliberate, known I18N-4 gap rather than
-leaving it unstated. Don't assume "I translated the visible strings" is the whole job.
+verbatim, and if so say so in the ticket's summary as a deliberate, known I18N-4 gap **and add its
+row to I18N-4's own census table above** — don't just leave it unstated, and don't just leave it
+stated locally in one ticket's own doc either. Don't assume "I translated the visible strings" is
+the whole job.

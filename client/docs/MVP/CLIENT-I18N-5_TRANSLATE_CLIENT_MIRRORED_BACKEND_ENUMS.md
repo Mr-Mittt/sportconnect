@@ -27,7 +27,8 @@ display-string mapping becomes locale-aware.
 - Less likely to apply here (enum labels aren't form validation), but skim
   `documentation/md/I18N_READINESS.md`'s I18N-10 anyway — if any enum-driven surface this ticket
   touches turns out to live inside a form (e.g. an admin editor with an enum-backed select), the
-  same native-validation and server-error checks apply.
+  same native-validation and server-error checks apply, including adding a row to I18N-4's own
+  census table if it shows a server error verbatim.
 - `NotificationType` is an exhaustive union, so the compiler already forces a case for every new
   member added to `getNotificationText` — this ticket adds the translated-string lookup inside each
   existing case, it doesn't change the exhaustiveness guard itself.
