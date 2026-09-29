@@ -1,9 +1,12 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 
 interface FriendRequestUnavailableDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  /** CLIENT-I18N-8: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -16,15 +19,16 @@ interface FriendRequestUnavailableDialogProps {
  * the Friends page's `ModalAnchorProvider` so this small notice sits dead-centre
  * rather than pinned below the pill row.
  */
-export function FriendRequestUnavailableDialog({ isOpen, onClose }: FriendRequestUnavailableDialogProps) {
+export function FriendRequestUnavailableDialog({ isOpen, onClose, i18nOverridePrefix }: FriendRequestUnavailableDialogProps) {
+  const t = useOverridableText('friends', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent centered className="p-4">
-        <DialogHeader title="Friend request unavailable" className="mb-3" onCloseClick={onClose} />
-        <p className="mb-3 text-2sm text-text-secondary">This friend request is no longer available.</p>
+        <DialogHeader title={t('unavailableDialog.title')} className="mb-3" onCloseClick={onClose} />
+        <p className="mb-3 text-2sm text-text-secondary">{t('unavailableDialog.body')}</p>
         <div className="flex justify-end">
           <Button variant="primary" size="sm" onClick={onClose}>
-            Got it
+            {t('unavailableDialog.dismiss')}
           </Button>
         </div>
       </DialogContent>

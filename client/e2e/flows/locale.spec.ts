@@ -97,3 +97,28 @@ test('Groups page renders Vietnamese copy under a stored vi locale', async ({ pa
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('Tên nhóm', { exact: true })).toBeVisible();
 });
+
+/**
+ * CLIENT-I18N-8: the Friends page renders translated under a stored `vi` locale — the page's
+ * sr-only heading, the rail's search/add controls, and the four section headers all read from
+ * the `friends` namespace.
+ */
+test('Friends page renders Vietnamese copy under a stored vi locale', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
+  });
+
+  await page.goto('/login');
+  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
+  await page.getByRole('button', { name: 'Đăng nhập' }).click();
+  await page.waitForURL('/');
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Bạn bè', exact: true }).click();
+  await expect(page).toHaveURL('/friends');
+  await expect(page.getByRole('heading', { name: 'Bạn bè', level: 1 })).toBeAttached();
+  await expect(page.getByLabel('Tìm bạn bè')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Thêm bạn' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Lời mời kết bạn \(\d+\)/ })).toBeVisible();
+  await expect(page.getByText('Chọn một người bạn để xem hồ sơ và trò chuyện.')).toBeVisible();
+});

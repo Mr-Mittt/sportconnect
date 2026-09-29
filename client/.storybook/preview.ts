@@ -3,6 +3,7 @@ import type { Preview } from '@storybook/react-vite';
 import { initReactI18next } from 'react-i18next';
 import commonEn from '../src/locales/en/common.json';
 import enumsEn from '../src/locales/en/enums.json';
+import friendsEn from '../src/locales/en/friends.json';
 import groupsEn from '../src/locales/en/groups.json';
 import homeFeedEn from '../src/locales/en/homeFeed.json';
 import loginEn from '../src/locales/en/login.json';
@@ -14,6 +15,7 @@ import sharedDialogsEn from '../src/locales/en/sharedDialogs.json';
 import shellEn from '../src/locales/en/shell.json';
 import commonVi from '../src/locales/vi/common.json';
 import enumsVi from '../src/locales/vi/enums.json';
+import friendsVi from '../src/locales/vi/friends.json';
 import groupsVi from '../src/locales/vi/groups.json';
 import homeFeedVi from '../src/locales/vi/homeFeed.json';
 import loginVi from '../src/locales/vi/login.json';
@@ -63,6 +65,7 @@ void i18next.use(initReactI18next).init({
       sharedComponents: sharedComponentsEn,
       enums: enumsEn,
       groups: groupsEn,
+      friends: friendsEn,
     },
     vi: {
       common: commonVi,
@@ -76,12 +79,13 @@ void i18next.use(initReactI18next).init({
       sharedComponents: sharedComponentsVi,
       enums: enumsVi,
       groups: groupsVi,
+      friends: friendsVi,
     },
   },
   lng: 'en',
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups'],
+  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends'],
   interpolation: { escapeValue: false },
   returnNull: false,
 });

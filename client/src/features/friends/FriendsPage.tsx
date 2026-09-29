@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
@@ -61,6 +62,7 @@ const noop = () => {};
  * so this is only the pre-fill, not a fixed scope like it was before.
  */
 export function FriendsPage() {
+  const { t } = useTranslation('friends');
   const navigate = useNavigate();
   const location = useLocation();
   // CLIENT-NOTIF-5: a clicked friend-request notification lands here with the
@@ -152,7 +154,7 @@ export function FriendsPage() {
     <ModalAnchorProvider value={modalAnchorBottom}>
       <main className="py-4">
         <h1 ref={h1Ref} className="sr-only">
-          Friends
+          {t('page.heading')}
         </h1>
         <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[2.1fr_0.9fr]">
           <div className="flex min-w-0 flex-col gap-3.5 sm:flex-row">
@@ -183,7 +185,7 @@ export function FriendsPage() {
                 if (selectedPerson === undefined) {
                   return (
                     <div className="border-hairline flex h-160 items-center justify-center rounded-xl border-border bg-surface-2 text-2sm text-text-muted">
-                      Select a friend to view their profile and chat.
+                      {t('page.selectPrompt')}
                     </div>
                   );
                 }

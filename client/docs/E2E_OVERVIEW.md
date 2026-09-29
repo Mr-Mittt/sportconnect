@@ -224,7 +224,7 @@ e2e/
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
     profile-journey.spec.ts   # PROFILE-8
-    locale.spec.ts            # CLIENT-I18N-1, CLIENT-I18N-7
+    locale.spec.ts            # CLIENT-I18N-1, CLIENT-I18N-7, CLIENT-I18N-8
     signup-locale.spec.ts     # CLIENT-REF-2
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
@@ -952,7 +952,7 @@ Related docs: `client/docs/MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md`,
 `client/docs/MVP/SPORT-10_ADD_SPORT_RESUME_REACTIVATION_FLOW.md`,
 `client/docs/MVP/CLIENT-SESSION-19_ADD_MODAL_FOR_PROFILE_DEFINITION_LIST.md`.
 
-### `e2e/flows/locale.spec.ts` (CLIENT-I18N-1 + CLIENT-I18N-7, 3 `test()`s)
+### `e2e/flows/locale.spec.ts` (CLIENT-I18N-1 + CLIENT-I18N-7 + CLIENT-I18N-8, 4 `test()`s)
 
 Proves `Accept-Language` actually follows `localeStore`'s active locale on real outgoing
 requests — no language-picker UI ships in this ticket (CLIENT-REF-1/3 build one later), so
@@ -965,6 +965,7 @@ requests — no language-picker UI ships in this ticket (CLIENT-REF-1/3 build on
 | defaults to `en` with nothing stored | Fresh context, log in via the real form — every captured `/api/` request's `Accept-Language` header is `en` |
 | follows a locale stored before the app loads | `addInitScript` seeds `locale-storage` = `{"state":{"locale":"vi"},"version":0}` → `<html lang="vi">` on `/login` before any login attempt, and every captured request (incl. the pre-login `/auth/refresh`) carries `Accept-Language: vi` |
 | Groups page renders Vietnamese copy under a stored `vi` locale (CLIENT-I18N-7) | Same seeded `vi` locale, log in, click the `Nhóm` nav button → `/groups`; the sr-only `<h1>` is `Nhóm`, `Tham gia nhóm` is visible, `Tạo nhóm` opens a dialog of that name whose `Tên nhóm` field is visible (scoped to the dialog with `exact: true` — the discovery search's `Tên nhóm hoặc mã mời` aria-label would otherwise substring-match) |
+| Friends page renders Vietnamese copy under a stored `vi` locale (CLIENT-I18N-8) | Same seeded `vi` locale, log in, click the `Bạn bè` nav button → `/friends`; the sr-only `<h1>` is `Bạn bè`, the rail search (`Tìm bạn bè`), `Thêm bạn` button, `Lời mời kết bạn (n)` section header and the "Chọn một người bạn…" empty-state prompt all render translated |
 
 Headers are captured via Playwright's own `page.on('request')`, not a dedicated MSW handler
 inspecting the header — simpler and equally reliable, a deliberate deviation from the ticket's
@@ -974,7 +975,8 @@ unconditional fetch on every authenticated session — doesn't 404 across the re
 its `null` response never overrides the seeded locale in either test here.
 
 Related docs: `client/docs/MVP/CLIENT-I18N-1_I18N_INFRASTRUCTURE_AND_LOCALE_STORE.md`,
-`client/docs/MVP/CLIENT-I18N-7_TRANSLATE_GROUPS_PAGE.md`.
+`client/docs/MVP/CLIENT-I18N-7_TRANSLATE_GROUPS_PAGE.md`,
+`client/docs/MVP/CLIENT-I18N-8_TRANSLATE_FRIENDS_PAGE.md`.
 
 ### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
 

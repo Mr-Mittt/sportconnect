@@ -1,5 +1,6 @@
 import { IconArrowLeft, IconUserPlus, IconX } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
@@ -65,9 +66,10 @@ interface SectionProps {
   count: number;
   totalCount: number;
   children: ReactNode;
+  t: (key: string) => string;
 }
 
-function FriendSection({ sectionKey, label, isCollapsed, onToggle, count, totalCount, children }: SectionProps) {
+function FriendSection({ sectionKey, label, isCollapsed, onToggle, count, totalCount, children, t }: SectionProps) {
   return (
     <section aria-label={label}>
       <Collapsible open={!isCollapsed} onOpenChange={() => onToggle(sectionKey)}>
@@ -78,9 +80,9 @@ function FriendSection({ sectionKey, label, isCollapsed, onToggle, count, totalC
         </CollapsibleTrigger>
         <CollapsibleContent className="flex flex-col gap-0.5 pb-1.5">
           {totalCount === 0 ? (
-            <p className="px-1.75 text-2xs text-text-muted">Nothing here yet.</p>
+            <p className="px-1.75 text-2xs text-text-muted">{t('rail.empty')}</p>
           ) : count === 0 ? (
-            <p className="px-1.75 text-2xs text-text-muted">No matches.</p>
+            <p className="px-1.75 text-2xs text-text-muted">{t('rail.noMatches')}</p>
           ) : (
             children
           )}
@@ -91,6 +93,8 @@ function FriendSection({ sectionKey, label, isCollapsed, onToggle, count, totalC
 }
 
 interface FriendRailProps {
+  /** CLIENT-I18N-8: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   query: string;
   onQueryChange: (value: string) => void;
   onClear: () => void;
@@ -125,6 +129,7 @@ interface FriendRailProps {
  * view there's no difference.
  */
 export function FriendRail({
+  i18nOverridePrefix,
   query,
   onQueryChange,
   onClear,
@@ -145,6 +150,7 @@ export function FriendRail({
   isSearching,
   isSearchError,
 }: FriendRailProps) {
+  const t = useOverridableText('friends', i18nOverridePrefix);
   const trimmedQuery = query.trim();
 
   return (
@@ -154,15 +160,15 @@ export function FriendRail({
           <Input
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search friends"
-            aria-label="Search friends"
+            placeholder={t('rail.searchPlaceholder')}
+            aria-label={t('rail.searchLabel')}
             className={query !== '' ? 'pr-8' : undefined}
           />
           {query !== '' && (
             <button
               type="button"
               onClick={onClear}
-              aria-label="Clear search"
+              aria-label={t('rail.clearSearch')}
               className="absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
             >
               <IconX className="size-3.5" aria-hidden="true" />
@@ -173,7 +179,7 @@ export function FriendRail({
           type="button"
           variant={isAddMode ? 'primary' : 'outline'}
           size="icon"
-          aria-label="Add friend"
+          aria-label={t('rail.addFriend')}
           onClick={onToggleAddMode}
           className="shrink-0 rounded-full"
         >
@@ -190,16 +196,16 @@ export function FriendRail({
               className="flex cursor-pointer items-center gap-1.5 self-start px-1.75 py-1 text-2sm text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
             >
               <IconArrowLeft className="size-3.5" aria-hidden="true" />
-              Back to friend list
+              {t('rail.backToList')}
             </button>
             <p className="px-1.75 pb-1 text-center text-2xs text-text-muted">
               {isSearching
-                ? 'Searching…'
+                ? t('rail.searching')
                 : isSearchError
-                  ? "Couldn't search right now."
+                  ? t('rail.searchError')
                   : searchResults.length > 0
-                    ? `Matches for "${trimmedQuery}"`
-                    : `No users found for "${trimmedQuery}"`}
+                    ? t('rail.matchesFor', { query: trimmedQuery })
+                    : t('rail.noUsersFor', { query: trimmedQuery })}
             </p>
             <div className="flex flex-col gap-0.5">
               {searchResults.map((result) => (
@@ -217,8 +223,9 @@ export function FriendRail({
         ) : (
           <>
             <FriendSection
+              t={t}
               sectionKey="online"
-              label="Online"
+              label={t('rail.sections.online')}
               isCollapsed={collapsedSections.online}
               onToggle={onToggleSection}
               count={onlineFriends.length}
@@ -237,8 +244,9 @@ export function FriendRail({
             </FriendSection>
 
             <FriendSection
+              t={t}
               sectionKey="friendRequests"
-              label="Friend Requests"
+              label={t('rail.sections.friendRequests')}
               isCollapsed={collapsedSections.friendRequests}
               onToggle={onToggleSection}
               count={friendRequestRows.length}
@@ -257,8 +265,9 @@ export function FriendRail({
             </FriendSection>
 
             <FriendSection
+              t={t}
               sectionKey="offline"
-              label="Offline"
+              label={t('rail.sections.offline')}
               isCollapsed={collapsedSections.offline}
               onToggle={onToggleSection}
               count={offlineFriends.length}
@@ -277,8 +286,9 @@ export function FriendRail({
             </FriendSection>
 
             <FriendSection
+              t={t}
               sectionKey="blocked"
-              label="Blocked"
+              label={t('rail.sections.blocked')}
               isCollapsed={collapsedSections.blocked}
               onToggle={onToggleSection}
               count={blockedFriends.length}
