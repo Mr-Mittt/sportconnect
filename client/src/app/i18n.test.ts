@@ -4,6 +4,7 @@ import enumsEn from '@/locales/en/enums.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
 import loginEn from '@/locales/en/login.json';
 import profileEn from '@/locales/en/profile.json';
+import profilePageEn from '@/locales/en/profilePage.json';
 import registerEn from '@/locales/en/register.json';
 import sharedComponentsEn from '@/locales/en/sharedComponents.json';
 import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
@@ -13,6 +14,7 @@ import enumsVi from '@/locales/vi/enums.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
 import loginVi from '@/locales/vi/login.json';
 import profileVi from '@/locales/vi/profile.json';
+import profilePageVi from '@/locales/vi/profilePage.json';
 import registerVi from '@/locales/vi/register.json';
 import sharedComponentsVi from '@/locales/vi/sharedComponents.json';
 import sharedDialogsVi from '@/locales/vi/sharedDialogs.json';
@@ -42,6 +44,7 @@ const namespacePairs: Record<string, [en: unknown, vi: unknown]> = {
   common: [commonEn, commonVi],
   register: [registerEn, registerVi],
   profile: [profileEn, profileVi],
+  profilePage: [profilePageEn, profilePageVi],
   login: [loginEn, loginVi],
   shell: [shellEn, shellVi],
   sharedDialogs: [sharedDialogsEn, sharedDialogsVi],

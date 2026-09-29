@@ -1,3 +1,4 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/dialog';
 
@@ -11,6 +12,8 @@ interface SportProfileStatusConfirmDialogProps {
   onConfirm: () => void;
   isSubmitting: boolean;
   isError: boolean;
+  /** CLIENT-I18N-6: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -27,18 +30,20 @@ export function SportProfileStatusConfirmDialog({
   onConfirm,
   isSubmitting,
   isError,
+  i18nOverridePrefix,
 }: SportProfileStatusConfirmDialogProps) {
+  const t = useOverridableText('profilePage', i18nOverridePrefix);
   const isDeactivate = mode === 'deactivate';
   const prompt = isDeactivate
-    ? `Stop playing ${sportName} for a while?`
-    : `Welcome back to ${sportName}!`;
+    ? t('statusConfirm.deactivatePrompt', { sportName })
+    : t('statusConfirm.reactivatePrompt', { sportName });
   const confirmLabel = isDeactivate
     ? isSubmitting
-      ? 'Deactivating…'
-      : 'Deactivate'
+      ? t('statusConfirm.deactivating')
+      : t('statusConfirm.deactivate')
     : isSubmitting
-      ? 'Reactivating…'
-      : 'Reactivate';
+      ? t('statusConfirm.reactivating')
+      : t('statusConfirm.reactivate');
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -47,13 +52,12 @@ export function SportProfileStatusConfirmDialog({
         <p className="mb-3 text-sm font-medium text-text-primary">{prompt}</p>
         {isDeactivate && (
           <p className="mb-3 text-2sm text-text-secondary">
-            It&apos;ll be hidden from your active sports, but your skill level, experience and
-            attributes are kept — reactivate any time.
+            {t('statusConfirm.deactivateNote')}
           </p>
         )}
         {isError && (
           <p role="alert" className="mb-2 text-2sm text-text-danger">
-            Couldn&apos;t update {sportName}. Please try again.
+            {t('statusConfirm.error', { sportName })}
           </p>
         )}
         <div className="flex justify-end gap-2">
@@ -69,7 +73,7 @@ export function SportProfileStatusConfirmDialog({
             {confirmLabel}
           </Button>
           <Button variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
-            Cancel
+            {t('statusConfirm.cancel')}
           </Button>
         </div>
       </DialogContent>

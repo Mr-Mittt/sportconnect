@@ -5,6 +5,7 @@ import enumsEn from '@/locales/en/enums.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
 import loginEn from '@/locales/en/login.json';
 import profileEn from '@/locales/en/profile.json';
+import profilePageEn from '@/locales/en/profilePage.json';
 import registerEn from '@/locales/en/register.json';
 import sharedComponentsEn from '@/locales/en/sharedComponents.json';
 import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
@@ -14,6 +15,7 @@ import enumsVi from '@/locales/vi/enums.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
 import loginVi from '@/locales/vi/login.json';
 import profileVi from '@/locales/vi/profile.json';
+import profilePageVi from '@/locales/vi/profilePage.json';
 import registerVi from '@/locales/vi/register.json';
 import sharedComponentsVi from '@/locales/vi/sharedComponents.json';
 import sharedDialogsVi from '@/locales/vi/sharedDialogs.json';
@@ -82,6 +84,7 @@ void i18next.use(initReactI18next).init({
       common: commonEn,
       register: registerEn,
       profile: profileEn,
+      profilePage: profilePageEn,
       login: loginEn,
       shell: shellEn,
       sharedDialogs: sharedDialogsEn,
@@ -93,6 +96,7 @@ void i18next.use(initReactI18next).init({
       common: commonVi,
       register: registerVi,
       profile: profileVi,
+      profilePage: profilePageVi,
       login: loginVi,
       shell: shellVi,
       sharedDialogs: sharedDialogsVi,
@@ -104,7 +108,7 @@ void i18next.use(initReactI18next).init({
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums'],
+  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });

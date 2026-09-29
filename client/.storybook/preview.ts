@@ -6,6 +6,7 @@ import enumsEn from '../src/locales/en/enums.json';
 import homeFeedEn from '../src/locales/en/homeFeed.json';
 import loginEn from '../src/locales/en/login.json';
 import profileEn from '../src/locales/en/profile.json';
+import profilePageEn from '../src/locales/en/profilePage.json';
 import registerEn from '../src/locales/en/register.json';
 import sharedComponentsEn from '../src/locales/en/sharedComponents.json';
 import sharedDialogsEn from '../src/locales/en/sharedDialogs.json';
@@ -15,6 +16,7 @@ import enumsVi from '../src/locales/vi/enums.json';
 import homeFeedVi from '../src/locales/vi/homeFeed.json';
 import loginVi from '../src/locales/vi/login.json';
 import profileVi from '../src/locales/vi/profile.json';
+import profilePageVi from '../src/locales/vi/profilePage.json';
 import registerVi from '../src/locales/vi/register.json';
 import sharedComponentsVi from '../src/locales/vi/sharedComponents.json';
 import sharedDialogsVi from '../src/locales/vi/sharedDialogs.json';
@@ -51,6 +53,7 @@ void i18next.use(initReactI18next).init({
       common: commonEn,
       register: registerEn,
       profile: profileEn,
+      profilePage: profilePageEn,
       login: loginEn,
       shell: shellEn,
       sharedDialogs: sharedDialogsEn,
@@ -62,6 +65,7 @@ void i18next.use(initReactI18next).init({
       common: commonVi,
       register: registerVi,
       profile: profileVi,
+      profilePage: profilePageVi,
       login: loginVi,
       shell: shellVi,
       sharedDialogs: sharedDialogsVi,
@@ -73,7 +77,7 @@ void i18next.use(initReactI18next).init({
   lng: 'en',
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums'],
+  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums'],
   interpolation: { escapeValue: false },
   returnNull: false,
 });
