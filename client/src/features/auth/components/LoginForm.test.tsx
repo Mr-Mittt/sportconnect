@@ -36,7 +36,7 @@ describe('LoginForm', () => {
     expect(onSubmit).toHaveBeenCalledWith({ email: 'jordan@example.com', password: 'password123' });
   });
 
-  it('does not submit with an empty password (native required validation)', async () => {
+  it('does not submit with an empty password', async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm();
 
@@ -83,5 +83,48 @@ describe('LoginForm', () => {
       'href',
       '/register',
     );
+  });
+
+  describe('custom validation (noValidate — no native browser popups, see I18N-10/CLIENT-I18N-2 doc comment)', () => {
+    it('does not submit and shows no messages before any submit attempt', () => {
+      renderForm();
+      expect(screen.queryByText('Email is required.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Password is required.')).not.toBeInTheDocument();
+    });
+
+    it('shows required messages beside each label on an empty submit attempt, and never calls onSubmit', async () => {
+      const user = userEvent.setup();
+      const { onSubmit } = renderForm();
+
+      await user.click(screen.getByRole('button', { name: 'Log in' }));
+
+      expect(screen.getByText('Email is required.')).toBeInTheDocument();
+      expect(screen.getByText('Password is required.')).toBeInTheDocument();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('shows "Enter a valid email address." (not the required message) for a malformed email', async () => {
+      const user = userEvent.setup();
+      const { onSubmit } = renderForm();
+
+      await user.type(screen.getByLabelText('Email'), 'not-an-email');
+      await user.type(screen.getByLabelText('Password'), 'password123');
+      await user.click(screen.getByRole('button', { name: 'Log in' }));
+
+      expect(screen.getByText('Enter a valid email address.')).toBeInTheDocument();
+      expect(screen.queryByText('Email is required.')).not.toBeInTheDocument();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('clears a field message the moment that field becomes valid, without re-submitting', async () => {
+      const user = userEvent.setup();
+      renderForm();
+
+      await user.click(screen.getByRole('button', { name: 'Log in' }));
+      expect(screen.getByText('Email is required.')).toBeInTheDocument();
+
+      await user.type(screen.getByLabelText('Email'), 'jordan@example.com');
+      expect(screen.queryByText('Email is required.')).not.toBeInTheDocument();
+    });
   });
 });

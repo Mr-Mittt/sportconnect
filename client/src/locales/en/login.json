@@ -4,12 +4,19 @@
   "subheading": "Log in to pick up where you left off.",
   "form": {
     "email": {
-      "label": "Email"
+      "label": "Email",
+      "error": {
+        "required": "Email is required.",
+        "invalid": "Enter a valid email address."
+      }
     },
     "password": {
       "label": "Password",
       "showAction": "Show password",
-      "hideAction": "Hide password"
+      "hideAction": "Hide password",
+      "error": {
+        "required": "Password is required."
+      }
     },
     "submit": "Log in",
     "submitting": "Logging in…",

@@ -86,3 +86,36 @@ passed because nothing on `/login` translated yet. Updated to assert the real Vi
   this change.
 
 **`tsc -b`** and **ESLint** both clean across every touched file.
+
+## Follow-up fix (2026-09-29, same PR): native validation wasn't translated
+
+Caught by the user in review, after the PR above was already pushed: `LoginForm` translated every
+*static* string but still used native HTML5 constraint validation (`required`, no `noValidate`) —
+the browser's own "Please fill out this field" popup renders in the browser's own language, never
+this app's `i18next` locale, so switching to Vietnamese never translated it. This is the exact bug
+`RegisterForm` already hit and fixed at CLIENT-REF-2 (custom `noValidate` + `hasAttemptedSubmit` +
+translated inline messages) — it just wasn't carried over when `LoginForm` was translated here.
+
+Fixed by mirroring `RegisterForm`'s pattern exactly: `noValidate`, `hasAttemptedSubmit` state,
+`aria-required="true"` replacing `required`, translated inline error text beside each label (new
+`form.email.error.{required,invalid}` / `form.password.error.required` keys in `login.json`).
+Login has no `RequiredMark` (unlike Register) — every field here is required, so a visual "*" on
+both adds no information a required/optional distinction would give on the longer sign-up form.
+Password gets only a "required" check, no length rule — that's a registration-time concern, not
+login's; the server stays the source of truth for whether credentials are actually correct.
+
+**Documented so this class of gap isn't missed a third time:** added `I18N_READINESS.md`'s new
+**I18N-10** ("translating a form is not just its static JSX strings") covering both this
+native-validation gap and the parallel "does this form show a server error message verbatim"
+question (I18N-4) that every translation ticket should state explicitly rather than silently
+inherit. Referenced from all three filed follow-ups (`CLIENT-I18N-3`/`4`/`5`) so whoever picks them
+up checks every form they touch for both, not just the visible static copy.
+
+**Tests:** new `describe('custom validation ...')` block in `LoginForm.test.tsx` (4 cases, mirrors
+`RegisterForm.test.tsx`'s shape) + a new `InvalidSubmit` Storybook story with a `play` function.
+Scoped Vitest 52/52 green (was 48, +4 new). Re-ran every previously-green e2e spec touching
+`/login` after the DOM change (`noValidate`, dropped `required`, label markup restructured):
+`a11y.spec.ts`'s `/login`-scoped subset (7/7, including the Tab-order test), `locale.spec.ts` (2/2),
+`auth-journey.spec.ts`/`msw-setup.spec.ts` (9/9) — all still green, confirming the restructure
+didn't change tab order or accessible names. `tsc -b`/ESLint clean; `pnpm exec storybook build`
+succeeds (build-time check only).

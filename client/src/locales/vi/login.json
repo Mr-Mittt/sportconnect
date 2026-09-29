@@ -4,12 +4,19 @@
   "subheading": "Đăng nhập để tiếp tục nơi bạn đã dừng lại.",
   "form": {
     "email": {
-      "label": "Email"
+      "label": "Email",
+      "error": {
+        "required": "Vui lòng nhập email.",
+        "invalid": "Địa chỉ email không hợp lệ."
+      }
     },
     "password": {
       "label": "Mật khẩu",
       "showAction": "Hiện mật khẩu",
-      "hideAction": "Ẩn mật khẩu"
+      "hideAction": "Ẩn mật khẩu",
+      "error": {
+        "required": "Vui lòng nhập mật khẩu."
+      }
     },
     "submit": "Đăng nhập",
     "submitting": "Đang đăng nhập…",

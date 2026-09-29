@@ -22,6 +22,12 @@ following the one-namespace-per-page/feature convention `app/i18n.ts` documents 
 
 ## Notes for pickup
 
+- **Read `documentation/md/I18N_READINESS.md`'s I18N-10 before starting.** Translating static JSX
+  strings is not the whole job — any form/control in scope needs its own check for (a) native HTML5
+  constraint validation (`required`, no `noValidate`) rendering the browser's own untranslated popup
+  instead of an app-locale message, and (b) whether it shows a server error message verbatim (state
+  explicitly whether that's an accepted I18N-4 gap or needs its own handling — don't leave it
+  unstated). Found and fixed twice already (`RegisterForm`, then `LoginForm`) — don't make it three.
 - Visual baselines change wherever this chrome appears — regenerate via `update-baselines`, never
   from a Windows host.
 - Add the new namespace(s) to `.storybook/preview.ts`'s isolated i18next instance too — CLIENT-I18N-2

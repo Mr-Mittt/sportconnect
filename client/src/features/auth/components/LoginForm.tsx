@@ -7,6 +7,11 @@ import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import type { LoginPayload } from '../types';
 
+// Same simple shape RegisterForm's own EMAIL_PATTERN uses (mirrors @Email server-side) — not a
+// full RFC 5322 parser, just enough to catch an obviously incomplete address before it
+// round-trips to the server.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 interface LoginFormProps {
   onSubmit: (payload: LoginPayload) => void;
   isPending: boolean;
@@ -16,30 +21,52 @@ interface LoginFormProps {
 /**
  * Presentational and controlled — LoginPage owns the mutation, this owns
  * only the form's own field values and the password-visibility toggle
- * (ephemeral UI state, not shared with anything else). Email/password
- * validity relies on native HTML5 constraint validation (required,
- * type="email") rather than a hand-rolled validator — the server response
- * is the actual source of truth for whether credentials are correct.
+ * (ephemeral UI state, not shared with anything else). Password *content*
+ * is never validated client-side beyond "non-empty" — the server response
+ * is the actual source of truth for whether credentials are correct, and
+ * login (unlike registration) has no minimum-length rule of its own.
  *
  * CLIENT-I18N-2 (step 1 of that ticket's "translate the rest of the app"): translated via a new
  * `login` namespace (own namespace, not shared with `register` — their strings don't overlap
  * beyond structure, same "one namespace per page" convention `app/i18n.ts` documents). The server's
  * own `errorMessage` (from `useLogin`) stays untranslated — same accepted exception `RegisterForm`
- * already established (arbitrary backend free text, nothing to translate it into).
+ * already established (arbitrary backend free text, nothing to translate it into; I18N-4).
+ *
+ * **Validation is entirely custom (`noValidate` on the `<form>`), not native HTML constraint
+ * validation** (2026-09-29 fix, found in review of this same ticket's translation pass —
+ * documented as `I18N_READINESS.md`'s I18N-10 so it isn't missed a third time): a browser's own
+ * "Please fill out this field" popup renders in the *browser's* language, never this app's
+ * `i18next` locale, so switching to Vietnamese never translated it — the exact bug `RegisterForm`
+ * already fixed, just not carried over here when this form was first translated. Same
+ * `hasAttemptedSubmit` pattern: the submit button is always clickable; clicking it while invalid
+ * sets `hasAttemptedSubmit` and reveals translated inline error text beside the invalid field's own
+ * label instead of submitting. No `RequiredMark` here (unlike `RegisterForm`) — every field on this
+ * form is required, so a visual "*" on both adds no information a `RegisterForm`-style optional/
+ * required distinction would; `aria-required="true"` still carries the a11y signal.
  */
 export function LoginForm({ onSubmit, isPending, errorMessage }: LoginFormProps) {
   const { t } = useTranslation('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+
+  const isEmailEmpty = email.trim() === '';
+  const isEmailInvalid = !isEmailEmpty && !EMAIL_PATTERN.test(email.trim());
+  const isPasswordEmpty = password === '';
+  const isValid = !isEmailEmpty && !isEmailInvalid && !isPasswordEmpty;
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isValid) {
+      setHasAttemptedSubmit(true);
+      return;
+    }
     onSubmit({ email, password });
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate={false}>
+    <form onSubmit={handleSubmit} noValidate>
       <h1 className="mb-1 text-xl font-semibold tracking-tight text-text-primary">{t('heading')}</h1>
       <p className="mb-6 text-2sm text-text-secondary">{t('subheading')}</p>
 
@@ -53,27 +80,44 @@ export function LoginForm({ onSubmit, isPending, errorMessage }: LoginFormProps)
       )}
 
       <div className="mb-4">
-        <Label htmlFor="login-email">{t('form.email.label')}</Label>
+        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+          <Label htmlFor="login-email" className="mb-0">
+            {t('form.email.label')}
+          </Label>
+          {hasAttemptedSubmit && isEmailEmpty && (
+            <span className="text-2xs text-text-danger">{t('form.email.error.required')}</span>
+          )}
+          {hasAttemptedSubmit && isEmailInvalid && (
+            <span className="text-2xs text-text-danger">{t('form.email.error.invalid')}</span>
+          )}
+        </div>
         <Input
           id="login-email"
           name="email"
           type="email"
           autoComplete="email"
-          required
+          aria-required="true"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
       </div>
 
       <div className="mb-5">
-        <Label htmlFor="login-password">{t('form.password.label')}</Label>
+        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+          <Label htmlFor="login-password" className="mb-0">
+            {t('form.password.label')}
+          </Label>
+          {hasAttemptedSubmit && isPasswordEmpty && (
+            <span className="text-2xs text-text-danger">{t('form.password.error.required')}</span>
+          )}
+        </div>
         <div className="relative">
           <Input
             id="login-password"
             name="password"
             type={showPassword ? 'text' : 'password'}
             autoComplete="current-password"
-            required
+            aria-required="true"
             className="pr-10"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
