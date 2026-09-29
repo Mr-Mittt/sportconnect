@@ -1,3 +1,4 @@
+import i18next from 'i18next';
 import type { Notification } from './types';
 
 export interface NotificationTextSegment {
@@ -32,6 +33,11 @@ export interface NotificationTextSegment {
  * backend's own doc: "may exceed actorIds.size()" when the same actor
  * repeats). A single actor triggering repeat events must not read as
  * "Alice and 2 others" when there's only ever been Alice.
+ *
+ * CLIENT-I18N-5: every fragment below is now `enums:notifications.*` — a plain function, not a
+ * component, so it reads the i18next singleton directly rather than via `useTranslation()` (same
+ * pattern as `shared/lib/relativeTime.ts`, this file's sole caller `NotificationRow` still has no
+ * `useTranslation()` subscription of its own, same as it already didn't for `relativeTime`).
  */
 export function getNotificationText(notification: Notification): NotificationTextSegment[] {
   const actor = actorSegment(notification);
@@ -39,36 +45,44 @@ export function getNotificationText(notification: Notification): NotificationTex
 
   switch (notification.type) {
     case 'session.comment.created':
-      return [actor, plain(' commented on '), entity];
+      return [actor, plain(i18next.t('enums:notifications.sessionCommentCreated')), entity];
     case 'session.participant.joined':
-      return [actor, plain(' joined '), entity];
+      return [actor, plain(i18next.t('enums:notifications.sessionParticipantJoined')), entity];
     case 'session.participant.left':
-      return [actor, plain(' left '), entity];
+      return [actor, plain(i18next.t('enums:notifications.sessionParticipantLeft')), entity];
     // SESSION-18 passes `actorId = null` (a scheduled job made this transition,
     // not a user), so `actors` is always empty here. Deliberately does not use
     // `actor` — actorSegment would render the bold-suppressed 'Someone' and read
     // as if a person started the session.
     case 'session.status.started':
-      return [entity, plain(' has started')];
+      return [entity, plain(i18next.t('enums:notifications.sessionStatusStarted'))];
     case 'session.join_request.created':
-      return [actor, plain(' requested to join '), entity];
+      return [actor, plain(i18next.t('enums:notifications.sessionJoinRequestCreated')), entity];
     case 'session.join_request.approved':
-      return [plain('Your request to join '), entity, plain(' was approved')];
+      return [
+        plain(i18next.t('enums:notifications.sessionJoinRequestApprovedPrefix')),
+        entity,
+        plain(i18next.t('enums:notifications.sessionJoinRequestApprovedSuffix')),
+      ];
     case 'session.join_request.rejected':
-      return [plain('Your request to join '), entity, plain(' was declined')];
+      return [
+        plain(i18next.t('enums:notifications.sessionJoinRequestRejectedPrefix')),
+        entity,
+        plain(i18next.t('enums:notifications.sessionJoinRequestRejectedSuffix')),
+      ];
     case 'session.invitation.created':
-      return [actor, plain(' invited you to join '), entity];
+      return [actor, plain(i18next.t('enums:notifications.sessionInvitationCreated')), entity];
     // SESSION-24: deliberately field-agnostic — fires on any successful updateSession call.
     case 'session.details.updated':
-      return [actor, plain(' updated '), entity];
+      return [actor, plain(i18next.t('enums:notifications.sessionDetailsUpdated')), entity];
     // U13 / CLIENT-NOTIF-5 — `entityType` is USER, not SESSION, so there is no
     // `entity` segment here: the text names only the other person. Both events
     // always carry a real actor (a self-request is rejected upstream), so
     // `actor` never degrades to the bold-suppressed 'Someone' in practice.
     case 'user.friend_request.created':
-      return [actor, plain(' wants to be your friend')];
+      return [actor, plain(i18next.t('enums:notifications.friendRequestCreated'))];
     case 'user.friend_request.accepted':
-      return [actor, plain(' is now your friend')];
+      return [actor, plain(i18next.t('enums:notifications.friendRequestAccepted'))];
     default: {
       // CLIENT-NOTIF-4 — compile-time exhaustiveness. Every `NotificationType`
       // handled above narrows `notification.type` to `never` here; add a member
@@ -94,7 +108,7 @@ export function getNotificationText(notification: Notification): NotificationTex
             'A backend routing key has probably shipped without its case in getNotificationText.',
         );
       }
-      return [plain('You have a new notification')];
+      return [plain(i18next.t('enums:notifications.fallback'))];
     }
   }
 }
@@ -110,17 +124,23 @@ function plain(text: string): NotificationTextSegment {
 
 function actorSegment(notification: Notification): NotificationTextSegment {
   if (notification.actors.length === 0) {
-    return plain('Someone');
+    return plain(i18next.t('enums:notifications.someone'));
   }
   const primary = notification.actors[0]!.fullName;
   const othersCount = notification.actors.length - 1;
-  const text = othersCount > 0 ? `${primary} and ${othersCount} other${othersCount > 1 ? 's' : ''}` : primary;
+  const text =
+    othersCount > 0
+      ? i18next.t(
+          othersCount > 1 ? 'enums:notifications.actorAndOthers' : 'enums:notifications.actorAndOneOther',
+          { name: primary, count: othersCount },
+        )
+      : primary;
   return { text, bold: true };
 }
 
 function entitySegment(notification: Notification): NotificationTextSegment {
   if (!notification.entityTitle) {
-    return plain('your session');
+    return plain(i18next.t('enums:notifications.yourSession'));
   }
   return { text: `"${notification.entityTitle}"`, bold: true };
 }

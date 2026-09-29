@@ -1,0 +1,46 @@
+{
+  "sessionStatus": {
+    "SCHEDULED": "Đã lên lịch",
+    "ONGOING": "Đang diễn ra",
+    "PREPARING": "Đang chuẩn bị",
+    "COMPLETED": "Đã hoàn thành",
+    "CANCELLED": "Đã hủy"
+  },
+  "sessionApproval": {
+    "auto": "Tự động duyệt",
+    "hostApproval": "Cần chủ trận duyệt"
+  },
+  "attributeValues": {
+    "yes": "Có",
+    "no": "Không",
+    "item": "Mục {{index}}",
+    "itemWithValue": "Mục {{index}} · {{value}}"
+  },
+  "friendship": {
+    "sendRequest": "Gửi lời mời kết bạn",
+    "waitingForResponse": "Đang chờ phản hồi",
+    "cancelRequest": "Hủy lời mời",
+    "decline": "Từ chối",
+    "accept": "Đồng ý"
+  },
+  "notifications": {
+    "someone": "Ai đó",
+    "yourSession": "trận của bạn",
+    "actorAndOneOther": "{{name}} và 1 người khác",
+    "actorAndOthers": "{{name}} và {{count}} người khác",
+    "fallback": "Bạn có một thông báo mới",
+    "sessionCommentCreated": " đã bình luận về ",
+    "sessionParticipantJoined": " đã tham gia ",
+    "sessionParticipantLeft": " đã rời khỏi ",
+    "sessionStatusStarted": " đã bắt đầu",
+    "sessionJoinRequestCreated": " đã yêu cầu tham gia ",
+    "sessionJoinRequestApprovedPrefix": "Yêu cầu tham gia ",
+    "sessionJoinRequestApprovedSuffix": " của bạn đã được chấp nhận",
+    "sessionJoinRequestRejectedPrefix": "Yêu cầu tham gia ",
+    "sessionJoinRequestRejectedSuffix": " của bạn đã bị từ chối",
+    "sessionInvitationCreated": " đã mời bạn tham gia ",
+    "sessionDetailsUpdated": " đã cập nhật ",
+    "friendRequestCreated": " muốn kết bạn với bạn",
+    "friendRequestAccepted": " đã trở thành bạn bè của bạn"
+  }
+}

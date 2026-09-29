@@ -1,5 +1,5 @@
 import { Popover, PopoverContent } from '@/shared/ui/popover';
-import { SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
+import { getSessionStatusLabel } from '@/shared/lib/sessionStatus';
 import type { SessionStatus } from '@/shared/types/session';
 import { DISCOVERABLE_STATUSES } from '../useDiscoverBaseFilters';
 import { DiscoverFilterTrigger } from './DiscoverFilterTrigger';
@@ -30,7 +30,7 @@ export function DiscoverStatusFilter({
   const selected = selectedStatuses[0];
   // 2026-09-23 revision — the trigger shows the selected value alone once set, no "Status " prefix
   // (same change applied to Fee).
-  const triggerLabel = selected !== undefined ? SESSION_STATUS_LABEL[selected] : 'Status';
+  const triggerLabel = selected !== undefined ? getSessionStatusLabel(selected) : 'Status';
   // No separate "clear" handler needed — toggling the currently-selected status off is exactly
   // the mutual-exclusion hook's own reset-to-default (see useDiscoverBaseFilters.toggleStatus).
   const clear = () => {
@@ -59,7 +59,7 @@ export function DiscoverStatusFilter({
                 onChange={() => onToggleStatus(status)}
                 className="size-4 accent-accent-solid"
               />
-              {SESSION_STATUS_LABEL[status]}
+              {getSessionStatusLabel(status)}
             </label>
           ))}
         </fieldset>

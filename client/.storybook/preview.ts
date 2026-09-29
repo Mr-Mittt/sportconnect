@@ -2,6 +2,7 @@ import i18next from 'i18next';
 import type { Preview } from '@storybook/react-vite';
 import { initReactI18next } from 'react-i18next';
 import commonEn from '../src/locales/en/common.json';
+import enumsEn from '../src/locales/en/enums.json';
 import homeFeedEn from '../src/locales/en/homeFeed.json';
 import loginEn from '../src/locales/en/login.json';
 import profileEn from '../src/locales/en/profile.json';
@@ -10,6 +11,7 @@ import sharedComponentsEn from '../src/locales/en/sharedComponents.json';
 import sharedDialogsEn from '../src/locales/en/sharedDialogs.json';
 import shellEn from '../src/locales/en/shell.json';
 import commonVi from '../src/locales/vi/common.json';
+import enumsVi from '../src/locales/vi/enums.json';
 import homeFeedVi from '../src/locales/vi/homeFeed.json';
 import loginVi from '../src/locales/vi/login.json';
 import profileVi from '../src/locales/vi/profile.json';
@@ -39,6 +41,10 @@ import '../src/index.css';
 // CLIENT-I18N-4: added `homeFeed` (HomeFeedPage's own string) and `sharedComponents`
 // (Feed/PostCard/CommentSection/CommentItem/CreatePostForm/GroupBroadcasts/HashtagPostsModal/
 // TrendingHashtags/SportSwitcher's default copy) — same sync-by-hand note applies.
+//
+// CLIENT-I18N-5: added `enums` (client-mirrored backend enum display strings — session status,
+// sport attribute BOOLEAN/DEFINITION_LIST, friendship status, notification text) — same
+// sync-by-hand note applies.
 void i18next.use(initReactI18next).init({
   resources: {
     en: {
@@ -50,6 +56,7 @@ void i18next.use(initReactI18next).init({
       sharedDialogs: sharedDialogsEn,
       homeFeed: homeFeedEn,
       sharedComponents: sharedComponentsEn,
+      enums: enumsEn,
     },
     vi: {
       common: commonVi,
@@ -60,12 +67,13 @@ void i18next.use(initReactI18next).init({
       sharedDialogs: sharedDialogsVi,
       homeFeed: homeFeedVi,
       sharedComponents: sharedComponentsVi,
+      enums: enumsVi,
     },
   },
   lng: 'en',
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents'],
+  ns: ['common', 'register', 'profile', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums'],
   interpolation: { escapeValue: false },
   returnNull: false,
 });

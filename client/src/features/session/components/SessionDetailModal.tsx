@@ -13,6 +13,7 @@ import {
   IconX,
   type Icon,
 } from '@tabler/icons-react';
+import i18next from 'i18next';
 import { useState } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import type { Comment } from '@/features/feed/types';
@@ -22,7 +23,7 @@ import { directionsUrl } from '@/shared/lib/mapsLinks';
 import { getRampBadgeClasses, getRampFillClass } from '@/shared/lib/rampStyles';
 import { UNCAPPED_CAPACITY } from '@/shared/lib/sessionCapacity';
 import { getParticipationAction, type ParticipationActionKind } from '@/shared/lib/sessionParticipation';
-import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
+import { getSessionStatusLabel, SESSION_STATUS_CLASSES } from '@/shared/lib/sessionStatus';
 import { formatSessionHeaderDateTime, formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
 import type {
@@ -377,7 +378,7 @@ export function SessionDetailModal({
                 aria-hidden="true"
               />
               <span className={cn('font-medium', SESSION_STATUS_CLASSES[session.status])}>
-                {SESSION_STATUS_LABEL[session.status]}
+                {getSessionStatusLabel(session.status)}
               </span>
               <span className="text-text-muted"> · {formatSessionHeaderDateTime(session.scheduledStart, session.scheduledEndAt)}</span>
             </div>
@@ -671,7 +672,10 @@ export function SessionDetailModal({
 
               <div className="flex items-center gap-2 self-end">
                 <span className="text-2xs text-text-muted">
-                  {session.autoApprove ? 'Auto approval' : 'Need host approval'}. Created by {session.createdByFullName}
+                  {session.autoApprove
+                    ? i18next.t('enums:sessionApproval.auto')
+                    : i18next.t('enums:sessionApproval.hostApproval')}
+                  . Created by {session.createdByFullName}
                 </span>
                 {!isCommentsForbidden && (
                   <button

@@ -1,0 +1,46 @@
+{
+  "sessionStatus": {
+    "SCHEDULED": "Scheduled",
+    "ONGOING": "Ongoing",
+    "PREPARING": "Preparing",
+    "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled"
+  },
+  "sessionApproval": {
+    "auto": "Auto approval",
+    "hostApproval": "Need host approval"
+  },
+  "attributeValues": {
+    "yes": "Yes",
+    "no": "No",
+    "item": "Item {{index}}",
+    "itemWithValue": "Item {{index}} · {{value}}"
+  },
+  "friendship": {
+    "sendRequest": "Send a friend request",
+    "waitingForResponse": "Waiting for response",
+    "cancelRequest": "Cancel request",
+    "decline": "Decline",
+    "accept": "Accept"
+  },
+  "notifications": {
+    "someone": "Someone",
+    "yourSession": "your session",
+    "actorAndOneOther": "{{name}} and 1 other",
+    "actorAndOthers": "{{name}} and {{count}} others",
+    "fallback": "You have a new notification",
+    "sessionCommentCreated": " commented on ",
+    "sessionParticipantJoined": " joined ",
+    "sessionParticipantLeft": " left ",
+    "sessionStatusStarted": " has started",
+    "sessionJoinRequestCreated": " requested to join ",
+    "sessionJoinRequestApprovedPrefix": "Your request to join ",
+    "sessionJoinRequestApprovedSuffix": " was approved",
+    "sessionJoinRequestRejectedPrefix": "Your request to join ",
+    "sessionJoinRequestRejectedSuffix": " was declined",
+    "sessionInvitationCreated": " invited you to join ",
+    "sessionDetailsUpdated": " updated ",
+    "friendRequestCreated": " wants to be your friend",
+    "friendRequestAccepted": " is now your friend"
+  }
+}
