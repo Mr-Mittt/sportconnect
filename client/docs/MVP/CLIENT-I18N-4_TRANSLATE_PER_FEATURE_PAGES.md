@@ -23,9 +23,10 @@ picked up**, same "prefer splitting" note the parent ticket (`CLIENT-I18N-2`) it
 - **Read `documentation/md/I18N_READINESS.md`'s I18N-10 before starting.** Translating static JSX
   strings is not the whole job — every form in scope (and there are several across these 7 features)
   needs its own check for (a) native HTML5 constraint validation rendering an untranslated browser
-  popup, and (b) whether it shows a server error message verbatim (state explicitly whether that's
-  an accepted I18N-4 gap or needs its own handling). Found and fixed twice already
-  (`RegisterForm`, `LoginForm`) — check every form here, don't assume none of the 7 features have one.
+  popup, and (b) whether it shows a server error message verbatim — if so, **add its row to I18N-4's
+  own census table** (same section of that doc), don't just note it locally in each feature's own
+  ticket. Found and fixed twice already (`RegisterForm`, `LoginForm`) — check every form here, don't
+  assume none of the 7 features have one.
 - Pick an order — likely highest-traffic first (Home Feed, Profile) — and file/pick up one feature
   at a time rather than attempting all seven in one pass.
 - Same per-feature checklist as every prior i18n ticket: new namespace + `.storybook/preview.ts`
