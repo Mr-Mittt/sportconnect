@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useProfilePageStore } from '@/app/profilePageStore';
@@ -89,6 +90,7 @@ import { useUserPreferences } from './useUserPreferences';
  * Settings this session, and the request itself is cheap and cached.
  */
 export function ProfilePage() {
+  const { t } = useTranslation('profilePage');
   const navigate = useNavigate();
   // ProfilePage renders behind ProtectedRoute (AUTH-4), so user is guaranteed
   // non-null here — same guarantee every other page relies on.
@@ -199,7 +201,7 @@ export function ProfilePage() {
   return (
     <ModalAnchorProvider value={modalAnchorBottom}>
       <main className="py-4">
-        <h1 className="sr-only">Profile</h1>
+        <h1 className="sr-only">{t('page.title')}</h1>
         <div className="mb-4" ref={sportSwitcherRef}>
           <SportSwitcher
             sports={sportProfilesQuery.data}

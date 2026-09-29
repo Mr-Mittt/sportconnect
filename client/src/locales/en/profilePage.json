@@ -1,0 +1,54 @@
+{
+  "page": { "title": "Profile" },
+  "tabs": {
+    "ariaLabel": "Profile sections",
+    "posts": "Posts",
+    "memories": "Memories",
+    "settings": "Settings"
+  },
+  "posts": { "empty": "No posts yet for this sport." },
+  "settings": {
+    "addSportPrompt": "Add a sport above to set up its profile.",
+    "active": "Active",
+    "activeDescription": "You're playing {{sportName}} — it shows in your sport switcher.",
+    "inactiveDescription": "{{sportName}} is deactivated — your details are kept, reactivate any time.",
+    "toggleAriaActive": "{{sportName}} profile: Active",
+    "toggleAriaInactive": "{{sportName}} profile: Inactive",
+    "sectionTitle": "Sport profile",
+    "skillLevel": "Skill level",
+    "skillLevelPlaceholder": "Select a skill level",
+    "skillLevels": {
+      "beginner": "Beginner",
+      "intermediate": "Intermediate",
+      "advanced": "Advanced"
+    },
+    "yearsOfExperience": "Years of experience",
+    "save": "Save changes",
+    "saving": "Saving…"
+  },
+  "unsaved": {
+    "title": "Unsaved changes",
+    "message": "You have unsaved changes to this sport profile. Discard them, or save before leaving?",
+    "saveError": "Couldn't save your sport profile. Please try again.",
+    "discard": "Discard changes",
+    "save": "Save changes",
+    "saving": "Saving…"
+  },
+  "statusConfirm": {
+    "deactivatePrompt": "Stop playing {{sportName}} for a while?",
+    "reactivatePrompt": "Welcome back to {{sportName}}!",
+    "deactivateNote": "It'll be hidden from your active sports, but your skill level, experience and attributes are kept — reactivate any time.",
+    "error": "Couldn't update {{sportName}}. Please try again.",
+    "deactivate": "Deactivate",
+    "deactivating": "Deactivating…",
+    "reactivate": "Reactivate",
+    "reactivating": "Reactivating…",
+    "cancel": "Cancel"
+  },
+  "saveResult": {
+    "profileFailed": "Your profile could not be saved.",
+    "preferencesFailed": "Your language preference could not be saved.",
+    "preferencesSaved": "Your language preference was saved.",
+    "profileSaved": "Your profile was saved."
+  }
+}

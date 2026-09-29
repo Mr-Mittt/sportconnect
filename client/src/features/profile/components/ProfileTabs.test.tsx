@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import i18n from '@/app/i18n';
 import { ProfileTabs } from './ProfileTabs';
 
 describe('ProfileTabs', () => {
@@ -36,5 +37,22 @@ describe('ProfileTabs', () => {
     render(<ProfileTabs activeTab="posts" onChange={() => {}} />);
     const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent);
     expect(tabs).toEqual(['Posts', 'Memories', 'Settings']);
+  });
+
+  // CLIENT-I18N-6: set and restore the locale explicitly — don't rely on a global reset.
+  it('renders Vietnamese copy when the locale is vi', async () => {
+    await i18n.changeLanguage('vi');
+        render(<ProfileTabs activeTab="posts" onChange={() => {}} />);
+    expect(screen.getByRole('tablist', { name: 'Các mục hồ sơ' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Bài viết' })).toBeInTheDocument();
+    await i18n.changeLanguage('en');
+  });
+
+  it('prefers an override-prefix key over the default copy', async () => {
+    await i18n.changeLanguage('en');
+    i18n.addResourceBundle('en', 'profileOverrideTest', { custom: { tabs: { posts: 'My writing' } } }, true, true);
+    render(<ProfileTabs activeTab="posts" onChange={() => {}} i18nOverridePrefix="profileOverrideTest:custom" />);
+    expect(screen.getByRole('tab', { name: 'My writing' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
   });
 });

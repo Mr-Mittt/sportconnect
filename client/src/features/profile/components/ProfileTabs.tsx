@@ -1,5 +1,6 @@
 import { IconMessage2, IconPhotoHeart, IconSettings } from '@tabler/icons-react';
 import { useRef } from 'react';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 
 export type ProfileTabKey = 'posts' | 'memories' | 'settings';
@@ -7,12 +8,14 @@ export type ProfileTabKey = 'posts' | 'memories' | 'settings';
 interface ProfileTabsProps {
   activeTab: ProfileTabKey;
   onChange: (tab: ProfileTabKey) => void;
+  /** CLIENT-I18N-6: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
-const TABS: { key: ProfileTabKey; label: string; Icon: typeof IconMessage2 }[] = [
-  { key: 'posts', label: 'Posts', Icon: IconMessage2 },
-  { key: 'memories', label: 'Memories', Icon: IconPhotoHeart },
-  { key: 'settings', label: 'Settings', Icon: IconSettings },
+const TABS: { key: ProfileTabKey; Icon: typeof IconMessage2 }[] = [
+  { key: 'posts', Icon: IconMessage2 },
+  { key: 'memories', Icon: IconPhotoHeart },
+  { key: 'settings', Icon: IconSettings },
 ];
 
 /**
@@ -20,7 +23,8 @@ const TABS: { key: ProfileTabKey; label: string; Icon: typeof IconMessage2 }[] =
  * `railTabs`) — same hand-rolled roving-tabindex tablist as `GroupTabs`
  * (parent owns `activeTab`, no Radix Tabs primitive exists in this repo yet).
  */
-export function ProfileTabs({ activeTab, onChange }: ProfileTabsProps) {
+export function ProfileTabs({ activeTab, onChange, i18nOverridePrefix }: ProfileTabsProps) {
+  const t = useOverridableText('profilePage', i18nOverridePrefix);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const handleKeyDown = (event: React.KeyboardEvent, index: number) => {
@@ -40,7 +44,7 @@ export function ProfileTabs({ activeTab, onChange }: ProfileTabsProps) {
     <div
       role="tablist"
       aria-orientation="vertical"
-      aria-label="Profile sections"
+      aria-label={t('tabs.ariaLabel')}
       className="flex w-37.5 shrink-0 flex-col gap-0.5"
     >
       {TABS.map((tab, index) => {
@@ -64,7 +68,7 @@ export function ProfileTabs({ activeTab, onChange }: ProfileTabsProps) {
             )}
           >
             <tab.Icon className="size-4" aria-hidden="true" />
-            {tab.label}
+            {t(`tabs.${tab.key}`)}
           </button>
         );
       })}

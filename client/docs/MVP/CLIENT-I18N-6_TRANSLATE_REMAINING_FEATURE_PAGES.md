@@ -1,6 +1,6 @@
 # CLIENT-I18N-6 · Translate remaining feature pages (Groups, Friends, Profile, Sessions/Matches, Notifications, Admin)
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-29)
 **Type:** Enhancement (broad, incremental — expected to split into one ticket per feature at pickup)
 **Depends on:** CLIENT-I18N-2 (step 1), CLIENT-I18N-3 (step 2 — shared chrome translated first)
 **Filed:** 2026-09-29, split out of `CLIENT-I18N-4` at pickup — that ticket narrowed to Home Feed
@@ -73,3 +73,52 @@ I18N-10-class gap (native-validation-equivalent static copy), found while CLIENT
 (user decision) since this ticket already claims the whole file — when this slice is picked up,
 apply the same `noValidate`/`hasAttemptedSubmit`/translated-inline-error pattern `RegisterForm`/
 `LoginForm` established (I18N_READINESS.md's I18N-10), same as every other form this ticket touches.
+
+## Scope change (2026-09-29, at pickup — user decision)
+
+**Admin pages are out of scope — no localization needed** (English-only accepted; admin surfaces are
+not user-facing). This resolves the open "are admin surfaces in scope for `vi`" question above and
+removes Admin from this ticket's slices. The 3 Admin editors' raw-server-message rows in
+`I18N_READINESS.md`'s I18N-4 census stay as-is (no action needed).
+
+## Scope change (2026-09-29, at pickup — user decision): narrowed to Profile only
+
+This ticket now covers **Profile only** (`/profile`: `ProfilePage`, `ProfileTabs`, `MemoriesTab`,
+`PostsTab`, `SportProfileSettingsTab`, `SettingsUnsavedChangesDialog`,
+`SportProfileStatusConfirmDialog`, client-authored messages in `useEditProfileSave`), in a new
+`profilePage` namespace (the existing `profile` namespace is `EditProfileModal`'s copy). The other
+slices were filed as **CLIENT-I18N-7** (Groups), **-8** (Friends), **-9** (Notifications), **-10**
+(Sessions/Matches — carries the `UpcomingMatches`/`SessionCard`/fee libs and the `CreateSessionModal`
+validation-copy note above). The Sessions/Matches notes in this file now belong to I18N-10.
+I18N-10 check for Profile: no native validation (one `<form>`, `isDirty`-gated Save); census rows for
+`useUpdateSportProfile`/`useDeactivateSportProfile`/`useEditProfileSave` still accurate, no new rows.
+
+## Implementation summary (2026-09-29)
+
+**Approved design (restated):** new `profilePage` namespace (`locales/{en,vi}/profilePage.json`: `page`, `tabs`,
+`posts`, `settings` (incl. `skillLevels`), `unsaved`, `statusConfirm`, `saveResult`), registered in `app/i18n.ts`,
+`.storybook/preview.ts` and `app/i18n.test.ts` key parity. Components use `useOverridableText('profilePage',
+i18nOverridePrefix)`; `ProfilePage` (page, no override need) uses plain `useTranslation('profilePage')`;
+`useEditProfileSave` reads the i18next singleton. English values are byte-identical to the replaced literals.
+
+**Built:** exactly the above for `ProfilePage`, `ProfileTabs`, `MemoriesTab`, `PostsTab`, `SportProfileSettingsTab`,
+`SettingsUnsavedChangesDialog`, `SportProfileStatusConfirmDialog`, `useEditProfileSave`.
+
+**Divergences / decisions:**
+- Beyond the plan's list, the audit at implementation found more literals in the same files (the "Add a sport
+  above…" prompt, skill-level placeholder and option labels, the Deactivating…/Reactivating… states, the
+  deactivate note, error lines, "Cancel", "Discard changes") — all covered.
+- **Skill-level labels** are translated inside the Settings tab (`settings.skillLevels.<value>`), not by
+  changing `shared/lib/skillLevels.ts`, because that lib is shared with `AddSportFields` (the Add Sport
+  modal), which is untranslated and belongs to a shared-dialog pass. **Known gap:** `AddSportFields`'
+  "Select a skill level"/level labels stay English until that is picked up.
+- `PAGE_ACCESS_NO_SPORTS_PROMPT` (`shared/lib/noSportsPrompt`) is untouched — not this slice.
+- Server messages shown verbatim by `useUpdateSportProfile`/`useDeactivateSportProfile`/`useEditProfileSave` stay
+  English (I18N-4); the client-authored fallback/composite messages are translated.
+- No hardcoded date/number/currency formatting exists in these files.
+
+**E2E:** scoped `e2e` project (`profile-journey`, `a11y`, `locale`, `feed-groups-journey`) — 44 passed after fixing one stale
+locator (`profile-journey.spec.ts` step 7). Full `e2e` project not run (scoped subset only, by standing rule).
+**Visual-regression expectation:** no baselined surface changes — English output is byte-identical, so no baseline
+change expected; a failing `visual-regression` run is the Windows noise floor. Checked: `app-profile.spec.ts` failed
+12/12 both with the change and with it stashed (same set). `app-sport-reactivate` not separately re-run.

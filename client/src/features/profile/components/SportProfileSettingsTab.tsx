@@ -1,4 +1,5 @@
 import { SKILL_LEVELS } from '@/shared/lib/skillLevels';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
 import type { ResolvedSportAttributeSchema, UserSportProfileResponse } from '@/shared/types/sport';
@@ -27,6 +28,8 @@ interface SportProfileSettingsTabProps {
   onToggleActive: () => void;
   /** SPORT-10: the deactivate/reactivate mutation is in flight — the toggle is disabled. */
   isTogglingActive: boolean;
+  /** CLIENT-I18N-6: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /** SPORT-10: the Active/Inactive pill toggle — first control in the tab. Mirrors
@@ -37,7 +40,9 @@ function ActiveToggleRow({
   isActive,
   onToggle,
   isBusy,
+  t,
 }: {
+  t: ReturnType<typeof useOverridableText>;
   sportName: string;
   isActive: boolean;
   onToggle: () => void;
@@ -46,18 +51,20 @@ function ActiveToggleRow({
   return (
     <div className="flex items-center justify-between">
       <div>
-        <div className="text-2sm font-medium text-text-primary">Active</div>
+        <div className="text-2sm font-medium text-text-primary">{t('settings.active')}</div>
         <div className="text-2xs text-text-muted">
           {isActive
-            ? `You're playing ${sportName} — it shows in your sport switcher.`
-            : `${sportName} is deactivated — your details are kept, reactivate any time.`}
+            ? t('settings.activeDescription', { sportName })
+            : t('settings.inactiveDescription', { sportName })}
         </div>
       </div>
       <Switch
         checked={isActive}
         onCheckedChange={onToggle}
         disabled={isBusy}
-        aria-label={`${sportName} profile: ${isActive ? 'Active' : 'Inactive'}`}
+        aria-label={t(isActive ? 'settings.toggleAriaActive' : 'settings.toggleAriaInactive', {
+          sportName,
+        })}
       />
     </div>
   );
@@ -94,13 +101,15 @@ export function SportProfileSettingsTab({
   errorMessage,
   onToggleActive,
   isTogglingActive,
+  i18nOverridePrefix,
 }: SportProfileSettingsTabProps) {
+  const t = useOverridableText('profilePage', i18nOverridePrefix);
   if (isLoading) return null;
 
   if (activeProfile === undefined) {
     return (
       <p className="py-4 text-sm text-text-secondary">
-        Add a sport above to set up its profile.
+        {t('settings.addSportPrompt')}
       </p>
     );
   }
@@ -120,6 +129,7 @@ export function SportProfileSettingsTab({
         isActive={isActive}
         onToggle={onToggleActive}
         isBusy={isTogglingActive}
+        t={t}
       />
 
       {/* SPORT-10: a native disabled <fieldset> makes every control below (incl. all of
@@ -130,29 +140,29 @@ export function SportProfileSettingsTab({
         className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0 disabled:opacity-60"
       >
       <div className="flex flex-col gap-3.5">
-        <h3 className="text-sm font-semibold text-text-primary">Sport profile</h3>
+        <h3 className="text-sm font-semibold text-text-primary">{t('settings.sectionTitle')}</h3>
         {/* grid-2 — same responsive 1→2-col wrapper `SportAttributesFields`' own `group` layout
             uses, so Skill level / Years of experience sit side by side at sm+ instead of stacked. */}
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
           <div>
-            <Label htmlFor="sport-profile-skill-level">Skill level</Label>
+            <Label htmlFor="sport-profile-skill-level">{t('settings.skillLevel')}</Label>
             <Select
               id="sport-profile-skill-level"
               value={draft.skillLevel}
               onChange={(event) => setSkillLevel(event.target.value)}
             >
               <option value="" disabled>
-                Select a skill level
+                {t('settings.skillLevelPlaceholder')}
               </option>
               {SKILL_LEVELS.map((level) => (
                 <option key={level.value} value={level.value}>
-                  {level.label}
+                  {t(`settings.skillLevels.${level.value}`)}
                 </option>
               ))}
             </Select>
           </div>
           <div>
-            <Label htmlFor="sport-profile-experience">Years of experience</Label>
+            <Label htmlFor="sport-profile-experience">{t('settings.yearsOfExperience')}</Label>
             <Input
               id="sport-profile-experience"
               type="number"
@@ -180,7 +190,7 @@ export function SportProfileSettingsTab({
         disabled={!isActive || !isDirty || draft.skillLevel === '' || isSaving}
         className={cn('self-start cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
       >
-        {isSaving ? 'Saving…' : 'Save changes'}
+        {isSaving ? t('settings.saving') : t('settings.save')}
       </Button>
       </fieldset>
     </form>

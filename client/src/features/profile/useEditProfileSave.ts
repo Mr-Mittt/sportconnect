@@ -1,3 +1,4 @@
+import i18next from 'i18next';
 import { useState } from 'react';
 import axios from 'axios';
 import type { ApiResponse } from '@/shared/types/api';
@@ -57,10 +58,10 @@ export function useEditProfileSave() {
     }
 
     const profileMessage = profileFailed
-      ? extractErrorMessage(profileResult.reason, 'Your profile could not be saved.')
+      ? extractErrorMessage(profileResult.reason, i18next.t('profilePage:saveResult.profileFailed'))
       : null;
     const preferencesMessage = preferencesFailed
-      ? extractErrorMessage(preferencesResult.reason, 'Your language preference could not be saved.')
+      ? extractErrorMessage(preferencesResult.reason, i18next.t('profilePage:saveResult.preferencesFailed'))
       : null;
 
     if (profileFailed && preferencesFailed) {
@@ -68,12 +69,12 @@ export function useEditProfileSave() {
     } else if (profileFailed) {
       setCombinedError(
         hasLanguageChange
-          ? `${profileMessage} Your language preference was saved.`
+          ? `${profileMessage} ${i18next.t('profilePage:saveResult.preferencesSaved')}`
           : profileMessage,
       );
     } else {
       setCombinedError(
-        hasProfileChange ? `Your profile was saved. ${preferencesMessage}` : preferencesMessage,
+        hasProfileChange ? `${i18next.t('profilePage:saveResult.profileSaved')} ${preferencesMessage}` : preferencesMessage,
       );
     }
   }

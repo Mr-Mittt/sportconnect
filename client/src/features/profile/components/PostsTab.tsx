@@ -8,6 +8,7 @@ import { CreatePostForm } from '@/shared/components/CreatePostForm';
 import { Feed } from '@/shared/components/Feed';
 import { CommentSection } from '@/shared/components/CommentSection';
 import { HashtagPostsModal } from '@/shared/components/HashtagPostsModal';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { usePostsTabData } from '../usePostsTabData';
 
 /**
@@ -19,7 +20,8 @@ import { usePostsTabData } from '../usePostsTabData';
  * exactly as Home Feed/Groups do, so a hashtag rendered in one of the
  * caller's own posts behaves identically everywhere it can be clicked.
  */
-export function PostsTab() {
+export function PostsTab({ i18nOverridePrefix }: { i18nOverridePrefix?: string }) {
+  const t = useOverridableText('profilePage', i18nOverridePrefix);
   const user = useAuthStore((state) => state.user)!;
   const {
     data,
@@ -101,7 +103,7 @@ export function PostsTab() {
         isError={isError}
         onRetry={retryPosts}
         isLoadMoreError={isLoadMorePostsError}
-        emptyMessage="No posts yet for this sport."
+        emptyMessage={t('posts.empty')}
         showSportBadge={false}
       />
       <CommentSection

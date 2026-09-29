@@ -1,0 +1,54 @@
+{
+  "page": { "title": "Hồ sơ" },
+  "tabs": {
+    "ariaLabel": "Các mục hồ sơ",
+    "posts": "Bài viết",
+    "memories": "Kỷ niệm",
+    "settings": "Cài đặt"
+  },
+  "posts": { "empty": "Chưa có bài viết nào cho môn thể thao này." },
+  "settings": {
+    "addSportPrompt": "Hãy thêm một môn thể thao ở trên để thiết lập hồ sơ cho môn đó.",
+    "active": "Đang hoạt động",
+    "activeDescription": "Bạn đang chơi {{sportName}} — môn này hiển thị trong bộ chuyển môn thể thao của bạn.",
+    "inactiveDescription": "{{sportName}} đã bị vô hiệu hóa — thông tin của bạn vẫn được giữ, có thể kích hoạt lại bất cứ lúc nào.",
+    "toggleAriaActive": "Hồ sơ {{sportName}}: Đang hoạt động",
+    "toggleAriaInactive": "Hồ sơ {{sportName}}: Không hoạt động",
+    "sectionTitle": "Hồ sơ thể thao",
+    "skillLevel": "Trình độ",
+    "skillLevelPlaceholder": "Chọn trình độ",
+    "skillLevels": {
+      "beginner": "Người mới bắt đầu",
+      "intermediate": "Trung bình",
+      "advanced": "Nâng cao"
+    },
+    "yearsOfExperience": "Số năm kinh nghiệm",
+    "save": "Lưu thay đổi",
+    "saving": "Đang lưu…"
+  },
+  "unsaved": {
+    "title": "Thay đổi chưa được lưu",
+    "message": "Bạn có thay đổi chưa lưu trong hồ sơ thể thao này. Bỏ các thay đổi hay lưu trước khi rời đi?",
+    "saveError": "Không thể lưu hồ sơ thể thao của bạn. Vui lòng thử lại.",
+    "discard": "Bỏ thay đổi",
+    "save": "Lưu thay đổi",
+    "saving": "Đang lưu…"
+  },
+  "statusConfirm": {
+    "deactivatePrompt": "Tạm ngừng chơi {{sportName}}?",
+    "reactivatePrompt": "Chào mừng bạn quay lại với {{sportName}}!",
+    "deactivateNote": "Môn này sẽ bị ẩn khỏi các môn đang chơi, nhưng trình độ, kinh nghiệm và các thuộc tính của bạn vẫn được giữ — có thể kích hoạt lại bất cứ lúc nào.",
+    "error": "Không thể cập nhật {{sportName}}. Vui lòng thử lại.",
+    "deactivate": "Vô hiệu hóa",
+    "deactivating": "Đang vô hiệu hóa…",
+    "reactivate": "Kích hoạt lại",
+    "reactivating": "Đang kích hoạt lại…",
+    "cancel": "Hủy"
+  },
+  "saveResult": {
+    "profileFailed": "Không thể lưu hồ sơ của bạn.",
+    "preferencesFailed": "Không thể lưu tùy chọn ngôn ngữ của bạn.",
+    "preferencesSaved": "Đã lưu tùy chọn ngôn ngữ của bạn.",
+    "profileSaved": "Đã lưu hồ sơ của bạn."
+  }
+}
