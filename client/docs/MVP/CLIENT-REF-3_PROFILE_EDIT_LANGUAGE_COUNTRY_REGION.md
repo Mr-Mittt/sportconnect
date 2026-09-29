@@ -162,11 +162,18 @@ fixtures (same "both together" semantics), no longer echoes a raw `country`/`cit
   `NoUsernameOrCity` renamed `NoUsernameOrRegion`. `pnpm exec storybook build` succeeds (build-time
   verification only — not manually eyeballed in a running Storybook instance this pickup).
 
-**Visual-regression expectation:** all 12 `profile-{posts,memories,settings,edit-profile-modal}-
-{375,768,1280}.png` baselines legitimately change — `ProfileHeader`'s handle line lost the `city`
-fallback (shows on every tab), and `edit-profile-modal`'s own 3 additionally change shape (City →
-Country/Region/Language). Not regenerated (Windows host, per repo convention); expected to fail
-until the next `update-baselines` dispatch regenerates exactly these 12 files.
+**Visual-regression — executed (2026-09-29):** 15 baselines legitimately changed, not 12 as
+originally predicted — `ProfileHeader`'s handle line lost the `city` fallback (shows on every
+`/profile`-rendering state), and `edit-profile-modal`'s own 3 additionally changed shape (City →
+Country/Region/Language). The 3 extra beyond the original estimate,
+`profile-settings-inactive-{375,768,1280}.png`, come from a second spec
+(`app-sport-reactivate.spec.ts`, SPORT-12) that also screenshots `/profile` full-page — missed in
+the original count, same root cause once found. Ran the `client-ci` `update-baselines` dispatch,
+downloaded the `visual-baselines` artifact, SHA-256-verified: exactly these 15 changed, the other
+135 committed baselines came back byte-identical (confirms the Windows-host diffs on those were
+pure font-rendering noise, not real). Eyeballed one representative image per distinct surface
+(`profile-posts`, `profile-edit-profile-modal`, `profile-settings-inactive`) — each showed exactly
+the expected change and nothing else. Applied and pushed (commit `93de458`).
 
 **IT/backend:** none — this is a client-only ticket. Backend **U19** (remove `city` entirely) was
 filed as the accepted follow-up, sequenced after this ticket.

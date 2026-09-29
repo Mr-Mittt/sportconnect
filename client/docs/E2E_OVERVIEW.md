@@ -1214,11 +1214,14 @@ known-Windows-noise caveat as every spec above: `pnpm test:visual` on a Windows 
 wholesale on font-rendering noise — the committed baselines are Linux-rendered via the `client-ci`
 `update-baselines` dispatch. All 12 were CI-current as of SPORT-7 (which regenerated the 3
 `profile-settings-*` for schema v3's collapsible groups + nested `Rackets` sub-group; the other 9
-were confirmed byte-identical against that same artifact) — **CLIENT-REF-3 changes all 12 again**:
-`ProfileHeader`'s handle line dropped the `city` fallback (`@jordanlee · Riverside` → `@jordanlee`,
-since `mockMyProfile.regionId` is `null`), which shows on every tab, and `edit-profile-modal`'s own
-3 additionally change shape — City replaced by Country/Region/Language (`GeoLocaleFields`). Not yet
-regenerated (Windows host); expected to fail until the next `update-baselines` dispatch.
+were confirmed byte-identical against that same artifact) — **CLIENT-REF-3 changed all 12 again,
+regenerated and applied (2026-09-29)**: `ProfileHeader`'s handle line dropped the `city` fallback
+(`@jordanlee · Riverside` → `@jordanlee`, since `mockMyProfile.regionId` is `null`), which shows on
+every tab, and `edit-profile-modal`'s own 3 additionally changed shape — City replaced by
+Country/Region/Language (`GeoLocaleFields`). SHA-256-verified against the `update-baselines`
+artifact: exactly these 12 (plus 3 more in `app-sport-reactivate.spec.ts`'s own entry below, missed
+in the original estimate — same root cause) changed; every other baseline in this repo came back
+byte-identical.
 
 ### `e2e/visual/app-sport-reactivate.spec.ts` (SPORT-12, `visual-regression` project)
 
@@ -1252,6 +1255,14 @@ against `e2e/visual/__screenshots__/{profile-settings-inactive,sport-status-conf
 sport-status-confirm-reactivate,reactivate-nudge-sport-pill,reactivate-nudge-group,
 sport-switcher-muted-plain,sport-switcher-muted-selected}-{width}.png`. Same known-Windows-noise
 caveat as every spec above — Linux-rendered via the `client-ci` `update-baselines` dispatch.
+
+**CLIENT-REF-3 (2026-09-29):** `profile-settings-inactive-{375,768,1280}.png` changed too — this
+state screenshots `/profile` full-page, so it picks up the same `ProfileHeader` handle-line change
+(`city` fallback dropped) as every state in `app-profile.spec.ts` above. Missed in that ticket's
+original expectation estimate (only `app-profile.spec.ts` was checked), caught by the `update-
+baselines` artifact's own SHA-256 diff and confirmed same root cause; regenerated and applied. The
+other 6 states in this file (all dialog- or component-scoped, no `ProfileHeader`) came back
+byte-identical.
 
 ---
 
