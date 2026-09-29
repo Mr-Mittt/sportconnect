@@ -7,6 +7,7 @@ import friendsEn from '../src/locales/en/friends.json';
 import groupsEn from '../src/locales/en/groups.json';
 import homeFeedEn from '../src/locales/en/homeFeed.json';
 import loginEn from '../src/locales/en/login.json';
+import notificationsEn from '../src/locales/en/notifications.json';
 import profileEn from '../src/locales/en/profile.json';
 import profilePageEn from '../src/locales/en/profilePage.json';
 import registerEn from '../src/locales/en/register.json';
@@ -19,6 +20,7 @@ import friendsVi from '../src/locales/vi/friends.json';
 import groupsVi from '../src/locales/vi/groups.json';
 import homeFeedVi from '../src/locales/vi/homeFeed.json';
 import loginVi from '../src/locales/vi/login.json';
+import notificationsVi from '../src/locales/vi/notifications.json';
 import profileVi from '../src/locales/vi/profile.json';
 import profilePageVi from '../src/locales/vi/profilePage.json';
 import registerVi from '../src/locales/vi/register.json';
@@ -66,6 +68,7 @@ void i18next.use(initReactI18next).init({
       enums: enumsEn,
       groups: groupsEn,
       friends: friendsEn,
+      notifications: notificationsEn,
     },
     vi: {
       common: commonVi,
@@ -80,12 +83,13 @@ void i18next.use(initReactI18next).init({
       enums: enumsVi,
       groups: groupsVi,
       friends: friendsVi,
+      notifications: notificationsVi,
     },
   },
   lng: 'en',
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends'],
+  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications'],
   interpolation: { escapeValue: false },
   returnNull: false,
 });
