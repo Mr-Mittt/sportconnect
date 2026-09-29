@@ -5,12 +5,12 @@ import { CommunityIllustration } from './CommunityIllustration';
 interface AuthShellProps {
   children: ReactNode;
   /**
-   * CLIENT-REF-2: defaults to the hardcoded English tagline so `LoginPage` (which never passes
-   * this prop) is untouched. `RegisterPage` passes a translated string instead of this component
-   * calling `t()` itself — `AuthShell` is the same instance `LoginPage` renders, and `LoginForm`
-   * stays English until CLIENT-I18N-2, so translating the tagline unconditionally here would show
-   * a translated shell around an English Login form after a sign-up language switch. Decided
-   * 2026-09-28, see CLIENT-REF-2's ticket doc.
+   * CLIENT-REF-2: the hardcoded English default exists so `AuthShell` never calls `t()` itself —
+   * every real caller passes its own translated `tagline` instead (`RegisterPage` from
+   * CLIENT-REF-2, `LoginPage` from CLIENT-I18N-2 step 1), the same reasoning CLIENT-REF-2's doc
+   * explains: `AuthShell` is one shared instance, so it can't know which page's translated string
+   * is "current" without the caller telling it. The default now only matters for a future caller
+   * that forgets to pass one.
    */
   tagline?: string;
 }

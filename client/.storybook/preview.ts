@@ -2,8 +2,12 @@ import i18next from 'i18next';
 import type { Preview } from '@storybook/react-vite';
 import { initReactI18next } from 'react-i18next';
 import commonEn from '../src/locales/en/common.json';
+import loginEn from '../src/locales/en/login.json';
+import profileEn from '../src/locales/en/profile.json';
 import registerEn from '../src/locales/en/register.json';
 import commonVi from '../src/locales/vi/common.json';
+import loginVi from '../src/locales/vi/login.json';
+import profileVi from '../src/locales/vi/profile.json';
 import registerVi from '../src/locales/vi/register.json';
 import '../src/index.css';
 
@@ -14,15 +18,20 @@ import '../src/index.css';
 // are presentational and reviewed one at a time anyway, not exercising the app's own locale
 // source-order logic. Namespace list kept in sync with `src/app/i18n.ts` by hand — see that
 // file's doc comment for the one-namespace-per-page convention (CLIENT-REF-2).
+//
+// CLIENT-I18N-2: found `profile` (CLIENT-REF-3) was never added here — `EditProfileModal` stories
+// reviewed under the `vi` toolbar were showing raw untranslated keys (`profile:title`, etc.)
+// instead of Vietnamese text, since this instance never knew that namespace existed. Fixed here
+// alongside adding `login` (this ticket's own new namespace).
 void i18next.use(initReactI18next).init({
   resources: {
-    en: { common: commonEn, register: registerEn },
-    vi: { common: commonVi, register: registerVi },
+    en: { common: commonEn, register: registerEn, profile: profileEn, login: loginEn },
+    vi: { common: commonVi, register: registerVi, profile: profileVi, login: loginVi },
   },
   lng: 'en',
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register'],
+  ns: ['common', 'register', 'profile', 'login'],
   interpolation: { escapeValue: false },
   returnNull: false,
 });

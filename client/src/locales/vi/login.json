@@ -1,0 +1,25 @@
+{
+  "tagline": "Đồng đội, trận đấu và hội bạn — tất cả trong một nơi.",
+  "heading": "Chào mừng trở lại",
+  "subheading": "Đăng nhập để tiếp tục nơi bạn đã dừng lại.",
+  "form": {
+    "email": {
+      "label": "Email"
+    },
+    "password": {
+      "label": "Mật khẩu",
+      "showAction": "Hiện mật khẩu",
+      "hideAction": "Ẩn mật khẩu"
+    },
+    "submit": "Đăng nhập",
+    "submitting": "Đang đăng nhập…",
+    "or": "hoặc",
+    "oauth": {
+      "facebook": "Tiếp tục với Facebook",
+      "google": "Tiếp tục với Google",
+      "apple": "Tiếp tục với Apple"
+    },
+    "newToSportHub": "Chưa có tài khoản?",
+    "createAccount": "Tạo tài khoản"
+  }
+}

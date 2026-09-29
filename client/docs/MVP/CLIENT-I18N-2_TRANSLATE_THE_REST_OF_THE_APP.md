@@ -1,6 +1,6 @@
 # CLIENT-I18N-2 · Translate the rest of the app (incrementally, feature by feature)
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-29, step 1 only — see Scope at pickup)
 **Type:** Enhancement (broad, incremental — expect to split at pickup)
 **Depends on:** CLIENT-I18N-1, CLIENT-REF-2, CLIENT-REF-3
 **Filed:** 2026-09-25, from the `/feature` session "Language, country and zone": the first pass translates only the sign-up form and
@@ -31,3 +31,58 @@ server message verbatim, it stays English until that is designed.
   feature is touched.
 
 **Out of scope:** backend message/enum localization (I18N-4); adding locales beyond `en`/`vi`; the language picker UI (CLIENT-REF-1/3).
+
+## Scope at pickup (2026-09-29, user decision)
+
+Split per the "Notes for pickup" recommendation above: **this pickup covers step 1 only —
+`LoginForm`/`LoginPage` + `AuthShell`'s default tagline.** Steps 2–4 (`TopBar`/`NavTabs`/shared
+modals; each per-feature page; client-mirrored enums) are filed as their own separate backlog
+tickets rather than built here, so this stays a small, reviewable PR instead of one giant one. This
+ticket (`CLIENT-I18N-2`) closes covering only step 1; the follow-up tickets carry the rest forward.
+
+## Implementation summary (2026-09-29)
+
+Built exactly per the "Scope at pickup" split above — `LoginForm`/`LoginPage`/`AuthShell`'s default
+tagline only.
+
+**i18n:** new `login` namespace (`src/locales/{en,vi}/login.json`), same shape `register.json`
+established — `tagline`, `heading`, `subheading`, `form.{email,password}.label`,
+`form.password.{showAction,hideAction}`, `form.{submit,submitting,or}`, `form.oauth.*`,
+`form.{newToSportHub,createAccount}`. English values copied verbatim from the previously-hardcoded
+strings, so every existing English-locale test/e2e assertion needed zero changes. Registered in
+`app/i18n.ts`. `LoginForm.tsx`/`LoginPage.tsx` wired via `useTranslation('login')`; `LoginPage`
+passes `tagline={t('tagline')}` into `AuthShell`, mirroring `RegisterPage` exactly — `AuthShell`'s
+own doc comment updated (it previously said "LoginPage never passes this prop," now stale).
+`useLogin.ts`'s client-side fallback error string ("Something went wrong…") deliberately **left
+untranslated**, matching `useRegister.ts`'s own precedent from CLIENT-REF-2 rather than diverging.
+
+**Found and fixed while touching `.storybook/preview.ts`:** the `profile` namespace (CLIENT-REF-3)
+had never been registered in Storybook's own isolated i18next instance — `EditProfileModal` stories
+reviewed under the `vi` toolbar were showing raw untranslated keys. Fixed alongside adding `login`.
+
+**New `src/app/i18n.test.ts`:** the "no missing keys between `en`/`vi`" guard the ticket's own
+"Notes for pickup" asked for — walks every namespace pair's leaf key paths and asserts they match
+exactly, covering all 4 namespaces that exist today (`common`, `register`, `profile`, `login`).
+
+**e2e:** `locale.spec.ts`'s vi-locale test previously asserted still-English `getByLabel('Email')`/
+`getByRole('button', {name:'Log in'})` locators while the page's locale was already `vi` — it only
+passed because nothing on `/login` translated yet. Updated to assert the real Vietnamese labels
+("Chào mừng trở lại", "Mật khẩu", "Đăng nhập").
+
+**Follow-ups filed** (steps 2–4 of the original scope, per its own "prefer splitting" note):
+**CLIENT-I18N-3** (TopBar/NavTabs/shared chrome), **CLIENT-I18N-4** (per-feature pages),
+**CLIENT-I18N-5** (client-mirrored backend enums — closes `I18N_READINESS.md`'s I18N-5).
+
+**Tests:**
+- Vitest: `LoginForm.test.tsx`/`LoginPage.test.tsx` unchanged and green (proves the English strings
+  are byte-identical); new `i18n.test.ts` (4 namespace-pair cases). Scoped run: 48/48 green.
+- `e2e`: every spec touching `/login` re-run directly rather than deferred — `locale.spec.ts` (2/2,
+  including the fixed vi-locale test), `a11y.spec.ts`'s `/login`-scoped subset (7/7),
+  `auth-journey.spec.ts`/`msw-setup.spec.ts`/`post-deep-link.spec.ts`/`admin-route-guard.spec.ts`
+  (13/13), `admin-sports.spec.ts` (6/6). **28/28 total, full `e2e` project not re-run this pickup.**
+- **Visual-regression expectation:** no baselined `/login` surface exists in this repo (confirmed —
+  same finding CLIENT-REF-2 made for `/register`/`/login`), so no baseline change expected; a
+  failing `visual-regression` run on this branch would be pure Windows noise floor, not caused by
+  this change.
+
+**`tsc -b`** and **ESLint** both clean across every touched file.

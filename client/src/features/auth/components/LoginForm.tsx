@@ -1,5 +1,6 @@
 import { IconBrandApple, IconBrandFacebook, IconBrandGoogle, IconEye, IconEyeOff } from '@tabler/icons-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
@@ -19,8 +20,15 @@ interface LoginFormProps {
  * validity relies on native HTML5 constraint validation (required,
  * type="email") rather than a hand-rolled validator — the server response
  * is the actual source of truth for whether credentials are correct.
+ *
+ * CLIENT-I18N-2 (step 1 of that ticket's "translate the rest of the app"): translated via a new
+ * `login` namespace (own namespace, not shared with `register` — their strings don't overlap
+ * beyond structure, same "one namespace per page" convention `app/i18n.ts` documents). The server's
+ * own `errorMessage` (from `useLogin`) stays untranslated — same accepted exception `RegisterForm`
+ * already established (arbitrary backend free text, nothing to translate it into).
  */
 export function LoginForm({ onSubmit, isPending, errorMessage }: LoginFormProps) {
+  const { t } = useTranslation('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -32,8 +40,8 @@ export function LoginForm({ onSubmit, isPending, errorMessage }: LoginFormProps)
 
   return (
     <form onSubmit={handleSubmit} noValidate={false}>
-      <h1 className="mb-1 text-xl font-semibold tracking-tight text-text-primary">Welcome back</h1>
-      <p className="mb-6 text-2sm text-text-secondary">Log in to pick up where you left off.</p>
+      <h1 className="mb-1 text-xl font-semibold tracking-tight text-text-primary">{t('heading')}</h1>
+      <p className="mb-6 text-2sm text-text-secondary">{t('subheading')}</p>
 
       {errorMessage && (
         <div
@@ -45,7 +53,7 @@ export function LoginForm({ onSubmit, isPending, errorMessage }: LoginFormProps)
       )}
 
       <div className="mb-4">
-        <Label htmlFor="login-email">Email</Label>
+        <Label htmlFor="login-email">{t('form.email.label')}</Label>
         <Input
           id="login-email"
           name="email"
@@ -58,7 +66,7 @@ export function LoginForm({ onSubmit, isPending, errorMessage }: LoginFormProps)
       </div>
 
       <div className="mb-5">
-        <Label htmlFor="login-password">Password</Label>
+        <Label htmlFor="login-password">{t('form.password.label')}</Label>
         <div className="relative">
           <Input
             id="login-password"
@@ -72,7 +80,7 @@ export function LoginForm({ onSubmit, isPending, errorMessage }: LoginFormProps)
           />
           <button
             type="button"
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            aria-label={showPassword ? t('form.password.hideAction') : t('form.password.showAction')}
             onClick={() => setShowPassword((prev) => !prev)}
             className="absolute top-1/2 right-1 -translate-y-1/2 cursor-pointer p-2 text-text-muted"
           >
@@ -86,12 +94,12 @@ export function LoginForm({ onSubmit, isPending, errorMessage }: LoginFormProps)
       </div>
 
       <Button type="submit" variant="primary" className="w-full" disabled={isPending}>
-        {isPending ? 'Logging in…' : 'Log in'}
+        {isPending ? t('form.submitting') : t('form.submit')}
       </Button>
 
       <div className="my-5 flex items-center gap-3">
         <div className="border-hairline-t flex-1 border-border" />
-        <span className="text-xs text-text-muted">or</span>
+        <span className="text-xs text-text-muted">{t('form.or')}</span>
         <div className="border-hairline-t flex-1 border-border" />
       </div>
 
@@ -100,22 +108,22 @@ export function LoginForm({ onSubmit, isPending, errorMessage }: LoginFormProps)
             present per the mockup, but non-functional until then. */}
         <Button variant="outline" className="w-full" disabled aria-disabled="true">
           <IconBrandFacebook className="size-4" aria-hidden="true" />
-          Continue with Facebook
+          {t('form.oauth.facebook')}
         </Button>
         <Button variant="outline" className="w-full" disabled aria-disabled="true">
           <IconBrandGoogle className="size-4" aria-hidden="true" />
-          Continue with Google
+          {t('form.oauth.google')}
         </Button>
         <Button variant="outline" className="w-full" disabled aria-disabled="true">
           <IconBrandApple className="size-4" aria-hidden="true" />
-          Continue with Apple
+          {t('form.oauth.apple')}
         </Button>
       </div>
 
       <p className="mt-6 text-center text-2sm text-text-secondary">
-        New to SportHub?{' '}
+        {t('form.newToSportHub')}{' '}
         <Link to="/register" className="text-text-accent hover:underline">
-          Create an account
+          {t('form.createAccount')}
         </Link>
       </p>
     </form>

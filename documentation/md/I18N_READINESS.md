@@ -108,7 +108,8 @@ scoped, not decided here:
 
 ### I18N-5 · Client-mirrored backend enums are also translatable surface
 **Date added:** 2026-08-24
-**Status:** `CANDIDATE` (2026-09-25 — sized into client **CLIENT-I18N-2**, item 4; still unbuilt)
+**Status:** `CANDIDATE` (2026-09-25 — sized into client CLIENT-I18N-2, item 4; 2026-09-29 — split out
+into its own ticket, client **CLIENT-I18N-5**, at CLIENT-I18N-2's pickup; still unbuilt)
 **Source:** the `/workon` skill's "client-visible enum or event type check" — the client hand-mirrors
 ~15 backend enums into display text (e.g. `getNotificationText`, post/comment type rendering)
 
