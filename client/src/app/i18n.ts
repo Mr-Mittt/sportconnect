@@ -1,15 +1,19 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import commonEn from '@/locales/en/common.json';
+import homeFeedEn from '@/locales/en/homeFeed.json';
 import loginEn from '@/locales/en/login.json';
 import profileEn from '@/locales/en/profile.json';
 import registerEn from '@/locales/en/register.json';
+import sharedComponentsEn from '@/locales/en/sharedComponents.json';
 import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
 import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
+import homeFeedVi from '@/locales/vi/homeFeed.json';
 import loginVi from '@/locales/vi/login.json';
 import profileVi from '@/locales/vi/profile.json';
 import registerVi from '@/locales/vi/register.json';
+import sharedComponentsVi from '@/locales/vi/sharedComponents.json';
 import sharedDialogsVi from '@/locales/vi/sharedDialogs.json';
 import shellVi from '@/locales/vi/shell.json';
 import { useLocaleStore } from './localeStore';
@@ -44,6 +48,17 @@ import { useLocaleStore } from './localeStore';
  * caller uses the override yet; built ahead of a concrete need, by explicit user decision at this
  * ticket's pickup.
  *
+ * CLIENT-I18N-4: `homeFeed` holds `HomeFeedPage`'s own (single) string. `sharedComponents` is
+ * `sharedDialogs`'s sibling for non-dialog cross-page pieces under `shared/components/` — `Feed`,
+ * `PostCard`, `CommentSection`, `CommentItem`, `CreatePostForm`, `GroupBroadcasts`,
+ * `HashtagPostsModal`, `TrendingHashtags`, `SportSwitcher` — each also gets the same
+ * `i18nOverridePrefix` + `useOverridableText` pattern CLIENT-I18N-3 established (generalized here
+ * to take an explicit default namespace instead of hardcoding `sharedDialogs`). `relativeTime`
+ * (used by several of the above, plus not-yet-translated `NotificationRow`) stays in `common`
+ * instead, matching `geoLocaleFields`'s "genuinely shared between namespaces" precedent — it's a
+ * plain function, not a component, so it reads the i18next singleton directly rather than via
+ * `useTranslation()` (see `shared/lib/relativeTime.ts`).
+ *
  * Imported once, for its side effect, from `main.tsx` (the app entry) — importing it anywhere
  * else risks a second, redundant `init()` call.
  */
@@ -56,6 +71,8 @@ void i18next.use(initReactI18next).init({
       login: loginEn,
       shell: shellEn,
       sharedDialogs: sharedDialogsEn,
+      homeFeed: homeFeedEn,
+      sharedComponents: sharedComponentsEn,
     },
     vi: {
       common: commonVi,
@@ -64,12 +81,14 @@ void i18next.use(initReactI18next).init({
       login: loginVi,
       shell: shellVi,
       sharedDialogs: sharedDialogsVi,
+      homeFeed: homeFeedVi,
+      sharedComponents: sharedComponentsVi,
     },
   },
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'login', 'shell', 'sharedDialogs'],
+  ns: ['common', 'register', 'profile', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });

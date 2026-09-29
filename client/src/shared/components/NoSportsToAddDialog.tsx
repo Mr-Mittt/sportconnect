@@ -50,7 +50,7 @@ export function NoSportsToAddDialog({
   isRetrying,
   i18nOverridePrefix,
 }: NoSportsToAddDialogProps) {
-  const t = useOverridableText(i18nOverridePrefix);
+  const t = useOverridableText('sharedDialogs', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">

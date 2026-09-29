@@ -24,7 +24,7 @@ export function UnsavedPostConfirmDialog({
   onLeave,
   i18nOverridePrefix,
 }: UnsavedPostConfirmDialogProps) {
-  const t = useOverridableText(i18nOverridePrefix);
+  const t = useOverridableText('sharedDialogs', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onStay()}>
       <DialogContent className="p-4">

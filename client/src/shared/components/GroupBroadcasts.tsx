@@ -1,5 +1,6 @@
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { GroupBroadcast } from '@/shared/types/rail';
@@ -10,6 +11,10 @@ interface GroupBroadcastsProps {
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
+  /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
+   * copy (`sharedComponents.groupBroadcasts.*`) for a specific caller. No current caller passes
+   * this. */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -28,13 +33,15 @@ export function GroupBroadcasts({
   isLoading,
   isError,
   onRetry,
+  i18nOverridePrefix,
 }: GroupBroadcastsProps) {
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   return (
     <section
-      aria-label="Group broadcasts"
+      aria-label={t('groupBroadcasts.ariaLabel')}
       className="border-hairline rounded-xl border-border bg-surface-2 p-3.5"
     >
-      <h2 className="mb-2.5 text-2sm font-medium text-text-primary">Group broadcasts</h2>
+      <h2 className="mb-2.5 text-2sm font-medium text-text-primary">{t('groupBroadcasts.heading')}</h2>
 
       {isLoading ? (
         <div className="flex flex-col gap-2.5">
@@ -49,17 +56,17 @@ export function GroupBroadcasts({
         </div>
       ) : isError ? (
         <div className="flex flex-col items-start gap-1.5 py-1">
-          <p className="text-xs text-text-danger">Couldn't load group broadcasts.</p>
+          <p className="text-xs text-text-danger">{t('groupBroadcasts.loadError')}</p>
           <button
             type="button"
             onClick={onRetry}
             className="cursor-pointer rounded border-hairline border-border px-2.5 py-1 text-xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
-            Retry
+            {t('groupBroadcasts.retry')}
           </button>
         </div>
       ) : broadcasts.length === 0 ? (
-        <div className="py-2 text-xs text-text-muted">No broadcasts from your groups.</div>
+        <div className="py-2 text-xs text-text-muted">{t('groupBroadcasts.empty')}</div>
       ) : (
         <div className="flex flex-col gap-2.5">
           {broadcasts.map((broadcast) => (

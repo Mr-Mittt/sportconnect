@@ -1,4 +1,5 @@
 import type { Post } from '@/features/feed/types';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Feed } from './Feed';
@@ -25,6 +26,10 @@ interface HashtagPostsModalProps {
   isError: boolean;
   onRetry: () => void;
   isLoadMoreError: boolean;
+  /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
+   * copy (`sharedComponents.hashtagPostsModal.*`) for a specific caller. No current caller passes
+   * this. */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -58,12 +63,14 @@ export function HashtagPostsModal({
   isError,
   onRetry,
   isLoadMoreError,
+  i18nOverridePrefix,
 }: HashtagPostsModalProps) {
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader
-          title={tag ?? 'Hashtag'}
+          title={tag ?? t('hashtagPostsModal.fallbackTitle')}
           className="border-hairline-b border-border px-4 py-3"
         />
 
@@ -84,7 +91,9 @@ export function HashtagPostsModal({
             isError={isError}
             onRetry={onRetry}
             isLoadMoreError={isLoadMoreError}
-            emptyMessage={`No posts found for ${tag ?? 'this hashtag'}.`}
+            emptyMessage={t('hashtagPostsModal.emptyMessage', {
+              tag: tag ?? t('hashtagPostsModal.emptyMessageFallbackTag'),
+            })}
           />
         </div>
       </DialogContent>

@@ -34,7 +34,7 @@ export function JoinFeedbackDialog({
   onOpenSession,
   i18nOverridePrefix,
 }: JoinFeedbackDialogProps) {
-  const t = useOverridableText(i18nOverridePrefix);
+  const t = useOverridableText('sharedDialogs', i18nOverridePrefix);
   const messageKey = kind !== null ? MESSAGE_KEY[kind] : null;
 
   return (

@@ -34,7 +34,7 @@ export function ReactivateSportNudgeDialog({
   isError,
   i18nOverridePrefix,
 }: ReactivateSportNudgeDialogProps) {
-  const t = useOverridableText(i18nOverridePrefix);
+  const t = useOverridableText('sharedDialogs', i18nOverridePrefix);
   const prompt =
     mode === 'group'
       ? t('reactivateSportNudge.promptGroup', { sportName })

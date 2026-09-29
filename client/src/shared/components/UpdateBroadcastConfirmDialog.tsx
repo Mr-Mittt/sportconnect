@@ -34,7 +34,7 @@ export function UpdateBroadcastConfirmDialog({
   existingText,
   i18nOverridePrefix,
 }: UpdateBroadcastConfirmDialogProps) {
-  const t = useOverridableText(i18nOverridePrefix);
+  const t = useOverridableText('sharedDialogs', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">

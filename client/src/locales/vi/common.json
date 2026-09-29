@@ -1,5 +1,11 @@
 {
   "logOut": "Đăng xuất",
+  "relativeTime": {
+    "justNow": "vừa xong",
+    "minutesAgo": "{{count}} phút trước",
+    "hoursAgo": "{{count}} giờ trước",
+    "daysAgo": "{{count}} ngày trước"
+  },
   "geoLocaleFields": {
     "language": "Ngôn ngữ",
     "country": "Quốc gia",

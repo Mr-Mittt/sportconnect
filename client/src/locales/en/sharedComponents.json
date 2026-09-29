@@ -1,0 +1,83 @@
+{
+  "feed": {
+    "loadError": "Couldn't load posts.",
+    "retry": "Retry",
+    "loadMoreError": "Couldn't load more posts.",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…",
+    "emptyMessageDefault": "No posts yet for this sport."
+  },
+  "postCard": {
+    "unknownUser": "Unknown User",
+    "postOptions": "Post options",
+    "deletePost": "Delete post",
+    "like": "Like",
+    "unlike": "Unlike",
+    "viewComments": "View comments"
+  },
+  "commentSection": {
+    "unknownUser": "Unknown User",
+    "dialogTitle": "Comments on {{name}}'s post",
+    "close": "Close",
+    "postLoadError": "Couldn't load this post.",
+    "loading": "Loading comments…",
+    "loadError": "Couldn't load comments.",
+    "empty": "No comments yet. Be the first to comment!",
+    "viewMore": "View more comments",
+    "loadingMore": "Loading…",
+    "commentPlaceholder": "Add a comment…",
+    "commentAriaLabel": "Add a comment",
+    "postComment": "Post comment",
+    "like": "Like",
+    "unlike": "Unlike"
+  },
+  "commentItem": {
+    "commentOptions": "Comment options",
+    "edit": "Edit",
+    "delete": "Delete",
+    "like": "Like comment",
+    "unlike": "Unlike comment",
+    "reply": "Reply",
+    "replyPlaceholder": "Reply to {{name}}",
+    "post": "Post"
+  },
+  "createPostForm": {
+    "placeholderWithName": "What's on your mind, {{firstName}}?",
+    "placeholderDefault": "What's on your mind?",
+    "ariaLabel": "Create a post",
+    "photo": "Photo",
+    "location": "Location",
+    "tagSport": "Tag sport",
+    "broadcast": "Broadcast",
+    "post": "Post",
+    "error": "Couldn't create post. Try again."
+  },
+  "groupBroadcasts": {
+    "ariaLabel": "Group broadcasts",
+    "heading": "Group broadcasts",
+    "loadError": "Couldn't load group broadcasts.",
+    "retry": "Retry",
+    "empty": "No broadcasts from your groups."
+  },
+  "hashtagPostsModal": {
+    "fallbackTitle": "Hashtag",
+    "emptyMessage": "No posts found for {{tag}}.",
+    "emptyMessageFallbackTag": "this hashtag"
+  },
+  "trendingHashtags": {
+    "ariaLabel": "Trending hashtags",
+    "heading": "Trending",
+    "loadError": "Couldn't load trending hashtags.",
+    "retry": "Retry",
+    "empty": "Nothing trending right now.",
+    "postCount": "{{count}} posts"
+  },
+  "sportSwitcher": {
+    "groupAriaLabel": "Sport filter",
+    "all": "All",
+    "reactivate": "Reactivate {{sport}}",
+    "atCap": "You have added every sport available",
+    "checking": "Checking…",
+    "addSport": "Add sport"
+  }
+}
