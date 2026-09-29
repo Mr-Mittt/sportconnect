@@ -1,0 +1,16 @@
+{
+  "topBar": {
+    "searchLabel": "Search",
+    "accountMenuLabel": "Your account"
+  },
+  "navTabs": {
+    "primaryLabel": "Primary",
+    "home": "Home",
+    "groups": "Groups",
+    "matches": "Play",
+    "friends": "Friends",
+    "profile": "Profile"
+  },
+  "loading": "Loading…",
+  "comingSoon": "Coming soon."
+}

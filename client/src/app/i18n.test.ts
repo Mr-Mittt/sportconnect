@@ -3,10 +3,14 @@ import commonEn from '@/locales/en/common.json';
 import loginEn from '@/locales/en/login.json';
 import profileEn from '@/locales/en/profile.json';
 import registerEn from '@/locales/en/register.json';
+import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
+import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
 import loginVi from '@/locales/vi/login.json';
 import profileVi from '@/locales/vi/profile.json';
 import registerVi from '@/locales/vi/register.json';
+import sharedDialogsVi from '@/locales/vi/sharedDialogs.json';
+import shellVi from '@/locales/vi/shell.json';
 
 /** Every leaf key path in a nested translation bundle, e.g. `form.email.label`. */
 function leafKeyPaths(bundle: unknown, prefix = ''): string[] {
@@ -33,6 +37,8 @@ const namespacePairs: Record<string, [en: unknown, vi: unknown]> = {
   register: [registerEn, registerVi],
   profile: [profileEn, profileVi],
   login: [loginEn, loginVi],
+  shell: [shellEn, shellVi],
+  sharedDialogs: [sharedDialogsEn, sharedDialogsVi],
 };
 
 describe('i18n bundle key parity (en vs vi)', () => {

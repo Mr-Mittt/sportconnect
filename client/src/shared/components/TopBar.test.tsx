@@ -75,7 +75,7 @@ describe('TopBar', () => {
     await i18n.changeLanguage('vi');
     render(<TopBar user={user} onLogout={vi.fn()} notificationBell={null} />);
 
-    await player.click(screen.getByRole('button', { name: 'Your account' }));
+    await player.click(screen.getByRole('button', { name: 'Tài khoản của bạn' }));
 
     expect(screen.getByRole('menuitem', { name: 'Đăng xuất' })).toBeInTheDocument();
   });

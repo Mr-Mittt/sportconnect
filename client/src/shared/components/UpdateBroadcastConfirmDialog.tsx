@@ -1,3 +1,4 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 
@@ -10,6 +11,9 @@ interface UpdateBroadcastConfirmDialogProps {
   /** The selected group's current active broadcast message, shown for
    * context so the admin knows what they're about to replace. */
   existingText: string;
+  /** CLIENT-I18N-3: i18next `"namespace:key.path"` prefix overriding this dialog's default copy
+   * (`sharedDialogs.updateBroadcast.*`) for a specific caller. No current caller passes this. */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -28,29 +32,26 @@ export function UpdateBroadcastConfirmDialog({
   isSubmitting,
   isError,
   existingText,
+  i18nOverridePrefix,
 }: UpdateBroadcastConfirmDialogProps) {
+  const t = useOverridableText(i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">
-        <DialogHeader title="Update the active broadcast?" className="mb-3" />
-        <p className="mb-2 text-2sm text-text-secondary">
-          This group already has an active broadcast. Posting a new one will replace it instead of
-          creating a second broadcast:
-        </p>
+        <DialogHeader title={t('updateBroadcast.title')} className="mb-3" />
+        <p className="mb-2 text-2sm text-text-secondary">{t('updateBroadcast.body')}</p>
         <p className="border-hairline mb-3 rounded-lg border-border bg-surface-1 p-2.5 text-2sm text-text-primary">
           {existingText}
         </p>
         {isError && (
-          <p className="mb-2 text-2sm text-text-danger">
-            Couldn't update the broadcast. Please try again.
-          </p>
+          <p className="mb-2 text-2sm text-text-danger">{t('updateBroadcast.error')}</p>
         )}
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
-            Cancel
+            {t('updateBroadcast.cancel')}
           </Button>
           <Button variant="primary" size="sm" onClick={onConfirm} disabled={isSubmitting}>
-            {isSubmitting ? 'Updating…' : 'Update broadcast'}
+            {isSubmitting ? t('updateBroadcast.updating') : t('updateBroadcast.confirm')}
           </Button>
         </div>
       </DialogContent>

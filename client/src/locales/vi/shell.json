@@ -1,0 +1,16 @@
+{
+  "topBar": {
+    "searchLabel": "Tìm kiếm",
+    "accountMenuLabel": "Tài khoản của bạn"
+  },
+  "navTabs": {
+    "primaryLabel": "Điều hướng chính",
+    "home": "Trang chủ",
+    "groups": "Nhóm",
+    "matches": "Chơi",
+    "friends": "Bạn bè",
+    "profile": "Hồ sơ"
+  },
+  "loading": "Đang tải…",
+  "comingSoon": "Sắp ra mắt."
+}

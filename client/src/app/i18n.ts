@@ -4,10 +4,14 @@ import commonEn from '@/locales/en/common.json';
 import loginEn from '@/locales/en/login.json';
 import profileEn from '@/locales/en/profile.json';
 import registerEn from '@/locales/en/register.json';
+import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
+import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
 import loginVi from '@/locales/vi/login.json';
 import profileVi from '@/locales/vi/profile.json';
 import registerVi from '@/locales/vi/register.json';
+import sharedDialogsVi from '@/locales/vi/sharedDialogs.json';
+import shellVi from '@/locales/vi/shell.json';
 import { useLocaleStore } from './localeStore';
 
 /**
@@ -27,18 +31,45 @@ import { useLocaleStore } from './localeStore';
  * (`useTranslation('register')` + `t('form.email.label')`, not `t('register.form.email.label')`)
  * since the namespace already provides that grouping.
  *
+ * CLIENT-I18N-3: `shell` is the one exception to "one namespace per page" — it holds `TopBar`/
+ * `NavTabs`/`AuthLoadingState`/`ComingSoonPage`'s own strings, i.e. the app chrome every
+ * authenticated route renders, treated as its own "feature" rather than folded into `common`
+ * (reserved for fragments genuinely shared *between* feature namespaces, like `geoLocaleFields`).
+ * `sharedDialogs` holds default copy for the 6 dialog components under `shared/components/` that
+ * render from more than one page's flow (join feedback, sport-reactivate nudge, unsaved-post
+ * guard, add-sport intro, no-sports-to-add, update-broadcast). Each of those 6 accepts an optional
+ * `i18nOverridePrefix` prop (i18next `"namespace:key.path"` syntax) that a caller can pass to
+ * override specific strings via `useOverridableText` (`shared/lib/useOverridableText.ts`) — i18next's
+ * own key-fallback array (`t([override, default])`), not custom resolution logic. No current
+ * caller uses the override yet; built ahead of a concrete need, by explicit user decision at this
+ * ticket's pickup.
+ *
  * Imported once, for its side effect, from `main.tsx` (the app entry) — importing it anywhere
  * else risks a second, redundant `init()` call.
  */
 void i18next.use(initReactI18next).init({
   resources: {
-    en: { common: commonEn, register: registerEn, profile: profileEn, login: loginEn },
-    vi: { common: commonVi, register: registerVi, profile: profileVi, login: loginVi },
+    en: {
+      common: commonEn,
+      register: registerEn,
+      profile: profileEn,
+      login: loginEn,
+      shell: shellEn,
+      sharedDialogs: sharedDialogsEn,
+    },
+    vi: {
+      common: commonVi,
+      register: registerVi,
+      profile: profileVi,
+      login: loginVi,
+      shell: shellVi,
+      sharedDialogs: sharedDialogsVi,
+    },
   },
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'login'],
+  ns: ['common', 'register', 'profile', 'login', 'shell', 'sharedDialogs'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });

@@ -1,3 +1,4 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 
@@ -13,6 +14,9 @@ interface NoSportsToAddDialogProps {
   /** Retries the catalogue read. Only rendered in the unavailable state. */
   onRetry: () => void;
   isRetrying: boolean;
+  /** CLIENT-I18N-3: i18next `"namespace:key.path"` prefix overriding this dialog's default copy
+   * (`sharedDialogs.noSportsToAdd.*`) for a specific caller. No current caller passes this. */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -44,33 +48,39 @@ export function NoSportsToAddDialog({
   isCatalogUnavailable,
   onRetry,
   isRetrying,
+  i18nOverridePrefix,
 }: NoSportsToAddDialogProps) {
+  const t = useOverridableText(i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">
         <DialogHeader
-          title={isCatalogUnavailable ? 'Could not load sports' : 'Nothing left to add'}
+          title={
+            isCatalogUnavailable
+              ? t('noSportsToAdd.unavailableTitle')
+              : t('noSportsToAdd.completeTitle')
+          }
           className="mb-3"
           onCloseClick={onClose}
         />
         <p className="mb-3 text-2sm text-text-secondary">
           {isCatalogUnavailable
-            ? 'We could not check which sports are available right now. Please try again.'
-            : 'You have added every sport available right now. New sports show up here as soon as they are added.'}
+            ? t('noSportsToAdd.unavailableBody')
+            : t('noSportsToAdd.completeBody')}
         </p>
         <div className="flex justify-end gap-2">
           {isCatalogUnavailable ? (
             <>
               <Button variant="outline" size="sm" onClick={onClose}>
-                Close
+                {t('noSportsToAdd.close')}
               </Button>
               <Button variant="primary" size="sm" onClick={onRetry} disabled={isRetrying}>
-                {isRetrying ? 'Retrying…' : 'Retry'}
+                {isRetrying ? t('noSportsToAdd.retrying') : t('noSportsToAdd.retry')}
               </Button>
             </>
           ) : (
             <Button variant="primary" size="sm" onClick={onClose}>
-              OK
+              {t('noSportsToAdd.ok')}
             </Button>
           )}
         </div>

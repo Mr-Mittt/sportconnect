@@ -6,6 +6,7 @@ import {
   IconUsersGroup,
   type Icon,
 } from '@tabler/icons-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 
 export type NavTabKey = 'home' | 'friends' | 'groups' | 'matches' | 'profile';
@@ -15,12 +16,12 @@ interface NavTabsProps {
   onChange: (tab: NavTabKey) => void;
 }
 
-const tabs: ReadonlyArray<{ key: NavTabKey; label: string; TabIcon: Icon }> = [
-  { key: 'home', label: 'Home', TabIcon: IconHome },
-  { key: 'groups', label: 'Groups', TabIcon: IconUsersGroup },
-  { key: 'matches', label: 'Play', TabIcon: IconCalendarEvent },
-  { key: 'friends', label: 'Friends', TabIcon: IconUsers },
-  { key: 'profile', label: 'Profile', TabIcon: IconUser },
+const tabs: ReadonlyArray<{ key: NavTabKey; labelKey: string; TabIcon: Icon }> = [
+  { key: 'home', labelKey: 'shell:navTabs.home', TabIcon: IconHome },
+  { key: 'groups', labelKey: 'shell:navTabs.groups', TabIcon: IconUsersGroup },
+  { key: 'matches', labelKey: 'shell:navTabs.matches', TabIcon: IconCalendarEvent },
+  { key: 'friends', labelKey: 'shell:navTabs.friends', TabIcon: IconUsers },
+  { key: 'profile', labelKey: 'shell:navTabs.profile', TabIcon: IconUser },
 ];
 
 /**
@@ -28,12 +29,17 @@ const tabs: ReadonlyArray<{ key: NavTabKey; label: string; TabIcon: Icon }> = [
  * decides what onChange does.
  */
 export function NavTabs({ active, onChange }: NavTabsProps) {
+  const { t } = useTranslation('shell');
   return (
     // overflow-x-auto: five tabs outgrow a 375px viewport (the mockup never
     // tested below 680px) — the row scrolls within itself rather than the page
     // overflowing sideways (HF-8)
-    <nav aria-label="Primary" className="border-hairline-b flex gap-1.5 overflow-x-auto border-border pb-2">
-      {tabs.map(({ key, label, TabIcon }) => {
+    <nav
+      aria-label={t('navTabs.primaryLabel')}
+      className="border-hairline-b flex gap-1.5 overflow-x-auto border-border pb-2"
+    >
+      {tabs.map(({ key, labelKey, TabIcon }) => {
+        const label = t(labelKey);
         const isActive = key === active;
         return (
           <button

@@ -1,0 +1,52 @@
+{
+  "joinFeedback": {
+    "joined": {
+      "title": "Bạn đã tham gia buổi chơi",
+      "body": "Bạn đã tham gia buổi chơi thành công. Chúc bạn chơi vui!"
+    },
+    "requested": {
+      "title": "Đã gửi yêu cầu tham gia",
+      "body": "Đang chờ chủ buổi chơi phê duyệt. Bạn có thể trò chuyện trong lúc chờ."
+    },
+    "gotIt": "Đã hiểu",
+    "openSession": "Mở buổi chơi"
+  },
+  "reactivateSportNudge": {
+    "dialogTitle": "Kích hoạt lại hồ sơ {{sportName}} của bạn?",
+    "promptSportPill": "Hồ sơ môn thể thao này đang tạm ngưng. Bạn muốn kích hoạt lại không?",
+    "promptGroup": "Đây là một nhóm {{sportName}}, nhưng hồ sơ {{sportName}} của bạn đang tạm ngưng. Bạn muốn kích hoạt lại không?",
+    "error": "Không thể kích hoạt lại {{sportName}}. Vui lòng thử lại.",
+    "later": "Để sau",
+    "yes": "Đồng ý",
+    "reactivating": "Đang kích hoạt lại…"
+  },
+  "unsavedPost": {
+    "title": "Rời đi mà không đăng bài?",
+    "body": "Bạn có một bài viết chưa lưu. Rời đi ngay bây giờ sẽ mất nội dung bạn đã nhập.",
+    "keepEditing": "Tiếp tục chỉnh sửa",
+    "leave": "Rời đi"
+  },
+  "addSportIntro": {
+    "title": "Thêm môn thể thao này vào hồ sơ của bạn?",
+    "body": "Đây là nhóm {{sportName}} — chấp nhận lời mời này sẽ thêm môn thể thao này vào hồ sơ của bạn.",
+    "ok": "Đồng ý"
+  },
+  "noSportsToAdd": {
+    "unavailableTitle": "Không thể tải danh sách môn thể thao",
+    "completeTitle": "Không còn môn nào để thêm",
+    "unavailableBody": "Chúng tôi không thể kiểm tra những môn thể thao hiện có. Vui lòng thử lại.",
+    "completeBody": "Bạn đã thêm tất cả môn thể thao hiện có. Môn thể thao mới sẽ xuất hiện ở đây ngay khi được thêm vào.",
+    "close": "Đóng",
+    "retry": "Thử lại",
+    "retrying": "Đang thử lại…",
+    "ok": "Đồng ý"
+  },
+  "updateBroadcast": {
+    "title": "Cập nhật thông báo đang hoạt động?",
+    "body": "Nhóm này đã có một thông báo đang hoạt động. Đăng một thông báo mới sẽ thay thế thông báo cũ thay vì tạo thêm thông báo thứ hai:",
+    "error": "Không thể cập nhật thông báo. Vui lòng thử lại.",
+    "cancel": "Hủy",
+    "confirm": "Cập nhật thông báo",
+    "updating": "Đang cập nhật…"
+  }
+}

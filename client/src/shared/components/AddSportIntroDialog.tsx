@@ -1,3 +1,4 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 
@@ -6,6 +7,9 @@ interface AddSportIntroDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   sportName: string;
+  /** CLIENT-I18N-3: i18next `"namespace:key.path"` prefix overriding this dialog's default copy
+   * (`sharedDialogs.addSportIntro.*`) for a specific caller. No current caller passes this. */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -21,17 +25,19 @@ export function AddSportIntroDialog({
   onClose,
   onConfirm,
   sportName,
+  i18nOverridePrefix,
 }: AddSportIntroDialogProps) {
+  const t = useOverridableText(i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">
-        <DialogHeader title="Add this sport to your profile?" className="mb-3" />
+        <DialogHeader title={t('addSportIntro.title')} className="mb-3" />
         <p className="mb-3 text-2sm text-text-secondary">
-          This {sportName} group — accepting this invitation will add this sport to your profile.
+          {t('addSportIntro.body', { sportName })}
         </p>
         <div className="flex justify-end">
           <Button variant="primary" size="sm" onClick={onConfirm}>
-            OK
+            {t('addSportIntro.ok')}
           </Button>
         </div>
       </DialogContent>

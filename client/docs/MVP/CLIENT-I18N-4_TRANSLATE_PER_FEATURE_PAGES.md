@@ -20,6 +20,20 @@ picked up**, same "prefer splitting" note the parent ticket (`CLIENT-I18N-2`) it
 
 ## Notes for pickup
 
+- **User directive (2026-09-29, at `CLIENT-I18N-3`'s pickup, carried forward here since that
+  ticket's own scope stayed narrow — chrome + 6 cross-page dialogs only):** this ticket covers
+  every remaining `shared/components/` file too, not just the 7 pages' own `<Feature>Page.tsx`
+  files — `Feed`, `PostCard`, `CommentSection`, `EditProfileModal`, `AddSportModal`/`AddSportFields`,
+  `GroupBroadcasts`, `HashtagPostsModal`, `SessionCard`, `SportSwitcher`, `ProfileHeader`,
+  `TrendingHashtags`, `UpcomingMatches`, the `attributeFields/` subfolder, and anything else under
+  that folder still holding hardcoded English. **No hardcoded text left anywhere in scope.** Apply
+  `useOverridableText` (`src/shared/lib/useOverridableText.ts`, built at `CLIENT-I18N-3`) as the
+  standard pattern for any component a caller could plausibly want different wording from — not
+  just the 6 dialogs `CLIENT-I18N-3` already covered. A component with only one call site and no
+  real override need yet still gets a default key in the right namespace; add the
+  `i18nOverridePrefix` prop preemptively when the component is the kind of thing (a dialog/modal/
+  confirm pattern) `CLIENT-I18N-3` applied it to on principle, not only when a second caller already
+  exists.
 - **Read `documentation/md/I18N_READINESS.md`'s I18N-10 before starting.** Translating static JSX
   strings is not the whole job — every form in scope (and there are several across these 7 features)
   needs its own check for (a) native HTML5 constraint validation rendering an untranslated browser
