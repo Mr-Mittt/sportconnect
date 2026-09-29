@@ -1,0 +1,32 @@
+{
+  "tagline": "Your teams, matches, and crew — all in one place.",
+  "heading": "Welcome back",
+  "subheading": "Log in to pick up where you left off.",
+  "form": {
+    "email": {
+      "label": "Email",
+      "error": {
+        "required": "Email is required.",
+        "invalid": "Enter a valid email address."
+      }
+    },
+    "password": {
+      "label": "Password",
+      "showAction": "Show password",
+      "hideAction": "Hide password",
+      "error": {
+        "required": "Password is required."
+      }
+    },
+    "submit": "Log in",
+    "submitting": "Logging in…",
+    "or": "or",
+    "oauth": {
+      "facebook": "Continue with Facebook",
+      "google": "Continue with Google",
+      "apple": "Continue with Apple"
+    },
+    "newToSportHub": "New to SportHub?",
+    "createAccount": "Create an account"
+  }
+}

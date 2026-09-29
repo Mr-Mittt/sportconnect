@@ -108,7 +108,8 @@ scoped, not decided here:
 
 ### I18N-5 · Client-mirrored backend enums are also translatable surface
 **Date added:** 2026-08-24
-**Status:** `CANDIDATE` (2026-09-25 — sized into client **CLIENT-I18N-2**, item 4; still unbuilt)
+**Status:** `CANDIDATE` (2026-09-25 — sized into client CLIENT-I18N-2, item 4; 2026-09-29 — split out
+into its own ticket, client **CLIENT-I18N-5**, at CLIENT-I18N-2's pickup; still unbuilt)
 **Source:** the `/workon` skill's "client-visible enum or event type check" — the client hand-mirrors
 ~15 backend enums into display text (e.g. `getNotificationText`, post/comment type rendering)
 
@@ -156,3 +157,34 @@ region names for that locale (a column or a translations table) in addition to a
 Vitest/RTL assertions match many literal English strings. The test setup initialises i18n with `en` so existing tests keep
 passing; new tests that exercise Vietnamese select it explicitly and prefer roles/labels over raw text. A small "no missing
 keys between `en` and `vi`" test guards bundle drift.
+
+### I18N-10 · Translating a form is not just its static JSX strings — validation and error paths need their own check
+**Date added:** 2026-09-29
+**Status:** `CONFIRMED`
+**Source:** found twice independently — `RegisterForm` (fixed at CLIENT-REF-2 pickup) and, missed
+the *second* time, `LoginForm` (translated at CLIENT-I18N-2 step 1, 2026-09-29; the native-validation
+gap below was caught by the user in review of that same PR and fixed as a same-branch follow-up
+commit, not a separate ticket)
+
+Two failure modes a plain "swap hardcoded strings for `t()`" pass does not catch, because neither
+one is a string literal sitting in the component's own JSX:
+
+1. **Native HTML5 constraint validation renders in the browser's own language, never the app's
+   locale.** Any `<input required>` / `type="email"` with `noValidate` unset triggers the browser's
+   own "Please fill out this field" / "Please enter an email address" popup on submit — that text
+   comes from the browser's UI language setting, completely bypassing `i18next`. Switching the app
+   to Vietnamese does nothing to it. Fix (established pattern, both `RegisterForm` and `LoginForm`
+   now use it): `noValidate` on the `<form>`, a local `hasAttemptedSubmit` flag set on a failed
+   submit, translated inline error text next to each label computed from current state, and
+   `aria-required="true"` replacing the native `required` attribute for the same a11y signal.
+2. **Server-response error messages are deliberately left untranslated (I18N-4, still `CANDIDATE`
+   — no decision made yet on *how* to eventually fix it).** This is a real, accepted gap, not an
+   oversight — but a translation ticket must say so *explicitly* every time it touches a form with
+   one, not silently inherit the assumption. Stating it is the whole point: it keeps I18N-4 a
+   single, trackable "not yet done," instead of N separate silent gaps nobody can find later.
+
+**Checklist for every future translation ticket** (`CLIENT-I18N-3`/`4`/`5` and anything after them)
+touching a form: for each one, explicitly check (a) does it use native `required`/constraint
+validation, and if so convert it to the pattern above; (b) does it render a server error message
+verbatim, and if so say so in the ticket's summary as a deliberate, known I18N-4 gap rather than
+leaving it unstated. Don't assume "I translated the visible strings" is the whole job.

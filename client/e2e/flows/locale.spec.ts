@@ -7,6 +7,11 @@ import { expect, test } from '../mocks/test.ts';
  * No language-picker UI ships in this ticket (CLIENT-REF-1/3 build one later), so "switching
  * locale" here means writing `localeStore`'s persisted key directly, via `addInitScript` —
  * exactly what a future picker's `setLocale` call would do to the same storage key.
+ *
+ * CLIENT-I18N-2 (step 1): the vi-locale test below now asserts the real Vietnamese `LoginForm`
+ * labels — until this ticket, `/login` never translated anything, so it incidentally passed with
+ * the still-English `getByLabel('Email')`/`getByRole('button', {name:'Log in'})` locators even
+ * with `vi` active. Those are genuinely different strings now, not just a stale comment.
  */
 
 test('Accept-Language defaults to en with nothing stored', async ({ page }) => {
@@ -47,10 +52,15 @@ test('Accept-Language follows a locale stored before the app loads', async ({ pa
 
   await page.goto('/login');
   await expect(page.locator('html')).toHaveAttribute('lang', 'vi');
+  // CLIENT-I18N-2: confirms the page actually rendered translated, not just the header changing.
+  await expect(page.getByRole('heading', { name: 'Chào mừng trở lại' })).toBeVisible();
 
+  // "Email" stays "Email" in the vi bundle (same convention as sign-up's Email field).
+  // exact: true on both — "Mật khẩu" is a substring of the toggle button's "Hiện mật khẩu"/"Ẩn
+  // mật khẩu" aria-label, same collision the English locator comment already calls out above.
   await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
-  await page.getByLabel('Password', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Log in' }).click();
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
+  await page.getByRole('button', { name: 'Đăng nhập' }).click();
   await page.waitForURL('/');
 
   await expect(page.getByRole('heading', { name: 'Home Feed' })).toBeVisible();
