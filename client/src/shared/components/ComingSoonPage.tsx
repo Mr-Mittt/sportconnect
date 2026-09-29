@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 interface ComingSoonPageProps {
   title: string;
 }
@@ -9,10 +11,11 @@ interface ComingSoonPageProps {
 // own `<main>` again — reintroduce it there if a future route-level use
 // returns, rather than assuming this div is always the right wrapper.
 export function ComingSoonPage({ title }: ComingSoonPageProps) {
+  const { t } = useTranslation('shell');
   return (
     <div className="py-4">
       <h1 className="text-2xl font-bold text-text-primary">{title}</h1>
-      <p className="mt-2 text-text-muted">Coming soon.</p>
+      <p className="mt-2 text-text-muted">{t('comingSoon')}</p>
     </div>
   );
 }

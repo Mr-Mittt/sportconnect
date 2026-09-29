@@ -32,14 +32,17 @@ interface TopBarProps {
 }
 
 export function TopBar({ user, onSearchClick, onLogout, notificationBell }: TopBarProps) {
-  // CLIENT-I18N-1's proof-of-integration string — the app's other real, visible strings stay
-  // English until CLIENT-REF-2/3 (sign-up, profile edit) and CLIENT-I18N-2 (everything else).
-  const { t } = useTranslation();
+  const { t } = useTranslation(['shell', 'common']);
   return (
     <header className="flex items-center justify-between py-3">
       <div className="text-lg font-medium text-text-primary">SportHub</div>
       <div className="flex items-center gap-1.5">
-        <Button variant="ghost" size="icon" aria-label="Search" onClick={onSearchClick}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t('shell:topBar.searchLabel')}
+          onClick={onSearchClick}
+        >
           <IconSearch className="size-5" aria-hidden="true" />
         </Button>
         {notificationBell}
@@ -47,7 +50,7 @@ export function TopBar({ user, onSearchClick, onLogout, notificationBell }: TopB
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              aria-label="Your account"
+              aria-label={t('shell:topBar.accountMenuLabel')}
               className="flex cursor-pointer items-center gap-0.5 rounded-full py-1 pr-1 pl-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
             >
               <Avatar>
@@ -69,7 +72,7 @@ export function TopBar({ user, onSearchClick, onLogout, notificationBell }: TopB
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onLogout}>
               <IconLogout className="size-4 text-text-secondary" aria-hidden="true" />
-              {t('logOut')}
+              {t('common:logOut')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

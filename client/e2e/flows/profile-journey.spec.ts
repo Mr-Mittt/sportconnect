@@ -176,7 +176,10 @@ test('Profile journey', async ({ page, context }) => {
   await test.step('7. Memories tab — renders the ComingSoonPage placeholder', async () => {
     await page.getByRole('tab', { name: 'Memories' }).click();
     await expect(page.getByRole('heading', { name: 'Memories' })).toBeVisible();
-    await expect(page.getByText('Coming soon.')).toBeVisible();
+    // CLIENT-I18N-3: ComingSoonPage's own copy is now translated — step 6 above already left the
+    // UI locale on `vi` for the rest of this test (the "Memories" tab/heading are per-feature
+    // strings, CLIENT-I18N-4's scope, so they stay English until that ticket).
+    await expect(page.getByText('Sắp ra mắt.')).toBeVisible();
   });
 });
 

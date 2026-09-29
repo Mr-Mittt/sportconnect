@@ -1,0 +1,52 @@
+{
+  "joinFeedback": {
+    "joined": {
+      "title": "You joined the session",
+      "body": "You successfully joined the session. Enjoy your games!"
+    },
+    "requested": {
+      "title": "Join request sent",
+      "body": "Waiting for host approval. Feel free to chat while you wait."
+    },
+    "gotIt": "Got it",
+    "openSession": "Open session"
+  },
+  "reactivateSportNudge": {
+    "dialogTitle": "Reactivate your {{sportName}} profile?",
+    "promptSportPill": "This sport profile is down. Do you want to bring it up?",
+    "promptGroup": "This is a {{sportName}} group, but your {{sportName}} profile is down. Do you want to bring it up?",
+    "error": "Couldn't bring {{sportName}} back up. Please try again.",
+    "later": "Later",
+    "yes": "Yes",
+    "reactivating": "Bringing it up…"
+  },
+  "unsavedPost": {
+    "title": "Leave without posting?",
+    "body": "You have an unsaved post draft. Leaving now will lose what you typed.",
+    "keepEditing": "Keep editing",
+    "leave": "Leave"
+  },
+  "addSportIntro": {
+    "title": "Add this sport to your profile?",
+    "body": "This {{sportName}} group — accepting this invitation will add this sport to your profile.",
+    "ok": "OK"
+  },
+  "noSportsToAdd": {
+    "unavailableTitle": "Could not load sports",
+    "completeTitle": "Nothing left to add",
+    "unavailableBody": "We could not check which sports are available right now. Please try again.",
+    "completeBody": "You have added every sport available right now. New sports show up here as soon as they are added.",
+    "close": "Close",
+    "retry": "Retry",
+    "retrying": "Retrying…",
+    "ok": "OK"
+  },
+  "updateBroadcast": {
+    "title": "Update the active broadcast?",
+    "body": "This group already has an active broadcast. Posting a new one will replace it instead of creating a second broadcast:",
+    "error": "Couldn't update the broadcast. Please try again.",
+    "cancel": "Cancel",
+    "confirm": "Update broadcast",
+    "updating": "Updating…"
+  }
+}

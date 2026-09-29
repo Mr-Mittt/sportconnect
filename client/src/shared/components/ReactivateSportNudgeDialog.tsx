@@ -1,3 +1,4 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/dialog';
 
@@ -11,6 +12,9 @@ interface ReactivateSportNudgeDialogProps {
   onReactivate: () => void;
   isReactivating: boolean;
   isError: boolean;
+  /** CLIENT-I18N-3: i18next `"namespace:key.path"` prefix overriding this dialog's default copy
+   * (`sharedDialogs.reactivateSportNudge.*`) for a specific caller. No current caller passes this. */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -28,20 +32,24 @@ export function ReactivateSportNudgeDialog({
   onReactivate,
   isReactivating,
   isError,
+  i18nOverridePrefix,
 }: ReactivateSportNudgeDialogProps) {
+  const t = useOverridableText(i18nOverridePrefix);
   const prompt =
     mode === 'group'
-      ? `This is a ${sportName} group, but your ${sportName} profile is down. Do you want to bring it up?`
-      : 'This sport profile is down. Do you want to bring it up?';
+      ? t('reactivateSportNudge.promptGroup', { sportName })
+      : t('reactivateSportNudge.promptSportPill');
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onLater()}>
       <DialogContent centered className="p-4" onOpenAutoFocus={(event) => event.preventDefault()}>
-        <DialogTitle className="sr-only">Reactivate your {sportName} profile?</DialogTitle>
+        <DialogTitle className="sr-only">
+          {t('reactivateSportNudge.dialogTitle', { sportName })}
+        </DialogTitle>
         <p className="mb-3 text-sm font-medium text-text-primary">{prompt}</p>
         {isError && (
           <p role="alert" className="mb-2 text-2sm text-text-danger">
-            Couldn&apos;t bring {sportName} back up. Please try again.
+            {t('reactivateSportNudge.error', { sportName })}
           </p>
         )}
         <div className="flex justify-end gap-2">
@@ -52,7 +60,7 @@ export function ReactivateSportNudgeDialog({
             disabled={isReactivating}
             className="min-w-20"
           >
-            Later
+            {t('reactivateSportNudge.later')}
           </Button>
           <Button
             variant="primary"
@@ -61,7 +69,7 @@ export function ReactivateSportNudgeDialog({
             disabled={isReactivating}
             className="min-w-20"
           >
-            {isReactivating ? 'Bringing it up…' : 'Yes'}
+            {isReactivating ? t('reactivateSportNudge.reactivating') : t('reactivateSportNudge.yes')}
           </Button>
         </div>
       </DialogContent>
