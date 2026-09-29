@@ -1,3 +1,4 @@
+import i18next from 'i18next';
 import { useState } from 'react';
 import { IconChevronDown } from '@tabler/icons-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
@@ -59,6 +60,13 @@ interface FriendProfilePanelProps {
  * just static "Coming soon" text). Local state, not lifted to the page: the
  * parent remounts this component via `key={person.id}` on every selection
  * change, which already resets it for free per person.
+ *
+ * CLIENT-I18N-5: the `NONE`/`PENDING_SENT`/`PENDING_RECEIVED` action text above — the strings that
+ * literally differ per `friendshipStatus` value — read `enums:friendship.*` via the i18next
+ * singleton directly (`i18next.t()`), matching this ticket's other client-mirrored-enum call
+ * sites. The `FRIENDS`-state "Friend"/"Unfriend" menu below and "Achievements"/"Coming soon." are
+ * general Friends-page copy, not a per-status label, so they stay out of this ticket's scope
+ * (`CLIENT-I18N-6`'s job when that feature's Friends slice is picked up).
  */
 export function FriendProfilePanel({
   person,
@@ -132,24 +140,24 @@ export function FriendProfilePanel({
         <div className="border-hairline-t flex shrink-0 justify-end border-border px-4 py-3">
           {person.friendshipStatus === 'NONE' && (
             <Button type="button" variant="primary" onClick={onSendRequest} disabled={isActionPending}>
-              Send a friend request
+              {i18next.t('enums:friendship.sendRequest')}
             </Button>
           )}
           {person.friendshipStatus === 'PENDING_SENT' && (
             <div className="flex items-center gap-2">
-              <span className="text-2xs text-text-muted">Waiting for response</span>
+              <span className="text-2xs text-text-muted">{i18next.t('enums:friendship.waitingForResponse')}</span>
               <Button type="button" variant="outline" onClick={onCancel} disabled={isActionPending}>
-                Cancel request
+                {i18next.t('enums:friendship.cancelRequest')}
               </Button>
             </div>
           )}
           {person.friendshipStatus === 'PENDING_RECEIVED' && (
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={onDecline} disabled={isActionPending}>
-                Decline
+                {i18next.t('enums:friendship.decline')}
               </Button>
               <Button type="button" variant="primary" onClick={onAccept} disabled={isActionPending}>
-                Accept
+                {i18next.t('enums:friendship.accept')}
               </Button>
             </div>
           )}

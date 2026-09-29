@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- shared schema-value rendering helpers, not
    a component module; `AttributeList` / `GridPairs` are private-ish presentational helpers used by
    the readers here and by `SessionAttributesSummary`. Fast-refresh granularity is irrelevant. */
+import i18next from 'i18next';
 import type { ReactNode } from 'react';
 import type {
   ResolvedAttributeLayout,
@@ -20,7 +21,14 @@ import { normalizeLayout, pickLayoutId } from './layout';
  * `DEFINITION` arrangement (`stacked`/`inline`/`grid-2`) and the `DEFINITION_LIST` presentation
  * (`cards`/`table`/`accordion`). Absent `layout` ⇒ the exact pre-SPORT-15 markup. One pure
  * function per `SportAttributeType`, keyed in `valueRenderers`; an unknown type is simply absent
- * from the map and renders nothing. */
+ * from the map and renders nothing.
+ *
+ * CLIENT-I18N-5: `BOOLEAN`'s Yes/No and the `DEFINITION_LIST` accordion's "Item N" summary read
+ * `enums:attributeValues.*` via the i18next singleton directly (`i18next.t()`), not
+ * `useTranslation()` — these are plain functions, not components, same pattern as
+ * `shared/lib/relativeTime.ts`. The `LIST_DISPLAY_IDS`/`LIST_EDIT_IDS` layout identifiers
+ * (`chips`/`comma`/`bullets`/etc.) are internal ids that pick a JSX shape, never rendered as text,
+ * so they stay out of scope. */
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -128,7 +136,10 @@ const valueRenderers: Record<SportAttributeType, (ctx: ValueContext) => ReactNod
     const { format } = normalizeLayout(layout, 'number');
     return format != null ? formatAttributeValue(value, 'NUMBER', format) : String(value);
   },
-  BOOLEAN: ({ value }) => (typeof value === 'boolean' ? (value ? 'Yes' : 'No') : null),
+  BOOLEAN: ({ value }) =>
+    typeof value === 'boolean'
+      ? i18next.t(value ? 'enums:attributeValues.yes' : 'enums:attributeValues.no')
+      : null,
   ENUM: ({ value, options }) =>
     typeof value === 'string' && value !== '' ? optionLabel(options, value) : null,
   LIST: ({ value, options, layout, context }) => {
@@ -252,10 +263,14 @@ function accordionSummary(
     if (field.hidden === true) continue;
     if (field.type !== 'STRING' && field.type !== 'NUMBER') continue;
     const value = record[field.key];
-    if (typeof value === 'string' && value.trim() !== '') return `Item ${index + 1} · ${value}`;
-    if (typeof value === 'number' && Number.isFinite(value)) return `Item ${index + 1} · ${value}`;
+    if (typeof value === 'string' && value.trim() !== '') {
+      return i18next.t('enums:attributeValues.itemWithValue', { index: index + 1, value });
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return i18next.t('enums:attributeValues.itemWithValue', { index: index + 1, value });
+    }
   }
-  return `Item ${index + 1}`;
+  return i18next.t('enums:attributeValues.item', { index: index + 1 });
 }
 
 /**

@@ -5,7 +5,7 @@ import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { formatParticipantCount } from '@/shared/lib/sessionCapacity';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import { getParticipationAction } from '@/shared/lib/sessionParticipation';
-import { SESSION_STATUS_CLASSES, SESSION_STATUS_LABEL } from '@/shared/lib/sessionStatus';
+import { getSessionStatusLabel, SESSION_STATUS_CLASSES } from '@/shared/lib/sessionStatus';
 import { formatSessionTimeRange } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -117,7 +117,7 @@ export function SessionCard({
           {title}
         </div>
         <span className={cn('shrink-0 text-2xs font-medium', SESSION_STATUS_CLASSES[session.status])}>
-          {SESSION_STATUS_LABEL[session.status]}
+          {getSessionStatusLabel(session.status)}
         </span>
       </div>
 

@@ -1,6 +1,7 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import commonEn from '@/locales/en/common.json';
+import enumsEn from '@/locales/en/enums.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
 import loginEn from '@/locales/en/login.json';
 import profileEn from '@/locales/en/profile.json';
@@ -9,6 +10,7 @@ import sharedComponentsEn from '@/locales/en/sharedComponents.json';
 import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
 import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
+import enumsVi from '@/locales/vi/enums.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
 import loginVi from '@/locales/vi/login.json';
 import profileVi from '@/locales/vi/profile.json';
@@ -59,6 +61,18 @@ import { useLocaleStore } from './localeStore';
  * plain function, not a component, so it reads the i18next singleton directly rather than via
  * `useTranslation()` (see `shared/lib/relativeTime.ts`).
  *
+ * CLIENT-I18N-5: `enums` holds the display strings the client generates by branching on a
+ * backend-mirrored enum/boolean value (`SessionStatus` + `autoApprove`, `SportAttributeType`'s
+ * `BOOLEAN`/`DEFINITION_LIST` arms, `FriendshipStatus`, `NotificationType`), one flat sub-object
+ * per source enum. Distinct from every other namespace here: it's not a page or a cross-page
+ * component, it's an audit cut across several files that all share "the text depends on which
+ * enum member this is." `getNotificationText`/`getSessionStatusLabel`/`attributeValues.tsx`'s
+ * value renderers are plain functions (not components), so — same as `relativeTime` — they read
+ * the i18next singleton directly rather than via `useTranslation()`. `feeType.ts`/
+ * `sessionParticipation.ts` look like the same shape but are deliberately **not** here — filed
+ * ahead of this ticket as `CLIENT-I18N-6`'s "client-authored UI copy," not client-mirrored enum
+ * labels; see that ticket's own scope note.
+ *
  * Imported once, for its side effect, from `main.tsx` (the app entry) — importing it anywhere
  * else risks a second, redundant `init()` call.
  */
@@ -73,6 +87,7 @@ void i18next.use(initReactI18next).init({
       sharedDialogs: sharedDialogsEn,
       homeFeed: homeFeedEn,
       sharedComponents: sharedComponentsEn,
+      enums: enumsEn,
     },
     vi: {
       common: commonVi,
@@ -83,12 +98,13 @@ void i18next.use(initReactI18next).init({
       sharedDialogs: sharedDialogsVi,
       homeFeed: homeFeedVi,
       sharedComponents: sharedComponentsVi,
+      enums: enumsVi,
     },
   },
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents'],
+  ns: ['common', 'register', 'profile', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });

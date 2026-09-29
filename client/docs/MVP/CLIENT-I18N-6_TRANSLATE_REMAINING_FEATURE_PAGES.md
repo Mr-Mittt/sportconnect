@@ -63,3 +63,13 @@ and `features/session/components/CreateSessionModal.tsx`/`SessionDetailModal.tsx
 
 **Out of scope:** `TopBar`/`NavTabs`/shared chrome (CLIENT-I18N-3); client-mirrored backend enums
 (CLIENT-I18N-5); backend message/enum localization (I18N-4); the language picker UI.
+
+## Note added at CLIENT-I18N-5's pickup (2026-09-29)
+
+`CreateSessionModal.tsx` (already listed above under the Sessions/Matches slice) has pre-existing
+raw-literal **custom validation strings** ("Sport is required.", "Title is required.", etc.) — an
+I18N-10-class gap (native-validation-equivalent static copy), found while CLIENT-I18N-5 was auditing
+`FeeTypeFields.tsx` (same file family). Flagged here rather than filed as a separate ticket
+(user decision) since this ticket already claims the whole file — when this slice is picked up,
+apply the same `noValidate`/`hasAttemptedSubmit`/translated-inline-error pattern `RegisterForm`/
+`LoginForm` established (I18N_READINESS.md's I18N-10), same as every other form this ticket touches.
