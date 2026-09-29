@@ -39,15 +39,17 @@ describe('ProfileTabs', () => {
     expect(tabs).toEqual(['Posts', 'Memories', 'Settings']);
   });
 
-  // CLIENT-I18N-6: src/test/setup.ts's afterEach reverts i18n back to 'en'.
+  // CLIENT-I18N-6: set and restore the locale explicitly — don't rely on a global reset.
   it('renders Vietnamese copy when the locale is vi', async () => {
     await i18n.changeLanguage('vi');
-    render(<ProfileTabs activeTab="posts" onChange={() => {}} />);
+        render(<ProfileTabs activeTab="posts" onChange={() => {}} />);
     expect(screen.getByRole('tablist', { name: 'Các mục hồ sơ' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Bài viết' })).toBeInTheDocument();
+    await i18n.changeLanguage('en');
   });
 
-  it('prefers an override-prefix key over the default copy', () => {
+  it('prefers an override-prefix key over the default copy', async () => {
+    await i18n.changeLanguage('en');
     i18n.addResourceBundle('en', 'profileOverrideTest', { custom: { tabs: { posts: 'My writing' } } }, true, true);
     render(<ProfileTabs activeTab="posts" onChange={() => {}} i18nOverridePrefix="profileOverrideTest:custom" />);
     expect(screen.getByRole('tab', { name: 'My writing' })).toBeInTheDocument();
