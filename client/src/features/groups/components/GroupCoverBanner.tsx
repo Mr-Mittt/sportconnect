@@ -1,6 +1,7 @@
 import { IconArrowLeft } from '@tabler/icons-react';
 import type { Group } from '@/features/feed/types';
 import { SportIcon } from '@/shared/components/SportIcon';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import type { SportProfile } from '@/shared/types/sport';
 
@@ -11,6 +12,8 @@ interface GroupCoverBannerProps {
    * fallback `getRampBadgeClasses` already has for an unknown ramp. */
   sport: SportProfile | undefined;
   onBack: () => void;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -23,7 +26,13 @@ interface GroupCoverBannerProps {
  * member count, and a way back to the "All groups" view (mirrors the
  * reference's `data-cover-back` button).
  */
-export function GroupCoverBanner({ group, sport, onBack }: GroupCoverBannerProps) {
+export function GroupCoverBanner({
+  group,
+  sport,
+  onBack,
+  i18nOverridePrefix,
+}: GroupCoverBannerProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   const rampClasses = getRampBadgeClasses(sport?.colorRamp ?? '');
 
   return (
@@ -43,7 +52,7 @@ export function GroupCoverBanner({ group, sport, onBack }: GroupCoverBannerProps
       <div className="flex items-center justify-between px-3.5 py-3">
         <div className="min-w-0">
           <div className="truncate text-base font-medium text-text-primary">{group.groupName}</div>
-          <div className="text-2sm text-text-muted">{group.memberCount} members</div>
+          <div className="text-2sm text-text-muted">{t('cover.members', { count: group.memberCount })}</div>
         </div>
         <button
           type="button"
@@ -51,7 +60,7 @@ export function GroupCoverBanner({ group, sport, onBack }: GroupCoverBannerProps
           className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border-hairline border-border px-3 py-1.5 text-2sm text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
         >
           <IconArrowLeft className="size-4" aria-hidden="true" />
-          All groups
+          {t('cover.back')}
         </button>
       </div>
     </div>

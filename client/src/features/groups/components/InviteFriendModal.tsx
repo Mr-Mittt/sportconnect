@@ -1,3 +1,4 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
@@ -23,6 +24,8 @@ interface InviteFriendModalProps {
   isSearching: boolean;
   isSearchError: boolean;
   onInvite: (userId: string) => void;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -50,29 +53,31 @@ export function InviteFriendModal({
   isSearching,
   isSearchError,
   onInvite,
+  i18nOverridePrefix,
 }: InviteFriendModalProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
-        <DialogHeader title="Invite a friend" className="border-hairline-b border-border px-4 py-3" />
+        <DialogHeader title={t('inviteFriend.title')} className="border-hairline-b border-border px-4 py-3" />
         <div className="border-hairline-b border-border px-4 py-3">
           <Input
             value={inputValue}
             onChange={(event) => onInputChange(event.target.value)}
-            placeholder="Search friends by name…"
-            aria-label="Search friends"
+            placeholder={t('inviteFriend.searchPlaceholder')}
+            aria-label={t('inviteFriend.searchAria')}
           />
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3">
-          {isSearching && <p className="text-2sm text-text-muted">Searching…</p>}
-          {isSearchError && <p className="text-2sm text-text-danger">Couldn't search. Try again.</p>}
+          {isSearching && <p className="text-2sm text-text-muted">{t('inviteFriend.searching')}</p>}
+          {isSearchError && <p className="text-2sm text-text-danger">{t('inviteFriend.searchError')}</p>}
           {!isSearching && !isSearchError && inputValue.trim().length < MIN_SEARCH_LENGTH && (
-            <p className="text-2sm text-text-muted">Type at least 2 characters to search.</p>
+            <p className="text-2sm text-text-muted">{t('inviteFriend.minChars', { count: MIN_SEARCH_LENGTH })}</p>
           )}
           {!isSearching &&
             !isSearchError &&
             inputValue.trim().length >= MIN_SEARCH_LENGTH &&
-            rows.length === 0 && <p className="text-2sm text-text-muted">No friends found.</p>}
+            rows.length === 0 && <p className="text-2sm text-text-muted">{t('inviteFriend.noResults')}</p>}
           <div className="flex flex-col gap-2.5">
             {rows.map(({ user, action, isSending, error }) => (
               <div key={user.id} className="flex flex-col gap-1">
@@ -95,10 +100,10 @@ export function InviteFriendModal({
                   </div>
                   <div className="shrink-0">
                     {action === 'member' && (
-                      <span className="text-2xs text-text-muted">Already a member</span>
+                      <span className="text-2xs text-text-muted">{t('inviteFriend.alreadyMember')}</span>
                     )}
                     {action === 'invited' && (
-                      <span className="text-2xs text-text-muted">Already invited</span>
+                      <span className="text-2xs text-text-muted">{t('inviteFriend.alreadyInvited')}</span>
                     )}
                     {action === 'friend' && (
                       <Button
@@ -108,7 +113,7 @@ export function InviteFriendModal({
                         disabled={isSending}
                         onClick={() => onInvite(user.id)}
                       >
-                        Invite
+                        {t('inviteFriend.invite')}
                       </Button>
                     )}
                   </div>

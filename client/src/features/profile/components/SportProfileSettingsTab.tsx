@@ -1,4 +1,5 @@
 import { SKILL_LEVELS } from '@/shared/lib/skillLevels';
+import { useTranslation } from 'react-i18next';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
@@ -104,6 +105,8 @@ export function SportProfileSettingsTab({
   i18nOverridePrefix,
 }: SportProfileSettingsTabProps) {
   const t = useOverridableText('profilePage', i18nOverridePrefix);
+  // CLIENT-I18N-7: skill-level labels are shared with `AddSportFields` (`sharedComponents:skillLevels.*`).
+  const { t: tShared } = useTranslation('sharedComponents');
   if (isLoading) return null;
 
   if (activeProfile === undefined) {
@@ -155,8 +158,8 @@ export function SportProfileSettingsTab({
                 {t('settings.skillLevelPlaceholder')}
               </option>
               {SKILL_LEVELS.map((level) => (
-                <option key={level.value} value={level.value}>
-                  {t(`settings.skillLevels.${level.value}`)}
+                <option key={level} value={level}>
+                  {tShared(`skillLevels.${level}`)}
                 </option>
               ))}
             </Select>

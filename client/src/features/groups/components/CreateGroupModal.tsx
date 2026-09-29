@@ -6,6 +6,7 @@ import {
   MIN_GROUP_NAME_LENGTH,
 } from '@/features/feed/types';
 import type { CreateGroupPayload } from '@/features/feed/types';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
@@ -29,6 +30,8 @@ interface CreateGroupModalProps {
    * shared "Group name or invite code" input. Only read once, on mount —
    * same remount-on-open convention as the rest of this form's state. */
   initialGroupName?: string;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -57,7 +60,9 @@ export function CreateGroupModal({
   isSubmitting,
   isError,
   initialGroupName = '',
+  i18nOverridePrefix,
 }: CreateGroupModalProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   const [groupName, setGroupName] = useState(initialGroupName);
   const [selectedSport, setSelectedSport] = useState<SportKey | ''>(lockedSport ?? '');
   const [description, setDescription] = useState('');
@@ -82,28 +87,28 @@ export function CreateGroupModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
-        <DialogHeader title="Create a group" className="border-hairline-b border-border px-4 py-3" />
+        <DialogHeader title={t('createGroup.title')} className="border-hairline-b border-border px-4 py-3" />
         <div className="flex flex-col gap-3.5 overflow-y-auto px-4 py-3.5">
           <div>
-            <Label htmlFor="create-group-name">Group name</Label>
+            <Label htmlFor="create-group-name">{t('createGroup.name')}</Label>
             <Input
               id="create-group-name"
               value={groupName}
               onChange={(event) => setGroupName(event.target.value.slice(0, MAX_GROUP_NAME_LENGTH))}
               maxLength={MAX_GROUP_NAME_LENGTH}
-              placeholder="e.g. Riverside Ballers"
+              placeholder={t('createGroup.namePlaceholder')}
             />
           </div>
           {lockedSport === null && (
             <div>
-              <Label htmlFor="create-group-sport">Sport</Label>
+              <Label htmlFor="create-group-sport">{t('createGroup.sport')}</Label>
               <Select
                 id="create-group-sport"
                 value={selectedSport}
                 onChange={(event) => setSelectedSport(event.target.value as SportKey)}
               >
                 <option value="" disabled>
-                  Select a sport
+                  {t('createGroup.sportPlaceholder')}
                 </option>
                 {Object.values(sportsByKey).map((sport) => (
                   <option key={sport.key} value={sport.key}>
@@ -114,7 +119,7 @@ export function CreateGroupModal({
             </div>
           )}
           <div>
-            <Label htmlFor="create-group-description">Description (optional)</Label>
+            <Label htmlFor="create-group-description">{t('createGroup.description')}</Label>
             <textarea
               id="create-group-description"
               value={description}
@@ -123,7 +128,7 @@ export function CreateGroupModal({
               }
               maxLength={MAX_GROUP_DESCRIPTION_LENGTH}
               rows={3}
-              placeholder="What's this group about?"
+              placeholder={t('createGroup.descriptionPlaceholder')}
               className="w-full resize-none rounded-lg border-hairline border-border-strong bg-surface-2 px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted focus-visible:border-border-accent focus-visible:ring-3 focus-visible:ring-bg-accent"
             />
           </div>
@@ -134,11 +139,11 @@ export function CreateGroupModal({
               onChange={(event) => setIsPrivate(event.target.checked)}
               className="size-4 cursor-pointer rounded border-border-strong"
             />
-            Private group
+            {t('createGroup.private')}
           </label>
           {isError && (
             <p role="alert" className="text-2sm text-text-danger">
-              Couldn't create the group. Try again.
+              {t('createGroup.error')}
             </p>
           )}
         </div>
@@ -149,7 +154,7 @@ export function CreateGroupModal({
             disabled={!isValid || isSubmitting}
             className={cn('cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
           >
-            {isSubmitting ? 'Creating…' : 'Create group'}
+            {isSubmitting ? t('createGroup.submitting') : t('createGroup.submit')}
           </Button>
         </div>
       </DialogContent>

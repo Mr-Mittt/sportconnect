@@ -2,6 +2,7 @@ import { IconSearch } from '@tabler/icons-react';
 import { useState } from 'react';
 import type { GroupInvitation, GroupMember } from '@/features/feed/types';
 import { formatNameList } from '@/shared/lib/formatNameList';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
@@ -17,6 +18,8 @@ function initialsFor(fullName: string): string {
     .toUpperCase();
 }
 
+type Translate = ReturnType<typeof useOverridableText>;
+
 function matchesQuery(name: string, query: string): boolean {
   return query === '' || name.toLowerCase().includes(query.toLowerCase());
 }
@@ -27,9 +30,10 @@ interface MemberRowProps {
   subtitle?: string;
   action?: React.ReactNode;
   isCurrentUser?: boolean;
+  t: Translate;
 }
 
-function MemberRow({ avatarUrl, name, subtitle, action, isCurrentUser = false }: MemberRowProps) {
+function MemberRow({ avatarUrl, name, subtitle, action, isCurrentUser = false, t }: MemberRowProps) {
   return (
     <div className="border-hairline flex items-center justify-between gap-3 rounded-lg border-border p-2.5">
       <div className="flex min-w-0 items-center gap-2.5">
@@ -42,7 +46,7 @@ function MemberRow({ avatarUrl, name, subtitle, action, isCurrentUser = false }:
         <div className="min-w-0">
           <div className="truncate text-2sm font-medium text-text-primary">
             {name}
-            {isCurrentUser && <span className="font-normal text-text-muted"> (you)</span>}
+            {isCurrentUser && <span className="font-normal text-text-muted">{` ${t('members.you')}`}</span>}
           </div>
           {subtitle !== undefined && <div className="text-2xs text-text-muted">{subtitle}</div>}
         </div>
@@ -60,17 +64,27 @@ interface SectionProps {
   totalCount: number;
   filteredCount: number;
   children: React.ReactNode;
+  t: Translate;
 }
 
-function Section({ title, isLoading, isError, onRetry, totalCount, filteredCount, children }: SectionProps) {
+function Section({
+  title,
+  isLoading,
+  isError,
+  onRetry,
+  totalCount,
+  filteredCount,
+  children,
+  t,
+}: SectionProps) {
   return (
     <section aria-label={title} className="flex flex-col gap-2">
       <h3 className="text-2sm font-semibold text-text-primary">{title}</h3>
-      {isLoading && <p className="text-2sm text-text-muted">Loading…</p>}
+      {isLoading && <p className="text-2sm text-text-muted">{t('members.loading')}</p>}
       {isError && (
         <div className="flex items-center gap-2">
           <p role="alert" className="text-2sm text-text-danger">
-            Couldn't load.
+            {t('members.loadError')}
           </p>
           {onRetry !== undefined && (
             <button
@@ -78,16 +92,16 @@ function Section({ title, isLoading, isError, onRetry, totalCount, filteredCount
               onClick={onRetry}
               className="cursor-pointer rounded-lg border-hairline border-border px-2.5 py-1 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
             >
-              Retry
+              {t('members.retry')}
             </button>
           )}
         </div>
       )}
       {!isLoading && !isError && totalCount === 0 && (
-        <p className="text-2sm text-text-muted">Nothing here yet.</p>
+        <p className="text-2sm text-text-muted">{t('members.empty')}</p>
       )}
       {!isLoading && !isError && totalCount > 0 && filteredCount === 0 && (
-        <p className="text-2sm text-text-muted">No matches.</p>
+        <p className="text-2sm text-text-muted">{t('members.noMatches')}</p>
       )}
       {!isLoading && !isError && filteredCount > 0 && (
         <div className="flex flex-col gap-2">{children}</div>
@@ -96,10 +110,10 @@ function Section({ title, isLoading, isError, onRetry, totalCount, filteredCount
   );
 }
 
-function invitationStatusLabel(invitation: GroupInvitation): string {
-  if (invitation.status === 'pending_owner') return 'Invitation sent — waiting for owner approval';
+function invitationStatusLabel(invitation: GroupInvitation, t: Translate): string {
+  if (invitation.status === 'pending_owner') return t('members.pendingOwner');
   const firstName = invitation.inviteeFullName.split(' ')[0] ?? invitation.inviteeFullName;
-  return `Awaiting ${firstName}'s response`;
+  return t('members.awaiting', { firstName });
 }
 
 /** GRP-7: the prospective-member name for either approval-queue row type —
@@ -140,6 +154,8 @@ interface GroupMembersTabProps {
   onRetryMembers: () => void;
   /** Fires with the current "find member" text, trimmed — pre-fills InviteFriendModal. */
   onInviteFriend: (query: string) => void;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -195,7 +211,9 @@ export function GroupMembersTab({
   isMembersError,
   onRetryMembers,
   onInviteFriend,
+  i18nOverridePrefix,
 }: GroupMembersTabProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   const [query, setQuery] = useState('');
 
   const filteredApprovalQueue = approvalQueue.filter((item) => matchesQuery(approvalQueueItemName(item), query));
@@ -208,8 +226,8 @@ export function GroupMembersTab({
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Find member"
-          aria-label="Find member"
+          placeholder={t('members.findMember')}
+          aria-label={t('members.findMember')}
           className="w-auto min-w-0 flex-1 sm:max-w-64"
         />
         <Button
@@ -220,13 +238,14 @@ export function GroupMembersTab({
           onClick={() => onInviteFriend(query.trim())}
         >
           <IconSearch className="size-4" aria-hidden="true" />
-          Invite friend
+          {t('members.inviteFriend')}
         </Button>
       </div>
 
       {canManage && (
         <Section
-          title="Waiting for group approve"
+          t={t}
+          title={t('members.approvalTitle')}
           isLoading={isApprovalQueueLoading}
           isError={isApprovalQueueError}
           onRetry={onRetryApprovalQueue}
@@ -235,12 +254,13 @@ export function GroupMembersTab({
         >
           {filteredApprovalQueue.map((item) => (
             <MemberRow
+              t={t}
               key={`${item.type}-${item.data.id}`}
               avatarUrl={item.type === 'join_request' ? item.data.userAvatarUrl : null}
               name={approvalQueueItemName(item)}
               subtitle={
                 item.type === 'invitation'
-                  ? `Invited by ${formatNameList(item.data.inviterFullNames)}`
+                  ? t('members.invitedBy', { names: formatNameList(item.data.inviterFullNames) })
                   : undefined
               }
               action={
@@ -252,7 +272,7 @@ export function GroupMembersTab({
                     disabled={isDecliningItem}
                     onClick={() => onDeclineItem(item)}
                   >
-                    Decline
+                    {t('members.decline')}
                   </Button>
                   <Button
                     type="button"
@@ -261,7 +281,7 @@ export function GroupMembersTab({
                     disabled={isAcceptingItem}
                     onClick={() => onAcceptItem(item)}
                   >
-                    Accept
+                    {t('members.accept')}
                   </Button>
                 </div>
               }
@@ -272,7 +292,8 @@ export function GroupMembersTab({
 
       {sentInvitations.length > 0 && (
         <Section
-          title="Waiting for user accept"
+          t={t}
+          title={t('members.sentTitle')}
           isLoading={isSentInvitationsLoading}
           isError={isSentInvitationsError}
           onRetry={onRetrySentInvitations}
@@ -283,10 +304,11 @@ export function GroupMembersTab({
             .filter((invitation) => matchesQuery(invitation.inviteeFullName, query))
             .map((invitation) => (
               <MemberRow
+                t={t}
                 key={invitation.id}
                 avatarUrl={null}
                 name={invitation.inviteeFullName}
-                subtitle={invitationStatusLabel(invitation)}
+                subtitle={invitationStatusLabel(invitation, t)}
                 action={
                   invitation.status === 'pending_owner' ? (
                     <Button
@@ -296,7 +318,7 @@ export function GroupMembersTab({
                       disabled={isCancelingInvitation}
                       onClick={() => onCancelInvitation(invitation.id)}
                     >
-                      Withdraw
+                      {t('members.withdraw')}
                     </Button>
                   ) : undefined
                 }
@@ -306,7 +328,8 @@ export function GroupMembersTab({
       )}
 
       <Section
-        title="Group administrator"
+        t={t}
+        title={t('members.adminTitle')}
         isLoading={isMembersLoading}
         isError={isMembersError}
         onRetry={onRetryMembers}
@@ -315,17 +338,19 @@ export function GroupMembersTab({
       >
         {filteredAdministrators.map((member) => (
           <MemberRow
+            t={t}
             key={member.id}
             avatarUrl={member.userAvatarUrl}
             name={member.userFullName}
-            subtitle={member.roleName === 'group_owner' ? 'Owner' : 'Admin'}
+            subtitle={member.roleName === 'group_owner' ? t('members.owner') : t('members.admin')}
             isCurrentUser={member.userId === currentUserId}
           />
         ))}
       </Section>
 
       <Section
-        title="Members"
+        t={t}
+        title={t('members.membersTitle')}
         isLoading={isMembersLoading}
         isError={isMembersError}
         onRetry={onRetryMembers}
@@ -334,6 +359,7 @@ export function GroupMembersTab({
       >
         {filteredMembers.map((member) => (
           <MemberRow
+            t={t}
             key={member.id}
             avatarUrl={member.userAvatarUrl}
             name={member.userFullName}
@@ -342,9 +368,9 @@ export function GroupMembersTab({
         ))}
       </Section>
 
-      <section aria-label="Blacklist" className="flex flex-col gap-2">
-        <h3 className="text-2sm font-semibold text-text-primary">Blacklist</h3>
-        <p className="text-2sm text-text-muted">Coming soon.</p>
+      <section aria-label={t('members.blacklist')} className="flex flex-col gap-2">
+        <h3 className="text-2sm font-semibold text-text-primary">{t('members.blacklist')}</h3>
+        <p className="text-2sm text-text-muted">{t('members.comingSoon')}</p>
       </section>
     </div>
   );

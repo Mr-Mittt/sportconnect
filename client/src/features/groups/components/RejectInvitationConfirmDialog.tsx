@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Label } from '@/shared/ui/label';
@@ -11,6 +12,8 @@ interface RejectInvitationConfirmDialogProps {
   isSubmitting: boolean;
   isError: boolean;
   groupName: string;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -29,31 +32,33 @@ export function RejectInvitationConfirmDialog({
   isSubmitting,
   isError,
   groupName,
+  i18nOverridePrefix,
 }: RejectInvitationConfirmDialogProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   const [reason, setReason] = useState('');
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">
-        <DialogHeader title={`Reject invitation to ${groupName}?`} className="mb-3" />
+        <DialogHeader title={t('reject.title', { groupName })} className="mb-3" />
         <div className="mb-3">
-          <Label htmlFor="reject-invitation-reason">Reason (optional)</Label>
+          <Label htmlFor="reject-invitation-reason">{t('reject.reason')}</Label>
           <Textarea
             id="reject-invitation-reason"
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Let them know why, if you'd like"
+            placeholder={t('reject.reasonPlaceholder')}
             maxLength={500}
           />
         </div>
         {isError && (
           <p role="alert" className="mb-2 text-2sm text-text-danger">
-            Couldn't reject the invitation. Please try again.
+            {t('reject.error')}
           </p>
         )}
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
-            Cancel
+            {t('reject.cancel')}
           </Button>
           <Button
             variant="outline"
@@ -62,7 +67,7 @@ export function RejectInvitationConfirmDialog({
             disabled={isSubmitting}
             className="border-text-danger text-text-danger hover:bg-bg-accent"
           >
-            {isSubmitting ? 'Rejecting…' : 'Reject'}
+            {isSubmitting ? t('reject.submitting') : t('reject.submit')}
           </Button>
         </div>
       </DialogContent>

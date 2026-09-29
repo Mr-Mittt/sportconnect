@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { SportKey } from '@/shared/types/sport';
 import { AddSportModal } from './AddSportModal';
+import i18n from '@/app/i18n';
 
 const baseProps = {
   isOpen: true,
@@ -176,4 +177,23 @@ describe('AddSportModal', () => {
     );
     expect(screen.getByRole('button', { name: 'Reactivating…' })).toBeDisabled();
   });
+
+  // CLIENT-I18N-7: the shared skill-level labels and the form copy both localize.
+  it('renders Vietnamese copy, including the shared skill-level labels, when the locale is vi', async () => {
+    await i18n.changeLanguage('vi');
+    render(<AddSportModal {...baseProps} isError />);
+    expect(screen.getByRole('dialog', { name: 'Thêm môn thể thao' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Trình độ')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Người mới bắt đầu' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Không thể thêm môn thể thao này. Vui lòng thử lại.');
+    await i18n.changeLanguage('en');
+  });
+
+  it('prefers an override-prefix key over the default copy', async () => {
+    await i18n.changeLanguage('en');
+    i18n.addResourceBundle('en', 'addSportOverrideTest', { custom: { addSport: { modalTitle: 'Pick a sport' } } }, true, true);
+    render(<AddSportModal {...baseProps} i18nOverridePrefix="addSportOverrideTest:custom" />);
+    expect(screen.getByRole('dialog', { name: 'Pick a sport' })).toBeInTheDocument();
+  });
+
 });

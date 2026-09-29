@@ -1,3 +1,4 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 
@@ -8,6 +9,8 @@ interface SettingsUnsavedChangesDialogProps {
   onSave: () => void;
   isSaving: boolean;
   isSaveError: boolean;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -24,25 +27,27 @@ export function SettingsUnsavedChangesDialog({
   onSave,
   isSaving,
   isSaveError,
+  i18nOverridePrefix,
 }: SettingsUnsavedChangesDialogProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="p-4">
-        <DialogHeader title="Unsaved changes" className="mb-3" onCloseClick={onCancel} />
+        <DialogHeader title={t('unsaved.title')} className="mb-3" onCloseClick={onCancel} />
         <p className="mb-3 text-2sm text-text-secondary">
-          You have unsaved changes to this group's settings. Discard them, or save before leaving?
+          {t('unsaved.body')}
         </p>
         {isSaveError && (
           <p role="alert" className="mb-2 text-2sm text-text-danger">
-            Couldn't save settings. Please try again.
+            {t('unsaved.saveError')}
           </p>
         )}
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={onDiscard} disabled={isSaving}>
-            Discard changes
+            {t('unsaved.discard')}
           </Button>
           <Button variant="primary" size="sm" onClick={onSave} disabled={isSaving}>
-            {isSaving ? 'Saving…' : 'Save changes'}
+            {isSaving ? t('unsaved.saving') : t('unsaved.save')}
           </Button>
         </div>
       </DialogContent>

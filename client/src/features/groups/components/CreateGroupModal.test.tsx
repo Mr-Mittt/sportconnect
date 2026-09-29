@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CreateGroupModal } from './CreateGroupModal';
+import i18n from '@/app/i18n';
 
 const sportsByKey: Record<SportKey, SportProfile> = {
   football: { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' },
@@ -104,4 +105,15 @@ describe('CreateGroupModal', () => {
     expect(screen.getByLabelText('Group name')).toHaveValue('Riverside Ballers');
     expect(screen.getByRole('button', { name: 'Create group' })).toBeEnabled();
   });
+
+  it('renders Vietnamese copy when the locale is vi', async () => {
+    await i18n.changeLanguage('vi');
+    render(<CreateGroupModal {...baseProps} isError />);
+    expect(screen.getByRole('dialog', { name: 'Tạo nhóm' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Tên nhóm')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Không thể tạo nhóm. Vui lòng thử lại.');
+    expect(screen.getByRole('button', { name: 'Tạo nhóm' })).toBeInTheDocument();
+    await i18n.changeLanguage('en');
+  });
+
 });

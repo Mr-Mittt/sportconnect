@@ -5,6 +5,7 @@ import { SportIcon } from '@/shared/components/SportIcon';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { Button } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 
@@ -24,6 +25,8 @@ interface JoinGroupModalProps {
   onRequestToJoin: (groupName: string) => void;
   isRequesting: boolean;
   isRequestError: boolean;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 interface SportFilterPillProps {
@@ -67,6 +70,7 @@ interface ResultSectionProps {
   pendingGroupIds: Set<number>;
   onRequestToJoin: (groupName: string) => void;
   isRequesting: boolean;
+  t: ReturnType<typeof useOverridableText>;
 }
 
 /** One sport's group of search results — header icon resolved by the caller, same reasoning as `SportFilterPill`. */
@@ -77,6 +81,7 @@ function ResultSection({
   pendingGroupIds,
   onRequestToJoin,
   isRequesting,
+  t,
 }: ResultSectionProps) {
   return (
     <div>
@@ -94,12 +99,12 @@ function ResultSection({
             >
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-text-primary">{result.groupName}</div>
-                <div className="text-2xs text-text-muted">{result.memberCount} members</div>
+                <div className="text-2xs text-text-muted">{t('join.members', { count: result.memberCount })}</div>
               </div>
               {result.isMember ? (
-                <span className="shrink-0 text-2xs text-text-muted">Already a member</span>
+                <span className="shrink-0 text-2xs text-text-muted">{t('join.alreadyMember')}</span>
               ) : isPending ? (
-                <span className="shrink-0 text-2xs text-text-accent">Pending</span>
+                <span className="shrink-0 text-2xs text-text-accent">{t('join.pending')}</span>
               ) : (
                 <Button
                   variant="outline"
@@ -108,7 +113,7 @@ function ResultSection({
                   disabled={isRequesting}
                   onClick={() => onRequestToJoin(result.groupName)}
                 >
-                  Request to join
+                  {t('join.request')}
                 </Button>
               )}
             </div>
@@ -154,11 +159,13 @@ export function JoinGroupModal({
   onRequestToJoin,
   isRequesting,
   isRequestError,
+  i18nOverridePrefix,
 }: JoinGroupModalProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent fixedHeight>
-        <DialogHeader title="Join a group" className="border-hairline-b border-border px-4 py-3" />
+        <DialogHeader title={t('join.title')} className="border-hairline-b border-border px-4 py-3" />
         <div className="border-hairline-b flex items-center gap-2 border-border px-4 py-3">
           <Input
             value={inputValue}
@@ -166,17 +173,17 @@ export function JoinGroupModal({
             onKeyDown={(event) => {
               if (event.key === 'Enter') onSearch();
             }}
-            placeholder="Search groups by name…"
-            aria-label="Search groups"
+            placeholder={t('join.searchPlaceholder')}
+            aria-label={t('join.searchAria')}
           />
           <Button variant="outline" size="sm" className="shrink-0 cursor-pointer" onClick={onSearch}>
-            Search
+            {t('join.search')}
           </Button>
         </div>
         {sportProfiles.length > 0 && (
           <div
             role="group"
-            aria-label="Sport filter"
+            aria-label={t('join.sportFilter')}
             className="border-hairline-b flex flex-wrap gap-2 border-border px-4 py-3"
           >
             {sportProfiles.map((sport) => (
@@ -191,15 +198,15 @@ export function JoinGroupModal({
           </div>
         )}
         <div className="flex-1 overflow-y-auto px-4 py-3">
-          {isSearching && <p className="text-2sm text-text-muted">Searching…</p>}
-          {isSearchError && <p className="text-2sm text-text-danger">Couldn't load groups.</p>}
+          {isSearching && <p className="text-2sm text-text-muted">{t('join.searching')}</p>}
+          {isSearchError && <p className="text-2sm text-text-danger">{t('join.loadError')}</p>}
           {isRequestError && (
             <p role="alert" className="mb-2.5 text-2sm text-text-danger">
-              Couldn't send the request. Try again.
+              {t('join.requestError')}
             </p>
           )}
           {!isSearching && !isSearchError && groupedResults.length === 0 && (
-            <p className="text-2sm text-text-muted">No groups found.</p>
+            <p className="text-2sm text-text-muted">{t('join.noResults')}</p>
           )}
           <div className="flex flex-col gap-4">
             {groupedResults.map(({ sportKey, sportProfile, results }) => (
@@ -211,6 +218,7 @@ export function JoinGroupModal({
                 pendingGroupIds={pendingGroupIds}
                 onRequestToJoin={onRequestToJoin}
                 isRequesting={isRequesting}
+                t={t}
               />
             ))}
           </div>

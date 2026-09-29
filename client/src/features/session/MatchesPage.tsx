@@ -10,7 +10,7 @@ import { ReactivateSportNudgeDialog } from '@/shared/components/ReactivateSportN
 import { useAddSportProfile } from '@/shared/hooks/useAddSportProfile';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
-import { PAGE_ACCESS_NO_SPORTS_PROMPT } from '@/shared/lib/noSportsPrompt';
+import { getPageAccessNoSportsPrompt } from '@/shared/lib/noSportsPrompt';
 import { AddSportModal } from '@/shared/components/AddSportModal';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { CreateSessionModal } from './components/CreateSessionModal';
@@ -97,7 +97,7 @@ export function MatchesPage() {
       return;
     }
     hasAutoPromptedAddSportRef.current = true;
-    setAddSportPromptMessage(PAGE_ACCESS_NO_SPORTS_PROMPT);
+    setAddSportPromptMessage(getPageAccessNoSportsPrompt());
     setIsAddSportOpen(true);
   }, [sportProfilesQuery.isLoading, sportProfilesQuery.data.length]);
 

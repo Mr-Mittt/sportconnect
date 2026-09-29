@@ -70,3 +70,30 @@ test('Accept-Language follows a locale stored before the app loads', async ({ pa
   expect(headers.length).toBeGreaterThan(0);
   expect(headers.every((header) => header === 'vi')).toBe(true);
 });
+
+/**
+ * CLIENT-I18N-7: the Groups page renders translated under a stored `vi` locale — the page's
+ * sr-only heading, the discovery panel's buttons, and the Create Group modal all read from the
+ * `groups` namespace.
+ */
+test('Groups page renders Vietnamese copy under a stored vi locale', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
+  });
+
+  await page.goto('/login');
+  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
+  await page.getByRole('button', { name: 'Đăng nhập' }).click();
+  await page.waitForURL('/');
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Nhóm', exact: true }).click();
+  await expect(page).toHaveURL('/groups');
+  await expect(page.getByRole('heading', { name: 'Nhóm', level: 1 })).toBeAttached();
+  await expect(page.getByRole('button', { name: 'Tham gia nhóm' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Tạo nhóm' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Tạo nhóm' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel('Tên nhóm', { exact: true })).toBeVisible();
+});

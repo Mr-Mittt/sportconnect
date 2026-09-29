@@ -1,4 +1,5 @@
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -20,6 +21,8 @@ interface GroupSpaceSwitcherProps {
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 function initialsFor(groupName: string): string {
@@ -98,10 +101,12 @@ export function GroupSpaceSwitcher({
   isLoading,
   isError,
   onRetry,
+  i18nOverridePrefix,
 }: GroupSpaceSwitcherProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   if (isLoading) {
     return (
-      <div role="group" aria-label="Group filter" className="flex flex-wrap items-center gap-2">
+      <div role="group" aria-label={t('switcher.ariaLabel')} className="flex flex-wrap items-center gap-2">
         <Skeleton className="h-7.5 w-16 rounded-full" />
         <Skeleton className="h-7.5 w-28 rounded-full" />
         <Skeleton className="h-7.5 w-24 rounded-full" />
@@ -111,22 +116,22 @@ export function GroupSpaceSwitcher({
 
   if (isError) {
     return (
-      <div role="group" aria-label="Group filter" className="flex items-center gap-2">
-        <p className="text-2sm text-text-danger">Couldn't load your groups.</p>
+      <div role="group" aria-label={t('switcher.ariaLabel')} className="flex items-center gap-2">
+        <p className="text-2sm text-text-danger">{t('loadGroupsError')}</p>
         <button
           type="button"
           onClick={onRetry}
           className="cursor-pointer rounded-lg border-hairline border-border px-2.5 py-1 text-2sm font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
         >
-          Retry
+          {t('retry')}
         </button>
       </div>
     );
   }
 
   return (
-    <div role="group" aria-label="Group filter" className="flex flex-wrap items-center gap-2">
-      <Pill label="All" isActive={selectedGroupId === null} onClick={() => onSelect(null)} />
+    <div role="group" aria-label={t('switcher.ariaLabel')} className="flex flex-wrap items-center gap-2">
+      <Pill label={t('switcher.all')} isActive={selectedGroupId === null} onClick={() => onSelect(null)} />
 
       {groups.map((group) => {
         const sportKey = sportKeyForId(group.sportId);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import commonEn from '@/locales/en/common.json';
 import enumsEn from '@/locales/en/enums.json';
+import groupsEn from '@/locales/en/groups.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
 import loginEn from '@/locales/en/login.json';
 import profileEn from '@/locales/en/profile.json';
@@ -11,6 +12,7 @@ import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
 import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
 import enumsVi from '@/locales/vi/enums.json';
+import groupsVi from '@/locales/vi/groups.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
 import loginVi from '@/locales/vi/login.json';
 import profileVi from '@/locales/vi/profile.json';
@@ -51,6 +53,7 @@ const namespacePairs: Record<string, [en: unknown, vi: unknown]> = {
   homeFeed: [homeFeedEn, homeFeedVi],
   sharedComponents: [sharedComponentsEn, sharedComponentsVi],
   enums: [enumsEn, enumsVi],
+  groups: [groupsEn, groupsVi],
 };
 
 describe('i18n bundle key parity (en vs vi)', () => {

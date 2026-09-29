@@ -17,11 +17,6 @@
     "sectionTitle": "Hồ sơ thể thao",
     "skillLevel": "Trình độ",
     "skillLevelPlaceholder": "Chọn trình độ",
-    "skillLevels": {
-      "beginner": "Người mới bắt đầu",
-      "intermediate": "Trung bình",
-      "advanced": "Nâng cao"
-    },
     "yearsOfExperience": "Số năm kinh nghiệm",
     "save": "Lưu thay đổi",
     "saving": "Đang lưu…"

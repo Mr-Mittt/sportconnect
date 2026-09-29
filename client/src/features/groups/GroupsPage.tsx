@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useGroupsPageStore } from '@/app/groupsPageStore';
@@ -39,7 +40,7 @@ import { ReactivateSportNudgeDialog } from '@/shared/components/ReactivateSportN
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
-import { PAGE_ACCESS_NO_SPORTS_PROMPT } from '@/shared/lib/noSportsPrompt';
+import { getPageAccessNoSportsPrompt } from '@/shared/lib/noSportsPrompt';
 import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { CreateGroupModal } from './components/CreateGroupModal';
@@ -101,6 +102,7 @@ const noop = () => {};
  * open state, same `activeCommentsPostId`-style convention already used here.
  */
 export function GroupsPage() {
+  const { t } = useTranslation('groups');
   const navigate = useNavigate();
   const activeSport = useGroupsPageStore((state) => state.activeSport);
   const setActiveSport = useGroupsPageStore((state) => state.setActiveSport);
@@ -377,7 +379,7 @@ export function GroupsPage() {
       return;
     }
     hasAutoPromptedAddSportRef.current = true;
-    setAddSportPromptMessage(PAGE_ACCESS_NO_SPORTS_PROMPT);
+    setAddSportPromptMessage(getPageAccessNoSportsPrompt());
     setAddSportOpenCount((count) => count + 1);
     setIsAddSportOpen(true);
   }, [
@@ -549,7 +551,7 @@ export function GroupsPage() {
   return (
     <ModalAnchorProvider value={pillRowAnchorBottom}>
       <main className="py-4">
-        <h1 className="sr-only">Groups</h1>
+        <h1 className="sr-only">{t('page.title')}</h1>
         <div className="mb-3">
           <SportSwitcher
             sports={data.sportProfiles}

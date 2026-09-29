@@ -1,5 +1,6 @@
 import { IconMessage2, IconMessages, IconSettings, IconUsers } from '@tabler/icons-react';
 import { useRef } from 'react';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 
 export type GroupTabKey = 'posts' | 'chat' | 'members' | 'settings';
@@ -7,14 +8,16 @@ export type GroupTabKey = 'posts' | 'chat' | 'members' | 'settings';
 interface GroupTabsProps {
   activeTab: GroupTabKey;
   onChange: (tab: GroupTabKey) => void;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
-const TABS: { key: GroupTabKey; label: string; Icon: typeof IconMessage2 }[] = [
-  { key: 'posts', label: 'Posts', Icon: IconMessage2 },
-  { key: 'chat', label: 'Chat', Icon: IconMessages },
+const TABS: { key: GroupTabKey; Icon: typeof IconMessage2 }[] = [
+  { key: 'posts', Icon: IconMessage2 },
+  { key: 'chat', Icon: IconMessages },
   // GRP-3
-  { key: 'members', label: 'Members', Icon: IconUsers },
-  { key: 'settings', label: 'Settings', Icon: IconSettings },
+  { key: 'members', Icon: IconUsers },
+  { key: 'settings', Icon: IconSettings },
 ];
 
 /**
@@ -25,7 +28,8 @@ const TABS: { key: GroupTabKey; label: string; Icon: typeof IconMessage2 }[] = [
  * (`client/CLAUDE.md`). Arrow-key navigation between tabs, matching this
  * app's other keyboard-accessible controls.
  */
-export function GroupTabs({ activeTab, onChange }: GroupTabsProps) {
+export function GroupTabs({ activeTab, onChange, i18nOverridePrefix }: GroupTabsProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Roving-tabindex keyboard nav (WAI-ARIA tabs pattern) — selection AND DOM
@@ -48,7 +52,7 @@ export function GroupTabs({ activeTab, onChange }: GroupTabsProps) {
     <div
       role="tablist"
       aria-orientation="vertical"
-      aria-label="Group sections"
+      aria-label={t('tabs.ariaLabel')}
       className="flex w-37.5 shrink-0 flex-col gap-0.5"
     >
       {TABS.map((tab, index) => {
@@ -72,7 +76,7 @@ export function GroupTabs({ activeTab, onChange }: GroupTabsProps) {
             )}
           >
             <tab.Icon className="size-4" aria-hidden="true" />
-            {tab.label}
+            {t(`tabs.${tab.key}`)}
           </button>
         );
       })}

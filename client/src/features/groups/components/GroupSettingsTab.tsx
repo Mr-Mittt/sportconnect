@@ -3,6 +3,7 @@ import type { Group, GroupInfo, GroupSettings, UpdateGroupSettingsPayload } from
 import { Button } from '@/shared/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
 import { Label } from '@/shared/ui/label';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Textarea } from '@/shared/ui/textarea';
 
 interface ToggleFieldRowProps {
@@ -11,10 +12,11 @@ interface ToggleFieldRowProps {
   value: boolean;
   canEdit: boolean;
   onChange: (value: boolean) => void;
+  t: ReturnType<typeof useOverridableText>;
 }
 
 /** One `GroupSettings` boolean row — same visual shape as the Privacy row below. */
-function ToggleFieldRow({ label, description, value, canEdit, onChange }: ToggleFieldRowProps) {
+function ToggleFieldRow({ label, description, value, canEdit, onChange, t }: ToggleFieldRowProps) {
   return (
     <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
       <div>
@@ -26,17 +28,17 @@ function ToggleFieldRow({ label, description, value, canEdit, onChange }: Toggle
           type="button"
           onClick={() => onChange(!value)}
           aria-pressed={value}
-          aria-label={`${label}: ${value ? 'On' : 'Off'}`}
+          aria-label={`${label}: ${value ? t('settings.on') : t('settings.off')}`}
           className={`cursor-pointer rounded-full px-3 py-1.5 text-2sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent ${
             value
               ? 'border-2 border-border-accent font-medium text-text-primary'
               : 'border-hairline border-border bg-surface-1 text-text-secondary'
           }`}
         >
-          {value ? 'On' : 'Off'}
+          {value ? t('settings.on') : t('settings.off')}
         </button>
       ) : (
-        <span className="text-2sm text-text-secondary">{value ? 'On' : 'Off'}</span>
+        <span className="text-2sm text-text-secondary">{value ? t('settings.on') : t('settings.off')}</span>
       )}
     </div>
   );
@@ -51,18 +53,29 @@ interface TextFieldRowProps {
   isError: boolean;
   emptyText: string;
   onChange: (value: string) => void;
+  t: ReturnType<typeof useOverridableText>;
 }
 
 /** One `GroupInfo` free-text row (rules/schedule) — draft-based, shares the Save button below. */
-function TextFieldRow({ id, label, value, canEdit, isLoading, isError, emptyText, onChange }: TextFieldRowProps) {
+function TextFieldRow({
+  id,
+  label,
+  value,
+  canEdit,
+  isLoading,
+  isError,
+  emptyText,
+  onChange,
+  t,
+}: TextFieldRowProps) {
   return (
     <div className="border-hairline-t border-border pt-3.5">
       <Label htmlFor={id}>{label}</Label>
       {isLoading ? (
-        <p className="text-2sm text-text-muted">Loading…</p>
+        <p className="text-2sm text-text-muted">{t('settings.loading')}</p>
       ) : isError ? (
         <p role="alert" className="text-2sm text-text-danger">
-          Couldn't load
+          {t('settings.loadError')}
         </p>
       ) : canEdit ? (
         <Textarea id={id} value={value} onChange={(event) => onChange(event.target.value)} />
@@ -102,6 +115,8 @@ interface GroupSettingsTabProps {
   onSaveSettings: () => void;
   isSavingSettings: boolean;
   isSaveSettingsError: boolean;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -154,7 +169,9 @@ export function GroupSettingsTab({
   onSaveSettings,
   isSavingSettings,
   isSaveSettingsError,
+  i18nOverridePrefix,
 }: GroupSettingsTabProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   const isOwner = currentUserRole === 'group_owner';
   const isAdmin = currentUserRole === 'group_admin';
   const canEdit = isOwner || isAdmin;
@@ -166,7 +183,7 @@ export function GroupSettingsTab({
     <div className="flex flex-col gap-4">
       <Collapsible open={isGeneralOpen} onOpenChange={setIsGeneralOpen}>
         <CollapsibleTrigger>
-          <span className="text-sm font-semibold text-text-primary">General</span>
+          <span className="text-sm font-semibold text-text-primary">{t('settings.general')}</span>
         </CollapsibleTrigger>
         <CollapsibleContent className="flex flex-col gap-4 pt-3">
           <div>
@@ -178,8 +195,8 @@ export function GroupSettingsTab({
 
           <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
             <div>
-              <div className="text-2sm font-medium text-text-primary">Privacy</div>
-              <div className="text-2xs text-text-muted">Who can see and join this group</div>
+              <div className="text-2sm font-medium text-text-primary">{t('settings.privacy')}</div>
+              <div className="text-2xs text-text-muted">{t('settings.privacyDesc')}</div>
             </div>
             {canEdit ? (
               <div className="flex gap-1.5">
@@ -194,7 +211,7 @@ export function GroupSettingsTab({
                       : 'border-hairline border-border bg-surface-1 text-text-secondary'
                   }`}
                 >
-                  Public
+                  {t('settings.public')}
                 </button>
                 <button
                   type="button"
@@ -207,54 +224,56 @@ export function GroupSettingsTab({
                       : 'border-hairline border-border bg-surface-1 text-text-secondary'
                   }`}
                 >
-                  Private
+                  {t('settings.private')}
                 </button>
               </div>
             ) : (
-              <span className="text-2sm text-text-secondary">{group.isPrivate ? 'Private' : 'Public'}</span>
+              <span className="text-2sm text-text-secondary">{group.isPrivate ? t('settings.private') : t('settings.public')}</span>
             )}
           </div>
           {isUpdatePrivacyError && (
             <p role="alert" className="-mt-2.5 text-2xs text-text-danger">
-              Couldn't update privacy. Try again.
+              {t('settings.privacyError')}
             </p>
           )}
           {!canEdit && (
-            <p className="-mt-2.5 text-2xs text-text-muted">Only the owner and admins can change this.</p>
+            <p className="-mt-2.5 text-2xs text-text-muted">{t('settings.ownerAdminOnly')}</p>
           )}
 
           <TextFieldRow
+            t={t}
             id="group-rules"
-            label="Rules"
+            label={t('settings.rules')}
             value={groupInfo?.rules ?? ''}
             canEdit={canEdit}
             isLoading={isGroupInfoLoading}
             isError={isGroupInfoError}
-            emptyText="No rules set yet."
+            emptyText={t('settings.rulesEmpty')}
             onChange={(value) => onUpdateGroupInfoField('rules', value)}
           />
 
           <TextFieldRow
+            t={t}
             id="group-schedule"
-            label="Schedule"
+            label={t('settings.schedule')}
             value={groupInfo?.schedule ?? ''}
             canEdit={canEdit}
             isLoading={isGroupInfoLoading}
             isError={isGroupInfoError}
-            emptyText="No schedule set yet."
+            emptyText={t('settings.scheduleEmpty')}
             onChange={(value) => onUpdateGroupInfoField('schedule', value)}
           />
 
           <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
             <div>
-              <div className="text-2sm font-medium text-text-primary">Group type</div>
-              <div className="text-2xs text-text-muted">Determines this group's member cap</div>
+              <div className="text-2sm font-medium text-text-primary">{t('settings.groupType')}</div>
+              <div className="text-2xs text-text-muted">{t('settings.groupTypeDesc')}</div>
             </div>
             {isSettingsLoading ? (
-              <span className="text-2sm text-text-muted">Loading…</span>
+              <span className="text-2sm text-text-muted">{t('settings.loading')}</span>
             ) : isSettingsError ? (
               <span role="alert" className="text-2sm text-text-danger">
-                Couldn't load
+                {t('settings.loadError')}
               </span>
             ) : (
               <span className="text-2sm text-text-secondary">{groupSettings?.groupTypeName}</span>
@@ -265,38 +284,41 @@ export function GroupSettingsTab({
 
       <Collapsible open={isPermissionOpen} onOpenChange={setIsPermissionOpen}>
         <CollapsibleTrigger>
-          <span className="text-sm font-semibold text-text-primary">Permission</span>
+          <span className="text-sm font-semibold text-text-primary">{t('settings.permission')}</span>
         </CollapsibleTrigger>
         <CollapsibleContent className="flex flex-col gap-4 pt-3">
           {isSettingsError ? (
             <p role="alert" className="text-2sm text-text-danger">
-              Couldn't load permission settings.
+              {t('settings.permissionLoadError')}
             </p>
           ) : (
             <>
               <ToggleFieldRow
-                label="Allow member posts"
-                description="Members can post in this group"
+                t={t}
+                label={t('settings.allowPosts')}
+                description={t('settings.allowPostsDesc')}
                 value={groupSettings?.allowMemberPosts ?? false}
                 canEdit={isOwner}
                 onChange={(value) => onUpdateSetting('allowMemberPosts', value)}
               />
               <ToggleFieldRow
-                label="Require post approval"
-                description="Owner/admin must approve member posts before they're visible"
+                t={t}
+                label={t('settings.requireApproval')}
+                description={t('settings.requireApprovalDesc')}
                 value={groupSettings?.requirePostApproval ?? false}
                 canEdit={isOwner}
                 onChange={(value) => onUpdateSetting('requirePostApproval', value)}
               />
               <ToggleFieldRow
-                label="Allow member invites"
-                description="Members can invite friends to join this group"
+                t={t}
+                label={t('settings.allowInvites')}
+                description={t('settings.allowInvitesDesc')}
                 value={groupSettings?.allowMemberInvites ?? false}
                 canEdit={isOwner}
                 onChange={(value) => onUpdateSetting('allowMemberInvites', value)}
               />
               {!isOwner && (
-                <p className="-mt-2.5 text-2xs text-text-muted">Only the owner can change these.</p>
+                <p className="-mt-2.5 text-2xs text-text-muted">{t('settings.ownerOnly')}</p>
               )}
             </>
           )}
@@ -307,7 +329,7 @@ export function GroupSettingsTab({
         <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
           {isSaveSettingsError ? (
             <p role="alert" className="text-2xs text-text-danger">
-              Couldn't save changes. Try again.
+              {t('settings.saveError')}
             </p>
           ) : (
             <span />
@@ -318,23 +340,23 @@ export function GroupSettingsTab({
             onClick={onSaveSettings}
             disabled={!hasUnsavedSettingsChanges || isSavingSettings}
           >
-            {isSavingSettings ? 'Saving…' : 'Save'}
+            {isSavingSettings ? t('settings.saving') : t('settings.save')}
           </Button>
         </div>
       )}
 
       <div className="border-hairline-t border-border pt-3.5">
         <Button variant="outline" size="sm" onClick={onLeave} disabled={isOwner || isLeaving}>
-          {isLeaving ? 'Leaving…' : 'Leave Group'}
+          {isLeaving ? t('settings.leaving') : t('settings.leave')}
         </Button>
         {isOwner && (
           <p className="mt-1.5 text-2xs text-text-muted">
-            Transfer ownership to another member before you can leave.
+            {t('settings.transferOwnership')}
           </p>
         )}
         {isLeaveError && (
           <p role="alert" className="mt-1.5 text-2xs text-text-danger">
-            Couldn't leave the group. Try again.
+            {t('settings.leaveError')}
           </p>
         )}
       </div>
@@ -347,7 +369,7 @@ export function GroupSettingsTab({
             onClick={onRequestDelete}
             className="border-text-danger text-text-danger hover:bg-bg-accent"
           >
-            Delete Group
+            {t('settings.delete')}
           </Button>
         </div>
       )}

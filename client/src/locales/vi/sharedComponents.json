@@ -79,5 +79,26 @@
     "atCap": "Bạn đã thêm tất cả môn thể thao hiện có",
     "checking": "Đang kiểm tra…",
     "addSport": "Thêm môn thể thao"
+  },
+  "skillLevels": {
+    "beginner": "Người mới bắt đầu",
+    "intermediate": "Trung bình",
+    "advanced": "Nâng cao"
+  },
+  "addSport": {
+    "modalTitle": "Thêm môn thể thao",
+    "sport": "Môn thể thao",
+    "skillLevel": "Trình độ",
+    "skillLevelPlaceholder": "Chọn trình độ",
+    "yearsOfExperience": "Số năm kinh nghiệm (không bắt buộc)",
+    "allSportsAdded": "Hiện bạn đã có hồ sơ cho mọi môn thể thao mà SportHub hỗ trợ.",
+    "resumeNote": "Bạn từng có hồ sơ {{sport}} — chúng tôi sẽ kích hoạt lại với thông tin trước đây của bạn.",
+    "error": "Không thể thêm môn thể thao này. Vui lòng thử lại.",
+    "cancel": "Hủy",
+    "reactivate": "Kích hoạt lại",
+    "reactivating": "Đang kích hoạt lại…",
+    "submit": "Thêm môn thể thao",
+    "submitting": "Đang thêm…",
+    "pagePrompt": "Này nhà vô địch, hãy thêm một môn thể thao trước đã — trang này sẽ chẳng có nhiều ý nghĩa nếu thiếu nó! 🏅"
   }
 }

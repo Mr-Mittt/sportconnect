@@ -1,4 +1,5 @@
 import axios from 'axios';
+import i18next from 'i18next';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useUserSearch } from '@/features/friends/hooks/useUserSearch';
 import { useGroupMembers } from '@/features/feed/hooks/useGroupMembers';
@@ -28,7 +29,7 @@ function extractErrorMessage(error: unknown): string {
     const message = (error.response?.data as ApiResponse<null> | undefined)?.message;
     if (message !== undefined) return message;
   }
-  return 'Something went wrong. Try again.';
+  return i18next.t('groups:inviteFriend.fallbackError');
 }
 
 /**

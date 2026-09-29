@@ -79,5 +79,26 @@
     "atCap": "You have added every sport available",
     "checking": "Checking…",
     "addSport": "Add sport"
+  },
+  "skillLevels": {
+    "beginner": "Beginner",
+    "intermediate": "Intermediate",
+    "advanced": "Advanced"
+  },
+  "addSport": {
+    "modalTitle": "Add a sport",
+    "sport": "Sport",
+    "skillLevel": "Skill level",
+    "skillLevelPlaceholder": "Select a skill level",
+    "yearsOfExperience": "Years of experience (optional)",
+    "allSportsAdded": "You already have a profile for every sport SportHub supports right now.",
+    "resumeNote": "You had a {{sport}} profile before — we'll reactivate it with your previous details.",
+    "error": "Couldn't add that sport. Try again.",
+    "cancel": "Cancel",
+    "reactivate": "Reactivate",
+    "reactivating": "Reactivating…",
+    "submit": "Add sport",
+    "submitting": "Adding…",
+    "pagePrompt": "Hey champ, add a sport first — this page won't make much sense without one! 🏅"
   }
 }
