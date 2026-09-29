@@ -1,8 +1,10 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import commonEn from '@/locales/en/common.json';
+import profileEn from '@/locales/en/profile.json';
 import registerEn from '@/locales/en/register.json';
 import commonVi from '@/locales/vi/common.json';
+import profileVi from '@/locales/vi/profile.json';
 import registerVi from '@/locales/vi/register.json';
 import { useLocaleStore } from './localeStore';
 
@@ -15,23 +17,23 @@ import { useLocaleStore } from './localeStore';
  * **One namespace per page/feature, `common` only for what's genuinely shared** (2026-09-28,
  * CLIENT-REF-2 — anticipated by CLIENT-I18N-2's own "expect to split per feature at pickup" note):
  * `register` is the first page namespace, holding everything specific to the sign-up screen;
- * `geoLocaleFields` stays in `common` since CLIENT-REF-3 (profile edit) shares that component's
- * strings too. Each page namespace's own keys drop the page name as a prefix (`useTranslation
- * ('register')` + `t('form.email.label')`, not `t('register.form.email.label')`) since the
- * namespace already provides that grouping.
+ * `profile` (CLIENT-REF-3) is the second, holding `EditProfileModal`'s own strings; `geoLocaleFields`
+ * stays in `common` since both namespaces share that component's strings. Each page namespace's
+ * own keys drop the page name as a prefix (`useTranslation('register')` + `t('form.email.label')`,
+ * not `t('register.form.email.label')`) since the namespace already provides that grouping.
  *
  * Imported once, for its side effect, from `main.tsx` (the app entry) — importing it anywhere
  * else risks a second, redundant `init()` call.
  */
 void i18next.use(initReactI18next).init({
   resources: {
-    en: { common: commonEn, register: registerEn },
-    vi: { common: commonVi, register: registerVi },
+    en: { common: commonEn, register: registerEn, profile: profileEn },
+    vi: { common: commonVi, register: registerVi, profile: profileVi },
   },
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register'],
+  ns: ['common', 'register', 'profile'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });

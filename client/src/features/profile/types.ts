@@ -10,6 +10,10 @@ export const MAX_BIO_LENGTH = 500;
  * persisting but never returning them, see `modules/user/user-impl/docs/
  * MVP/U11_...md`'s 2026-08-26 update) — this type reflects the fixed shape.
  *
+ * **`city` is being retired (CLIENT-REF-3/U19)** — `EditProfileModal` no longer edits or displays
+ * it (replaced by `regionId`/`regionName`); the field stays here only because the backend hasn't
+ * dropped the column yet (`modules/user/user-impl/docs/MVP/U19_REMOVE_CITY_FIELD.md`, `TODO`).
+ *
  * `useMyProfile` is the only consumer — it returns this full type for the
  * logged-in user's own profile (`GET /api/users/me`). Any other user looked
  * up by id comes back as the PII-free `UserInfoResponse`, never this
@@ -30,7 +34,16 @@ export interface UserResponse {
   coverUrl: string | null;
   location: { latitude: number; longitude: number } | null;
   city: string | null;
+  /** The linked country's English name (when {@link countryId} is set), else the legacy free
+   * text a country was never matched to, else `null` (U16). Display only — profile edit submits
+   * `countryId`/`regionId`, never this string. */
   country: string | null;
+  /** `countries.id` in the reference domain, or `null` (U16). */
+  countryId: number | null;
+  /** `regions.id` in the reference domain, or `null` (U16). */
+  regionId: number | null;
+  /** English name of {@link regionId}'s region, or `null` (U16). */
+  regionName: string | null;
   heightCm: number | null;
   weightKg: number | null;
   shoeSizeCm: number | null;

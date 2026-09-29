@@ -33,6 +33,9 @@ const profileFixture: UserResponse = {
   location: null,
   city: 'Riverside',
   country: null,
+  countryId: null,
+  regionId: null,
+  regionName: null,
   heightCm: null,
   weightKg: null,
   shoeSizeCm: null,
@@ -111,8 +114,27 @@ const footballPost = {
  * safe the same way `AdminLayout.stories.tsx`'s shared `QueryClientProvider`
  * wrapper is.
  */
+// CLIENT-REF-3: EditProfileModal (unconditionally mounted, only its Dialog is closed) now wires
+// useGeoLocaleFieldsData() itself, and ProfilePage fetches preferences for its languageCode seed
+// — both fire on mount regardless of the modal's own open state.
+const preferencesFixture = {
+  language: null,
+  timezone: null,
+  distanceUnit: null,
+  notificationEmail: null,
+  notificationPush: null,
+  notificationSms: null,
+  privacyProfile: null,
+  privacyLocation: null,
+  createdAt: null,
+  updatedAt: null,
+};
+
 function mockGet(url: string): { data: unknown } {
   if (url === '/users/me') return apiResponse(profileFixture);
+  if (url === '/users/me/preferences') return apiResponse(preferencesFixture);
+  if (url === '/reference/languages') return apiResponse([]);
+  if (url === '/reference/countries') return apiResponse([]);
   if (url === '/sports/profiles') return apiResponse([footballProfile]);
   if (url === '/sports') return apiResponse([{ id: 5, name: 'Football', iconUrl: null }]);
   if (url === '/posts/mine') return apiResponse({ ...emptyPage().data.data, content: [footballPost] });
@@ -124,6 +146,12 @@ function mockGet(url: string): { data: unknown } {
   throw new Error(`unexpected GET ${url}`);
 }
 apiClient.get = (async (url: string) => mockGet(url)) as typeof apiClient.get;
+apiClient.post = (async (url: string) => {
+  if (url === '/reference/resolve') {
+    return apiResponse({ language: null, country: null, region: null, source: null });
+  }
+  throw new Error(`unexpected POST ${url}`);
+}) as typeof apiClient.post;
 useAuthStore.getState().setSession(storyUser, 'story-access-token');
 
 const meta = {

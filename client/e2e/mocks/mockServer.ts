@@ -10,6 +10,7 @@ import { resetFriendHandlersState } from './handlers/friends.ts';
 import { resetGroupHandlersState, seedJoinRequestsState } from './handlers/groups.ts';
 import { resetLocationHandlersState } from './handlers/locations.ts';
 import { resetNotificationHandlersState, seedNotificationsState } from './handlers/notifications.ts';
+import { resetPreferenceHandlersState } from './handlers/preferences.ts';
 import { resetSessionHandlersState } from './handlers/sessions.ts';
 import {
   resetSportHandlersState,
@@ -101,6 +102,7 @@ function resetSession(sessionId: string): void {
   resetLocationHandlersState(sessionId);
   resetSessionHandlersState(sessionId);
   resetNotificationHandlersState(sessionId);
+  resetPreferenceHandlersState(sessionId);
   resetOverrides(sessionId);
   requestLogs.delete(sessionId);
 }

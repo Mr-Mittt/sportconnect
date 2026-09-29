@@ -45,6 +45,9 @@ export function useUpdateMyProfile() {
 
   return {
     updateProfile: mutation.mutate,
+    // CLIENT-REF-3: `useEditProfileSave` awaits both this and `useUpdateMyPreferences` to report
+    // which side failed distinctly — `mutate` (fire-and-forget) can't be awaited.
+    updateProfileAsync: mutation.mutateAsync,
     isPending: mutation.isPending,
     isSuccess: mutation.isSuccess,
     errorMessage,

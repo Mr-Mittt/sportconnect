@@ -30,13 +30,16 @@ import { expect, test } from '../mocks/test.ts';
  * (e2e/mocks/fixtures.ts) is Jordan Lee's own full profile row.
  */
 
-test('Profile journey', async ({ page }) => {
+test('Profile journey', async ({ page, context }) => {
   await test.step('1. load — header/bio render, Posts tab is the default, both own posts show', async () => {
     await seedAuthenticatedSession(page, '/profile');
     await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
     // .first() — "Jordan Lee" also appears as the author name on both own posts below.
     await expect(page.getByText('Jordan Lee').first()).toBeVisible();
-    await expect(page.getByText('@jordanlee · Riverside')).toBeVisible();
+    // CLIENT-REF-3: mockMyProfile's regionId is null (unmatched legacy 'city' text) — no
+    // fallback to it (user decision), so the handle line is just the username until step 6 sets
+    // a real region.
+    await expect(page.getByText('@jordanlee')).toBeVisible();
     await expect(
       page.getByText('Weekend warrior. Badminton on Saturdays, pickleball whenever the courts are free.'),
     ).toBeVisible();
@@ -118,17 +121,56 @@ test('Profile journey', async ({ page }) => {
     await expect(page.getByLabel('Model')).toHaveValue('Yonex Astrox 99 Pro');
   });
 
-  await test.step('6. Edit Profile modal — changing the bio saves and updates the header', async () => {
+  await test.step('6. Edit Profile modal — bio, Country/Region/Language via "Use my current location", save, header + UI language update', async () => {
+    // Matches reference.ts's COORDINATES_TEST_LATITUDE/LONGITUDE, resolving to Vietnam +
+    // Ho Chi Minh City (id 102) with source COORDINATES — same fixture signup-locale.spec.ts uses.
+    await context.grantPermissions(['geolocation']);
+    await context.setGeolocation({ latitude: 10.7769, longitude: 106.7009 });
+
     await page.getByRole('button', { name: 'Edit profile' }).click();
     const dialog = page.getByRole('dialog', { name: 'Edit profile' });
     await expect(dialog.getByLabel('First name')).toHaveValue('Jordan');
+    // The legacy-country hint (CLIENT-REF-3) — mockMyProfile.countryId is null but .country
+    // still holds old free text.
+    await expect(dialog.getByText('Currently set to "USA" — pick a country below to replace it.')).toBeVisible();
 
     const bioField = dialog.getByLabel('Bio');
     await bioField.fill('Now coaching weekend badminton clinics too.');
+
+    // CLIENT-REF-3: countryId/regionId/languageCode all start untouched (mockMyProfile has none
+    // set) — a single "Use my current location" click fills Country/Region and, since language
+    // was never explicitly touched, also the resolved default language.
+    await page.getByRole('button', { name: /use my current location/i }).click();
+    await expect(dialog.getByLabel('Region')).toHaveValue('102'); // Ho Chi Minh City
+    await expect(dialog.getByLabel('Language')).toHaveValue('vi');
+
+    const profileUpdateRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/users/') && request.url().includes('/profile') && request.method() === 'PUT',
+    );
     await dialog.getByRole('button', { name: 'Save changes' }).click();
+
+    const request = await profileUpdateRequest;
+    const body = request.postDataJSON() as {
+      countryId?: number;
+      regionId?: number;
+      location?: { latitude: number; longitude: number };
+    };
+    expect(body.countryId).toBe(1);
+    expect(body.regionId).toBe(102);
+    expect(body.location).toEqual({ latitude: 10.7769, longitude: 106.7009 });
 
     await expect(dialog).not.toBeVisible();
     await expect(page.getByText('Now coaching weekend badminton clinics too.')).toBeVisible();
+    // ProfileHeader now shows the newly-set region — no more legacy-city fallback.
+    await expect(page.getByText('@jordanlee · Ho Chi Minh City')).toBeVisible();
+
+    // The language save (PUT /users/me/preferences) switched the UI locale live — reopening
+    // the modal renders its own strings translated (CLIENT-REF-3's new `profile` i18n namespace).
+    await page.getByRole('button', { name: 'Edit profile' }).click();
+    const viDialog = page.getByRole('dialog', { name: 'Chỉnh sửa hồ sơ' });
+    await expect(viDialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(viDialog).not.toBeVisible();
   });
 
   await test.step('7. Memories tab — renders the ComingSoonPage placeholder', async () => {

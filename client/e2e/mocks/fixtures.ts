@@ -128,6 +128,11 @@ export const mockMyProfile: UserResponse = {
   location: null,
   city: 'Riverside',
   country: 'USA',
+  // CLIENT-REF-3: countryId/regionId null (legacy 'USA' free text, unmatched) — exercises the
+  // legacy-country-hint edge case by default; the country/region e2e spec picks a real country.
+  countryId: null,
+  regionId: null,
+  regionName: null,
   heightCm: null,
   weightKg: null,
   shoeSizeCm: null,

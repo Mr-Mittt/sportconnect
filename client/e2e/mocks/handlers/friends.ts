@@ -6,6 +6,7 @@ import type {
   FriendUser,
   UserInfo,
 } from '../../../src/features/friends/types.ts';
+import type { UpdateProfilePayload } from '../../../src/features/profile/profileEditDraft.ts';
 import type { UserResponse } from '../../../src/features/profile/types.ts';
 import {
   mockFriend,
@@ -16,6 +17,7 @@ import {
   mockUser,
 } from '../fixtures.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
+import { mockCountries, mockRegionsByCountryId } from './reference.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
@@ -305,6 +307,13 @@ export const friendHandlers: HttpHandler[] = [
   // before this ticket. null-means-skip, mirroring `UserServiceImpl.updateProfile`'s real
   // behavior (`EditProfileModal`'s own `buildProfileUpdatePayload` already only ever sends
   // fields that changed, never `null`, so this handler doesn't need to special-case one).
+  //
+  // CLIENT-REF-3: `body.country`/`.city` are gone from `UpdateProfilePayload` — `countryId`/
+  // `regionId` take their place, resolved into display names (`country`/`regionName`) from the
+  // same `mockCountries`/`mockRegionsByCountryId` fixtures `reference.ts`'s handlers use, same
+  // "small stateful fake backend" reasoning as `myProfileState` itself. `countryId` present means
+  // `regionId` replaces the stored region — an absent `regionId` clears it (U16's "both together"
+  // rule; `EditProfileModal`'s `applyGeoSelection` already always sends both when either changed).
   http.put('/api/users/:userId/profile', async ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
@@ -313,11 +322,32 @@ export const friendHandlers: HttpHandler[] = [
       return HttpResponse.json(apiError('User not found'), { status: 404 });
     }
     const session = friendsSessions.get(sessionIdFromRequest(request));
-    const body = (await request.json()) as Partial<UserResponse>;
+    const body = (await request.json()) as UpdateProfilePayload;
+    const current = session.myProfileState;
+
+    let countryId = current.countryId;
+    let regionId = current.regionId;
+    if (body.countryId !== undefined) {
+      countryId = body.countryId;
+      regionId = body.regionId ?? null;
+    } else if (body.regionId !== undefined) {
+      regionId = body.regionId;
+    }
+    const country =
+      countryId !== null ? (mockCountries.find((c) => c.id === countryId)?.name ?? current.country) : current.country;
+    const regionName =
+      regionId !== null
+        ? (mockRegionsByCountryId[countryId ?? -1]?.find((r) => r.id === regionId)?.name ?? null)
+        : null;
+
     const updated: UserResponse = {
-      ...session.myProfileState,
+      ...current,
       ...body,
-      fullName: `${body.firstName ?? session.myProfileState.firstName} ${body.lastName ?? session.myProfileState.lastName}`,
+      countryId,
+      regionId,
+      country,
+      regionName,
+      fullName: `${body.firstName ?? current.firstName} ${body.lastName ?? current.lastName}`,
     };
     session.myProfileState = updated;
     return HttpResponse.json(apiResponse(updated, 'Profile updated successfully'));

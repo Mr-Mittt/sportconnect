@@ -19,6 +19,9 @@ const baseUser: UserResponse = {
   location: null,
   city: 'Riverside',
   country: null,
+  countryId: null,
+  regionId: 101,
+  regionName: 'Riverside',
   heightCm: null,
   weightKg: null,
   shoeSizeCm: null,
@@ -37,7 +40,7 @@ function renderHeader(overrides: Partial<UserResponse> = {}) {
 }
 
 describe('ProfileHeader', () => {
-  it('renders full name, handle, city, and bio in italic, wrapped in quotes', () => {
+  it('renders full name, handle, regionName, and bio in italic, wrapped in quotes', () => {
     renderHeader();
     expect(screen.getByText('Bilal Nasser')).toBeInTheDocument();
     expect(screen.getByText('@bnasser · Riverside')).toBeInTheDocument();
@@ -68,13 +71,18 @@ describe('ProfileHeader', () => {
     expect(screen.queryByText(/@/)).not.toBeInTheDocument();
   });
 
-  it('omits city from the handle line when city is null', () => {
-    renderHeader({ city: null });
+  it('omits the region segment from the handle line when regionName is null', () => {
+    renderHeader({ regionId: null, regionName: null });
     expect(screen.getByText('@bnasser')).toBeInTheDocument();
   });
 
-  it('renders no handle line at all when both username and city are null', () => {
-    renderHeader({ username: null, city: null });
+  it('never falls back to the legacy city string when regionName is null (CLIENT-REF-3, user decision)', () => {
+    renderHeader({ regionId: null, regionName: null });
+    expect(screen.queryByText(/Riverside/)).not.toBeInTheDocument();
+  });
+
+  it('renders no handle line at all when both username and regionName are null', () => {
+    renderHeader({ username: null, regionId: null, regionName: null });
     expect(screen.queryByText(/@|Riverside/)).not.toBeInTheDocument();
   });
 

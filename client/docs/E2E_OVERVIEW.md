@@ -367,7 +367,10 @@ through `KNOWN_USERS`'s narrow `FriendUser` shape, since `/profile`'s `useMyProf
 `EditProfileModal` need the full row for the caller's own id. **PROFILE-8** made this session-scoped
 (`myProfileState`, seeded from `mockMyProfile`) and added `PUT /api/users/:userId/profile`, so an
 Edit Profile save actually changes what the next `GET` returns — PROFILE-7 never needed this (its
-baselines only ever exercised a clean load, no save).
+baselines only ever exercised a clean load, no save). **CLIENT-REF-3:** `countryId`/`regionId`/
+`regionName` are all `null` by default (the legacy `country: 'USA'` free text was never matched to
+a real country) — deliberately exercises the legacy-country hint and the no-region-segment handle
+line by default; `profile-journey.spec.ts` step 6 picks a real country/region/language itself.
 
 ---
 
@@ -914,23 +917,30 @@ Profile save, and the Memories placeholder.
 
 | Step | Asserts |
 |---|---|
-| 1. load | Header shows "Jordan Lee" / "@jordanlee · Riverside" / the seeded bio, Posts tab selected by default, both of mockUser's own posts (`mockPost`/`mockGroupPost`, both Badminton) render |
+| 1. load | Header shows "Jordan Lee" / "@jordanlee" (**CLIENT-REF-3:** no region segment — `mockMyProfile.regionId` is `null`, and `ProfileHeader` no longer falls back to the legacy `city` string) / the seeded bio, Posts tab selected by default, both of mockUser's own posts (`mockPost`/`mockGroupPost`, both Badminton) render |
 | 2. SportSwitcher | Pickleball pill → "No posts yet for this sport." (mockUser holds a Pickleball profile but no Pickleball posts) → Badminton pill restores both |
 | 3. composer | Typed content + "Post" (exact — `getByRole('button', { name: 'Post' })` without `exact: true` also matches "Post options"/the trending "#fridayrun 12 posts" button) → new article first, 3 total |
 | 4. comment modal | Opens empty on the new post, adds a comment via `dialog.getByLabel('Add a comment')`, comment count bumps to 1 |
 | 5. Settings tab | Skill level starts `intermediate`, Save disabled; changes skill level to `advanced` **and** the `SportAttributesFields` "Racket brand" attribute (a top-level `gear` field; SPORT-7 made the schema v3/nested but this step still edits the loose one), Save enables, saves, Save disables again and both values persist |
 | 5b. Settings tab — CLIENT-SESSION-19 | Save starts disabled again; clicks "Add" on the `DEFINITION_LIST` attribute "Rackets you own", fills the `AddDefinitionRecordModal` (Model/Weight), submits — dialog closes, "Item 1" + the entered model render inline, Save enables — saves, Save disables again and the record still renders |
-| 6. Edit Profile modal | Prefilled ("Jordan" in First name), changes Bio, saves — modal closes and the new bio appears in `ProfileHeader` |
+| 6. Edit Profile modal (**CLIENT-REF-3**, expanded) | Prefilled ("Jordan" in First name); the legacy-country hint renders (`mockMyProfile.country` = "USA", `countryId` `null`); changes Bio; grants geolocation and clicks "Use my current location" (same `reference.ts` coordinate fixture `signup-locale.spec.ts` uses) — fills Region "Ho Chi Minh City" and Language "Tiếng Việt" (both untouched until now); Save — the `PUT .../profile` request body carries `countryId`/`regionId`/`location`; modal closes, new bio + `ProfileHeader`'s "@jordanlee · Ho Chi Minh City" render; reopening Edit Profile shows it translated ("Chỉnh sửa hồ sơ" — the language save switched the UI locale live via `useSyncUserLocale`) |
 | 7. Memories tab | `ComingSoonPage` placeholder ("Memories" heading + "Coming soon.") |
 
-**Two real MSW mutation gaps found and fixed at pickup** — neither existed before this ticket
-(`PROFILE-7`'s visual-regression baselines never exercised a save, only a clean load):
+**Two real MSW mutation gaps found and fixed at PROFILE-8's pickup** (neither existed before that
+ticket — `PROFILE-7`'s visual-regression baselines never exercised a save, only a clean load):
 `PUT /api/sports/profiles/:profileId` (`sport.ts` — merges `attributes` into the existing map rather
 than replacing it wholesale, mirroring the real service's "omitted key keeps its stored value"
 behavior) and `PUT /api/users/:userId/profile` (`friends.ts` — the `GET /api/users/:userId` own-id
 branch `PROFILE-7` added was reading a fixed `mockMyProfile` constant; now backed by a new
 session-scoped `myProfileState` field so a save actually changes what the next `GET` returns, same
 "small stateful fake backend" pattern every other mutable fixture in this suite already uses).
+
+**CLIENT-REF-3** widened `friends.ts`'s profile-update handler further: `countryId`/`regionId` (not
+`country`/`city` free text, both dropped from the payload) resolve into `country`/`regionName`
+display names from `reference.ts`'s `mockCountries`/`mockRegionsByCountryId`, same "both together"
+semantics the real backend documents (U16). `preferences.ts` also went from a fixed `GET`-only stub
+to a session-scoped `PUT`+`GET` pair (same pattern), so a saved language actually persists across a
+refetch — needed for step 6's live UI-language-switch assertion above.
 
 **Separate test — SPORT-10 Active/Inactive toggle:**
 
@@ -1202,9 +1212,13 @@ every other spec's mockUser-authored fixtures already show) → waits for `docum
 screenshot compared against `e2e/visual/__screenshots__/profile-{state}-{width}.png`. Same
 known-Windows-noise caveat as every spec above: `pnpm test:visual` on a Windows host diffs these
 wholesale on font-rendering noise — the committed baselines are Linux-rendered via the `client-ci`
-`update-baselines` dispatch. All 12 are CI-current as of SPORT-7 (which regenerated the 3
+`update-baselines` dispatch. All 12 were CI-current as of SPORT-7 (which regenerated the 3
 `profile-settings-*` for schema v3's collapsible groups + nested `Rackets` sub-group; the other 9
-were confirmed byte-identical against that same artifact).
+were confirmed byte-identical against that same artifact) — **CLIENT-REF-3 changes all 12 again**:
+`ProfileHeader`'s handle line dropped the `city` fallback (`@jordanlee · Riverside` → `@jordanlee`,
+since `mockMyProfile.regionId` is `null`), which shows on every tab, and `edit-profile-modal`'s own
+3 additionally change shape — City replaced by Country/Region/Language (`GeoLocaleFields`). Not yet
+regenerated (Windows host); expected to fail until the next `update-baselines` dispatch.
 
 ### `e2e/visual/app-sport-reactivate.spec.ts` (SPORT-12, `visual-regression` project)
 
