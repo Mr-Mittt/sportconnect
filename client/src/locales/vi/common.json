@@ -23,5 +23,10 @@
       "unavailable": "Vị trí hiện không khả dụng — bạn vẫn có thể chọn thủ công.",
       "timeout": "Việc định vị mất quá nhiều thời gian — bạn vẫn có thể chọn thủ công."
     }
+  },
+  "typing": {
+    "one": "{{name}} đang nhập…",
+    "two": "{{first}} và {{second}} đang nhập…",
+    "many": "{{count}} người đang nhập…"
   }
 }

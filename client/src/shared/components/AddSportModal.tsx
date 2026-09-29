@@ -1,3 +1,4 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import type { SportKey } from '@/shared/types/sport';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
@@ -21,6 +22,8 @@ interface AddSportModalProps {
   resumableProfiles?: Map<SportKey, ResumablePrevious>;
   /** SPORT-10: pre-select this sport (e.g. the Profile-page deactivated pill that opened this). */
   initialSport?: SportKey;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -45,11 +48,13 @@ export function AddSportModal({
   promptMessage,
   resumableProfiles,
   initialSport,
+  i18nOverridePrefix,
 }: AddSportModalProps) {
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
-        <DialogHeader title="Add a sport" className="border-hairline-b border-border px-4 py-3" />
+        <DialogHeader title={t('addSport.modalTitle')} className="border-hairline-b border-border px-4 py-3" />
         <AddSportFields
           availableSports={availableSports}
           onSubmit={onSubmit}
@@ -59,6 +64,7 @@ export function AddSportModal({
           resumableProfiles={resumableProfiles}
           onCancel={onClose}
           initialSport={initialSport}
+          i18nOverridePrefix={i18nOverridePrefix}
         />
       </DialogContent>
     </Dialog>

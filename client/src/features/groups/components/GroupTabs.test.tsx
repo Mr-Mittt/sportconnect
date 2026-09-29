@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { GroupTabs } from './GroupTabs';
+import i18n from '@/app/i18n';
 
 describe('GroupTabs', () => {
   it('marks the active tab as selected', () => {
@@ -44,4 +45,23 @@ describe('GroupTabs', () => {
     await user.click(screen.getByRole('tab', { name: 'Members' }));
     expect(onChange).toHaveBeenCalledWith('members');
   });
+
+  // CLIENT-I18N-7: set and restore the locale explicitly — don't rely on a global reset.
+  it('renders Vietnamese copy when the locale is vi', async () => {
+    await i18n.changeLanguage('vi');
+    render(<GroupTabs activeTab="posts" onChange={() => {}} />);
+    expect(screen.getByRole('tablist', { name: 'Các mục của nhóm' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Trò chuyện' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Cài đặt' })).toBeInTheDocument();
+    await i18n.changeLanguage('en');
+  });
+
+  it('prefers an override-prefix key over the default copy', async () => {
+    await i18n.changeLanguage('en');
+    i18n.addResourceBundle('en', 'groupsOverrideTest', { custom: { tabs: { posts: 'My writing' } } }, true, true);
+    render(<GroupTabs activeTab="posts" onChange={() => {}} i18nOverridePrefix="groupsOverrideTest:custom" />);
+    expect(screen.getByRole('tab', { name: 'My writing' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Chat' })).toBeInTheDocument(); // un-overridden key falls back
+  });
+
 });

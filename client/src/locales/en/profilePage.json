@@ -17,11 +17,6 @@
     "sectionTitle": "Sport profile",
     "skillLevel": "Skill level",
     "skillLevelPlaceholder": "Select a skill level",
-    "skillLevels": {
-      "beginner": "Beginner",
-      "intermediate": "Intermediate",
-      "advanced": "Advanced"
-    },
     "yearsOfExperience": "Years of experience",
     "save": "Save changes",
     "saving": "Saving…"

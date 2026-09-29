@@ -1,3 +1,4 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 
@@ -8,6 +9,8 @@ interface DeleteGroupConfirmDialogProps {
   isSubmitting: boolean;
   isError: boolean;
   groupName: string;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -22,22 +25,24 @@ export function DeleteGroupConfirmDialog({
   isSubmitting,
   isError,
   groupName,
+  i18nOverridePrefix,
 }: DeleteGroupConfirmDialogProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">
-        <DialogHeader title={`Delete ${groupName}?`} className="mb-3" />
+        <DialogHeader title={t('deleteGroup.title', { groupName })} className="mb-3" />
         <p className="mb-3 text-2sm text-text-secondary">
-          This removes the group for every member. Posts and membership can't be recovered.
+          {t('deleteGroup.body')}
         </p>
         {isError && (
           <p role="alert" className="mb-2 text-2sm text-text-danger">
-            Couldn't delete the group. Please try again.
+            {t('deleteGroup.error')}
           </p>
         )}
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
-            Cancel
+            {t('deleteGroup.cancel')}
           </Button>
           <Button
             variant="outline"
@@ -46,7 +51,7 @@ export function DeleteGroupConfirmDialog({
             disabled={isSubmitting}
             className="border-text-danger text-text-danger hover:bg-bg-accent"
           >
-            {isSubmitting ? 'Deleting…' : 'Delete group'}
+            {isSubmitting ? t('deleteGroup.submitting') : t('deleteGroup.submit')}
           </Button>
         </div>
       </DialogContent>

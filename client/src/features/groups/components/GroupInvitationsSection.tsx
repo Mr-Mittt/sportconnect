@@ -1,5 +1,6 @@
 import type { GroupInvitation } from '@/features/feed/types';
 import { formatNameList } from '@/shared/lib/formatNameList';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Skeleton } from '@/shared/ui/skeleton';
 
@@ -12,6 +13,8 @@ interface GroupInvitationsSectionProps {
   onReject: (invitationId: number) => void;
   isAccepting: boolean;
   isRejecting: boolean;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -41,12 +44,14 @@ export function GroupInvitationsSection({
   onReject,
   isAccepting,
   isRejecting,
+  i18nOverridePrefix,
 }: GroupInvitationsSectionProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   if (!isLoading && !isError && invitations.length === 0) return null;
 
   return (
-    <section aria-label="Invitations" className="flex flex-col gap-2.5">
-      <h2 className="text-2sm font-semibold text-text-primary">Invitations</h2>
+    <section aria-label={t('invitations.title')} className="flex flex-col gap-2.5">
+      <h2 className="text-2sm font-semibold text-text-primary">{t('invitations.title')}</h2>
 
       {isLoading && (
         <div className="flex flex-col gap-2.5">
@@ -57,14 +62,14 @@ export function GroupInvitationsSection({
       {isError && (
         <div className="flex items-center gap-2">
           <p role="alert" className="text-2sm text-text-danger">
-            Couldn't load your invitations.
+            {t('invitations.loadError')}
           </p>
           <button
             type="button"
             onClick={onRetry}
             className="cursor-pointer rounded-lg border-hairline border-border px-2.5 py-1 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
-            Retry
+            {t('retry')}
           </button>
         </div>
       )}
@@ -81,7 +86,7 @@ export function GroupInvitationsSection({
                   {invitation.groupName}
                 </div>
                 <div className="text-2xs text-text-muted">
-                  Group invitation from {formatNameList(invitation.inviterFullNames)}
+                  {t('invitations.from', { names: formatNameList(invitation.inviterFullNames) })}
                 </div>
               </div>
               <div className="flex shrink-0 gap-1.5">
@@ -92,7 +97,7 @@ export function GroupInvitationsSection({
                   disabled={isRejecting}
                   onClick={() => onReject(invitation.id)}
                 >
-                  Reject
+                  {t('invitations.reject')}
                 </Button>
                 <Button
                   type="button"
@@ -101,7 +106,7 @@ export function GroupInvitationsSection({
                   disabled={isAccepting}
                   onClick={() => onAccept(invitation.id)}
                 >
-                  Accept
+                  {t('invitations.accept')}
                 </Button>
               </div>
             </div>

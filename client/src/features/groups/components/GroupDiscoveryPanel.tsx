@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import type { Group, GroupInvitation, JoinRequest } from '@/features/feed/types';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
@@ -46,6 +47,8 @@ interface GroupDiscoveryPanelProps {
   onRetryJoinRequests: () => void;
   onWithdrawJoinRequest: (requestId: number) => void;
   isWithdrawingJoinRequest: boolean;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 function initialsFor(groupName: string): string {
@@ -106,7 +109,9 @@ export function GroupDiscoveryPanel({
   onRetryJoinRequests,
   onWithdrawJoinRequest,
   isWithdrawingJoinRequest,
+  i18nOverridePrefix,
 }: GroupDiscoveryPanelProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   // Transient UI input, same "component owns its own input state" precedent
   // as CreatePostForm's textarea — read at click time by whichever button
   // fires, matching the design reference's single shared input.
@@ -121,6 +126,7 @@ export function GroupDiscoveryPanel({
         onRetry={onRetryInvitations}
         onAccept={onAcceptInvitation}
         onReject={onRejectInvitation}
+        i18nOverridePrefix={i18nOverridePrefix}
         isAccepting={isAcceptingInvitation}
         isRejecting={isRejectingInvitation}
       />
@@ -128,8 +134,8 @@ export function GroupDiscoveryPanel({
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Group name or invite code"
-          aria-label="Group name or invite code"
+          placeholder={t('discovery.searchPlaceholder')}
+          aria-label={t('discovery.searchPlaceholder')}
           className="w-auto min-w-0 flex-1 sm:max-w-64"
         />
         <button
@@ -138,7 +144,7 @@ export function GroupDiscoveryPanel({
           className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-hairline border-border-strong bg-surface-2 px-3 py-1.75 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
         >
           <IconSearch className="size-4" aria-hidden="true" />
-          Join Group
+          {t('discovery.join')}
         </button>
         <button
           type="button"
@@ -146,7 +152,7 @@ export function GroupDiscoveryPanel({
           className="border-hairline flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-dashed border-border-strong bg-surface-2 px-3 py-1.75 text-2sm text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
         >
           <IconPlus className="size-4" aria-hidden="true" />
-          Create Group
+          {t('discovery.create')}
         </button>
       </div>
 
@@ -159,13 +165,13 @@ export function GroupDiscoveryPanel({
 
       {isError && (
         <div className="flex items-center justify-center gap-2 py-4">
-          <p className="text-2sm text-text-danger">Couldn't load your groups.</p>
+          <p className="text-2sm text-text-danger">{t('loadGroupsError')}</p>
           <button
             type="button"
             onClick={onRetry}
             className="cursor-pointer rounded-lg border-hairline border-border px-2.5 py-1 text-2sm font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
-            Retry
+            {t('retry')}
           </button>
         </div>
       )}
@@ -173,7 +179,7 @@ export function GroupDiscoveryPanel({
       {!isLoading && !isError && groups.length === 0 && (
         <div className="flex flex-col items-center gap-1.5 py-8 text-center">
           <IconUsersGroup className="size-6 text-text-muted" aria-hidden="true" />
-          <p className="text-2sm text-text-muted">You haven't joined any groups yet.</p>
+          <p className="text-2sm text-text-muted">{t('discovery.empty')}</p>
         </div>
       )}
 
@@ -186,7 +192,7 @@ export function GroupDiscoveryPanel({
               <button
                 key={group.id}
                 type="button"
-                aria-label={`Open ${group.groupName}`}
+                aria-label={t('discovery.openGroup', { groupName: group.groupName })}
                 onClick={() => onOpenGroup(group.id, group.sportId)}
                 className="border-hairline flex min-h-16.5 cursor-pointer items-center gap-3 rounded-xl border-border bg-surface-2 p-3.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
               >
@@ -206,7 +212,7 @@ export function GroupDiscoveryPanel({
                 </Avatar>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-text-primary">{group.groupName}</div>
-                  <div className="text-2xs text-text-muted">{group.memberCount} members</div>
+                  <div className="text-2xs text-text-muted">{t('discovery.members', { count: group.memberCount })}</div>
                 </div>
               </button>
             );
@@ -215,8 +221,8 @@ export function GroupDiscoveryPanel({
       )}
 
       {(isJoinRequestsLoading || isJoinRequestsError || joinRequests.length > 0) && (
-        <section aria-label="Join requests" className="flex flex-col gap-2.5">
-          <h2 className="text-2sm font-semibold text-text-primary">Join requests</h2>
+        <section aria-label={t('discovery.joinRequests')} className="flex flex-col gap-2.5">
+          <h2 className="text-2sm font-semibold text-text-primary">{t('discovery.joinRequests')}</h2>
 
           {isJoinRequestsLoading && (
             <div className="flex flex-col gap-2.5">
@@ -227,14 +233,14 @@ export function GroupDiscoveryPanel({
           {isJoinRequestsError && (
             <div className="flex items-center gap-2">
               <p role="alert" className="text-2sm text-text-danger">
-                Couldn't load your join requests.
+                {t('discovery.joinRequestsLoadError')}
               </p>
               <button
                 type="button"
                 onClick={onRetryJoinRequests}
                 className="cursor-pointer rounded-lg border-hairline border-border px-2.5 py-1 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
               >
-                Retry
+                {t('retry')}
               </button>
             </div>
           )}
@@ -256,7 +262,7 @@ export function GroupDiscoveryPanel({
                     disabled={isWithdrawingJoinRequest}
                     onClick={() => onWithdrawJoinRequest(request.id)}
                   >
-                    Withdraw
+                    {t('discovery.withdraw')}
                   </Button>
                 </div>
               ))}

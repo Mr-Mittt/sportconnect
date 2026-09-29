@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { sportIdForKey } from '@/features/feed/sportIdMap';
 import { SKILL_LEVELS } from '@/shared/lib/skillLevels';
 import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
@@ -45,6 +46,8 @@ interface AddSportFieldsProps {
   /** SPORT-10: pre-select this sport instead of `availableSports[0]` — used when the
    * Profile-page `SportSwitcher`'s deactivated pill opens the modal already targeting that sport. */
   initialSport?: SportKey;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -73,7 +76,9 @@ export function AddSportFields({
   resumableProfiles,
   onCancel,
   initialSport,
+  i18nOverridePrefix,
 }: AddSportFieldsProps) {
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   const [selectedSport, setSelectedSport] = useState<SportKey | ''>(
     initialSport ?? availableSports[0] ?? '',
   );
@@ -112,12 +117,12 @@ export function AddSportFields({
         )}
         {availableSports.length === 0 ? (
           <p className="text-sm text-text-secondary">
-            You already have a profile for every sport SportHub supports right now.
+            {t('addSport.allSportsAdded')}
           </p>
         ) : (
           <>
             <div>
-              <Label htmlFor="add-sport-sport">Sport</Label>
+              <Label htmlFor="add-sport-sport">{t('addSport.sport')}</Label>
               <Select
                 id="add-sport-sport"
                 value={selectedSport}
@@ -132,12 +137,13 @@ export function AddSportFields({
             </div>
             {isResumeMode && (
               <p className="text-2sm text-text-secondary">
-                You had a {getSportProfileConfig(selectedSport as SportKey).label} profile before —
-                we&apos;ll reactivate it with your previous details.
+                {t('addSport.resumeNote', {
+                  sport: getSportProfileConfig(selectedSport as SportKey).label,
+                })}
               </p>
             )}
             <div>
-              <Label htmlFor="add-sport-skill">Skill level</Label>
+              <Label htmlFor="add-sport-skill">{t('addSport.skillLevel')}</Label>
               <Select
                 id="add-sport-skill"
                 value={isResumeMode ? (resumable?.skillLevel ?? '') : skillLevel}
@@ -145,17 +151,17 @@ export function AddSportFields({
                 disabled={isResumeMode}
               >
                 <option value="" disabled>
-                  Select a skill level
+                  {t('addSport.skillLevelPlaceholder')}
                 </option>
                 {SKILL_LEVELS.map((level) => (
-                  <option key={level.value} value={level.value}>
-                    {level.label}
+                  <option key={level} value={level}>
+                    {t(`skillLevels.${level}`)}
                   </option>
                 ))}
               </Select>
             </div>
             <div>
-              <Label htmlFor="add-sport-experience">Years of experience (optional)</Label>
+              <Label htmlFor="add-sport-experience">{t('addSport.yearsOfExperience')}</Label>
               <Input
                 id="add-sport-experience"
                 type="number"
@@ -171,14 +177,14 @@ export function AddSportFields({
         )}
         {isError && (
           <p role="alert" className="text-2sm text-text-danger">
-            Couldn&apos;t add that sport. Try again.
+            {t('addSport.error')}
           </p>
         )}
       </div>
       <div className="border-hairline-t flex justify-end gap-2 border-border px-4 py-3">
         {isResumeMode && onCancel !== undefined && (
           <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
+            {t('addSport.cancel')}
           </Button>
         )}
         <Button
@@ -189,11 +195,11 @@ export function AddSportFields({
         >
           {isResumeMode
             ? isSubmitting
-              ? 'Reactivating…'
-              : 'Reactivate'
+              ? t('addSport.reactivating')
+              : t('addSport.reactivate')
             : isSubmitting
-              ? 'Adding…'
-              : 'Add sport'}
+              ? t('addSport.submitting')
+              : t('addSport.submit')}
         </Button>
       </div>
     </>

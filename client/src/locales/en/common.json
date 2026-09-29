@@ -23,5 +23,10 @@
       "unavailable": "Location isn't available right now — you can still pick these manually.",
       "timeout": "Location took too long to respond — you can still pick these manually."
     }
+  },
+  "typing": {
+    "one": "{{name}} is typing…",
+    "two": "{{first}} and {{second}} are typing…",
+    "many": "{{count}} people are typing…"
   }
 }

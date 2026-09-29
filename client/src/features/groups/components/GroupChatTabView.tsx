@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EmojiPickerButton } from '@/features/chat/components/EmojiPickerButton';
 import type { ChatMessage } from '@/features/chat/types';
 import { formatTypingLabel, type TypingUser } from '@/features/chat/typingLabel';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { useAutoResizeTextarea } from '@/shared/lib/useAutoResizeTextarea';
 import { useInfiniteScrollSentinel } from '@/shared/lib/useInfiniteScrollSentinel';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
@@ -45,6 +46,8 @@ export interface GroupChatTabViewProps {
   /** Other group members currently typing (CHAT-15). */
   typingUsers: TypingUser[];
   sendTyping: (isTyping: boolean) => void;
+  /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -79,7 +82,9 @@ export function GroupChatTabView({
   loadOlderMessages,
   typingUsers,
   sendTyping,
+  i18nOverridePrefix,
 }: GroupChatTabViewProps) {
+  const t = useOverridableText('groups', i18nOverridePrefix);
   const [draft, setDraft] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
@@ -216,10 +221,10 @@ export function GroupChatTabView({
     <div className="flex h-full min-h-105 flex-col">
       <div className="border-hairline flex flex-1 flex-col overflow-hidden rounded-xl border-border bg-surface-2">
         <div ref={containerRef} className="flex-1 overflow-y-auto p-3.5">
-          {isLoading && <p className="text-2sm text-text-muted">Loading…</p>}
+          {isLoading && <p className="text-2sm text-text-muted">{t('chat.loading')}</p>}
           {isError && (
             <p role="alert" className="text-2sm text-text-danger">
-              Couldn't load this group's chat.
+              {t('chat.loadError')}
             </p>
           )}
           {!isLoading && !isError && (
@@ -227,13 +232,13 @@ export function GroupChatTabView({
               <div ref={sentinelRef} aria-hidden="true" />
               {hasOlderMessages && isLoadOlderMessagesError && (
                 <div className="mb-2.5 flex flex-col items-center gap-1.5">
-                  <p className="text-2xs text-text-danger">Couldn't load earlier messages.</p>
+                  <p className="text-2xs text-text-danger">{t('chat.loadEarlierError')}</p>
                   <button
                     type="button"
                     onClick={handleLoadOlderMessages}
                     className="cursor-pointer rounded-lg border-hairline border-border px-3 py-1 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                   >
-                    Retry
+                    {t('chat.retry')}
                   </button>
                 </div>
               )}
@@ -244,11 +249,11 @@ export function GroupChatTabView({
                   disabled={isLoadingOlderMessages}
                   className="mb-2.5 w-full cursor-pointer rounded-lg border-hairline border-border py-1 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                 >
-                  {isLoadingOlderMessages ? 'Loading…' : 'Load earlier messages'}
+                  {isLoadingOlderMessages ? t('chat.loading') : t('chat.loadEarlier')}
                 </button>
               )}
               {(messages?.length ?? 0) === 0 ? (
-                <p className="text-2sm text-text-muted">No messages yet.</p>
+                <p className="text-2sm text-text-muted">{t('chat.empty')}</p>
               ) : (
                 <div className="flex flex-col gap-1">
                   {(() => {
@@ -327,7 +332,7 @@ export function GroupChatTabView({
                                       }}
                                       rows={1}
                                       className="min-h-0 resize-none break-words py-1.5 text-2sm"
-                                      aria-label="Edit message content"
+                                      aria-label={t('chat.editContentAria')}
                                     />
                                     <div
                                       className="absolute bottom-0 right-0.5 z-10 flex translate-y-1/2 gap-0.5"
@@ -337,8 +342,8 @@ export function GroupChatTabView({
                                         type="button"
                                         onClick={saveEdit}
                                         disabled={editDraft.trim().length === 0}
-                                        aria-label="Save edit"
-                                        title="Save"
+                                        aria-label={t('chat.saveEditAria')}
+                                        title={t('chat.saveEditTitle')}
                                         className="cursor-pointer rounded p-0.5 text-text-accent hover:text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                                       >
                                         <IconCheck className="size-4.5" aria-hidden="true" />
@@ -346,8 +351,8 @@ export function GroupChatTabView({
                                       <button
                                         type="button"
                                         onClick={cancelEditing}
-                                        aria-label="Cancel edit"
-                                        title="Cancel"
+                                        aria-label={t('chat.cancelEditAria')}
+                                        title={t('chat.cancelEditTitle')}
                                         className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                                       >
                                         <IconX className="size-4.5" aria-hidden="true" />
@@ -355,13 +360,13 @@ export function GroupChatTabView({
                                     </div>
                                   </div>
                                 ) : isDeleted ? (
-                                  <span className="italic text-text-muted">Message deleted</span>
+                                  <span className="italic text-text-muted">{t('chat.deleted')}</span>
                                 ) : (
                                   <>
                                     {message.content}
                                     {message.editedAt !== null && (
                                       <span className="ml-1 text-2xs text-text-muted">
-                                        (edited)
+                                        {t('chat.edited')}
                                       </span>
                                     )}
                                   </>
@@ -372,7 +377,7 @@ export function GroupChatTabView({
                                       type="button"
                                       onClick={() => startEditing(message)}
                                       disabled={isEditing || isDeleting}
-                                      aria-label="Edit message"
+                                      aria-label={t('chat.editMessageAria')}
                                       className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                                     >
                                       <IconPencil className="size-4.5" aria-hidden="true" />
@@ -381,7 +386,7 @@ export function GroupChatTabView({
                                       type="button"
                                       onClick={() => deleteMessage(message.id)}
                                       disabled={isEditing || isDeleting}
-                                      aria-label="Delete message"
+                                      aria-label={t('chat.deleteMessageAria')}
                                       className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                                     >
                                       <IconTrash className="size-4.5" aria-hidden="true" />
@@ -421,8 +426,8 @@ export function GroupChatTabView({
                 }
               }}
               onBlur={stopTypingNow}
-              placeholder="Message the group…"
-              aria-label="Message the group"
+              placeholder={t('chat.placeholder')}
+              aria-label={t('chat.inputAria')}
               disabled={inputDisabled}
               rows={1}
               className="min-h-0 resize-none break-words py-2 pr-9"
@@ -443,7 +448,7 @@ export function GroupChatTabView({
             onClick={send}
             disabled={draft.trim().length === 0 || isSending || inputDisabled}
           >
-            {isSending ? 'Sending…' : 'Send'}
+            {isSending ? t('chat.sending') : t('chat.send')}
           </Button>
         </div>
       </div>

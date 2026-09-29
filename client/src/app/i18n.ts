@@ -2,6 +2,7 @@ import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import commonEn from '@/locales/en/common.json';
 import enumsEn from '@/locales/en/enums.json';
+import groupsEn from '@/locales/en/groups.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
 import loginEn from '@/locales/en/login.json';
 import profileEn from '@/locales/en/profile.json';
@@ -12,6 +13,7 @@ import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
 import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
 import enumsVi from '@/locales/vi/enums.json';
+import groupsVi from '@/locales/vi/groups.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
 import loginVi from '@/locales/vi/login.json';
 import profileVi from '@/locales/vi/profile.json';
@@ -75,6 +77,12 @@ import { useLocaleStore } from './localeStore';
  * ahead of this ticket as `CLIENT-I18N-6`'s "client-authored UI copy," not client-mirrored enum
  * labels; see that ticket's own scope note.
  *
+ * CLIENT-I18N-7: `groups` holds the Groups feature's own copy (`GroupsPage`, its 16 components, and the
+ * few strings its hooks build). Cross-page pieces it touches live elsewhere: `AddSportFields`/`AddSportModal`
+ * and the shared skill-level labels in `sharedComponents` (`addSport.*`, `skillLevels.*`), the chat typing
+ * line in `common` (`typing.*`, shared with the Friends chat panel). `formatNameList` and
+ * `getPageAccessNoSportsPrompt` are plain functions, so they read the i18next singleton directly.
+ *
  * Imported once, for its side effect, from `main.tsx` (the app entry) — importing it anywhere
  * else risks a second, redundant `init()` call.
  */
@@ -91,6 +99,7 @@ void i18next.use(initReactI18next).init({
       homeFeed: homeFeedEn,
       sharedComponents: sharedComponentsEn,
       enums: enumsEn,
+      groups: groupsEn,
     },
     vi: {
       common: commonVi,
@@ -103,12 +112,13 @@ void i18next.use(initReactI18next).init({
       homeFeed: homeFeedVi,
       sharedComponents: sharedComponentsVi,
       enums: enumsVi,
+      groups: groupsVi,
     },
   },
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums'],
+  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });

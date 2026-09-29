@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatNameList } from './formatNameList';
+import i18n from '@/app/i18n';
 
 describe('formatNameList', () => {
   it('returns an empty string for zero names', () => {
@@ -19,4 +20,12 @@ describe('formatNameList', () => {
       'Sam Ito, Priya Shah, and Morgan Diaz',
     );
   });
+
+  it('joins names in the active locale (vi)', async () => {
+    await i18n.changeLanguage('vi');
+    expect(formatNameList(['Sam Ito', 'Priya Shah'])).toBe('Sam Ito và Priya Shah');
+    expect(formatNameList(['Sam Ito', 'Priya Shah', 'Morgan Diaz'])).toBe('Sam Ito, Priya Shah và Morgan Diaz');
+    await i18n.changeLanguage('en');
+  });
+
 });

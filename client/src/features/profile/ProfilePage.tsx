@@ -28,7 +28,7 @@ import { useTrendingHashtags } from '@/shared/hooks/useTrendingHashtags';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { useUpcomingMatches } from '@/shared/hooks/useUpcomingMatches';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
-import { PAGE_ACCESS_NO_SPORTS_PROMPT } from '@/shared/lib/noSportsPrompt';
+import { getPageAccessNoSportsPrompt } from '@/shared/lib/noSportsPrompt';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { MemoriesTab } from './components/MemoriesTab';
 import { PostsTab } from './components/PostsTab';
@@ -69,7 +69,7 @@ import { useUserPreferences } from './useUserPreferences';
  * same `AddSportModal` the SportSwitcher's own "+" pill opens, prompted
  * automatically once (`hasAutoPromptedAddSportRef` latches after the first
  * prompt, not re-shown just because it's closed), with the same
- * `PAGE_ACCESS_NO_SPORTS_PROMPT` copy Groups/Matches use. Fitting: this
+ * `getPageAccessNoSportsPrompt()` copy Groups/Matches use. Fitting: this
  * page's Settings tab is the one place that's genuinely unusable with zero
  * sport profiles (`SportProfileSettingsTab` already renders "Add a sport
  * above to set up its profile.").
@@ -165,7 +165,7 @@ export function ProfilePage() {
       return;
     }
     hasAutoPromptedAddSportRef.current = true;
-    setAddSportPromptMessage(PAGE_ACCESS_NO_SPORTS_PROMPT);
+    setAddSportPromptMessage(getPageAccessNoSportsPrompt());
     setAddSportOpenCount((count) => count + 1);
     setIsAddSportOpen(true);
   }, [sportProfilesQuery.isLoading, sportProfilesQuery.data.length]);
