@@ -17,6 +17,9 @@ const baseUser: UserResponse = {
   location: null,
   city: 'Riverside',
   country: null,
+  countryId: null,
+  regionId: 101,
+  regionName: 'Riverside',
   heightCm: null,
   weightKg: null,
   shoeSizeCm: null,
@@ -64,7 +67,7 @@ export const WithAvatarAndCover: Story = {
   },
 };
 
-/** `username`/`city` both null — the whole handle line is omitted. */
-export const NoUsernameOrCity: Story = {
-  args: { user: { ...baseUser, username: null, city: null } },
+/** `username`/`regionName` both null — the whole handle line is omitted. */
+export const NoUsernameOrRegion: Story = {
+  args: { user: { ...baseUser, username: null, regionId: null, regionName: null } },
 };

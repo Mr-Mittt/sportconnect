@@ -46,12 +46,27 @@ export interface GeoLocaleFieldsData {
   longitude: number | null;
 }
 
+/** Seeds Language/Country/Region from an already-known value (CLIENT-REF-3: the profile's stored
+ * `countryId`/`regionId`, the caller's stored language preference) instead of starting empty like
+ * anonymous sign-up. Every field is optional and independently seeded. A **non-null** seed is
+ * pre-marked `touched` (same "an edit always wins over detection" rule this hook already applies
+ * to a hand-pick) — a stored value is a real prior choice, so the mount's silent resolve must
+ * never silently overwrite it; a later explicit "Use my location" click still captures new
+ * coordinates but likewise won't clobber an already-touched field. A `null`/omitted seed behaves
+ * exactly as the no-`initial` case (untouched, open to resolve/default-language fill). */
+export interface GeoLocaleFieldsInitial {
+  languageCode?: string | null;
+  countryId?: number | null;
+  regionId?: number | null;
+}
+
 /**
  * CLIENT-REF-1: the page-level data hook behind `GeoLocaleFields` — composes the four reference
  * hooks, runs the one-time silent (locales + timezone) resolve on mount, and owns the "Use my
  * current location" button's flow. Shared verbatim by sign-up (CLIENT-REF-2, anonymous) and
- * profile edit (CLIENT-REF-3, authenticated) — neither passes any per-caller option in, since the
- * resolve endpoint and every reference read are public and caller-agnostic.
+ * profile edit (CLIENT-REF-3, authenticated) via the optional `initial` seed (see
+ * {@link GeoLocaleFieldsInitial}) — every reference read and the resolve endpoint itself stay
+ * public and caller-agnostic either way.
  *
  * **Touched-field protection.** A field the user has explicitly changed (`onLanguageChange` /
  * `onCountryChange` / `onRegionChange`) is recorded in an internal `touched` set and is never
@@ -74,7 +89,7 @@ export interface GeoLocaleFieldsData {
  * silent resolve is the one told to skip language entirely, since that resolve's detection would
  * otherwise silently race the seed. See `applyResolvedFields`'s doc comment for the full reasoning.
  */
-export function useGeoLocaleFieldsData(): GeoLocaleFieldsData {
+export function useGeoLocaleFieldsData(initial?: GeoLocaleFieldsInitial): GeoLocaleFieldsData {
   const { data: languages, isLoading: isLanguagesLoading, isError: isLanguagesError } = useLanguages();
   const { data: countries, isLoading: isCountriesLoading, isError: isCountriesError } = useCountries();
 
@@ -88,10 +103,25 @@ export function useGeoLocaleFieldsData(): GeoLocaleFieldsData {
   // which fixes the mismatch without disabling the country-hand-pick default-language feature,
   // whose own gating still reads `touchedRef`, not "is languageCode null" (that check would always
   // be false now that this is never `null` to begin with).
-  const [languageCode, setLanguageCode] = useState<string | null>(() => useLocaleStore.getState().locale);
-  const [countryId, setCountryId] = useState<number | null>(null);
-  const [regionId, setRegionId] = useState<number | null>(null);
-  const touchedRef = useRef<Set<TouchedField>>(new Set());
+  //
+  // CLIENT-REF-3: `initial?.languageCode` overrides the localeStore seed when given (a non-null
+  // stored preference wins over the page's current UI locale, same as it wins over resolve below).
+  const [languageCode, setLanguageCode] = useState<string | null>(
+    () => initial?.languageCode ?? useLocaleStore.getState().locale,
+  );
+  const [countryId, setCountryId] = useState<number | null>(() => initial?.countryId ?? null);
+  const [regionId, setRegionId] = useState<number | null>(() => initial?.regionId ?? null);
+  // CLIENT-REF-3: every non-null `initial` seed starts pre-touched — see GeoLocaleFieldsInitial's
+  // own doc comment for why (a stored value is a real prior choice, never silently overwritten).
+  const touchedRef = useRef<Set<TouchedField>>(
+    new Set(
+      (['language', 'country', 'region'] as const).filter((field) => {
+        if (field === 'language') return (initial?.languageCode ?? null) !== null;
+        if (field === 'country') return (initial?.countryId ?? null) !== null;
+        return (initial?.regionId ?? null) !== null;
+      }),
+    ),
+  );
 
   const { data: regions, isLoading: isRegionsLoading, isError: isRegionsError } = useRegions(countryId);
 

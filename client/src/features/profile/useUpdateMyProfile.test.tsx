@@ -35,6 +35,9 @@ function profile(overrides: Partial<UserResponse> = {}): UserResponse {
     location: null,
     city: 'Hanoi',
     country: 'Vietnam',
+    countryId: 1,
+    regionId: 101,
+    regionName: 'Hanoi',
     heightCm: null,
     weightKg: null,
     shoeSizeCm: null,
@@ -66,34 +69,34 @@ describe('useUpdateMyProfile', () => {
 
   it('calls PUT /users/{userId}/profile with the diffed payload', async () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-    const updated = profile({ city: 'Da Nang' });
+    const updated = profile({ bio: 'New bio' });
     vi.spyOn(apiClient, 'put').mockResolvedValueOnce({
       data: { success: true, message: '', data: updated, timestamp: '' },
     });
 
     const { result } = renderHook(() => useUpdateMyProfile(), { wrapper: wrapper(queryClient) });
 
-    act(() => result.current.updateProfile({ city: 'Da Nang' }));
+    act(() => result.current.updateProfile({ bio: 'New bio' }));
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(apiClient.put).toHaveBeenCalledWith('/users/user-1/profile', { city: 'Da Nang' });
+    expect(apiClient.put).toHaveBeenCalledWith('/users/user-1/profile', { bio: 'New bio' });
   });
 
   it('patches the myProfile cache with the returned row on success', async () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     queryClient.setQueryData(profileKeys.myProfile('user-1'), profile());
-    const updated = profile({ city: 'Da Nang' });
+    const updated = profile({ bio: 'New bio' });
     vi.spyOn(apiClient, 'put').mockResolvedValueOnce({
       data: { success: true, message: '', data: updated, timestamp: '' },
     });
 
     const { result } = renderHook(() => useUpdateMyProfile(), { wrapper: wrapper(queryClient) });
 
-    act(() => result.current.updateProfile({ city: 'Da Nang' }));
+    act(() => result.current.updateProfile({ bio: 'New bio' }));
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(queryClient.getQueryData<UserResponse>(profileKeys.myProfile('user-1'))?.city).toBe(
-      'Da Nang',
+    expect(queryClient.getQueryData<UserResponse>(profileKeys.myProfile('user-1'))?.bio).toBe(
+      'New bio',
     );
   });
 
@@ -118,5 +121,17 @@ describe('useUpdateMyProfile', () => {
     await waitFor(() =>
       expect(result.current.errorMessage).toBe('Username must be between 3 and 50 characters'),
     );
+  });
+
+  it('updateProfileAsync resolves with the updated row (CLIENT-REF-3: useEditProfileSave awaits this)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const updated = profile({ countryId: 2 });
+    vi.spyOn(apiClient, 'put').mockResolvedValueOnce({
+      data: { success: true, message: '', data: updated, timestamp: '' },
+    });
+
+    const { result } = renderHook(() => useUpdateMyProfile(), { wrapper: wrapper(queryClient) });
+
+    await expect(result.current.updateProfileAsync({ countryId: 2 })).resolves.toEqual(updated);
   });
 });

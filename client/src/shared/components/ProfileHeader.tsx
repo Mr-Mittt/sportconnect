@@ -31,16 +31,21 @@ interface ProfileHeaderProps {
  * Cover/avatar fall back the same way `GroupCoverBanner`/`FriendProfilePanel`
  * already do — a plain `surface-1` band, `coverUrl` overlaid as an image when
  * set, no decorative pattern (this app has no such treatment anywhere else).
- * `username`/`city` each render only when non-null, and the whole handle
+ * `username`/`regionName` each render only when non-null, and the whole handle
  * line is omitted if both are null — same "no placeholder for missing
  * optional text" rule the design spec gives `bio`.
+ *
+ * **CLIENT-REF-3:** shows `regionName` (deliberately **not** the legacy `city` string, even as a
+ * fallback — user decision, 2026-09-29) — `city` is being fully retired (backend `U19`), not kept
+ * alive here. A user with `city` set but no `regionId` yet simply shows no location segment until
+ * they pick a region in `EditProfileModal`.
  *
  * PROFILE-10: `bio` renders in italic, wrapped in curly quotes (`&ldquo;`/`&rdquo;`, not a straight
  * `"`) — a quote-style visual treatment, distinct from the plain handle line above it, to read as
  * the user's own voice.
  */
 export function ProfileHeader({ user, onEditProfile }: ProfileHeaderProps) {
-  const handleParts = [user.username !== null ? `@${user.username}` : null, user.city].filter(
+  const handleParts = [user.username !== null ? `@${user.username}` : null, user.regionName].filter(
     (part): part is string => part !== null,
   );
 

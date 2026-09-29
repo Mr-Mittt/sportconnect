@@ -1,0 +1,25 @@
+{
+  "title": "Edit profile",
+  "section": {
+    "profile": "Profile",
+    "contact": "Contact",
+    "personal": "Personal"
+  },
+  "field": {
+    "firstName": "First name",
+    "lastName": "Last name",
+    "username": "Username",
+    "bio": "Bio",
+    "avatarUrl": "Avatar URL",
+    "coverUrl": "Cover URL",
+    "phoneNumber": "Phone number",
+    "dateOfBirth": "Date of birth",
+    "gender": "Gender",
+    "heightCm": "Height (cm)",
+    "weightKg": "Weight (kg)",
+    "shoeSizeCm": "Shoe size (JP, cm)"
+  },
+  "legacyCountry": "Currently set to \"{{country}}\" — pick a country below to replace it.",
+  "save": "Save changes",
+  "saving": "Saving…"
+}

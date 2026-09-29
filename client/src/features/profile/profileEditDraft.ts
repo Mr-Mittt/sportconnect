@@ -1,15 +1,23 @@
 import type { UserResponse } from './types';
 
-/** The editable subset of `UserResponse` — 1:1 with `UpdateProfileRequest`
+/**
+ * The editable subset of `UserResponse` — 1:1 with `UpdateProfileRequest`
  * (`modules/user/user-api`), minus every sport-profile field (`PROFILE-4`'s
- * job, not this modal's). */
+ * job, not this modal's).
+ *
+ * **CLIENT-REF-3:** `country` (free text) is gone — the server silently ignores it now (U16).
+ * `countryId`/`regionId` replace it: per `UpdateProfileRequest`'s own "both together" rule, a
+ * `countryId` present means `regionId` *replaces* the stored region (absent = cleared), so
+ * `EditProfileModal` always sends both together whenever either changed, never one alone.
+ * `city` is dropped too (replaced by `regionId` — see `types.ts`'s `UserResponse.city` doc).
+ * `location` mirrors `UpdateProfileRequest.location` (`LocationRequest`) — only ever included
+ * after a successful "Use my current location" click, same as sign-up (CLIENT-REF-2).
+ */
 export interface UpdateProfilePayload {
   firstName?: string;
   lastName?: string;
   username?: string;
   bio?: string;
-  city?: string;
-  country?: string;
   avatarUrl?: string;
   coverUrl?: string;
   phoneNumber?: string;
@@ -18,19 +26,21 @@ export interface UpdateProfilePayload {
   heightCm?: number;
   weightKg?: number;
   shoeSizeCm?: number;
+  countryId?: number;
+  regionId?: number;
+  location?: { latitude: number; longitude: number };
 }
 
-/** The form's local draft. Every field is a string because it is bound to an
- * input — `heightCm`/`weightKg`/`shoeSizeCm` are converted back to numbers
- * only when they are sent (same shape `sportFieldsDraft.ts`'s
+/** The form's local draft — the plain-text fields only (Country/Region/Language live in
+ * `useGeoLocaleFieldsData`'s own state, not here — see `EditProfileModal`). Every field is a
+ * string because it is bound to an input — `heightCm`/`weightKg`/`shoeSizeCm` are converted back
+ * to numbers only when they are sent (same shape `sportFieldsDraft.ts`'s
  * `minPlayers`/`maxPlayers` already use). */
 export interface ProfileEditDraft {
   firstName: string;
   lastName: string;
   username: string;
   bio: string;
-  city: string;
-  country: string;
   avatarUrl: string;
   coverUrl: string;
   phoneNumber: string;
@@ -48,8 +58,6 @@ export function toProfileEditDraft(user: UserResponse): ProfileEditDraft {
     lastName: user.lastName ?? '',
     username: user.username ?? '',
     bio: user.bio ?? '',
-    city: user.city ?? '',
-    country: user.country ?? '',
     avatarUrl: user.avatarUrl ?? '',
     coverUrl: user.coverUrl ?? '',
     phoneNumber: user.phoneNumber ?? '',
@@ -59,6 +67,35 @@ export function toProfileEditDraft(user: UserResponse): ProfileEditDraft {
     weightKg: user.weightKg?.toString() ?? '',
     shoeSizeCm: user.shoeSizeCm?.toString() ?? '',
   };
+}
+
+/** Geo selection change — compared against the profile's original `countryId`/`regionId` and
+ * merged into the payload by `buildProfileUpdatePayload`'s caller (`EditProfileModal`), following
+ * the "both together" rule: send both whenever either changed, never one alone. */
+export interface GeoSelection {
+  countryId: number | null;
+  regionId: number | null;
+  location: { latitude: number; longitude: number } | null;
+}
+
+/** Adds the Country/Region/location fields to an already-built text-field payload, applying the
+ * "both together" rule against the profile's original `countryId`/`regionId` — split out of
+ * `buildProfileUpdatePayload` since this half's inputs come from `useGeoLocaleFieldsData`'s own
+ * state, not `ProfileEditDraft`. */
+export function applyGeoSelection(
+  payload: UpdateProfilePayload,
+  user: UserResponse,
+  geo: GeoSelection,
+): UpdateProfilePayload {
+  const result = { ...payload };
+  if (geo.countryId !== user.countryId || geo.regionId !== user.regionId) {
+    if (geo.countryId !== null) result.countryId = geo.countryId;
+    if (geo.regionId !== null) result.regionId = geo.regionId;
+  }
+  if (geo.location !== null) {
+    result.location = geo.location;
+  }
+  return result;
 }
 
 /**
@@ -90,8 +127,6 @@ export function buildProfileUpdatePayload(
   if (draft.lastName !== original.lastName) payload.lastName = draft.lastName;
   if (draft.username !== original.username) payload.username = draft.username;
   if (draft.bio !== original.bio) payload.bio = draft.bio;
-  if (draft.city !== original.city) payload.city = draft.city;
-  if (draft.country !== original.country) payload.country = draft.country;
   if (draft.avatarUrl !== original.avatarUrl) payload.avatarUrl = draft.avatarUrl;
   if (draft.coverUrl !== original.coverUrl) payload.coverUrl = draft.coverUrl;
   if (draft.phoneNumber !== original.phoneNumber) payload.phoneNumber = draft.phoneNumber;

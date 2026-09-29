@@ -37,6 +37,9 @@ const profileFixture: UserResponse = {
   location: null,
   city: 'Riverside',
   country: null,
+  countryId: null,
+  regionId: null,
+  regionName: null,
   heightCm: null,
   weightKg: null,
   shoeSizeCm: null,
@@ -141,6 +144,25 @@ function staticGetResponse(
   sportProfiles: typeof footballProfile[],
 ): { data: unknown } | undefined {
   if (url === '/users/me') return apiResponse(profileFixture);
+  // CLIENT-REF-3: EditProfileModal (unconditionally mounted, only its Dialog is closed) now wires
+  // useGeoLocaleFieldsData() itself, and ProfilePage fetches preferences for its languageCode
+  // seed — both fire on mount regardless of the modal's own open state.
+  if (url === '/users/me/preferences') {
+    return apiResponse({
+      language: null,
+      timezone: null,
+      distanceUnit: null,
+      notificationEmail: null,
+      notificationPush: null,
+      notificationSms: null,
+      privacyProfile: null,
+      privacyLocation: null,
+      createdAt: null,
+      updatedAt: null,
+    });
+  }
+  if (url === '/reference/languages') return apiResponse([]);
+  if (url === '/reference/countries') return apiResponse([]);
   if (url === '/sports/profiles') return apiResponse(sportProfiles);
   if (url === '/sports') {
     return apiResponse([
@@ -175,6 +197,11 @@ describe('ProfilePage', () => {
     vi.restoreAllMocks();
     useAuthStore.getState().setSession(testUser, 'access-token');
     useProfilePageStore.setState({ activeSport: null });
+    // CLIENT-REF-3: the mount-time silent resolve EditProfileModal's useGeoLocaleFieldsData() call
+    // fires — same all-null default RegisterPage.test.tsx uses.
+    vi.spyOn(apiClient, 'post').mockResolvedValue(
+      apiResponse({ language: null, country: null, region: null, source: null }),
+    );
   });
 
   afterEach(() => {
