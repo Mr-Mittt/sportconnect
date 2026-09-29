@@ -2,15 +2,19 @@ import i18next from 'i18next';
 import type { Preview } from '@storybook/react-vite';
 import { initReactI18next } from 'react-i18next';
 import commonEn from '../src/locales/en/common.json';
+import homeFeedEn from '../src/locales/en/homeFeed.json';
 import loginEn from '../src/locales/en/login.json';
 import profileEn from '../src/locales/en/profile.json';
 import registerEn from '../src/locales/en/register.json';
+import sharedComponentsEn from '../src/locales/en/sharedComponents.json';
 import sharedDialogsEn from '../src/locales/en/sharedDialogs.json';
 import shellEn from '../src/locales/en/shell.json';
 import commonVi from '../src/locales/vi/common.json';
+import homeFeedVi from '../src/locales/vi/homeFeed.json';
 import loginVi from '../src/locales/vi/login.json';
 import profileVi from '../src/locales/vi/profile.json';
 import registerVi from '../src/locales/vi/register.json';
+import sharedComponentsVi from '../src/locales/vi/sharedComponents.json';
 import sharedDialogsVi from '../src/locales/vi/sharedDialogs.json';
 import shellVi from '../src/locales/vi/shell.json';
 import '../src/index.css';
@@ -31,6 +35,10 @@ import '../src/index.css';
 // CLIENT-I18N-3: added `shell` (TopBar/NavTabs/AuthLoadingState/ComingSoonPage) and
 // `sharedDialogs` (the 6 cross-page dialog components' default copy) — same "keep this list in
 // sync with app/i18n.ts by hand" note above applies to these two as well.
+//
+// CLIENT-I18N-4: added `homeFeed` (HomeFeedPage's own string) and `sharedComponents`
+// (Feed/PostCard/CommentSection/CommentItem/CreatePostForm/GroupBroadcasts/HashtagPostsModal/
+// TrendingHashtags/SportSwitcher's default copy) — same sync-by-hand note applies.
 void i18next.use(initReactI18next).init({
   resources: {
     en: {
@@ -40,6 +48,8 @@ void i18next.use(initReactI18next).init({
       login: loginEn,
       shell: shellEn,
       sharedDialogs: sharedDialogsEn,
+      homeFeed: homeFeedEn,
+      sharedComponents: sharedComponentsEn,
     },
     vi: {
       common: commonVi,
@@ -48,12 +58,14 @@ void i18next.use(initReactI18next).init({
       login: loginVi,
       shell: shellVi,
       sharedDialogs: sharedDialogsVi,
+      homeFeed: homeFeedVi,
+      sharedComponents: sharedComponentsVi,
     },
   },
   lng: 'en',
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'login', 'shell', 'sharedDialogs'],
+  ns: ['common', 'register', 'profile', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents'],
   interpolation: { escapeValue: false },
   returnNull: false,
 });

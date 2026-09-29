@@ -27,7 +27,7 @@ export function AddSportIntroDialog({
   sportName,
   i18nOverridePrefix,
 }: AddSportIntroDialogProps) {
-  const t = useOverridableText(i18nOverridePrefix);
+  const t = useOverridableText('sharedDialogs', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">

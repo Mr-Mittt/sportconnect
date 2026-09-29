@@ -7,6 +7,7 @@ import {
 import type { Post } from '@/features/feed/types';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import type { SportProfile } from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
@@ -44,6 +45,9 @@ interface PostCardProps {
   onHashtagClick: (tag: string) => void;
   onDeletePost: (postId: number) => void;
   onOpenComments: (postId: number) => void;
+  /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
+   * copy (`sharedComponents.postCard.*`) for a specific caller. No current caller passes this. */
+  i18nOverridePrefix?: string;
 }
 
 function initialsFor(fullName: string): string {
@@ -90,8 +94,10 @@ export function PostCard({
   onHashtagClick,
   onDeletePost,
   onOpenComments,
+  i18nOverridePrefix,
 }: PostCardProps) {
-  const displayName = post.userFullName ?? 'Unknown User';
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
+  const displayName = post.userFullName ?? t('postCard.unknownUser');
   const isOwnPost = currentUserId !== undefined && post.userId === currentUserId;
 
   return (
@@ -141,7 +147,7 @@ export function PostCard({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label="Post options"
+                aria-label={t('postCard.postOptions')}
                 className="cursor-pointer rounded p-1 text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
               >
                 <IconDotsVertical className="size-4" aria-hidden="true" />
@@ -152,7 +158,7 @@ export function PostCard({
                 onSelect={() => onDeletePost(post.id)}
                 className="text-text-danger"
               >
-                Delete post
+                {t('postCard.deletePost')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -169,7 +175,7 @@ export function PostCard({
         <button
           type="button"
           aria-pressed={post.isLikedByCurrentUser}
-          aria-label={post.isLikedByCurrentUser ? 'Unlike' : 'Like'}
+          aria-label={post.isLikedByCurrentUser ? t('postCard.unlike') : t('postCard.like')}
           onClick={() => onToggleLike(post.id)}
           className={cn(
             'flex cursor-pointer items-center gap-1 rounded p-0.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
@@ -185,7 +191,7 @@ export function PostCard({
         </button>
         <button
           type="button"
-          aria-label="View comments"
+          aria-label={t('postCard.viewComments')}
           disabled={post.postType === 'GROUP_BROADCAST'}
           onClick={() => onOpenComments(post.id)}
           className="flex cursor-pointer items-center gap-1 rounded p-0.5 text-xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-50"

@@ -1,3 +1,4 @@
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { TrendingHashtag } from '@/shared/types/rail';
 
@@ -7,6 +8,10 @@ interface TrendingHashtagsProps {
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
+  /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
+   * copy (`sharedComponents.trendingHashtags.*`) for a specific caller. No current caller passes
+   * this. */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -25,13 +30,15 @@ export function TrendingHashtags({
   isLoading,
   isError,
   onRetry,
+  i18nOverridePrefix,
 }: TrendingHashtagsProps) {
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   return (
     <section
-      aria-label="Trending hashtags"
+      aria-label={t('trendingHashtags.ariaLabel')}
       className="border-hairline rounded-xl border-border bg-surface-2 p-3.5"
     >
-      <h2 className="mb-2.5 text-2sm font-medium text-text-primary">Trending</h2>
+      <h2 className="mb-2.5 text-2sm font-medium text-text-primary">{t('trendingHashtags.heading')}</h2>
 
       {isLoading ? (
         <div className="flex flex-col gap-2">
@@ -40,17 +47,17 @@ export function TrendingHashtags({
         </div>
       ) : isError ? (
         <div className="flex flex-col items-start gap-1.5 py-1">
-          <p className="text-xs text-text-danger">Couldn't load trending hashtags.</p>
+          <p className="text-xs text-text-danger">{t('trendingHashtags.loadError')}</p>
           <button
             type="button"
             onClick={onRetry}
             className="cursor-pointer rounded border-hairline border-border px-2.5 py-1 text-xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
-            Retry
+            {t('trendingHashtags.retry')}
           </button>
         </div>
       ) : hashtags.length === 0 ? (
-        <div className="py-2 text-xs text-text-muted">Nothing trending right now.</div>
+        <div className="py-2 text-xs text-text-muted">{t('trendingHashtags.empty')}</div>
       ) : (
         <div className="flex flex-col gap-2">
           {hashtags.map((hashtag) => (
@@ -61,7 +68,9 @@ export function TrendingHashtags({
               className="flex w-full cursor-pointer items-center justify-between gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
             >
               <span className="truncate text-2sm text-text-accent">{hashtag.tag}</span>
-              <span className="shrink-0 text-xs text-text-muted">{hashtag.postCount} posts</span>
+              <span className="shrink-0 text-xs text-text-muted">
+                {t('trendingHashtags.postCount', { count: hashtag.postCount })}
+              </span>
             </button>
           ))}
         </div>

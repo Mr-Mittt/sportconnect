@@ -1,6 +1,7 @@
 import type { GroupRef, Post } from '@/features/feed/types';
 import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useInfiniteScrollSentinel } from '@/shared/lib/useInfiniteScrollSentinel';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { PostCard } from './PostCard';
@@ -52,6 +53,10 @@ interface FeedProps {
    * group-scoped destination to send the user to), so the group name there
    * just renders as static text via PostCard's own no-op fallback. */
   onGroupClick?: (groupId: number, sportId: number) => void;
+  /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
+   * copy (`sharedComponents.feed.*`) for a specific caller. No current caller passes this —
+   * `emptyMessage` above stays the mechanism for per-caller empty-state text, unaffected by this. */
+  i18nOverridePrefix?: string;
 }
 
 function PostCardSkeleton() {
@@ -103,12 +108,14 @@ export function Feed({
   isError,
   onRetry,
   isLoadMoreError,
-  emptyMessage = 'No posts yet for this sport.',
+  emptyMessage,
   showSportBadge = true,
   groupsById = {},
   showGroupName = true,
   onGroupClick,
+  i18nOverridePrefix,
 }: FeedProps) {
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   const canLoadMore = hasMorePosts && !isFetchingMorePosts;
   const sentinelRef = useInfiniteScrollSentinel(onLoadMore, canLoadMore);
 
@@ -125,13 +132,13 @@ export function Feed({
   if (isError) {
     return (
       <div className="border-hairline flex flex-col items-center gap-2 rounded-xl border-border bg-surface-2 p-6 text-center">
-        <p className="text-2sm text-text-danger">Couldn't load posts.</p>
+        <p className="text-2sm text-text-danger">{t('feed.loadError')}</p>
         <button
           type="button"
           onClick={onRetry}
           className="cursor-pointer rounded-lg border-hairline border-border px-3 py-1.5 text-2sm font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
         >
-          Retry
+          {t('feed.retry')}
         </button>
       </div>
     );
@@ -143,7 +150,11 @@ export function Feed({
       : posts.filter((post) => post.sportId === sportIdForKey(activeSport));
 
   if (visiblePosts.length === 0) {
-    return <div className="py-6 text-center text-2sm text-text-muted">{emptyMessage}</div>;
+    return (
+      <div className="py-6 text-center text-2sm text-text-muted">
+        {emptyMessage ?? t('feed.emptyMessageDefault')}
+      </div>
+    );
   }
 
   return (
@@ -176,13 +187,13 @@ export function Feed({
       <div ref={sentinelRef} aria-hidden="true" />
       {hasMorePosts && isLoadMoreError && (
         <div className="flex flex-col items-center gap-1.5 self-center">
-          <p className="text-2sm text-text-danger">Couldn't load more posts.</p>
+          <p className="text-2sm text-text-danger">{t('feed.loadMoreError')}</p>
           <button
             type="button"
             onClick={onLoadMore}
             className="cursor-pointer rounded-lg border-hairline border-border px-4 py-2 text-2sm font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
-            Retry
+            {t('feed.retry')}
           </button>
         </div>
       )}
@@ -193,7 +204,7 @@ export function Feed({
           disabled={isFetchingMorePosts}
           className="cursor-pointer self-center rounded-lg border-hairline border-border px-4 py-2 text-2sm font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
         >
-          {isFetchingMorePosts ? 'Loading…' : 'Load more'}
+          {isFetchingMorePosts ? t('feed.loadingMore') : t('feed.loadMore')}
         </button>
       )}
     </div>

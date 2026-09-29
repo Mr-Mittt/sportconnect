@@ -12,6 +12,9 @@ import { expect, test } from '../mocks/test.ts';
  * labels — until this ticket, `/login` never translated anything, so it incidentally passed with
  * the still-English `getByLabel('Email')`/`getByRole('button', {name:'Log in'})` locators even
  * with `vi` active. Those are genuinely different strings now, not just a stale comment.
+ *
+ * CLIENT-I18N-4: same reasoning for the post-login assertion — Home Feed's `sr-only` `<h1>` is
+ * now translated too, so the vi-locale test asserts "Bảng tin", not the stale English "Home Feed".
  */
 
 test('Accept-Language defaults to en with nothing stored', async ({ page }) => {
@@ -63,7 +66,7 @@ test('Accept-Language follows a locale stored before the app loads', async ({ pa
   await page.getByRole('button', { name: 'Đăng nhập' }).click();
   await page.waitForURL('/');
 
-  await expect(page.getByRole('heading', { name: 'Home Feed' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Bảng tin' })).toBeVisible();
   expect(headers.length).toBeGreaterThan(0);
   expect(headers.every((header) => header === 'vi')).toBe(true);
 });

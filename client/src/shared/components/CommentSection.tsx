@@ -4,6 +4,7 @@ import type { Comment, Post } from '@/features/feed/types';
 import { MAX_COMMENT_LENGTH } from '@/features/feed/types';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import type { SportProfile } from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
@@ -54,6 +55,10 @@ interface CommentSectionProps {
    * affordance at all, unlike PostCard in the feed). Same
    * `onToggleLike(postId)` convention as PostCard/Feed. */
   onTogglePostLike: (postId: number) => void;
+  /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
+   * copy (`sharedComponents.commentSection.*`) for a specific caller. No current caller passes
+   * this. */
+  i18nOverridePrefix?: string;
 }
 
 function initialsFor(fullName: string): string {
@@ -100,7 +105,9 @@ export function CommentSection({
   onToggleCommentLike,
   onHashtagClick,
   onTogglePostLike,
+  i18nOverridePrefix,
 }: CommentSectionProps) {
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   const [content, setContent] = useState('');
 
   const submitComment = () => {
@@ -110,12 +117,12 @@ export function CommentSection({
     setContent('');
   };
 
-  const displayName = post?.userFullName ?? 'Unknown User';
+  const displayName = post?.userFullName ?? t('commentSection.unknownUser');
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent fixedHeight fixedHeightVh={72} className="max-w-[35rem]">
-        <DialogTitle className="sr-only">Comments on {displayName}'s post</DialogTitle>
+        <DialogTitle className="sr-only">{t('commentSection.dialogTitle', { name: displayName })}</DialogTitle>
 
         {/* FEED-12: the post header (below) only ever renders once `post` is
          * resolved. A cold `/posts/:id` load can spend real time (or fail)
@@ -133,13 +140,13 @@ export function CommentSection({
                 <Skeleton className="h-2.5 w-16" />
               </div>
             </div>
-            <DialogClose aria-label="Close" />
+            <DialogClose aria-label={t('commentSection.close')} />
           </div>
         )}
         {post === null && isPostError && (
           <div className="border-hairline-b flex items-center justify-between gap-2 border-border px-4 py-3">
-            <p className="text-2sm text-text-danger">Couldn't load this post.</p>
-            <DialogClose aria-label="Close" />
+            <p className="text-2sm text-text-danger">{t('commentSection.postLoadError')}</p>
+            <DialogClose aria-label={t('commentSection.close')} />
           </div>
         )}
 
@@ -158,7 +165,7 @@ export function CommentSection({
               </div>
             </div>
             <div className="flex shrink-0 flex-col items-end justify-center gap-1.5">
-              <DialogClose aria-label="Close" />
+              <DialogClose aria-label={t('commentSection.close')} />
               {sport !== null && (
                 <span
                   className={cn(
@@ -185,7 +192,7 @@ export function CommentSection({
               <button
                 type="button"
                 aria-pressed={post.isLikedByCurrentUser}
-                aria-label={post.isLikedByCurrentUser ? 'Unlike' : 'Like'}
+                aria-label={post.isLikedByCurrentUser ? t('commentSection.unlike') : t('commentSection.like')}
                 onClick={() => onTogglePostLike(post.id)}
                 className={cn(
                   'mt-2 flex cursor-pointer items-center gap-1 rounded p-0.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
@@ -201,10 +208,10 @@ export function CommentSection({
               </button>
             </div>
           )}
-          {isLoading && <p className="text-2sm text-text-muted">Loading comments…</p>}
-          {isError && <p className="text-2sm text-text-danger">Couldn't load comments.</p>}
+          {isLoading && <p className="text-2sm text-text-muted">{t('commentSection.loading')}</p>}
+          {isError && <p className="text-2sm text-text-danger">{t('commentSection.loadError')}</p>}
           {!isLoading && !isError && comments.length === 0 && (
-            <p className="text-2sm text-text-muted">No comments yet. Be the first to comment!</p>
+            <p className="text-2sm text-text-muted">{t('commentSection.empty')}</p>
           )}
           {!isLoading && !isError && comments.length > 0 && (
             <div className="flex flex-col gap-3">
@@ -227,7 +234,7 @@ export function CommentSection({
                   disabled={isFetchingMore}
                   className="cursor-pointer self-center rounded-lg border-hairline border-border px-3 py-1.5 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
                 >
-                  {isFetchingMore ? 'Loading…' : 'View more comments'}
+                  {isFetchingMore ? t('commentSection.loadingMore') : t('commentSection.viewMore')}
                 </button>
               )}
             </div>
@@ -248,15 +255,15 @@ export function CommentSection({
             onKeyDown={(event) => {
               if (event.key === 'Enter') submitComment();
             }}
-            placeholder="Add a comment…"
-            aria-label="Add a comment"
+            placeholder={t('commentSection.commentPlaceholder')}
+            aria-label={t('commentSection.commentAriaLabel')}
             maxLength={MAX_COMMENT_LENGTH}
             className="min-w-0 flex-1 rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           />
           <Button
             variant="primary"
             size="icon"
-            aria-label="Post comment"
+            aria-label={t('commentSection.postComment')}
             onClick={submitComment}
             disabled={content.trim().length === 0 || isPosting}
             className={cn('cursor-pointer rounded-full disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}

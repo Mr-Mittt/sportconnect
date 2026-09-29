@@ -2,6 +2,7 @@ import { IconDotsVertical, IconHeart, IconHeartFilled, IconPencil, IconTrash } f
 import { useState } from 'react';
 import { MAX_COMMENT_LENGTH, type Comment } from '@/features/feed/types';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
@@ -26,6 +27,10 @@ interface CommentItemProps {
    * plain text instead — session comments have no hashtag-click destination,
    * unlike Post comments. */
   onHashtagClick?: (tag: string) => void;
+  /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
+   * copy (`sharedComponents.commentItem.*`) for a specific caller. No current caller passes
+   * this. */
+  i18nOverridePrefix?: string;
 }
 
 function initialsFor(fullName: string): string {
@@ -72,7 +77,9 @@ export function CommentItem({
   onReply,
   isSubmittingReply,
   onHashtagClick,
+  i18nOverridePrefix,
 }: CommentItemProps) {
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   const [showReplyBox, setShowReplyBox] = useState(false);
   const [replyContent, setReplyContent] = useState('');
 
@@ -129,7 +136,7 @@ export function CommentItem({
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      aria-label="Comment options"
+                      aria-label={t('commentItem.commentOptions')}
                       className="ml-auto cursor-pointer rounded p-0.5 text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                     >
                       <IconDotsVertical className="size-3.5" aria-hidden="true" />
@@ -138,11 +145,11 @@ export function CommentItem({
                   <DropdownMenuContent className="w-36">
                     <DropdownMenuItem disabled className="cursor-not-allowed opacity-50">
                       <IconPencil className="size-3.5" aria-hidden="true" />
-                      Edit
+                      {t('commentItem.edit')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => onDelete(comment)} className="text-text-danger">
                       <IconTrash className="size-3.5" aria-hidden="true" />
-                      Delete
+                      {t('commentItem.delete')}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -162,7 +169,7 @@ export function CommentItem({
             <button
               type="button"
               aria-pressed={comment.isLikedByCurrentUser}
-              aria-label={comment.isLikedByCurrentUser ? 'Unlike comment' : 'Like comment'}
+              aria-label={comment.isLikedByCurrentUser ? t('commentItem.unlike') : t('commentItem.like')}
               onClick={() => onToggleLike(comment)}
               className={cn(
                 'flex cursor-pointer items-center gap-1 rounded p-0.5 text-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
@@ -182,7 +189,7 @@ export function CommentItem({
                 onClick={() => setShowReplyBox((open) => !open)}
                 className="cursor-pointer rounded p-0.5 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
               >
-                Reply
+                {t('commentItem.reply')}
               </button>
             )}
           </div>
@@ -193,8 +200,8 @@ export function CommentItem({
                 type="text"
                 value={replyContent}
                 onChange={(event) => setReplyContent(event.target.value.slice(0, MAX_COMMENT_LENGTH))}
-                placeholder={`Reply to ${comment.userFullName}`}
-                aria-label={`Reply to ${comment.userFullName}`}
+                placeholder={t('commentItem.replyPlaceholder', { name: comment.userFullName })}
+                aria-label={t('commentItem.replyPlaceholder', { name: comment.userFullName })}
                 maxLength={MAX_COMMENT_LENGTH}
                 className="min-w-0 flex-1 rounded-lg border-hairline border-border bg-surface-2 px-2.5 py-1 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
               />
@@ -205,7 +212,7 @@ export function CommentItem({
                 disabled={replyContent.trim().length === 0 || isSubmittingReply}
                 className={cn('cursor-pointer text-2xs disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
               >
-                Post
+                {t('commentItem.post')}
               </Button>
             </div>
           )}
@@ -222,6 +229,7 @@ export function CommentItem({
                   onReply={onReply}
                   isSubmittingReply={isSubmittingReply}
                   onHashtagClick={onHashtagClick}
+                  i18nOverridePrefix={i18nOverridePrefix}
                 />
               ))}
             </div>

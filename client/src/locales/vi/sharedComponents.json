@@ -1,0 +1,83 @@
+{
+  "feed": {
+    "loadError": "Không thể tải bài viết.",
+    "retry": "Thử lại",
+    "loadMoreError": "Không thể tải thêm bài viết.",
+    "loadMore": "Tải thêm",
+    "loadingMore": "Đang tải…",
+    "emptyMessageDefault": "Chưa có bài viết nào cho môn thể thao này."
+  },
+  "postCard": {
+    "unknownUser": "Người dùng không xác định",
+    "postOptions": "Tùy chọn bài viết",
+    "deletePost": "Xóa bài viết",
+    "like": "Thích",
+    "unlike": "Bỏ thích",
+    "viewComments": "Xem bình luận"
+  },
+  "commentSection": {
+    "unknownUser": "Người dùng không xác định",
+    "dialogTitle": "Bình luận về bài viết của {{name}}",
+    "close": "Đóng",
+    "postLoadError": "Không thể tải bài viết này.",
+    "loading": "Đang tải bình luận…",
+    "loadError": "Không thể tải bình luận.",
+    "empty": "Chưa có bình luận nào. Hãy là người đầu tiên bình luận!",
+    "viewMore": "Xem thêm bình luận",
+    "loadingMore": "Đang tải…",
+    "commentPlaceholder": "Viết bình luận…",
+    "commentAriaLabel": "Viết bình luận",
+    "postComment": "Đăng bình luận",
+    "like": "Thích",
+    "unlike": "Bỏ thích"
+  },
+  "commentItem": {
+    "commentOptions": "Tùy chọn bình luận",
+    "edit": "Chỉnh sửa",
+    "delete": "Xóa",
+    "like": "Thích bình luận",
+    "unlike": "Bỏ thích bình luận",
+    "reply": "Trả lời",
+    "replyPlaceholder": "Trả lời {{name}}",
+    "post": "Đăng"
+  },
+  "createPostForm": {
+    "placeholderWithName": "Bạn đang nghĩ gì vậy, {{firstName}}?",
+    "placeholderDefault": "Bạn đang nghĩ gì vậy?",
+    "ariaLabel": "Tạo bài viết",
+    "photo": "Ảnh",
+    "location": "Vị trí",
+    "tagSport": "Gắn thẻ môn thể thao",
+    "broadcast": "Thông báo",
+    "post": "Đăng",
+    "error": "Không thể đăng bài. Vui lòng thử lại."
+  },
+  "groupBroadcasts": {
+    "ariaLabel": "Thông báo từ nhóm",
+    "heading": "Thông báo từ nhóm",
+    "loadError": "Không thể tải thông báo từ nhóm.",
+    "retry": "Thử lại",
+    "empty": "Không có thông báo nào từ các nhóm của bạn."
+  },
+  "hashtagPostsModal": {
+    "fallbackTitle": "Hashtag",
+    "emptyMessage": "Không tìm thấy bài viết nào cho {{tag}}.",
+    "emptyMessageFallbackTag": "hashtag này"
+  },
+  "trendingHashtags": {
+    "ariaLabel": "Hashtag thịnh hành",
+    "heading": "Thịnh hành",
+    "loadError": "Không thể tải hashtag thịnh hành.",
+    "retry": "Thử lại",
+    "empty": "Hiện chưa có gì thịnh hành.",
+    "postCount": "{{count}} bài viết"
+  },
+  "sportSwitcher": {
+    "groupAriaLabel": "Bộ lọc môn thể thao",
+    "all": "Tất cả",
+    "reactivate": "Kích hoạt lại {{sport}}",
+    "atCap": "Bạn đã thêm tất cả môn thể thao hiện có",
+    "checking": "Đang kiểm tra…",
+    "addSport": "Thêm môn thể thao"
+  }
+}

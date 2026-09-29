@@ -2,6 +2,7 @@ import { IconBallFootball, IconMapPin, IconPhoto, IconSpeakerphone } from '@tabl
 import { createElement, useLayoutEffect, useRef, useState } from 'react';
 import { MAX_POST_LENGTH } from '@/features/feed/types';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
@@ -29,6 +30,10 @@ interface CreatePostFormProps {
    * retypes and submits again. Defaults to false so every other existing
    * call site doesn't need updating. */
   isError?: boolean;
+  /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
+   * copy (`sharedComponents.createPostForm.*`) for a specific caller. No current caller passes
+   * this. */
+  i18nOverridePrefix?: string;
 }
 
 function initialsFor(fullName: string): string {
@@ -77,7 +82,9 @@ export function CreatePostForm({
   onTagSportClick,
   canBroadcast = false,
   isError = false,
+  i18nOverridePrefix,
 }: CreatePostFormProps) {
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   const [content, setContent] = useState('');
   const [isBroadcastOn, setIsBroadcastOn] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -117,8 +124,12 @@ export function CreatePostForm({
           rows={1}
           value={content}
           onChange={(event) => setContent(event.target.value.slice(0, MAX_POST_LENGTH))}
-          placeholder={`What's on your mind${currentUser !== undefined ? `, ${currentUser.firstName}` : ''}?`}
-          aria-label="Create a post"
+          placeholder={
+            currentUser !== undefined
+              ? t('createPostForm.placeholderWithName', { firstName: currentUser.firstName })
+              : t('createPostForm.placeholderDefault')
+          }
+          aria-label={t('createPostForm.ariaLabel')}
           maxLength={MAX_POST_LENGTH}
           className="min-w-0 flex-1 resize-none border-none bg-transparent py-2 text-sm text-text-primary outline-none placeholder:text-text-muted"
         />
@@ -137,7 +148,7 @@ export function CreatePostForm({
             className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
             {createElement(IconPhoto, { className: 'size-4', 'aria-hidden': true })}
-            Photo
+            {t('createPostForm.photo')}
           </button>
           <button
             type="button"
@@ -145,7 +156,7 @@ export function CreatePostForm({
             className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded p-0.5 text-2xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
             {createElement(IconMapPin, { className: 'size-4', 'aria-hidden': true })}
-            Location
+            {t('createPostForm.location')}
           </button>
           <button
             type="button"
@@ -156,7 +167,7 @@ export function CreatePostForm({
                 pin above), not bound to any specific SportProfile — stays a
                 plain Tabler icon rather than switching to SportIcon. */}
             {createElement(IconBallFootball, { className: 'size-4', 'aria-hidden': true })}
-            Tag sport
+            {t('createPostForm.tagSport')}
           </button>
           {canBroadcast && (
             <button
@@ -169,7 +180,7 @@ export function CreatePostForm({
               )}
             >
               {createElement(IconSpeakerphone, { className: 'size-4', 'aria-hidden': true })}
-              Broadcast
+              {t('createPostForm.broadcast')}
             </button>
           )}
         </div>
@@ -180,11 +191,11 @@ export function CreatePostForm({
           disabled={!hasText || isSubmitting}
           className={cn('shrink-0 cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
         >
-          Post
+          {t('createPostForm.post')}
         </Button>
       </div>
       {isError && (
-        <p className="mt-2 text-2xs text-text-danger">Couldn't create post. Try again.</p>
+        <p className="mt-2 text-2xs text-text-danger">{t('createPostForm.error')}</p>
       )}
       <UnsavedPostConfirmDialog
         isOpen={unsavedGuard.isLeaveDialogOpen}

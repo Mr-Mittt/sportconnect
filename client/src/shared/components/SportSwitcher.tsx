@@ -1,5 +1,6 @@
 import { IconLayoutGrid, IconPlus } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { SportIcon } from './SportIcon';
@@ -34,6 +35,10 @@ interface SportSwitcherProps {
    * nudge is dismissed; on `/profile` it never is. */
   inactiveSports?: SportProfile[];
   onInactiveSelect?: (key: SportKey) => void;
+  /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
+   * copy (`sharedComponents.sportSwitcher.*`) for a specific caller. No current caller passes
+   * this. */
+  i18nOverridePrefix?: string;
 }
 
 interface PillProps {
@@ -101,7 +106,9 @@ export function SportSwitcher({
   showAllPill = true,
   inactiveSports = [],
   onInactiveSelect,
+  i18nOverridePrefix,
 }: SportSwitcherProps) {
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   // SPORT-5: retained only for the tooltip. It no longer gates the click — being at the cap is
   // now something the dialog explains, not something the pill refuses to discuss. Note this is
   // equivalent to `availableSports.length === 0` at every call site, because they all pass the
@@ -114,10 +121,10 @@ export function SportSwitcher({
   // ~71px of 13px text ≈ 117px) grows ~5.9px per side, ~11.7px combined between two adjacent
   // pills — already past gap-2's 8px. gap-3.5 (14px) covers that with a ~2px margin.
   return (
-    <div role="group" aria-label="Sport filter" className="flex flex-wrap gap-3.5">
+    <div role="group" aria-label={t('sportSwitcher.groupAriaLabel')} className="flex flex-wrap gap-3.5">
       {showAllPill && (
         <Pill
-          label="All"
+          label={t('sportSwitcher.all')}
           icon={<IconLayoutGrid className="size-4" aria-hidden="true" />}
           isActive={active === 'all'}
           onClick={() => onChange('all')}
@@ -143,14 +150,14 @@ export function SportSwitcher({
           icon={<SportIcon iconUrl={sport.iconUrl} className="size-4" />}
           isActive={active === sport.key}
           muted
-          title={`Reactivate ${sport.label}`}
+          title={t('sportSwitcher.reactivate', { sport: sport.label })}
           onClick={() => onInactiveSelect?.(sport.key)}
         />
       ))}
       <button
         type="button"
         aria-disabled={isCheckingCatalog}
-        title={atCap ? 'You have added every sport available' : undefined}
+        title={atCap ? t('sportSwitcher.atCap') : undefined}
         onClick={() => {
           if (!isCheckingCatalog) {
             onAddSport();
@@ -159,7 +166,7 @@ export function SportSwitcher({
         className="border-hairline flex cursor-pointer items-center gap-1.5 rounded-full border-dashed border-border-strong px-3 py-1.75 text-2sm text-text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
       >
         <IconPlus className="size-4" aria-hidden="true" />
-        {isCheckingCatalog ? 'Checking…' : 'Add sport'}
+        {isCheckingCatalog ? t('sportSwitcher.checking') : t('sportSwitcher.addSport')}
       </button>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useGroupsPageStore } from '@/app/groupsPageStore';
@@ -73,6 +74,7 @@ const noop = () => {};
  * pagination and making it work from a cold load with no prior fetch at all.
  */
 export function HomeFeedPage() {
+  const { t } = useTranslation('homeFeed');
   const activeSport = useHomeFeedStore((state) => state.activeSport);
   const setActiveSport = useHomeFeedStore((state) => state.setActiveSport);
   // Only used to hand off to the Groups page's own state below (`goToGroup`)
@@ -232,7 +234,7 @@ export function HomeFeedPage() {
     <ModalAnchorProvider value={modalAnchorBottom}>
       <main className="py-4">
         {/* The rail cards introduce h2s; give the page its h1 for AT users (HF-8) */}
-        <h1 className="sr-only">Home Feed</h1>
+        <h1 className="sr-only">{t('pageHeading')}</h1>
         <div className="mb-4" ref={sportSwitcherRef}>
           <SportSwitcher
             sports={data.sportProfiles}
