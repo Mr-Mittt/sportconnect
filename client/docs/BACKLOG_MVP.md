@@ -78,6 +78,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 9 | [CLIENT-I18N-8](MVP/CLIENT-I18N-8_TRANSLATE_FRIENDS_PAGE.md) | Translate Friends feature — split out of `CLIENT-I18N-6` | `TODO` |
 | 10 | [CLIENT-I18N-9](MVP/CLIENT-I18N-9_TRANSLATE_NOTIFICATIONS.md) | Translate Notifications feature chrome — split out of `CLIENT-I18N-6` | `TODO` |
 | 11 | [CLIENT-I18N-10](MVP/CLIENT-I18N-10_TRANSLATE_SESSIONS_MATCHES.md) | Translate Sessions/Matches feature + UpcomingMatches/SessionCard + fee/participation/capacity/startTime libs + CreateSessionModal validation copy — split out of `CLIENT-I18N-6` | `TODO` |
+| 12 | [CLIENT-I18N-11](MVP/CLIENT-I18N-11_TRANSLATE_SPORT_NAMES.md) | Translate sport names — `common` `sport.*` keys (`sport.badminton` = Cầu lông, `sport.pickleball`) + a `getSportLabel(key, fallback)` helper replacing `getSportProfileConfig().label`; ~15 display sites use `sportName`/that label. Requested after CLIENT-I18N-6 | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
