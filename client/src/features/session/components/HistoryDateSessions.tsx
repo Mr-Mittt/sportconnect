@@ -3,8 +3,11 @@ import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation'
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { useHistoryDateSessions } from '../hooks/useHistoryDateSessions';
 import { LoadMoreButton } from './LoadMoreButton';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface HistoryDateSessionsProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   /** `yyyy-MM-dd` — the history date whose sessions to fetch. */
   date: string;
   /** Already-formatted row label ("Sep 14, 2026" / "Today"), only used to name the nested
@@ -40,16 +43,18 @@ export function HistoryDateSessions({
   onViewDetails,
   onParticipationAction,
   isParticipationActionPending,
+  i18nOverridePrefix,
 }: HistoryDateSessionsProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const query = useHistoryDateSessions(date, sportId);
   const sessions = (query.data?.pages ?? []).flatMap((page) => page.content);
 
   return (
     <div className="flex flex-col gap-3">
-      {query.isLoading && <p className="text-2sm text-text-muted">Loading…</p>}
+      {query.isLoading && <p className="text-2sm text-text-muted">{t('common.loading')}</p>}
       {query.isError && (
         <p role="alert" className="text-2sm text-text-danger">
-          Couldn't load these sessions.
+          {t('history.dateError')}
         </p>
       )}
       {sessions.map((session) => (
@@ -67,7 +72,7 @@ export function HistoryDateSessions({
         <LoadMoreButton
           isFetching={query.isFetchingNextPage}
           onClick={() => void query.fetchNextPage()}
-          ariaLabel={`Load more sessions for ${dateLabel}`}
+          ariaLabel={t('history.loadMoreForDate', { label: dateLabel })}
         />
       )}
     </div>

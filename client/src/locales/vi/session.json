@@ -1,0 +1,317 @@
+{
+  "dateFormat": {
+    "weekdayTime": "EEE, HH:mm",
+    "monthDayTime": "d MMM, HH:mm",
+    "weekdayMonthDayTime": "EEE, d MMM '·' HH:mm",
+    "weekdayDayMonth": "EEE, d MMM",
+    "dayMonth": "d MMM",
+    "dayMonthYear": "d MMM, yyyy",
+    "monthYear": "MMMM yyyy",
+    "weekdayNarrow": "EEEEE",
+    "fullDate": "EEEE, d MMMM, yyyy"
+  },
+  "dateLabel": {
+    "today": "Hôm nay",
+    "tomorrow": "Ngày mai",
+    "tomorrowWithDate": "Ngày mai ({{date}})"
+  },
+  "startTime": {
+    "today": "Hôm nay, {{time}}",
+    "tomorrow": "Ngày mai, {{time}}"
+  },
+  "fee": {
+    "type": {
+      "FREE": "Miễn phí",
+      "SPLIT": "Chia đều chi phí",
+      "FIXED": "Số tiền cố định"
+    },
+    "pending": "Chưa có mức phí"
+  },
+  "capacity": {
+    "participants_one": "{{count}} người tham gia",
+    "participants_other": "{{count}} người tham gia",
+    "participantsOfCapacity_one": "{{count}}/{{capacity}} người tham gia",
+    "participantsOfCapacity_other": "{{count}}/{{capacity}} người tham gia"
+  },
+  "participation": {
+    "join": "Tham gia",
+    "accept": "Chấp nhận",
+    "cancel": "Hủy",
+    "leave": "Rời khỏi"
+  },
+  "common": {
+    "loading": "Đang tải…",
+    "loadMore": "Tải thêm",
+    "collapse": "Thu gọn {{label}}",
+    "expand": "Mở rộng {{label}}",
+    "close": "Đóng"
+  },
+  "history": {
+    "title": "Lịch sử",
+    "error": "Không thể tải lịch sử buổi chơi của bạn.",
+    "empty": "Chưa có lịch sử buổi chơi.",
+    "dateError": "Không thể tải các buổi chơi này.",
+    "loadMoreForDate": "Tải thêm buổi chơi cho {{label}}",
+    "loadMoreDates": "Tải thêm ngày trong lịch sử"
+  },
+  "locationFavorites": {
+    "choose": "Chọn địa điểm",
+    "change": "Đổi địa điểm",
+    "empty": "Chưa có địa điểm yêu thích.",
+    "pickOther": "Chọn một địa điểm…"
+  },
+  "requested": {
+    "title": "Buổi chơi đã yêu cầu",
+    "heading": "Buổi chơi đã yêu cầu ({{n}})",
+    "empty": "Chưa có buổi chơi nào được yêu cầu.",
+    "error": "Không thể tải các buổi chơi bạn đã yêu cầu."
+  },
+  "comments": {
+    "title": "Thảo luận",
+    "loading": "Đang tải bình luận…",
+    "error": "Không thể tải bình luận.",
+    "empty": "Chưa có bình luận nào. Hãy là người đầu tiên bình luận!",
+    "viewMore": "Xem thêm bình luận",
+    "placeholder": "Thêm bình luận…",
+    "addLabel": "Thêm bình luận",
+    "post": "Đăng bình luận"
+  },
+  "upcoming": {
+    "title": "Buổi chơi sắp tới",
+    "error": "Không thể tải các buổi chơi sắp tới của bạn.",
+    "empty": "Bạn chưa có buổi chơi nào sắp tới."
+  },
+  "discover": {
+    "noMore": "Không còn gì để tải.",
+    "emptyForDate": "Không có buổi chơi nào để khám phá vào {{label}}.",
+    "errorForDate": "Không thể tải các buổi chơi cho {{label}}.",
+    "date": {
+      "trigger": "Ngày",
+      "triggerCount": "Ngày ({{n}})",
+      "reset": "Đặt lại bộ lọc ngày",
+      "chooseFromList": "Chọn từ danh sách",
+      "legend": "Ngày để khám phá",
+      "pick": "Chọn ngày…",
+      "max": "Tối đa {{max}} ngày cùng lúc."
+    },
+    "fee": {
+      "trigger": "Phí",
+      "clear": "Xóa bộ lọc phí",
+      "legend": "Loại phí",
+      "maxAmount": "Số tiền tối đa",
+      "clearButton": "Xóa"
+    },
+    "location": {
+      "needsSport": "Chọn một môn thể thao cụ thể để lọc theo địa điểm",
+      "trigger": "Địa điểm",
+      "triggerCount": "Địa điểm ({{n}})",
+      "clear": "Xóa bộ lọc địa điểm",
+      "searchPlaceholder": "Tìm địa điểm…",
+      "searchLabel": "Tìm địa điểm",
+      "noFavorites": "Chưa có địa điểm yêu thích.",
+      "noResults": "Không tìm thấy địa điểm nào.",
+      "legend": "Địa điểm để khám phá",
+      "pick": "Chọn một địa điểm…"
+    },
+    "sportLabel": "Môn thể thao để khám phá",
+    "search": {
+      "placeholder": "Tìm kiếm",
+      "label": "Tìm buổi chơi"
+    },
+    "searchScope": "Phạm vi tìm kiếm",
+    "searchMode": {
+      "sessions": "Buổi chơi"
+    },
+    "openSlots": {
+      "clear": "Xóa bộ lọc chỗ trống",
+      "placeholder": "Chỗ trống",
+      "label": "Số chỗ trống tối thiểu",
+      "increase": "Tăng số chỗ trống",
+      "decrease": "Giảm số chỗ trống"
+    },
+    "status": {
+      "trigger": "Trạng thái",
+      "clear": "Xóa bộ lọc trạng thái",
+      "legend": "Trạng thái để khám phá"
+    },
+    "time": {
+      "before": "Trước",
+      "after": "Sau",
+      "trigger": "Giờ",
+      "clear": "Xóa bộ lọc giờ"
+    },
+    "panelLabel": "Khám phá buổi chơi",
+    "heading": "Khám phá",
+    "countsLoading": "Đang tải số lượng buổi chơi…",
+    "countsError": "Không thể tải số lượng buổi chơi cho các ngày này.",
+    "modalTitle": "Khám phá buổi chơi hôm nay",
+    "noSportsPrompt": "Này nhà vô địch, hãy thêm một môn thể thao trước đã — không thể tham gia trận đấu của môn bạn còn không chơi! 🎯",
+    "emptyToday": "Hôm nay không có buổi chơi nào để khám phá.",
+    "errorToday": "Không thể tải các buổi chơi hôm nay.",
+    "anotherDate": "Tìm buổi chơi vào ngày khác?",
+    "discoverMore": "Khám phá thêm"
+  },
+  "time": {
+    "hour": "Giờ",
+    "minute": "Phút",
+    "date": "Ngày",
+    "minuteShort": "Phút"
+  },
+  "preparing": {
+    "title": "Hoàn tất thiết lập buổi chơi",
+    "missing": {
+      "locationAndFee": "Địa điểm và Phí",
+      "location": "Địa điểm",
+      "fee": "Phí"
+    },
+    "missingPrefix": "Còn thiếu:",
+    "missingSuffix": ". Hãy hoàn tất trước khi buổi chơi bắt đầu, nếu không buổi chơi sẽ tự động bị hủy.",
+    "error": "Không thể hoàn tất thiết lập buổi chơi. Vui lòng thử lại.",
+    "saving": "Đang lưu…",
+    "save": "Lưu"
+  },
+  "calendar": {
+    "previousMonth": "Tháng trước",
+    "nextMonth": "Tháng sau"
+  },
+  "matches": {
+    "heading": "Chơi",
+    "createSession": "Tạo buổi chơi",
+    "showMySessions": "Hiện buổi chơi của tôi",
+    "hideMySessions": "Ẩn buổi chơi của tôi",
+    "mySessions": "Buổi chơi của tôi"
+  },
+  "card": {
+    "defaultTitle": "Buổi chơi {{sport}}",
+    "locationPending": "Chưa có địa điểm",
+    "viewDetailsLabel": "{{title}} — Xem chi tiết",
+    "viewDetails": "Xem chi tiết",
+    "actionLabel": "{{title}} — {{action}}",
+    "working": "Đang xử lý…"
+  },
+  "upcomingMatches": {
+    "label": "Trận sắp tới",
+    "title": "Sắp tới",
+    "seeAll": "Xem tất cả",
+    "empty": "Chưa có trận nào sắp tới.",
+    "join": "Tham gia trận",
+    "create": "Tạo trận"
+  },
+  "detail": {
+    "defaultTitle": "Buổi chơi",
+    "error": "Không thể tải buổi chơi này.",
+    "getDirections": "Chỉ đường",
+    "unknownUser": "không rõ",
+    "cancelledBy": "Đã bị hủy bởi {{name}}",
+    "cancelledByOn": "Đã bị hủy bởi {{name}} vào {{time}}",
+    "reason": "Lý do: {{reason}}",
+    "players": {
+      "label": "Người chơi",
+      "heading": "Người chơi ({{value}})",
+      "error": "Không thể tải danh sách người tham gia."
+    },
+    "qualifier": {
+      "hostAndYou": "(chủ trì, bạn)",
+      "host": "(chủ trì)",
+      "you": "(bạn)"
+    },
+    "approval": {
+      "label": "Đang chờ duyệt",
+      "heading": "Đang chờ duyệt ({{n}})",
+      "error": "Không thể tải các yêu cầu.",
+      "reject": "Từ chối",
+      "approve": "Duyệt",
+      "reasonPlaceholder": "Lý do (không bắt buộc)",
+      "reasonLabel": "Lý do từ chối {{name}}",
+      "rejecting": "Đang từ chối…",
+      "confirmReject": "Xác nhận từ chối",
+      "neverMind": "Thôi bỏ qua"
+    },
+    "approvalCreatedBy": "{{approval}}. Tạo bởi {{name}}",
+    "like": "Thích",
+    "unlike": "Bỏ thích",
+    "actionError": "Không thể hoàn tất thao tác đó. Vui lòng thử lại.",
+    "waitingForHost": "Đang chờ chủ trì duyệt.",
+    "decline": "Từ chối",
+    "pending": {
+      "JOIN": "Đang tham gia…",
+      "ACCEPT": "Đang chấp nhận…",
+      "CANCEL": "Đang hủy…",
+      "LEAVE": "Đang rời…",
+      "DECLINE": "Đang từ chối…"
+    }
+  },
+  "create": {
+    "title": "Tạo buổi chơi của bạn",
+    "noSportsPrompt": "Này nhà vô địch, hãy thêm một môn thể thao trước đã — không thể tổ chức trận đấu từ hư không! 🏆",
+    "basicInfo": "Thông tin cơ bản của buổi chơi",
+    "sport": {
+      "label": "Môn thể thao",
+      "placeholder": "Chọn một môn thể thao"
+    },
+    "titleField": {
+      "label": "Tên buổi chơi",
+      "placeholder": "VD: Chơi giao lưu Chủ nhật"
+    },
+    "location": {
+      "label": "Địa điểm (không bắt buộc)",
+      "pickSportFirst": "Hãy chọn môn thể thao trước."
+    },
+    "locationNote": {
+      "label": "Ghi chú địa điểm (không bắt buộc)",
+      "placeholder": "VD: Sân số 3"
+    },
+    "startsAt": {
+      "label": "Bắt đầu lúc"
+    },
+    "duration": {
+      "label": "Thời lượng (phút)",
+      "placeholder": "VD: 90"
+    },
+    "takenSlot": {
+      "label": "Chỗ đã có người"
+    },
+    "openSlot": {
+      "label": "Chỗ trống"
+    },
+    "slots": {
+      "placeholder": "VD: 10"
+    },
+    "slotsSummary": "{{taken}}/{{capacity}} chỗ",
+    "fee": {
+      "label": "Phí (không bắt buộc)"
+    },
+    "description": {
+      "label": "Mô tả (không bắt buộc)",
+      "placeholder": "Buổi chơi này về điều gì?"
+    },
+    "detail": "Chi tiết buổi chơi",
+    "error": "Không thể tạo buổi chơi. Vui lòng thử lại.",
+    "preparingPrefix": "Buổi chơi này sẽ được tạo với trạng thái",
+    "preparingSuffix": "— hãy thêm địa điểm và phí để chuyển sang \"{{scheduled}}\". Bạn có thể hoàn tất bất cứ lúc nào trước khi buổi chơi bắt đầu, nếu không buổi chơi sẽ tự động bị hủy.",
+    "creating": "Đang tạo…",
+    "submit": "Tạo buổi chơi",
+    "validation": {
+      "sport": "Vui lòng chọn môn thể thao.",
+      "title": "Vui lòng nhập tên buổi chơi.",
+      "startTime": "Vui lòng chọn thời gian bắt đầu.",
+      "duration": "Vui lòng nhập thời lượng.",
+      "openSlot": "Vui lòng nhập số chỗ trống."
+    },
+    "invite": {
+      "label": "Mời bạn bè (không bắt buộc)",
+      "remove": "Xóa {{name}}",
+      "placeholder": "Tìm bạn bè theo tên…",
+      "searchLabel": "Tìm bạn bè để mời",
+      "minChars": "Nhập ít nhất {{min}} ký tự để tìm kiếm.",
+      "noResults": "Không tìm thấy bạn bè nào."
+    },
+    "autoApprove": {
+      "label": "Tự động duyệt yêu cầu tham gia",
+      "hint": "Mọi người có thể tham gia mà không cần bạn duyệt."
+    }
+  },
+  "attributes": {
+    "heading": "Chi tiết buổi chơi"
+  }
+}

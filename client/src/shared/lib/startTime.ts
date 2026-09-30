@@ -1,4 +1,6 @@
 import { differenceInCalendarDays, format, isSameDay } from 'date-fns';
+import i18next from 'i18next';
+import { formatLocalized } from '@/shared/lib/localizedDate';
 
 /**
  * Formats a future ISO timestamp the way the mockup labels upcoming matches:
@@ -11,15 +13,15 @@ export function formatStartTime(iso: string, now: Date = new Date()): string {
   const date = new Date(iso);
   const days = differenceInCalendarDays(date, now);
   if (days === 0) {
-    return `Today, ${format(date, 'HH:mm')}`;
+    return i18next.t('session:startTime.today', { time: format(date, 'HH:mm') });
   }
   if (days === 1) {
-    return `Tomorrow, ${format(date, 'HH:mm')}`;
+    return i18next.t('session:startTime.tomorrow', { time: format(date, 'HH:mm') });
   }
   if (days > 1 && days < 7) {
-    return format(date, 'EEE, HH:mm');
+    return formatLocalized(date, 'weekdayTime');
   }
-  return format(date, 'MMM d, HH:mm');
+  return formatLocalized(date, 'monthDayTime');
 }
 
 /**
@@ -37,7 +39,7 @@ export function formatSessionTimeRange(
   const start = formatStartTime(startIso, now);
   if (endIso === null) return start;
   const endDate = new Date(endIso);
-  const end = isSameDay(new Date(startIso), endDate) ? format(endDate, 'HH:mm') : format(endDate, 'MMM d, HH:mm');
+  const end = isSameDay(new Date(startIso), endDate) ? format(endDate, 'HH:mm') : formatLocalized(endDate, 'monthDayTime');
   return `${start} – ${end}`;
 }
 
@@ -55,8 +57,8 @@ export function formatSessionTimeRange(
  */
 export function formatSessionHeaderDateTime(iso: string, endIso: string | null = null): string {
   const start = new Date(iso);
-  const startLabel = format(start, "EEE, MMM d '·' HH:mm");
+  const startLabel = formatLocalized(start, 'weekdayMonthDayTime');
   if (endIso === null) return startLabel;
   const end = new Date(endIso);
-  return `${startLabel} – ${isSameDay(start, end) ? format(end, 'HH:mm') : format(end, "EEE, MMM d '·' HH:mm")}`;
+  return `${startLabel} – ${isSameDay(start, end) ? format(end, 'HH:mm') : formatLocalized(end, 'weekdayMonthDayTime')}`;
 }

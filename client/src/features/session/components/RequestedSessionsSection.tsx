@@ -4,8 +4,11 @@ import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation'
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { SessionListItem } from '../types';
 import { DiscoverResultsList } from './DiscoverResultsList';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface RequestedSessionsSectionProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   sessions: SessionListItem[];
   isLoading: boolean;
   isError: boolean;
@@ -51,15 +54,18 @@ export function RequestedSessionsSection({
   onParticipationAction,
   isParticipationActionPending,
   gridClassName,
+  i18nOverridePrefix,
 }: RequestedSessionsSectionProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const [isExpanded, setIsExpanded] = useState(true);
+  const requestedLabel = t('requested.heading', { n: sessions.length });
 
   return (
-    <section aria-label="Requested sessions" className="mb-3.5">
+    <section aria-label={t('requested.title')} className="mb-3.5">
       <button
         type="button"
         aria-expanded={isExpanded}
-        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} Requested sessions (${sessions.length})`}
+        aria-label={isExpanded ? t('common.collapse', { label: requestedLabel }) : t('common.expand', { label: requestedLabel })}
         onClick={() => setIsExpanded((current) => !current)}
         className="mb-2 flex w-full cursor-pointer items-center gap-2.5 border-none bg-none p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
       >
@@ -69,7 +75,7 @@ export function RequestedSessionsSection({
           <IconChevronRight className="size-3.5 shrink-0 text-text-muted" aria-hidden="true" />
         )}
         <span className="shrink-0 whitespace-nowrap text-2xs font-medium text-text-muted">
-          Requested sessions ({sessions.length})
+          {requestedLabel}
         </span>
         <div className="h-px flex-1 bg-border" />
       </button>
@@ -85,8 +91,8 @@ export function RequestedSessionsSection({
           // Required prop, but unreachable under the gate above (isLoading/isError/sessions.length
           // === 0 is exactly what that gate excludes) — kept as documentation of what this text
           // would have been, not copy that ever actually renders.
-          emptyMessage="No requested sessions."
-          errorMessage="Couldn't load your requested sessions."
+          emptyMessage={t('requested.empty')}
+          errorMessage={t('requested.error')}
           sportsByKey={sportsByKey}
           currentUserId={currentUserId}
           onViewDetails={onViewDetails}

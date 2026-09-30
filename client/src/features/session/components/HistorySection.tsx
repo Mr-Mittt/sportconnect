@@ -3,8 +3,11 @@ import type { ReactNode } from 'react';
 import { formatSessionDayLabel } from '../groupSessionsByDate';
 import type { SessionHistoryDate } from '../types';
 import { LoadMoreButton } from './LoadMoreButton';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface HistorySectionProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   /** Most-recent-first, as `GET /sessions/history?dateCount=` returns them (loaded pages so far). */
   dates: SessionHistoryDate[];
   /** `yyyy-MM-dd` for "now" in the viewer's zone — drives the "Today" special case. A prop (not read
@@ -44,19 +47,21 @@ export function HistorySection({
   isFetchingMore,
   onLoadMore,
   renderDateSessions,
+  i18nOverridePrefix,
 }: HistorySectionProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   return (
-    <section aria-label="History" className="flex flex-col gap-3">
-      <h2 className="text-2sm font-medium text-text-primary">History</h2>
+    <section aria-label={t('history.title')} className="flex flex-col gap-3">
+      <h2 className="text-2sm font-medium text-text-primary">{t('history.title')}</h2>
 
-      {isLoading && <p className="text-2sm text-text-muted">Loading…</p>}
+      {isLoading && <p className="text-2sm text-text-muted">{t('common.loading')}</p>}
       {isError && (
         <p role="alert" className="text-2sm text-text-danger">
-          Couldn't load your session history.
+          {t('history.error')}
         </p>
       )}
       {!isLoading && !isError && dates.length === 0 && (
-        <p className="text-2sm text-text-muted">No session history yet.</p>
+        <p className="text-2sm text-text-muted">{t('history.empty')}</p>
       )}
       {dates.length > 0 && (
         <div className="flex flex-col gap-3">
@@ -69,7 +74,7 @@ export function HistorySection({
                 <button
                   type="button"
                   aria-expanded={isExpanded}
-                  aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${rowLabel}`}
+                  aria-label={isExpanded ? t('common.collapse', { label: rowLabel }) : t('common.expand', { label: rowLabel })}
                   onClick={() => onToggleDate(date)}
                   className="flex w-full cursor-pointer items-center gap-2.5 border-none bg-none p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                 >
@@ -90,7 +95,7 @@ export function HistorySection({
         </div>
       )}
       {!isLoading && !isError && hasMore && (
-        <LoadMoreButton isFetching={isFetchingMore} onClick={onLoadMore} ariaLabel="Load more history dates" />
+        <LoadMoreButton isFetching={isFetchingMore} onClick={onLoadMore} ariaLabel={t('history.loadMoreDates')} />
       )}
     </section>
   );

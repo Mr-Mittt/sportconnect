@@ -18,10 +18,13 @@ import { DiscoverTimeFilter } from './DiscoverTimeFilter';
 import { DiscoverDateSection } from './DiscoverDateSection';
 import { DiscoverSearchBox } from './DiscoverSearchBox';
 import { RequestedSessionsSection } from './RequestedSessionsSection';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 const DEFAULT_GRID_CLASS_NAME = 'grid grid-cols-1 gap-3 sm:grid-cols-2';
 
 interface SessionDiscoverPanelProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   searchMode: SessionSearchMode;
   onSearchModeChange: (mode: SessionSearchMode) => void;
   searchText: string;
@@ -166,10 +169,12 @@ export function SessionDiscoverPanel({
   onParticipationAction,
   isParticipationActionPending,
   gridClassName = DEFAULT_GRID_CLASS_NAME,
+  i18nOverridePrefix,
 }: SessionDiscoverPanelProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   return (
-    <section aria-label="Discover sessions" className="min-w-0 flex-1">
-      <h2 className="sr-only">Discover</h2>
+    <section aria-label={t('discover.panelLabel')} className="min-w-0 flex-1">
+      <h2 className="sr-only">{t('discover.heading')}</h2>
       <div className="mb-3.5 flex flex-col gap-2.5">
         <DiscoverSearchBox
           searchMode={searchMode}
@@ -245,10 +250,10 @@ export function SessionDiscoverPanel({
         gridClassName={gridClassName}
       />
 
-      {isCountsLoading && <p className="mb-2 text-2sm text-text-muted">Loading session counts…</p>}
+      {isCountsLoading && <p className="mb-2 text-2sm text-text-muted">{t('discover.countsLoading')}</p>}
       {isCountsError && (
         <p role="alert" className="mb-2 text-2sm text-text-danger">
-          Couldn't load session counts for these dates.
+          {t('discover.countsError')}
         </p>
       )}
       <div className="flex flex-col gap-3">

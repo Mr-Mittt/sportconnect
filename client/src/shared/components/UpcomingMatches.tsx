@@ -4,8 +4,11 @@ import { Button } from '@/shared/ui/button';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Session } from '@/shared/types/session';
 import { SessionCard } from './SessionCard';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface UpcomingMatchesProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   matches: Session[];
   activeSport: SportKey | 'all';
   sportsByKey: Record<SportKey, SportProfile>;
@@ -69,7 +72,9 @@ export function UpcomingMatches({
   onParticipationAction,
   isParticipationActionPending,
   maxVisible = 4,
+  i18nOverridePrefix,
 }: UpcomingMatchesProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const filtered =
     activeSport === 'all'
       ? matches
@@ -78,29 +83,29 @@ export function UpcomingMatches({
 
   return (
     <section
-      aria-label="Upcoming matches"
+      aria-label={t('upcomingMatches.label')}
       className="border-hairline rounded-xl border-border bg-surface-2 p-3.5"
     >
       <div className="mb-2.5 flex items-center justify-between">
-        <h2 className="text-2sm font-medium text-text-primary">Upcoming</h2>
+        <h2 className="text-2sm font-medium text-text-primary">{t('upcomingMatches.title')}</h2>
         <button
           type="button"
           onClick={onSeeAll}
           className="cursor-pointer rounded text-xs text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
         >
-          See all
+          {t('upcomingMatches.seeAll')}
         </button>
       </div>
 
       {visible.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-2">
-          <p className="text-xs text-text-muted">No upcoming matches.</p>
+          <p className="text-xs text-text-muted">{t('upcomingMatches.empty')}</p>
           <div className="flex w-full gap-2">
             <Button variant="primary" size="sm" className="flex-1" onClick={onJoinMatch}>
-              Join a match
+              {t('upcomingMatches.join')}
             </Button>
             <Button variant="outline" size="sm" className="flex-1" onClick={onCreateMatch}>
-              Create a match
+              {t('upcomingMatches.create')}
             </Button>
           </div>
         </div>

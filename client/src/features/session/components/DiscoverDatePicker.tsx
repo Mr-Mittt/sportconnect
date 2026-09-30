@@ -4,8 +4,11 @@ import { Popover, PopoverContent } from '@/shared/ui/popover';
 import { MAX_DISCOVER_DATES } from '../discoverDateLabel';
 import { DiscoverFilterTrigger } from './DiscoverFilterTrigger';
 import { SessionStartTimeCalendar } from './SessionStartTimeCalendar';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface DiscoverDatePickerProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   quickDates: string[];
   selectedDates: string[];
   onToggleDate: (date: string) => void;
@@ -49,16 +52,18 @@ export function DiscoverDatePicker({
   isAtMax,
   isActive,
   onReset,
+  i18nOverridePrefix,
 }: DiscoverDatePickerProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const [showCalendar, setShowCalendar] = useState(false);
   const selectedSet = new Set(selectedDates);
   const customDates = selectedDates.filter((date) => !quickDates.includes(date));
   const triggerLabel =
     selectedDates.length === 0
-      ? 'Date'
+      ? t('discover.date.trigger')
       : selectedDates.length === 1
         ? dateLabel(selectedDates[0])
-        : `Date (${selectedDates.length})`;
+        : t('discover.date.triggerCount', { n: selectedDates.length });
 
   return (
     <Popover onOpenChange={(open) => !open && setShowCalendar(false)}>
@@ -66,7 +71,7 @@ export function DiscoverDatePicker({
         label={triggerLabel}
         isActive={isActive}
         onClear={onReset}
-        clearLabel="Reset date filter"
+        clearLabel={t('discover.date.reset')}
       />
       <PopoverContent align="start" className="w-64">
         {showCalendar ? (
@@ -84,12 +89,12 @@ export function DiscoverDatePicker({
               onClick={() => setShowCalendar(false)}
               className="cursor-pointer rounded text-2xs text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
             >
-              Choose from the list instead
+              {t('discover.date.chooseFromList')}
             </button>
           </div>
         ) : (
           <fieldset className="flex flex-col gap-1">
-            <legend className="sr-only">Dates to discover</legend>
+            <legend className="sr-only">{t('discover.date.legend')}</legend>
             {[...quickDates, ...customDates].map((date) => {
               const checked = selectedSet.has(date);
               const disabled = !checked && isAtMax;
@@ -115,11 +120,11 @@ export function DiscoverDatePicker({
               onClick={() => setShowCalendar(true)}
               className="mt-1 cursor-pointer rounded px-2 py-1.5 text-left text-2sm text-text-accent hover:bg-surface-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Pick a date…
+              {t('discover.date.pick')}
             </button>
             {isAtMax && (
               <p className="px-2 text-2xs text-text-muted">
-                Up to {MAX_DISCOVER_DATES} dates at once.
+                {t('discover.date.max', { max: MAX_DISCOVER_DATES })}
               </p>
             )}
           </fieldset>

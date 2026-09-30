@@ -4,8 +4,11 @@ import { MAX_COMMENT_LENGTH } from '@/features/feed/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface SessionCommentComposerProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   currentUser: { fullName: string; avatarUrl: string | null } | undefined;
   onAddComment: (content: string) => void;
   isPosting: boolean;
@@ -31,7 +34,9 @@ export function SessionCommentComposer({
   currentUser,
   onAddComment,
   isPosting,
+  i18nOverridePrefix,
 }: SessionCommentComposerProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const [content, setContent] = useState('');
 
   const submitComment = () => {
@@ -56,15 +61,15 @@ export function SessionCommentComposer({
         onKeyDown={(event) => {
           if (event.key === 'Enter') submitComment();
         }}
-        placeholder="Add a comment…"
-        aria-label="Add a comment"
+        placeholder={t('comments.placeholder')}
+        aria-label={t('comments.addLabel')}
         maxLength={MAX_COMMENT_LENGTH}
         className="min-w-0 flex-1 rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
       />
       <Button
         variant="primary"
         size="icon"
-        aria-label="Post comment"
+        aria-label={t('comments.post')}
         onClick={submitComment}
         disabled={content.trim().length === 0 || isPosting}
         className={cn('cursor-pointer rounded-full disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}

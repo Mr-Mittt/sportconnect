@@ -1,4 +1,6 @@
 import { addDays, format, startOfDay } from 'date-fns';
+import i18next from 'i18next';
+import { formatLocalized } from '@/shared/lib/localizedDate';
 
 /** SESSION-39's own cap on how many explicit `date` values `/discover/counts` accepts in one
  * call — also this feature's cap on how many dates a caller can check in the Date filter at once. */
@@ -12,10 +14,10 @@ export const MAX_DISCOVER_DATES = 8;
  * for any date beyond tomorrow — plain `dd/MM` gave no weekday context when scanning a list of
  * checkboxes/section headers spanning up to 8 different dates. */
 export function formatDiscoverDateLabel(dateKey: string, today: string): string {
-  if (dateKey === today) return 'Today';
+  if (dateKey === today) return i18next.t('session:dateLabel.today');
   const tomorrow = format(addDays(new Date(`${today}T00:00:00`), 1), 'yyyy-MM-dd');
-  if (dateKey === tomorrow) return 'Tomorrow';
-  return format(new Date(`${dateKey}T00:00:00`), 'EEE, do MMM');
+  if (dateKey === tomorrow) return i18next.t('session:dateLabel.tomorrow');
+  return formatLocalized(new Date(`${dateKey}T00:00:00`), 'weekdayDayMonth');
 }
 
 /** `DiscoverDatePicker`'s own checklist-row label — same as `formatDiscoverDateLabel` except
@@ -27,7 +29,9 @@ export function formatDiscoverDateLabel(dateKey: string, today: string): string 
 export function formatDiscoverDateOptionLabel(dateKey: string, today: string): string {
   const tomorrow = format(addDays(new Date(`${today}T00:00:00`), 1), 'yyyy-MM-dd');
   if (dateKey === tomorrow)
-    return `Tomorrow (${format(new Date(`${dateKey}T00:00:00`), 'do MMM')})`;
+    return i18next.t('session:dateLabel.tomorrowWithDate', {
+      date: formatLocalized(new Date(`${dateKey}T00:00:00`), 'dayMonth'),
+    });
   return formatDiscoverDateLabel(dateKey, today);
 }
 

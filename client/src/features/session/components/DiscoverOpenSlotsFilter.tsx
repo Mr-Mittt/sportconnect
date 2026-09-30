@@ -1,8 +1,11 @@
 import { IconChevronDown, IconChevronUp, IconX } from '@tabler/icons-react';
 import { cn } from '@/shared/lib/utils';
 import { Input } from '@/shared/ui/input';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface DiscoverOpenSlotsFilterProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   /** Raw input text, not the parsed number — `useDiscoverBaseFilters` owns the real clamp so
    * every Discover surface parses identically; this component sanitizes keystrokes (digits only)
    * and re-clamps the displayed text on blur, but the derived `minOpenSlots` sent to the server
@@ -45,7 +48,8 @@ function clamp(n: number): number {
  * no CSS workaround needed. The native spinner is hidden entirely (`index.css`'s
  * `.discover-open-slots-input` rules) rather than left showing alongside a second, redundant pair.
  */
-export function DiscoverOpenSlotsFilter({ value, onChange, onClear }: DiscoverOpenSlotsFilterProps) {
+export function DiscoverOpenSlotsFilter({ value, onChange, onClear, i18nOverridePrefix }: DiscoverOpenSlotsFilterProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const isSet = value.trim() !== '';
 
   const handleChange = (raw: string) => {
@@ -76,7 +80,7 @@ export function DiscoverOpenSlotsFilter({ value, onChange, onClear }: DiscoverOp
         <button
           type="button"
           onClick={onClear}
-          aria-label="Clear open slots filter"
+          aria-label={t('discover.openSlots.clear')}
           className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-danger"
         >
           <IconX className="size-3.5" aria-hidden="true" />
@@ -95,8 +99,8 @@ export function DiscoverOpenSlotsFilter({ value, onChange, onClear }: DiscoverOp
           }
         }}
         onBlur={handleBlur}
-        placeholder="Open slots"
-        aria-label="Minimum open slots"
+        placeholder={t('discover.openSlots.placeholder')}
+        aria-label={t('discover.openSlots.label')}
         className={cn(
           'discover-open-slots-input h-full w-20 border-0 bg-transparent px-0 py-0 text-xs shadow-none focus-visible:ring-0',
         )}
@@ -105,7 +109,7 @@ export function DiscoverOpenSlotsFilter({ value, onChange, onClear }: DiscoverOp
         <button
           type="button"
           onClick={() => step(1)}
-          aria-label="Increase open slots"
+          aria-label={t('discover.openSlots.increase')}
           className="flex h-3.5 w-4 cursor-pointer items-center justify-center text-text-secondary hover:text-text-primary"
         >
           <IconChevronUp className="size-3" aria-hidden="true" />
@@ -113,7 +117,7 @@ export function DiscoverOpenSlotsFilter({ value, onChange, onClear }: DiscoverOp
         <button
           type="button"
           onClick={() => step(-1)}
-          aria-label="Decrease open slots"
+          aria-label={t('discover.openSlots.decrease')}
           className="flex h-3.5 w-4 cursor-pointer items-center justify-center text-text-secondary hover:text-text-primary"
         >
           <IconChevronDown className="size-3" aria-hidden="true" />

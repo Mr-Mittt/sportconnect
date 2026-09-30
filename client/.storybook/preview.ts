@@ -11,6 +11,7 @@ import notificationsEn from '../src/locales/en/notifications.json';
 import profileEn from '../src/locales/en/profile.json';
 import profilePageEn from '../src/locales/en/profilePage.json';
 import registerEn from '../src/locales/en/register.json';
+import sessionEn from '../src/locales/en/session.json';
 import sharedComponentsEn from '../src/locales/en/sharedComponents.json';
 import sharedDialogsEn from '../src/locales/en/sharedDialogs.json';
 import shellEn from '../src/locales/en/shell.json';
@@ -24,6 +25,7 @@ import notificationsVi from '../src/locales/vi/notifications.json';
 import profileVi from '../src/locales/vi/profile.json';
 import profilePageVi from '../src/locales/vi/profilePage.json';
 import registerVi from '../src/locales/vi/register.json';
+import sessionVi from '../src/locales/vi/session.json';
 import sharedComponentsVi from '../src/locales/vi/sharedComponents.json';
 import sharedDialogsVi from '../src/locales/vi/sharedDialogs.json';
 import shellVi from '../src/locales/vi/shell.json';
@@ -67,6 +69,7 @@ void i18next.use(initReactI18next).init({
       sharedComponents: sharedComponentsEn,
       enums: enumsEn,
       groups: groupsEn,
+      session: sessionEn,
       friends: friendsEn,
       notifications: notificationsEn,
     },
@@ -82,6 +85,7 @@ void i18next.use(initReactI18next).init({
       sharedComponents: sharedComponentsVi,
       enums: enumsVi,
       groups: groupsVi,
+      session: sessionVi,
       friends: friendsVi,
       notifications: notificationsVi,
     },
@@ -89,7 +93,7 @@ void i18next.use(initReactI18next).init({
   lng: 'en',
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications'],
+  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session'],
   interpolation: { escapeValue: false },
   returnNull: false,
 });

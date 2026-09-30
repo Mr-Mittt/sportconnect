@@ -1,3 +1,4 @@
+import i18next from 'i18next';
 import type { Session } from '@/shared/types/session';
 
 export type ParticipationActionKind = 'JOIN' | 'ACCEPT' | 'CANCEL' | 'LEAVE';
@@ -26,8 +27,8 @@ export function getParticipationAction(
   }
 
   const status = session.callerParticipation?.status;
-  if (status === undefined || status === 'LEFT') return { kind: 'JOIN', label: 'Join' };
-  if (status === 'INVITED') return { kind: 'ACCEPT', label: 'Accept' };
-  if (status === 'REQUESTED') return { kind: 'CANCEL', label: 'Cancel' };
-  return { kind: 'LEAVE', label: 'Leave' }; // JOINED
+  if (status === undefined || status === 'LEFT') return { kind: 'JOIN', label: i18next.t('session:participation.join') };
+  if (status === 'INVITED') return { kind: 'ACCEPT', label: i18next.t('session:participation.accept') };
+  if (status === 'REQUESTED') return { kind: 'CANCEL', label: i18next.t('session:participation.cancel') };
+  return { kind: 'LEAVE', label: i18next.t('session:participation.leave') }; // JOINED
 }

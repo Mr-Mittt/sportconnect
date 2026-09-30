@@ -3,8 +3,11 @@ import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation'
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { DiscoverDateSection as DiscoverDateSectionData } from '../types';
 import { DiscoverResultsList } from './DiscoverResultsList';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface DiscoverDateSectionProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   section: DiscoverDateSectionData;
   onToggleExpanded: (date: string) => void;
   onLoadMore: (date: string) => void;
@@ -34,15 +37,19 @@ export function DiscoverDateSection({
   onParticipationAction,
   isParticipationActionPending,
   gridClassName,
+  i18nOverridePrefix,
 }: DiscoverDateSectionProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const { date, label, count, isExpanded, sessions, isLoading, isError, hasMore, isFetchingMore } = section;
+
+  const labelWithCount = `${label} (${count})`;
 
   return (
     <div>
       <button
         type="button"
         aria-expanded={isExpanded}
-        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${label} (${count})`}
+        aria-label={isExpanded ? t('common.collapse', { label: labelWithCount }) : t('common.expand', { label: labelWithCount })}
         onClick={() => onToggleExpanded(date)}
         className="flex w-full cursor-pointer items-center gap-2.5 border-none bg-none p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
       >
@@ -66,8 +73,8 @@ export function DiscoverDateSection({
             hasMore={hasMore}
             isFetchingMore={isFetchingMore}
             onLoadMore={() => onLoadMore(date)}
-            emptyMessage={`No sessions to discover on ${label}.`}
-            errorMessage={`Couldn't load sessions for ${label}.`}
+            emptyMessage={t('discover.emptyForDate', { label })}
+            errorMessage={t('discover.errorForDate', { label })}
             sportsByKey={sportsByKey}
             currentUserId={currentUserId}
             onViewDetails={onViewDetails}

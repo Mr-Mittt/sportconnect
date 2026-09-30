@@ -1,0 +1,317 @@
+{
+  "dateFormat": {
+    "weekdayTime": "EEE, HH:mm",
+    "monthDayTime": "MMM d, HH:mm",
+    "weekdayMonthDayTime": "EEE, MMM d '·' HH:mm",
+    "weekdayDayMonth": "EEE, do MMM",
+    "dayMonth": "do MMM",
+    "dayMonthYear": "MMM d, yyyy",
+    "monthYear": "MMMM yyyy",
+    "weekdayNarrow": "EEEEE",
+    "fullDate": "EEEE, MMMM d, yyyy"
+  },
+  "dateLabel": {
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "tomorrowWithDate": "Tomorrow ({{date}})"
+  },
+  "startTime": {
+    "today": "Today, {{time}}",
+    "tomorrow": "Tomorrow, {{time}}"
+  },
+  "fee": {
+    "type": {
+      "FREE": "Free",
+      "SPLIT": "Split cost",
+      "FIXED": "Fixed amount"
+    },
+    "pending": "Fee pending"
+  },
+  "capacity": {
+    "participants_one": "{{count}} participant",
+    "participants_other": "{{count}} participants",
+    "participantsOfCapacity_one": "{{count}}/{{capacity}} participant",
+    "participantsOfCapacity_other": "{{count}}/{{capacity}} participants"
+  },
+  "participation": {
+    "join": "Join",
+    "accept": "Accept",
+    "cancel": "Cancel",
+    "leave": "Leave"
+  },
+  "common": {
+    "loading": "Loading…",
+    "loadMore": "Load more",
+    "collapse": "Collapse {{label}}",
+    "expand": "Expand {{label}}",
+    "close": "Close"
+  },
+  "history": {
+    "title": "History",
+    "error": "Couldn't load your session history.",
+    "empty": "No session history yet.",
+    "dateError": "Couldn't load these sessions.",
+    "loadMoreForDate": "Load more sessions for {{label}}",
+    "loadMoreDates": "Load more history dates"
+  },
+  "locationFavorites": {
+    "choose": "Choose location",
+    "change": "Change location",
+    "empty": "No favorites yet.",
+    "pickOther": "Choose a location…"
+  },
+  "requested": {
+    "title": "Requested sessions",
+    "heading": "Requested sessions ({{n}})",
+    "empty": "No requested sessions.",
+    "error": "Couldn't load your requested sessions."
+  },
+  "comments": {
+    "title": "Discussion",
+    "loading": "Loading comments…",
+    "error": "Couldn't load comments.",
+    "empty": "No comments yet. Be the first to comment!",
+    "viewMore": "View more comments",
+    "placeholder": "Add a comment…",
+    "addLabel": "Add a comment",
+    "post": "Post comment"
+  },
+  "upcoming": {
+    "title": "Upcoming sessions",
+    "error": "Couldn't load your upcoming sessions.",
+    "empty": "You have no upcoming sessions."
+  },
+  "discover": {
+    "noMore": "No more to load.",
+    "emptyForDate": "No sessions to discover on {{label}}.",
+    "errorForDate": "Couldn't load sessions for {{label}}.",
+    "date": {
+      "trigger": "Date",
+      "triggerCount": "Date ({{n}})",
+      "reset": "Reset date filter",
+      "chooseFromList": "Choose from the list instead",
+      "legend": "Dates to discover",
+      "pick": "Pick a date…",
+      "max": "Up to {{max}} dates at once."
+    },
+    "fee": {
+      "trigger": "Fee",
+      "clear": "Clear fee filter",
+      "legend": "Fee type",
+      "maxAmount": "Max amount",
+      "clearButton": "Clear"
+    },
+    "location": {
+      "needsSport": "Pick a specific sport to filter by location",
+      "trigger": "Location",
+      "triggerCount": "Location ({{n}})",
+      "clear": "Clear location filter",
+      "searchPlaceholder": "Search locations…",
+      "searchLabel": "Search locations",
+      "noFavorites": "No favorites yet.",
+      "noResults": "No locations found.",
+      "legend": "Locations to discover",
+      "pick": "Choose a location…"
+    },
+    "sportLabel": "Sport to discover",
+    "search": {
+      "placeholder": "Search",
+      "label": "Search sessions"
+    },
+    "searchScope": "Search scope",
+    "searchMode": {
+      "sessions": "Sessions"
+    },
+    "openSlots": {
+      "clear": "Clear open slots filter",
+      "placeholder": "Open slots",
+      "label": "Minimum open slots",
+      "increase": "Increase open slots",
+      "decrease": "Decrease open slots"
+    },
+    "status": {
+      "trigger": "Status",
+      "clear": "Clear status filter",
+      "legend": "Statuses to discover"
+    },
+    "time": {
+      "before": "Before",
+      "after": "After",
+      "trigger": "Time",
+      "clear": "Clear time filter"
+    },
+    "panelLabel": "Discover sessions",
+    "heading": "Discover",
+    "countsLoading": "Loading session counts…",
+    "countsError": "Couldn't load session counts for these dates.",
+    "modalTitle": "Discover today session",
+    "noSportsPrompt": "Hey champ, add a sport first — can't join a match you don't even play! 🎯",
+    "emptyToday": "No sessions to discover today.",
+    "errorToday": "Couldn't load today's sessions.",
+    "anotherDate": "Find session for another date?",
+    "discoverMore": "Discover more"
+  },
+  "time": {
+    "hour": "Hour",
+    "minute": "Minute",
+    "date": "Date",
+    "minuteShort": "Min"
+  },
+  "preparing": {
+    "title": "Complete session setup",
+    "missing": {
+      "locationAndFee": "Location and Fee",
+      "location": "Location",
+      "fee": "Fee"
+    },
+    "missingPrefix": "Still missing:",
+    "missingSuffix": ". Complete it before this session starts, or it will be auto-cancelled.",
+    "error": "Couldn't complete the session setup. Try again.",
+    "saving": "Saving…",
+    "save": "Save"
+  },
+  "calendar": {
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month"
+  },
+  "matches": {
+    "heading": "Play",
+    "createSession": "Create session",
+    "showMySessions": "Show my sessions",
+    "hideMySessions": "Hide my sessions",
+    "mySessions": "My sessions"
+  },
+  "card": {
+    "defaultTitle": "{{sport}} session",
+    "locationPending": "Location pending",
+    "viewDetailsLabel": "{{title}} — View details",
+    "viewDetails": "View details",
+    "actionLabel": "{{title}} — {{action}}",
+    "working": "Working…"
+  },
+  "upcomingMatches": {
+    "label": "Upcoming matches",
+    "title": "Upcoming",
+    "seeAll": "See all",
+    "empty": "No upcoming matches.",
+    "join": "Join a match",
+    "create": "Create a match"
+  },
+  "detail": {
+    "defaultTitle": "Session",
+    "error": "Couldn't load this session.",
+    "getDirections": "Get Directions",
+    "unknownUser": "unknown",
+    "cancelledBy": "Cancelled by {{name}}",
+    "cancelledByOn": "Cancelled by {{name}} on {{time}}",
+    "reason": "Reason: {{reason}}",
+    "players": {
+      "label": "Players",
+      "heading": "Players ({{value}})",
+      "error": "Couldn't load participants."
+    },
+    "qualifier": {
+      "hostAndYou": "(host, you)",
+      "host": "(host)",
+      "you": "(you)"
+    },
+    "approval": {
+      "label": "Waiting for approval",
+      "heading": "Waiting for approval ({{n}})",
+      "error": "Couldn't load requests.",
+      "reject": "Reject",
+      "approve": "Approve",
+      "reasonPlaceholder": "Reason (optional)",
+      "reasonLabel": "Reject reason for {{name}}",
+      "rejecting": "Rejecting…",
+      "confirmReject": "Confirm reject",
+      "neverMind": "Never mind"
+    },
+    "approvalCreatedBy": "{{approval}}. Created by {{name}}",
+    "like": "Like",
+    "unlike": "Unlike",
+    "actionError": "Couldn't complete that action. Try again.",
+    "waitingForHost": "Waiting for host approval.",
+    "decline": "Decline",
+    "pending": {
+      "JOIN": "Joining…",
+      "ACCEPT": "Accepting…",
+      "CANCEL": "Cancelling…",
+      "LEAVE": "Leaving…",
+      "DECLINE": "Declining…"
+    }
+  },
+  "create": {
+    "title": "Create your session",
+    "noSportsPrompt": "Hey champ, add a sport first — can't host a match out of thin air! 🏆",
+    "basicInfo": "Session basic information",
+    "sport": {
+      "label": "Sport",
+      "placeholder": "Select a sport"
+    },
+    "titleField": {
+      "label": "Session title",
+      "placeholder": "e.g. Sunday pickup run"
+    },
+    "location": {
+      "label": "Location (optional)",
+      "pickSportFirst": "Pick a sport first."
+    },
+    "locationNote": {
+      "label": "Location note (optional)",
+      "placeholder": "e.g. Court 3"
+    },
+    "startsAt": {
+      "label": "Starts at"
+    },
+    "duration": {
+      "label": "Duration in minutes",
+      "placeholder": "e.g. 90"
+    },
+    "takenSlot": {
+      "label": "Taken slot"
+    },
+    "openSlot": {
+      "label": "Open slot"
+    },
+    "slots": {
+      "placeholder": "e.g. 10"
+    },
+    "slotsSummary": "{{taken}}/{{capacity}} slots",
+    "fee": {
+      "label": "Fee (optional)"
+    },
+    "description": {
+      "label": "Description (optional)",
+      "placeholder": "What's this session about?"
+    },
+    "detail": "Session detail",
+    "error": "Couldn't create the session. Try again.",
+    "preparingPrefix": "This session will be created as",
+    "preparingSuffix": "— add a location and fee to make it {{scheduled}}. You can complete it anytime before it starts, or it will be auto-cancelled.",
+    "creating": "Creating…",
+    "submit": "Create session",
+    "validation": {
+      "sport": "Sport is required.",
+      "title": "Title is required.",
+      "startTime": "Start time is required.",
+      "duration": "Duration is required.",
+      "openSlot": "Open slot is required."
+    },
+    "invite": {
+      "label": "Invite your friend (optional)",
+      "remove": "Remove {{name}}",
+      "placeholder": "Search friends by name…",
+      "searchLabel": "Search friends to invite",
+      "minChars": "Type at least {{min}} characters to search.",
+      "noResults": "No friends found."
+    },
+    "autoApprove": {
+      "label": "Auto approve join request",
+      "hint": "Everyone can join without your review."
+    }
+  },
+  "attributes": {
+    "heading": "Session detail"
+  }
+}

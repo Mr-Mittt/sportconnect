@@ -14,9 +14,13 @@ import {
   subMonths,
 } from 'date-fns';
 import { useState } from 'react';
+import { formatLocalized, getDateFnsLocale } from '@/shared/lib/localizedDate';
 import { cn } from '@/shared/lib/utils';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface SessionStartTimeCalendarProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   /** Date-only significance — time-of-day comes from the separate hour/minute wheels. */
   value: Date | null;
   onSelect: (date: Date) => void;
@@ -38,12 +42,15 @@ export function SessionStartTimeCalendar({
   onSelect,
   minDate,
   now = new Date(),
+  i18nOverridePrefix,
 }: SessionStartTimeCalendarProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const floor = startOfDay(minDate ?? now);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(value ?? floor));
 
-  const gridStart = startOfWeek(startOfMonth(viewMonth));
-  const gridEnd = endOfWeek(endOfMonth(viewMonth));
+  const dateFnsLocale = getDateFnsLocale();
+  const gridStart = startOfWeek(startOfMonth(viewMonth), { locale: dateFnsLocale });
+  const gridEnd = endOfWeek(endOfMonth(viewMonth), { locale: dateFnsLocale });
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
 
   const canGoPrev = !isSameMonth(floor, viewMonth);
@@ -53,17 +60,17 @@ export function SessionStartTimeCalendar({
       <div className="mb-2 flex items-center justify-between">
         <button
           type="button"
-          aria-label="Previous month"
+          aria-label={t('calendar.previousMonth')}
           disabled={!canGoPrev}
           onClick={() => setViewMonth((month) => subMonths(month, 1))}
           className="cursor-pointer rounded p-1 text-text-secondary hover:bg-surface-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-40"
         >
           <IconChevronLeft className="size-4" aria-hidden="true" />
         </button>
-        <span className="text-2sm font-medium text-text-primary">{format(viewMonth, 'MMMM yyyy')}</span>
+        <span className="text-2sm font-medium text-text-primary">{formatLocalized(viewMonth, 'monthYear')}</span>
         <button
           type="button"
-          aria-label="Next month"
+          aria-label={t('calendar.nextMonth')}
           onClick={() => setViewMonth((month) => addMonths(month, 1))}
           className="cursor-pointer rounded p-1 text-text-secondary hover:bg-surface-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
         >
@@ -74,7 +81,7 @@ export function SessionStartTimeCalendar({
       <div className="grid grid-cols-7 gap-y-1 text-center">
         {days.slice(0, 7).map((day) => (
           <span key={day.toISOString()} className="text-2xs text-text-muted" aria-hidden="true">
-            {format(day, 'EEEEE')}
+            {formatLocalized(day, 'weekdayNarrow')}
           </span>
         ))}
         {days.map((day) => {
@@ -87,7 +94,7 @@ export function SessionStartTimeCalendar({
               type="button"
               disabled={disabled}
               aria-pressed={selected}
-              aria-label={format(day, 'EEEE, MMMM d, yyyy')}
+              aria-label={formatLocalized(day, 'fullDate')}
               onClick={() => onSelect(day)}
               className={cn(
                 'flex size-8 cursor-pointer items-center justify-center rounded-full text-2sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:text-text-muted disabled:opacity-40',

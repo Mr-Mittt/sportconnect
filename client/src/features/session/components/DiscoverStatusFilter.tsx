@@ -3,8 +3,11 @@ import { getSessionStatusLabel } from '@/shared/lib/sessionStatus';
 import type { SessionStatus } from '@/shared/types/session';
 import { DISCOVERABLE_STATUSES } from '../useDiscoverBaseFilters';
 import { DiscoverFilterTrigger } from './DiscoverFilterTrigger';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface DiscoverStatusFilterProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   selectedStatuses: SessionStatus[];
   onToggleStatus: (status: SessionStatus) => void;
 }
@@ -25,12 +28,14 @@ interface DiscoverStatusFilterProps {
 export function DiscoverStatusFilter({
   selectedStatuses,
   onToggleStatus,
+  i18nOverridePrefix,
 }: DiscoverStatusFilterProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const selectedSet = new Set(selectedStatuses);
   const selected = selectedStatuses[0];
   // 2026-09-23 revision — the trigger shows the selected value alone once set, no "Status " prefix
   // (same change applied to Fee).
-  const triggerLabel = selected !== undefined ? getSessionStatusLabel(selected) : 'Status';
+  const triggerLabel = selected !== undefined ? getSessionStatusLabel(selected) : t('discover.status.trigger');
   // No separate "clear" handler needed — toggling the currently-selected status off is exactly
   // the mutual-exclusion hook's own reset-to-default (see useDiscoverBaseFilters.toggleStatus).
   const clear = () => {
@@ -43,11 +48,11 @@ export function DiscoverStatusFilter({
         label={triggerLabel}
         isActive={selected !== undefined}
         onClear={clear}
-        clearLabel="Clear status filter"
+        clearLabel={t('discover.status.clear')}
       />
       <PopoverContent align="start" className="w-44">
         <fieldset className="flex flex-col gap-0.5">
-          <legend className="sr-only">Statuses to discover</legend>
+          <legend className="sr-only">{t('discover.status.legend')}</legend>
           {DISCOVERABLE_STATUSES.map((status) => (
             <label
               key={status}

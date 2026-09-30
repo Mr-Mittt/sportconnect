@@ -3,8 +3,11 @@ import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation'
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { SessionListItem } from '../types';
 import { LoadMoreButton } from './LoadMoreButton';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface DiscoverResultsListProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   sessions: SessionListItem[];
   isLoading: boolean;
   isError: boolean;
@@ -46,10 +49,12 @@ export function DiscoverResultsList({
   onParticipationAction,
   isParticipationActionPending,
   gridClassName,
+  i18nOverridePrefix,
 }: DiscoverResultsListProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   return (
     <div className="flex flex-col gap-3">
-      {isLoading && <p className="text-2sm text-text-muted">Loading…</p>}
+      {isLoading && <p className="text-2sm text-text-muted">{t('common.loading')}</p>}
       {isError && (
         <p role="alert" className="text-2sm text-text-danger">
           {errorMessage}
@@ -79,7 +84,7 @@ export function DiscoverResultsList({
       {/* 2026-09-23 revision — previously rendered nothing once the last page loaded, giving no
         confirmation the list had actually ended vs. just not being re-checked. */}
       {!isLoading && !isError && !hasMore && sessions.length > 0 && (
-        <p className="self-center text-2xs text-text-muted">No more to load.</p>
+        <p className="self-center text-2xs text-text-muted">{t('discover.noMore')}</p>
       )}
     </div>
   );

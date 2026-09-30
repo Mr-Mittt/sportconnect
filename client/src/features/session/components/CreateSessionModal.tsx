@@ -18,6 +18,7 @@ import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
 import { AddSportFields, type AddSportProfileSubmission } from '@/shared/components/AddSportFields';
 import { RequiredMark } from '@/shared/components/RequiredMark';
+import { getSessionStatusLabel } from '@/shared/lib/sessionStatus';
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import { toOffsetAwareIso } from '@/shared/lib/scheduledStart';
@@ -25,8 +26,7 @@ import type { CreateSessionPayload } from '../types';
 import { FeeTypeFields } from './FeeTypeFields';
 import { LocationFavoritesDropdown } from './LocationFavoritesDropdown';
 import { SessionStartTimePicker } from './SessionStartTimePicker';
-
-const NO_SPORTS_PROMPT = "Hey champ, add a sport first — can't host a match out of thin air! 🏆";
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 const INVITE_SEARCH_MIN_LENGTH = 3;
 
@@ -99,13 +99,16 @@ function InviteFriendField({
   selected,
   onSelect,
   onRemove,
+  i18nOverridePrefix,
 }: {
   friends: FriendUser[];
   isFriendsLoading: boolean;
   selected: FriendUser[];
   onSelect: (friend: FriendUser) => void;
   onRemove: (friendId: string) => void;
+  i18nOverridePrefix?: string;
 }) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const [query, setQuery] = useState('');
   const selectedIds = new Set(selected.map((friend) => friend.id));
   const trimmedQuery = query.trim();
@@ -131,7 +134,7 @@ function InviteFriendField({
               <button
                 type="button"
                 onClick={() => onRemove(friend.id)}
-                aria-label={`Remove ${friend.fullName}`}
+                aria-label={t('create.invite.remove', { name: friend.fullName })}
                 className="flex size-4 cursor-pointer items-center justify-center rounded-full text-text-muted hover:bg-surface-2 hover:text-text-primary"
               >
                 <IconX className="size-3" aria-hidden="true" />
@@ -143,17 +146,17 @@ function InviteFriendField({
       <Input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search friends by name…"
-        aria-label="Search friends to invite"
+        placeholder={t('create.invite.placeholder')}
+        aria-label={t('create.invite.searchLabel')}
       />
       {trimmedQuery.length > 0 && trimmedQuery.length < INVITE_SEARCH_MIN_LENGTH && (
-        <p className="text-2xs text-text-muted">Type at least 3 characters to search.</p>
+        <p className="text-2xs text-text-muted">{t('create.invite.minChars', { min: INVITE_SEARCH_MIN_LENGTH })}</p>
       )}
       {trimmedQuery.length >= INVITE_SEARCH_MIN_LENGTH &&
         (isFriendsLoading ? (
-          <p className="text-2xs text-text-muted">Loading…</p>
+          <p className="text-2xs text-text-muted">{t('common.loading')}</p>
         ) : results.length === 0 ? (
-          <p className="text-2xs text-text-muted">No friends found.</p>
+          <p className="text-2xs text-text-muted">{t('create.invite.noResults')}</p>
         ) : (
           <div className="flex flex-col gap-1">
             {results.map((friend) => (
@@ -182,7 +185,16 @@ function InviteFriendField({
 /** "Auto approve join request" — unchecked by default (matches the backend's new-session
  * default). Checking it reveals an inline warning immediately, no separate confirm step (user
  * decision) and no nested Dialog — same reasoning as `InviteFriendField` above. */
-function AutoApproveField({ checked, onChange }: { checked: boolean; onChange: (next: boolean) => void }) {
+function AutoApproveField({
+  checked,
+  onChange,
+  i18nOverridePrefix,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  i18nOverridePrefix?: string;
+}) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   return (
     <div className="flex flex-col gap-1">
       <label className="flex cursor-pointer items-center gap-2 text-2sm text-text-primary select-none">
@@ -192,14 +204,16 @@ function AutoApproveField({ checked, onChange }: { checked: boolean; onChange: (
           onChange={(event) => onChange(event.target.checked)}
           className="size-4 cursor-pointer rounded border-border-strong"
         />
-        Auto approve join request
+        {t('create.autoApprove.label')}
       </label>
-      {checked && <p className="text-2xs text-text-muted">Everyone can join without your review.</p>}
+      {checked && <p className="text-2xs text-text-muted">{t('create.autoApprove.hint')}</p>}
     </div>
   );
 }
 
 interface CreateSessionModalProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   isOpen: boolean;
   onClose: () => void;
 
@@ -375,7 +389,9 @@ export function CreateSessionModal({
   onAddSport,
   isAddingSport,
   isAddSportError,
+  i18nOverridePrefix,
 }: CreateSessionModalProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const sportKeys = Object.keys(sportsByKey) as SportKey[];
   // Prefers the hosting page's active SportSwitcher pill; otherwise falls back to the caller's
   // first sport profile (in sportsByKey's own order) — covers both "exactly one profile" and
@@ -526,7 +542,7 @@ export function CreateSessionModal({
           fixedHeight={sportKeys.length > 0}
           className={sportKeys.length > 0 ? 'max-w-2xl' : 'max-w-md'}
         >
-          <DialogHeader title="Create your session" className="border-hairline-b border-border px-4 py-3" />
+          <DialogHeader title={t('create.title')} className="border-hairline-b border-border px-4 py-3" />
           {sportKeys.length === 0 ? (
             <AddSportFields
               availableSports={availableSports}
@@ -534,20 +550,20 @@ export function CreateSessionModal({
               onSubmit={onAddSport}
               isSubmitting={isAddingSport}
               isError={isAddSportError}
-              promptMessage={NO_SPORTS_PROMPT}
+              promptMessage={t('create.noSportsPrompt')}
             />
           ) : (
             <>
           <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-4 py-3.5">
             <Collapsible open={isBasicInfoOpen} onOpenChange={setIsBasicInfoOpen}>
               <CollapsibleTrigger className="border-hairline-b justify-center gap-1.5 border-border px-1.75 py-1.5">
-                <span className="text-2xs font-medium text-text-secondary">Session basic information</span>
+                <span className="text-2xs font-medium text-text-secondary">{t('create.basicInfo')}</span>
               </CollapsibleTrigger>
               <CollapsibleContent className="flex flex-col gap-3.5 pt-3">
                 <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-10">
                   <div className="sm:col-span-2">
                     <Label htmlFor="create-session-sport">
-                      Sport
+                      {t('create.sport.label')}
                       <RequiredMark />
                     </Label>
                     <Select
@@ -557,7 +573,7 @@ export function CreateSessionModal({
                       onChange={(event) => setSelectedSport(event.target.value as SportKey)}
                     >
                       <option value="" disabled>
-                        Select a sport
+                        {t('create.sport.placeholder')}
                       </option>
                       {Object.values(sportsByKey).map((sport) => (
                         <option key={sport.key} value={sport.key}>
@@ -566,13 +582,13 @@ export function CreateSessionModal({
                       ))}
                     </Select>
                     {hasAttemptedSubmit && effectiveSportId === undefined && (
-                      <p className="mt-1 text-2xs text-text-danger">Sport is required.</p>
+                      <p className="mt-1 text-2xs text-text-danger">{t('create.validation.sport')}</p>
                     )}
                   </div>
 
                   <div className="sm:col-span-8">
                     <Label htmlFor="create-session-title">
-                      Session title
+                      {t('create.titleField.label')}
                       <RequiredMark />
                     </Label>
                     <Input
@@ -580,10 +596,10 @@ export function CreateSessionModal({
                       aria-required="true"
                       value={title}
                       onChange={(event) => setTitle(event.target.value)}
-                      placeholder="e.g. Sunday pickup run"
+                      placeholder={t('create.titleField.placeholder')}
                     />
                     {hasAttemptedSubmit && title.trim() === '' && (
-                      <p className="mt-1 text-2xs text-text-danger">Title is required.</p>
+                      <p className="mt-1 text-2xs text-text-danger">{t('create.validation.title')}</p>
                     )}
                   </div>
                 </div>
@@ -594,7 +610,7 @@ export function CreateSessionModal({
                         display/button pair below (same reasoning as jsx-a11y flagging an
                         unassociated <label>). */}
                     <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-                      Location (optional)
+                      {t('create.location.label')}
                     </span>
                     <div className="flex items-center gap-2">
                       {selectedLocation !== null && (
@@ -614,17 +630,17 @@ export function CreateSessionModal({
                       />
                     </div>
                     {effectiveSportId === undefined && (
-                      <p className="mt-1 text-2xs text-text-muted">Pick a sport first.</p>
+                      <p className="mt-1 text-2xs text-text-muted">{t('create.location.pickSportFirst')}</p>
                     )}
                   </div>
 
                   <div className="sm:col-span-3">
-                    <Label htmlFor="create-session-location-note">Location note (optional)</Label>
+                    <Label htmlFor="create-session-location-note">{t('create.locationNote.label')}</Label>
                     <Input
                       id="create-session-location-note"
                       value={locationNote}
                       onChange={(event) => setLocationNote(event.target.value)}
-                      placeholder="e.g. Court 3"
+                      placeholder={t('create.locationNote.placeholder')}
                     />
                   </div>
                 </div>
@@ -635,7 +651,7 @@ export function CreateSessionModal({
                         its own aria-label, sit under this one heading; same reasoning as
                         Location's span above. */}
                     <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-                      Starts at
+                      {t('create.startsAt.label')}
                       <RequiredMark />
                     </span>
                     {/* Re-keyed on the sport so a Sport change (which resets `scheduledStart` to
@@ -647,13 +663,13 @@ export function CreateSessionModal({
                       onChange={setScheduledStart}
                     />
                     {hasAttemptedSubmit && scheduledStart === '' && (
-                      <p className="mt-1 text-2xs text-text-danger">Start time is required.</p>
+                      <p className="mt-1 text-2xs text-text-danger">{t('create.validation.startTime')}</p>
                     )}
                   </div>
 
                   <div className="sm:col-span-3">
                     <Label htmlFor="create-session-duration">
-                      Duration in minutes
+                      {t('create.duration.label')}
                       <RequiredMark />
                     </Label>
                     <DigitsOnlyInput
@@ -662,10 +678,10 @@ export function CreateSessionModal({
                       min={0}
                       value={durationMinutes}
                       onChange={(event) => setDurationMinutes(event.target.value)}
-                      placeholder="e.g. 90"
+                      placeholder={t('create.duration.placeholder')}
                     />
                     {hasAttemptedSubmit && durationMinutes === '' && (
-                      <p className="mt-1 text-2xs text-text-danger">Duration is required.</p>
+                      <p className="mt-1 text-2xs text-text-danger">{t('create.validation.duration')}</p>
                     )}
                   </div>
                 </div>
@@ -674,19 +690,19 @@ export function CreateSessionModal({
                   <div className="sm:col-span-5">
                     <div className="flex gap-3.5">
                       <div className="flex-1">
-                        <Label htmlFor="create-session-taken-slots">Taken slot</Label>
+                        <Label htmlFor="create-session-taken-slots">{t('create.takenSlot.label')}</Label>
                         <DigitsOnlyInput
                           id="create-session-taken-slots"
                           min={0}
                           value={takenSlots}
                           onChange={(event) => setTakenSlots(event.target.value)}
-                          placeholder="e.g. 10"
+                          placeholder={t('create.slots.placeholder')}
                         />
                       </div>
 
                       <div className="flex-1">
                         <Label htmlFor="create-session-open-slots">
-                          Open slot
+                          {t('create.openSlot.label')}
                           <RequiredMark />
                         </Label>
                         <DigitsOnlyInput
@@ -695,21 +711,21 @@ export function CreateSessionModal({
                           min={0}
                           value={openSlots}
                           onChange={(event) => setOpenSlots(event.target.value)}
-                          placeholder="e.g. 10"
+                          placeholder={t('create.slots.placeholder')}
                         />
                         {hasAttemptedSubmit && openSlots === '' && (
-                          <p className="mt-1 text-2xs text-text-danger">Open slot is required.</p>
+                          <p className="mt-1 text-2xs text-text-danger">{t('create.validation.openSlot')}</p>
                         )}
                       </div>
                     </div>
                     <p className="mt-1.5 text-2xs text-text-muted">
-                      {effectiveTakenSlots}/{capacity} slots
+                      {t('create.slotsSummary', { taken: effectiveTakenSlots, capacity })}
                     </p>
                   </div>
 
                   <div className="sm:col-span-5">
                     <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-                      Fee (optional)
+                      {t('create.fee.label')}
                     </span>
                     <FeeTypeFields
                       value={feeType}
@@ -722,9 +738,10 @@ export function CreateSessionModal({
 
                 <div>
                   <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-                    Invite your friend (optional)
+                    {t('create.invite.label')}
                   </span>
                   <InviteFriendField
+                    i18nOverridePrefix={i18nOverridePrefix}
                     friends={friends}
                     isFriendsLoading={isFriendsLoading}
                     selected={selectedInvitees}
@@ -735,16 +752,20 @@ export function CreateSessionModal({
                   />
                 </div>
 
-                <AutoApproveField checked={autoApprove} onChange={setAutoApprove} />
+                <AutoApproveField
+                  checked={autoApprove}
+                  onChange={setAutoApprove}
+                  i18nOverridePrefix={i18nOverridePrefix}
+                />
 
                 <div>
-                  <Label htmlFor="create-session-description">Description (optional)</Label>
+                  <Label htmlFor="create-session-description">{t('create.description.label')}</Label>
                   <textarea
                     id="create-session-description"
                     value={description}
                     onChange={(event) => setDescription(event.target.value)}
                     rows={3}
-                    placeholder="What's this session about?"
+                    placeholder={t('create.description.placeholder')}
                     className="w-full resize-none rounded-lg border-hairline border-border-strong bg-surface-2 px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted focus-visible:border-border-accent focus-visible:ring-3 focus-visible:ring-bg-accent"
                   />
                 </div>
@@ -758,7 +779,7 @@ export function CreateSessionModal({
             {sessionAttributeSchema !== null && (
               <Collapsible open={isDetailOpen} onOpenChange={setIsDetailOpen} className="border-hairline-t border-border pt-3">
                 <CollapsibleTrigger className="border-hairline-b justify-center gap-1.5 border-border px-1.75 py-1.5">
-                  <span className="text-2xs font-medium text-text-secondary">Session detail</span>
+                  <span className="text-2xs font-medium text-text-secondary">{t('create.detail')}</span>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-3">
                   <SportAttributesFields
@@ -776,7 +797,7 @@ export function CreateSessionModal({
 
             {isError && (
               <p role="alert" className="text-2sm text-text-danger">
-                Couldn't create the session. Try again.
+                {t('create.error')}
               </p>
             )}
           </div>
@@ -788,9 +809,8 @@ export function CreateSessionModal({
                 of scroll position, same reasoning as the submit button itself. */}
             {willBePreparing && (
               <p className="flex-1 text-2xs text-amber-800">
-                This session will be created as <strong>Preparing</strong> — add a location and
-                fee to make it Scheduled. You can complete it anytime before it starts, or it will
-                be auto-cancelled.
+                {t('create.preparingPrefix')} <strong>{getSessionStatusLabel('PREPARING')}</strong>{' '}
+                {t('create.preparingSuffix', { scheduled: getSessionStatusLabel('SCHEDULED') })}
               </p>
             )}
             <Button
@@ -799,7 +819,7 @@ export function CreateSessionModal({
               disabled={isSubmitting}
               className={cn('shrink-0 cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
             >
-              {isSubmitting ? 'Creating…' : 'Create session'}
+              {isSubmitting ? t('create.creating') : t('create.submit')}
             </Button>
           </div>
             </>

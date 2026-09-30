@@ -10,6 +10,7 @@ import profileEn from '@/locales/en/profile.json';
 import profilePageEn from '@/locales/en/profilePage.json';
 import registerEn from '@/locales/en/register.json';
 import sharedComponentsEn from '@/locales/en/sharedComponents.json';
+import sessionEn from '@/locales/en/session.json';
 import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
 import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
@@ -23,6 +24,7 @@ import profileVi from '@/locales/vi/profile.json';
 import profilePageVi from '@/locales/vi/profilePage.json';
 import registerVi from '@/locales/vi/register.json';
 import sharedComponentsVi from '@/locales/vi/sharedComponents.json';
+import sessionVi from '@/locales/vi/session.json';
 import sharedDialogsVi from '@/locales/vi/sharedDialogs.json';
 import shellVi from '@/locales/vi/shell.json';
 
@@ -60,6 +62,7 @@ const namespacePairs: Record<string, [en: unknown, vi: unknown]> = {
   groups: [groupsEn, groupsVi],
   friends: [friendsEn, friendsVi],
   notifications: [notificationsEn, notificationsVi],
+  session: [sessionEn, sessionVi],
 };
 
 describe('i18n bundle key parity (en vs vi)', () => {
