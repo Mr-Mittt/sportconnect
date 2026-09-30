@@ -21,6 +21,10 @@ export function useSportProfiles(): {
   data: SportProfile[];
   isLoading: boolean;
   isError: boolean;
+  /** PROFILE-12: the sports list is *known* — loaded and not failed. `data` is `[]` both while
+   * loading and after a failure, so "zero sports" gates (auto add-sport prompts, Join/Create
+   * match, the sport switcher's "+" pill) must check this, never `data.length === 0` alone. */
+  isReady: boolean;
 } {
   const query = useRawMySportProfiles();
   const { i18n } = useTranslation();
@@ -38,5 +42,10 @@ export function useSportProfiles(): {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `label` is read from the i18next singleton, so the language is an implicit input
   }, [query.data, i18n.language]);
 
-  return { data, isLoading: query.isLoading, isError: query.isError };
+  return {
+    data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    isReady: !query.isLoading && !query.isError,
+  };
 }

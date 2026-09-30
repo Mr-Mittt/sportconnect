@@ -15,6 +15,7 @@ import { EditProfileModal } from '@/shared/components/EditProfileModal';
 import { GroupBroadcasts } from '@/shared/components/GroupBroadcasts';
 import { NoSportsToAddDialog } from '@/shared/components/NoSportsToAddDialog';
 import { ProfileHeader } from '@/shared/components/ProfileHeader';
+import { ProfileHeaderPlaceholder } from '@/shared/components/ProfileHeaderPlaceholder';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { TrendingHashtags } from '@/shared/components/TrendingHashtags';
 import { UpcomingMatches } from '@/shared/components/UpcomingMatches';
@@ -158,7 +159,7 @@ export function ProfilePage() {
   useEffect(() => {
     if (
       hasAutoPromptedAddSportRef.current ||
-      sportProfilesQuery.isLoading ||
+      !sportProfilesQuery.isReady ||
       sportProfilesQuery.data.length > 0
     ) {
       return;
@@ -167,7 +168,7 @@ export function ProfilePage() {
     setAddSportPromptMessage(getPageAccessNoSportsPrompt());
     setAddSportOpenCount((count) => count + 1);
     setIsAddSportOpen(true);
-  }, [sportProfilesQuery.isLoading, sportProfilesQuery.data.length]);
+  }, [sportProfilesQuery.isReady, sportProfilesQuery.data.length]);
 
   const upcomingMatchesQuery = useUpcomingMatches();
   const hashtagsQuery = useTrendingHashtags();
@@ -215,6 +216,7 @@ export function ProfilePage() {
             maxSports={sportCatalog.data.length || undefined}
             isCheckingCatalog={addSportLauncher.isCheckingCatalog}
             onAddSport={addSportLauncher.launch}
+            isDisabled={!sportProfilesQuery.isReady}
             showAllPill={false}
             inactiveSports={inactiveSports}
             onInactiveSelect={(key) =>
@@ -227,7 +229,7 @@ export function ProfilePage() {
             }
           />
         </div>
-        {profileQuery.data !== undefined && (
+        {profileQuery.data !== undefined ? (
           <ProfileHeader
             user={profileQuery.data}
             onEditProfile={() => {
@@ -235,6 +237,9 @@ export function ProfilePage() {
               setIsEditProfileOpen(true);
             }}
           />
+        ) : (
+          // PROFILE-12: same placeholder whether the profile query is still loading or failed.
+          <ProfileHeaderPlaceholder fullName={`${user.firstName} ${user.lastName}`} />
         )}
         <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[2.1fr_0.9fr]">
           <div className="min-w-0">
@@ -294,6 +299,7 @@ export function ProfilePage() {
               onViewDetails={discoverModalData.onViewDetails}
               onCreateMatch={createSessionModalData.openCreateModal}
               onJoinMatch={discoverModalData.openDiscoverModal}
+              isSportsReady={sportProfilesQuery.isReady}
               onParticipationAction={railParticipationAction.onParticipationAction}
               isParticipationActionPending={railParticipationAction.isParticipationActionPending}
             />

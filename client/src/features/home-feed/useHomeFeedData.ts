@@ -82,6 +82,7 @@ export function useHomeFeedData(): {
   isBroadcastsLoading: boolean;
   isBroadcastsError: boolean;
   retryBroadcasts: () => void;
+  isSportsReady: boolean;
 } {
   const isVisualEmpty =
     new URLSearchParams(window.location.search).get('visual-state') === 'empty';
@@ -197,5 +198,8 @@ export function useHomeFeedData(): {
     isBroadcastsLoading: groupBroadcastsQuery.isLoading,
     isBroadcastsError: groupBroadcastsQuery.isError,
     retryBroadcasts: groupBroadcastsQuery.refetch,
+    /** PROFILE-12: the caller's sports list is known (loaded, not failed) — gates the zero-sport
+     * dependent controls (Join/Create match, the sport switcher's "+" pill). */
+    isSportsReady: sportProfilesQuery.isReady,
   };
 }

@@ -141,6 +141,7 @@ export function HomeFeedPage() {
     isBroadcastsLoading,
     isBroadcastsError,
     retryBroadcasts,
+    isSportsReady,
   } = useHomeFeedData();
   const commentsData = useCommentsData(activeCommentsPostId ?? -1, activeCommentsPostId !== null);
   const activeCommentsPostQuery = usePost(
@@ -243,6 +244,7 @@ export function HomeFeedPage() {
             maxSports={sportCatalog.data.length || undefined}
             isCheckingCatalog={addSportLauncher.isCheckingCatalog}
             onAddSport={addSportLauncher.launch}
+            isDisabled={!isSportsReady}
             inactiveSports={inactiveSports}
             onInactiveSelect={inactiveSportPill.onInactiveSelect}
           />
@@ -296,6 +298,7 @@ export function HomeFeedPage() {
               onViewDetails={discoverModalData.onViewDetails}
               onCreateMatch={createSessionModalData.openCreateModal}
               onJoinMatch={discoverModalData.openDiscoverModal}
+              isSportsReady={isSportsReady}
               onParticipationAction={railParticipationAction.onParticipationAction}
               isParticipationActionPending={railParticipationAction.isParticipationActionPending}
             />

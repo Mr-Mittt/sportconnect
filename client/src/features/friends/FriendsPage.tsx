@@ -231,6 +231,7 @@ export function FriendsPage() {
               onViewDetails={discoverModalData.onViewDetails}
               onCreateMatch={createSessionModalData.openCreateModal}
               onJoinMatch={discoverModalData.openDiscoverModal}
+              isSportsReady={sportProfilesQuery.isReady}
               onParticipationAction={railParticipationAction.onParticipationAction}
               isParticipationActionPending={railParticipationAction.isParticipationActionPending}
             />

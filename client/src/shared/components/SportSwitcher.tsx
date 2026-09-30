@@ -19,6 +19,9 @@ interface SportSwitcherProps {
   onAddSport: () => void;
   /** SPORT-5: the catalogue re-read is in flight; the pill is disabled and says so. */
   isCheckingCatalog?: boolean;
+  /** PROFILE-12: the caller's sport profiles haven't settled (still loading, or failed) — the "+"
+   * pill is disabled (no label change) so it can't open the add-sport flow against an unknown list. */
+  isDisabled?: boolean;
   /** SPORT-3: callers should pass the live catalog's size here (falling back to this default only
    * before the catalog's first fetch resolves) — hardcoding 3 stopped reflecting reality once the
    * real active catalog shrank to 2 sports (A6). */
@@ -103,6 +106,7 @@ export function SportSwitcher({
   onAddSport,
   maxSports = 3,
   isCheckingCatalog = false,
+  isDisabled = false,
   showAllPill = true,
   inactiveSports = [],
   onInactiveSelect,
@@ -156,10 +160,10 @@ export function SportSwitcher({
       ))}
       <button
         type="button"
-        aria-disabled={isCheckingCatalog}
+        aria-disabled={isCheckingCatalog || isDisabled}
         title={atCap ? t('sportSwitcher.atCap') : undefined}
         onClick={() => {
-          if (!isCheckingCatalog) {
+          if (!isCheckingCatalog && !isDisabled) {
             onAddSport();
           }
         }}
