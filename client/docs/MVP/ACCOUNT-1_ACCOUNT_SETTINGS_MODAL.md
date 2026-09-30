@@ -104,7 +104,7 @@ warnings in `SessionStartTimePicker`). Scoped Vitest: 60 files / 506 green (`loc
 full `e2e` project was not run (scoped runs only, per standing instruction); `client/docs/E2E_OVERVIEW.md`
 updated (journey steps 6/7/8, a11y row, visual note).
 
-**Visual-regression expectation:** baselines `profile-edit-profile-modal-{375,768,1280}.png` legitimately
+**Visual-regression expectation (Executed 2026-09-30 — see below):** baselines `profile-edit-profile-modal-{375,768,1280}.png` legitimately
 change (the modal shrinks from a full form to two fields) — expected to fail until the `update-baselines`
 GitHub dispatch regenerates exactly those three files; every other baseline must stay byte-identical.
 `visual-regression` was **not run** locally (Windows noise floor makes it uninformative without a
@@ -131,3 +131,10 @@ geo `POST /reference/resolve` "for the Edit Profile modal" — now unused there,
   `U20` (validated enum + migration) and client `ACCOUNT-2` (drop the transitional handling after U20).
 - Tests: `inputGuards.test.ts` (new), `AccountSettingsModal.test.tsx` (+gender dropdown, legacy mapping,
   guard cases). Scoped Vitest green; scoped e2e (`profile-journey`, `a11y`, `signup-locale`) 38/38.
+
+## Visual baselines — Executed (2026-09-30)
+
+`update-baselines` dispatch artifact applied via `/updatebaseline`: SHA-256 confirmed **exactly the predicted 3 files**
+changed (`profile-edit-profile-modal-{375,768,1280}.png`); the other 147 baselines came back byte-identical (so the
+local Windows diffs on them were pure noise floor). Human check: the modal renders as the intended two-field
+(Avatar URL / Cover URL) dialog.
