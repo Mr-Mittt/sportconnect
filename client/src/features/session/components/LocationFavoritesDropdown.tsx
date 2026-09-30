@@ -7,8 +7,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface LocationFavoritesDropdownProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   selectedLocation: Location | null;
   favorites: Location[];
   isFavoritesLoading: boolean;
@@ -39,19 +42,21 @@ export function LocationFavoritesDropdown({
   disabled,
   onSelectFavorite,
   onOpenLocationPicker,
+  i18nOverridePrefix,
 }: LocationFavoritesDropdownProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={disabled}>
-          {selectedLocation === null ? 'Choose location' : 'Change location'}
+          {selectedLocation === null ? t('locationFavorites.choose') : t('locationFavorites.change')}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         {isFavoritesLoading ? (
-          <p className="px-2 py-2 text-2xs text-text-muted">Loading…</p>
+          <p className="px-2 py-2 text-2xs text-text-muted">{t('common.loading')}</p>
         ) : favorites.length === 0 ? (
-          <p className="px-2 py-2 text-2xs text-text-muted">No favorites yet.</p>
+          <p className="px-2 py-2 text-2xs text-text-muted">{t('locationFavorites.empty')}</p>
         ) : (
           favorites.map((location) => (
             <DropdownMenuItem key={location.id} onSelect={() => onSelectFavorite(location)}>
@@ -60,7 +65,7 @@ export function LocationFavoritesDropdown({
           ))
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onOpenLocationPicker}>Choose a location…</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onOpenLocationPicker}>{t('locationFavorites.pickOther')}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

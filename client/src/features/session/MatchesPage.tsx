@@ -1,5 +1,6 @@
 import { IconChevronsLeft, IconChevronsRight, IconPlus } from '@tabler/icons-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { NoSportsToAddDialog } from '@/shared/components/NoSportsToAddDialog';
@@ -34,6 +35,7 @@ import { useMatchesPageData } from './useMatchesPageData';
  * `useParams`-seeds-page-state precedent FEED-12 used for `/posts/:postId`).
  */
 export function MatchesPage() {
+  const { t } = useTranslation('session');
   const [searchParams, setSearchParams] = useSearchParams();
   const initialSessionId = useMemo(() => {
     const raw = searchParams.get('session');
@@ -118,7 +120,7 @@ export function MatchesPage() {
 
   return (
     <main className="py-4">
-      <h1 className="sr-only">Play</h1>
+      <h1 className="sr-only">{t('matches.heading')}</h1>
       <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
         <SportSwitcher
           sports={Object.values(data.sportsByKey)}
@@ -143,7 +145,7 @@ export function MatchesPage() {
           className="border-hairline flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-dashed border-border-strong bg-surface-2 px-3 py-1.75 text-2sm text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
         >
           <IconPlus className="size-4" aria-hidden="true" />
-          Create session
+          {t('matches.createSession')}
         </button>
       </div>
 
@@ -210,8 +212,8 @@ export function MatchesPage() {
         <div className="relative hidden shrink-0 md:block md:w-px md:self-stretch md:bg-border">
           <button
             type="button"
-            title={data.isMySessionsPanelCollapsed ? 'Show my sessions' : 'Hide my sessions'}
-            aria-label={data.isMySessionsPanelCollapsed ? 'Show my sessions' : 'Hide my sessions'}
+            title={data.isMySessionsPanelCollapsed ? t('matches.showMySessions') : t('matches.hideMySessions')}
+            aria-label={data.isMySessionsPanelCollapsed ? t('matches.showMySessions') : t('matches.hideMySessions')}
             aria-expanded={!data.isMySessionsPanelCollapsed}
             onClick={data.toggleMySessionsPanelCollapsed}
             className="border-hairline absolute top-14 left-1/2 flex size-7.5 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-border-strong bg-surface-2 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
@@ -226,7 +228,7 @@ export function MatchesPage() {
 
         {!data.isMySessionsPanelCollapsed && (
           <section
-            aria-label="My sessions"
+            aria-label={t('matches.mySessions')}
             className="flex flex-col gap-6 md:w-[calc(33.333%-2rem)] md:shrink-0"
           >
             <UpcomingSessionsSection

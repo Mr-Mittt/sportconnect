@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { DiscoverFilters } from './discoverParams';
 import { discoverQuickDates, formatDiscoverDateLabel, formatDiscoverDateOptionLabel, MAX_DISCOVER_DATES } from './discoverDateLabel';
 import { useDiscoverBaseFilters } from './useDiscoverBaseFilters';
@@ -23,6 +24,7 @@ function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
  * `sportId` is the hosting page's active sport pill (`undefined` = every active sport).
  */
 export function useDiscoverFilters(sportId: number | undefined, enabled: boolean) {
+  const { i18n } = useTranslation();
   const today = format(new Date(), 'yyyy-MM-dd');
   const base = useDiscoverBaseFilters(sportId, enabled);
 
@@ -85,7 +87,9 @@ export function useDiscoverFilters(sportId: number | undefined, enabled: boolean
   const sectionQueries = useDiscoverDateSections(sortedDates, expandedDates, filters, enabled);
   const labelsByDate = useMemo(
     () => new Map(sortedDates.map((date) => [date, formatDiscoverDateLabel(date, today)])),
-    [sortedDates, today],
+    // `i18n.language`: labels are locale-formatted ("Today", weekday/month names).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sortedDates, today, i18n.language],
   );
   const dateSections = buildDiscoverDateSections(
     sortedDates,

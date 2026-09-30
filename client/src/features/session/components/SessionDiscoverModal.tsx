@@ -17,11 +17,11 @@ import { DiscoverOpenSlotsFilter } from './DiscoverOpenSlotsFilter';
 import { DiscoverStatusFilter } from './DiscoverStatusFilter';
 import { DiscoverTimeFilter } from './DiscoverTimeFilter';
 import { DiscoverResultsList } from './DiscoverResultsList';
-
-const NO_SPORTS_PROMPT =
-  "Hey champ, add a sport first — can't join a match you don't even play! 🎯";
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface SessionDiscoverModalProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   isOpen: boolean;
   onClose: () => void;
 
@@ -159,7 +159,9 @@ export function SessionDiscoverModal({
   onAddSport,
   isAddingSport,
   isAddSportError,
+  i18nOverridePrefix,
 }: SessionDiscoverModalProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const hasNoSportProfiles = Object.keys(sportsByKey).length === 0;
   const navigate = useNavigate();
   const discoverMore = () => {
@@ -179,7 +181,7 @@ export function SessionDiscoverModal({
           className={hasNoSportProfiles ? 'max-w-md' : 'max-w-2xl'}
         >
           <DialogHeader
-            title="Discover today session"
+            title={t('discover.modalTitle')}
             className="border-hairline-b border-border px-4 py-3"
           />
           {hasNoSportProfiles ? (
@@ -189,7 +191,7 @@ export function SessionDiscoverModal({
               onSubmit={onAddSport}
               isSubmitting={isAddingSport}
               isError={isAddSportError}
-              promptMessage={NO_SPORTS_PROMPT}
+              promptMessage={t('discover.noSportsPrompt')}
             />
           ) : (
             <>
@@ -246,8 +248,8 @@ export function SessionDiscoverModal({
                   hasMore={hasMore}
                   isFetchingMore={isFetchingMore}
                   onLoadMore={onLoadMore}
-                  emptyMessage="No sessions to discover today."
-                  errorMessage="Couldn't load today's sessions."
+                  emptyMessage={t('discover.emptyToday')}
+                  errorMessage={t('discover.errorToday')}
                   sportsByKey={sportsByKey}
                   currentUserId={currentUserId}
                   onViewDetails={onViewDetails}
@@ -257,9 +259,9 @@ export function SessionDiscoverModal({
                 />
               </div>
               <div className="border-hairline-t flex items-center justify-end gap-2 border-border px-4 py-3">
-                <p className="text-2xs text-text-muted">Find session for another date?</p>
+                <p className="text-2xs text-text-muted">{t('discover.anotherDate')}</p>
                 <Button variant="outline" size="sm" onClick={discoverMore}>
-                  Discover more
+                  {t('discover.discoverMore')}
                 </Button>
               </div>
             </>

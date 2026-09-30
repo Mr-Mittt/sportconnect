@@ -3,8 +3,11 @@ import { useEffect, useState } from 'react';
 import { Select } from '@/shared/ui/select';
 import { formatDiscoverDateOptionLabel } from '../discoverDateLabel';
 import { SessionStartTimeCalendar } from './SessionStartTimeCalendar';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface SessionStartTimePickerProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   /** `"yyyy-MM-dd'T'HH:mm"` — same shape the old native `datetime-local` input produced, so
    * `CreateSessionModal` turns it into an offset-aware ISO string on submit (`toOffsetAwareIso`).
    * `''` whenever any of the three pieces (date/hour/minute) isn't set yet. */
@@ -52,7 +55,9 @@ export function SessionStartTimePicker({
   value,
   onChange,
   now = new Date(),
+  i18nOverridePrefix,
 }: SessionStartTimePickerProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const [showCalendar, setShowCalendar] = useState(false);
   const [datePart, setDatePart] = useState(() =>
     value !== '' ? value.slice(0, 10) : format(startOfDay(now), 'yyyy-MM-dd'),
@@ -103,12 +108,12 @@ export function SessionStartTimePicker({
     <div className="flex flex-col gap-1.5">
       <div className="flex gap-1.5">
         <Select
-          aria-label="Date"
+          aria-label={t('time.date')}
           value={showCalendar ? PICK_DATE_VALUE : isCustomDate ? CUSTOM_DATE_VALUE : datePart}
           onChange={(event) => handleDateSelect(event.target.value)}
         >
           <option value="" disabled>
-            Date
+            {t('time.date')}
           </option>
           {quickDates.map((date) => {
             const dateKey = format(date, 'yyyy-MM-dd');
@@ -123,16 +128,16 @@ export function SessionStartTimePicker({
               {format(new Date(`${datePart}T00:00:00`), 'dd/MM/yyyy')}
             </option>
           )}
-          <option value={PICK_DATE_VALUE}>Pick a date…</option>
+          <option value={PICK_DATE_VALUE}>{t('discover.date.pick')}</option>
         </Select>
 
         <Select
-          aria-label="Hour"
+          aria-label={t('time.hour')}
           value={hourPart}
           onChange={(event) => commit(datePart, event.target.value, minutePart)}
         >
           <option value="" disabled>
-            Hour
+            {t('time.hour')}
           </option>
           {hourOptions.map((hour) => (
             <option key={hour} value={hour}>
@@ -142,12 +147,12 @@ export function SessionStartTimePicker({
         </Select>
 
         <Select
-          aria-label="Minute"
+          aria-label={t('time.minute')}
           value={minutePart}
           onChange={(event) => commit(datePart, hourPart, event.target.value)}
         >
           <option value="" disabled>
-            Min
+            {t('time.minuteShort')}
           </option>
           {minuteOptions.map((minute) => (
             <option key={minute} value={minute}>
@@ -173,7 +178,7 @@ export function SessionStartTimePicker({
             onClick={() => setShowCalendar(false)}
             className="mt-2 cursor-pointer rounded text-2xs text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >
-            Choose from the list instead
+            {t('discover.date.chooseFromList')}
           </button>
         </div>
       )}

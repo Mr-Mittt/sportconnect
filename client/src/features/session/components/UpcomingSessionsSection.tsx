@@ -3,8 +3,11 @@ import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { SessionDateGroup as SessionDateGroupData } from '../groupSessionsByDate';
 import { LoadMoreButton } from './LoadMoreButton';
 import { SessionDateGroup } from './SessionDateGroup';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface UpcomingSessionsSectionProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   /** Already day-grouped (`groupSessionsByDate`), soonest day first. */
   groups: SessionDateGroupData[];
   isLoading: boolean;
@@ -44,19 +47,21 @@ export function UpcomingSessionsSection({
   onViewDetails,
   onParticipationAction,
   isParticipationActionPending,
+  i18nOverridePrefix,
 }: UpcomingSessionsSectionProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   return (
-    <section aria-label="Upcoming sessions" className="flex flex-col gap-3">
-      <h2 className="text-2sm font-medium text-text-primary">Upcoming sessions</h2>
+    <section aria-label={t('upcoming.title')} className="flex flex-col gap-3">
+      <h2 className="text-2sm font-medium text-text-primary">{t('upcoming.title')}</h2>
 
-      {isLoading && <p className="text-2sm text-text-muted">Loading…</p>}
+      {isLoading && <p className="text-2sm text-text-muted">{t('common.loading')}</p>}
       {isError && (
         <p role="alert" className="text-2sm text-text-danger">
-          Couldn't load your upcoming sessions.
+          {t('upcoming.error')}
         </p>
       )}
       {!isLoading && !isError && groups.length === 0 && (
-        <p className="text-2sm text-text-muted">You have no upcoming sessions.</p>
+        <p className="text-2sm text-text-muted">{t('upcoming.empty')}</p>
       )}
       {groups.length > 0 && (
         <div className="flex flex-col gap-4">

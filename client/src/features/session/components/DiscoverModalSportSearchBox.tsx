@@ -1,8 +1,11 @@
 import { IconSearch } from '@tabler/icons-react';
 import { sportIdForKey } from '@/features/feed/sportIdMap';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface DiscoverModalSportSearchBoxProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   sportId: number | undefined;
   onSportIdChange: (sportId: number) => void;
   /** The caller's own held sport profiles — same map `SessionDiscoverModal` already receives for
@@ -27,7 +30,9 @@ export function DiscoverModalSportSearchBox({
   sportsByKey,
   searchText,
   onSearchTextChange,
+  i18nOverridePrefix,
 }: DiscoverModalSportSearchBoxProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const sports = Object.values(sportsByKey);
 
   return (
@@ -35,7 +40,7 @@ export function DiscoverModalSportSearchBox({
       <select
         value={sportId ?? ''}
         onChange={(event) => onSportIdChange(Number(event.target.value))}
-        aria-label="Sport to discover"
+        aria-label={t('discover.sportLabel')}
         className="border-hairline cursor-pointer rounded-lg border-border bg-surface-2 px-2.5 py-2 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
       >
         {sports.map((sport) => {
@@ -56,8 +61,8 @@ export function DiscoverModalSportSearchBox({
           type="text"
           value={searchText}
           onChange={(event) => onSearchTextChange(event.target.value)}
-          placeholder="Search"
-          aria-label="Search sessions"
+          placeholder={t('discover.search.placeholder')}
+          aria-label={t('discover.search.label')}
           className="border-hairline w-full rounded-lg border-border bg-surface-2 py-2 pr-2.5 pl-8 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
         />
       </div>

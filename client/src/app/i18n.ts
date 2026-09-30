@@ -11,6 +11,7 @@ import profileEn from '@/locales/en/profile.json';
 import profilePageEn from '@/locales/en/profilePage.json';
 import registerEn from '@/locales/en/register.json';
 import sharedComponentsEn from '@/locales/en/sharedComponents.json';
+import sessionEn from '@/locales/en/session.json';
 import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
 import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
@@ -24,6 +25,7 @@ import profileVi from '@/locales/vi/profile.json';
 import profilePageVi from '@/locales/vi/profilePage.json';
 import registerVi from '@/locales/vi/register.json';
 import sharedComponentsVi from '@/locales/vi/sharedComponents.json';
+import sessionVi from '@/locales/vi/session.json';
 import sharedDialogsVi from '@/locales/vi/sharedDialogs.json';
 import shellVi from '@/locales/vi/shell.json';
 import { useLocaleStore } from './localeStore';
@@ -94,6 +96,13 @@ import { useLocaleStore } from './localeStore';
  * CLIENT-I18N-9: `notifications` holds the bell dropdown's own copy (`NotificationBell`, `NotificationRow`). The
  * notification sentence itself stays in `enums` (CLIENT-I18N-5) and the relative timestamp in `common`.
  *
+ * CLIENT-I18N-10: `session` holds the Sessions/Matches feature's own copy (`MatchesPage`, the Discover/Create/Detail
+ * modals and their 30 components) plus `shared/components/SessionCard`/`UpcomingMatches`. It also holds
+ * `dateFormat.*` — the date-fns *patterns* per language (English month-first, Vietnamese day-first), read by
+ * `shared/lib/localizedDate.ts`'s `formatLocalized`, since a date-fns `Locale` supplies weekday/month names but
+ * not word order. `feeType`/`sessionParticipation`/`sessionCapacity`/`startTime`/`discoverDateLabel`/
+ * `groupSessionsByDate` are plain functions, so they read the i18next singleton directly (`i18next.t('session:…')`).
+ *
  * Imported once, for its side effect, from `main.tsx` (the app entry) — importing it anywhere
  * else risks a second, redundant `init()` call.
  */
@@ -113,6 +122,7 @@ void i18next.use(initReactI18next).init({
       groups: groupsEn,
       friends: friendsEn,
       notifications: notificationsEn,
+      session: sessionEn,
     },
     vi: {
       common: commonVi,
@@ -128,12 +138,13 @@ void i18next.use(initReactI18next).init({
       groups: groupsVi,
       friends: friendsVi,
       notifications: notificationsVi,
+      session: sessionVi,
     },
   },
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications'],
+  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });

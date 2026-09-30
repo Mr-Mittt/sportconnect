@@ -144,3 +144,33 @@ test('Notification bell renders Vietnamese copy under a stored vi locale', async
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText('Thông báo', { exact: true })).toBeVisible();
 });
+
+/**
+ * CLIENT-I18N-10: the Matches page renders translated under a stored `vi` locale — the page's
+ * sr-only heading, the Create button, the My-sessions rail and the Discover panel's filters all
+ * read from the `session` namespace, and Create Session's inline validation is translated.
+ */
+test('Matches page renders Vietnamese copy under a stored vi locale', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
+  });
+
+  await page.goto('/login');
+  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
+  await page.getByRole('button', { name: 'Đăng nhập' }).click();
+  await page.waitForURL('/');
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Chơi', exact: true }).click();
+  await expect(page).toHaveURL('/matches');
+  await expect(page.getByRole('heading', { name: 'Chơi', level: 1 })).toBeAttached();
+  await expect(page.getByRole('region', { name: 'Khám phá buổi chơi' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Buổi chơi của tôi' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Trạng thái' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Tạo buổi chơi', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Tạo buổi chơi của bạn' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Tạo buổi chơi', exact: true }).click();
+  await expect(dialog.getByText('Vui lòng nhập tên buổi chơi.')).toBeVisible();
+});

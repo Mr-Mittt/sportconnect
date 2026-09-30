@@ -11,8 +11,11 @@ import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Session } from '@/shared/types/session';
 import { SportIcon } from './SportIcon';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface SessionCardProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   session: Session;
   sportsByKey: Record<SportKey, SportProfile>;
   /** Post-ship: a JOINED creator never gets the card's own Leave action either — same rule
@@ -94,11 +97,13 @@ export function SessionCard({
   onParticipationAction,
   isParticipationActionPending,
   size = 'full',
+  i18nOverridePrefix,
 }: SessionCardProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const s = SIZE_STYLES[size];
   const sportKey = sportKeyForId(session.sportId);
   const sport = sportKey !== undefined ? sportsByKey[sportKey] : undefined;
-  const title = session.title ?? `${session.sportName} session`;
+  const title = session.title ?? t('card.defaultTitle', { sport: session.sportName });
   const action = getParticipationAction(session);
   const isActionPending = isParticipationActionPending(session.id);
   const isLeaveHiddenForCreator = action?.kind === 'LEAVE' && session.createdBy === currentUserId;
@@ -136,7 +141,7 @@ export function SessionCard({
             single line, ellipsised — never wraps to a second line (which is what made cards in
             one grid row differ in height); the full name stays available on hover via `title`. */}
         <span className="min-w-0 truncate" title={session.location?.name}>
-          {session.location?.name ?? 'Location pending'}
+          {session.location?.name ?? t('card.locationPending')}
         </span>
       </div>
 
@@ -155,19 +160,19 @@ export function SessionCard({
         <button
           type="button"
           // Sibling cards would otherwise expose identical "View details" names to a screen reader.
-          aria-label={`${title} — View details`}
+          aria-label={t('card.viewDetailsLabel', { title })}
           onClick={(event) => {
             event.stopPropagation();
             onViewDetails(session.id);
           }}
           className={ACTION_BUTTON_CLASSES}
         >
-          View details
+          {t('card.viewDetails')}
         </button>
         {action !== null && !isLeaveHiddenForCreator && (
           <button
             type="button"
-            aria-label={`${title} — ${action.label}`}
+            aria-label={t('card.actionLabel', { title, action: action.label })}
             disabled={isActionPending}
             onClick={(event) => {
               event.stopPropagation();
@@ -175,7 +180,7 @@ export function SessionCard({
             }}
             className={ACTION_BUTTON_CLASSES}
           >
-            {isActionPending ? 'Working…' : action.label}
+            {isActionPending ? t('card.working') : action.label}
           </button>
         )}
       </div>

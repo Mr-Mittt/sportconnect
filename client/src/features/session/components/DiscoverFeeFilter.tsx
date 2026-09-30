@@ -1,12 +1,15 @@
 import { Popover, PopoverContent } from '@/shared/ui/popover';
 import { Button } from '@/shared/ui/button';
 import { Label } from '@/shared/ui/label';
-import { FEE_TYPE_LABEL } from '@/shared/lib/feeType';
+import { getFeeTypeLabel } from '@/shared/lib/feeType';
 import type { FeeType } from '@/shared/types/session';
 import { DiscoverFilterTrigger } from './DiscoverFilterTrigger';
 import { VndAmountInput } from './FeeTypeFields';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface DiscoverFeeFilterProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   feeType: FeeType | undefined;
   onToggleFeeType: (feeType: FeeType) => void;
   maxFeeAmountVndText: string;
@@ -29,7 +32,9 @@ export function DiscoverFeeFilter({
   maxFeeAmountVndText,
   onMaxFeeAmountVndChange,
   onClear,
+  i18nOverridePrefix,
 }: DiscoverFeeFilterProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const trimmedAmount = maxFeeAmountVndText.trim();
   const isSet = feeType !== undefined || trimmedAmount !== '';
   // 2026-09-23 revision — the label reflects whichever of feeType/maxFeeAmountVnd is set, not
@@ -37,10 +42,10 @@ export function DiscoverFeeFilter({
   // indication anything was filtered. A later revision (same day) dropped the "Fee " prefix once
   // set — the trigger shows the selected value alone, same as Status.
   const labelParts = [
-    feeType !== undefined ? FEE_TYPE_LABEL[feeType] : undefined,
+    feeType !== undefined ? getFeeTypeLabel(feeType) : undefined,
     trimmedAmount !== '' ? `<=${trimmedAmount} VND` : undefined,
   ].filter((part): part is string => part !== undefined);
-  const triggerLabel = labelParts.length > 0 ? labelParts.join(', ') : 'Fee';
+  const triggerLabel = labelParts.length > 0 ? labelParts.join(', ') : t('discover.fee.trigger');
 
   return (
     <Popover>
@@ -48,12 +53,12 @@ export function DiscoverFeeFilter({
         label={triggerLabel}
         isActive={isSet}
         onClear={onClear}
-        clearLabel="Clear fee filter"
+        clearLabel={t('discover.fee.clear')}
       />
       <PopoverContent align="start" className="w-56">
         <div className="flex flex-col gap-2">
           <fieldset className="flex flex-col gap-0.5">
-            <legend className="sr-only">Fee type</legend>
+            <legend className="sr-only">{t('discover.fee.legend')}</legend>
             {FEE_TYPES.map((type) => (
               <label
                 key={type}
@@ -65,13 +70,13 @@ export function DiscoverFeeFilter({
                   onChange={() => onToggleFeeType(type)}
                   className="size-4 accent-accent-solid"
                 />
-                {FEE_TYPE_LABEL[type]}
+                {getFeeTypeLabel(type)}
               </label>
             ))}
           </fieldset>
           <div className="flex items-center gap-2 px-2">
             <Label htmlFor="discover-max-fee-amount" className="mb-0 shrink-0 text-2xs">
-              Max amount
+              {t('discover.fee.maxAmount')}
             </Label>
             <VndAmountInput
               id="discover-max-fee-amount"
@@ -88,7 +93,7 @@ export function DiscoverFeeFilter({
               className="self-start"
               onClick={onClear}
             >
-              Clear
+              {t('discover.fee.clearButton')}
             </Button>
           )}
         </div>

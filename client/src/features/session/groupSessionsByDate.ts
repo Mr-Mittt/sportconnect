@@ -1,4 +1,6 @@
 import { format } from 'date-fns';
+import i18next from 'i18next';
+import { formatLocalized } from '@/shared/lib/localizedDate';
 import type { Session } from '@/shared/types/session';
 
 /**
@@ -9,7 +11,9 @@ import type { Session } from '@/shared/types/session';
  * zone west of UTC.
  */
 export function formatSessionDayLabel(dateKey: string, today: string): string {
-  return dateKey === today ? 'Today' : format(new Date(`${dateKey}T00:00:00`), 'MMM d, yyyy');
+  return dateKey === today
+    ? i18next.t('session:dateLabel.today')
+    : formatLocalized(new Date(`${dateKey}T00:00:00`), 'dayMonthYear');
 }
 
 export interface SessionDateGroup {

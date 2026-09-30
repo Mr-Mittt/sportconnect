@@ -3,6 +3,7 @@ import { Popover, PopoverContent } from '@/shared/ui/popover';
 import { cn } from '@/shared/lib/utils';
 import type { StartTimeFilter } from '@/shared/types/session';
 import { DiscoverFilterTrigger } from './DiscoverFilterTrigger';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 function clampHour(value: string): string {
   const n = Math.min(23, Math.max(0, Number.parseInt(value, 10) || 0));
@@ -19,12 +20,9 @@ function nowHourMinute(): [string, string] {
   return [String(now.getHours()).padStart(2, '0'), String(now.getMinutes()).padStart(2, '0')];
 }
 
-const DIRECTION_LABELS: Record<StartTimeFilter, string> = {
-  BEFORE_OR_EQUAL: 'Before',
-  AFTER_OR_EQUAL: 'After',
-};
-
 interface DiscoverTimeFilterProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   startTimeFilter: StartTimeFilter | undefined;
   onStartTimeFilterChange: (filter: StartTimeFilter) => void;
   startTime: string | undefined;
@@ -48,7 +46,9 @@ export function DiscoverTimeFilter({
   startTime,
   onStartTimeChange,
   onClear,
+  i18nOverridePrefix,
 }: DiscoverTimeFilterProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const isSet = startTime !== undefined;
   const [startHour, startMinute] = startTime !== undefined ? startTime.split(':') : nowHourMinute();
   const [hour, setHour] = useState(startHour);
@@ -92,10 +92,14 @@ export function DiscoverTimeFilter({
   return (
     <Popover>
       <DiscoverFilterTrigger
-        label={isSet ? `${DIRECTION_LABELS[startTimeFilter ?? 'AFTER_OR_EQUAL']} ${startTime}` : 'Time'}
+        label={
+          isSet
+            ? `${startTimeFilter === 'BEFORE_OR_EQUAL' ? t('discover.time.before') : t('discover.time.after')} ${startTime}`
+            : t('discover.time.trigger')
+        }
         isActive={isSet}
         onClear={onClear}
-        clearLabel="Clear time filter"
+        clearLabel={t('discover.time.clear')}
       />
       <PopoverContent align="start" className="w-auto">
         <div className="flex items-center gap-1.5">
@@ -105,12 +109,12 @@ export function DiscoverTimeFilter({
             onClick={() => toggleDirection('BEFORE_OR_EQUAL')}
             className={directionButtonClass(startTimeFilter === 'BEFORE_OR_EQUAL')}
           >
-            Before
+            {t('discover.time.before')}
           </button>
           <input
             type="number"
             inputMode="numeric"
-            aria-label="Hour"
+            aria-label={t('time.hour')}
             min={0}
             max={23}
             value={hour}
@@ -122,7 +126,7 @@ export function DiscoverTimeFilter({
           <input
             type="number"
             inputMode="numeric"
-            aria-label="Minute"
+            aria-label={t('time.minute')}
             min={0}
             max={59}
             value={minute}
@@ -136,7 +140,7 @@ export function DiscoverTimeFilter({
             onClick={() => toggleDirection('AFTER_OR_EQUAL')}
             className={directionButtonClass(startTimeFilter === 'AFTER_OR_EQUAL')}
           >
-            After
+            {t('discover.time.after')}
           </button>
         </div>
       </PopoverContent>

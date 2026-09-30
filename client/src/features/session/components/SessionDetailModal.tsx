@@ -42,8 +42,11 @@ import { SessionAttributesSummary } from './SessionAttributesSummary';
 import { SessionCommentComposer } from './SessionCommentComposer';
 import { SessionCommentSection } from './SessionCommentSection';
 import { SessionPreparingCompletion, type CompletionFavorites } from './SessionPreparingCompletion';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface SessionDetailModalProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   isOpen: boolean;
   onClose: () => void;
 
@@ -146,10 +149,14 @@ function initialsFor(fullName: string): string {
 /** `(host)` / `(you)` / `(host, you)` — muted qualifier next to a roster chip's name, kept as a
  * separate text node from the name itself (not concatenated in the same string) so the name
  * alone stays queryable by exact text. */
-function rosterQualifier(isHost: boolean, isYou: boolean): string | null {
-  if (isHost && isYou) return '(host, you)';
-  if (isHost) return '(host)';
-  if (isYou) return '(you)';
+function rosterQualifier(
+  isHost: boolean,
+  isYou: boolean,
+  t: (key: string) => string,
+): string | null {
+  if (isHost && isYou) return t('detail.qualifier.hostAndYou');
+  if (isHost) return t('detail.qualifier.host');
+  if (isYou) return t('detail.qualifier.you');
   return null;
 }
 
@@ -158,13 +165,6 @@ const PARTICIPATION_ACTION_ICON: Record<ParticipationActionKind, Icon> = {
   ACCEPT: IconCheck,
   CANCEL: IconX,
   LEAVE: IconLogout,
-};
-
-const PARTICIPATION_PENDING_LABEL: Record<ParticipationActionKind, string> = {
-  JOIN: 'Joining…',
-  ACCEPT: 'Accepting…',
-  CANCEL: 'Cancelling…',
-  LEAVE: 'Leaving…',
 };
 
 /** CLIENT-SESSION-10: a participation action button's contents — an idle icon + label, swapped
@@ -307,7 +307,9 @@ export function SessionDetailModal({
   isPostingComment,
   onDeleteComment,
   onToggleCommentLike,
+  i18nOverridePrefix,
 }: SessionDetailModalProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   /** Which requested-participant row currently has its reject-reason box open — only one at a
    * time, same "no native confirm dialog, inline reveal" idiom this modal already used for the
    * (now-removed) cancel-session reason reveal. */
@@ -326,7 +328,9 @@ export function SessionDetailModal({
     session !== undefined &&
     (session.status === 'SCHEDULED' || session.status === 'ONGOING' || session.status === 'PREPARING');
 
-  const title = session === undefined ? 'Session' : (session.title ?? `${session.sportName} session`);
+  const title = session === undefined
+      ? t('detail.defaultTitle')
+      : (session.title ?? t('card.defaultTitle', { sport: session.sportName }));
   const sportKey = session !== undefined ? sportKeyForId(session.sportId) : undefined;
   const sport = sportKey !== undefined ? sportsByKey[sportKey] : undefined;
 
@@ -369,7 +373,7 @@ export function SessionDetailModal({
                 {title}
               </DialogTitle>
             </div>
-            <DialogClose aria-label="Close" className="justify-self-end" />
+            <DialogClose aria-label={t('common.close')} className="justify-self-end" />
           </div>
           {session !== undefined && (
             <div className="flex items-center gap-1.5 text-2sm">
@@ -386,8 +390,8 @@ export function SessionDetailModal({
         </div>
 
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-3.5">
-          {isLoading && <p className="text-2sm text-text-muted">Loading…</p>}
-          {isError && <p role="alert" className="text-2sm text-text-danger">Couldn't load this session.</p>}
+          {isLoading && <p className="text-2sm text-text-muted">{t('common.loading')}</p>}
+          {isError && <p role="alert" className="text-2sm text-text-danger">{t('detail.error')}</p>}
 
           {session !== undefined && (
             <>
@@ -396,7 +400,7 @@ export function SessionDetailModal({
                   <IconMapPin className="size-4 shrink-0 text-text-muted" aria-hidden="true" />
                   {/* SESSION-24: null on a PREPARING session created without a location. */}
                   <span className="text-2sm text-text-primary">
-                    {session.location?.name ?? 'Location pending'}
+                    {session.location?.name ?? t('card.locationPending')}
                   </span>
                   {session.location !== null &&
                     session.location.latitude !== null &&
@@ -407,7 +411,7 @@ export function SessionDetailModal({
                         rel="noopener noreferrer"
                         className="text-2sm font-medium text-text-accent hover:underline"
                       >
-                        Get Directions
+                        {t('detail.getDirections')}
                       </a>
                     )}
                 </div>
@@ -442,11 +446,17 @@ export function SessionDetailModal({
               {session.status === 'CANCELLED' && (
                 <div className="border-hairline rounded-lg border-border bg-surface-1 p-2.5 text-2sm text-text-secondary">
                   <div>
-                    Cancelled by {session.cancelledByFullName ?? 'unknown'}
-                    {session.cancelledAt !== null ? ` on ${formatStartTime(session.cancelledAt)}` : ''}
+                    {session.cancelledAt !== null
+                      ? t('detail.cancelledByOn', {
+                          name: session.cancelledByFullName ?? t('detail.unknownUser'),
+                          time: formatStartTime(session.cancelledAt),
+                        })
+                      : t('detail.cancelledBy', {
+                          name: session.cancelledByFullName ?? t('detail.unknownUser'),
+                        })}
                   </div>
                   {session.cancelReason !== null && session.cancelReason !== '' && (
-                    <div className="mt-1 text-2xs text-text-muted">Reason: {session.cancelReason}</div>
+                    <div className="mt-1 text-2xs text-text-muted">{t('detail.reason', { reason: session.cancelReason })}</div>
                   )}
                 </div>
               )}
@@ -466,7 +476,7 @@ export function SessionDetailModal({
                 />
               )}
 
-              <section aria-label="Players" className="flex flex-col gap-2">
+              <section aria-label={t('detail.players.label')} className="flex flex-col gap-2">
                 <button
                   type="button"
                   onClick={() => setIsPlayersCollapsed((collapsed) => !collapsed)}
@@ -474,11 +484,12 @@ export function SessionDetailModal({
                   className="flex w-full cursor-pointer items-center gap-1.5 rounded text-2sm font-medium text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                 >
                   <IconUsers className="size-4 shrink-0" aria-hidden="true" />
-                  Players (
-                  {session.capacity === UNCAPPED_CAPACITY
-                    ? session.participantCount
-                    : `${session.participantCount}/${session.capacity}`}
-                  )
+                  {t('detail.players.heading', {
+                    value:
+                      session.capacity === UNCAPPED_CAPACITY
+                        ? session.participantCount
+                        : `${session.participantCount}/${session.capacity}`,
+                  })}
                   <IconChevronDown
                     className={cn(
                       'ml-auto size-4 shrink-0 text-text-muted transition-transform',
@@ -499,10 +510,10 @@ export function SessionDetailModal({
                   </div>
                 )}
 
-                {isParticipantsLoading && <p className="text-2xs text-text-muted">Loading…</p>}
+                {isParticipantsLoading && <p className="text-2xs text-text-muted">{t('common.loading')}</p>}
                 {isParticipantsError && (
                   <p role="alert" className="text-2xs text-text-danger">
-                    Couldn't load participants.
+                    {t('detail.players.error')}
                   </p>
                 )}
 
@@ -531,6 +542,7 @@ export function SessionDetailModal({
                       const qualifier = rosterQualifier(
                         participant.userId === session.createdBy,
                         participant.userId === currentUserId,
+                        t,
                       );
                       return (
                         <div
@@ -563,7 +575,7 @@ export function SessionDetailModal({
                   is blocked on COMPLETED/CANCELLED), so this stays hidden rather than showing
                   buttons that would only ever 400. */}
               {canJoinOrLeave && requestedParticipants.length > 0 && (
-                <section aria-label="Waiting for approval" className="flex flex-col gap-2">
+                <section aria-label={t('detail.approval.label')} className="flex flex-col gap-2">
                   <button
                     type="button"
                     onClick={() => setIsApprovalCollapsed((collapsed) => !collapsed)}
@@ -571,7 +583,7 @@ export function SessionDetailModal({
                     className="flex w-full cursor-pointer items-center gap-1.5 rounded text-2sm font-medium text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                   >
                     <IconClock className="size-4 shrink-0" aria-hidden="true" />
-                    Waiting for approval ({requestedParticipants.length})
+                    {t('detail.approval.heading', { n: requestedParticipants.length })}
                     <IconChevronDown
                       className={cn(
                         'ml-auto size-4 shrink-0 text-text-muted transition-transform',
@@ -581,11 +593,11 @@ export function SessionDetailModal({
                     />
                   </button>
                   {isRequestedParticipantsLoading && (
-                    <p className="text-2xs text-text-muted">Loading…</p>
+                    <p className="text-2xs text-text-muted">{t('common.loading')}</p>
                   )}
                   {isRequestedParticipantsError && (
                     <p role="alert" className="text-2xs text-text-danger">
-                      Couldn't load requests.
+                      {t('detail.approval.error')}
                     </p>
                   )}
                   {!isApprovalCollapsed && !isRequestedParticipantsLoading && !isRequestedParticipantsError && (
@@ -617,7 +629,7 @@ export function SessionDetailModal({
                                   setRejectReason('');
                                 }}
                               >
-                                Reject
+                                {t('detail.approval.reject')}
                               </Button>
                               <Button
                                 type="button"
@@ -626,7 +638,7 @@ export function SessionDetailModal({
                                 disabled={isApprovingParticipant}
                                 onClick={() => onApproveParticipant(participant.userId)}
                               >
-                                Approve
+                                {t('detail.approval.approve')}
                               </Button>
                             </div>
                           </div>
@@ -635,8 +647,8 @@ export function SessionDetailModal({
                               <Input
                                 value={rejectReason}
                                 onChange={(event) => setRejectReason(event.target.value)}
-                                placeholder="Reason (optional)"
-                                aria-label={`Reject reason for ${participant.userFullName}`}
+                                placeholder={t('detail.approval.reasonPlaceholder')}
+                                aria-label={t('detail.approval.reasonLabel', { name: participant.userFullName })}
                               />
                               <div className="flex gap-2">
                                 <Button
@@ -649,7 +661,7 @@ export function SessionDetailModal({
                                     setRejectingUserId(null);
                                   }}
                                 >
-                                  {isRejectingParticipant ? 'Rejecting…' : 'Confirm reject'}
+                                  {isRejectingParticipant ? t('detail.approval.rejecting') : t('detail.approval.confirmReject')}
                                 </Button>
                                 <Button
                                   type="button"
@@ -658,7 +670,7 @@ export function SessionDetailModal({
                                   disabled={isRejectingParticipant}
                                   onClick={() => setRejectingUserId(null)}
                                 >
-                                  Never mind
+                                  {t('detail.approval.neverMind')}
                                 </Button>
                               </div>
                             </div>
@@ -672,16 +684,18 @@ export function SessionDetailModal({
 
               <div className="flex items-center gap-2 self-end">
                 <span className="text-2xs text-text-muted">
-                  {session.autoApprove
-                    ? i18next.t('enums:sessionApproval.auto')
-                    : i18next.t('enums:sessionApproval.hostApproval')}
-                  . Created by {session.createdByFullName}
+                  {t('detail.approvalCreatedBy', {
+                    approval: session.autoApprove
+                      ? i18next.t('enums:sessionApproval.auto')
+                      : i18next.t('enums:sessionApproval.hostApproval'),
+                    name: session.createdByFullName,
+                  })}
                 </span>
                 {!isCommentsForbidden && (
                   <button
                     type="button"
                     aria-pressed={session.isLikedByCurrentUser}
-                    aria-label={session.isLikedByCurrentUser ? 'Unlike' : 'Like'}
+                    aria-label={session.isLikedByCurrentUser ? t('detail.unlike') : t('detail.like')}
                     onClick={onToggleLike}
                     disabled={isTogglingLike}
                     className={cn(
@@ -729,12 +743,12 @@ export function SessionDetailModal({
 
             {isJoinError && (
               <p role="alert" className="text-2sm text-text-danger">
-                Couldn't complete that action. Try again.
+                {t('detail.actionError')}
               </p>
             )}
             {isLeaveError && (
               <p role="alert" className="text-2sm text-text-danger">
-                Couldn't complete that action. Try again.
+                {t('detail.actionError')}
               </p>
             )}
 
@@ -742,15 +756,15 @@ export function SessionDetailModal({
               <div className="flex justify-center gap-2">
                 {participationAction.kind === 'CANCEL' && (
                   // CLIENT-SESSION-30: REQUESTED → the one action is Cancel; say why it's still pending.
-                  <p className="self-center text-2xs text-text-muted">Waiting for host approval.</p>
+                  <p className="self-center text-2xs text-text-muted">{t('detail.waitingForHost')}</p>
                 )}
                 {participationAction.kind === 'ACCEPT' && (
                   <Button variant="outline" disabled={isJoining || isLeaving} onClick={onLeave}>
                     <ActionButtonContent
                       Icon={IconX}
                       isPending={isLeaving}
-                      pendingLabel="Declining…"
-                      idleLabel="Decline"
+                      pendingLabel={t('detail.pending.DECLINE')}
+                      idleLabel={t('detail.decline')}
                     />
                   </Button>
                 )}
@@ -762,7 +776,7 @@ export function SessionDetailModal({
                   <ActionButtonContent
                     Icon={PARTICIPATION_ACTION_ICON[participationAction.kind]}
                     isPending={isAcceptOrJoin ? isJoining : isLeaving}
-                    pendingLabel={PARTICIPATION_PENDING_LABEL[participationAction.kind]}
+                    pendingLabel={t(`detail.pending.${participationAction.kind}`)}
                     idleLabel={participationAction.label}
                   />
                 </Button>

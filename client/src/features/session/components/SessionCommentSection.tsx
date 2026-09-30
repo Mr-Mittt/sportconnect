@@ -1,7 +1,10 @@
 import type { Comment } from '@/features/feed/types';
 import { CommentItem } from '@/shared/components/CommentItem';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface SessionCommentSectionProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   currentUserId: string | undefined;
   comments: Comment[];
   isLoading: boolean;
@@ -52,19 +55,21 @@ export function SessionCommentSection({
   isPosting,
   onDeleteComment,
   onToggleCommentLike,
+  i18nOverridePrefix,
 }: SessionCommentSectionProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   if (isForbidden) return null;
 
   return (
-    <section aria-label="Discussion" className="border-hairline-t flex flex-col gap-2 border-border pt-3">
-      {isLoading && <p className="text-2xs text-text-muted">Loading comments…</p>}
+    <section aria-label={t('comments.title')} className="border-hairline-t flex flex-col gap-2 border-border pt-3">
+      {isLoading && <p className="text-2xs text-text-muted">{t('comments.loading')}</p>}
       {isError && (
         <p role="alert" className="text-2xs text-text-danger">
-          Couldn't load comments.
+          {t('comments.error')}
         </p>
       )}
       {!isLoading && !isError && comments.length === 0 && (
-        <p className="text-2xs text-text-muted">No comments yet. Be the first to comment!</p>
+        <p className="text-2xs text-text-muted">{t('comments.empty')}</p>
       )}
       {!isLoading && !isError && comments.length > 0 && (
         <div className="flex flex-col gap-3">
@@ -86,7 +91,7 @@ export function SessionCommentSection({
               disabled={isFetchingMore}
               className="cursor-pointer self-center rounded-lg border-hairline border-border px-3 py-1.5 text-2xs font-medium text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
             >
-              {isFetchingMore ? 'Loading…' : 'View more comments'}
+              {isFetchingMore ? t('common.loading') : t('comments.viewMore')}
             </button>
           )}
         </div>

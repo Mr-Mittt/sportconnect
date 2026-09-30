@@ -20,6 +20,7 @@ import {
   applyRefFieldLayouts,
   findAttributeByPath,
 } from '@/shared/components/attributeFields/refFieldLayouts';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 /**
  * The type `renderValueNode` should use for a resolved node's stored value. For an "own" node it is
@@ -38,6 +39,8 @@ function effectiveRenderType(attribute: ResolvedSportAttributeDefinition): Sport
 }
 
 export interface SessionAttributesSummaryProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   /**
    * The resolved *session* attribute schema (A17) for this session's sport, from
    * `useSessionAttributeSchema`. Same `Resolved*` tree `SportAttributesFields` renders as inputs —
@@ -171,7 +174,9 @@ export function SessionAttributesSummary({
   schema,
   values,
   refBaseSchema,
+  i18nOverridePrefix,
 }: SessionAttributesSummaryProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const definitionsByName = new Map<string, ResolvedSportAttributeDefinitionType>(
     (schema.definitions ?? []).map((definitionType) => [definitionType.name, definitionType]),
   );
@@ -187,7 +192,7 @@ export function SessionAttributesSummary({
 
   return (
     <section aria-label="Session detail" className="flex flex-col gap-2">
-      <h3 className="text-2sm font-semibold text-text-primary">Session detail</h3>
+      <h3 className="text-2sm font-semibold text-text-primary">{t('attributes.heading')}</h3>
       <div className="flex flex-col gap-3">
         {groups.map((entry) => (
           <div key={entry.key}>{entry.node}</div>

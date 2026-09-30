@@ -7,6 +7,7 @@ import { Button } from '@/shared/ui/button';
 import type { UpdateSessionPayload } from '../types';
 import { FeeTypeFields } from './FeeTypeFields';
 import { LocationFavoritesDropdown } from './LocationFavoritesDropdown';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 /** CLIENT-SESSION-23: the favorites data `LocationFavoritesDropdown` needs, bundled into one prop
  * so the six hosts of `SessionDetailModal` thread a single value through instead of three. Owned by
@@ -19,6 +20,8 @@ export interface CompletionFavorites {
 }
 
 interface SessionPreparingCompletionProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   /** Caller guarantees `status === 'PREPARING'` before rendering this at all — SESSION-24's own
    * definition of PREPARING means at least one of `location`/`feeType` is null here. */
   session: Session;
@@ -58,7 +61,9 @@ export function SessionPreparingCompletion({
   onSubmit,
   isSubmitting,
   isError,
+  i18nOverridePrefix,
 }: SessionPreparingCompletionProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   const missingLocation = session.location === null;
   const missingFee = session.feeType === null;
 
@@ -83,7 +88,11 @@ export function SessionPreparingCompletion({
   const canSubmit = hasLocationToSubmit || hasFeeToSubmit;
 
   const missingLabel =
-    missingLocation && missingFee ? 'Location and Fee' : missingLocation ? 'Location' : 'Fee';
+    missingLocation && missingFee
+      ? t('preparing.missing.locationAndFee')
+      : missingLocation
+        ? t('preparing.missing.location')
+        : t('preparing.missing.fee');
 
   const submit = () => {
     if (!canSubmit) return;
@@ -102,12 +111,12 @@ export function SessionPreparingCompletion({
 
   return (
     <section
-      aria-label="Complete session setup"
+      aria-label={t('preparing.title')}
       className="border-amber-800/30 bg-amber-50 flex flex-col gap-2.5 rounded-xl border-hairline p-2.5"
     >
       <p className="text-2sm text-amber-800">
-        Still missing: <strong>{missingLabel}</strong>. Complete it before this session starts, or
-        it will be auto-cancelled.
+        {t('preparing.missingPrefix')} <strong>{missingLabel}</strong>
+        {t('preparing.missingSuffix')}
       </p>
 
       {missingLocation && (
@@ -140,7 +149,7 @@ export function SessionPreparingCompletion({
 
       {isError && (
         <p role="alert" className="text-2xs text-text-danger">
-          Couldn't complete the session setup. Try again.
+          {t('preparing.error')}
         </p>
       )}
 
@@ -152,7 +161,7 @@ export function SessionPreparingCompletion({
         onClick={submit}
         className="self-start"
       >
-        {isSubmitting ? 'Saving…' : 'Save'}
+        {isSubmitting ? t('preparing.saving') : t('preparing.save')}
       </Button>
 
       <LocationPicker {...locationPicker} />

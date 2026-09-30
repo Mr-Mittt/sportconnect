@@ -3,9 +3,12 @@ import { SessionCard } from '@/shared/components/SessionCard';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import type { SessionDateGroup as SessionDateGroupData } from '../groupSessionsByDate';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface SessionDateGroupProps
   extends Pick<SessionDateGroupData, 'dateKey' | 'dateLabel' | 'sessions'> {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   // `dateKey` (`yyyy-MM-dd`, CLIENT-SESSION-23 — the old zone-qualified key went with the retired
   // active/history split) is the opaque collapse-state identity; the per-day header carries the rest.
   sportsByKey: Record<SportKey, SportProfile>;
@@ -36,13 +39,15 @@ export function SessionDateGroup({
   onViewDetails,
   onParticipationAction,
   isParticipationActionPending,
+  i18nOverridePrefix,
 }: SessionDateGroupProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   return (
     <div>
       <button
         type="button"
         aria-expanded={!isCollapsed}
-        aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${dateLabel}`}
+        aria-label={isCollapsed ? t('common.expand', { label: dateLabel }) : t('common.collapse', { label: dateLabel })}
         onClick={() => onToggleCollapsed(dateKey)}
         className="flex w-full cursor-pointer items-center gap-2.5 border-none bg-none p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
       >

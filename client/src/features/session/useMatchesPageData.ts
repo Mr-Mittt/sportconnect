@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/app/authStore';
 import { useMatchesPageStore } from '@/app/matchesPageStore';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
@@ -48,6 +49,7 @@ import { useSessionDetailModalData } from './useSessionDetailModalData';
  *  and counts other sports' sessions).
  */
 export function useMatchesPageData(initialSessionId: number | null) {
+  const { i18n } = useTranslation();
   const currentUserId = useAuthStore((state) => state.user?.id);
   // CLIENT-SESSION-29 (2026-09-23) — /matches no longer offers an "All sports" pill (user
   // decision); `useMatchesActiveSport` defaults to the caller's first sport profile instead of a
@@ -121,7 +123,9 @@ export function useMatchesPageData(initialSessionId: number | null) {
 
   const upcomingDateGroups = useMemo(
     () => groupSessionsByDate((upcomingQuery.data?.pages ?? []).flatMap((page) => page.content)),
-    [upcomingQuery.data],
+    // `i18n.language`: the day labels are locale-formatted at grouping time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [upcomingQuery.data, i18n.language],
   );
   const historyDates = useMemo(
     () => (historyDatesQuery.data?.pages ?? []).flatMap((page) => page.dates),

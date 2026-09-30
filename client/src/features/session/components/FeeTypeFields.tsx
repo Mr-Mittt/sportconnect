@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { FEE_TYPE_LABEL } from '@/shared/lib/feeType';
+import { getFeeTypeLabel } from '@/shared/lib/feeType';
 import type { FeeType } from '@/shared/types/session';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
@@ -111,7 +111,7 @@ export function FeeTypeFields({
           }}
           className="size-4 cursor-pointer rounded border-border-strong"
         />
-        {FEE_TYPE_LABEL.FREE}
+        {getFeeTypeLabel('FREE')}
       </label>
       <label className="flex cursor-pointer items-center gap-2 text-2sm text-text-primary select-none">
         <input
@@ -123,11 +123,11 @@ export function FeeTypeFields({
           }}
           className="size-4 cursor-pointer rounded border-border-strong"
         />
-        {FEE_TYPE_LABEL.SPLIT}
+        {getFeeTypeLabel('SPLIT')}
       </label>
       <div className="flex items-center gap-2">
         <Label htmlFor={`${idPrefix}-fee-amount`} className="mb-0 shrink-0">
-          {FEE_TYPE_LABEL.FIXED}
+          {getFeeTypeLabel('FIXED')}
         </Label>
         <VndAmountInput
           id={`${idPrefix}-fee-amount`}

@@ -3,8 +3,11 @@ import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import type { Location } from '@/shared/types/location';
 import { DiscoverFilterTrigger } from './DiscoverFilterTrigger';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface DiscoverLocationFilterProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
   /** `false` when the hosting page's sport pill is 'all' — both `GET /locations/favorites` and
    * `GET /locations/search` require one specific sport (LOC-1). */
   isAvailable: boolean;
@@ -71,16 +74,18 @@ export function DiscoverLocationFilter({
   searchResults,
   isSearchLoading,
   onOpenLocationPicker,
+  i18nOverridePrefix,
 }: DiscoverLocationFilterProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
   if (!isAvailable) {
     return (
       <button
         type="button"
         aria-disabled="true"
-        title="Pick a specific sport to filter by location"
+        title={t('discover.location.needsSport')}
         className="border-hairline cursor-not-allowed rounded-full border-border bg-surface-1 px-3 py-1.5 text-xs text-text-secondary"
       >
-        Location
+        {t('discover.location.trigger')}
       </button>
     );
   }
@@ -99,10 +104,14 @@ export function DiscoverLocationFilter({
   return (
     <Popover>
       <DiscoverFilterTrigger
-        label={`Location${selectedLocations.length > 0 ? ` (${selectedLocations.length})` : ''}`}
+        label={
+          selectedLocations.length > 0
+            ? t('discover.location.triggerCount', { n: selectedLocations.length })
+            : t('discover.location.trigger')
+        }
         isActive={selectedLocations.length > 0}
         onClear={onClearLocationFilter}
-        clearLabel="Clear location filter"
+        clearLabel={t('discover.location.clear')}
       />
       <PopoverContent align="start" className="w-72">
         {/* No selected-locations chip row (2026-09-23 revision) — the checklist below already
@@ -111,18 +120,18 @@ export function DiscoverLocationFilter({
           <Input
             value={searchText}
             onChange={(event) => onSearchTextChange(event.target.value)}
-            placeholder="Search locations…"
-            aria-label="Search locations"
+            placeholder={t('discover.location.searchPlaceholder')}
+            aria-label={t('discover.location.searchLabel')}
           />
           {isLoadingRows ? (
-            <p className="px-2 py-1.5 text-2xs text-text-muted">Loading…</p>
+            <p className="px-2 py-1.5 text-2xs text-text-muted">{t('common.loading')}</p>
           ) : rows.length === 0 ? (
             <p className="px-2 py-1.5 text-2xs text-text-muted">
-              {trimmedSearch === '' ? 'No favorites yet.' : 'No locations found.'}
+              {trimmedSearch === '' ? t('discover.location.noFavorites') : t('discover.location.noResults')}
             </p>
           ) : (
             <fieldset className="flex min-w-0 max-h-48 flex-col gap-0.5 overflow-y-auto">
-              <legend className="sr-only">Locations to discover</legend>
+              <legend className="sr-only">{t('discover.location.legend')}</legend>
               {rows.map((location) => (
                 <LocationRow
                   key={location.id}
@@ -140,7 +149,7 @@ export function DiscoverLocationFilter({
             className="cursor-pointer justify-start"
             onClick={onOpenLocationPicker}
           >
-            Choose a location…
+            {t('discover.location.pick')}
           </Button>
         </div>
       </PopoverContent>
