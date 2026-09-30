@@ -312,6 +312,7 @@
     }
   },
   "attributes": {
-    "heading": "Session detail"
+    "heading": "Session detail",
+    "detail": "Session detail"
   }
 }

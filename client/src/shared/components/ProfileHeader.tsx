@@ -1,4 +1,5 @@
 import { IconPencil } from '@tabler/icons-react';
+import { useTranslation } from 'react-i18next';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import type { UserResponse } from '@/features/profile/types';
@@ -45,6 +46,7 @@ interface ProfileHeaderProps {
  * the user's own voice.
  */
 export function ProfileHeader({ user, onEditProfile }: ProfileHeaderProps) {
+  const { t } = useTranslation('common');
   const handleParts = [user.username !== null ? `@${user.username}` : null, user.regionName].filter(
     (part): part is string => part !== null,
   );
@@ -71,7 +73,7 @@ export function ProfileHeader({ user, onEditProfile }: ProfileHeaderProps) {
         </div>
         <Button type="button" variant="outline" size="sm" onClick={onEditProfile} className="shrink-0">
           <IconPencil className="size-4" aria-hidden="true" />
-          Edit profile
+          {t('editProfile')}
         </Button>
       </div>
       {user.bio !== null && user.bio !== '' && (

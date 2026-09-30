@@ -191,7 +191,7 @@ export function SessionAttributesSummary({
   if (groups.length === 0) return null;
 
   return (
-    <section aria-label="Session detail" className="flex flex-col gap-2">
+    <section aria-label={t('attributes.detail')} className="flex flex-col gap-2">
       <h3 className="text-2sm font-semibold text-text-primary">{t('attributes.heading')}</h3>
       <div className="flex flex-col gap-3">
         {groups.map((entry) => (

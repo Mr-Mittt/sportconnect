@@ -1,6 +1,7 @@
 import { IconX } from '@tabler/icons-react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 import { useModalAnchor } from '@/shared/lib/modalAnchor';
 import { FloatingPortalContainerContext } from './floatingPortalContainer';
@@ -184,11 +185,12 @@ interface DialogHeaderProps {
  * this component doesn't fit that shape.
  */
 function DialogHeader({ title, className, onCloseClick }: DialogHeaderProps) {
+  const { t } = useTranslation('common');
   return (
     <div className={cn('grid grid-cols-[1fr_auto_1fr] items-center', className)}>
       <span aria-hidden="true" />
       <DialogTitle className="text-center">{title}</DialogTitle>
-      <DialogClose aria-label="Close" className="justify-self-end" onClick={onCloseClick} />
+      <DialogClose aria-label={t('close')} className="justify-self-end" onClick={onCloseClick} />
     </div>
   );
 }

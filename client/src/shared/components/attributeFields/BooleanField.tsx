@@ -1,15 +1,11 @@
 import { Label } from '@/shared/ui/label';
+import i18next from 'i18next';
 import { Switch } from '@/shared/ui/switch';
 import { SegmentedControl } from '@/shared/ui/segmented-control';
 import type { AttributeControlBaseProps } from './types';
 import { normalizeLayout, pickLayoutId } from './layout';
 
 const BOOLEAN_LAYOUTS = ['switch', 'checkbox', 'segmented'] as const;
-
-const YES_NO = [
-  { value: 'true', label: 'Yes' },
-  { value: 'false', label: 'No' },
-];
 
 /** `BOOLEAN` attribute control (CLIENT-SESSION-17 Part A). Stores a real `boolean`.
  * SPORT-13: `layout.id` picks `switch` (default `<Switch>`), `checkbox` (native), or `segmented`
@@ -23,6 +19,10 @@ export function BooleanField({
   requiredHint,
   layout,
 }: AttributeControlBaseProps) {
+  const yesNo = [
+    { value: 'true', label: i18next.t('enums:attributeValues.yes') },
+    { value: 'false', label: i18next.t('enums:attributeValues.no') },
+  ];
   const { id } = normalizeLayout(layout, label);
   const kind = pickLayoutId(id, BOOLEAN_LAYOUTS, 'switch', label);
   const checked = typeof value === 'boolean' ? value : false;
@@ -37,7 +37,7 @@ export function BooleanField({
           aria-required={ariaRequired}
           value={String(checked)}
           onValueChange={(next) => onChange(next === 'true')}
-          options={YES_NO}
+          options={yesNo}
         />
         {requiredHint}
       </div>

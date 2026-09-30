@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { useTranslation } from 'react-i18next';
 import type {
   ResolvedAttributeLayout,
   ResolvedSportAttributeDefinitionType,
@@ -106,12 +107,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * exports it so `DefinitionListField`'s `table` layout can render one field per cell.
  */
 export function RecordField({ field, value, onChange, definitionsByName }: RecordFieldProps) {
+  const { t } = useTranslation('sharedComponents');
   const fieldId = useId();
   const isRequired = field.isRequired === true;
   const showRequiredHint = isRequired && isEmptyValue(value);
   const label = isRequired ? `${field.label} *` : field.label;
   const hint = showRequiredHint ? (
-    <p className="mt-1 text-2xs text-text-danger">Required</p>
+    <p className="mt-1 text-2xs text-text-danger">{t('attributeFields.required')}</p>
   ) : undefined;
 
   switch (field.type) {
@@ -183,7 +185,7 @@ export function RecordField({ field, value, onChange, definitionsByName }: Recor
             selected={Array.isArray(value) ? (value as string[]) : []}
             onChange={onChange}
           />
-          {showRequiredHint && <p className="mt-1 text-2xs text-text-danger">Required</p>}
+          {showRequiredHint && <p className="mt-1 text-2xs text-text-danger">{t('attributeFields.required')}</p>}
         </div>
       );
 
@@ -203,7 +205,7 @@ export function RecordField({ field, value, onChange, definitionsByName }: Recor
             definitionsByName={definitionsByName}
             layout={field.layout ?? undefined}
           />
-          {showRequiredHint && <p className="text-2xs text-text-danger">Required</p>}
+          {showRequiredHint && <p className="text-2xs text-text-danger">{t('attributeFields.required')}</p>}
         </fieldset>
       );
     }

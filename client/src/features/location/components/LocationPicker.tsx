@@ -1,4 +1,5 @@
 import { IconArrowLeft, IconExternalLink, IconHeart, IconMapPin, IconSearch } from '@tabler/icons-react';
+import { useOverridableText } from '@/shared/lib/useOverridableText';
 import type { Location } from '../types';
 import type { LocationPickerMode } from '../useLocationPickerData';
 import { directionsUrl } from '@/shared/lib/mapsLinks';
@@ -50,6 +51,8 @@ export interface LocationPickerProps {
   onSave: () => void;
   isSaving: boolean;
   isSaveError: boolean;
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
 }
 
 /**
@@ -105,12 +108,14 @@ export function LocationPicker({
   onSave,
   isSaving,
   isSaveError,
+  i18nOverridePrefix,
 }: LocationPickerProps) {
+  const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent fixedHeight>
         <DialogHeader
-          title={mode === 'search' ? 'Choose a location' : 'Add a new location'}
+          title={mode === 'search' ? t('locationPicker.chooseTitle') : t('locationPicker.addTitle')}
           className="border-hairline-b border-border px-4 py-3"
         />
         {mode === 'search' ? (
@@ -122,19 +127,19 @@ export function LocationPicker({
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') onSearch();
                 }}
-                placeholder="Search locations by name…"
-                aria-label="Search locations"
+                placeholder={t('locationPicker.searchPlaceholder')}
+                aria-label={t('locationPicker.searchAria')}
               />
               <Button variant="outline" size="sm" className="shrink-0 cursor-pointer" onClick={onSearch}>
                 <IconSearch className="size-4" aria-hidden="true" />
-                Search
+                {t('locationPicker.search')}
               </Button>
             </div>
             <div className="flex-1 overflow-y-auto px-4 py-3">
-              {isSearching && <p className="text-2sm text-text-muted">Searching…</p>}
-              {isSearchError && <p className="text-2sm text-text-danger">Couldn't load locations.</p>}
+              {isSearching && <p className="text-2sm text-text-muted">{t('locationPicker.searching')}</p>}
+              {isSearchError && <p className="text-2sm text-text-danger">{t('locationPicker.searchError')}</p>}
               {!isSearching && !isSearchError && results.length === 0 && (
-                <p className="text-2sm text-text-muted">No locations found.</p>
+                <p className="text-2sm text-text-muted">{t('locationPicker.noResults')}</p>
               )}
               <div className="flex flex-col gap-2.5">
                 {results.map((location) => {
@@ -158,7 +163,7 @@ export function LocationPicker({
                           event.stopPropagation();
                           onToggleFavorite(location);
                         }}
-                        aria-label={isFavorited ? `Unfavorite ${location.name}` : `Favorite ${location.name}`}
+                        aria-label={t(isFavorited ? 'locationPicker.unfavorite' : 'locationPicker.favorite', { name: location.name })}
                         aria-pressed={isFavorited}
                         className="mr-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-muted hover:bg-surface-1 hover:text-text-danger disabled:cursor-default disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                       >
@@ -174,7 +179,7 @@ export function LocationPicker({
             </div>
             <div className="border-hairline-t flex justify-center border-border px-4 py-3">
               <Button variant="ghost" size="sm" className="cursor-pointer" onClick={onSwitchToCreate}>
-                Can't find it? Add a new location
+                {t('locationPicker.cantFind')}
               </Button>
             </div>
           </>
@@ -186,7 +191,7 @@ export function LocationPicker({
               className="mb-3 flex items-center gap-1 text-2sm text-text-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
             >
               <IconArrowLeft className="size-4" aria-hidden="true" />
-              Back to search
+              {t('locationPicker.backToSearch')}
             </button>
 
             <Button
@@ -197,10 +202,10 @@ export function LocationPicker({
               onClick={onOpenGoogleMaps}
             >
               <IconExternalLink className="size-4" aria-hidden="true" />
-              Find on Google Maps
+              {t('locationPicker.findOnGoogleMaps')}
             </Button>
 
-            <Label htmlFor="location-maps-url">Paste the share link</Label>
+            <Label htmlFor="location-maps-url">{t('locationPicker.pasteLink')}</Label>
             <div className="mb-3 flex items-center gap-2">
               <Input
                 id="location-maps-url"
@@ -216,17 +221,17 @@ export function LocationPicker({
                 disabled={isResolving || mapsUrlInput.trim() === ''}
                 onClick={onResolveUrl}
               >
-                {isResolving ? 'Resolving…' : 'Resolve'}
+                {isResolving ? t('locationPicker.resolving') : t('locationPicker.resolve')}
               </Button>
             </div>
             {isResolveError && (
               <p role="alert" className="mb-3 text-2sm text-text-danger">
-                Couldn't resolve that link. Try a different one, or enter the details manually below.
+                {t('locationPicker.resolveError')}
               </p>
             )}
             {resolvedNoCoordinates && (
               <p className="mb-3 text-2sm text-text-muted">
-                Couldn't detect coordinates from that link — enter the location details manually below.
+                {t('locationPicker.noCoordinates')}
               </p>
             )}
 
@@ -245,32 +250,32 @@ export function LocationPicker({
                   className="flex w-fit items-center gap-1 text-2sm text-text-accent hover:underline"
                 >
                   <IconMapPin className="size-4" aria-hidden="true" />
-                  Get Directions
+                  {t('locationPicker.getDirections')}
                 </a>
               </div>
             )}
 
-            <Label htmlFor="location-name">Name</Label>
+            <Label htmlFor="location-name">{t('locationPicker.name')}</Label>
             <Input
               id="location-name"
               value={name}
               onChange={(event) => onNameChange(event.target.value)}
-              placeholder="e.g. Riverside Sports Complex"
+              placeholder={t('locationPicker.namePlaceholder')}
               className="mb-3"
             />
 
-            <Label htmlFor="location-address">Address (optional)</Label>
+            <Label htmlFor="location-address">{t('locationPicker.address')}</Label>
             <Input
               id="location-address"
               value={address}
               onChange={(event) => onAddressChange(event.target.value)}
-              placeholder="e.g. 123 Main St"
+              placeholder={t('locationPicker.addressPlaceholder')}
               className="mb-3"
             />
 
             {isSaveError && (
               <p role="alert" className="mb-3 text-2sm text-text-danger">
-                Couldn't save this location. Try again.
+                {t('locationPicker.saveError')}
               </p>
             )}
 
@@ -281,7 +286,7 @@ export function LocationPicker({
               disabled={!canSave || isSaving}
               onClick={onSave}
             >
-              {isSaving ? 'Saving…' : 'Save & Use This Location'}
+              {isSaving ? t('locationPicker.saving') : t('locationPicker.save')}
             </Button>
           </div>
         )}

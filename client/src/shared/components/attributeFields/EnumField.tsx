@@ -1,4 +1,5 @@
 import { Label } from '@/shared/ui/label';
+import { useTranslation } from 'react-i18next';
 import { Select } from '@/shared/ui/select';
 import { RadioGroup } from '@/shared/ui/radio-group';
 import { SegmentedControl } from '@/shared/ui/segmented-control';
@@ -36,6 +37,7 @@ export function EnumField({
   requiredHint,
   layout,
 }: EnumFieldProps) {
+  const { t } = useTranslation('sharedComponents');
   const options = attribute.options ?? [];
   const { id } = normalizeLayout(layout, label);
   let kind = pickLayoutId(id, ENUM_LAYOUTS, 'dropdown', label);
@@ -77,7 +79,7 @@ export function EnumField({
       className={cn(selected !== '' && 'pr-9')}
     >
       <option value="" disabled>
-        Select…
+        {t('attributeFields.select')}
       </option>
       {options.map((option) => (
         <option key={option.value} value={option.value}>
@@ -97,7 +99,7 @@ export function EnumField({
           {select}
           <button
             type="button"
-            aria-label={`Clear ${label}`}
+            aria-label={t('attributeFields.clear', { label })}
             onClick={() => onChange('')}
             className="absolute right-6 top-1/2 -translate-y-1/2 rounded p-0.5 text-text-muted transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
           >

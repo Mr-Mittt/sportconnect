@@ -312,6 +312,7 @@
     }
   },
   "attributes": {
-    "heading": "Chi tiết buổi chơi"
+    "heading": "Chi tiết buổi chơi",
+    "detail": "Chi tiết buổi chơi"
   }
 }
