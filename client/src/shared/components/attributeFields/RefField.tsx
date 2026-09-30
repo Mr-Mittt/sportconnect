@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import type {
   ResolvedAttributeLayout,
@@ -68,6 +69,7 @@ export function RefField({
   definitionsByName,
   layout,
 }: RefFieldProps) {
+  const { t } = useTranslation('sharedComponents');
   const isList = node.cardinality === 'LIST';
   const effectiveLayout = layout === undefined ? node.layout : layout;
   const recordBase = node.type === 'DEFINITION' || node.type === 'DEFINITION_LIST';
@@ -150,7 +152,7 @@ export function RefField({
       <AddDefinitionRecordModal
         open={modalOpen}
         onOpenChange={setModalOpen}
-        title={`Add — ${node.label}`}
+        title={t('attributeFields.addTitle', { label: node.label })}
         definitionType={definitionType}
         definitionsByName={effectiveDefinitions}
         onSubmit={addDraft}
@@ -158,10 +160,10 @@ export function RefField({
     ) : (
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader title={`Add — ${node.label}`} onCloseClick={() => setModalOpen(false)} />
+          <DialogHeader title={t('attributeFields.addTitle', { label: node.label })} onCloseClick={() => setModalOpen(false)} />
           <div className="flex flex-col gap-4 p-4">
             <div>
-              <Label htmlFor={`${fieldId}-other`}>Value</Label>
+              <Label htmlFor={`${fieldId}-other`}>{t('attributeFields.value')}</Label>
               <Input
                 id={`${fieldId}-other`}
                 value={draftText}
@@ -170,10 +172,10 @@ export function RefField({
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setModalOpen(false)}>
-                Cancel
+                {t('attributeFields.cancel')}
               </Button>
               <Button type="button" size="sm" onClick={commitScalarDraft}>
-                Add
+                {t('attributeFields.add')}
               </Button>
             </div>
           </div>
@@ -190,7 +192,7 @@ export function RefField({
       disabled={atCap}
       onClick={openModal}
     >
-      Other…
+      {t('attributeFields.other')}
     </Button>
   );
 
@@ -229,18 +231,18 @@ export function RefField({
             }}
           >
             <option value="" disabled>
-              Select…
+              {t('attributeFields.select')}
             </option>
             {choices.map((choice) => (
               <option key={choice.key} value={choice.key}>
                 {choice.text}
               </option>
             ))}
-            <option value={OTHER}>Other…</option>
+            <option value={OTHER}>{t('attributeFields.other')}</option>
           </Select>
           {noProfileValues && (
             <p className="mt-1 text-2xs text-text-muted">
-              Nothing on your profile to pick from — use “Other…”.
+              {t('attributeFields.nothingOnProfile')}
             </p>
           )}
           {modal}
@@ -276,7 +278,7 @@ export function RefField({
         {otherButton}
         {noProfileValues && (
           <p className="mt-1 text-2xs text-text-muted">
-            Nothing on your profile to pick from — use “Other…”.
+            {t('attributeFields.nothingOnProfile')}
           </p>
         )}
         {modal}
@@ -294,7 +296,7 @@ export function RefField({
 
   const emptyHint = choices.length === 0 && (
     <p className="text-2xs text-text-muted">
-      Nothing on your profile to pick from — use “Other…”.
+      {t('attributeFields.nothingOnProfile')}
     </p>
   );
 
@@ -372,12 +374,12 @@ export function RefField({
                 type="checkbox"
                 checked
                 onChange={() => onChange(current.filter((_v, i) => i !== index))}
-                aria-label={`${label} (selected, position ${index + 1})`}
+                aria-label={t('attributeFields.selectedPosition', { label, index: index + 1 })}
               />
               <span className="min-w-0 flex-1">{choice?.node ?? label}</span>
               <button
                 type="button"
-                aria-label={`Move ${label} up`}
+                aria-label={t('attributeFields.moveUp', { label })}
                 disabled={index === 0}
                 onClick={() => move(index, -1)}
                 className="cursor-pointer rounded p-0.5 text-text-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-not-allowed disabled:opacity-30"
@@ -386,7 +388,7 @@ export function RefField({
               </button>
               <button
                 type="button"
-                aria-label={`Move ${label} down`}
+                aria-label={t('attributeFields.moveDown', { label })}
                 disabled={index === current.length - 1}
                 onClick={() => move(index, 1)}
                 className="cursor-pointer rounded p-0.5 text-text-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-not-allowed disabled:opacity-30"

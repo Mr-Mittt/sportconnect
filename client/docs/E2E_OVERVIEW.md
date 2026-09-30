@@ -224,7 +224,7 @@ e2e/
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
     profile-journey.spec.ts   # PROFILE-8
-    locale.spec.ts            # CLIENT-I18N-1, CLIENT-I18N-7, CLIENT-I18N-8, CLIENT-I18N-9, CLIENT-I18N-10, CLIENT-I18N-11
+    locale.spec.ts            # CLIENT-I18N-1, CLIENT-I18N-7, CLIENT-I18N-8, CLIENT-I18N-9, CLIENT-I18N-10, CLIENT-I18N-11, CLIENT-I18N-12
     signup-locale.spec.ts     # CLIENT-REF-2
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
@@ -952,7 +952,7 @@ Related docs: `client/docs/MVP/PROFILE-8_E2E_PROFILE_JOURNEY.md`,
 `client/docs/MVP/SPORT-10_ADD_SPORT_RESUME_REACTIVATION_FLOW.md`,
 `client/docs/MVP/CLIENT-SESSION-19_ADD_MODAL_FOR_PROFILE_DEFINITION_LIST.md`.
 
-### `e2e/flows/locale.spec.ts` (CLIENT-I18N-1 + CLIENT-I18N-7 + CLIENT-I18N-8 + CLIENT-I18N-9 + CLIENT-I18N-10 + CLIENT-I18N-11, 7 `test()`s)
+### `e2e/flows/locale.spec.ts` (CLIENT-I18N-1 + CLIENT-I18N-7 + CLIENT-I18N-8 + CLIENT-I18N-9 + CLIENT-I18N-10 + CLIENT-I18N-11 + CLIENT-I18N-12, 8 `test()`s)
 
 Proves `Accept-Language` actually follows `localeStore`'s active locale on real outgoing
 requests — no language-picker UI ships in this ticket (CLIENT-REF-1/3 build one later), so
@@ -969,6 +969,7 @@ requests — no language-picker UI ships in this ticket (CLIENT-REF-1/3 build on
 | Notification bell renders Vietnamese copy under a stored `vi` locale (CLIENT-I18N-9) | Same seeded `vi` locale, log in on `/`, click the `Thông báo` bell button; the popover dialog opens and its heading `Thông báo` is visible |
 | Matches page renders Vietnamese copy under a stored `vi` locale (CLIENT-I18N-10) | Same seeded `vi` locale, log in, click the `Chơi` nav button → `/matches`; the sr-only `<h1>` is `Chơi`, the `Khám phá buổi chơi` and `Buổi chơi của tôi` regions and the `Trạng thái` filter render; `Tạo buổi chơi` opens the `Tạo buổi chơi của bạn` dialog and submitting it empty shows `Vui lòng nhập tên buổi chơi.` |
 | Sport names render in Vietnamese under a stored `vi` locale (CLIENT-I18N-11) | Same seeded `vi` locale, log in, `Chơi` → `Tạo buổi chơi` opens the Create Session dialog; the sport picker shows `Cầu lông` and no English `Badminton` (`getSportLabel` via `common:sport.*`) |
+| LocationPicker renders Vietnamese copy under a stored `vi` locale (CLIENT-I18N-12) | Same seeded `vi` locale, log in, `Chơi` → `Tạo buổi chơi`, pick a sport, `Chọn địa điểm` → `Chọn một địa điểm…` opens the `Chọn địa điểm` LocationPicker dialog (`Tìm địa điểm` search box, `Tìm` button, dialog-header `Đóng`); `Không tìm thấy? Thêm địa điểm mới` switches to the `Thêm địa điểm mới` create mode (`Quay lại tìm kiếm`, `Dán liên kết chia sẻ`, `Lưu & dùng địa điểm này`) |
 
 Headers are captured via Playwright's own `page.on('request')`, not a dedicated MSW handler
 inspecting the header — simpler and equally reliable, a deliberate deviation from the ticket's
@@ -982,7 +983,8 @@ Related docs: `client/docs/MVP/CLIENT-I18N-1_I18N_INFRASTRUCTURE_AND_LOCALE_STOR
 `client/docs/MVP/CLIENT-I18N-8_TRANSLATE_FRIENDS_PAGE.md`,
 `client/docs/MVP/CLIENT-I18N-9_TRANSLATE_NOTIFICATIONS.md`,
 `client/docs/MVP/CLIENT-I18N-10_TRANSLATE_SESSIONS_MATCHES.md`,
-`client/docs/MVP/CLIENT-I18N-11_TRANSLATE_SPORT_NAMES.md`.
+`client/docs/MVP/CLIENT-I18N-11_TRANSLATE_SPORT_NAMES.md`,
+`client/docs/MVP/CLIENT-I18N-12_TRANSLATE_REMAINING_UNLOCALIZED_TEXT.md`.
 
 ### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
 

@@ -32,5 +32,8 @@
   "sport": {
     "badminton": "Badminton",
     "pickleball": "Pickleball"
-  }
+  },
+  "close": "Close",
+  "editProfile": "Edit profile",
+  "addEmoji": "Add emoji"
 }

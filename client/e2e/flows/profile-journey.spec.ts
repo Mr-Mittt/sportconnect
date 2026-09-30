@@ -166,7 +166,7 @@ test('Profile journey', async ({ page, context }) => {
 
     // The language save (PUT /users/me/preferences) switched the UI locale live — reopening
     // the modal renders its own strings translated (CLIENT-REF-3's new `profile` i18n namespace).
-    await page.getByRole('button', { name: 'Edit profile' }).click();
+    await page.getByRole('button', { name: 'Chỉnh sửa hồ sơ', exact: true }).click();
     const viDialog = page.getByRole('dialog', { name: 'Chỉnh sửa hồ sơ' });
     await expect(viDialog).toBeVisible();
     await page.keyboard.press('Escape');

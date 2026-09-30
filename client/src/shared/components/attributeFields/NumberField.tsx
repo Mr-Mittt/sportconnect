@@ -1,4 +1,5 @@
 import { Button } from '@/shared/ui/button';
+import { useTranslation } from 'react-i18next';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Slider } from '@/shared/ui/slider';
@@ -35,6 +36,7 @@ export function NumberField({
   requiredHint,
   layout,
 }: NumberFieldProps) {
+  const { t } = useTranslation('sharedComponents');
   const { id, format } = normalizeLayout(layout, label);
   let kind = pickLayoutId(id, NUMBER_LAYOUTS, 'input', label);
 
@@ -90,7 +92,7 @@ export function NumberField({
           <Button
             variant="outline"
             size="icon"
-            aria-label={`Decrease ${label}`}
+            aria-label={t('attributeFields.decrease', { label })}
             disabled={attribute.min != null && num !== undefined && num <= attribute.min}
             onClick={() => onChange((num ?? attribute.min ?? 0) - 1)}
           >
@@ -100,7 +102,7 @@ export function NumberField({
           <Button
             variant="outline"
             size="icon"
-            aria-label={`Increase ${label}`}
+            aria-label={t('attributeFields.increase', { label })}
             disabled={attribute.max != null && num !== undefined && num >= attribute.max}
             onClick={() => onChange((num ?? attribute.min ?? 0) + 1)}
           >

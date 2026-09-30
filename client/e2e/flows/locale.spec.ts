@@ -196,3 +196,39 @@ test('sport names render in Vietnamese under a stored vi locale', async ({ page 
   await expect(dialog.getByText('Cầu lông').first()).toBeAttached();
   await expect(dialog.getByText('Badminton')).toHaveCount(0);
 });
+
+/**
+ * CLIENT-I18N-12: the shared LocationPicker (opened from Create Session's favorites dropdown) and
+ * the dialog close button render translated under a stored `vi` locale — neither had a
+ * translation hook before this ticket.
+ */
+test('LocationPicker renders Vietnamese copy under a stored vi locale', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
+  });
+
+  await page.goto('/login');
+  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
+  await page.getByRole('button', { name: 'Đăng nhập' }).click();
+  await page.waitForURL('/');
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Chơi', exact: true }).click();
+  await page.getByRole('button', { name: 'Tạo buổi chơi', exact: true }).click();
+  const createDialog = page.getByRole('dialog', { name: 'Tạo buổi chơi của bạn' });
+  await createDialog.locator('select').first().selectOption('pickleball');
+
+  await createDialog.getByRole('button', { name: 'Chọn địa điểm' }).click();
+  await page.getByRole('menuitem', { name: 'Chọn một địa điểm…' }).click();
+
+  const locationDialog = page.getByRole('dialog', { name: 'Chọn địa điểm' });
+  await expect(locationDialog.getByLabel('Tìm địa điểm')).toBeVisible();
+  await expect(locationDialog.getByRole('button', { name: 'Tìm', exact: true })).toBeVisible();
+  await expect(locationDialog.getByRole('button', { name: 'Đóng' })).toBeVisible();
+
+  await locationDialog.getByRole('button', { name: 'Không tìm thấy? Thêm địa điểm mới' }).click();
+  const addDialog = page.getByRole('dialog', { name: 'Thêm địa điểm mới' });
+  await expect(addDialog.getByRole('button', { name: /Quay lại tìm kiếm/ })).toBeVisible();
+  await expect(addDialog.getByLabel('Dán liên kết chia sẻ')).toBeVisible();
+  await expect(addDialog.getByRole('button', { name: 'Lưu & dùng địa điểm này' })).toBeVisible();
+});

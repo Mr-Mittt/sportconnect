@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import i18next from 'i18next';
+import { useTranslation } from 'react-i18next';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import type {
   ResolvedAttributeLayout,
@@ -45,6 +47,7 @@ export function DefinitionListField({
   definitionsByName,
   layout,
 }: DefinitionListFieldProps) {
+  const { t } = useTranslation('sharedComponents');
   const normalized = normalizeLayout(layout, label);
   let kind = pickLayoutId(
     normalized.id,
@@ -81,17 +84,17 @@ export function DefinitionListField({
       className="self-start"
     >
       <IconPlus className="size-4" aria-hidden="true" />
-      Add
+      {t('attributeFields.add')}
     </Button>
   );
   const capNote = atCap ? (
-    <p className="text-2xs text-text-muted">{MAX_LIST_ITEMS} items (maximum)</p>
+    <p className="text-2xs text-text-muted">{t('attributeFields.maxItems', { count: MAX_LIST_ITEMS })}</p>
   ) : null;
   const addModal = (
     <AddDefinitionRecordModal
       open={addModalOpen}
       onOpenChange={setAddModalOpen}
-      title={`Add — ${label}`}
+      title={t('attributeFields.addTitle', { label })}
       definitionType={definitionType}
       definitionsByName={definitionsByName}
       onSubmit={(record) => onChange([...rows, record])}
@@ -117,7 +120,7 @@ export function DefinitionListField({
                     </th>
                   ))}
                   <th className="p-2">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t('attributeFields.actions')}</span>
                   </th>
                 </tr>
               </thead>
@@ -140,7 +143,7 @@ export function DefinitionListField({
                     <td className="p-2 text-right">
                       <button
                         type="button"
-                        aria-label={`Remove item ${index + 1}`}
+                        aria-label={t('attributeFields.removeItem', { index: index + 1 })}
                         onClick={() => removeRow(index)}
                         className="cursor-pointer rounded p-0.5 text-text-secondary hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                       >
@@ -178,7 +181,7 @@ export function DefinitionListField({
                   </CollapsibleTrigger>
                   <button
                     type="button"
-                    aria-label={`Remove item ${index + 1}`}
+                    aria-label={t('attributeFields.removeItem', { index: index + 1 })}
                     onClick={() => removeRow(index)}
                     className="cursor-pointer rounded p-0.5 text-text-secondary hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                   >
@@ -219,10 +222,10 @@ export function DefinitionListField({
               className="border-hairline flex flex-col gap-3 rounded-lg border-border p-3"
             >
               <div className="flex items-center justify-between">
-                <span className="text-2xs font-medium text-text-secondary">Item {index + 1}</span>
+                <span className="text-2xs font-medium text-text-secondary">{i18next.t('enums:attributeValues.item', { index: index + 1 })}</span>
                 <button
                   type="button"
-                  aria-label={`Remove item ${index + 1}`}
+                  aria-label={t('attributeFields.removeItem', { index: index + 1 })}
                   onClick={() => removeRow(index)}
                   className="cursor-pointer rounded p-0.5 text-text-secondary hover:text-text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
                 >

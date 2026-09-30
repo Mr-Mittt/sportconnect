@@ -1,4 +1,5 @@
 import { IconChevronDown, IconChevronUp } from '@tabler/icons-react';
+import { useTranslation } from 'react-i18next';
 import type { ResolvedAttributeLayout, ResolvedSportAttributeOption } from '@/shared/types/sport';
 import { MAX_LIST_ITEMS } from '@/shared/types/sport';
 import { cn } from '@/shared/lib/utils';
@@ -27,6 +28,7 @@ const LIST_LAYOUTS = ['checkboxes', 'chips', 'multiselect', 'ordered'] as const;
  * to the pre-SPORT-14 markup.
  */
 export function ListField({ fieldId, label, options, selected, onChange, layout }: ListFieldProps) {
+  const { t } = useTranslation('sharedComponents');
   const kind = pickLayoutId(normalizeLayout(layout, label).id, LIST_LAYOUTS, 'checkboxes', label);
   const atCap = selected.length >= MAX_LIST_ITEMS;
 
@@ -120,12 +122,12 @@ export function ListField({ fieldId, label, options, selected, onChange, layout 
                 type="checkbox"
                 checked
                 onChange={() => toggle(value, false)}
-                aria-label={`${labelFor(value)} (selected, position ${index + 1})`}
+                aria-label={t('attributeFields.selectedPosition', { label: labelFor(value), index: index + 1 })}
               />
               <span className="flex-1">{labelFor(value)}</span>
               <button
                 type="button"
-                aria-label={`Move ${labelFor(value)} up`}
+                aria-label={t('attributeFields.moveUp', { label: labelFor(value) })}
                 disabled={index === 0}
                 onClick={() => move(index, -1)}
                 className="cursor-pointer rounded p-0.5 text-text-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-not-allowed disabled:opacity-30"
@@ -134,7 +136,7 @@ export function ListField({ fieldId, label, options, selected, onChange, layout 
               </button>
               <button
                 type="button"
-                aria-label={`Move ${labelFor(value)} down`}
+                aria-label={t('attributeFields.moveDown', { label: labelFor(value) })}
                 disabled={index === selected.length - 1}
                 onClick={() => move(index, 1)}
                 className="cursor-pointer rounded p-0.5 text-text-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-not-allowed disabled:opacity-30"

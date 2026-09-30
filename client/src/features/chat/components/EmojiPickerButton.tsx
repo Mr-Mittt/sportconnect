@@ -1,6 +1,7 @@
 import { IconMoodSmile } from '@tabler/icons-react';
 import EmojiPicker, { Theme, type EmojiClickData } from 'emoji-picker-react';
 import type { RefObject } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 
 export interface EmojiPickerButtonProps {
@@ -33,6 +34,7 @@ export function EmojiPickerButton({
   onInsert,
   disabled,
 }: EmojiPickerButtonProps) {
+  const { t } = useTranslation('common');
   const insertEmoji = (emoji: string) => {
     const node = textareaRef.current;
     const start = node?.selectionStart ?? value.length;
@@ -57,8 +59,8 @@ export function EmojiPickerButton({
         <button
           type="button"
           disabled={disabled}
-          aria-label="Add emoji"
-          title="Add emoji"
+          aria-label={t('addEmoji')}
+          title={t('addEmoji')}
           className="cursor-pointer rounded p-0.5 text-text-muted hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-60"
         >
           <IconMoodSmile className="size-4.5" aria-hidden="true" />

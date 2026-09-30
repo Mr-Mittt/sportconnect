@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ResolvedSportAttributeDefinitionType } from '@/shared/types/sport';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
@@ -36,6 +37,7 @@ export function AddDefinitionRecordModal({
   definitionsByName,
   onSubmit,
 }: AddDefinitionRecordModalProps) {
+  const { t } = useTranslation('sharedComponents');
   const [draftRecord, setDraftRecord] = useState<Record<string, unknown>>({});
   // Reset the draft the moment `open` flips to `true` — adjusted during render (React's
   // documented pattern for "reset state when a prop changes"), not in an effect, so there is no
@@ -65,10 +67,10 @@ export function AddDefinitionRecordModal({
           />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('attributeFields.cancel')}
             </Button>
             <Button type="button" size="sm" onClick={commit}>
-              Add
+              {t('attributeFields.add')}
             </Button>
           </div>
         </div>

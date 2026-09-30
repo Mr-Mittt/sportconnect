@@ -32,5 +32,8 @@
   "sport": {
     "badminton": "Cầu lông",
     "pickleball": "Pickleball"
-  }
+  },
+  "close": "Đóng",
+  "editProfile": "Chỉnh sửa hồ sơ",
+  "addEmoji": "Thêm biểu tượng cảm xúc"
 }
