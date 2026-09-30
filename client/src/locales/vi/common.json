@@ -28,5 +28,9 @@
     "one": "{{name}} đang nhập…",
     "two": "{{first}} và {{second}} đang nhập…",
     "many": "{{count}} người đang nhập…"
+  },
+  "sport": {
+    "badminton": "Cầu lông",
+    "pickleball": "Pickleball"
   }
 }

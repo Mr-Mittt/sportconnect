@@ -174,3 +174,25 @@ test('Matches page renders Vietnamese copy under a stored vi locale', async ({ p
   await dialog.getByRole('button', { name: 'Tạo buổi chơi', exact: true }).click();
   await expect(dialog.getByText('Vui lòng nhập tên buổi chơi.')).toBeVisible();
 });
+
+/**
+ * CLIENT-I18N-11: sport names come from `common:sport.*` (via `getSportLabel`), not the hardcoded
+ * English label — the Create Session sport picker shows the Vietnamese name for Badminton.
+ */
+test('sport names render in Vietnamese under a stored vi locale', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
+  });
+
+  await page.goto('/login');
+  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
+  await page.getByRole('button', { name: 'Đăng nhập' }).click();
+  await page.waitForURL('/');
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Chơi', exact: true }).click();
+  await page.getByRole('button', { name: 'Tạo buổi chơi', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Tạo buổi chơi của bạn' });
+  await expect(dialog.getByText('Cầu lông').first()).toBeAttached();
+  await expect(dialog.getByText('Badminton')).toHaveCount(0);
+});

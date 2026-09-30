@@ -28,5 +28,9 @@
     "one": "{{name}} is typing…",
     "two": "{{first}} and {{second}} are typing…",
     "many": "{{count}} people are typing…"
+  },
+  "sport": {
+    "badminton": "Badminton",
+    "pickleball": "Pickleball"
   }
 }

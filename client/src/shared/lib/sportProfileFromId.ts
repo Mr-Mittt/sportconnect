@@ -1,5 +1,5 @@
 import { sportIconUrlForId, sportKeyForId } from '@/features/feed/sportIdMap';
-import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
+import { getSportLabel, getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
 import type { SportProfile } from '@/shared/types/sport';
 
 /**
@@ -24,4 +24,12 @@ export function sportProfileForId(sportId: number): SportProfile | undefined {
     return undefined;
   }
   return { key, ...getSportProfileConfig(key), iconUrl: sportIconUrlForId(sportId) };
+}
+
+/** CLIENT-I18N-11: localized name for a backend `{ sportId, sportName }` pair — resolves the id
+ * through the live catalog to a key for `getSportLabel`, keeping the backend `sportName` as the
+ * fallback when the catalog hasn't loaded or doesn't know the sport. */
+export function getSportLabelForId(sportId: number | null, fallbackName: string): string {
+  const key = sportKeyForId(sportId);
+  return key === undefined ? fallbackName : getSportLabel(key, fallbackName);
 }

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { sportProfileForId } from '@/shared/lib/sportProfileFromId';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -30,6 +31,8 @@ export function useResumableSports(): {
   isError: boolean;
 } {
   const query = useRawMySportProfiles({ includeInactive: true });
+  const { i18n } = useTranslation();
+  const language = i18n.language;
 
   const { resumableProfiles, inactiveSports } = useMemo(() => {
     const rows = query.data ?? [];
@@ -48,9 +51,10 @@ export function useResumableSports(): {
       });
       sports.push(mapped);
     }
-    sports.sort((a, b) => a.label.localeCompare(b.label));
+    sports.sort((a, b) => a.label.localeCompare(b.label, language));
     return { resumableProfiles: profiles, inactiveSports: sports };
-  }, [query.data]);
+    // `i18n.language`: the mapped `label` (and so the sort) is locale-dependent (CLIENT-I18N-11).
+  }, [query.data, language]);
 
   return {
     resumableProfiles,

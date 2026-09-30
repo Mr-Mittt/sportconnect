@@ -1,3 +1,4 @@
+import i18next from 'i18next';
 import type { SportKey } from '@/shared/types/sport';
 
 /**
@@ -20,10 +21,14 @@ import type { SportKey } from '@/shared/types/sport';
  * e.g. Badminton's `'ball-tennis'`) — `SportProfile.iconUrl` now comes from
  * the live catalog's real backend-served icon instead of a hand-picked
  * approximation here.
+ *
+ * CLIENT-I18N-11: `label` is no longer hardcoded English — it is resolved per call
+ * through `getSportLabel` (`common:sport.*`), so anything memoizing a `SportProfile`
+ * must depend on `i18n.language`.
  */
-const SPORT_PROFILE_CONFIG: Record<SportKey, { label: string; colorRamp: string }> = {
-  badminton: { label: 'Badminton', colorRamp: 'teal' },
-  pickleball: { label: 'Pickleball', colorRamp: 'coral' },
+const SPORT_PROFILE_CONFIG: Record<SportKey, { colorRamp: string }> = {
+  badminton: { colorRamp: 'teal' },
+  pickleball: { colorRamp: 'coral' },
 };
 
 /** Generic fallback for any catalog sport with no bespoke entry above yet —
@@ -31,11 +36,23 @@ const SPORT_PROFILE_CONFIG: Record<SportKey, { label: string; colorRamp: string 
  * Title-cases the raw key as a readable label rather than showing it
  * verbatim. Neutral ramp, never blue/green/amber/red (reserved for semantic
  * meaning app-wide, per client/CLAUDE.md). */
-function fallbackSportProfileConfig(key: SportKey): { label: string; colorRamp: string } {
-  return {
-    label: key.charAt(0).toUpperCase() + key.slice(1),
-    colorRamp: 'gray',
-  };
+function fallbackSportProfileConfig(): { colorRamp: string } {
+  return { colorRamp: 'gray' };
+}
+
+/** CLIENT-I18N-11: the localized display name for a sport. Resolves
+ * `common:sport.<key>` against the i18next singleton (plain function, same
+ * pattern as `relativeTime.ts`, so it follows the active language), then falls
+ * back to the backend-provided `fallbackName`, then to the title-cased key —
+ * `SportKey` is a live-derived `string`, so a catalog sport with no locale
+ * entry yet is a real case. Callers holding only a backend `sportName` should
+ * pass it as the fallback. */
+export function getSportLabel(key: SportKey, fallbackName?: string): string {
+  const i18nKey = `common:sport.${key}`;
+  if (i18next.exists(i18nKey)) {
+    return i18next.t(i18nKey);
+  }
+  return fallbackName ?? key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 /** Looks up a sport's label/colorRamp, falling back to a generic entry
@@ -43,5 +60,5 @@ function fallbackSportProfileConfig(key: SportKey): { label: string; colorRamp: 
  * can return, not just the ones with a bespoke entry above. Use this instead
  * of indexing `SPORT_PROFILE_CONFIG` directly. */
 export function getSportProfileConfig(key: SportKey): { label: string; colorRamp: string } {
-  return SPORT_PROFILE_CONFIG[key] ?? fallbackSportProfileConfig(key);
+  return { label: getSportLabel(key), ...(SPORT_PROFILE_CONFIG[key] ?? fallbackSportProfileConfig()) };
 }

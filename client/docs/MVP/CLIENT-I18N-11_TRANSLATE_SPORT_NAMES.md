@@ -1,6 +1,6 @@
 # CLIENT-I18N-11 · Translate sport names (`common` `sport.*` keys)
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-09-30)
 **Type:** Enhancement
 **Depends on:** CLIENT-I18N-6 (merged — its `SportProfileSettingsTab`/`SportProfileStatusConfirmDialog` interpolate `sportName`)
 **Filed:** 2026-09-29, requested by the user right after CLIENT-I18N-6's close-out.
@@ -42,3 +42,39 @@ types (`feed/types.ts`, `shared/types/{sport,session,location}.ts`). Grep `sport
 
 **Out of scope:** backend sport-name localization (I18N-4); sport attribute-schema labels (server-resolved, A13);
 the language picker.
+
+## Scope check at pickup (2026-09-30)
+
+User confirmed nothing to add or remove.
+
+## Implementation summary (2026-09-30)
+
+**Approved design (restated):** add a `sport` block to `common` (en + vi), a plain `getSportLabel(key, fallbackName?)` reading the i18next
+singleton, and fold `getSportProfileConfig(key).label` into it, keeping `colorRamp`; update every display site.
+
+**Built:**
+- `locales/{en,vi}/common.json`: `sport.badminton` (Badminton / Cầu lông), `sport.pickleball` (Pickleball / Pickleball). Parity is covered by the existing `i18n.test.ts` `common` entry.
+- `shared/lib/sportProfileConfig.ts`: `SPORT_PROFILE_CONFIG` now holds only `colorRamp`; new `getSportLabel` (`i18next.exists` → translated; else backend `fallbackName`; else title-cased key);
+  `getSportProfileConfig` composes `{ label: getSportLabel(key), colorRamp }`, so its ~6 callers (`AddSportFields`, `GroupsPage` ×2, `useInactiveSportPillSelect`, `sportProfileFromId`, `useGroupBroadcasts` colorRamp only) needed **no edit**.
+- `shared/lib/sportProfileFromId.ts`: new `getSportLabelForId(sportId, sportName)` — resolves the id through the live catalog to a key, keeping the backend `sportName` as the fallback. Used where a display name arrives **from the backend** rather than from a `SportProfile`:
+  `SessionCard` and `SessionDetailModal` (`card.defaultTitle`), `ProfilePage` (status-confirm dialog, resolved at render from the stored `sportId`) and `SportProfileSettingsTab` (`ActiveToggleRow`).
+- Memoized `SportProfile` mappings cache a locale-dependent `label`, so `useSportProfiles`, `useResumableSports` (its sort now also uses `localeCompare(…, language)`) and `useFriendsPageData`'s `selectedSports` depend on `i18n.language`
+  (an `eslint-disable` with reason on the two where the language is read implicitly through the singleton).
+- Every `sport.label` render site (`SportSwitcher`, `PostCard`, `CommentSection`, `CreateGroupModal`, `JoinGroupModal`, `FriendProfilePanel`, `CreateSessionModal`, `DiscoverModalSportSearchBox`, `SessionDetailModal` aria-label) reads a `SportProfile`, so it follows for free.
+
+**Consumer census:** `getSportProfileConfig().label` — all callers **compatible as-is** (English output identical; `vi` now translated). `e2e/` locators for "Badminton"/"Pickleball" all run under the default `en` locale → **compatible as-is**; the 66-test scoped run confirms.
+Backend `sportName` (`Session`, `UserSportProfileResponse`, `location.ts`) is unchanged and now a fallback only. No I18N-4 census row — client-side key lookup, not backend localization.
+
+**Divergences from the ticket text:** none in design. The ticket's site list was a pre-filing grep; the real set was smaller than feared because most sites read `SportProfile.label`, which the config change covers centrally.
+`useGroupBroadcasts` and `GroupsPage`'s `getSportProfileConfig(...).label` needed no edit.
+
+**Not translated (by design):** attribute-schema labels (server-resolved, A13); sport names embedded in user-authored text; the language picker.
+
+**Tests:** new `shared/lib/sportLabelI18n.test.ts` (4: English identical, vi translation + colorRamp, unknown-sport fallback chain, id-based resolution); one new e2e in `locale.spec.ts` (Create Session shows `Cầu lông`, no `Badminton`).
+
+**Verification:** `tsc -b` clean; ESLint 0 errors/0 warnings on `shared`, `features/profile`, `features/friends`. Scoped Vitest (`shared`, `features/profile|friends|groups|session`, `app`) **161 files / 1364 passed**.
+**E2E:** `e2e` project — `locale`, `matches-journey`, `profile-journey`, `feed-groups-journey`, `a11y`, `home-feed-journey`, `group-invitations` **66 passed**; the full `pnpm e2e` suite was not run (scoped subset, by standing instruction).
+**Visual-regression expectation:** no baselined surface changes — English rendering is byte-identical, so any failing `visual-regression` run on this Windows host is the noise floor, not a regression. Not run this ticket (no visual change; the stash-and-rerun proof was done in I18N-10).
+**Browser check:** the `vi` Playwright test drives the real built page (MSW); no real-backend run — no endpoint, DTO or contract changed.
+
+**IT changes:** none — client-only ticket.
