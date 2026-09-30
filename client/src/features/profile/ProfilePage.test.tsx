@@ -227,6 +227,43 @@ describe('ProfilePage', () => {
     await waitFor(() => expect(screen.getByLabelText('Skill level')).toHaveValue('beginner'));
   });
 
+  describe('PROFILE-12: header placeholder', () => {
+    function mockProfileFailingWith(usersMe: () => Promise<unknown>) {
+      return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+        if (url === '/users/me') return usersMe() as never;
+        const staticResponse = staticGetResponse(url, [footballProfile, basketballProfile]);
+        if (staticResponse) return staticResponse;
+        if (url === '/posts/mine') return apiResponse({ ...emptyPage().data.data, content: [] });
+        throw new Error(`unexpected GET ${url}`);
+      });
+    }
+
+    it('renders the placeholder (session name, no Edit button) while the profile query is loading', () => {
+      mockProfileFailingWith(() => new Promise(() => {}));
+      render(<ProfilePage />, { wrapper });
+
+      const placeholder = screen.getByTestId('profile-header-placeholder');
+      expect(placeholder).toHaveTextContent(`${testUser.firstName} ${testUser.lastName}`);
+      expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument();
+    });
+
+    it('renders the same placeholder when the profile query errors', async () => {
+      mockProfileFailingWith(() => Promise.reject(new Error('boom')));
+      render(<ProfilePage />, { wrapper });
+
+      await waitFor(() => expect(screen.getByTestId('profile-header-placeholder')).toBeInTheDocument());
+      expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument();
+    });
+
+    it('swaps to the real header once the profile resolves', async () => {
+      mockProfileGet([]);
+      render(<ProfilePage />, { wrapper });
+
+      expect(await screen.findByRole('button', { name: 'Edit profile' })).toBeInTheDocument();
+      expect(screen.queryByTestId('profile-header-placeholder')).not.toBeInTheDocument();
+    });
+  });
+
   it('propagates a SportSwitcher change to both Posts and Settings', async () => {
     const user = userEvent.setup();
     mockProfileGet([
@@ -254,6 +291,40 @@ describe('ProfilePage', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Add a sport' });
     expect(within(dialog).getByText(/add a sport first/i)).toBeInTheDocument();
+  });
+
+  it('PROFILE-12: does not auto-open Add sport while the sport profiles are still loading', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/sports/profiles') return new Promise(() => {}) as never;
+      const staticResponse = staticGetResponse(url, [footballProfile]);
+      if (staticResponse) return staticResponse;
+      if (url === '/posts/mine') return apiResponse({ ...emptyPage().data.data, content: [] });
+      throw new Error(`unexpected GET ${url}`);
+    });
+    render(<ProfilePage />, { wrapper });
+
+    // Give the (empty-list) effect every chance to fire, then assert it did not.
+    await screen.findByTestId('profile-header-placeholder');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('dialog', { name: 'Add a sport' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add sport' })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('PROFILE-12: does not auto-open Add sport when the sport profiles fail to load', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/sports/profiles') throw new Error('boom');
+      const staticResponse = staticGetResponse(url, [footballProfile]);
+      if (staticResponse) return staticResponse;
+      if (url === '/posts/mine') return apiResponse({ ...emptyPage().data.data, content: [] });
+      throw new Error(`unexpected GET ${url}`);
+    });
+    render(<ProfilePage />, { wrapper });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add sport' })).toHaveAttribute('aria-disabled', 'true'),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('dialog', { name: 'Add a sport' })).not.toBeInTheDocument();
   });
 
   it('does not open the Add sport modal when the caller already has a sport profile', async () => {

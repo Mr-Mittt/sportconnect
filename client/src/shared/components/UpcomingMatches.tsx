@@ -24,6 +24,9 @@ interface UpcomingMatchesProps {
    * `onSeeAll` reused) so each can point somewhere more specific than the populated list does. */
   onCreateMatch: () => void;
   onJoinMatch: () => void;
+  /** PROFILE-12: false while the caller's sport profiles are loading or failed — Join/Create are
+   * disabled so they can't run the zero-sport gate against an unknown list. Defaults to true. */
+  isSportsReady?: boolean;
   /** CLIENT-SESSION-9: the card's single participation action (Join/Accept/Cancel/Leave), same
    * derivation and same "Decline stays modal-only" scoping as `SessionCard`'s own prop. */
   onParticipationAction: (sessionId: number, kind: ParticipationActionKind) => void;
@@ -69,6 +72,7 @@ export function UpcomingMatches({
   onViewDetails,
   onCreateMatch,
   onJoinMatch,
+  isSportsReady = true,
   onParticipationAction,
   isParticipationActionPending,
   maxVisible = 4,
@@ -101,10 +105,10 @@ export function UpcomingMatches({
         <div className="flex flex-col items-center gap-2 py-2">
           <p className="text-xs text-text-muted">{t('upcomingMatches.empty')}</p>
           <div className="flex w-full gap-2">
-            <Button variant="primary" size="sm" className="flex-1" onClick={onJoinMatch}>
+            <Button variant="primary" size="sm" className="flex-1" onClick={onJoinMatch} disabled={!isSportsReady}>
               {t('upcomingMatches.join')}
             </Button>
-            <Button variant="outline" size="sm" className="flex-1" onClick={onCreateMatch}>
+            <Button variant="outline" size="sm" className="flex-1" onClick={onCreateMatch} disabled={!isSportsReady}>
               {t('upcomingMatches.create')}
             </Button>
           </div>

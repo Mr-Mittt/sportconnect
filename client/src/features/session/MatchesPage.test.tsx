@@ -348,6 +348,26 @@ describe('MatchesPage', () => {
     expect(within(dialog).getByText(/add a sport first/i)).toBeInTheDocument();
   });
 
+  it('PROFILE-12: does not auto-open Add sport when the sport profiles fail to load', async () => {
+    const spy = mockGet({});
+    const original = spy.getMockImplementation() as (url: string, config?: unknown) => Promise<unknown>;
+    let profilesRequested = false;
+    spy.mockImplementation((async (url: string, config?: unknown) => {
+      if (url === '/sports/profiles') {
+        profilesRequested = true;
+        throw new Error('boom');
+      }
+      return original(url, config);
+    }) as never);
+    render(<MatchesPage />, { wrapper: wrapperFor('/matches') });
+
+    await waitFor(() => expect(profilesRequested).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('dialog', { name: 'Add a sport' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add sport' })).toHaveAttribute('aria-disabled', 'true');
+expect(screen.getByRole('button', { name: 'Create session' })).toBeDisabled();
+  });
+
   it('does not open the Add sport modal when the caller already has a sport profile', async () => {
     mockGet({ upcomingSessions: [session()] });
     render(<MatchesPage />, { wrapper: wrapperFor('/matches') });

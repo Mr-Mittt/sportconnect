@@ -202,4 +202,23 @@ describe('SportSwitcher', () => {
     // A second click must not fire a second re-read.
     expect(onAddSport).not.toHaveBeenCalled();
   });
+
+  it('PROFILE-12: isDisabled makes the Add sport pill aria-disabled and swallows the click', async () => {
+    const user = userEvent.setup();
+    const onAddSport = vi.fn();
+    render(
+      <SportSwitcher
+        sports={threeSports}
+        active="all"
+        onChange={() => {}}
+        onAddSport={onAddSport}
+        isDisabled
+      />,
+    );
+
+    const addPill = screen.getByRole('button', { name: 'Add sport' });
+    expect(addPill).toHaveAttribute('aria-disabled', 'true');
+    await user.click(addPill);
+    expect(onAddSport).not.toHaveBeenCalled();
+  });
 });

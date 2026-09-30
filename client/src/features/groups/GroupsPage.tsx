@@ -371,7 +371,7 @@ export function GroupsPage() {
     if (
       hasAutoPromptedAddSportRef.current ||
       hasEngagedInvitationSportGateRef.current ||
-      sportProfilesQuery.isLoading ||
+      !sportProfilesQuery.isReady ||
       sportProfilesQuery.data.length > 0 ||
       groupInvitationsData.isLoading ||
       groupInvitationsData.invitations.length > 0
@@ -383,7 +383,7 @@ export function GroupsPage() {
     setAddSportOpenCount((count) => count + 1);
     setIsAddSportOpen(true);
   }, [
-    sportProfilesQuery.isLoading,
+    sportProfilesQuery.isReady,
     sportProfilesQuery.data.length,
     groupInvitationsData.isLoading,
     groupInvitationsData.invitations.length,
@@ -560,6 +560,7 @@ export function GroupsPage() {
             maxSports={sportCatalog.data.length || undefined}
             isCheckingCatalog={addSportLauncher.isCheckingCatalog}
             onAddSport={addSportLauncher.launch}
+            isDisabled={!sportProfilesQuery.isReady}
             inactiveSports={inactiveSports}
             onInactiveSelect={inactiveSportPill.onInactiveSelect}
           />
@@ -756,6 +757,7 @@ export function GroupsPage() {
               onViewDetails={discoverModalData.onViewDetails}
               onCreateMatch={createSessionModalData.openCreateModal}
               onJoinMatch={discoverModalData.openDiscoverModal}
+              isSportsReady={sportProfilesQuery.isReady}
               onParticipationAction={railParticipationAction.onParticipationAction}
               isParticipationActionPending={railParticipationAction.isParticipationActionPending}
             />

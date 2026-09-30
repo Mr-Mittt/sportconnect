@@ -93,7 +93,7 @@ export function MatchesPage() {
   useEffect(() => {
     if (
       hasAutoPromptedAddSportRef.current ||
-      sportProfilesQuery.isLoading ||
+      !sportProfilesQuery.isReady ||
       sportProfilesQuery.data.length > 0
     ) {
       return;
@@ -101,7 +101,7 @@ export function MatchesPage() {
     hasAutoPromptedAddSportRef.current = true;
     setAddSportPromptMessage(getPageAccessNoSportsPrompt());
     setIsAddSportOpen(true);
-  }, [sportProfilesQuery.isLoading, sportProfilesQuery.data.length]);
+  }, [sportProfilesQuery.isReady, sportProfilesQuery.data.length]);
 
   const closeDetail = () => {
     data.closeDetail();
@@ -134,6 +134,7 @@ export function MatchesPage() {
           maxSports={sportCatalog.data.length || undefined}
           isCheckingCatalog={addSportLauncher.isCheckingCatalog}
           onAddSport={addSportLauncher.launch}
+          isDisabled={!sportProfilesQuery.isReady}
           showAllPill={false}
           inactiveSports={inactiveSports}
           onInactiveSelect={inactiveSportPill.onInactiveSelect}
@@ -142,7 +143,8 @@ export function MatchesPage() {
         <button
           type="button"
           onClick={data.openCreateModal}
-          className="border-hairline flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-dashed border-border-strong bg-surface-2 px-3 py-1.75 text-2sm text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+          disabled={!sportProfilesQuery.isReady}
+          className="border-hairline flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-dashed border-border-strong bg-surface-2 px-3 py-1.75 text-2sm text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default disabled:opacity-50"
         >
           <IconPlus className="size-4" aria-hidden="true" />
           {t('matches.createSession')}

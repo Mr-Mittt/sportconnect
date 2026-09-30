@@ -1,18 +1,9 @@
 import { IconPencil } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
+import { initialsFor } from '@/shared/lib/initialsFor';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import type { UserResponse } from '@/features/profile/types';
-
-function initialsFor(fullName: string): string {
-  return fullName
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-}
 
 interface ProfileHeaderProps {
   user: UserResponse;

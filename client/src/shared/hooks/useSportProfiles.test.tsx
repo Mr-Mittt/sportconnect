@@ -110,4 +110,28 @@ describe('useSportProfiles', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.data).toEqual([]);
   });
+
+  describe('isReady (PROFILE-12)', () => {
+    it('is false while loading, true once loaded (even when the list is empty)', async () => {
+      useAuthStore.setState({ user: mockUser, accessToken: 'token', isBootstrapping: false });
+      vi.spyOn(apiClient, 'get').mockResolvedValueOnce(apiResponse([]));
+
+      const { result } = renderHook(() => useSportProfiles(), { wrapper });
+
+      expect(result.current.isReady).toBe(false);
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.data).toEqual([]);
+    });
+
+    it('stays false after a failed load — data is [] there too, but "zero sports" is not known', async () => {
+      useAuthStore.setState({ user: mockUser, accessToken: 'token', isBootstrapping: false });
+      vi.spyOn(apiClient, 'get').mockRejectedValueOnce(new Error('boom'));
+
+      const { result } = renderHook(() => useSportProfiles(), { wrapper });
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+      expect(result.current.isReady).toBe(false);
+      expect(result.current.data).toEqual([]);
+    });
+  });
 });
