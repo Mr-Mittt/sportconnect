@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { sportProfileForId } from '@/shared/lib/sportProfileFromId';
 import type { SportProfile } from '@/shared/types/sport';
 import { useRawMySportProfiles } from './useRawMySportProfiles';
@@ -22,6 +23,7 @@ export function useSportProfiles(): {
   isError: boolean;
 } {
   const query = useRawMySportProfiles();
+  const { i18n } = useTranslation();
 
   const data = useMemo<SportProfile[]>(() => {
     return (query.data ?? []).reduce<SportProfile[]>((profiles, profile) => {
@@ -33,7 +35,8 @@ export function useSportProfiles(): {
       }
       return profiles;
     }, []);
-  }, [query.data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `label` is read from the i18next singleton, so the language is an implicit input
+  }, [query.data, i18n.language]);
 
   return { data, isLoading: query.isLoading, isError: query.isError };
 }

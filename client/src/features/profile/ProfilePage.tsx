@@ -29,6 +29,7 @@ import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { useUpcomingMatches } from '@/shared/hooks/useUpcomingMatches';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
 import { getPageAccessNoSportsPrompt } from '@/shared/lib/noSportsPrompt';
+import { getSportLabelForId } from '@/shared/lib/sportProfileFromId';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { MemoriesTab } from './components/MemoriesTab';
 import { PostsTab } from './components/PostsTab';
@@ -369,7 +370,11 @@ export function ProfilePage() {
           key={statusToggle ? `${statusToggle.mode}-${statusToggle.profileId}` : 'closed'}
           isOpen={statusToggle !== null}
           mode={statusToggle?.mode ?? 'deactivate'}
-          sportName={statusToggle?.sportName ?? ''}
+          sportName={
+            statusToggle !== null
+              ? getSportLabelForId(statusToggle.sportId, statusToggle.sportName)
+              : ''
+          }
           onClose={() => {
             deactivateSportProfile.reset();
             addSportMutation.reset();

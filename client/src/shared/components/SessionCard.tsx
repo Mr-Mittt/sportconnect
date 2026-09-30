@@ -10,6 +10,7 @@ import { formatSessionTimeRange } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Session } from '@/shared/types/session';
+import { getSportLabelForId } from '@/shared/lib/sportProfileFromId';
 import { SportIcon } from './SportIcon';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 
@@ -103,7 +104,7 @@ export function SessionCard({
   const s = SIZE_STYLES[size];
   const sportKey = sportKeyForId(session.sportId);
   const sport = sportKey !== undefined ? sportsByKey[sportKey] : undefined;
-  const title = session.title ?? t('card.defaultTitle', { sport: session.sportName });
+  const title = session.title ?? t('card.defaultTitle', { sport: getSportLabelForId(session.sportId, session.sportName) });
   const action = getParticipationAction(session);
   const isActionPending = isParticipationActionPending(session.id);
   const isLeaveHiddenForCreator = action?.kind === 'LEAVE' && session.createdBy === currentUserId;

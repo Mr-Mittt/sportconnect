@@ -1,5 +1,6 @@
 import { SKILL_LEVELS } from '@/shared/lib/skillLevels';
 import { useTranslation } from 'react-i18next';
+import { getSportLabelForId } from '@/shared/lib/sportProfileFromId';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
@@ -128,7 +129,7 @@ export function SportProfileSettingsTab({
       }}
     >
       <ActiveToggleRow
-        sportName={activeProfile.sportName}
+        sportName={getSportLabelForId(activeProfile.sportId, activeProfile.sportName)}
         isActive={isActive}
         onToggle={onToggleActive}
         isBusy={isTogglingActive}

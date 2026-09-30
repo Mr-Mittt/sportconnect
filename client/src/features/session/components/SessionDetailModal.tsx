@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import type { Comment } from '@/features/feed/types';
 import { SportIcon } from '@/shared/components/SportIcon';
+import { getSportLabelForId } from '@/shared/lib/sportProfileFromId';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { directionsUrl } from '@/shared/lib/mapsLinks';
 import { getRampBadgeClasses, getRampFillClass } from '@/shared/lib/rampStyles';
@@ -330,7 +331,7 @@ export function SessionDetailModal({
 
   const title = session === undefined
       ? t('detail.defaultTitle')
-      : (session.title ?? t('card.defaultTitle', { sport: session.sportName }));
+      : (session.title ?? t('card.defaultTitle', { sport: getSportLabelForId(session.sportId, session.sportName) }));
   const sportKey = session !== undefined ? sportKeyForId(session.sportId) : undefined;
   const sport = sportKey !== undefined ? sportsByKey[sportKey] : undefined;
 

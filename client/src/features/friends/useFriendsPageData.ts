@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/app/authStore';
 import { useFriendsPageStore } from '@/app/friendsPageStore';
 import { sportProfileForId } from '@/shared/lib/sportProfileFromId';
@@ -181,6 +182,7 @@ export function useFriendsPageData(
   // (not fetched yet, or deactivated app-wide) is dropped silently, same as
   // the old mapping. `activeSportIds` absent (a backend that predates U15) →
   // `[]`, so the pill row just renders nothing.
+  const { i18n } = useTranslation();
   const selectedSports = useMemo<SportProfile[]>(
     () =>
       (profileQuery.data?.activeSportIds ?? []).reduce<SportProfile[]>((sports, sportId) => {
@@ -190,7 +192,8 @@ export function useFriendsPageData(
         }
         return sports;
       }, []),
-    [profileQuery.data],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `label` is read from the i18next singleton, so the language is an implicit input
+    [profileQuery.data, i18n.language],
   );
   const selectedSearchResult = searchResults.find((result) => result.id === selectedPersonId);
 
