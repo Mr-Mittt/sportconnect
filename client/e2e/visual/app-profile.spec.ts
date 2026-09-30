@@ -87,7 +87,7 @@ for (const width of breakpoints) {
 
     await page.getByRole('button', { name: 'Edit profile' }).click();
     const dialog = page.getByRole('dialog', { name: 'Edit profile' });
-    await expect(dialog.getByLabel('First name')).toBeVisible();
+    await expect(dialog.getByLabel('Avatar URL')).toBeVisible();
     // CLIENT-SESSION-12: blur the autofocused field first — an open text
     // input's blinking caret is a real, reproducible flakiness source for
     // this kind of dialog-scoped screenshot.

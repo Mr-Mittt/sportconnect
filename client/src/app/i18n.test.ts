@@ -6,6 +6,7 @@ import groupsEn from '@/locales/en/groups.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
 import loginEn from '@/locales/en/login.json';
 import notificationsEn from '@/locales/en/notifications.json';
+import accountSettingsEn from '@/locales/en/accountSettings.json';
 import profileEn from '@/locales/en/profile.json';
 import profilePageEn from '@/locales/en/profilePage.json';
 import registerEn from '@/locales/en/register.json';
@@ -20,6 +21,7 @@ import groupsVi from '@/locales/vi/groups.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
 import loginVi from '@/locales/vi/login.json';
 import notificationsVi from '@/locales/vi/notifications.json';
+import accountSettingsVi from '@/locales/vi/accountSettings.json';
 import profileVi from '@/locales/vi/profile.json';
 import profilePageVi from '@/locales/vi/profilePage.json';
 import registerVi from '@/locales/vi/register.json';
@@ -51,6 +53,7 @@ function leafKeyPaths(bundle: unknown, prefix = ''): string[] {
 const namespacePairs: Record<string, [en: unknown, vi: unknown]> = {
   common: [commonEn, commonVi],
   register: [registerEn, registerVi],
+  accountSettings: [accountSettingsEn, accountSettingsVi],
   profile: [profileEn, profileVi],
   profilePage: [profilePageEn, profilePageVi],
   login: [loginEn, loginVi],

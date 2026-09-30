@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [U19](MVP/U19_REMOVE_CITY_FIELD.md) | Remove `city` field entirely from the backend — superseded by Region (U16), found during CLIENT-REF-3 pickup | `TODO` |
+| 2 | [U20](MVP/U20_GENDER_AS_VALIDATED_ENUM.md) | Make `gender` a validated enum (`MALE` / `FEMALE`) — server currently stores free text; found during ACCOUNT-1 | `TODO` |
 
 ---
 

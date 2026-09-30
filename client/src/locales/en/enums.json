@@ -1,4 +1,9 @@
 {
+  "gender": {
+    "unspecified": "Not specified",
+    "MALE": "Male",
+    "FEMALE": "Female"
+  },
   "sessionStatus": {
     "SCHEDULED": "Scheduled",
     "ONGOING": "Ongoing",

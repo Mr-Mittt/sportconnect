@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { digitsOnlyInputProps } from '@/shared/lib/inputGuards';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
@@ -114,6 +115,7 @@ export function SportFieldsForm({
             <Input
               id="sport-min-players"
               type="number"
+              {...digitsOnlyInputProps}
               min={1}
               value={draft.minPlayers}
               onChange={(event) => set('minPlayers', event.target.value)}
@@ -124,6 +126,7 @@ export function SportFieldsForm({
             <Input
               id="sport-max-players"
               type="number"
+              {...digitsOnlyInputProps}
               min={1}
               value={draft.maxPlayers}
               onChange={(event) => set('maxPlayers', event.target.value)}

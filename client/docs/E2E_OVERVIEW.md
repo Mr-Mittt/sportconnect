@@ -408,7 +408,7 @@ helpers called.
 | `Escape closes only the open Time/Location popover, then a second Escape closes the "Join a match" modal` | Selects the Badminton pill → "Join a match" → Time → asserts the popover's Before button is visible → **Escape** → popover gone **and dialog still visible** → same for the Location filter (search input) → a third Escape (no popover open) closes the dialog | **CLIENT-SESSION-27 (2026-09-24).** Radix `react-dialog`/`react-menu` resolved `react-dismissable-layer` 1.1.15 while `react-popover` resolved 1.1.19; the layer stack is a module-level context, so two copies = two independent stacks, each layer thought it was the highest and both answered the same Escape. Fixed by `pnpm.overrides` in `client/package.json` pinning one copy — a dependency-graph regression, no component code changed. Verified to **fail without the fix** (dialog gone after the first Escape) |
 | `every "Join a match" filter popover stays inside the dialog @ 375px` / `@ 320px` (one `test()` per width) | Sets the viewport → Badminton pill → "Join a match" → for each of Time / Location / Status / Fee: opens the popover, `expect.poll`s until its bounding box lies within the dialog's box (±0.5px), then closes it with Escape and asserts the dialog is still open | **CLIENT-SESSION-32 (2026-09-24).** `DialogContent` is `overflow-hidden` and a nested popover portals into it (CLIENT-SESSION-29), but Radix Popper collided against the viewport only, so at 375px the Location popover (`w-72`) fit the viewport yet ran 16px past the 343px dialog and was clipped. Fixed at the shared `PopoverContent` (`collisionBoundary` = the dialog's Content node, `collisionPadding` 8, `max-w-[var(--radix-popover-content-available-width)]`). 320px additionally exercises the `max-w` cap (there `w-72` exceeds the whole 288px dialog; Time's `w-auto` popover already overhung). Verified to **fail without the fix** at both widths. jsdom has no layout — real-browser only |
 
-### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + GRP-3 + FRIEND-1 + PROFILE-7, several independent `test()`s)
+### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + GRP-3 + FRIEND-1 + PROFILE-7 + ACCOUNT-1, several independent `test()`s)
 
 | Test(s) | What it checks | Notes |
 |---|---|---|
@@ -421,6 +421,7 @@ helpers called.
 | `profile page @ {375,768,1280}px — axe reports no critical/serious violations` (×3) | Same axe gate, default Posts tab | PROFILE-7: this page's own ticket text explicitly asked for the full HF-8-shape 3-breakpoint gate, unlike Groups/Friends' single representative check |
 | `profile page — Settings tab — axe reports no critical/serious violations` | Same axe gate, Settings tab active (per-sport profile editor) | PROFILE-7: one representative state, same "richer state, not a full matrix" scoping the Groups/Friends checks above use |
 | `profile page — Edit Profile modal open — axe reports no critical/serious violations` | Same axe gate, `EditProfileModal` open | PROFILE-7 |
+| `profile page — Account settings modal open — axe reports no critical/serious violations` | Same axe gate, `AccountSettingsModal` open via the avatar dropdown | ACCOUNT-1 |
 | `/login`/`/register` @ {375,768,1280}px — no horizontal overflow (×6) | Same overflow check, logged-out pages | No `seedAuthenticatedSession` — these routes aren't behind `ProtectedRoute` |
 | `/login`/`/register` @ {375,768,1280}px — axe violations (×6) | Same axe gate | |
 | `/login: Tab reaches every control in order` | Explicit Tab sequence: Email → Password → "Show password" toggle → Log in → "Create an account" link | `getByLabel('Password', { exact: true })` — substring matching would collide with the toggle's `aria-label="Show password"` |
@@ -909,7 +910,7 @@ it rather than being left describing the old behaviour.
 
 Related docs: `client/docs/MVP/ADMIN-2_SPORT_ADMIN_MASTER_DETAIL_PAGE.md`.
 
-### `e2e/flows/profile-journey.spec.ts` (PROFILE-8, one `test()` with 8 steps + 1 separate `test()` — SPORT-10)
+### `e2e/flows/profile-journey.spec.ts` (PROFILE-8, one `test()` with 9 steps + 1 separate `test()` — SPORT-10)
 
 The `/profile` page's full journey — header/bio, `SportSwitcher`, posting from the composer, the
 comment modal, Settings tab save (a scalar attribute and a `DEFINITION_LIST` add-via-modal), Edit
@@ -923,8 +924,9 @@ Profile save, and the Memories placeholder.
 | 4. comment modal | Opens empty on the new post, adds a comment via `dialog.getByLabel('Add a comment')`, comment count bumps to 1 |
 | 5. Settings tab | Skill level starts `intermediate`, Save disabled; changes skill level to `advanced` **and** the `SportAttributesFields` "Racket brand" attribute (a top-level `gear` field; SPORT-7 made the schema v3/nested but this step still edits the loose one), Save enables, saves, Save disables again and both values persist |
 | 5b. Settings tab — CLIENT-SESSION-19 | Save starts disabled again; clicks "Add" on the `DEFINITION_LIST` attribute "Rackets you own", fills the `AddDefinitionRecordModal` (Model/Weight), submits — dialog closes, "Item 1" + the entered model render inline, Save enables — saves, Save disables again and the record still renders |
-| 6. Edit Profile modal (**CLIENT-REF-3**, expanded) | Prefilled ("Jordan" in First name); the legacy-country hint renders (`mockMyProfile.country` = "USA", `countryId` `null`); changes Bio; grants geolocation and clicks "Use my current location" (same `reference.ts` coordinate fixture `signup-locale.spec.ts` uses) — fills Region "Ho Chi Minh City" and Language "Tiếng Việt" (both untouched until now); Save — the `PUT .../profile` request body carries `countryId`/`regionId`/`location`; modal closes, new bio + `ProfileHeader`'s "@jordanlee · Ho Chi Minh City" render; reopening Edit Profile shows it translated ("Chỉnh sửa hồ sơ" — the language save switched the UI locale live via `useSyncUserLocale`) |
-| 7. Memories tab | `ComingSoonPage` placeholder (step 6 already left the UI locale on `vi`, so the tab/heading are asserted as "Kỷ niệm" (CLIENT-I18N-6) and the body as "Sắp ra mắt." (CLIENT-I18N-3)) |
+| 6. Edit Profile modal (**ACCOUNT-1**) | Avatar URL + Cover URL only (no First name/Bio); fills Cover URL, Save — the `PUT ./profile` body is exactly `{ coverUrl }`; modal closes |
+| 7. Account settings modal (**ACCOUNT-1**, was step 6 Edit Profile; **CLIENT-REF-3**, expanded) | Opened from the avatar dropdown ("Your account" → "Account settings"). Prefilled ("Jordan" in First name); the legacy-country hint renders (`mockMyProfile.country` = "USA", `countryId` `null`); changes Bio; grants geolocation and clicks "Use my current location" (same `reference.ts` coordinate fixture `signup-locale.spec.ts` uses) — fills Region "Ho Chi Minh City" and Language "Tiếng Việt" (both untouched until now); Save — the `PUT .../profile` request body carries `countryId`/`regionId`/`location`; modal closes, new bio + `ProfileHeader`'s "@jordanlee · Ho Chi Minh City" render; reopening it via the dropdown shows it translated ("Cài đặt tài khoản" — the language save switched the UI locale live via `useSyncUserLocale`) |
+| 8. Memories tab | `ComingSoonPage` placeholder (step 7 already left the UI locale on `vi`, so the tab/heading are asserted as "Kỷ niệm" (CLIENT-I18N-6) and the body as "Sắp ra mắt." (CLIENT-I18N-3)) |
 
 **Two real MSW mutation gaps found and fixed at PROFILE-8's pickup** (neither existed before that
 ticket — `PROFILE-7`'s visual-regression baselines never exercised a save, only a clean load):
@@ -1189,7 +1191,7 @@ Parameterized: 3 breakpoints × 4 states = **12 test instances**, `profile — $
 | `posts` | `seedAuthenticatedSession(page, '/profile')`, default landing tab | Posts tab selected, first article visible (`mockPost`/`mockGroupPost`, both mockUser's own, both Badminton — mockUser's first sport profile) |
 | `memories` | Posts tab → Memories tab | "Memories" heading visible (`ComingSoonPage` placeholder — no backend concept exists yet) |
 | `settings` | Posts tab → Settings tab | "Skill level" select visible (the per-sport profile editor, PROFILE-4/SPORT-2) — clean (non-dirty) state, Save stays disabled, so no PUT mutation handler is exercised |
-| `edit-profile-modal` | Click "Edit profile" (`ProfileHeader`) | Dialog-scoped, "First name" field visible — never submitted, so no PUT mutation handler is exercised either |
+| `edit-profile-modal` | Click "Edit profile" (`ProfileHeader`) | Dialog-scoped, "Avatar URL" field visible (**ACCOUNT-1:** narrowed to avatar/cover, so this baseline legitimately changed) — never submitted, so no PUT mutation handler is exercised either |
 
 **Real MSW gap found and fixed at pickup** (this ticket is the first to run the real `/profile` page
 through Playwright — `PROFILE-8`, the E2E functional ticket, is still `TODO`): `GET /api/posts/mine`

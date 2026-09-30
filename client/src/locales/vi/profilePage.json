@@ -44,6 +44,7 @@
     "profileFailed": "Không thể lưu hồ sơ của bạn.",
     "preferencesFailed": "Không thể lưu tùy chọn ngôn ngữ của bạn.",
     "preferencesSaved": "Đã lưu tùy chọn ngôn ngữ của bạn.",
-    "profileSaved": "Đã lưu hồ sơ của bạn."
+    "profileSaved": "Đã lưu hồ sơ của bạn.",
+    "profileFailedRetry": "Không thể lưu hồ sơ của bạn. Vui lòng thử lại."
   }
 }

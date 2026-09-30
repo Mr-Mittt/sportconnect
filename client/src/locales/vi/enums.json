@@ -1,4 +1,9 @@
 {
+  "gender": {
+    "unspecified": "Chưa chọn",
+    "MALE": "Nam",
+    "FEMALE": "Nữ"
+  },
   "sessionStatus": {
     "SCHEDULED": "Đã lên lịch",
     "ONGOING": "Đang diễn ra",

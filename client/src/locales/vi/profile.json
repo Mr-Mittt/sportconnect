@@ -1,25 +1,9 @@
 {
   "title": "Chỉnh sửa hồ sơ",
-  "section": {
-    "profile": "Hồ sơ",
-    "contact": "Liên hệ",
-    "personal": "Cá nhân"
-  },
   "field": {
-    "firstName": "Tên",
-    "lastName": "Họ",
-    "username": "Tên người dùng",
-    "bio": "Tiểu sử",
     "avatarUrl": "URL ảnh đại diện",
-    "coverUrl": "URL ảnh bìa",
-    "phoneNumber": "Số điện thoại",
-    "dateOfBirth": "Ngày sinh",
-    "gender": "Giới tính",
-    "heightCm": "Chiều cao (cm)",
-    "weightKg": "Cân nặng (kg)",
-    "shoeSizeCm": "Cỡ giày (JP, cm)"
+    "coverUrl": "URL ảnh bìa"
   },
-  "legacyCountry": "Hiện đang đặt là \"{{country}}\" — chọn một quốc gia bên dưới để thay thế.",
   "save": "Lưu thay đổi",
   "saving": "Đang lưu…"
 }

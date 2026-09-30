@@ -2,7 +2,7 @@ import i18next from 'i18next';
 import { useState } from 'react';
 import axios from 'axios';
 import type { ApiResponse } from '@/shared/types/api';
-import type { EditProfileSavePayload } from '@/shared/components/EditProfileModal';
+import type { AccountSettingsSavePayload } from '@/shared/components/AccountSettingsModal';
 import { useUpdateMyPreferences } from './useUpdateMyPreferences';
 import { useUpdateMyProfile } from './useUpdateMyProfile';
 
@@ -21,8 +21,8 @@ function extractErrorMessage(reason: unknown, fallback: string): string {
 }
 
 /**
- * CLIENT-REF-3: the combined-Save orchestrator `EditProfileModal`'s one Save button needs —
- * `EditProfileModal` reports a profile-field payload (possibly empty) and an optional
+ * CLIENT-REF-3: the combined-Save orchestrator `AccountSettingsModal`'s one Save button needs —
+ * `AccountSettingsModal` reports a profile-field payload (possibly empty) and an optional
  * `languageCode` (the caller's language preference, a `useUpdateMyPreferences` call, not part of
  * `UpdateProfileRequest`); this hook fires whichever half actually changed and reports **which
  * side failed** distinctly, rather than one generic "could not save" — profile and preferences are
@@ -37,7 +37,7 @@ export function useEditProfileSave() {
   const preferences = useUpdateMyPreferences();
   const [combinedError, setCombinedError] = useState<string | null>(null);
 
-  async function save(payload: EditProfileSavePayload, options?: { onSuccess?: () => void }) {
+  async function save(payload: AccountSettingsSavePayload, options?: { onSuccess?: () => void }) {
     setCombinedError(null);
     const hasProfileChange = Object.keys(payload.profile).length > 0;
     const hasLanguageChange = payload.languageCode !== undefined;

@@ -38,11 +38,10 @@ import { SettingsUnsavedChangesDialog } from './components/SettingsUnsavedChange
 import { SportProfileSettingsTab } from './components/SportProfileSettingsTab';
 import { SportProfileStatusConfirmDialog } from './components/SportProfileStatusConfirmDialog';
 import { useDeactivateSportProfile } from './useDeactivateSportProfile';
-import { useEditProfileSave } from './useEditProfileSave';
+import { useUpdateMyProfile } from './useUpdateMyProfile';
 import { useMyProfile } from './useMyProfile';
 import { useProfileActiveSport } from './useProfileActiveSport';
 import { useSportProfileSettingsTabData } from './useSportProfileSettingsTabData';
-import { useUserPreferences } from './useUserPreferences';
 
 /**
  * Assembles the `/profile` page (PROFILE-6): `SportSwitcher` (no `'all'` pill,
@@ -119,8 +118,7 @@ export function ProfilePage() {
   } | null>(null);
 
   const profileQuery = useMyProfile();
-  const preferencesQuery = useUserPreferences();
-  const editProfileSave = useEditProfileSave();
+  const updateMyProfile = useUpdateMyProfile();
   const settingsTabData = useSportProfileSettingsTabData(settingsSportOverride);
   const settingsGuard = useUnsavedChangesGuard(settingsTabData.isDirty);
   const deactivateSportProfile = useDeactivateSportProfile();
@@ -320,16 +318,17 @@ export function ProfilePage() {
             key={`edit-profile-${editProfileOpenCount}`}
             isOpen={isEditProfileOpen}
             onClose={() => {
-              editProfileSave.reset();
+              updateMyProfile.reset();
               setIsEditProfileOpen(false);
             }}
             user={profileQuery.data}
-            languageCode={preferencesQuery.data?.language ?? null}
             onSave={(payload) =>
-              editProfileSave.save(payload, { onSuccess: () => setIsEditProfileOpen(false) })
+              updateMyProfile.updateProfile(payload, {
+                onSuccess: () => setIsEditProfileOpen(false),
+              })
             }
-            isSaving={editProfileSave.isSaving}
-            errorMessage={editProfileSave.errorMessage}
+            isSaving={updateMyProfile.isPending}
+            errorMessage={updateMyProfile.errorMessage}
           />
         )}
         <SettingsUnsavedChangesDialog

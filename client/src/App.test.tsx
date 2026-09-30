@@ -579,6 +579,56 @@ describe('App routing', () => {
     expect(useAuthStore.getState().user).toBeNull();
   });
 
+  it('opens Account settings from the account menu, seeded from GET /users/me (ACCOUNT-1)', async () => {
+    vi.spyOn(apiClient, 'post').mockImplementation((url: string) => {
+      if (url === '/reference/resolve') {
+        return Promise.resolve({
+          data: { success: true, message: '', data: { language: null, country: null, region: null, source: null }, timestamp: '' },
+        });
+      }
+      return Promise.resolve(fixtureAuthResponse);
+    });
+    const defaultGet = vi.mocked(apiClient.get).getMockImplementation()!;
+    const ok = (data: unknown) => ({ data: { success: true, message: '', data, timestamp: '' } });
+    vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+      if (url === '/users/me') {
+        return ok({
+          ...fixtureUser,
+          bio: 'Weekend baller.',
+          country: null,
+          countryId: null,
+          regionId: null,
+          regionName: null,
+          heightCm: null,
+          weightKg: null,
+          shoeSizeCm: null,
+          dateOfBirth: null,
+          gender: null,
+          coverUrl: null,
+          location: null,
+          city: null,
+          fullName: 'Jordan Lee',
+        });
+      }
+      if (url === '/reference/languages' || url === '/reference/countries') return ok([]);
+      return defaultGet(url);
+    });
+
+    const user = userEvent.setup();
+    renderApp(['/']);
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
+
+    expect(screen.queryByRole('dialog', { name: 'Account settings' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Your account' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Account settings' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Account settings' });
+    expect(within(dialog).getByLabelText('First name')).toHaveValue('Jordan');
+    expect(within(dialog).getByLabelText('Bio')).toHaveValue('Weekend baller.');
+    // Avatar/cover live in the /profile Edit profile modal, not here.
+    expect(within(dialog).queryByLabelText('Avatar URL')).not.toBeInTheDocument();
+  });
+
   it('redirects to /login for a protected route while logged out, and back to it after a successful login', async () => {
     vi.spyOn(apiClient, 'post').mockImplementation((url: string) => {
       if (url === '/auth/refresh') return Promise.reject(new Error('no session'));

@@ -3,6 +3,9 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useJoinFeedbackStore } from '@/app/joinFeedbackStore';
 import { useLogout } from '@/features/auth/useLogout';
+import { useEditProfileSave } from '@/features/profile/useEditProfileSave';
+import { useMyProfile } from '@/features/profile/useMyProfile';
+import { useUserPreferences } from '@/features/profile/useUserPreferences';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { useNotificationBellData } from '@/features/notifications/useNotificationBellData';
 import { useNotificationLiveSocket } from '@/features/notifications/useNotificationLiveSocket';
@@ -12,6 +15,7 @@ import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
+import { AccountSettingsModal } from './AccountSettingsModal';
 import { AuthLoadingState } from './AuthLoadingState';
 import { JoinFeedbackDialog } from './JoinFeedbackDialog';
 import { NavTabs, type NavTabKey } from './NavTabs';
@@ -93,6 +97,14 @@ export function AppShell() {
   const joinFeedbackOpenSessionId = useJoinFeedbackStore((state) => state.openSessionId);
   const dismissJoinFeedback = useJoinFeedbackStore((state) => state.dismiss);
 
+  // ACCOUNT-1: the Account Settings modal (opened from TopBar's avatar dropdown) lives here, not on
+  // a page — it is reachable from every page.
+  // It is mounted only while open, so its draft (and its reference-data queries) reset on every open.
+  const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
+  const profileQuery = useMyProfile();
+  const preferencesQuery = useUserPreferences();
+  const accountSettingsSave = useEditProfileSave();
+
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const sessionDetailData = useSessionDetailModalData(selectedSessionId);
   const sportProfilesQuery = useSportProfiles();
@@ -122,10 +134,28 @@ export function AppShell() {
           email: user.email,
         }}
         onLogout={logout}
+        onOpenAccountSettings={() => setIsAccountSettingsOpen(true)}
         notificationBell={<NotificationBell {...notificationBell} />}
       />
       <NavTabs active={activeTabFromPath(pathname)} onChange={(tab) => navigate(pathByTab[tab])} />
       <Outlet />
+
+      {isAccountSettingsOpen && profileQuery.data !== undefined && (
+        <AccountSettingsModal
+          isOpen={isAccountSettingsOpen}
+          onClose={() => {
+            accountSettingsSave.reset();
+            setIsAccountSettingsOpen(false);
+          }}
+          user={profileQuery.data}
+          languageCode={preferencesQuery.data?.language ?? null}
+          onSave={(payload) =>
+            accountSettingsSave.save(payload, { onSuccess: () => setIsAccountSettingsOpen(false) })
+          }
+          isSaving={accountSettingsSave.isSaving}
+          errorMessage={accountSettingsSave.errorMessage}
+        />
+      )}
 
       <SessionDetailModal
         isOpen={selectedSessionId !== null}

@@ -3,6 +3,7 @@ import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { sportIdForKey } from '@/features/feed/sportIdMap';
 import { SKILL_LEVELS } from '@/shared/lib/skillLevels';
 import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
+import { digitsOnlyInputProps } from '@/shared/lib/inputGuards';
 import { cn } from '@/shared/lib/utils';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import type { SportKey } from '@/shared/types/sport';
@@ -165,6 +166,7 @@ export function AddSportFields({
               <Input
                 id="add-sport-experience"
                 type="number"
+                {...digitsOnlyInputProps}
                 min={0}
                 value={
                   isResumeMode ? (resumable?.yearsOfExperience ?? '') : yearsOfExperience

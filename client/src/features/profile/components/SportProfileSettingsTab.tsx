@@ -2,6 +2,7 @@ import { SKILL_LEVELS } from '@/shared/lib/skillLevels';
 import { useTranslation } from 'react-i18next';
 import { getSportLabelForId } from '@/shared/lib/sportProfileFromId';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
+import { digitsOnlyInputProps } from '@/shared/lib/inputGuards';
 import { cn } from '@/shared/lib/utils';
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
 import type { ResolvedSportAttributeSchema, UserSportProfileResponse } from '@/shared/types/sport';
@@ -170,6 +171,7 @@ export function SportProfileSettingsTab({
             <Input
               id="sport-profile-experience"
               type="number"
+              {...digitsOnlyInputProps}
               min={0}
               value={draft.yearsOfExperience}
               onChange={(event) => setYearsOfExperience(event.target.value)}
