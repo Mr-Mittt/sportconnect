@@ -31,3 +31,6 @@ playwright-report
 *.njsproj
 *.sln
 *.sw?
+
+# Vite dependency pre-bundle cache
+.vite/

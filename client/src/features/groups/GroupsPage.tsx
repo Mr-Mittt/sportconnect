@@ -47,6 +47,7 @@ import { CreateGroupModal } from './components/CreateGroupModal';
 import { DeleteGroupConfirmDialog } from './components/DeleteGroupConfirmDialog';
 import { GroupChatTab } from './components/GroupChatTab';
 import { GroupCoverBanner } from './components/GroupCoverBanner';
+import { GroupCoverBannerPlaceholder } from './components/GroupCoverBannerPlaceholder';
 import { GroupDiscoveryPanel } from './components/GroupDiscoveryPanel';
 import { GroupMembersTab } from './components/GroupMembersTab';
 import { GroupSettingsTab } from './components/GroupSettingsTab';
@@ -321,6 +322,17 @@ export function GroupsPage() {
     selectedGroup !== null ? sportKeyForId(selectedGroup.sportId) : undefined;
   const selectedGroupSport =
     selectedGroupSportKey !== undefined ? sportsByKey[selectedGroupSportKey] : undefined;
+  // GRP-11: a group is selected (e.g. handed off from Home Feed's `goToGroup`) but the groups list
+  // hasn't produced it — still loading or failed. `selectedGroup === null` alone can't tell this
+  // apart from "nothing selected", so without this the discovery panel flashes in the meantime.
+  // The store's own `selectedGroupSportId` (set alongside the id) is known before the list is.
+  const pendingSelectionSportId = useGroupsPageStore((state) => state.selectedGroupSportId);
+  const isSelectionPending =
+    selectedGroupId !== null && selectedGroup === null && (isGroupsLoading || isGroupsError);
+  const pendingSelectionSportKey =
+    pendingSelectionSportId !== null ? sportKeyForId(pendingSelectionSportId) : undefined;
+  const pendingSelectionSport =
+    pendingSelectionSportKey !== undefined ? sportsByKey[pendingSelectionSportKey] : undefined;
   // Switching the sport pill can make the currently open group no longer
   // make sense to keep showing — either because "All" was picked (no single
   // group belongs to "All"), or because a different, incompatible sport was
@@ -610,10 +622,16 @@ export function GroupsPage() {
               onBack={() => guardedSelectGroupAndShowPosts(null)}
             />
           )}
+          {isSelectionPending && (
+            <GroupCoverBannerPlaceholder
+              sport={pendingSelectionSport}
+              onBack={() => guardedSelectGroupAndShowPosts(null)}
+            />
+          )}
         </div>
         <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[2.1fr_0.9fr]">
           <div className="min-w-0">
-            {selectedGroup === null ? (
+            {isSelectionPending ? null : selectedGroup === null ? (
               <GroupDiscoveryPanel
                 groups={data.groups}
                 sportsByKey={sportsByKey}
