@@ -14,9 +14,13 @@ import * as React from 'react';
  * (`@radix-ui/react-dismissable-layer`'s global layer stack, not DOM containment) — this
  * portal does not touch it. Its cause was two installed copies of that package (Dialog on 1.1.15,
  * Popover on 1.1.19, so two independent stacks); fixed by the `pnpm.overrides` entry in
- * `client/package.json`. `@radix-ui/react-focus-scope` has the same split-copy duplication
- * (Dialog/Menu on 1.1.12, Popover on 1.1.16) and is deliberately left alone — this portal is what
- * makes it harmless today; see its own follow-up ticket.
+ * `client/package.json`. `focus-scope` (and `focus-guards`) had the same split-copy duplication and
+ * were deduped the same way in CLIENT-SESSION-33 (`src/test/radixSingleCopy.test.ts` guards all
+ * three). Re-tested there with this portal and the `onFocusOutside` guard in `popover.tsx`
+ * removed, on the single copy: the Escape-cascade and "stays inside the dialog" e2e tests still
+ * fail — the portal is not a duplication workaround, it is what keeps a popover a real DOM
+ * descendant of the Dialog's Content (focus-trap containment, and staying inside the Dialog's
+ * bounds), so it stays.
  *
  * Fix: `DialogContent` provides its own Content DOM node through this context;
  * `PopoverContent` (if rendered inside one) portals into that node via `Popover.Portal`'s own
