@@ -147,6 +147,17 @@ test('profile page — Edit Profile modal open — axe reports no critical/serio
   expect(await gatingViolations(page)).toEqual([]);
 });
 
+test('profile page — Account settings modal open — axe reports no critical/serious violations', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await seedAuthenticatedSession(page, '/profile');
+  await page.getByRole('button', { name: 'Your account' }).click();
+  await page.getByRole('menuitem', { name: 'Account settings' }).click();
+  await expect(page.getByRole('dialog', { name: 'Account settings' })).toBeVisible();
+  expect(await gatingViolations(page)).toEqual([]);
+});
+
 /*
  * AUTH-6: same a11y gate extended to Login/Register — logged-out routes, not
  * behind ProtectedRoute, so no seedAuthenticatedSession() call. MSW's default

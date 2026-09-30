@@ -14,48 +14,11 @@ import {
 } from '@/shared/components/GeoLocaleFields';
 import { RequiredMark } from '@/shared/components/RequiredMark';
 import { useGeoLocaleFieldsData } from '@/shared/hooks/useGeoLocaleFieldsData';
+import { phoneNumberInputProps } from '@/shared/lib/inputGuards';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import type { RegisterPayload } from '../types';
-
-// Same navigation/edit keys CreateSessionModal.tsx's own digits-only guard allows through —
-// blocking a keystroke should never also block Tab/Backspace/arrow navigation etc.
-const PHONE_NUMBER_ALLOWED_KEYS = new Set([
-  'Backspace',
-  'Delete',
-  'Tab',
-  'Escape',
-  'Enter',
-  'ArrowLeft',
-  'ArrowRight',
-  'ArrowUp',
-  'ArrowDown',
-  'Home',
-  'End',
-]);
-
-// Digits plus the punctuation a phone number actually uses — `RegisterRequest.phoneNumber` has no
-// server-side format validation beyond `@Size(max = 20)`, so this is purely a client-side typing
-// guard preventing obviously-wrong input (letters, stray punctuation), not a full phone format.
-const PHONE_NUMBER_CHAR_PATTERN = /^[0-9+\-() ]$/;
-
-function handlePhoneNumberKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-  if (event.ctrlKey || event.metaKey || event.altKey || PHONE_NUMBER_ALLOWED_KEYS.has(event.key)) {
-    return;
-  }
-  if (!PHONE_NUMBER_CHAR_PATTERN.test(event.key)) {
-    event.preventDefault();
-  }
-}
-
-// A `type="tel"` input doesn't validate a pasted string at all (pasting "call me!" leaves it
-// showing verbatim) — reject the whole paste unless every character is one this field allows.
-function handlePhoneNumberPaste(event: React.ClipboardEvent<HTMLInputElement>) {
-  if (!/^[0-9+\-() ]+$/.test(event.clipboardData.getData('text'))) {
-    event.preventDefault();
-  }
-}
 
 // Same simple shape `@Email` accepts server-side — not a full RFC 5322 parser, just enough to
 // catch an obviously incomplete address before it round-trips to the server.
@@ -315,8 +278,7 @@ export function RegisterForm({ onSubmit, isPending, errorMessage }: RegisterForm
             maxLength={20}
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(e.target.value)}
-            onKeyDown={handlePhoneNumberKeyDown}
-            onPaste={handlePhoneNumberPaste}
+            {...phoneNumberInputProps}
           />
         </div>
         <GeoLocaleLanguageField

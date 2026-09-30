@@ -1,0 +1,23 @@
+{
+  "title": "Cài đặt tài khoản",
+  "section": {
+    "profile": "Hồ sơ",
+    "contact": "Liên hệ",
+    "personal": "Cá nhân"
+  },
+  "field": {
+    "firstName": "Tên",
+    "lastName": "Họ",
+    "username": "Tên người dùng",
+    "bio": "Tiểu sử",
+    "phoneNumber": "Số điện thoại",
+    "dateOfBirth": "Ngày sinh",
+    "gender": "Giới tính",
+    "heightCm": "Chiều cao (cm)",
+    "weightKg": "Cân nặng (kg)",
+    "shoeSizeCm": "Cỡ giày (JP, cm)"
+  },
+  "legacyCountry": "Hiện đang đặt là \"{{country}}\" — chọn một quốc gia bên dưới để thay thế.",
+  "save": "Lưu thay đổi",
+  "saving": "Đang lưu…"
+}

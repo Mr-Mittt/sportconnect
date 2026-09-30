@@ -8,6 +8,7 @@ const meta = {
   args: {
     user: { initials: 'JL', name: 'Jordan Lee', email: 'jordan@example.com' },
     onLogout: () => {},
+    onOpenAccountSettings: () => {},
     // CLIENT-NOTIF-1: TopBar itself no longer owns unreadCount/click-handler
     // props — see Notifications/NotificationBell for the real bell's own
     // stories (open/loading/empty/populated states).

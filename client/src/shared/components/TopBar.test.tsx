@@ -1,14 +1,20 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/app/i18n';
 import { TopBar } from './TopBar';
 
 const user = { initials: 'JL', name: 'Jordan Lee', email: 'jordan@example.com' };
 
 describe('TopBar', () => {
+  // The vi test switches i18n directly (not via localeStore), which src/test/setup.ts's own
+  // revert doesn't cover.
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
   it('shows the user initials', () => {
-    render(<TopBar user={user} onLogout={vi.fn()} notificationBell={null} />);
+    render(<TopBar user={user} onLogout={vi.fn()} onOpenAccountSettings={vi.fn()} notificationBell={null} />);
     expect(screen.getByText('JL')).toBeInTheDocument();
   });
 
@@ -21,6 +27,7 @@ describe('TopBar', () => {
         user={user}
         onSearchClick={onSearchClick}
         onLogout={onLogout}
+        onOpenAccountSettings={vi.fn()}
         notificationBell={<button type="button">Notifications</button>}
       />,
     );
@@ -33,7 +40,7 @@ describe('TopBar', () => {
 
   it('opens the account menu on click, showing the identity header', async () => {
     const player = userEvent.setup();
-    render(<TopBar user={user} onLogout={vi.fn()} notificationBell={null} />);
+    render(<TopBar user={user} onLogout={vi.fn()} onOpenAccountSettings={vi.fn()} notificationBell={null} />);
 
     expect(screen.queryByText('jordan@example.com')).not.toBeInTheDocument();
     await player.click(screen.getByRole('button', { name: 'Your account' }));
@@ -45,7 +52,7 @@ describe('TopBar', () => {
   it('calls onLogout when the Log out item is selected', async () => {
     const player = userEvent.setup();
     const onLogout = vi.fn();
-    render(<TopBar user={user} onLogout={onLogout} notificationBell={null} />);
+    render(<TopBar user={user} onLogout={onLogout} onOpenAccountSettings={vi.fn()} notificationBell={null} />);
 
     await player.click(screen.getByRole('button', { name: 'Your account' }));
     await player.click(screen.getByRole('menuitem', { name: 'Log out' }));
@@ -56,7 +63,7 @@ describe('TopBar', () => {
   it('closes the menu on Escape without calling onLogout', async () => {
     const player = userEvent.setup();
     const onLogout = vi.fn();
-    render(<TopBar user={user} onLogout={onLogout} notificationBell={null} />);
+    render(<TopBar user={user} onLogout={onLogout} onOpenAccountSettings={vi.fn()} notificationBell={null} />);
 
     await player.click(screen.getByRole('button', { name: 'Your account' }));
     expect(screen.getByRole('menuitem', { name: 'Log out' })).toBeInTheDocument();
@@ -73,10 +80,31 @@ describe('TopBar', () => {
   it('renders the Log out item in Vietnamese when the locale is vi (CLIENT-I18N-1)', async () => {
     const player = userEvent.setup();
     await i18n.changeLanguage('vi');
-    render(<TopBar user={user} onLogout={vi.fn()} notificationBell={null} />);
+    render(<TopBar user={user} onLogout={vi.fn()} onOpenAccountSettings={vi.fn()} notificationBell={null} />);
 
     await player.click(screen.getByRole('button', { name: 'Tài khoản của bạn' }));
 
     expect(screen.getByRole('menuitem', { name: 'Đăng xuất' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Cài đặt tài khoản' })).toBeInTheDocument();
+  });
+
+  it('calls onOpenAccountSettings (not onLogout) when Account settings is selected (ACCOUNT-1)', async () => {
+    const player = userEvent.setup();
+    const onLogout = vi.fn();
+    const onOpenAccountSettings = vi.fn();
+    render(
+      <TopBar
+        user={user}
+        onLogout={onLogout}
+        onOpenAccountSettings={onOpenAccountSettings}
+        notificationBell={null}
+      />,
+    );
+
+    await player.click(screen.getByRole('button', { name: 'Your account' }));
+    await player.click(screen.getByRole('menuitem', { name: 'Account settings' }));
+
+    expect(onOpenAccountSettings).toHaveBeenCalledTimes(1);
+    expect(onLogout).not.toHaveBeenCalled();
   });
 });

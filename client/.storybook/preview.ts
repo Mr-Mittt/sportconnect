@@ -8,6 +8,7 @@ import groupsEn from '../src/locales/en/groups.json';
 import homeFeedEn from '../src/locales/en/homeFeed.json';
 import loginEn from '../src/locales/en/login.json';
 import notificationsEn from '../src/locales/en/notifications.json';
+import accountSettingsEn from '../src/locales/en/accountSettings.json';
 import profileEn from '../src/locales/en/profile.json';
 import profilePageEn from '../src/locales/en/profilePage.json';
 import registerEn from '../src/locales/en/register.json';
@@ -22,6 +23,7 @@ import groupsVi from '../src/locales/vi/groups.json';
 import homeFeedVi from '../src/locales/vi/homeFeed.json';
 import loginVi from '../src/locales/vi/login.json';
 import notificationsVi from '../src/locales/vi/notifications.json';
+import accountSettingsVi from '../src/locales/vi/accountSettings.json';
 import profileVi from '../src/locales/vi/profile.json';
 import profilePageVi from '../src/locales/vi/profilePage.json';
 import registerVi from '../src/locales/vi/register.json';
@@ -60,6 +62,7 @@ void i18next.use(initReactI18next).init({
     en: {
       common: commonEn,
       register: registerEn,
+      accountSettings: accountSettingsEn,
       profile: profileEn,
       profilePage: profilePageEn,
       login: loginEn,
@@ -76,6 +79,7 @@ void i18next.use(initReactI18next).init({
     vi: {
       common: commonVi,
       register: registerVi,
+      accountSettings: accountSettingsVi,
       profile: profileVi,
       profilePage: profilePageVi,
       login: loginVi,
@@ -93,7 +97,7 @@ void i18next.use(initReactI18next).init({
   lng: 'en',
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session'],
+  ns: ['common', 'register', 'accountSettings', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session'],
   interpolation: { escapeValue: false },
   returnNull: false,
 });

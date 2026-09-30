@@ -121,7 +121,8 @@ current whenever I18N-4 itself finally gets scoped:**
 |---|---|---|
 | `/login` | Log in | `useLogin` |
 | `/register` | Sign up | `useRegister` |
-| `/profile` | Edit Profile modal | `useEditProfileSave` (wraps `useUpdateMyProfile` + `useUpdateMyPreferences`) |
+| Any page (avatar dropdown) | Account Settings modal (ACCOUNT-1 — was the `/profile` Edit Profile modal's body) | `useEditProfileSave` (wraps `useUpdateMyProfile` + `useUpdateMyPreferences`) |
+| `/profile` | Edit Profile modal (ACCOUNT-1 — avatar/cover URL only) | `useUpdateMyProfile` (its client fallback is now localized; the server message is still shown verbatim) |
 | `/profile` | Settings tab — per-sport profile editor | `useUpdateSportProfile` |
 | `/profile` | Settings tab — deactivate/reactivate a sport profile | `useDeactivateSportProfile` |
 | Groups page | Invite Friend modal | `useInviteFriendModalData` |

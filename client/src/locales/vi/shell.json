@@ -1,7 +1,8 @@
 {
   "topBar": {
     "searchLabel": "Tìm kiếm",
-    "accountMenuLabel": "Tài khoản của bạn"
+    "accountMenuLabel": "Tài khoản của bạn",
+    "accountSettings": "Cài đặt tài khoản"
   },
   "navTabs": {
     "primaryLabel": "Điều hướng chính",

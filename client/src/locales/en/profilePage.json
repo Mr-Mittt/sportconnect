@@ -44,6 +44,7 @@
     "profileFailed": "Your profile could not be saved.",
     "preferencesFailed": "Your language preference could not be saved.",
     "preferencesSaved": "Your language preference was saved.",
-    "profileSaved": "Your profile was saved."
+    "profileSaved": "Your profile was saved.",
+    "profileFailedRetry": "Could not save your profile. Please try again."
   }
 }

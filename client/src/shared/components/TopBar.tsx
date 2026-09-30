@@ -1,4 +1,4 @@
-import { IconChevronDown, IconLogout, IconSearch } from '@tabler/icons-react';
+import { IconChevronDown, IconLogout, IconSearch, IconSettings } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Avatar, AvatarFallback } from '@/shared/ui/avatar';
@@ -21,6 +21,8 @@ interface TopBarProps {
   user: TopBarUser;
   onSearchClick?: () => void;
   onLogout: () => void;
+  /** ACCOUNT-1: opens the Account Settings modal (owned by `AppShell`) from the avatar dropdown. */
+  onOpenAccountSettings: () => void;
   /**
    * CLIENT-NOTIF-1: the real bell + dropdown (`NotificationBell`), rendered
    * as a slot rather than TopBar owning unreadCount/click-handler props
@@ -31,7 +33,13 @@ interface TopBarProps {
   notificationBell: ReactNode;
 }
 
-export function TopBar({ user, onSearchClick, onLogout, notificationBell }: TopBarProps) {
+export function TopBar({
+  user,
+  onSearchClick,
+  onLogout,
+  onOpenAccountSettings,
+  notificationBell,
+}: TopBarProps) {
   const { t } = useTranslation(['shell', 'common']);
   return (
     <header className="flex items-center justify-between py-3">
@@ -70,6 +78,10 @@ export function TopBar({ user, onSearchClick, onLogout, notificationBell }: TopB
               </div>
             </div>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onOpenAccountSettings}>
+              <IconSettings className="size-4 text-text-secondary" aria-hidden="true" />
+              {t('shell:topBar.accountSettings')}
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={onLogout}>
               <IconLogout className="size-4 text-text-secondary" aria-hidden="true" />
               {t('common:logOut')}

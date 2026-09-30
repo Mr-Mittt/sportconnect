@@ -121,14 +121,35 @@ test('Profile journey', async ({ page, context }) => {
     await expect(page.getByLabel('Model')).toHaveValue('Yonex Astrox 99 Pro');
   });
 
-  await test.step('6. Edit Profile modal — bio, Country/Region/Language via "Use my current location", save, header + UI language update', async () => {
+  await test.step('6. Edit Profile modal — avatar/cover URL only (ACCOUNT-1), saves just the changed field', async () => {
+    await page.getByRole('button', { name: 'Edit profile' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Edit profile' });
+    await expect(dialog.getByLabel('Avatar URL')).toBeVisible();
+    // Everything else moved to Account settings.
+    await expect(dialog.getByLabel('First name')).toHaveCount(0);
+    await expect(dialog.getByLabel('Bio')).toHaveCount(0);
+
+    await dialog.getByLabel('Cover URL').fill('https://cdn.example.com/cover.png');
+    const profileUpdateRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/users/') && request.url().includes('/profile') && request.method() === 'PUT',
+    );
+    await dialog.getByRole('button', { name: 'Save changes' }).click();
+
+    expect((await profileUpdateRequest).postDataJSON()).toEqual({
+      coverUrl: 'https://cdn.example.com/cover.png',
+    });
+    await expect(dialog).not.toBeVisible();
+  });
+
+  await test.step('7. Account settings modal (avatar dropdown) — bio, Country/Region/Language via "Use my current location", save, header + UI language update', async () => {
     // Matches reference.ts's COORDINATES_TEST_LATITUDE/LONGITUDE, resolving to Vietnam +
     // Ho Chi Minh City (id 102) with source COORDINATES — same fixture signup-locale.spec.ts uses.
     await context.grantPermissions(['geolocation']);
     await context.setGeolocation({ latitude: 10.7769, longitude: 106.7009 });
 
-    await page.getByRole('button', { name: 'Edit profile' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Edit profile' });
+    await page.getByRole('button', { name: 'Your account' }).click();
+    await page.getByRole('menuitem', { name: 'Account settings' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Account settings' });
     await expect(dialog.getByLabel('First name')).toHaveValue('Jordan');
     // The legacy-country hint (CLIENT-REF-3) — mockMyProfile.countryId is null but .country
     // still holds old free text.
@@ -166,15 +187,16 @@ test('Profile journey', async ({ page, context }) => {
 
     // The language save (PUT /users/me/preferences) switched the UI locale live — reopening
     // the modal renders its own strings translated (CLIENT-REF-3's new `profile` i18n namespace).
-    await page.getByRole('button', { name: 'Chỉnh sửa hồ sơ', exact: true }).click();
-    const viDialog = page.getByRole('dialog', { name: 'Chỉnh sửa hồ sơ' });
+    await page.getByRole('button', { name: 'Tài khoản của bạn' }).click();
+    await page.getByRole('menuitem', { name: 'Cài đặt tài khoản' }).click();
+    const viDialog = page.getByRole('dialog', { name: 'Cài đặt tài khoản' });
     await expect(viDialog).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(viDialog).not.toBeVisible();
   });
 
-  await test.step('7. Memories tab — renders the ComingSoonPage placeholder', async () => {
-    // CLIENT-I18N-3/6: step 6 above already left the UI locale on `vi` for the rest of this test —
+  await test.step('8. Memories tab — renders the ComingSoonPage placeholder', async () => {
+    // CLIENT-I18N-3/6: step 7 above already left the UI locale on `vi` for the rest of this test —
     // ComingSoonPage's copy and (CLIENT-I18N-6) the Memories tab/heading are both translated.
     await page.getByRole('tab', { name: 'Kỷ niệm' }).click();
     await expect(page.getByRole('heading', { name: 'Kỷ niệm' })).toBeVisible();

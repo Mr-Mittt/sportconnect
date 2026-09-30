@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+import i18next from 'i18next';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
 import type { ApiResponse } from '@/shared/types/api';
@@ -40,7 +41,7 @@ export function useUpdateMyProfile() {
   const errorMessage = mutation.error
     ? (axios.isAxiosError(mutation.error) &&
         (mutation.error.response?.data as ApiResponse<null> | undefined)?.message) ||
-      'Could not save your profile. Please try again.'
+      i18next.t('profilePage:saveResult.profileFailedRetry')
     : null;
 
   return {

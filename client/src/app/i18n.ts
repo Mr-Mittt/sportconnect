@@ -7,6 +7,7 @@ import groupsEn from '@/locales/en/groups.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
 import loginEn from '@/locales/en/login.json';
 import notificationsEn from '@/locales/en/notifications.json';
+import accountSettingsEn from '@/locales/en/accountSettings.json';
 import profileEn from '@/locales/en/profile.json';
 import profilePageEn from '@/locales/en/profilePage.json';
 import registerEn from '@/locales/en/register.json';
@@ -21,6 +22,7 @@ import groupsVi from '@/locales/vi/groups.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
 import loginVi from '@/locales/vi/login.json';
 import notificationsVi from '@/locales/vi/notifications.json';
+import accountSettingsVi from '@/locales/vi/accountSettings.json';
 import profileVi from '@/locales/vi/profile.json';
 import profilePageVi from '@/locales/vi/profilePage.json';
 import registerVi from '@/locales/vi/register.json';
@@ -111,6 +113,7 @@ void i18next.use(initReactI18next).init({
     en: {
       common: commonEn,
       register: registerEn,
+      accountSettings: accountSettingsEn,
       profile: profileEn,
       profilePage: profilePageEn,
       login: loginEn,
@@ -127,6 +130,7 @@ void i18next.use(initReactI18next).init({
     vi: {
       common: commonVi,
       register: registerVi,
+      accountSettings: accountSettingsVi,
       profile: profileVi,
       profilePage: profilePageVi,
       login: loginVi,
@@ -144,7 +148,7 @@ void i18next.use(initReactI18next).init({
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session'],
+  ns: ['common', 'register', 'accountSettings', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });
