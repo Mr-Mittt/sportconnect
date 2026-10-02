@@ -19,7 +19,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| — | — | _(none — C11 done 2026-09-10)_ | — |
+| 1 | [C12](MVP/C12_ERROR_CONTRACT_AND_CATEGORY_TAXONOMY.md) | **[Error handling · Phase A]** Error contract — `ApiResponse` gains nullable `errorCode`/`errorParams`, exceptions gain an additive `(code, message, params)` constructor, `GlobalExceptionHandler` passes them through, `ERROR_CODES.md` registry + category taxonomy. Foundation for every other ticket in the program | `TODO` |
 
 ---
 

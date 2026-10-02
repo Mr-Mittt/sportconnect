@@ -24,6 +24,7 @@ module's own implementation work).
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 1 | [NTF-5](MVP/NTF-5_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the notification module — list/mark-read endpoints; smallest module. Pairs with CLIENT-ERR-8 | `TODO` |
 
 ---
 

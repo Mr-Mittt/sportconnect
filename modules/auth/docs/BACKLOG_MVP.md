@@ -21,7 +21,7 @@
 |---|---|---|---|
 | 1 | [A5](MVP/A5_LOGIN_REGISTRATION_RATE_LIMITING.md) | Login/registration rate limiting | `TODO` |
 | 2 | [A7](MVP/A7_AUDIT_PUBLIC_API_SURFACE_AND_REMOVE_UNUSED_ENDPOINTS.md) | Audit the public API surface and clean up unused endpoints — `permitAll` allowlist dates to the initial commit and was never reviewed; 13 public endpoints have no client caller | `TODO` |
-| 3 | [A8](MVP/A8_STRUCTURED_ERROR_CODES_ON_APIRESPONSE_ERROR.md) | Structured error codes on `ApiResponse.error()` for known auth failures (starting with register's "Email already registered") so the client can translate them instead of showing the server's raw English text — found during client CLIENT-REF-2 | `TODO` |
+| 3 | [A8](MVP/A8_STRUCTURED_ERROR_CODES_ON_APIRESPONSE_ERROR.md) | **[Error handling · Phase B]** Structured error codes for the auth module — **scope change 2026-10-02 (user decision, I18N-4 review):** the shared `ApiResponse.errorCode`/`errorParams` contract moved to common **C12**; A8 is now the auth audit (login/register/refresh/reset/verify: check, categorize, define codes, convert throw sites). Depends on C12; pairs with CLIENT-ERR-2. Originally found during client CLIENT-REF-2 | `TODO` |
 
 ---
 

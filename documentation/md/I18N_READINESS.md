@@ -90,7 +90,7 @@ caller is authenticated and has one set, rather than treating the two as unrelat
 
 ### I18N-4 · Backend-authored, user-facing strings are English-only today
 **Date added:** 2026-08-24
-**Status:** `CANDIDATE`
+**Status:** `CONFIRMED` (2026-10-02 — direction 1 chosen: stable error codes + client-owned en/vi copy, no backend message catalog. Delivered through the error-handling program: global handling first, then a per-module audit that defines codes, then client adaptation. Design, phases and ticket tracker: `documentation/md/ERROR_HANDLING_DESIGN.md`. Contract in common **C12**, client foundation **CLIENT-ERR-1**, per-module Phase B/C pairs listed there; auth **A8** was folded in as the auth audit.)
 **Source:** surfaced while scoping A13's resolution split (raw vs. resolved responses)
 
 `ApiResponse.message` and every domain exception's message (`BadRequestException`,
@@ -117,18 +117,18 @@ pickup) — every client form currently showing a server-authored message verbat
 each client localization ticket (`CLIENT-I18N-3`/`4`/`5`/beyond) touches new ground, so this list is
 current whenever I18N-4 itself finally gets scoped:**
 
-| Page | Form/flow | Hook |
-|---|---|---|
-| `/login` | Log in | `useLogin` |
-| `/register` | Sign up | `useRegister` |
-| Any page (avatar dropdown) | Account Settings modal (ACCOUNT-1 — was the `/profile` Edit Profile modal's body) | `useEditProfileSave` (wraps `useUpdateMyProfile` + `useUpdateMyPreferences`) |
-| `/profile` | Edit Profile modal (ACCOUNT-1 — avatar/cover URL only) | `useUpdateMyProfile` (its client fallback is now localized; the server message is still shown verbatim) |
-| `/profile` | Settings tab — per-sport profile editor | `useUpdateSportProfile` |
-| `/profile` | Settings tab — deactivate/reactivate a sport profile | `useDeactivateSportProfile` |
-| Groups page | Invite Friend modal | `useInviteFriendModalData` |
-| Admin | Sport fields editor | `useUpdateSport` |
-| Admin | Sport attribute-schema editor | `useReplaceSportAttributeSchema` |
-| Admin | Session attribute-schema editor | `useReplaceSessionAttributeSchema` |
+| Page | Form/flow | Hook | Phase C ticket |
+|---|---|---|---|
+| `/login` | Log in | `useLogin` | CLIENT-ERR-2 |
+| `/register` | Sign up | `useRegister` | CLIENT-ERR-2 |
+| Any page (avatar dropdown) | Account Settings modal (ACCOUNT-1 — was the `/profile` Edit Profile modal's body) | `useEditProfileSave` (wraps `useUpdateMyProfile` + `useUpdateMyPreferences`) | CLIENT-ERR-3 |
+| `/profile` | Edit Profile modal (ACCOUNT-1 — avatar/cover URL only) | `useUpdateMyProfile` (its client fallback is now localized; the server message is still shown verbatim) | CLIENT-ERR-3 |
+| `/profile` | Settings tab — per-sport profile editor | `useUpdateSportProfile` | CLIENT-ERR-4 |
+| `/profile` | Settings tab — deactivate/reactivate a sport profile | `useDeactivateSportProfile` | CLIENT-ERR-4 |
+| Groups page | Invite Friend modal | `useInviteFriendModalData` | CLIENT-ERR-5 |
+| Admin | Sport fields editor | `useUpdateSport` | CLIENT-ERR-1 (shared classifier only; no vi copy) |
+| Admin | Sport attribute-schema editor | `useReplaceSportAttributeSchema` | CLIENT-ERR-1 (shared classifier only; no vi copy) |
+| Admin | Session attribute-schema editor | `useReplaceSessionAttributeSchema` | CLIENT-ERR-1 (shared classifier only; no vi copy) |
 
 Home Feed, Friends (aside from the invite modal), Sessions/Matches, and Notifications don't
 currently surface a raw server message anywhere. **Whoever picks up `CLIENT-I18N-3`/`4`/`5` (or any

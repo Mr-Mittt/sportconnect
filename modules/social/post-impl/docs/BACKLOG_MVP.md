@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [B7](MVP/B7_NOTIFICATION_OUTBOX_WIRING.md) | Notification outbox wiring — post liked/commented/replied, thread-participant fan-out | `TODO` |
+| 2 | [A18](MVP/A18_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the post module — posts, comments, likes, feed, hashtags; not-found vs forbidden via the post ResourceGate (A14). Pairs with CLIENT-ERR-6 | `TODO` |
 
 ---
 

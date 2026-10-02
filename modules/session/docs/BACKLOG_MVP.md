@@ -25,6 +25,7 @@
 | 4 | [SESSION-29](MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md) | Old `CANCELLED`/`COMPLETED` session storage — retention concern, documented only, no direction decided (revisit once there's real usage/storage data) | `TODO` |
 | 5 | [SESSION-41](MVP/SESSION-41_GENERATION_FAILURE_BACKSTOP.md) | No retry/backstop for a failed eager group-session generation attempt — SESSION-38's failure isolation leaves no periodic sweep to catch a missed group | `TODO` |
 | 6 | [SESSION-44](MVP/SESSION-44_REJECT_JOIN_AND_APPROVAL_ON_COMPLETED_SESSION.md) | `joinSession` (and approve/reject) reject only `CANCELLED`, not `COMPLETED` — a join or join request on a finished session succeeds (and notifies the creator); found during client CLIENT-SESSION-30 by code review, not yet reproduced live | `TODO` |
+| 7 | [SESSION-45](MVP/SESSION-45_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the session module — create/join/leave/approve/complete, comments, discover; session ResourceGate not-found vs forbidden (the client special-cases a 403 on comments today). Pairs with CLIENT-ERR-7 | `TODO` |
 
 ---
 

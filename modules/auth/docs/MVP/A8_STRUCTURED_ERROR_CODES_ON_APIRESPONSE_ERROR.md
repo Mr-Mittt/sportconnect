@@ -2,12 +2,29 @@
 
 **Status:** `TODO`
 **Type:** Enhancement
-**Depends on:** none
+**Program:** Error handling · Phase B
+**Depends on:** C12 (common) — the shared `ApiResponse` contract (see scope change below)
 **Filed:** 2026-09-28, found during client **CLIENT-REF-2** (sign-up) — the register error banner shows the server's
 raw English message (e.g. `"Email already registered"`) with no way for the client to translate it, since
 `ApiResponse.error(message)` carries only free text, no code. The client-side fix at CLIENT-REF-2's pickup was to
 leave the banner untranslated (a documented, accepted limitation) rather than string-match the English text, which
 would be fragile and break silently the moment this message's wording changes.
+
+## Scope change (2026-10-02, I18N-4 review — user decision)
+
+The error-handling program (`documentation/md/ERROR_HANDLING_DESIGN.md`) puts the shared contract in **common C12**: `ApiResponse.errorCode`/`errorParams`, the additive exception constructors, `GlobalExceptionHandler` pass-through and the `ERROR_CODES.md` registry. This ticket therefore **no longer adds the `ApiResponse` field** and instead becomes the **auth Phase B audit**: check every user-reachable auth endpoint (login, register, refresh, logout, forgot/reset password, verify-email), categorize each error with the C12 taxonomy, define codes (starting with `EMAIL_ALREADY_REGISTERED`, `INVALID_CREDENTIALS`, `ACCOUNT_DEACTIVATED`, plus the refresh/reset/verify token errors), record them in `ERROR_CODES.md`, convert the throw sites, and cover the boundaries with ITs. The "decide at pickup which throw sites" caveat below is replaced by "all user-reachable auth errors". Paired client ticket: **CLIENT-ERR-2** (auth copy and states).
+
+**Known auth messages:** `Email already registered`, `Email already verified`, `Invalid email or password`, `Account is deactivated`, `Refresh token expired or revoked`, `Refresh token missing`, `Reset token already used`, `Reset token has expired`, `Verification token has expired`.
+
+**Audit table (fill in at pickup):**
+
+| Endpoint | Error / current message | Category | Code | Params | Client behavior |
+|---|---|---|---|---|---|
+| _to be filled during the audit_ | | | | | |
+
+The original ticket text follows unchanged for history.
+
+---
 
 ## What
 
@@ -46,3 +63,5 @@ shape) at pickup, not skipped because "it's just additive."
 **Tests:** Spock coverage for each throw site updated to assert the new `errorCode` alongside the existing `message`
 assertion; an integration test confirming the field round-trips through the real HTTP response for at least the
 register-duplicate-email case.
+
+**On close:** update this ticket's row in the tracker table in `documentation/md/ERROR_HANDLING_DESIGN.md`.

@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [B21](MVP/B21_NOTIFICATION_OUTBOX_WIRING.md) | Notification outbox wiring — join requests, invites | `TODO` |
+| 2 | [A11](MVP/A11_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the group module — groups, membership, roles, invitations, join requests, settings, broadcasts; availability-vs-visibility (not found vs forbidden) per the ResourceGate rule. Pairs with CLIENT-ERR-5 | `TODO` |
 
 ---
 
