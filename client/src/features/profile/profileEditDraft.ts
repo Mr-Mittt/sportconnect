@@ -1,4 +1,4 @@
-import { isGender, type UserResponse } from './types';
+import type { UserResponse } from './types';
 
 /**
  * The editable subset of `UserResponse` — 1:1 with `UpdateProfileRequest`
@@ -62,7 +62,7 @@ export function toProfileEditDraft(user: UserResponse): ProfileEditDraft {
     coverUrl: user.coverUrl ?? '',
     phoneNumber: user.phoneNumber ?? '',
     dateOfBirth: user.dateOfBirth ?? '',
-    gender: normalizeGender(user.gender),
+    gender: user.gender ?? '',
     heightCm: user.heightCm?.toString() ?? '',
     weightKg: user.weightKg?.toString() ?? '',
     shoeSizeCm: user.shoeSizeCm?.toString() ?? '',
@@ -146,14 +146,4 @@ export function buildProfileUpdatePayload(
   }
 
   return payload;
-}
-
-/** Seeds the gender field: the server stores free text today, so a legacy `"Female"`/`"male"` is
- * mapped (case-insensitively) onto its enum value; anything else is kept verbatim so the
- * dropdown can still show it. Applied to both the draft and the "original" it is diffed against,
- * so the mapping alone never marks the form dirty or sends a write. */
-function normalizeGender(value: string | null): string {
-  if (value === null) return '';
-  const upper = value.trim().toUpperCase();
-  return isGender(upper) ? upper : value;
 }

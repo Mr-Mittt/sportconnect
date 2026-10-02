@@ -7,7 +7,7 @@ import {
   type ProfileEditDraft,
   type UpdateProfilePayload,
 } from '@/features/profile/profileEditDraft';
-import { GENDERS, isGender, MAX_BIO_LENGTH, type UserResponse } from '@/features/profile/types';
+import { GENDERS, MAX_BIO_LENGTH, type UserResponse } from '@/features/profile/types';
 import {
   GeoLocaleCountrySelect,
   GeoLocaleLanguageField,
@@ -255,12 +255,6 @@ export function AccountSettingsModal({
                       {tEnums(`gender.${gender}`)}
                     </option>
                   ))}
-                  {/* The server stores gender as free text today (a validated enum is a filed
-                      backend follow-up), so a legacy value outside MALE/FEMALE can still arrive —
-                      keep it selectable instead of silently blanking the field. */}
-                  {draft.gender !== '' && !isGender(draft.gender) && (
-                    <option value={draft.gender}>{draft.gender}</option>
-                  )}
                 </Select>
               </div>
             </div>

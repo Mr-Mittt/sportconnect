@@ -325,6 +325,12 @@ export const friendHandlers: HttpHandler[] = [
     const body = (await request.json()) as UpdateProfilePayload;
     const current = session.myProfileState;
 
+    // ACCOUNT-2 / U20: gender is a closed set. Absent/null = skip, "" = clear, otherwise exactly
+    // MALE or FEMALE (case-sensitive) — anything else is a 400 and nothing is applied.
+    if (body.gender !== undefined && body.gender !== null && body.gender !== '' && body.gender !== 'MALE' && body.gender !== 'FEMALE') {
+      return HttpResponse.json(apiError('gender must be one of: MALE, FEMALE'), { status: 400 });
+    }
+
     let countryId = current.countryId;
     let regionId = current.regionId;
     if (body.countryId !== undefined) {
@@ -343,6 +349,7 @@ export const friendHandlers: HttpHandler[] = [
     const updated: UserResponse = {
       ...current,
       ...body,
+      gender: body.gender === undefined || body.gender === null ? current.gender : body.gender === '' ? null : body.gender,
       countryId,
       regionId,
       country,

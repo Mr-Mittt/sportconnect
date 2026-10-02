@@ -78,13 +78,9 @@ export interface UserPreferenceResponse {
 }
 
 /**
- * The gender values the client offers and sends (`UpdateProfileRequest.gender`). The server
- * stores it as free-text `VARCHAR(20)` today with no validation — a validated `Gender` enum is a
- * filed backend follow-up — so a stored value can still be outside this set (see `isGender`).
+ * The gender values the client offers and sends (`UpdateProfileRequest.gender`). Mirrors the
+ * server's validated `Gender` enum (U20): anything else is a 400, and a stored value is always one
+ * of these or `null`. `UserResponse.gender` stays `string | null` — it is the wire contract.
  */
 export const GENDERS = ['MALE', 'FEMALE'] as const;
 export type Gender = (typeof GENDERS)[number];
-
-export function isGender(value: string): value is Gender {
-  return (GENDERS as readonly string[]).includes(value);
-}

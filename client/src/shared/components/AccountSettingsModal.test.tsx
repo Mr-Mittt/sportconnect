@@ -359,22 +359,34 @@ describe('AccountSettingsModal', () => {
     expect(onSave).toHaveBeenCalledWith({ profile: { gender: 'FEMALE' }, languageCode: undefined });
   });
 
-  it('maps a legacy free-text gender ("female") onto its enum value without marking the form dirty', () => {
+  it('preselects a stored gender without marking the form dirty (ACCOUNT-2)', () => {
     renderWithProviders(
-      <AccountSettingsModal isOpen onClose={vi.fn()} user={user({ gender: 'female' })} languageCode="vi" onSave={vi.fn()} isSaving={false} errorMessage={null} />,
+      <AccountSettingsModal isOpen onClose={vi.fn()} user={user({ gender: 'FEMALE' })} languageCode="vi" onSave={vi.fn()} isSaving={false} errorMessage={null} />,
     );
 
     expect(screen.getByLabelText('Gender')).toHaveValue('FEMALE');
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
   });
 
-  it('keeps an unrecognised legacy gender selectable instead of blanking it', () => {
+  it('"Not specified" sends an empty string to clear a stored gender (ACCOUNT-2)', async () => {
+    const testUser = userEvent.setup();
+    const onSave = vi.fn();
     renderWithProviders(
-      <AccountSettingsModal isOpen onClose={vi.fn()} user={user({ gender: 'asdf' })} languageCode="vi" onSave={vi.fn()} isSaving={false} errorMessage={null} />,
+      <AccountSettingsModal isOpen onClose={vi.fn()} user={user({ gender: 'MALE' })} languageCode="vi" onSave={onSave} isSaving={false} errorMessage={null} />,
     );
 
-    expect(screen.getByLabelText('Gender')).toHaveValue('asdf');
-    expect(screen.getByRole('option', { name: 'asdf' })).toBeInTheDocument();
+    await testUser.selectOptions(screen.getByLabelText('Gender'), '');
+    await testUser.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(onSave).toHaveBeenCalledWith({ profile: { gender: '' }, languageCode: undefined });
+  });
+
+  it('shows the gender-validation message from the server verbatim (ACCOUNT-2)', () => {
+    renderWithProviders(
+      <AccountSettingsModal isOpen onClose={vi.fn()} user={user()} languageCode="vi" onSave={vi.fn()} isSaving={false} errorMessage="gender must be one of: MALE, FEMALE" />,
+    );
+
+    expect(screen.getByText('gender must be one of: MALE, FEMALE')).toBeInTheDocument();
   });
 
   it('height/weight/shoe size reject e, +, -, . keystrokes and non-digit pastes; the phone field rejects letters', () => {
