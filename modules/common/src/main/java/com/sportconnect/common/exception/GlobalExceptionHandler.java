@@ -49,12 +49,30 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(e.getMessage()));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(coded(e));
     }
 
     @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(e.getMessage()));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(coded(e));
+    }
+
+    /**
+     * 409: well-formed request that clashes with current state. Added by C12; no pre-existing site
+     * throws it yet (each module's error-code audit moves its own sites from 400 where it applies).
+     */
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConflict(ConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(coded(e));
+    }
+
+    /**
+     * Builds the error body for one of our shared exceptions, copying its {@code errorCode} /
+     * {@code errorParams} when it carries them (C12). An un-coded exception yields exactly the
+     * {@code message}-only body it always did.
+     */
+    private static <E extends RuntimeException & CodedException> ApiResponse<Void> coded(E e) {
+        return ApiResponse.error(e.getErrorCode(), e.getMessage(), e.getErrorParams());
     }
 
     /**
@@ -77,23 +95,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Access denied"));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("ACCESS_DENIED", "Access denied", null));
     }
 
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException e) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(e.getMessage()));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(coded(e));
     }
 
     @ExceptionHandler({NotFoundException.class, ResourceNotFoundException.class})
     public ResponseEntity<ApiResponse<Void>> handleNotFound(RuntimeException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(e.getMessage()));
+        String code = e instanceof CodedException coded ? coded.getErrorCode() : null;
+        Map<String, Object> params = e instanceof CodedException coded ? coded.getErrorParams() : null;
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(code, e.getMessage(), params));
     }
 
     /**
      * Bean-validation failures from {@code @Valid} request bodies. Field-level messages are
-     * collected into a {@code field -> message} map and returned as the response {@code data},
-     * since a single top-level message string would lose which field(s) actually failed.
+     * collected into a {@code field -> message} map and returned as
+     * {@code errorParams.fields} (code {@code VALIDATION_FAILED}), since a single top-level message
+     * string would lose which field(s) actually failed. C12 moved the map out of {@code data}, which
+     * is now always {@code null} on an error.
      *
      * <p>An {@code @Override} of {@link ResponseEntityExceptionHandler}'s own handler rather than a
      * fresh {@code @ExceptionHandler(MethodArgumentNotValidException.class)} method: declaring the
@@ -109,7 +132,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             fieldErrors.put(fieldError.getField(), fieldError.getDefaultMessage());
         }
-        return handleExceptionInternal(ex, ApiResponse.error("Validation failed", fieldErrors),
+        Map<String, Object> params = fieldErrors.isEmpty() ? null : Map.of("fields", fieldErrors);
+        return handleExceptionInternal(ex, ApiResponse.error("VALIDATION_FAILED", "Validation failed", params),
                 headers, HttpStatus.BAD_REQUEST, request);
     }
 
@@ -124,7 +148,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleMissingServletRequestParameter(
             MissingServletRequestParameterException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        return handleExceptionInternal(ex, ApiResponse.error(ex.getParameterName() + " is required"),
+        return handleExceptionInternal(ex, ApiResponse.error("MISSING_PARAMETER", ex.getParameterName() + " is required",
+                        Map.of("param", ex.getParameterName())),
                 headers, HttpStatus.BAD_REQUEST, request);
     }
 
@@ -148,8 +173,25 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         }
         Object envelope = (body instanceof ApiResponse<?>)
                 ? body
-                : ApiResponse.error(genericMessageFor(statusCode));
+                : ApiResponse.error(genericCodeFor(statusCode), genericMessageFor(statusCode), null);
         return super.handleExceptionInternal(ex, envelope, headers, statusCode, request);
+    }
+
+    /**
+     * Fixed per-status error code for framework-level failures (C12), registered in
+     * {@code ERROR_CODES.md}. Statuses without a dedicated code return {@code null} (message only).
+     */
+    private static String genericCodeFor(HttpStatusCode statusCode) {
+        return switch (statusCode.value()) {
+            case 400 -> "MALFORMED_REQUEST";
+            case 404 -> "ENDPOINT_NOT_FOUND";
+            case 405 -> "METHOD_NOT_ALLOWED";
+            case 406 -> "NOT_ACCEPTABLE";
+            case 413 -> "REQUEST_TOO_LARGE";
+            case 415 -> "UNSUPPORTED_MEDIA_TYPE";
+            case 503 -> "SERVICE_UNAVAILABLE";
+            default -> statusCode.is5xxServerError() ? "INTERNAL_ERROR" : null;
+        };
     }
 
     private static String genericMessageFor(HttpStatusCode statusCode) {
@@ -177,6 +219,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleGeneric(Exception e) {
         log.error("Unhandled exception", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("An unexpected error occurred"));
+                .body(ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred", null));
     }
 }

@@ -32,6 +32,7 @@ class GlobalExceptionMappingIntegrationTest extends BaseIT {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Resource not found"))
+                .andExpect(jsonPath("$.errorCode").value("ENDPOINT_NOT_FOUND"))
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 
@@ -42,6 +43,7 @@ class GlobalExceptionMappingIntegrationTest extends BaseIT {
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Request method not supported"))
+                .andExpect(jsonPath("$.errorCode").value("METHOD_NOT_ALLOWED"))
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 
@@ -53,6 +55,7 @@ class GlobalExceptionMappingIntegrationTest extends BaseIT {
                 .andExpect(status().isUnsupportedMediaType())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Unsupported media type"))
+                .andExpect(jsonPath("$.errorCode").value("UNSUPPORTED_MEDIA_TYPE"))
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 
@@ -64,6 +67,7 @@ class GlobalExceptionMappingIntegrationTest extends BaseIT {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Malformed request"))
+                .andExpect(jsonPath("$.errorCode").value("MALFORMED_REQUEST"))
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 
@@ -74,6 +78,26 @@ class GlobalExceptionMappingIntegrationTest extends BaseIT {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Malformed request"))
+                .andExpect(jsonPath("$.errorCode").value("MALFORMED_REQUEST"))
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    /**
+     * C12: a real {@code @Valid} endpoint through the real pipeline. The per-field messages arrive in
+     * {@code errorParams.fields}, the code is {@code VALIDATION_FAILED}, and {@code data} is null —
+     * the field map no longer lives in {@code data}.
+     */
+    @Test
+    void validationFailure_carriesFieldsInErrorParams_andNoData() throws Exception {
+        mockMvc.perform(post("/api/auth/login").with(anonymous())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errorParams.fields.email").value("Email is required"))
+                .andExpect(jsonPath("$.errorParams.fields.password").value("Password is required"))
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 }
