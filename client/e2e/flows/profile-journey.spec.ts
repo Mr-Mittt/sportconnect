@@ -157,6 +157,8 @@ test('Profile journey', async ({ page, context }) => {
 
     const bioField = dialog.getByLabel('Bio');
     await bioField.fill('Now coaching weekend badminton clinics too.');
+    // ACCOUNT-2: gender is a closed MALE/FEMALE set; the mock PUT rejects anything else like U20.
+    await dialog.getByLabel('Gender').selectOption('FEMALE');
 
     // CLIENT-REF-3: countryId/regionId/languageCode all start untouched (mockMyProfile has none
     // set) — a single "Use my current location" click fills Country/Region and, since language
@@ -174,10 +176,12 @@ test('Profile journey', async ({ page, context }) => {
     const body = request.postDataJSON() as {
       countryId?: number;
       regionId?: number;
+      gender?: string;
       location?: { latitude: number; longitude: number };
     };
     expect(body.countryId).toBe(1);
     expect(body.regionId).toBe(102);
+    expect(body.gender).toBe('FEMALE');
     expect(body.location).toEqual({ latitude: 10.7769, longitude: 106.7009 });
 
     await expect(dialog).not.toBeVisible();
@@ -191,6 +195,7 @@ test('Profile journey', async ({ page, context }) => {
     await page.getByRole('menuitem', { name: 'Cài đặt tài khoản' }).click();
     const viDialog = page.getByRole('dialog', { name: 'Cài đặt tài khoản' });
     await expect(viDialog).toBeVisible();
+    await expect(viDialog.getByLabel('Giới tính')).toHaveValue('FEMALE'); // persisted by the mock
     await page.keyboard.press('Escape');
     await expect(viDialog).not.toBeVisible();
   });

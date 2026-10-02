@@ -10,7 +10,7 @@ const baseUser: UserResponse = {
   username: 'jordanlee',
   phoneNumber: '0123456789',
   dateOfBirth: '1995-06-12',
-  gender: 'Female',
+  gender: 'FEMALE',
   bio: 'Weekend baller, always up for a pickup game.',
   avatarUrl: 'https://cdn.example.com/avatar.png',
   coverUrl: null,
