@@ -2,12 +2,19 @@ package com.sportconnect.common.exception;
 
 import java.util.Map;
 
-public class UnauthorizedException extends RuntimeException implements CodedException {
+/**
+ * The request is well-formed but clashes with the current state of a resource (for example a
+ * duplicate that already exists). Mapped to HTTP 409 by {@link GlobalExceptionHandler}; the client
+ * treats it as the {@code CONFLICT} category. Added by C12 with no existing throw site converted —
+ * moving a site from {@link BadRequestException} to this is a status change, so each module's
+ * error-code audit decides that per site.
+ */
+public class ConflictException extends RuntimeException implements CodedException {
 
     private final String errorCode;
     private final Map<String, Object> errorParams;
 
-    public UnauthorizedException(String message) {
+    public ConflictException(String message) {
         this(null, message, null);
     }
 
@@ -18,7 +25,7 @@ public class UnauthorizedException extends RuntimeException implements CodedExce
      * @param message     English fallback text
      * @param errorParams values interpolated into the message; may be {@code null}
      */
-    public UnauthorizedException(String errorCode, String message, Map<String, Object> errorParams) {
+    public ConflictException(String errorCode, String message, Map<String, Object> errorParams) {
         super(message);
         this.errorCode = errorCode;
         this.errorParams = errorParams;

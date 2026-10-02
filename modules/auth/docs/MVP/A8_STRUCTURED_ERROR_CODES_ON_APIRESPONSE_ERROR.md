@@ -16,6 +16,8 @@ The error-handling program (`documentation/md/ERROR_HANDLING_DESIGN.md`) puts th
 
 **Known auth messages:** `Email already registered`, `Email already verified`, `Invalid email or password`, `Account is deactivated`, `Refresh token expired or revoked`, `Refresh token missing`, `Reset token already used`, `Reset token has expired`, `Verification token has expired`.
 
+**Observation from C12 (2026-10-02):** `JwtAuthenticationEntryPoint` writes the 401 body itself, outside `GlobalExceptionHandler`, and puts Spring's internal text in `message` ("Unauthorized: Full authentication is required..."). The client's 401 flow keys off the status only, so **no `errorCode` is wanted for 401** (user decision, C12). Decide in this audit whether to replace that text with a fixed message; do not add a code.
+
 **Audit table (fill in at pickup):**
 
 | Endpoint | Error / current message | Category | Code | Params | Client behavior |
