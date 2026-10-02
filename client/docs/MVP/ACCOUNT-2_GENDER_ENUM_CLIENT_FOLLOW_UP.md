@@ -1,6 +1,6 @@
 # ACCOUNT-2 · Gender enum — client follow-up to backend U20
 
-**Status:** `TODO` · **Type:** Enhancement · **Depends on:** backend **U20** (`modules/user/user-impl/docs/BACKLOG_MVP.md`)
+**Status:** `TODO` · **Type:** Enhancement · **Depends on:** backend **U20** (`modules/user/user-impl/docs/BACKLOG_MVP.md`) - **shipped 2026-10-02, unblocked**
 **Filed:** 2026-09-30, from ACCOUNT-1: the Account Settings gender field is a Male/Female dropdown sending `MALE`/`FEMALE`, but the server (until U20) still accepts and stores free text, so the client carries transitional handling.
 
 ## What

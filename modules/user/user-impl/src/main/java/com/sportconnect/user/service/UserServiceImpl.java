@@ -6,6 +6,7 @@ import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.user.api.dto.FriendRequestResponse;
+import com.sportconnect.user.api.dto.Gender;
 import com.sportconnect.user.api.dto.LocationResponse;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.UserSportProfileService;
@@ -218,6 +219,8 @@ public class UserServiceImpl implements UserService {
 
         // U16: validated first so a bad selection fails before any other field is touched.
         applyGeoSelection(user, request);
+        // U20: same reasoning - validated before any field is touched, so a bad gender saves nothing.
+        String resolvedGender = resolveGender(request.getGender());
 
         // Captured before mutation so the publish below only fires when a field services/chat
         // actually displays (name/username/avatar) really changed — not on every profile save.
@@ -242,7 +245,7 @@ public class UserServiceImpl implements UserService {
             user.setDateOfBirth(request.getDateOfBirth());
         }
         if (request.getGender() != null) {
-            user.setGender(request.getGender());
+            user.setGender(resolvedGender);
         }
         if (request.getBio() != null) {
             user.setBio(request.getBio());
@@ -392,6 +395,24 @@ public class UserServiceImpl implements UserService {
         }
         log.info("Created new user: {}", email);
         return toUserResponse(savedUser);
+    }
+
+    /**
+     * U20: validates the {@code gender} part of a profile update. Callers apply the result only when the request's
+     * gender is non-null ({@code null} = skip).
+     *
+     * @param requested the raw {@code UpdateProfileRequest.gender}
+     * @return the {@link Gender} name to store; {@code null} for the empty string (clear) or for a {@code null}
+     *         request (nothing to store)
+     * @throws BadRequestException if non-empty and not exactly one of {@link Gender}'s names (case-sensitive)
+     */
+    private String resolveGender(String requested) {
+        if (requested == null || requested.isEmpty()) {
+            return null;
+        }
+        return Gender.fromWire(requested)
+                .map(Gender::name)
+                .orElseThrow(() -> new BadRequestException("gender must be one of: MALE, FEMALE"));
     }
 
     /**

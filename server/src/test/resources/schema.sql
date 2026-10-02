@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) UNIQUE,
     phone_number VARCHAR(20),
     date_of_birth DATE,
-    gender VARCHAR(20),
+    gender VARCHAR(20) CONSTRAINT chk_users_gender CHECK (gender IN ('MALE', 'FEMALE')),
     bio TEXT,
     avatar_url VARCHAR(500),
     cover_url VARCHAR(500),

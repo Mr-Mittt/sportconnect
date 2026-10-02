@@ -208,5 +208,7 @@
     <!-- U16: users.country_id / region_id (no FK — cross-domain ids only), user_preferences.language widened to 35,
          and the one-time users.country -> country_id backfill (re-run by REF-4). -->
     <include file="db/changelog/changes/V075__add_country_region_links_to_users.sql" relativeToChangelogFile="false"/>
+    <!-- U20: users.gender -> closed set (MALE / FEMALE): normalise existing rows, then a CHECK constraint. -->
+    <include file="db/changelog/changes/V076__normalize_user_gender.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>
