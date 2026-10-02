@@ -284,7 +284,7 @@ class UserServiceImplSpec extends Specification {
                 .username("newusername")
                 .phoneNumber("+1234567890")
                 .dateOfBirth(LocalDate.of(1990, 1, 1))
-                .gender("Male")
+                .gender("MALE")
                 .bio("Updated bio")
                 .avatarUrl("https://example.com/avatar.jpg")
                 .coverUrl("https://example.com/cover.jpg")
@@ -304,7 +304,7 @@ class UserServiceImplSpec extends Specification {
             assert savedUser.lastName == "Name"
             assert savedUser.username == "newusername"
             assert savedUser.phoneNumber == "+1234567890"
-            assert savedUser.gender == "Male"
+            assert savedUser.gender == "MALE"
             assert savedUser.bio == "Updated bio"
             assert savedUser.city == "New York"
             assert savedUser.countryId == 7L
@@ -369,6 +369,57 @@ class UserServiceImplSpec extends Specification {
 
         and: "no event is published — none of the displayable fields changed"
         0 * stringRedisTemplate.opsForStream()
+    }
+
+    def "updateProfile stores #sent as #stored (U20)"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId).email("test@example.com").gender(existing)
+                .isActive(true).roles([] as Set).build()
+        def request = UpdateProfileRequest.builder().gender(sent).build()
+
+        when:
+        userService.updateProfile(userId, userId, request)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * userRepository.save(_) >> { User savedUser ->
+            assert savedUser.gender == stored
+            return savedUser
+        }
+
+        where:
+        sent     | existing | stored
+        "MALE"   | null     | "MALE"
+        "FEMALE" | "MALE"   | "FEMALE"
+        ""       | "FEMALE" | null      // empty string clears
+        null     | "FEMALE" | "FEMALE"  // null = skip, existing value untouched
+    }
+
+    def "updateProfile rejects gender '#sent' with a BadRequestException and saves nothing (U20)"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId).email("test@example.com").firstName("Old").gender("MALE")
+                .isActive(true).roles([] as Set).build()
+        def request = UpdateProfileRequest.builder().firstName("New").gender(sent).build()
+
+        when:
+        userService.updateProfile(userId, userId, request)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        def e = thrown(BadRequestException)
+        e.message == "gender must be one of: MALE, FEMALE"
+        0 * userRepository.save(_)
+
+        and: "validated before any field was applied"
+        user.firstName == "Old"
+        user.gender == "MALE"
+
+        where:
+        sent << ["male", "Female", "asdf", " MALE", "OTHER", "M"]
     }
 
     def "updateProfile should update physical stats when provided within bounds"() {

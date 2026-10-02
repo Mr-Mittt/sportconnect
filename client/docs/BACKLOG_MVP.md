@@ -70,7 +70,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 |---|---|---|---|
 | 2 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
 | 5 | [CLIENT-SESSION-18](MVP/CLIENT-SESSION-18_REF_OTHER_MODAL_SUGGESTED_RESULTS.md) | Suggested-results typeahead inside the `CLIENT-SESSION-17` `#ref` "Other…" add-modal — debounced backend search over an aggregated value pool, shared with `SPORT-6`. **Hard-blocked on backend `A14`** (postponed) — same block as `SPORT-6`, sequence together. Split out of the CLIENT-SESSION-17 pickup (user decision 2026-09-08). | `TODO` |
-| 7 | [ACCOUNT-2](MVP/ACCOUNT-2_GENDER_ENUM_CLIENT_FOLLOW_UP.md) | Gender enum client follow-up — drop ACCOUNT-1's transitional legacy-gender handling once backend **U20** (validated `MALE`/`FEMALE` enum) ships; **hard-blocked on U20** | `TODO` |
+| 7 | [ACCOUNT-2](MVP/ACCOUNT-2_GENDER_ENUM_CLIENT_FOLLOW_UP.md) | Gender enum client follow-up — drop ACCOUNT-1's transitional legacy-gender handling once backend **U20** (validated `MALE`/`FEMALE` enum) ships; ~~hard-blocked on U20~~ **unblocked - U20 shipped 2026-10-02** | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against

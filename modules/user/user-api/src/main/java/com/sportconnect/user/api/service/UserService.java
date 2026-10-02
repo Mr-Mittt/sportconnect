@@ -86,6 +86,14 @@ public interface UserService {
 
     /**
      * Update user profile. Caller may only update their own profile.
+     *
+     * <p>Validation runs before any field is applied, so a rejected request saves nothing: the country/region
+     * selection (U16, {@code 400}) and {@code gender} (U20). {@code gender} must be exactly one of
+     * {@link com.sportconnect.user.api.dto.Gender}'s names ({@code MALE}, {@code FEMALE}) - anything else, including
+     * lower-case, is a {@code BadRequestException}; {@code null} skips the field and the empty string clears it.
+     *
+     * @throws com.sportconnect.common.exception.BadRequestException on an invalid gender, geo selection or physical stat
+     * @throws com.sportconnect.common.exception.ForbiddenException if {@code callerId} is not {@code userId}
      */
     UserResponse updateProfile(UUID userId, UUID callerId, UpdateProfileRequest request);
 

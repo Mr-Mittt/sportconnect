@@ -29,6 +29,12 @@ public class UpdateProfileRequest {
 
     private LocalDate dateOfBirth;
 
+    /**
+     * One of {@link Gender}'s names ({@code "MALE"}, {@code "FEMALE"}), exact upper-case. {@code null} skips the
+     * field; the empty string clears it (stored as {@code NULL}); anything else is a {@code 400}. Kept a
+     * {@code String} rather than the enum type so {@code ""} and {@code null} stay distinguishable - binding an enum
+     * would collapse both (or reject {@code ""}).
+     */
     private String gender;
 
     @Size(max = 500, message = "Bio must not exceed 500 characters")
