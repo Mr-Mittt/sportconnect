@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [LOC-5](MVP/LOC-5_VENUE_COUNTRY_REGION_LINKS.md) | Venue `Location` gains nullable `country_id`/`region_id`, auto-derived from coordinates on create (never rejects) + idempotent one-time backfill runner; new `location-impl` → `reference-api` edge. Needs REF-1 + REF-2 (`reference` backlog). Part of `documentation/md/REFERENCE_DATA_DESIGN.md` | `TODO` |
+| 2 | [LOC-6](MVP/LOC-6_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the location module — locations, favorites, timezone derivation; small. Pairs with CLIENT-ERR-8 | `TODO` |
 
 ---
 

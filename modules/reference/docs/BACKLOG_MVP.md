@@ -37,6 +37,7 @@ each names its REF prerequisite:
 |---|---|---|---|
 | 1 | [REF-3](MVP/REF-3_VIETNAM_PROVINCE_DATA_REFRESH.md) | Refresh Vietnam's regions and boundaries to the current province list (63 → 34 merger) | `TODO` |
 | 2 | [REF-4](MVP/REF-4_SEED_REMAINING_COUNTRIES.md) | Seed the remaining ISO 3166-1 countries (REF-1 seeds Vietnam only; polygons already ship, rows only) | `TODO` |
+| 3 | [REF-5](MVP/REF-5_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the reference module — country/region/language reads and `POST /api/reference/resolve`; small, likely few client-actionable codes. Pairs with CLIENT-ERR-8 | `TODO` |
 
 ---
 

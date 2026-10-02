@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [U19](MVP/U19_REMOVE_CITY_FIELD.md) | Remove `city` field entirely from the backend — superseded by Region (U16), found during CLIENT-REF-3 pickup | `TODO` |
+| 2 | [U21](MVP/U21_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the user module — profile/preferences/password/friends/search endpoints; categorize, define codes (range errors with `min`/`max`, unknown language, invalid gender, ownership), convert throw sites. Pairs with CLIENT-ERR-3 | `TODO` |
 
 ---
 

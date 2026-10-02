@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | [A14](MVP/A14_ATTRIBUTE_VALUE_SUGGESTIONS_AND_SEARCH_SCOPE.md) | Attribute-value suggestions + `searchScope` — typeahead pooled from what users already typed, so free text converges *before* an Equipment catalogue exists; results carry an optional `id` from day one so the client never changes when it does. **Postponed at 2026-08-25 pickup** — the aggregation strategy needs more design investigation before implementation (see the ticket's own Investigation notes) | `TODO` |
 | 2 | [A24](MVP/A24_ATTRIBUTE_LABEL_LOCALE_PREFERS_STORED_LANGUAGE.md) | Attribute-label locale prefers the caller's explicitly stored language over `Accept-Language` (I18N_READINESS I18N-3). Needs U16 (`user` backlog) and client CLIENT-I18N-1. Part of `documentation/md/REFERENCE_DATA_DESIGN.md` | `TODO` |
+| 3 | [A25](MVP/A25_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the sport module — sport profile create/edit/deactivate, attribute schemas, admin sport editor; categorize, define codes (duplicate profile with `sportName`, invalid/oversized attributes, ownership), convert throw sites. Pairs with CLIENT-ERR-4 | `TODO` |
 
 ---
 
