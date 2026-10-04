@@ -30,6 +30,7 @@ export function useMarkAllNotificationsRead() {
   const idsToMarkRef = useRef<number[]>([]);
 
   return useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: async () => {
       await Promise.all(idsToMarkRef.current.map((id) => apiClient.put(`/notifications/${id}/read`)));
     },

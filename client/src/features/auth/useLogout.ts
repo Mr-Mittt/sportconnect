@@ -22,6 +22,7 @@ export function useLogout(options?: { onSettled?: () => void }): {
   const clearSession = useAuthStore((state) => state.clearSession);
 
   const mutation = useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: logout,
     onSettled: () => {
       clearSession();

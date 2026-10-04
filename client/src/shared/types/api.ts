@@ -6,4 +6,11 @@ export interface ApiResponse<T> {
   message: string;
   data: T;
   timestamp: string; // ISO timestamp
+  /**
+   * C12: machine-readable error code (`<DOMAIN>_<REASON>`, registered in
+   * `documentation/md/ERROR_CODES.md`). Present only on some error responses; omitted otherwise.
+   */
+  errorCode?: string;
+  /** C12: values interpolated into `message`, or `{ fields: { <field>: <message> } }` for a validation failure. */
+  errorParams?: Record<string, unknown>;
 }

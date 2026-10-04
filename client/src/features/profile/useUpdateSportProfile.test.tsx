@@ -108,6 +108,7 @@ describe('useUpdateSportProfile', () => {
     vi.spyOn(apiClient, 'put').mockRejectedValueOnce({
       isAxiosError: true,
       response: {
+        status: 400,
         data: { success: false, message: 'heightCm must be between 50 and 300', data: null, timestamp: '' },
       },
     });

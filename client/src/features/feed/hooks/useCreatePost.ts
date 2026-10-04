@@ -21,6 +21,7 @@ import type { CreatePostPayload, Post } from '../types';
 export function useCreatePost() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (payload: CreatePostPayload) => {
       const response = await apiClient.post<ApiResponse<Post>>('/posts', payload);
       return response.data.data;

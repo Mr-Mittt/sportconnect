@@ -1,23 +1,19 @@
 import i18next from 'i18next';
 import { useState } from 'react';
-import axios from 'axios';
-import type { ApiResponse } from '@/shared/types/api';
+import { getApiError, getErrorMessage } from '@/shared/lib/apiError';
 import type { AccountSettingsSavePayload } from '@/shared/components/AccountSettingsModal';
 import { useUpdateMyPreferences } from './useUpdateMyPreferences';
 import { useUpdateMyProfile } from './useUpdateMyProfile';
 
-/** Same server-text extraction `useUpdateMyProfile`/`useUpdateMyPreferences` each do for their own
- * `mutation.error` — duplicated here (not imported from either) because this reads a
- * `Promise.allSettled` rejection reason directly. Reading `profile.errorMessage`/
- * `preferences.errorMessage` after the `await` below would be a stale closure: those are computed
- * from each hook's own render-time state, which hasn't re-rendered yet inside this same async
- * function body. */
+/** The message for one half of the combined save. Reads a `Promise.allSettled` rejection reason
+ * directly: reading `profile.errorMessage`/`preferences.errorMessage` after the `await` below would
+ * be a stale closure (those are computed from each hook's own render-time state, which hasn't
+ * re-rendered yet inside this async function body). Goes through the shared classifier
+ * (CLIENT-ERR-1); `fallback` is only for a failure that is not an HTTP error at all. */
 function extractErrorMessage(reason: unknown, fallback: string): string {
-  if (axios.isAxiosError(reason)) {
-    const message = (reason.response?.data as ApiResponse<null> | undefined)?.message;
-    if (message) return message;
-  }
-  return fallback;
+  const { category, status } = getApiError(reason);
+  if (category === 'UNKNOWN' && status === null) return fallback;
+  return getErrorMessage(reason);
 }
 
 /**

@@ -15,6 +15,7 @@ import type { ApiResponse } from '@/shared/types/api';
 export function useUpdateSession() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async ({ sessionId, payload }: { sessionId: number; payload: UpdateSessionPayload }) => {
       const response = await apiClient.put<ApiResponse<Session>>(`/sessions/${sessionId}`, payload);
       return response.data.data;

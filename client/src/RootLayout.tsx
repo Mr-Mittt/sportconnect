@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { useSyncUserLocale } from './app/useSyncUserLocale';
 import { useSessionBootstrap } from './features/auth/useSessionBootstrap';
+import { ErrorToaster } from './shared/components/ErrorToaster';
 
 /**
  * Root route element for the data router (router.tsx). Restores the session
@@ -12,9 +13,17 @@ import { useSessionBootstrap } from './features/auth/useSessionBootstrap';
  * `localeStore`, same "every route, once per session" placement as
  * `useSessionBootstrap` — a user can land on any route first (a bookmark, a
  * deep link), not just `/`.
+ *
+ * CLIENT-ERR-1: also hosts the one toast region (`ErrorToaster`) the global mutation-failure
+ * handler writes to.
  */
 export function RootLayout() {
   useSessionBootstrap();
   useSyncUserLocale();
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      <ErrorToaster />
+    </>
+  );
 }

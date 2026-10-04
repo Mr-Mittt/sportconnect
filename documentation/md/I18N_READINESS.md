@@ -130,6 +130,13 @@ current whenever I18N-4 itself finally gets scoped:**
 | Admin | Sport attribute-schema editor | `useReplaceSportAttributeSchema` | CLIENT-ERR-1 (shared classifier only; no vi copy) |
 | Admin | Session attribute-schema editor | `useReplaceSessionAttributeSchema` | CLIENT-ERR-1 (shared classifier only; no vi copy) |
 
+**CLIENT-ERR-1 (2026-10-04):** all 11 hooks above now read their error through the shared classifier
+(`shared/lib/apiError.ts`, `getErrorMessage`) with the same return shape. A 400/409 (and a login 401)
+still shows the server text verbatim; a 403, 404, 5xx or offline failure now shows the localized
+`errors:category.*` copy instead of English server prose (so the vi UI no longer shows English for
+those). The three admin hooks keep the server text or their fixed English fallback (no vi copy). The
+"Phase C ticket" column is where each row's per-code copy lands.
+
 Home Feed, Friends (aside from the invite modal), Sessions/Matches, and Notifications don't
 currently surface a raw server message anywhere. **Whoever picks up `CLIENT-I18N-3`/`4`/`5` (or any
 later translation ticket): if the form you're translating shows a server error verbatim, add its row

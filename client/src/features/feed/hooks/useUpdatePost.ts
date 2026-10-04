@@ -34,6 +34,7 @@ interface UpdatePostVariables {
 export function useUpdatePost() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async ({ postId, payload }: UpdatePostVariables) => {
       const response = await apiClient.put<ApiResponse<Post>>(`/posts/${postId}`, payload);
       return response.data.data;

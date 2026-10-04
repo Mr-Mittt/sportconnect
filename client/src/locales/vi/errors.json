@@ -1,0 +1,41 @@
+{
+  "category": {
+    "VALIDATION": "Vui lòng kiểm tra lại thông tin đã nhập rồi thử lại.",
+    "CONFLICT": "Thao tác này xung đột với trạng thái hiện tại. Hãy tải lại rồi thử lại.",
+    "FORBIDDEN": "Bạn không có quyền truy cập nội dung này.",
+    "NOT_FOUND": "Nội dung này không còn tồn tại hoặc đã bị xóa.",
+    "INTERNAL": "Đã xảy ra lỗi ở phía chúng tôi. Vui lòng thử lại.",
+    "NETWORK": "Không thể kết nối tới máy chủ. Hãy kiểm tra kết nối mạng.",
+    "UNKNOWN": "Đã xảy ra lỗi ở phía chúng tôi. Vui lòng thử lại.",
+    "UNAUTHENTICATED": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+  },
+  "screens": {
+    "notFound": {
+      "title": "Không tìm thấy trang",
+      "action": "Về trang chủ",
+      "body": "Trang bạn đang tìm không tồn tại."
+    },
+    "forbidden": {
+      "title": "Không có quyền truy cập",
+      "action": "Về trang chủ"
+    },
+    "unavailable": {
+      "title": "Không còn khả dụng",
+      "action": "Về trang chủ"
+    },
+    "error": {
+      "title": "Không tải được nội dung này",
+      "action": "Thử lại"
+    },
+    "network": {
+      "title": "Bạn có vẻ đang ngoại tuyến",
+      "action": "Thử lại"
+    },
+    "crash": {
+      "title": "Đã xảy ra sự cố",
+      "body": "Một lỗi không mong muốn đã khiến trang này không hiển thị được.",
+      "action": "Tải lại"
+    }
+  },
+  "codes": {}
+}

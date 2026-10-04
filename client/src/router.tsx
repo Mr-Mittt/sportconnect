@@ -11,6 +11,7 @@ import { ProfilePage } from './features/profile/ProfilePage';
 import { MatchesPage } from './features/session/MatchesPage';
 import { RootLayout } from './RootLayout';
 import { AppShell } from './shared/components/AppShell';
+import { NotFoundPage, RouteErrorPage } from './shared/components/RouteErrorPages';
 import { ProtectedRoute } from './shared/components/ProtectedRoute';
 import { PublicOnlyRoute } from './shared/components/PublicOnlyRoute';
 
@@ -21,9 +22,13 @@ import { PublicOnlyRoute } from './shared/components/PublicOnlyRoute';
  * from what App.tsx rendered. Exported as `routes` (not just `router`) so
  * tests can build their own `createMemoryRouter(routes, {...})` instead of
  * duplicating this tree.
+ *
+ * CLIENT-ERR-1: the root route carries `RouteErrorPage` as its `errorElement` (a throw while
+ * rendering any route lands there, not on React Router's raw default screen), and the final `*`
+ * route is the catch-all not-found page.
  */
 export const routes = createRoutesFromElements(
-  <Route element={<RootLayout />}>
+  <Route element={<RootLayout />} errorElement={<RouteErrorPage />}>
     {/* Pre-auth routes render outside AppShell — no TopBar/NavTabs for a
         logged-out visitor. PublicOnlyRoute sends an already-authenticated
         visitor to Home Feed instead of showing the form again. */}
@@ -86,6 +91,9 @@ export const routes = createRoutesFromElements(
       <Route path="sports" element={<AdminSportsPage />} />
       <Route path="sports/:sportId" element={<AdminSportsPage />} />
     </Route>
+    {/* CLIENT-ERR-1: any URL nothing above matched. Outside AppShell, like the pre-auth routes,
+        so it renders the same for a signed-in and a signed-out visitor. */}
+    <Route path="*" element={<NotFoundPage />} />
   </Route>,
 );
 

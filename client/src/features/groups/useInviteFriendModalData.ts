@@ -1,4 +1,3 @@
-import axios from 'axios';
 import i18next from 'i18next';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useUserSearch } from '@/features/friends/hooks/useUserSearch';
@@ -6,7 +5,7 @@ import { useGroupMembers } from '@/features/feed/hooks/useGroupMembers';
 import { useSentInvitations } from '@/features/feed/hooks/useSentInvitations';
 import { useSendGroupInvitation } from '@/features/feed/hooks/useSendGroupInvitation';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
-import type { ApiResponse } from '@/shared/types/api';
+import { getApiError, getErrorMessage } from '@/shared/lib/apiError';
 import type { UserSearchResult } from '@/features/friends/types';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -25,11 +24,9 @@ export interface InviteResultRow {
 }
 
 function extractErrorMessage(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const message = (error.response?.data as ApiResponse<null> | undefined)?.message;
-    if (message !== undefined) return message;
-  }
-  return i18next.t('groups:inviteFriend.fallbackError');
+  const { category, status } = getApiError(error);
+  if (category === 'UNKNOWN' && status === null) return i18next.t('groups:inviteFriend.fallbackError');
+  return getErrorMessage(error);
 }
 
 /**

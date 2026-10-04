@@ -2,6 +2,7 @@ import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import commonEn from '@/locales/en/common.json';
 import enumsEn from '@/locales/en/enums.json';
+import errorsEn from '@/locales/en/errors.json';
 import friendsEn from '@/locales/en/friends.json';
 import groupsEn from '@/locales/en/groups.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
@@ -17,6 +18,7 @@ import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
 import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
 import enumsVi from '@/locales/vi/enums.json';
+import errorsVi from '@/locales/vi/errors.json';
 import friendsVi from '@/locales/vi/friends.json';
 import groupsVi from '@/locales/vi/groups.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
@@ -105,6 +107,11 @@ import { useLocaleStore } from './localeStore';
  * not word order. `feeType`/`sessionParticipation`/`sessionCapacity`/`startTime`/`discoverDateLabel`/
  * `groupSessionsByDate` are plain functions, so they read the i18next singleton directly (`i18next.t('session:…')`).
  *
+ * CLIENT-ERR-1: `errors` holds the category-level default copy for server/network failures (`category.*`),
+ * the not-found/forbidden/crash screens (`screens.*`), and — filled in per module by CLIENT-ERR-2..9 — one
+ * entry per server error code (`codes.<CODE>`). Read by `shared/lib/apiError.ts` (a plain module, so it uses
+ * the i18next singleton directly) and by `ResourceUnavailable`.
+ *
  * Imported once, for its side effect, from `main.tsx` (the app entry) — importing it anywhere
  * else risks a second, redundant `init()` call.
  */
@@ -126,6 +133,7 @@ void i18next.use(initReactI18next).init({
       friends: friendsEn,
       notifications: notificationsEn,
       session: sessionEn,
+      errors: errorsEn,
     },
     vi: {
       common: commonVi,
@@ -143,12 +151,13 @@ void i18next.use(initReactI18next).init({
       friends: friendsVi,
       notifications: notificationsVi,
       session: sessionVi,
+      errors: errorsVi,
     },
   },
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'accountSettings', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session'],
+  ns: ['common', 'register', 'accountSettings', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session', 'errors'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });

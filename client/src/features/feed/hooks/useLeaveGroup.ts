@@ -16,6 +16,7 @@ export function useLeaveGroup(currentUserId: string | undefined) {
   const queryClient = useQueryClient();
   const selectGroup = useGroupsPageStore((state) => state.selectGroup);
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (groupId: number) => {
       await apiClient.delete<ApiResponse<void>>(`/groups/${groupId}/leave`);
       return groupId;

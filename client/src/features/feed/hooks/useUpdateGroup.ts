@@ -18,6 +18,7 @@ interface UpdateGroupVariables {
 export function useUpdateGroup(currentUserId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async ({ groupId, payload }: UpdateGroupVariables) => {
       const response = await apiClient.put<ApiResponse<Group>>(`/groups/${groupId}`, payload);
       return response.data.data;

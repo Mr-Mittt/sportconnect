@@ -19,6 +19,7 @@ interface RejectInvitationPayload {
 export function useRejectInvitation() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async ({ invitationId, reason }: RejectInvitationPayload) => {
       await apiClient.put<ApiResponse<void>>(`/groups/invitations/${invitationId}/reject`, {
         reason: reason ?? undefined,

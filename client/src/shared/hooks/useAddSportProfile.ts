@@ -30,6 +30,7 @@ export function useAddSportProfile(userId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (payload: AddSportProfilePayload) => {
       const response = await apiClient.post<ApiResponse<UserSportProfileResponse>>(
         '/sports/profiles',

@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
-import i18next from 'i18next';
 import { apiClient } from '@/app/apiClient';
+import { getErrorMessage } from '@/shared/lib/apiError';
 import { useAuthStore } from '@/app/authStore';
 import type { ApiResponse } from '@/shared/types/api';
 import { profileKeys } from './queryKeys';
@@ -25,6 +24,7 @@ export function useUpdateMyProfile() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (payload: UpdateProfilePayload) => {
       const response = await apiClient.put<ApiResponse<UserResponse>>(
         `/users/${userId}/profile`,
@@ -38,11 +38,7 @@ export function useUpdateMyProfile() {
     },
   });
 
-  const errorMessage = mutation.error
-    ? (axios.isAxiosError(mutation.error) &&
-        (mutation.error.response?.data as ApiResponse<null> | undefined)?.message) ||
-      i18next.t('profilePage:saveResult.profileFailedRetry')
-    : null;
+  const errorMessage = mutation.error ? getErrorMessage(mutation.error) : null;
 
   return {
     updateProfile: mutation.mutate,

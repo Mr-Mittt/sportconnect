@@ -12,6 +12,7 @@ import type { CreateLocationPayload, Location } from '../types';
 export function useCreateLocation() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (payload: CreateLocationPayload) => {
       const response = await apiClient.post<ApiResponse<Location>>('/locations', payload);
       return response.data.data;

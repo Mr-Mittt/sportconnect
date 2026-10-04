@@ -105,6 +105,7 @@ describe('useUpdateMyProfile', () => {
     vi.spyOn(apiClient, 'put').mockRejectedValueOnce({
       isAxiosError: true,
       response: {
+        status: 400,
         data: {
           success: false,
           message: 'Username must be between 3 and 50 characters',

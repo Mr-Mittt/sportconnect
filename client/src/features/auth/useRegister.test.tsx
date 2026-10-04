@@ -63,6 +63,7 @@ describe('useRegister', () => {
     vi.spyOn(apiClient, 'post').mockRejectedValueOnce({
       isAxiosError: true,
       response: {
+        status: 400,
         data: {
           success: false,
           message: 'Email already registered',

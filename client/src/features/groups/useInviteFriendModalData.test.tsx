@@ -221,7 +221,8 @@ describe('useInviteFriendModalData', () => {
     });
     vi.spyOn(apiClient, 'post').mockRejectedValue({
       isAxiosError: true,
-      response: { data: { success: false, message: 'You can only invite your friends', data: null, timestamp: '' } },
+      response: {
+        status: 400, data: { success: false, message: 'You can only invite your friends', data: null, timestamp: '' } },
     });
 
     const { result } = renderHook(() => useInviteFriendModalData(1, true, 'ro'), { wrapper });

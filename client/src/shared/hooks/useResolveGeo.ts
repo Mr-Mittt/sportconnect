@@ -23,6 +23,7 @@ export function useResolveGeo(): {
   isError: boolean;
 } {
   const mutation = useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: async (request: ResolveGeoRequest) => {
       const response = await apiClient.post<ApiResponse<ResolvedGeoResponse>>(
         '/reference/resolve',

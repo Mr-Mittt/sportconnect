@@ -12,6 +12,7 @@ import type { ApiResponse } from '@/shared/types/api';
  */
 export function useResolveMapsUrl() {
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (url: string) => {
       const response = await apiClient.post<ApiResponse<ResolvedMapsUrl>>('/locations/resolve-maps-url', {
         url,
