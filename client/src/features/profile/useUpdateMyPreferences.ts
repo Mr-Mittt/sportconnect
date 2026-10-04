@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
 import { apiClient } from '@/app/apiClient';
+import { getErrorMessage } from '@/shared/lib/apiError';
 import type { ApiResponse } from '@/shared/types/api';
 import { profileKeys } from './queryKeys';
 import type { UserPreferenceResponse } from './types';
@@ -26,6 +26,7 @@ export function useUpdateMyPreferences() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (payload: UpdatePreferencesPayload) => {
       const response = await apiClient.put<ApiResponse<UserPreferenceResponse>>(
         '/users/me/preferences',
@@ -38,11 +39,7 @@ export function useUpdateMyPreferences() {
     },
   });
 
-  const errorMessage = mutation.error
-    ? (axios.isAxiosError(mutation.error) &&
-        (mutation.error.response?.data as ApiResponse<null> | undefined)?.message) ||
-      'Could not save your language preference. Please try again.'
-    : null;
+  const errorMessage = mutation.error ? getErrorMessage(mutation.error) : null;
 
   return {
     updatePreferences: mutation.mutateAsync,

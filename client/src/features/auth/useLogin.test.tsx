@@ -59,6 +59,7 @@ describe('useLogin', () => {
     vi.spyOn(apiClient, 'post').mockRejectedValueOnce({
       isAxiosError: true,
       response: {
+        status: 401,
         data: {
           success: false,
           message: 'Invalid email or password',

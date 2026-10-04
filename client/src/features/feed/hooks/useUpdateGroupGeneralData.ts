@@ -20,6 +20,7 @@ interface UpdateGroupGeneralDataVariables {
 export function useUpdateGroupGeneralData() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async ({ groupId, payload }: UpdateGroupGeneralDataVariables) => {
       const response = await apiClient.put<ApiResponse<GroupInfo>>(
         `/groups/${groupId}/generalData`,

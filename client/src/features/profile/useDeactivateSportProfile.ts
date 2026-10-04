@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
 import { apiClient } from '@/app/apiClient';
+import { getErrorMessage } from '@/shared/lib/apiError';
 import { sessionKeys } from '@/features/session/queryKeys';
 import {
   sportProfilesQueryKey,
@@ -20,6 +20,7 @@ export function useDeactivateSportProfile() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (profileId: number) => {
       await apiClient.delete<ApiResponse<null>>(`/sports/profiles/${profileId}`);
     },
@@ -30,11 +31,7 @@ export function useDeactivateSportProfile() {
     },
   });
 
-  const errorMessage = mutation.error
-    ? (axios.isAxiosError(mutation.error) &&
-        (mutation.error.response?.data as ApiResponse<null> | undefined)?.message) ||
-      'Could not deactivate that sport profile. Please try again.'
-    : null;
+  const errorMessage = mutation.error ? getErrorMessage(mutation.error) : null;
 
   return {
     deactivateSportProfile: mutation.mutate,

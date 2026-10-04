@@ -1,0 +1,41 @@
+{
+  "category": {
+    "VALIDATION": "Please check what you entered and try again.",
+    "CONFLICT": "This conflicts with the current state. Refresh and try again.",
+    "FORBIDDEN": "You don't have access to this.",
+    "NOT_FOUND": "This no longer exists or was removed.",
+    "INTERNAL": "Something went wrong on our side. Try again.",
+    "NETWORK": "Can't reach the server. Check your connection.",
+    "UNKNOWN": "Something went wrong on our side. Try again.",
+    "UNAUTHENTICATED": "Your session has expired. Please sign in again."
+  },
+  "screens": {
+    "notFound": {
+      "title": "Page not found",
+      "action": "Back to home",
+      "body": "The page you're looking for doesn't exist."
+    },
+    "forbidden": {
+      "title": "No access",
+      "action": "Back to home"
+    },
+    "unavailable": {
+      "title": "No longer available",
+      "action": "Back to home"
+    },
+    "error": {
+      "title": "Couldn't load this",
+      "action": "Try again"
+    },
+    "network": {
+      "title": "You seem to be offline",
+      "action": "Try again"
+    },
+    "crash": {
+      "title": "Something broke",
+      "body": "An unexpected error stopped this page from showing.",
+      "action": "Reload"
+    }
+  },
+  "codes": {}
+}

@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
-import axios from 'axios';
 import { apiClient } from '@/app/apiClient';
+import { getErrorMessage } from '@/shared/lib/apiError';
 import { useAuthStore } from '@/app/authStore';
 import type { ApiResponse } from '@/shared/types/api';
 import type { AuthResult, LoginPayload, User } from './types';
@@ -25,6 +25,7 @@ export function useLogin(options?: { onSuccess?: (user: User) => void }): {
   const setSession = useAuthStore((state) => state.setSession);
 
   const mutation = useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: login,
     onSuccess: (result) => {
       setSession(result.user, result.accessToken);
@@ -32,11 +33,7 @@ export function useLogin(options?: { onSuccess?: (user: User) => void }): {
     },
   });
 
-  const errorMessage = mutation.error
-    ? (axios.isAxiosError(mutation.error) &&
-        (mutation.error.response?.data as ApiResponse<null> | undefined)?.message) ||
-      'Something went wrong. Please try again.'
-    : null;
+  const errorMessage = mutation.error ? getErrorMessage(mutation.error) : null;
 
   return {
     login: mutation.mutate,

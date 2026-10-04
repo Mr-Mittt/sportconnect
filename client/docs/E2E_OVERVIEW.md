@@ -226,6 +226,7 @@ e2e/
     profile-journey.spec.ts   # PROFILE-8
     locale.spec.ts            # CLIENT-I18N-1, CLIENT-I18N-7, CLIENT-I18N-8, CLIENT-I18N-9, CLIENT-I18N-10, CLIENT-I18N-11, CLIENT-I18N-12
     signup-locale.spec.ts     # CLIENT-REF-2
+    error-handling.spec.ts    # CLIENT-ERR-1
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -987,6 +988,18 @@ Related docs: `client/docs/MVP/CLIENT-I18N-1_I18N_INFRASTRUCTURE_AND_LOCALE_STOR
 `client/docs/MVP/CLIENT-I18N-10_TRANSLATE_SESSIONS_MATCHES.md`,
 `client/docs/MVP/CLIENT-I18N-11_TRANSLATE_SPORT_NAMES.md`,
 `client/docs/MVP/CLIENT-I18N-12_TRANSLATE_REMAINING_UNLOCALIZED_TEXT.md`.
+
+### `e2e/flows/error-handling.spec.ts` (CLIENT-ERR-1, 5 `test()`s)
+
+The app-wide error layer, with only the network faked (`page.route`). Related docs: `client/docs/MVP/CLIENT-ERR-1_GLOBAL_ERROR_HANDLING.md`, `documentation/md/ERROR_HANDLING_DESIGN.md`.
+
+| Test | What it checks |
+|---|---|
+| unknown URL → not-found screen | Signed in, `/no/such/page` renders the "Page not found" heading (the router's `*` route, outside `AppShell`); "Back to home" returns to the Home Feed. |
+| not-found screen follows the stored locale | With `locale-storage` = `vi`, the same screen reads "Không tìm thấy trang" / "Về trang chủ". |
+| failed like → rollback + server-error toast | `POST /api/posts/*/like` answered 500: the optimistic like rolls back to 3 and the global toast "Something went wrong on our side. Try again." shows. |
+| like with the network down → offline toast | The like request is aborted: the toast reads "Can't reach the server. Check your connection." |
+| inline error does not also toast | The Add-sport 400 shows its own `role="alert"` in the dialog and no `[data-sonner-toast]` exists (the hook declares `errorDisplay: 'inline'`). |
 
 ### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
 

@@ -17,6 +17,7 @@ import type { CreateGroupPayload, Group, PageResponse } from '../types';
 export function useCreateGroup(currentUserId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (payload: CreateGroupPayload) => {
       const response = await apiClient.post<ApiResponse<Group>>('/groups', payload);
       return response.data.data;

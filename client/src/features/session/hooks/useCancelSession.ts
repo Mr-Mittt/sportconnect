@@ -12,6 +12,7 @@ import type { ApiResponse } from '@/shared/types/api';
 export function useCancelSession() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async ({ sessionId, payload }: { sessionId: number; payload: CancelSessionPayload }) => {
       const response = await apiClient.post<ApiResponse<Session>>(`/sessions/${sessionId}/cancel`, payload);
       return response.data.data;

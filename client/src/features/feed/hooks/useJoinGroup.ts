@@ -17,6 +17,7 @@ import type { JoinRequest, JoinRequestPayload } from '../types';
 export function useJoinGroup() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (payload: JoinRequestPayload) => {
       const response = await apiClient.post<ApiResponse<JoinRequest>>(
         '/groups/join-requests',

@@ -15,6 +15,7 @@ import type { ApiResponse } from '@/shared/types/api';
 export function useUnfriend() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (friendId: string) => {
       await apiClient.delete<ApiResponse<void>>(`/users/friends/${friendId}`);
       return friendId;

@@ -31,6 +31,7 @@ import type { CreateInvitationPayload, GroupInvitation } from '../types';
 export function useSendGroupInvitation(groupId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (inviteeId: string) => {
       const payload: CreateInvitationPayload = { inviteeId };
       const response = await apiClient.post<ApiResponse<GroupInvitation>>(

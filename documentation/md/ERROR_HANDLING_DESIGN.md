@@ -43,7 +43,7 @@
 | `NETWORK` | no response | "Check your connection", retry |
 | `INTERNAL` | 5xx | Generic "something went wrong", retry |
 
-Lookup order on the client: `errors:<CODE>` → category copy → server `message`.
+Lookup order on the client (as built in CLIENT-ERR-1): `errors:codes.<CODE>` → the server `message` for `VALIDATION`, `CONFLICT` and `UNAUTHENTICATED` (specific text such as "gender must be one of: MALE, FEMALE" or "Invalid email or password" beats a generic line; English only until a code exists) → the localized category copy (`errors:category.<CATEGORY>`). `FORBIDDEN`, `NOT_FOUND`, `INTERNAL` and `NETWORK` always use the category copy, so a server string like "An unexpected error occurred" never shows in Vietnamese. 404 `NOT_FOUND` covers "unavailable" too (the client cannot tell them apart by status).
 
 ## Phases and tracker
 
@@ -51,7 +51,7 @@ Update the matching cell when a ticket closes (each ticket's **On close** line s
 
 | Module | Phase A: foundation | Phase B: audit and codes | Phase C: client adaptation |
 |---|---|---|---|
-| common / client | [C12](../../modules/common/docs/MVP/C12_ERROR_CONTRACT_AND_CATEGORY_TAXONOMY.md) `DONE` · [CLIENT-ERR-1](../../client/docs/MVP/CLIENT-ERR-1_GLOBAL_ERROR_HANDLING.md) `TODO` | n/a | n/a |
+| common / client | [C12](../../modules/common/docs/MVP/C12_ERROR_CONTRACT_AND_CATEGORY_TAXONOMY.md) `DONE` · [CLIENT-ERR-1](../../client/docs/MVP/CLIENT-ERR-1_GLOBAL_ERROR_HANDLING.md) `DONE` | n/a | n/a |
 | auth | n/a | [A8](../../modules/auth/docs/MVP/A8_STRUCTURED_ERROR_CODES_ON_APIRESPONSE_ERROR.md) `TODO` | [CLIENT-ERR-2](../../client/docs/MVP/CLIENT-ERR-2_AUTH_ERROR_ADAPTATION.md) `TODO` |
 | user | n/a | [U21](../../modules/user/user-impl/docs/MVP/U21_ERROR_CODE_AUDIT.md) `TODO` | [CLIENT-ERR-3](../../client/docs/MVP/CLIENT-ERR-3_USER_ERROR_ADAPTATION.md) `TODO` |
 | sport | n/a | [A25](../../modules/sport/sport-impl/docs/MVP/A25_ERROR_CODE_AUDIT.md) `TODO` | [CLIENT-ERR-4](../../client/docs/MVP/CLIENT-ERR-4_SPORT_ERROR_ADAPTATION.md) `TODO` |
@@ -59,10 +59,15 @@ Update the matching cell when a ticket closes (each ticket's **On close** line s
 | post | n/a | [A18](../../modules/social/post-impl/docs/MVP/A18_ERROR_CODE_AUDIT.md) `TODO` | [CLIENT-ERR-6](../../client/docs/MVP/CLIENT-ERR-6_POST_ERROR_ADAPTATION.md) `TODO` |
 | session | n/a | [SESSION-45](../../modules/session/docs/MVP/SESSION-45_ERROR_CODE_AUDIT.md) `TODO` | [CLIENT-ERR-7](../../client/docs/MVP/CLIENT-ERR-7_SESSION_ERROR_ADAPTATION.md) `TODO` |
 | reference / location / notification | n/a | [REF-5](../../modules/reference/docs/MVP/REF-5_ERROR_CODE_AUDIT.md) `TODO` · [LOC-6](../../modules/location/docs/MVP/LOC-6_ERROR_CODE_AUDIT.md) `TODO` · [NTF-5](../../modules/notification/docs/MVP/NTF-5_ERROR_CODE_AUDIT.md) `TODO` | [CLIENT-ERR-8](../../client/docs/MVP/CLIENT-ERR-8_MISC_ERROR_ADAPTATION.md) `TODO` (may close as a no-op) |
+| chat (Go service, plain-text errors) | n/a | n/a (no `ApiResponse` envelope) | [CLIENT-ERR-9](../../client/docs/MVP/CLIENT-ERR-9_CHAT_ERROR_ADAPTATION.md) `TODO` |
 
 **Order:** C12 → CLIENT-ERR-1 → the B/C pairs in parallel per module (suggested: auth, user, sport, group, post, session, misc). A Phase C ticket depends on CLIENT-ERR-1 and its module's Phase B ticket; `/workon` stops if a dependency has not shipped.
 
 The program is `DONE` when every cell is `DONE`; then set I18N-4 to `BUILT` in `I18N_READINESS.md`.
+
+## Behavior sign-off rule (CLIENT-ERR-1 and Phase C tickets CLIENT-ERR-2..8), added 2026-10-03
+
+Error handling is a product behavior, not only copy, so CLIENT-ERR-1 and each Phase C ticket align it with the user **before** it is implemented. The ticket's Phase 3 plan must include a per-flow table: for each endpoint or screen and each error (code or category), **where the message shows** (inline field, banner, page state, toast, modal), **the en and vi copy**, and **what the app does afterward** (stay on the form, keep or discard input, retry or refetch, roll back an optimistic update, keep or close a modal, redirect, not-found/forbidden screen). It starts from the Phase B audit table's "Client behavior" column and the category defaults above and lists every departure from them. Implementation starts only after the user approves the table; the approved table goes into the ticket's implementation summary. CLIENT-ERR-1 applies the rule to the category defaults themselves (the table above plus the toast-versus-inline decision), and the approved defaults are the baseline every Phase C table departs from.
 
 ## Out of scope
 

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
 import { apiClient } from '@/app/apiClient';
+import { getApiError } from '@/shared/lib/apiError';
 import type { ApiResponse } from '@/shared/types/api';
 import type { SessionAttributeSchema } from '@/shared/types/sport';
 import { adminKeys } from './queryKeys';
@@ -22,6 +22,7 @@ export function useReplaceSessionAttributeSchema(sportId: number | undefined) {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (schema: SessionAttributeSchema) => {
       const response = await apiClient.put<ApiResponse<SessionAttributeSchema | null>>(
         `/sports/${sportId}/session-attribute-schema`,
@@ -35,10 +36,11 @@ export function useReplaceSessionAttributeSchema(sportId: number | undefined) {
     },
   });
 
+  // CLIENT-I18N-6: admin editors are English-only, so show the server's own text (or this fixed
+  // English fallback) rather than the localized `errors` category copy.
   const errorMessage = mutation.error
-    ? (axios.isAxiosError(mutation.error) &&
-        (mutation.error.response?.data as ApiResponse<null> | undefined)?.message) ||
-      'Could not save the session attribute schema. Please try again.'
+    ? (getApiError(mutation.error).message ??
+      'Could not save the session attribute schema. Please try again.')
     : null;
 
   return {

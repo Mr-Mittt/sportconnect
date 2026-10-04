@@ -8,6 +8,7 @@ import type { ApiResponse } from '@/shared/types/api';
 export function useCreateSession() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async (payload: CreateSessionPayload) => {
       const response = await apiClient.post<ApiResponse<Session>>('/sessions', payload);
       return response.data.data;

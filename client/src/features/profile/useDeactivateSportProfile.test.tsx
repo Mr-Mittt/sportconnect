@@ -38,11 +38,12 @@ describe('useDeactivateSportProfile', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: [...sessionKeys.all, 'discover'] });
   });
 
-  it("surfaces the server's own error message", async () => {
+  it('shows the localized not-found copy for a 404 (CLIENT-ERR-1), not the English server text', async () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     vi.spyOn(apiClient, 'delete').mockRejectedValueOnce({
       isAxiosError: true,
-      response: { data: { success: false, message: 'Sport profile not found', data: null } },
+      response: {
+        status: 404, data: { success: false, message: 'Sport profile not found', data: null } },
     });
 
     const { result } = renderHook(() => useDeactivateSportProfile(), {
@@ -52,6 +53,6 @@ describe('useDeactivateSportProfile', () => {
     act(() => result.current.deactivateSportProfile(999));
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.errorMessage).toBe('Sport profile not found');
+    expect(result.current.errorMessage).toBe('This no longer exists or was removed.');
   });
 });

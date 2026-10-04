@@ -20,6 +20,7 @@ import { notificationKeys } from './queryKeys';
 export function useMarkNotificationRead() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: async (notificationId: number) => {
       await apiClient.put(`/notifications/${notificationId}/read`);
     },

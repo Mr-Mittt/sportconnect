@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
 import { apiClient } from '@/app/apiClient';
+import { getErrorMessage } from '@/shared/lib/apiError';
 import { useAuthStore } from '@/app/authStore';
 import {
   sportProfilesQueryKey,
@@ -33,6 +33,7 @@ export function useUpdateSportProfile() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async ({ profileId, payload }: UpdateSportProfileVariables) => {
       const response = await apiClient.put<ApiResponse<UserSportProfileResponse>>(
         `/sports/profiles/${profileId}`,
@@ -50,11 +51,7 @@ export function useUpdateSportProfile() {
     },
   });
 
-  const errorMessage = mutation.error
-    ? (axios.isAxiosError(mutation.error) &&
-        (mutation.error.response?.data as ApiResponse<null> | undefined)?.message) ||
-      'Could not save your sport profile. Please try again.'
-    : null;
+  const errorMessage = mutation.error ? getErrorMessage(mutation.error) : null;
 
   return {
     updateSportProfile: mutation.mutate,

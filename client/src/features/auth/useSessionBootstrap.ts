@@ -33,6 +33,7 @@ export function useSessionBootstrap(): void {
   const hasBootstrapped = useRef(false);
 
   const mutation = useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: refresh,
     onSuccess: (result) => {
       setSession(result.user, result.accessToken);

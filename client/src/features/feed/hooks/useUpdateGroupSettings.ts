@@ -17,6 +17,7 @@ interface UpdateGroupSettingsVariables {
 export function useUpdateGroupSettings() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'inline' },
     mutationFn: async ({ groupId, payload }: UpdateGroupSettingsVariables) => {
       const response = await apiClient.put<ApiResponse<GroupSettings>>(
         `/groups/${groupId}/settings`,
