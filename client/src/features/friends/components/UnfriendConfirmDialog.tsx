@@ -8,6 +8,8 @@ interface UnfriendConfirmDialogProps {
   onConfirm: () => void;
   isSubmitting: boolean;
   isError: boolean;
+  /** CLIENT-ERR-3: specific text for a coded failure (`NOT_FRIENDS`); absent = the generic line. */
+  errorText?: string;
   personName: string;
   /** CLIENT-I18N-8: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
@@ -35,6 +37,7 @@ export function UnfriendConfirmDialog({
   onConfirm,
   isSubmitting,
   isError,
+  errorText,
   personName,
   i18nOverridePrefix,
 }: UnfriendConfirmDialogProps) {
@@ -52,7 +55,7 @@ export function UnfriendConfirmDialog({
         </p>
         {isError && (
           <p role="alert" className="mb-2 text-2sm text-text-danger">
-            {t('unfriendDialog.error', { personName })}
+            {errorText ?? t('unfriendDialog.error', { personName })}
           </p>
         )}
         <div className="flex justify-end gap-2">

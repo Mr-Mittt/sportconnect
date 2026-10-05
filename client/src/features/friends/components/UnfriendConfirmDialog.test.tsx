@@ -52,6 +52,12 @@ describe('UnfriendConfirmDialog', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't unfriend Priya Shah. Please try again.");
   });
 
+  it('shows the coded error text instead of the generic line when one is given', () => {
+    render(<UnfriendConfirmDialog {...baseProps} isError errorText="You’re no longer friends with this person." />);
+    expect(screen.getByRole('alert')).toHaveTextContent('You’re no longer friends with this person.');
+    expect(screen.queryByText(/Couldn't unfriend/)).not.toBeInTheDocument();
+  });
+
   it('disables both buttons while submitting', () => {
     render(<UnfriendConfirmDialog {...baseProps} isSubmitting />);
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();

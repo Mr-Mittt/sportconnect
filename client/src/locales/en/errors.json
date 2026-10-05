@@ -41,6 +41,23 @@
     "EMAIL_ALREADY_REGISTERED": "An account with this email already exists.",
     "INVALID_CREDENTIALS": "Invalid email or password.",
     "ACCOUNT_DEACTIVATED": "This account has been deactivated.",
-    "VALIDATION_FAILED": "Some of the information you entered isn’t valid. Check the form and try again."
+    "VALIDATION_FAILED": "Some of the information you entered isn’t valid. Check the form and try again.",
+    "USER_PROFILE_NOT_OWNED": "You can only edit your own profile.",
+    "HEIGHT_OUT_OF_RANGE": "Height must be between {{min}} and {{max}} cm.",
+    "WEIGHT_OUT_OF_RANGE": "Weight must be between {{min}} and {{max}} kg.",
+    "SHOE_SIZE_OUT_OF_RANGE": "Shoe size must be between {{min}} and {{max}} mm.",
+    "GENDER_INVALID": "Choose a valid gender.",
+    "LANGUAGE_UNKNOWN": "That language isn’t available.",
+    "LOCATION_INCOMPLETE": "Share both latitude and longitude, or neither.",
+    "LOCATION_OUT_OF_RANGE": "That location isn’t valid. Check the coordinates.",
+    "CURRENT_PASSWORD_INCORRECT": "Your current password is incorrect.",
+    "SEARCH_KEYWORD_TOO_SHORT": "Type at least {{min}} characters to search.",
+    "FRIEND_REQUEST_SELF": "You can’t send a friend request to yourself.",
+    "USER_NOT_FOUND": "This person is no longer available.",
+    "ALREADY_FRIENDS": "You’re already friends.",
+    "FRIEND_REQUEST_ALREADY_PENDING": "A friend request is already pending.",
+    "FRIEND_REQUEST_NOT_FOUND": "This friend request no longer exists.",
+    "FRIEND_REQUEST_NOT_PENDING": "This friend request was already answered.",
+    "NOT_FRIENDS": "You’re no longer friends with this person."
   }
 }

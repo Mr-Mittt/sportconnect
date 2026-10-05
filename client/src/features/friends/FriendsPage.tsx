@@ -204,6 +204,7 @@ export function FriendsPage() {
                         onUnfriend={() => data.unfriend(selectedPerson.id)}
                         onUnfriendDialogClose={data.resetUnfriend}
                         isUnfriendError={data.isUnfriendError}
+                        unfriendErrorText={data.unfriendErrorText}
                         isActionPending={
                           data.isSendingRequest ||
                           data.isAcceptingRequest ||

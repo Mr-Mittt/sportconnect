@@ -4,6 +4,7 @@ import { useAuthStore } from '@/app/authStore';
 import { useFriendsPageStore } from '@/app/friendsPageStore';
 import { sportProfileForId } from '@/shared/lib/sportProfileFromId';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
+import { getApiError, getErrorMessage } from '@/shared/lib/apiError';
 import { useUserInfo } from './useUserInfo';
 import { useAcceptFriendRequest } from './hooks/useAcceptFriendRequest';
 import { useCancelFriendRequest } from './hooks/useCancelFriendRequest';
@@ -402,6 +403,11 @@ export function useFriendsPageData(
       unfriendMutation.mutate(friendId, { onSuccess: () => setSelectedPersonId(undefined) }),
     isUnfriending: unfriendMutation.isPending,
     isUnfriendError: unfriendMutation.isError,
+    // CLIENT-ERR-3: only the coded race ("already not friends") gets specific copy.
+    unfriendErrorText:
+      unfriendMutation.error && getApiError(unfriendMutation.error).code === 'NOT_FRIENDS'
+        ? getErrorMessage(unfriendMutation.error)
+        : undefined,
     resetUnfriend: () => unfriendMutation.reset(),
   };
 }

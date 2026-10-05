@@ -41,6 +41,8 @@ interface FriendProfilePanelProps {
    * (`CLIENT-MODAL-1`). */
   onUnfriendDialogClose: () => void;
   isUnfriendError: boolean;
+  /** CLIENT-ERR-3: coded unfriend failure text (`NOT_FRIENDS`), shown instead of the generic line. */
+  unfriendErrorText?: string;
   isActionPending: boolean;
 }
 
@@ -82,6 +84,7 @@ export function FriendProfilePanel({
   onUnfriend,
   onUnfriendDialogClose,
   isUnfriendError,
+  unfriendErrorText,
   isActionPending,
 }: FriendProfilePanelProps) {
   const t = useOverridableText('friends', i18nOverridePrefix);
@@ -198,6 +201,7 @@ export function FriendProfilePanel({
             onConfirm={onUnfriend}
             isSubmitting={isActionPending}
             isError={isUnfriendError}
+            errorText={unfriendErrorText}
             personName={person.fullName}
             i18nOverridePrefix={i18nOverridePrefix}
           />
