@@ -50,9 +50,10 @@ import java.util.UUID;
  * All 36 endpoints require authentication ({@code /api/groups/**} is not in {@code SecurityConfig}'s
  * permitAll list, despite a couple of methods here defensively handling a null caller id) — {@code 401}
  * applies uniformly and isn't repeated in every method's Javadoc. Permission/ownership failures across
- * this whole controller are {@code BadRequestException} (400) in the service layer, not {@code
- * ForbiddenException} (403) — verified directly against {@code GroupServiceImpl}, not assumed; documented
- * per-method below to match the actual code.
+ * this whole controller are {@code ForbiddenException} (403) since A11 (they were {@code
+ * BadRequestException} 400s before); state conflicts are {@code ConflictException} (409) and a vanished
+ * group, invitation or join request is a 404. Every non-internal error carries a {@code GROUP_*}
+ * {@code errorCode}, registered in {@code documentation/md/ERROR_CODES.md}.
  */
 @RestController
 @RequestMapping("/api/groups")
@@ -67,7 +68,8 @@ public class GroupController {
     @Operation(summary = "Create a group", description = "The caller must have a sport profile for the group's sport.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Group created"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, name already exists, or no sport profile for this sport"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or no sport profile for this sport"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Group name already exists"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PostMapping
@@ -83,7 +85,7 @@ public class GroupController {
     @Operation(summary = "Get a group by id", description = "Public groups are visible to any authenticated caller. Private groups are visible only to members (owner/admin/member) — a non-member gets 400.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Group found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Group is private and the caller is not a member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Group is private and the caller is not a member"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -131,7 +133,9 @@ public class GroupController {
     @Operation(summary = "Update a group", description = "Owner or admin only. Partial update — only non-null fields are applied.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Group updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, not owner/admin, or name already exists"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Name already exists"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -148,7 +152,7 @@ public class GroupController {
     @Operation(summary = "Delete a group", description = "Owner only. Soft delete (isActive=false).")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Group deleted"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not the group owner"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the group owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -169,7 +173,9 @@ public class GroupController {
             + "Caller and target must be friends, same gate as a peer-sent invitation.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Invitation sent"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin, already a member, not friends, or already has a pending invitation"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not friends with the target"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Already a member, or already has a pending invitation"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -186,7 +192,8 @@ public class GroupController {
     @Operation(summary = "Remove a member", description = "Owner or admin only. The owner cannot be removed this way.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Member removed"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin, or target is the group owner"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Target is the group owner"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -203,7 +210,8 @@ public class GroupController {
     @Operation(summary = "Change a member's role", description = "Owner only. The owner's own role can't be changed this way (use transfer-ownership), and the owner role can't be assigned this way either.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Role updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not the owner, target is the owner, or newRoleName is group_owner"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Target is the owner, or newRoleName is group_owner"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found, target isn't a member, or newRoleName doesn't exist")
     })
@@ -237,7 +245,7 @@ public class GroupController {
     @Operation(summary = "Transfer group ownership", description = "Current owner only. The new owner must already be a member; the previous owner becomes an admin.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Ownership transferred"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not the current owner"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the current owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found, or newOwnerId isn't a member")
     })
@@ -272,7 +280,8 @@ public class GroupController {
     @Operation(summary = "Request to join a group", description = "Looked up by group name (in the request body), not id.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Request sent"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, already a member, or already has a pending request"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Already a member, or already has a pending request"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "No group with this name")
     })
@@ -289,7 +298,8 @@ public class GroupController {
     @Operation(summary = "Accept a join request", description = "Owner or admin only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request accepted"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin, or request is no longer pending"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Request is no longer pending"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Request not found")
     })
@@ -305,7 +315,8 @@ public class GroupController {
     @Operation(summary = "Decline a join request", description = "Owner or admin only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request declined"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin, or request is no longer pending"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Request is no longer pending"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Request not found")
     })
@@ -321,7 +332,7 @@ public class GroupController {
     @Operation(summary = "List a group's pending join requests (paginated)", description = "Owner or admin only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Pending requests"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -352,7 +363,9 @@ public class GroupController {
     @Operation(summary = "Cancel the caller's own join request")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request cancelled"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not the requester, group no longer active, or request no longer pending"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the requester"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group no longer active"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Request no longer pending"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Request or group not found")
     })
@@ -404,7 +417,9 @@ public class GroupController {
             + "Scoped write path for the fields getGroupGeneralData reads back (groupName/description/avatarUrl/coverUrl/rules/schedule).")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "General data updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, not owner/admin, or name already exists"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Name already exists"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -423,7 +438,7 @@ public class GroupController {
     @Operation(summary = "Get a group's settings", description = "Members only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Settings found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not a group member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a group member"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -439,7 +454,8 @@ public class GroupController {
     @Operation(summary = "Update a group's settings", description = "Owner only. Partial update — only non-null fields are applied.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Settings updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or not the owner"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -458,7 +474,7 @@ public class GroupController {
     @Operation(summary = "Get a group's recurring session schedule", description = "Member only. recurrenceLocationId is a bare id — resolve display details via GET /api/locations/{id}.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Recurrence schedule (fields may be null if not configured)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not a member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a member"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -474,7 +490,8 @@ public class GroupController {
     @Operation(summary = "Update a group's recurring session schedule", description = "Owner only. Partial update. recurrenceLocationId must resolve to a Location for this group's sport.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Recurrence schedule updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not the owner, group has no sport set, or recurrenceLocationId's sport doesn't match"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Group has no sport set, or recurrenceLocationId's sport doesn't match"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -493,7 +510,9 @@ public class GroupController {
     @Operation(summary = "Pin a post", description = "Owner or admin only. Max 10 pins per group; only GROUP_POST posts belonging to this group can be pinned.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Post pinned"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin, pin limit reached, already pinned, post belongs to a different group, or not a GROUP_POST"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Pin limit reached, post belongs to a different group, or not a GROUP_POST"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Already pinned"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group or post not found")
     })
@@ -511,7 +530,7 @@ public class GroupController {
     @Operation(summary = "Unpin a post", description = "Owner or admin only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Post unpinned"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -528,7 +547,7 @@ public class GroupController {
     @Operation(summary = "List a group's pinned posts", description = "Members only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Pinned posts (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not a group member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a group member"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -546,7 +565,9 @@ public class GroupController {
     @Operation(summary = "Invite a friend to the group", description = "Sender must be a group member, must be friends with the invitee, and the group's allowMemberInvites setting must be on. 3-step flow: member invites -> owner approves -> invitee accepts.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Invitation created (or the existing pending one returned, if already invited)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, not a member, invites disabled for this group, invitee already a member, or not friends with the invitee"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or not friends with the invitee"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a member, or invites disabled for this group"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Invitee already a member"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -564,7 +585,8 @@ public class GroupController {
     @Operation(summary = "Approve a member-sent invitation", description = "Owner or admin only. Moves the invitation to pending_user for the invitee to respond.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Invitation approved"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin, or not pending owner approval"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Not pending owner approval"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invitation not found")
     })
@@ -580,7 +602,8 @@ public class GroupController {
     @Operation(summary = "Decline a member-sent invitation", description = "Owner or admin only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Invitation declined"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin, or not pending owner approval"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Not pending owner approval"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invitation not found")
     })
@@ -596,7 +619,8 @@ public class GroupController {
     @Operation(summary = "Accept an owner-approved invitation", description = "Invitee only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Invitation accepted, caller is now a member"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not the invitee, or not pending the invitee's response"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the invitee"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Not pending the invitee's response"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invitation not found")
     })
@@ -612,7 +636,8 @@ public class GroupController {
     @Operation(summary = "Reject an owner-approved invitation", description = "Invitee only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Invitation rejected"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not the invitee, or not pending the invitee's response"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the invitee"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Not pending the invitee's response"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invitation not found")
     })
@@ -630,7 +655,7 @@ public class GroupController {
     @Operation(summary = "List a group's pending invitations awaiting owner approval (paginated)", description = "Owner or admin only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Pending invitations"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -661,7 +686,7 @@ public class GroupController {
     @Operation(summary = "List invitations the caller sent for this group (paginated)", description = "Group members only. Returns both pending_owner (awaiting owner/admin approval) and pending_user (owner/admin already approved, awaiting the invitee's response) rows in one page — each row's `status` tells them apart.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sent invitations (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not a group member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a group member"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -680,7 +705,7 @@ public class GroupController {
             + "invitations the owner/admin themselves declined (`declined_by_owner`) — those never reached the invitee.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Declined invitations (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not owner/admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
     })
@@ -697,7 +722,9 @@ public class GroupController {
     @Operation(summary = "Cancel the caller's own invitation", description = "Only while it's still pending_owner (awaiting owner/admin approval) — once approved, it's out of the inviter's hands.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Invitation cancelled"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not the inviter, group no longer active, or invitation no longer pending_owner"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the inviter"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group no longer active"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Invitation no longer pending_owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invitation or group not found")
     })

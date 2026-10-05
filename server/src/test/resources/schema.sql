@@ -214,6 +214,52 @@ CREATE TABLE IF NOT EXISTS group_members (
     FOREIGN KEY (role_id) REFERENCES group_roles(id)
 );
 
+-- A11: group_join_requests / group_invitations / group_invitation_inviters / group_pinned_posts —
+-- needed for GroupErrorCodesIntegrationTest to exercise the join-request, invitation and pin paths
+-- through the real GroupServiceImpl (and for getGroup, whose response mapping reads the pins).
+-- Mirror the entities; the real migrations' cross-domain FKs were dropped in B17, so none here.
+CREATE TABLE IF NOT EXISTS group_join_requests (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    user_id UUID NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    message TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by UUID,
+    reviewed_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS group_invitations (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    inviter_id UUID NOT NULL,
+    invitee_id UUID NOT NULL,
+    status VARCHAR(25) NOT NULL DEFAULT 'pending_owner',
+    reviewed_by UUID,
+    reviewed_at TIMESTAMP,
+    reject_reason VARCHAR(255),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS group_invitation_inviters (
+    id BIGSERIAL PRIMARY KEY,
+    invitation_id BIGINT NOT NULL,
+    inviter_id UUID NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_invitation_inviter UNIQUE(invitation_id, inviter_id)
+);
+
+CREATE TABLE IF NOT EXISTS group_pinned_posts (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    post_id BIGINT NOT NULL,
+    pinned_by UUID NOT NULL,
+    pinned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_group_pinned_post UNIQUE(group_id, post_id)
+);
+
 -- Two rows per friendship pair, mirrors V019 — needed for a real @SpringBootTest to exercise
 -- PostGate's friends-visibility branch (A14, modules/social/post-impl/docs/MVP/A14_POST_RESOURCE_GATE.md),
 -- which calls UserFriendService.areFriends() for real.

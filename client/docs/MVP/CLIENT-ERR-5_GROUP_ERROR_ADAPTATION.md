@@ -11,6 +11,8 @@ Phase C of the error-handling program for **group**, after A11 defines the codes
 
 **Flows:** Groups page: group not found/forbidden → `ResourceUnavailable`, Invite Friend modal (`useInviteFriendModalData`), join requests, membership/role actions, settings.
 
+**Delta from backend A11 (2026-10-05, DONE):** the code list is final — `documentation/md/ERROR_CODES.md` § group (29 `GROUP_*` codes) and the per-endpoint audit table in `modules/social/group-impl/docs/MVP/A11_ERROR_CODE_AUDIT.md`, which is the starting point for the behavior table below. Statuses moved: owner/admin/member/invitee permission failures are now **403** (were 400), state conflicts (name taken, already member, already pending, not pending, already pinned) **409** (were 400), and cancelling a join request or invitation of a deleted group **404** (was 400). Anything in the group feature that keyed off a 400 for those flows must key off the code or the new category instead. Invite Friend inline errors (`GROUP_NOT_FRIENDS`, `GROUP_ALREADY_MEMBER`, `GROUP_INVITATION_ALREADY_PENDING`, `GROUP_MEMBER_INVITES_DISABLED`, `GROUP_MEMBER_CAPACITY_REACHED {max}`) are the first priority. Deactivated callers still pass every group endpoint until their token expires (U12), so no client state is needed for that.
+
 **Localization:** en + vi for every new string (client rule).
 
 **Out of scope:** Other modules' codes; changes to the CLIENT-ERR-1 classifier contract (raise those against that ticket instead).
