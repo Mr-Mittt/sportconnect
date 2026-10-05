@@ -4,8 +4,8 @@ import { friendKeys } from '../queryKeys';
 import type { ApiResponse } from '@/shared/types/api';
 
 /**
- * Wraps `POST /api/users/friends/requests` (U1). 400s server-side if
- * already friends or a request is already pending — the caller
+ * Wraps `POST /api/users/friends/requests` (U1). Answers 409 (U21: `ALREADY_FRIENDS`,
+ * `FRIEND_REQUEST_ALREADY_PENDING`) if already friends or pending — the caller
  * (`useFriendsPageData`) gates the "Send a friend request" action on the
  * selected person's real `FriendshipStatus === 'NONE'`, not always-enabled,
  * so this is never called against an already-pending pair in normal use.

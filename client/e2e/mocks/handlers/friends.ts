@@ -23,8 +23,8 @@ function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
 }
 
-function apiError(message: string): ApiResponse<null> {
-  return { success: false, message, data: null, timestamp: new Date().toISOString() };
+function apiError(message: string, errorCode?: string, errorParams?: Record<string, unknown>): ApiResponse<null> {
+  return { success: false, message, data: null, timestamp: new Date().toISOString(), errorCode, errorParams };
 }
 
 function requireAuth(request: Request): Response | null {
@@ -143,10 +143,10 @@ export const friendHandlers: HttpHandler[] = [
     const { receiverId } = (await request.json()) as { receiverId: string };
     const session = friendsSessions.get(sessionIdFromRequest(request));
     if (session.friendsState.some((friend) => friend.id === receiverId)) {
-      return HttpResponse.json(apiError('You are already friends'), { status: 400 });
+      return HttpResponse.json(apiError('You are already friends', 'ALREADY_FRIENDS'), { status: 409 });
     }
     if (session.sentRequestsState.some((req) => req.receiverId === receiverId)) {
-      return HttpResponse.json(apiError('Friend request already pending'), { status: 400 });
+      return HttpResponse.json(apiError('Friend request already pending', 'FRIEND_REQUEST_ALREADY_PENDING'), { status: 409 });
     }
     const receiver = KNOWN_USERS[receiverId];
     session.sentRequestsState = [
@@ -171,7 +171,7 @@ export const friendHandlers: HttpHandler[] = [
     const session = friendsSessions.get(sessionIdFromRequest(request));
     const accepted = session.receivedRequestsState.find((req) => req.requestId === requestId);
     if (accepted === undefined) {
-      return HttpResponse.json(apiError('Friend request not found'), { status: 404 });
+      return HttpResponse.json(apiError('Friend request not found', 'FRIEND_REQUEST_NOT_FOUND'), { status: 404 });
     }
     session.receivedRequestsState = session.receivedRequestsState.filter(
       (req) => req.requestId !== requestId,
@@ -212,7 +212,7 @@ export const friendHandlers: HttpHandler[] = [
   // FRIEND-2 (unfriend enhancement): `DELETE /api/users/friends/{friendId}`
   // (U1's removeFriend) — `friendId` is the other person's user id, a single
   // path segment, so this never shadows the `requests/:requestId` route
-  // above. 400 if the pair aren't currently friends, mirroring the real
+  // above. 409 NOT_FRIENDS (U21) if the pair are not currently friends, mirroring the real
   // service.
   http.delete('/api/users/friends/:friendId', ({ request, params }) => {
     const unauthorized = requireAuth(request);
@@ -220,7 +220,7 @@ export const friendHandlers: HttpHandler[] = [
     const friendId = String(params.friendId);
     const session = friendsSessions.get(sessionIdFromRequest(request));
     if (!session.friendsState.some((friend) => friend.id === friendId)) {
-      return HttpResponse.json(apiError('Not currently friends with this user'), { status: 400 });
+      return HttpResponse.json(apiError('You are not friends with this user', 'NOT_FRIENDS'), { status: 409 });
     }
     session.friendsState = session.friendsState.filter((friend) => friend.id !== friendId);
     return HttpResponse.json(apiResponse(null, 'Friend removed'));
@@ -233,7 +233,7 @@ export const friendHandlers: HttpHandler[] = [
     const url = new URL(request.url);
     const keyword = url.searchParams.get('q') ?? '';
     if (keyword.trim().length < 2) {
-      return HttpResponse.json(apiError('Search keyword must be at least 2 characters'), { status: 400 });
+      return HttpResponse.json(apiError('Search keyword must be at least 2 characters', 'SEARCH_KEYWORD_TOO_SHORT', { min: 2 }), { status: 400 });
     }
     const session = friendsSessions.get(sessionIdFromRequest(request));
     const results = Object.values(KNOWN_USERS)
@@ -328,7 +328,7 @@ export const friendHandlers: HttpHandler[] = [
     // ACCOUNT-2 / U20: gender is a closed set. Absent/null = skip, "" = clear, otherwise exactly
     // MALE or FEMALE (case-sensitive) — anything else is a 400 and nothing is applied.
     if (body.gender !== undefined && body.gender !== null && body.gender !== '' && body.gender !== 'MALE' && body.gender !== 'FEMALE') {
-      return HttpResponse.json(apiError('gender must be one of: MALE, FEMALE'), { status: 400 });
+      return HttpResponse.json(apiError('gender must be one of: MALE, FEMALE', 'GENDER_INVALID', { allowed: ['MALE', 'FEMALE'] }), { status: 400 });
     }
 
     let countryId = current.countryId;

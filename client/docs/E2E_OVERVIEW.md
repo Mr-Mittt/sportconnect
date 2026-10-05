@@ -228,6 +228,7 @@ e2e/
     signup-locale.spec.ts     # CLIENT-REF-2
     error-handling.spec.ts    # CLIENT-ERR-1
     auth-errors.spec.ts       # CLIENT-ERR-2
+    user-errors.spec.ts       # CLIENT-ERR-3
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -1014,6 +1015,17 @@ The auth forms' server errors localized from the error code. The auth handler (`
 | validation failure (vi) | Same, in Vietnamese ("Kiểm tra: Mật khẩu."). |
 | invalid credentials (vi) | Login 401: "Email hoặc mật khẩu không đúng.", stays on `/login`, email kept. |
 | login 400 VALIDATION_FAILED | `page.route` answers 400 with field detail; the banner shows only "Invalid email or password." |
+
+### `e2e/flows/user-errors.spec.ts` (CLIENT-ERR-3, 4 `test()`s)
+
+The user module's coded errors (U21) localized from the error code. The form's own min/max stops an out-of-range height before it is sent, and the friend races cannot come from mock state, so each server error is forced with `page.route`. The friends mock handler (`e2e/mocks/handlers/friends.ts`) also mirrors the real codes now (409 for `ALREADY_FRIENDS`, `FRIEND_REQUEST_ALREADY_PENDING`, `NOT_FRIENDS`; `FRIEND_REQUEST_NOT_FOUND`; `SEARCH_KEYWORD_TOO_SHORT` and `GENDER_INVALID` with params). Related docs: `client/docs/MVP/CLIENT-ERR-3_USER_ERROR_ADAPTATION.md`.
+
+| Test | What it checks |
+|---|---|
+| height rejected (en) | Account Settings save with a forced 400 `HEIGHT_OUT_OF_RANGE`: alert "Height must be between 50 and 300 cm.", modal stays open, input kept. |
+| height rejected (vi) | Same alert in Vietnamese ("Chiều cao phải từ 50 đến 300 cm."); the locale is switched by writing `locale-storage` and reloading after login, since the login labels are English. |
+| unfriend `NOT_FRIENDS` | Forced 409 on the unfriend DELETE: the dialog's alert shows "You're no longer friends with this person." instead of the generic "Couldn't unfriend". |
+| accept `FRIEND_REQUEST_NOT_PENDING` | Forced 409 on accept: the toast "This friend request was already answered." appears. |
 
 ### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
 

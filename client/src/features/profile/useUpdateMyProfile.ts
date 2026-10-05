@@ -14,7 +14,8 @@ import type { UserResponse } from './types';
  * `useUpdateGroup`, so `ProfileHeader`/the Edit Profile modal reflect the
  * save immediately without a round-trip refetch.
  *
- * `errorMessage` surfaces the server's own text (`ApiResponse.message`) —
+ * `errorMessage` is `getErrorMessage(error)` (CLIENT-ERR-1/3): localized copy for a coded error
+ * (e.g. `HEIGHT_OUT_OF_RANGE`), else the server's own text (`ApiResponse.message`) —
  * same extraction as `useUpdateSport`/`useLogin` — rather than a
  * reimplemented client-side copy of `UpdateProfileRequest`'s `@Size`
  * messages.

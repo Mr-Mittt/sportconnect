@@ -20,3 +20,6 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 export const Submitting: Story = { args: { isSubmitting: true } };
 export const ErrorState: Story = { args: { isError: true } };
+export const NotFriendsError: Story = {
+  args: { isError: true, errorText: 'You’re no longer friends with this person.' },
+};
