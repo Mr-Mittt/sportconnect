@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useInactiveSportNudgeStore } from '@/app/inactiveSportNudgeStore';
 import { sportIdForKey } from '@/features/feed/sportIdMap';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
 import type { SportKey } from '@/shared/types/sport';
 import { useAddSportProfile } from './useAddSportProfile';
@@ -56,6 +57,7 @@ export function useInactiveSportPillSelect({ userId, onSelectSport }: UseInactiv
             sportName: getSportProfileConfig(pendingKey).label,
             isReactivating: addSport.isPending,
             isError: addSport.isError,
+            errorText: getCodedErrorMessage(addSport.error),
             onLater: () => {
               deferSport(pendingKey);
               onSelectSport(pendingKey);

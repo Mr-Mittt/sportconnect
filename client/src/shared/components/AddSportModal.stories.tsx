@@ -39,6 +39,11 @@ export const ErrorState: Story = {
   args: { isError: true },
 };
 
+/** CLIENT-ERR-4: a coded failure (here a duplicate profile) replaces the static error line. */
+export const CodedErrorState: Story = {
+  args: { isError: true, errorText: 'You already have a Tennis profile.' },
+};
+
 /** SPORT-10: the selected sport has a soft-deleted profile — skill/YoE are pre-filled and
  * read-only, and the button becomes "Reactivate" (POSTs `isResume: true`). Cancel is shown too. */
 export const Reactivate: Story = {

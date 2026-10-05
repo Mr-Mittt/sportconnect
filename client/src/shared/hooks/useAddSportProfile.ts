@@ -18,9 +18,9 @@ export type AddSportProfilePayload = AddSportProfileSubmission;
  * dashed pill opens. Same "write the new item into the query cache
  * directly, then invalidate in the background" shape as `useCreateGroup`:
  * the new profile needs to show up in the switcher immediately, not after a
- * refetch round trip. The backend enforces the 3-profile cap and rejects a
- * duplicate sport (400) — surfaced via `isError`, same as every other
- * mutation-backed modal in this app (CreateGroupModal, JoinGroupModal).
+ * refetch round trip. A duplicate sport is a 409 `SPORT_PROFILE_ALREADY_EXISTS` (A25) and
+ * a resume with nothing to resume a 400 `PROFILE_NOT_RESUMABLE` — surfaced via `isError`, and callers pass
+ * `getCodedErrorMessage(error)` as the form's `errorText` (CLIENT-ERR-4) so the message is specific.
  *
  * `userId` is kept as a readiness guard only — SPORT-11 / A22 collapsed the
  * cache to the single caller-scoped `sportProfilesQueryKey` (no per-user

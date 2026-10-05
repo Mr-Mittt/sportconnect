@@ -26,3 +26,8 @@ export const Reactivate: Story = { args: { mode: 'reactivate' } };
 
 export const Submitting: Story = { args: { isSubmitting: true } };
 export const ErrorState: Story = { args: { isError: true } };
+
+/** CLIENT-ERR-4: a coded failure replaces the static "Couldn't update {Sport}" line. */
+export const CodedError: Story = {
+  args: { isError: true, errorText: 'This sport profile no longer exists.' },
+};

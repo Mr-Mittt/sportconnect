@@ -13,6 +13,7 @@ import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { getPageAccessNoSportsPrompt } from '@/shared/lib/noSportsPrompt';
 import { AddSportModal } from '@/shared/components/AddSportModal';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import { SportSwitcher } from '@/shared/components/SportSwitcher';
 import { CreateSessionModal } from './components/CreateSessionModal';
 import { HistoryDateSessions } from './components/HistoryDateSessions';
@@ -308,6 +309,7 @@ export function MatchesPage() {
         onAddSport={addSportMutation.mutate}
         isAddingSport={addSportMutation.isPending}
         isAddSportError={addSportMutation.isError}
+        addSportErrorText={getCodedErrorMessage(addSportMutation.error)}
       />
 
       <SessionDetailModal
@@ -381,6 +383,7 @@ export function MatchesPage() {
         resumableProfiles={resumableProfiles}
         isSubmitting={addSportMutation.isPending}
         isError={addSportMutation.isError}
+        errorText={getCodedErrorMessage(addSportMutation.error)}
         onSubmit={(payload) =>
           addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
         }

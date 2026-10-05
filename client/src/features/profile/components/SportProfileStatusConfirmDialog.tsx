@@ -12,6 +12,8 @@ interface SportProfileStatusConfirmDialogProps {
   onConfirm: () => void;
   isSubmitting: boolean;
   isError: boolean;
+  /** CLIENT-ERR-4: a code-specific message (`getCodedErrorMessage`) shown instead of the static error line; unset keeps the static line. */
+  errorText?: string;
   /** CLIENT-I18N-6: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
@@ -30,6 +32,7 @@ export function SportProfileStatusConfirmDialog({
   onConfirm,
   isSubmitting,
   isError,
+  errorText,
   i18nOverridePrefix,
 }: SportProfileStatusConfirmDialogProps) {
   const t = useOverridableText('profilePage', i18nOverridePrefix);
@@ -57,7 +60,7 @@ export function SportProfileStatusConfirmDialog({
         )}
         {isError && (
           <p role="alert" className="mb-2 text-2sm text-text-danger">
-            {t('statusConfirm.error', { sportName })}
+            {errorText ?? t('statusConfirm.error', { sportName })}
           </p>
         )}
         <div className="flex justify-end gap-2">

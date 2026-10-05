@@ -52,4 +52,16 @@ describe('ReactivateSportNudgeDialog', () => {
     render(<ReactivateSportNudgeDialog {...baseProps} mode="sport-pill" isError />);
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't bring Badminton back up");
   });
+
+  it('CLIENT-ERR-4: shows a code-specific errorText instead of the static line', () => {
+    render(
+      <ReactivateSportNudgeDialog
+        {...baseProps}
+        mode="sport-pill"
+        isError
+        errorText="There's no deactivated Badminton profile to bring back."
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent("There's no deactivated Badminton profile");
+  });
 });

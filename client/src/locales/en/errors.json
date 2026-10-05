@@ -58,6 +58,13 @@
     "FRIEND_REQUEST_ALREADY_PENDING": "A friend request is already pending.",
     "FRIEND_REQUEST_NOT_FOUND": "This friend request no longer exists.",
     "FRIEND_REQUEST_NOT_PENDING": "This friend request was already answered.",
-    "NOT_FRIENDS": "You’re no longer friends with this person."
+    "NOT_FRIENDS": "You’re no longer friends with this person.",
+    "SPORT_PROFILE_ALREADY_EXISTS": "You already have a {{sportName}} profile.",
+    "PROFILE_NOT_RESUMABLE": "There's no deactivated {{sportName}} profile to bring back.",
+    "SPORT_PROFILE_NOT_OWNED": "You can only change your own sport profile.",
+    "SPORT_PROFILE_NOT_FOUND": "This sport profile no longer exists.",
+    "SPORT_NOT_FOUND": "This sport isn't available right now.",
+    "PROFILE_ATTRIBUTES_TOO_LARGE": "Couldn't save your sport details. Please try again.",
+    "PROFILE_ATTRIBUTES_INVALID": "Couldn't save your sport details. Please try again."
   }
 }

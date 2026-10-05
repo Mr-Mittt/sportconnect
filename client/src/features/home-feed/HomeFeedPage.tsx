@@ -15,6 +15,7 @@ import { useSessionParticipationAction } from '@/features/session/hooks/useSessi
 import { useCreateSessionModalData } from '@/features/session/useCreateSessionModalData';
 import { useDiscoverModalData } from '@/features/session/useDiscoverModalData';
 import { AddSportModal } from '@/shared/components/AddSportModal';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import { NoSportsToAddDialog } from '@/shared/components/NoSportsToAddDialog';
 import { CommentSection } from '@/shared/components/CommentSection';
 import { CreatePostForm } from '@/shared/components/CreatePostForm';
@@ -378,6 +379,7 @@ export function HomeFeedPage() {
           resumableProfiles={resumableProfiles}
           isSubmitting={addSportMutation.isPending}
           isError={addSportMutation.isError}
+          errorText={getCodedErrorMessage(addSportMutation.error)}
           onSubmit={(payload) =>
             addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
           }

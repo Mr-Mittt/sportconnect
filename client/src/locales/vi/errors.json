@@ -58,6 +58,13 @@
     "FRIEND_REQUEST_ALREADY_PENDING": "Lời mời kết bạn đang chờ phản hồi.",
     "FRIEND_REQUEST_NOT_FOUND": "Lời mời kết bạn này không còn tồn tại.",
     "FRIEND_REQUEST_NOT_PENDING": "Lời mời kết bạn này đã được phản hồi.",
-    "NOT_FRIENDS": "Bạn và người này không còn là bạn bè."
+    "NOT_FRIENDS": "Bạn và người này không còn là bạn bè.",
+    "SPORT_PROFILE_ALREADY_EXISTS": "Bạn đã có hồ sơ {{sportName}} rồi.",
+    "PROFILE_NOT_RESUMABLE": "Không có hồ sơ {{sportName}} đã tắt để kích hoạt lại.",
+    "SPORT_PROFILE_NOT_OWNED": "Bạn chỉ có thể thay đổi hồ sơ môn thể thao của chính mình.",
+    "SPORT_PROFILE_NOT_FOUND": "Hồ sơ môn thể thao này không còn tồn tại.",
+    "SPORT_NOT_FOUND": "Môn thể thao này hiện không khả dụng.",
+    "PROFILE_ATTRIBUTES_TOO_LARGE": "Không thể lưu thông tin môn thể thao. Vui lòng thử lại.",
+    "PROFILE_ATTRIBUTES_INVALID": "Không thể lưu thông tin môn thể thao. Vui lòng thử lại."
   }
 }
