@@ -75,6 +75,27 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
 
+-- Create email_verifications and password_reset_tokens (needed once an IT test exercised the real
+-- verify-email / reset-password error paths — A8, modules/auth/docs/MVP/A8_*). Mirror V002__create_auth_tables.sql
+-- without the user_id FKs (dropped by V044 / A6).
+CREATE TABLE IF NOT EXISTS email_verifications (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    verified_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create sports table (needed once PostServiceImpl started querying it directly — A9,
 -- modules/social/post-impl/docs/BACKLOG_MVP.md)
 CREATE TABLE IF NOT EXISTS sports (

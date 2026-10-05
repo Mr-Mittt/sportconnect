@@ -124,6 +124,7 @@ class AuthControllerSpec extends Specification {
 
         then:
         result.andExpect(status().isUnauthorized())
+              .andExpect(jsonPath('$.errorCode').value("REFRESH_TOKEN_MISSING"))
         0 * authService.refreshToken(_)
     }
 
