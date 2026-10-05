@@ -36,6 +36,10 @@
       "apple": "Continue with Apple"
     },
     "alreadyHaveAccount": "Already have an account?",
-    "logIn": "Log in"
+    "logIn": "Log in",
+    "serverError": {
+      "signInInstead": "Sign in instead",
+      "checkFields": "Check: {{fields}}."
+    }
   }
 }

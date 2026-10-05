@@ -223,6 +223,30 @@ describe('RegisterForm', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Email already registered');
   });
 
+  it('adds a "Sign in instead" link to /login for a duplicate-email error', () => {
+    renderForm({ errorMessage: 'An account with this email already exists.', errorCode: 'EMAIL_ALREADY_REGISTERED' });
+    expect(screen.getByRole('link', { name: 'Sign in instead' })).toHaveAttribute('href', '/login');
+  });
+
+  it('has no "Sign in instead" link for other errors', () => {
+    renderForm({ errorMessage: 'Something went wrong on our side. Try again.', errorCode: 'INTERNAL_ERROR' });
+    expect(screen.queryByRole('link', { name: 'Sign in instead' })).not.toBeInTheDocument();
+  });
+
+  it('names the failed fields from the server with this form\u2019s labels, skipping unknown keys', () => {
+    renderForm({
+      errorMessage: 'Check the form.',
+      errorCode: 'VALIDATION_FAILED',
+      errorFields: ['fullName', 'phoneNumber', 'latitude'],
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Check: Full name, Phone number.');
+  });
+
+  it('shows no field list when the server named no known field', () => {
+    renderForm({ errorMessage: 'Check the form.', errorCode: 'VALIDATION_FAILED', errorFields: ['latitude'] });
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Check:');
+  });
+
   it('toggles password visibility', async () => {
     const user = userEvent.setup();
     renderForm();

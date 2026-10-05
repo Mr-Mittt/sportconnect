@@ -32,7 +32,7 @@ export const Submitting: Story = {
 };
 
 export const Error: Story = {
-  args: { errorMessage: 'Invalid email or password' },
+  args: { errorMessage: 'Invalid email or password.' },
 };
 
 /**

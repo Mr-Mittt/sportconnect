@@ -94,7 +94,7 @@ test('Auth journey — register, logout, login', async ({ page }) => {
     await page.getByLabel('Password', { exact: true }).fill('definitely-wrong-password');
     await page.getByRole('button', { name: 'Log in' }).click();
 
-    await expect(page.getByRole('alert')).toHaveText('Invalid email or password');
+    await expect(page.getByRole('alert')).toHaveText('Invalid email or password.');
     await expect(page).toHaveURL('/login');
   });
 });

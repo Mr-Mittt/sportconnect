@@ -227,6 +227,7 @@ e2e/
     locale.spec.ts            # CLIENT-I18N-1, CLIENT-I18N-7, CLIENT-I18N-8, CLIENT-I18N-9, CLIENT-I18N-10, CLIENT-I18N-11, CLIENT-I18N-12
     signup-locale.spec.ts     # CLIENT-REF-2
     error-handling.spec.ts    # CLIENT-ERR-1
+    auth-errors.spec.ts       # CLIENT-ERR-2
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -1000,6 +1001,19 @@ The app-wide error layer, with only the network faked (`page.route`). Related do
 | failed like → rollback + server-error toast | `POST /api/posts/*/like` answered 500: the optimistic like rolls back to 3 and the global toast "Something went wrong on our side. Try again." shows. |
 | like with the network down → offline toast | The like request is aborted: the toast reads "Can't reach the server. Check your connection." |
 | inline error does not also toast | The Add-sport 400 shows its own `role="alert"` in the dialog and no `[data-sonner-toast]` exists (the hook declares `errorDisplay: 'inline'`). |
+
+### `e2e/flows/auth-errors.spec.ts` (CLIENT-ERR-2, 6 `test()`s)
+
+The auth forms' server errors localized from the error code. The auth handler (`e2e/mocks/handlers/auth.ts`) now mirrors the real codes: login 401 carries `INVALID_CREDENTIALS`; sign-up with `mockTakenEmail` (`fixtures.ts`) gets 409 `EMAIL_ALREADY_REGISTERED`; a blank-after-trim register field gets 400 `VALIDATION_FAILED` with `errorParams.fields` (an 8-space password passes the form's own length rule). `auth-journey.spec.ts` step 4 now expects "Invalid email or password." (the localized copy, with a period). Related docs: `client/docs/MVP/CLIENT-ERR-2_AUTH_ERROR_ADAPTATION.md`, `documentation/md/ERROR_HANDLING_DESIGN.md`.
+
+| Test | What it checks |
+|---|---|
+| duplicate email (en) | Banner "An account with this email already exists.", stays on `/register`, email input kept, "Sign in instead" link goes to `/login`. |
+| duplicate email (vi) | Same banner and link in Vietnamese. |
+| validation failure (en) | Generic "Some of the information you entered isn't valid…" line plus "Check: Password."; no sign-in link. |
+| validation failure (vi) | Same, in Vietnamese ("Kiểm tra: Mật khẩu."). |
+| invalid credentials (vi) | Login 401: "Email hoặc mật khẩu không đúng.", stays on `/login`, email kept. |
+| login 400 VALIDATION_FAILED | `page.route` answers 400 with field detail; the banner shows only "Invalid email or password." |
 
 ### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
 

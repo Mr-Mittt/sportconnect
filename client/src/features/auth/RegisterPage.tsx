@@ -15,7 +15,7 @@ export function RegisterPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? '/';
-  const { register, isPending, errorMessage } = useRegister({
+  const { register, isPending, errorMessage, errorCode, errorFields } = useRegister({
     onSuccess: () => navigate(from, { replace: true }),
   });
 
@@ -23,7 +23,13 @@ export function RegisterPage() {
     // CLIENT-REF-2: translated tagline — see AuthShell's doc comment for why this is a prop
     // rather than AuthShell translating its own default (which LoginPage also renders).
     <AuthShell tagline={t('tagline')}>
-      <RegisterForm onSubmit={register} isPending={isPending} errorMessage={errorMessage} />
+      <RegisterForm
+        onSubmit={register}
+        isPending={isPending}
+        errorMessage={errorMessage}
+        errorCode={errorCode}
+        errorFields={errorFields}
+      />
     </AuthShell>
   );
 }

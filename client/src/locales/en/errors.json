@@ -37,5 +37,10 @@
       "action": "Reload"
     }
   },
-  "codes": {}
+  "codes": {
+    "EMAIL_ALREADY_REGISTERED": "An account with this email already exists.",
+    "INVALID_CREDENTIALS": "Invalid email or password.",
+    "ACCOUNT_DEACTIVATED": "This account has been deactivated.",
+    "VALIDATION_FAILED": "Some of the information you entered isn’t valid. Check the form and try again."
+  }
 }

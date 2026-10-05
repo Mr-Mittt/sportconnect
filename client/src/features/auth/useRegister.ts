@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
-import { getErrorMessage } from '@/shared/lib/apiError';
+import { getApiError, getErrorMessage } from '@/shared/lib/apiError';
 import { useAuthStore } from '@/app/authStore';
 import type { ApiResponse } from '@/shared/types/api';
 import type { AuthResult, RegisterPayload, User } from './types';
@@ -13,14 +13,17 @@ async function register(payload: RegisterPayload): Promise<AuthResult> {
 /**
  * Wraps POST /auth/register in a TanStack mutation. Registration also logs
  * the user in (same `AuthResult` shape as login) — on success this populates
- * authStore directly, no separate "now log in" step. `errorMessage` is the
- * server's own message (e.g. email already taken), or a fallback for
- * network-level failures the server never got to respond to.
+ * authStore directly, no separate "now log in" step. `errorMessage` is localized through the
+ * shared classifier (`EMAIL_ALREADY_REGISTERED`, `VALIDATION_FAILED`, category copy for offline or
+ * 5xx). `errorCode` and `errorFields` (the server field names of a `VALIDATION_FAILED`) let the form
+ * add a sign-in link or name the failed fields (CLIENT-ERR-2).
  */
 export function useRegister(options?: { onSuccess?: (user: User) => void }): {
   register: (payload: RegisterPayload) => void;
   isPending: boolean;
   errorMessage: string | null;
+  errorCode: string | null;
+  errorFields: string[];
 } {
   const setSession = useAuthStore((state) => state.setSession);
 
@@ -34,10 +37,16 @@ export function useRegister(options?: { onSuccess?: (user: User) => void }): {
   });
 
   const errorMessage = mutation.error ? getErrorMessage(mutation.error) : null;
+  const apiError = mutation.error ? getApiError(mutation.error) : null;
+  const fields = apiError?.params?.fields;
+  const errorFields =
+    apiError?.code === 'VALIDATION_FAILED' && fields && typeof fields === 'object' ? Object.keys(fields) : [];
 
   return {
     register: mutation.mutate,
     isPending: mutation.isPending,
     errorMessage,
+    errorCode: apiError?.code ?? null,
+    errorFields,
   };
 }
