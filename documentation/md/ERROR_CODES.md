@@ -116,4 +116,42 @@ The 401 written by `JwtAuthenticationEntryPoint` (missing/invalid access token) 
 Not coded by A25 (admin-only, no localization needed): duplicate sport name, the admin sport create/update/delete and schema `PUT`/`/all` 404s, and the `common.attributes` schema validators. Bean-validation failures on the profile body use `VALIDATION_FAILED`. The group-create gate `You must have a sport profile for this sport to create a group` is a group error (A11).
 
 Not coded by U21: the generic `User not found with id …` 404s (lookups, profile, password and preferences for a missing or deactivated caller use the category copy), and the three `ReferenceService.requireValidSelection` 400s (country/region selection), which belong to REF-5.
-Still to come: each remaining Phase B ticket (A11, A18, SESSION-45, REF-5, LOC-6, NTF-5) adds its section here.
+#### group (A11, `GroupServiceImpl`, `GroupController`)
+
+A11 also moved statuses: owner/admin/member/invitee permission failures went 400 → 403, state conflicts 400 → 409, and "Group no longer exists" 400 → 404 (consumer census in the ticket). The three 403 owner/admin/member codes are distinct on the wire but the client shows the same copy for each.
+
+| Code | Status | Params | When |
+|---|---|---|---|
+| `GROUP_NOT_FOUND` | 404 | none | Any group-scoped call for a group that does not exist or is no longer active (including cancelling a join request or invitation of a deleted group, moved from 400 by A11). |
+| `GROUP_INVITATION_NOT_FOUND` | 404 | none | Approve, decline, accept, reject or cancel of an invitation that does not exist. |
+| `GROUP_JOIN_REQUEST_NOT_FOUND` | 404 | none | Accept, decline or cancel of a join request that does not exist. |
+| `GROUP_MEMBER_NOT_FOUND` | 404 | none | Role change or ownership transfer targeting someone who is not a member. |
+| `GROUP_POST_NOT_FOUND` | 404 | none | Pinning a post that does not exist. |
+| `GROUP_PRIVATE` | 403 | none | `GET /api/groups/{id}` for a private group by a non-member (moved from 400 by A11). |
+| `GROUP_ADMIN_REQUIRED` | 403 | none | A write or admin read needing owner or admin (update, add/remove member, accept/decline join requests, pin/unpin, approve/decline invitations, view invitations). Moved from 400 by A11. |
+| `GROUP_OWNER_REQUIRED` | 403 | none | A write needing the owner (delete, change a role, transfer ownership, update settings or recurrence). Moved from 400 by A11. |
+| `GROUP_MEMBER_REQUIRED` | 403 | none | A member-only read or action (settings, recurrence, pinned posts, send invitation, own sent invitations). Moved from 400 by A11. |
+| `GROUP_INVITEE_ONLY` | 403 | none | Accept or reject an invitation addressed to someone else. |
+| `GROUP_REQUESTER_ONLY` | 403 | none | Cancel a join request that is not the caller's. |
+| `GROUP_INVITER_ONLY` | 403 | none | Cancel an invitation the caller did not send. |
+| `GROUP_MEMBER_INVITES_DISABLED` | 403 | none | A member invites someone while the group disallows member invitations. |
+| `GROUP_NAME_TAKEN` | 409 | none | Create or update where another group already holds the name (moved from 400 by A11). |
+| `GROUP_ALREADY_MEMBER` | 409 | none | Join request, invitation or add-member for someone who is already a member (moved from 400 by A11). |
+| `GROUP_JOIN_REQUEST_ALREADY_PENDING` | 409 | none | A second pending join request for the same group. |
+| `GROUP_INVITATION_ALREADY_PENDING` | 409 | none | Add-member for someone who already has a pending invitation. |
+| `GROUP_JOIN_REQUEST_NOT_PENDING` | 409 | none | Accept, decline or cancel of a join request that is no longer pending. |
+| `GROUP_INVITATION_NOT_PENDING` | 409 | none | Approve, decline, accept, reject or cancel of an invitation that is not in the required state. |
+| `GROUP_POST_ALREADY_PINNED` | 409 | none | Pinning a post that is already pinned. |
+| `GROUP_SPORT_PROFILE_REQUIRED` | 400 | none | Create a group without an active sport profile for the sport. |
+| `GROUP_NOT_FRIENDS` | 400 | none | Invite or add someone who is not a friend. |
+| `GROUP_OWNER_CANNOT_LEAVE` | 400 | none | The owner calls leave without transferring ownership first. |
+| `GROUP_OWNER_CANNOT_BE_REMOVED` | 400 | none | Removing the owner from the group. |
+| `GROUP_OWNER_ROLE_PROTECTED` | 400 | none | Changing the owner's role, or assigning the owner role through the role endpoint. |
+| `GROUP_MEMBER_CAPACITY_REACHED` | 400 | `{max}` | A join, invite acceptance or add-member that would exceed the group type's member cap. |
+| `GROUP_PIN_LIMIT_REACHED` | 400 | `{max: 10}` | Pinning an eleventh post. |
+| `GROUP_POST_NOT_PINNABLE` | 400 | none | Pinning a post from another group, or one that is not a `GROUP_POST`. |
+| `GROUP_RECURRENCE_LOCATION_SPORT_MISMATCH` | 400 | none | Setting a recurrence location whose sport differs from the group's. |
+
+Not coded by A11: the internal seed or data lookups (group owner role, member role, admin role, default group type, group type, group settings, group owner, current-owner membership), which use the category copy, and `Group has no sport set — cannot validate a sport-specific location` (defensive, effectively unreachable). `getGroup` of a missing group, and all other group lookups by id, use `GROUP_NOT_FOUND`.
+
+Still to come: each remaining Phase B ticket (A18, SESSION-45, REF-5, LOC-6, NTF-5) adds its section here.

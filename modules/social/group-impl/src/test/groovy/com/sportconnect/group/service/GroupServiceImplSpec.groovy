@@ -2,6 +2,8 @@ package com.sportconnect.group.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ConflictException
+import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.group.api.dto.*
@@ -209,7 +211,8 @@ class GroupServiceImplSpec extends Specification {
         0 * groupRepository.save(_ as Group)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_SPORT_PROFILE_REQUIRED'
     }
 
     def "createGroup should throw BadRequestException when group name already exists"() {
@@ -227,7 +230,8 @@ class GroupServiceImplSpec extends Specification {
         0 * groupRepository.save(_ as Group)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_NAME_TAKEN'
     }
 
     def "getGroup should return group when found with pinned posts"() {
@@ -267,7 +271,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.findByIdAndIsActiveTrue(999L) >> Optional.empty()
 
         and: "exception is thrown"
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     // A9 — privacy/membership check on getGroup
@@ -285,7 +290,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.existsByGroupIdAndUserId(privateGroup.id, otherUserId) >> false
 
         and: "exception is thrown before any response data is built"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_PRIVATE'
         0 * userService.getUserSummariesByIds(_)
         0 * pinnedPostRepository.findTop3ByGroupIdOrderByPinnedAtDesc(_)
     }
@@ -303,7 +309,8 @@ class GroupServiceImplSpec extends Specification {
         0 * groupMemberRepository.existsByGroupIdAndUserId(_, _)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_PRIVATE'
     }
 
     def "getGroup should return group when private and caller is a member"() {
@@ -407,7 +414,8 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_ADMIN_REQUIRED'
     }
 
     def "updateGroup should update group when user is admin"() {
@@ -493,7 +501,8 @@ class GroupServiceImplSpec extends Specification {
         0 * groupRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_NAME_TAKEN'
     }
 
     def "updateGroup should translate a concurrent groupName conflict at save-time into BadRequestException"() {
@@ -522,7 +531,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.save(_ as Group) >> { throw new org.springframework.dao.DataIntegrityViolationException("duplicate key") }
 
         and: "translated into the same friendly error the pre-check would have thrown"
-        BadRequestException ex = thrown(BadRequestException)
+        ConflictException ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_NAME_TAKEN'
         ex.message == "Group name already exists"
     }
 
@@ -561,7 +571,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_OWNER_REQUIRED'
     }
 
     def "createJoinRequest should create join request successfully"() {
@@ -626,7 +637,8 @@ class GroupServiceImplSpec extends Specification {
         0 * joinRequestRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_MEMBER_CAPACITY_REACHED'
     }
 
     def "createJoinRequest should throw BadRequestException when user is already member"() {
@@ -643,7 +655,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_ALREADY_MEMBER'
     }
 
     def "createJoinRequest should auto-accept a pending_user invitation instead of creating an ordinary pending request (B11 rule 3)"() {
@@ -775,7 +788,8 @@ class GroupServiceImplSpec extends Specification {
         0 * groupMemberRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_MEMBER_CAPACITY_REACHED'
     }
 
     def "acceptJoinRequest should throw BadRequestException when user is not admin"() {
@@ -805,7 +819,8 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_ADMIN_REQUIRED'
     }
 
     def "transferOwnership should transfer ownership successfully"() {
@@ -1196,7 +1211,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.findByIdAndIsActiveTrue(999L) >> Optional.empty()
 
         and: "exception is thrown"
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     def "getGroupInfo should return only groupName and isPrivate when group is private and caller is not a member"() {
@@ -1303,7 +1319,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.findByIdAndIsActiveTrue(999L) >> Optional.empty()
 
         and: "exception is thrown"
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     def "getGroupGeneralData should return only groupName and isPrivate when group is private and caller is not a member"() {
@@ -1449,7 +1466,8 @@ class GroupServiceImplSpec extends Specification {
         0 * groupRepository.save(_ as Group)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_ADMIN_REQUIRED'
     }
 
     def "updateGroupGeneralData should throw NotFoundException when group does not exist"() {
@@ -1464,7 +1482,8 @@ class GroupServiceImplSpec extends Specification {
         0 * groupRepository.save(_ as Group)
 
         and: "exception is thrown"
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     def "updateGroupGeneralData should throw BadRequestException when new group name already exists"() {
@@ -1493,7 +1512,8 @@ class GroupServiceImplSpec extends Specification {
         0 * groupRepository.save(_ as Group)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_NAME_TAKEN'
     }
 
     def "updateGroup should update rules and schedule when provided"() {
@@ -1551,7 +1571,8 @@ class GroupServiceImplSpec extends Specification {
         1 * joinRequestRepository.findById(999L) >> Optional.empty()
 
         and: "exception is thrown"
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_JOIN_REQUEST_NOT_FOUND'
     }
 
     def "cancelJoinRequest should throw BadRequestException when caller is not the requestor"() {
@@ -1571,7 +1592,8 @@ class GroupServiceImplSpec extends Specification {
         0 * joinRequestRepository.deleteById(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_REQUESTER_ONLY'
     }
 
     def "cancelJoinRequest should throw BadRequestException when group is inactive"() {
@@ -1598,7 +1620,9 @@ class GroupServiceImplSpec extends Specification {
         0 * joinRequestRepository.deleteById(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     def "cancelJoinRequest should throw BadRequestException when request is not pending"() {
@@ -1619,7 +1643,8 @@ class GroupServiceImplSpec extends Specification {
         0 * joinRequestRepository.deleteById(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_JOIN_REQUEST_NOT_PENDING'
     }
 
     def "getPublicGroups should return all public groups when no filters provided (anonymous)"() {
@@ -1940,7 +1965,8 @@ class GroupServiceImplSpec extends Specification {
         0 * groupSettingsRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_OWNER_REQUIRED'
     }
 
     def "updateGroupSettings should throw BadRequestException when user is member"() {
@@ -1966,7 +1992,8 @@ class GroupServiceImplSpec extends Specification {
         0 * groupSettingsRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_OWNER_REQUIRED'
     }
 
     // B6a — Pinned posts
@@ -2018,7 +2045,8 @@ class GroupServiceImplSpec extends Specification {
         0 * pinnedPostRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_PIN_LIMIT_REACHED'
     }
 
     def "pinPost should throw BadRequestException when post is already pinned"() {
@@ -2039,7 +2067,8 @@ class GroupServiceImplSpec extends Specification {
         0 * pinnedPostRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_POST_ALREADY_PINNED'
     }
 
     def "pinPost should throw BadRequestException when post belongs to a different group"() {
@@ -2063,7 +2092,8 @@ class GroupServiceImplSpec extends Specification {
         0 * pinnedPostRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_POST_NOT_PINNABLE'
     }
 
     def "pinPost should throw BadRequestException when post is not GROUP_POST type"() {
@@ -2087,7 +2117,8 @@ class GroupServiceImplSpec extends Specification {
         0 * pinnedPostRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_POST_NOT_PINNABLE'
     }
 
     def "pinPost should throw BadRequestException when caller is regular member"() {
@@ -2107,7 +2138,8 @@ class GroupServiceImplSpec extends Specification {
         0 * pinnedPostRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_ADMIN_REQUIRED'
     }
 
     def "unpinPost should delete pin when caller is owner or admin"() {
@@ -2143,7 +2175,8 @@ class GroupServiceImplSpec extends Specification {
         0 * pinnedPostRepository.deleteByGroupIdAndPostId(_, _)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_ADMIN_REQUIRED'
     }
 
     def "getPinnedPosts should return all pinned posts ordered by pinnedAt desc for a member"() {
@@ -2184,7 +2217,8 @@ class GroupServiceImplSpec extends Specification {
         0 * pinnedPostRepository.findByGroupIdOrderByPinnedAtDesc(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_MEMBER_REQUIRED'
     }
 
     // ─── Invitation tests ─────────────────────────────────────────────────────
@@ -2245,7 +2279,8 @@ class GroupServiceImplSpec extends Specification {
         0 * invitationRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_MEMBER_CAPACITY_REACHED'
     }
 
     def "createInvitation should throw when inviter is not a member"() {
@@ -2258,7 +2293,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> false
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_MEMBER_REQUIRED'
     }
 
     def "createInvitation should throw when allowMemberInvites is false"() {
@@ -2273,7 +2309,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
         1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_MEMBER_INVITES_DISABLED'
     }
 
     def "createInvitation should throw when invitee is already a member"() {
@@ -2289,7 +2326,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
         1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> true
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_ALREADY_MEMBER'
     }
 
     def "createInvitation should throw when inviter and invitee are not friends"() {
@@ -2309,7 +2347,8 @@ class GroupServiceImplSpec extends Specification {
         0 * invitationRepository.save(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_NOT_FRIENDS'
     }
 
     def "createInvitation should silently return existing invitation when duplicate pending exists"() {
@@ -2646,7 +2685,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_ADMIN_REQUIRED'
     }
 
     def "approveInvitation should throw when invitation is not in pending_owner status"() {
@@ -2663,7 +2703,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(
                 GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build())
         1 * groupRoleRepository.findById(ownerRole.id) >> Optional.of(ownerRole)
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_INVITATION_NOT_PENDING'
     }
 
     def "approveInvitation should auto-accept via an existing pending join request instead of moving to pending_user (B11 rule 2)"() {
@@ -2748,7 +2789,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> defaultGroupType.maxMembers
         0 * groupMemberRepository.save(_)
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_MEMBER_CAPACITY_REACHED'
     }
 
     def "acceptInvitation should throw when caller is not the invitee"() {
@@ -2762,7 +2804,8 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_INVITEE_ONLY'
     }
 
     def "rejectInvitation should set status to declined_by_user and persist the given reason"() {
@@ -2809,7 +2852,8 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * invitationRepository.findById(1L) >> Optional.of(invitation)
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_INVITATION_NOT_PENDING'
     }
 
     def "declineInvitation should set status to declined_by_owner"() {
@@ -2839,7 +2883,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_ADMIN_REQUIRED'
     }
 
     def "getGroupInvitations should return pending_owner rows with the group's sportId (B15) for an owner caller"() {
@@ -2880,7 +2925,8 @@ class GroupServiceImplSpec extends Specification {
 
         then:
         1 * groupRepository.existsById(999L) >> false
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     def "getDeclinedInvitations should throw when caller is not owner or admin"() {
@@ -2893,7 +2939,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_ADMIN_REQUIRED'
     }
 
     def "getDeclinedInvitations should return declined_by_user rows with their rejectReason for an owner caller"() {
@@ -2938,7 +2985,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.existsById(testGroup.id) >> true
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_MEMBER_REQUIRED'
     }
 
     def "getMemberSentInvitations should return both pending_owner and pending_user rows in one page"() {
@@ -3092,7 +3140,8 @@ class GroupServiceImplSpec extends Specification {
         1 * invitationRepository.findById(999L) >> Optional.empty()
 
         and: "exception is thrown"
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_INVITATION_NOT_FOUND'
     }
 
     def "cancelInvitation should throw BadRequestException when caller is not a recorded co-inviter"() {
@@ -3111,7 +3160,8 @@ class GroupServiceImplSpec extends Specification {
         0 * invitationRepository.deleteById(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_INVITER_ONLY'
     }
 
     def "cancelInvitation should throw BadRequestException when group is inactive"() {
@@ -3136,7 +3186,9 @@ class GroupServiceImplSpec extends Specification {
         0 * invitationRepository.deleteById(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     def "cancelInvitation should throw BadRequestException when invitation is not pending_owner"() {
@@ -3155,7 +3207,8 @@ class GroupServiceImplSpec extends Specification {
         0 * invitationRepository.deleteById(_)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_INVITATION_NOT_PENDING'
     }
 
     // ─── removeMember ─────────────────────────────────────────────────────────
@@ -3187,7 +3240,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.existsById(999L) >> false
         0 * groupMemberRepository.deleteByGroupIdAndUserId(_, _)
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     def "removeMember should throw BadRequestException when caller is not admin or owner"() {
@@ -3205,7 +3259,8 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(callerMember)
         0 * groupMemberRepository.deleteByGroupIdAndUserId(_, _)
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_ADMIN_REQUIRED'
     }
 
     def "removeMember should throw BadRequestException when target is group owner"() {
@@ -3226,7 +3281,8 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.of(ownerMember)
         0 * groupMemberRepository.deleteByGroupIdAndUserId(_, _)
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_OWNER_CANNOT_BE_REMOVED'
     }
 
     // ─── leaveMember ──────────────────────────────────────────────────────────
@@ -3253,7 +3309,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.existsById(999L) >> false
         0 * groupMemberRepository.deleteByGroupIdAndUserId(_, _)
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     def "leaveMember should throw BadRequestException when caller is the group owner"() {
@@ -3269,7 +3326,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         0 * groupMemberRepository.deleteByGroupIdAndUserId(_, _)
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_OWNER_CANNOT_LEAVE'
     }
 
     // ─── domain event publishing (chat sync) ─────────────────────────────────
@@ -3465,7 +3523,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * joinRequestRepository.findById(999L) >> Optional.empty()
         0 * joinRequestRepository.save(_)
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_JOIN_REQUEST_NOT_FOUND'
     }
 
     def "declineJoinRequest should throw BadRequestException when caller is not admin"() {
@@ -3485,7 +3544,8 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(callerMember)
         0 * joinRequestRepository.save(_)
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_ADMIN_REQUIRED'
     }
 
     def "declineJoinRequest should throw BadRequestException when request is not pending"() {
@@ -3505,7 +3565,8 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findById(adminRole.id) >> Optional.of(adminRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         0 * joinRequestRepository.save(_)
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_JOIN_REQUEST_NOT_PENDING'
     }
 
     // ─── addMember ────────────────────────────────────────────────────────────
@@ -3606,7 +3667,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
         1 * groupMemberRepository.countByGroupId(testGroup.id) >> defaultGroupType.maxMembers
         0 * invitationRepository.save(_)
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_MEMBER_CAPACITY_REACHED'
     }
 
     def "addMember should throw NotFoundException when group does not exist"() {
@@ -3616,7 +3678,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.existsById(999L) >> false
         0 * invitationRepository.save(_)
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     def "addMember should throw BadRequestException when caller is not admin or owner"() {
@@ -3634,7 +3697,8 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findById(memberRole.id) >> Optional.of(memberRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(callerMember)
         0 * invitationRepository.save(_)
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_ADMIN_REQUIRED'
     }
 
     def "addMember should throw BadRequestException when target is already a member"() {
@@ -3653,7 +3717,8 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> true
         0 * invitationRepository.save(_)
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_ALREADY_MEMBER'
     }
 
     def "addMember should throw BadRequestException when admin and target are not friends"() {
@@ -3673,7 +3738,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
         1 * userFriendService.areFriends(userId, otherUserId) >> false
         0 * invitationRepository.save(_)
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_NOT_FRIENDS'
     }
 
     def "addMember should throw BadRequestException when target already has a pending invitation"() {
@@ -3694,7 +3760,8 @@ class GroupServiceImplSpec extends Specification {
         1 * userFriendService.areFriends(userId, otherUserId) >> true
         1 * invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(testGroup.id, otherUserId, _) >> true
         0 * invitationRepository.save(_)
-        thrown(BadRequestException)
+        def ex = thrown(ConflictException)
+        ex.errorCode == 'GROUP_INVITATION_ALREADY_PENDING'
     }
 
     // ─── updateMemberRole ─────────────────────────────────────────────────────
@@ -3731,7 +3798,8 @@ class GroupServiceImplSpec extends Specification {
         _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(adminMember)
         0 * groupMemberRepository.save(_)
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_OWNER_REQUIRED'
     }
 
     def "updateMemberRole should throw BadRequestException when target is the owner"() {
@@ -3750,7 +3818,8 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(callerOwnerMember)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.of(targetOwnerMember)
         0 * groupMemberRepository.save(_)
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_OWNER_ROLE_PROTECTED'
     }
 
     def "updateMemberRole should throw BadRequestException when assigning group_owner role directly"() {
@@ -3769,7 +3838,8 @@ class GroupServiceImplSpec extends Specification {
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
         _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.of(targetMember)
         0 * groupMemberRepository.save(_)
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_OWNER_ROLE_PROTECTED'
     }
 
     // ─── getGroupMembers ──────────────────────────────────────────────────────
@@ -3807,7 +3877,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.existsById(999L) >> false
         0 * groupMemberRepository.findByGroupId(_, _)
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     // ─── getGroupSettings ─────────────────────────────────────────────────────
@@ -3843,7 +3914,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.existsById(999L) >> false
         0 * groupSettingsRepository.findByGroupId(_)
-        thrown(NotFoundException)
+        def ex = thrown(NotFoundException)
+        ex.errorCode == 'GROUP_NOT_FOUND'
     }
 
     def "getGroupSettings should throw BadRequestException when caller is not a member"() {
@@ -3854,7 +3926,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsById(testGroup.id) >> true
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
         0 * groupSettingsRepository.findByGroupId(_)
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_MEMBER_REQUIRED'
     }
 
     // ─── getGroupRecurrence / updateGroupRecurrence / getGroupsWithAutoGenerateSessionsEnabled ──
@@ -3883,7 +3956,8 @@ class GroupServiceImplSpec extends Specification {
         then:
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
         1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_MEMBER_REQUIRED'
     }
 
     def "updateGroupRecurrence should require owner"() {
@@ -3894,7 +3968,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
         1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
-        thrown(BadRequestException)
+        def ex = thrown(ForbiddenException)
+        ex.errorCode == 'GROUP_OWNER_REQUIRED'
         0 * groupRepository.save(_)
     }
 
@@ -3912,7 +3987,8 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >>
                 Optional.of(GroupMember.builder().roleId(ownerRole.id).build())
         1 * locationService.getLocation(5L) >> mismatchedLocation
-        thrown(BadRequestException)
+        def ex = thrown(BadRequestException)
+        ex.errorCode == 'GROUP_RECURRENCE_LOCATION_SPORT_MISMATCH'
         0 * groupRepository.save(_)
     }
 

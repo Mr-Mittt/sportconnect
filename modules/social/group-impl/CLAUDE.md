@@ -91,7 +91,7 @@ GET    /api/groups/{groupId}/permissions/user-role
 3. One pending request per user per group — `createJoinRequest` checks for existing pending before creating
 4. `transferOwnership` — new owner must be an existing member; previous owner becomes `group_admin`
 5. Settings defaults on create: `allowMemberPosts=true`, `requirePostApproval=false`, `allowMemberInvites=false`
-6. `getGroupSettings` requires membership — non-members get `BadRequestException`
+6. `getGroupSettings` requires membership — non-members get `ForbiddenException` (`GROUP_MEMBER_REQUIRED`, 403 since A11 — every owner/admin/member permission failure in this service is a coded 403, state conflicts are coded 409s, see `documentation/md/ERROR_CODES.md` § group)
 7. Every path that inserts a `GroupMember` row must also trigger the `GROUP_SYSTEM` welcome post
    (B9) via the private `postWelcomeMessage(groupId, newMemberId, inviterId)` helper — pass
    `inviterId = null` for a self-requested join (no one to credit), or the actual inviter's id

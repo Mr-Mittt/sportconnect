@@ -22,6 +22,8 @@ Phase B of the error-handling program for **post (post-impl)**: (1) **check** ev
 **Account lifecycle:** the audit also records what a deactivated caller receives per endpoint (CLAUDE.md § Account lifecycle).
 **Client-visible enum check (CLIENT-NOTIF-4):** new codes are client-visible; the client case is **CLIENT-ERR-6**, filed alongside this ticket.
 
+**Carried over from group A11 (2026-10-05):** `PostServiceImpl.getPostById` throws an un-coded `NotFoundException("Post not found")` via `postGate.require`, and group's `pinPost` reaches it first. The audit must code that 404 (and the gate's 403 "You don't have access to this post"); once it does, group's `GROUP_POST_NOT_FOUND` (currently unreachable, its `post == null` check never sees a null) can be removed or kept as defensive. Group's pin IT (`GroupErrorCodesIntegrationTest`) does not cover a missing post for this reason.
+
 **Out of scope:** Other modules (their own Phase B ticket); the client copy and page states (the paired CLIENT-ERR ticket, filed alongside this one); a backend message catalog; deactivated-user token gaps (U12).
 
 **Tests:** Spock coverage asserting `errorCode`/`errorParams` beside each updated `message`; `server` ITs through the real pipeline for the module's authorization/not-found boundaries (status + `errorCode`), per the CLAUDE.md IT rule.

@@ -2,6 +2,8 @@ package com.sportconnect.group.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
+import com.sportconnect.common.exception.ConflictException;
+import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.NotFoundException;
 import com.sportconnect.group.api.dto.CreateGroupRequest;
 import com.sportconnect.group.api.dto.CreateInvitationRequest;
@@ -188,7 +190,7 @@ public class GroupServiceImpl implements GroupService {
     public GroupResponse createGroup(UUID userId, CreateGroupRequest request) {
         // Validate group name uniqueness
         if (groupRepository.existsByGroupName(request.getGroupName())) {
-            throw new BadRequestException("Group name already exists");
+            throw new ConflictException("GROUP_NAME_TAKEN", "Group name already exists", null);
         }
 
         // Validate the sport (A7). A deactivated sport surfaces as a 404 exactly like an unknown
@@ -199,7 +201,7 @@ public class GroupServiceImpl implements GroupService {
         // Validate creator has an active sport profile for the requested sport. This re-checks
         // sport status internally (A7) - deliberate defence in depth, not a redundant call.
         if (!userSportProfileService.hasActiveProfileForActiveSport(userId, request.getSportId())) {
-            throw new BadRequestException("You must have a sport profile for this sport to create a group");
+            throw new BadRequestException("GROUP_SPORT_PROFILE_REQUIRED", "You must have a sport profile for this sport to create a group", null);
         }
 
         // Create group
@@ -255,13 +257,13 @@ public class GroupServiceImpl implements GroupService {
     @Transactional(readOnly = true)
     public GroupResponse getGroup(Long groupId, UUID currentUserId) {
         Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
 
         // Privacy gate before the (relatively expensive) response mapping and pinned-post fetch below —
         // membership is checked, not ownership/admin specifically, since isGroupMember covers all three roles.
         if (Boolean.TRUE.equals(group.getIsPrivate())
                 && (currentUserId == null || !isGroupMember(groupId, currentUserId))) {
-            throw new BadRequestException("This group is private. Request to join to view its details");
+            throw new ForbiddenException("GROUP_PRIVATE", "This group is private. Request to join to view its details", null);
         }
 
         GroupResponse response = mapToGroupResponse(group, currentUserId);
@@ -383,17 +385,17 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public GroupResponse updateGroup(Long groupId, UUID userId, UpdateGroupRequest request) {
         Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
 
         // Check permission (owner or admin)
         if (!canManageMembers(groupId, userId)) {
-            throw new BadRequestException("Only group owner or admin can update group");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can update group", null);
         }
 
         // Update fields if provided
         if (request.getGroupName() != null && !request.getGroupName().equals(group.getGroupName())) {
             if (groupRepository.existsByGroupName(request.getGroupName())) {
-                throw new BadRequestException("Group name already exists");
+                throw new ConflictException("GROUP_NAME_TAKEN", "Group name already exists", null);
             }
             group.setGroupName(request.getGroupName());
         }
@@ -429,7 +431,7 @@ public class GroupServiceImpl implements GroupService {
         try {
             group = groupRepository.save(group);
         } catch (DataIntegrityViolationException e) {
-            throw new BadRequestException("Group name already exists");
+            throw new ConflictException("GROUP_NAME_TAKEN", "Group name already exists", null);
         }
         log.info("Updated group {} by user {}", groupId, userId);
 
@@ -440,11 +442,11 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public void deleteGroup(Long groupId, UUID userId) {
         Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
 
         // Only owner can delete
         if (!isGroupOwner(groupId, userId)) {
-            throw new BadRequestException("Only group owner can delete group");
+            throw new ForbiddenException("GROUP_OWNER_REQUIRED", "Only group owner can delete group", null);
         }
 
         group.setIsActive(false);
@@ -458,28 +460,28 @@ public class GroupServiceImpl implements GroupService {
     public void addMember(Long groupId, UUID adminUserId, UUID targetUserId) {
         // Verify group exists
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         // Check permission
         if (!canManageMembers(groupId, adminUserId)) {
-            throw new BadRequestException("Only group owner or admin can add members");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can add members", null);
         }
 
         // Check if already member
         if (groupMemberRepository.existsByGroupIdAndUserId(groupId, targetUserId)) {
-            throw new BadRequestException("User is already a member");
+            throw new ConflictException("GROUP_ALREADY_MEMBER", "User is already a member", null);
         }
 
         // B9: owner/admin adds still go through the friends-only gate, same as a peer invite
         if (!userFriendService.areFriends(adminUserId, targetUserId)) {
-            throw new BadRequestException("You can only add your friends");
+            throw new BadRequestException("GROUP_NOT_FRIENDS", "You can only add your friends", null);
         }
 
         boolean alreadyInvited = invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(
                 groupId, targetUserId, List.of("pending_owner", "pending_user"));
         if (alreadyInvited) {
-            throw new BadRequestException("User already has a pending invitation to this group");
+            throw new ConflictException("GROUP_INVITATION_ALREADY_PENDING", "User already has a pending invitation to this group", null);
         }
 
         checkMemberCapacityNotExceeded(groupId);
@@ -517,17 +519,17 @@ public class GroupServiceImpl implements GroupService {
     public void removeMember(Long groupId, UUID adminUserId, UUID targetUserId) {
         // Verify group exists
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         // Check permission
         if (!canManageMembers(groupId, adminUserId)) {
-            throw new BadRequestException("Only group owner or admin can remove members");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can remove members", null);
         }
 
         // Cannot remove owner
         if (isGroupOwner(groupId, targetUserId)) {
-            throw new BadRequestException("Cannot remove group owner");
+            throw new BadRequestException("GROUP_OWNER_CANNOT_BE_REMOVED", "Cannot remove group owner", null);
         }
 
         // Remove membership
@@ -543,22 +545,22 @@ public class GroupServiceImpl implements GroupService {
     public void updateMemberRole(Long groupId, UUID adminUserId, UUID targetUserId, String newRoleName) {
         // Verify group exists
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         // Only owner can change roles
         if (!isGroupOwner(groupId, adminUserId)) {
-            throw new BadRequestException("Only group owner can change member roles");
+            throw new ForbiddenException("GROUP_OWNER_REQUIRED", "Only group owner can change member roles", null);
         }
 
         // Cannot change owner's role
         if (isGroupOwner(groupId, targetUserId)) {
-            throw new BadRequestException("Cannot change owner's role. Transfer ownership instead.");
+            throw new BadRequestException("GROUP_OWNER_ROLE_PROTECTED", "Cannot change owner's role. Transfer ownership instead.", null);
         }
 
         // Get membership
         GroupMember member = groupMemberRepository.findByGroupIdAndUserId(groupId, targetUserId)
-                .orElseThrow(() -> new NotFoundException("Member not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_MEMBER_NOT_FOUND", "Member not found", null));
 
         // Get new role
         GroupRole newRole = groupRoleRepository.findByRoleName(newRoleName)
@@ -566,7 +568,7 @@ public class GroupServiceImpl implements GroupService {
 
         // Cannot assign owner role
         if ("group_owner".equals(newRoleName)) {
-            throw new BadRequestException("Cannot assign owner role. Use transfer ownership instead.");
+            throw new BadRequestException("GROUP_OWNER_ROLE_PROTECTED", "Cannot assign owner role. Use transfer ownership instead.", null);
         }
 
         member.setRoleId(newRole.getId());
@@ -580,7 +582,7 @@ public class GroupServiceImpl implements GroupService {
     public Page<GroupMemberResponse> getGroupMembers(Long groupId, UUID currentUserId, Pageable pageable) {
         // Verify group exists
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         Page<GroupMember> membersPage = groupMemberRepository.findByGroupId(groupId, pageable);
@@ -608,17 +610,17 @@ public class GroupServiceImpl implements GroupService {
     public void transferOwnership(Long groupId, UUID currentOwnerId, UUID newOwnerId) {
         // Verify group exists
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         // Verify current owner
         if (!isGroupOwner(groupId, currentOwnerId)) {
-            throw new BadRequestException("Only current owner can transfer ownership");
+            throw new ForbiddenException("GROUP_OWNER_REQUIRED", "Only current owner can transfer ownership", null);
         }
 
         // Verify new owner is a member
         GroupMember newOwnerMember = groupMemberRepository.findByGroupIdAndUserId(groupId, newOwnerId)
-                .orElseThrow(() -> new NotFoundException("New owner must be a group member"));
+                .orElseThrow(() -> new NotFoundException("GROUP_MEMBER_NOT_FOUND", "New owner must be a group member", null));
 
         // Get current owner membership
         GroupMember currentOwnerMember = groupMemberRepository.findByGroupIdAndUserId(groupId, currentOwnerId)
@@ -645,12 +647,12 @@ public class GroupServiceImpl implements GroupService {
     public void leaveMember(Long groupId, UUID userId) {
         // Verify group exists
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         // Owner cannot leave, must transfer ownership first
         if (isGroupOwner(groupId, userId)) {
-            throw new BadRequestException("Owner cannot leave group. Transfer ownership first.");
+            throw new BadRequestException("GROUP_OWNER_CANNOT_LEAVE", "Owner cannot leave group. Transfer ownership first.", null);
         }
 
         // Remove membership
@@ -666,11 +668,11 @@ public class GroupServiceImpl implements GroupService {
     public JoinRequestResponse createJoinRequest(UUID userId, CreateJoinRequestRequest request) {
         // Find group by name
         Group group = groupRepository.findByGroupName(request.getGroupName())
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
 
         // Check if already a member
         if (groupMemberRepository.existsByGroupIdAndUserId(group.getId(), userId)) {
-            throw new BadRequestException("You are already a member of this group");
+            throw new ConflictException("GROUP_ALREADY_MEMBER", "You are already a member of this group", null);
         }
 
         // B11 rule 3: an invitation already awaiting this user's response is at least as strong a
@@ -685,7 +687,7 @@ public class GroupServiceImpl implements GroupService {
         } else {
             // Check if pending request exists
             if (joinRequestRepository.existsByGroupIdAndUserIdAndStatus(group.getId(), userId, "pending")) {
-                throw new BadRequestException("You already have a pending request for this group");
+                throw new ConflictException("GROUP_JOIN_REQUEST_ALREADY_PENDING", "You already have a pending request for this group", null);
             }
 
             checkMemberCapacityNotExceeded(group.getId());
@@ -749,16 +751,16 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public void acceptJoinRequest(Long requestId, UUID adminUserId) {
         GroupJoinRequest request = joinRequestRepository.findById(requestId)
-                .orElseThrow(() -> new NotFoundException("Join request not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_JOIN_REQUEST_NOT_FOUND", "Join request not found", null));
 
         // Check permission
         if (!canManageMembers(request.getGroupId(), adminUserId)) {
-            throw new BadRequestException("Only group owner or admin can accept join requests");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can accept join requests", null);
         }
 
         // Check if already accepted
         if (!"pending".equals(request.getStatus())) {
-            throw new BadRequestException("Request is not pending");
+            throw new ConflictException("GROUP_JOIN_REQUEST_NOT_PENDING", "Request is not pending", null);
         }
 
         finalizeMembership(request.getGroupId(), request.getUserId(), null);
@@ -776,16 +778,16 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public void declineJoinRequest(Long requestId, UUID adminUserId) {
         GroupJoinRequest request = joinRequestRepository.findById(requestId)
-                .orElseThrow(() -> new NotFoundException("Join request not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_JOIN_REQUEST_NOT_FOUND", "Join request not found", null));
 
         // Check permission
         if (!canManageMembers(request.getGroupId(), adminUserId)) {
-            throw new BadRequestException("Only group owner or admin can decline join requests");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can decline join requests", null);
         }
 
         // Check if already processed
         if (!"pending".equals(request.getStatus())) {
-            throw new BadRequestException("Request is not pending");
+            throw new ConflictException("GROUP_JOIN_REQUEST_NOT_PENDING", "Request is not pending", null);
         }
 
         // Update request
@@ -802,12 +804,12 @@ public class GroupServiceImpl implements GroupService {
     public Page<JoinRequestResponse> getGroupJoinRequests(Long groupId, UUID adminUserId, Pageable pageable) {
         // Verify group exists
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         // Check permission
         if (!canManageMembers(groupId, adminUserId)) {
-            throw new BadRequestException("Only group owner or admin can view join requests");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can view join requests", null);
         }
 
         Page<GroupJoinRequest> requestsPage = joinRequestRepository.findPendingRequestsByGroupId(groupId, pageable);
@@ -825,20 +827,20 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public void cancelJoinRequest(Long requestId, UUID callerId) {
         GroupJoinRequest joinRequest = joinRequestRepository.findById(requestId)
-                .orElseThrow(() -> new NotFoundException("Join request not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_JOIN_REQUEST_NOT_FOUND", "Join request not found", null));
 
         if (!joinRequest.getUserId().equals(callerId)) {
-            throw new BadRequestException("You can only cancel your own request");
+            throw new ForbiddenException("GROUP_REQUESTER_ONLY", "You can only cancel your own request", null);
         }
 
         Group group = groupRepository.findById(joinRequest.getGroupId())
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
         if (!Boolean.TRUE.equals(group.getIsActive())) {
-            throw new BadRequestException("Group no longer exists");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group no longer exists", null);
         }
 
         if (!"pending".equals(joinRequest.getStatus())) {
-            throw new BadRequestException("Request is not pending");
+            throw new ConflictException("GROUP_JOIN_REQUEST_NOT_PENDING", "Request is not pending", null);
         }
 
         joinRequestRepository.deleteById(requestId);
@@ -849,7 +851,7 @@ public class GroupServiceImpl implements GroupService {
     @Transactional(readOnly = true)
     public GroupInfoResponse getGroupInfo(Long groupId, UUID currentUserId) {
         Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
 
         if (!isGroupGeneralDataVisible(groupId, group, currentUserId)) {
             return GroupInfoResponse.builder()
@@ -866,7 +868,7 @@ public class GroupServiceImpl implements GroupService {
     @Transactional(readOnly = true)
     public GroupGeneralDataResponse getGroupGeneralData(Long groupId, UUID currentUserId) {
         Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
 
         if (!isGroupGeneralDataVisible(groupId, group, currentUserId)) {
             return GroupGeneralDataResponse.builder()
@@ -891,16 +893,16 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public GroupGeneralDataResponse updateGroupGeneralData(Long groupId, UUID userId, UpdateGroupGeneralDataRequest request) {
         Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
 
         // Check permission (owner or admin) — same model as updateGroup
         if (!canManageMembers(groupId, userId)) {
-            throw new BadRequestException("Only group owner or admin can update group");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can update group", null);
         }
 
         if (request.getGroupName() != null && !request.getGroupName().equals(group.getGroupName())) {
             if (groupRepository.existsByGroupName(request.getGroupName())) {
-                throw new BadRequestException("Group name already exists");
+                throw new ConflictException("GROUP_NAME_TAKEN", "Group name already exists", null);
             }
             group.setGroupName(request.getGroupName());
         }
@@ -929,7 +931,7 @@ public class GroupServiceImpl implements GroupService {
         try {
             group = groupRepository.save(group);
         } catch (DataIntegrityViolationException e) {
-            throw new BadRequestException("Group name already exists");
+            throw new ConflictException("GROUP_NAME_TAKEN", "Group name already exists", null);
         }
         log.info("Updated general data for group {} by user {}", groupId, userId);
 
@@ -969,12 +971,12 @@ public class GroupServiceImpl implements GroupService {
     public GroupSettingsResponse getGroupSettings(Long groupId, UUID userId) {
         // Verify group exists
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         // Check if user is member
         if (!isGroupMember(groupId, userId)) {
-            throw new BadRequestException("Only group members can view settings");
+            throw new ForbiddenException("GROUP_MEMBER_REQUIRED", "Only group members can view settings", null);
         }
 
         GroupSettings settings = groupSettingsRepository.findByGroupId(groupId)
@@ -988,12 +990,12 @@ public class GroupServiceImpl implements GroupService {
     public GroupSettingsResponse updateGroupSettings(Long groupId, UUID userId, UpdateGroupSettingsRequest request) {
         // Verify group exists
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         // Only owner can update settings
         if (!isGroupOwner(groupId, userId)) {
-            throw new BadRequestException("Only group owner can update settings");
+            throw new ForbiddenException("GROUP_OWNER_REQUIRED", "Only group owner can update settings", null);
         }
 
         GroupSettings settings = groupSettingsRepository.findByGroupId(groupId)
@@ -1024,10 +1026,10 @@ public class GroupServiceImpl implements GroupService {
     @Transactional(readOnly = true)
     public GroupRecurrenceResponse getGroupRecurrence(Long groupId, UUID userId) {
         Group group = groupRepository.findById(groupId)
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
 
         if (!isGroupMember(groupId, userId)) {
-            throw new BadRequestException("Only group members can view the recurring session schedule");
+            throw new ForbiddenException("GROUP_MEMBER_REQUIRED", "Only group members can view the recurring session schedule", null);
         }
 
         return mapToRecurrenceResponse(group);
@@ -1037,10 +1039,10 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public GroupRecurrenceResponse updateGroupRecurrence(Long groupId, UUID userId, UpdateGroupRecurrenceRequest request) {
         Group group = groupRepository.findById(groupId)
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
 
         if (!isGroupOwner(groupId, userId)) {
-            throw new BadRequestException("Only group owner can update the recurring session schedule");
+            throw new ForbiddenException("GROUP_OWNER_REQUIRED", "Only group owner can update the recurring session schedule", null);
         }
 
         if (request.getRecurrenceLocationId() != null) {
@@ -1049,7 +1051,7 @@ public class GroupServiceImpl implements GroupService {
             }
             LocationResponse location = locationService.getLocation(request.getRecurrenceLocationId());
             if (!group.getSportId().equals(location.getSportId())) {
-                throw new BadRequestException("recurrenceLocationId does not match this group's sport");
+                throw new BadRequestException("GROUP_RECURRENCE_LOCATION_SPORT_MISMATCH", "recurrenceLocationId does not match this group's sport", null);
             }
             group.setRecurrenceLocationId(request.getRecurrenceLocationId());
         }
@@ -1266,31 +1268,31 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public PinnedPostResponse pinPost(Long groupId, UUID userId, Long postId) {
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         if (!canManageMembers(groupId, userId)) {
-            throw new BadRequestException("Only group owner or admin can pin posts");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can pin posts", null);
         }
 
         long pinCount = pinnedPostRepository.countByGroupId(groupId);
         if (pinCount >= 10) {
-            throw new BadRequestException("Pin limit reached (max 10). Unpin a post before pinning a new one.");
+            throw new BadRequestException("GROUP_PIN_LIMIT_REACHED", "Pin limit reached (max 10). Unpin a post before pinning a new one.", Map.of("max", 10));
         }
 
         if (pinnedPostRepository.existsByGroupIdAndPostId(groupId, postId)) {
-            throw new BadRequestException("Post is already pinned");
+            throw new ConflictException("GROUP_POST_ALREADY_PINNED", "Post is already pinned", null);
         }
 
         PostResponse post = postService.getPostById(postId, userId);
         if (post == null) {
-            throw new NotFoundException("Post not found");
+            throw new NotFoundException("GROUP_POST_NOT_FOUND", "Post not found", null);
         }
         if (!groupId.equals(post.getGroupId())) {
-            throw new BadRequestException("Post does not belong to this group");
+            throw new BadRequestException("GROUP_POST_NOT_PINNABLE", "Post does not belong to this group", null);
         }
         if (PostType.GROUP_POST != post.getPostType()) {
-            throw new BadRequestException("Only GROUP_POST posts can be pinned");
+            throw new BadRequestException("GROUP_POST_NOT_PINNABLE", "Only GROUP_POST posts can be pinned", null);
         }
 
         GroupPinnedPost pin = GroupPinnedPost.builder()
@@ -1314,11 +1316,11 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public void unpinPost(Long groupId, UUID userId, Long postId) {
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         if (!canManageMembers(groupId, userId)) {
-            throw new BadRequestException("Only group owner or admin can unpin posts");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can unpin posts", null);
         }
 
         pinnedPostRepository.deleteByGroupIdAndPostId(groupId, postId);
@@ -1329,11 +1331,11 @@ public class GroupServiceImpl implements GroupService {
     @Transactional(readOnly = true)
     public List<PinnedPostResponse> getPinnedPosts(Long groupId, UUID currentUserId) {
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
 
         if (!isGroupMember(groupId, currentUserId)) {
-            throw new BadRequestException("Only group members can view pinned posts");
+            throw new ForbiddenException("GROUP_MEMBER_REQUIRED", "Only group members can view pinned posts", null);
         }
 
         List<GroupPinnedPost> pins = pinnedPostRepository.findByGroupIdOrderByPinnedAtDesc(groupId);
@@ -1358,26 +1360,26 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public GroupInvitationResponse createInvitation(Long groupId, UUID inviterId, CreateInvitationRequest request) {
         Group group = groupRepository.findByIdAndIsActiveTrue(groupId)
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
 
         if (!isGroupMember(groupId, inviterId)) {
-            throw new BadRequestException("Only group members can send invitations");
+            throw new ForbiddenException("GROUP_MEMBER_REQUIRED", "Only group members can send invitations", null);
         }
 
         GroupSettings settings = groupSettingsRepository.findByGroupId(groupId)
                 .orElseThrow(() -> new NotFoundException("Group settings not found"));
         if (!Boolean.TRUE.equals(settings.getAllowMemberInvites())) {
-            throw new BadRequestException("Member invitations are not allowed in this group");
+            throw new ForbiddenException("GROUP_MEMBER_INVITES_DISABLED", "Member invitations are not allowed in this group", null);
         }
 
         UUID inviteeId = request.getInviteeId();
 
         if (groupMemberRepository.existsByGroupIdAndUserId(groupId, inviteeId)) {
-            throw new BadRequestException("User is already a member of this group");
+            throw new ConflictException("GROUP_ALREADY_MEMBER", "User is already a member of this group", null);
         }
 
         if (!userFriendService.areFriends(inviterId, inviteeId)) {
-            throw new BadRequestException("You can only invite your friends");
+            throw new BadRequestException("GROUP_NOT_FRIENDS", "You can only invite your friends", null);
         }
 
         boolean alreadyInvited = invitationRepository.existsByGroupIdAndInviteeIdAndStatusIn(
@@ -1476,13 +1478,13 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public void approveInvitation(Long invitationId, UUID ownerId) {
         GroupInvitation invitation = invitationRepository.findById(invitationId)
-                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_INVITATION_NOT_FOUND", "Invitation not found", null));
 
         if (!canManageMembers(invitation.getGroupId(), ownerId)) {
-            throw new BadRequestException("Only group owner or admin can approve invitations");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can approve invitations", null);
         }
         if (!"pending_owner".equals(invitation.getStatus())) {
-            throw new BadRequestException("Invitation is not pending owner approval");
+            throw new ConflictException("GROUP_INVITATION_NOT_PENDING", "Invitation is not pending owner approval", null);
         }
 
         invitation = transitionInvitationTowardPendingUser(invitation, ownerId);
@@ -1548,13 +1550,13 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public void declineInvitation(Long invitationId, UUID ownerId) {
         GroupInvitation invitation = invitationRepository.findById(invitationId)
-                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_INVITATION_NOT_FOUND", "Invitation not found", null));
 
         if (!canManageMembers(invitation.getGroupId(), ownerId)) {
-            throw new BadRequestException("Only group owner or admin can decline invitations");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can decline invitations", null);
         }
         if (!"pending_owner".equals(invitation.getStatus())) {
-            throw new BadRequestException("Invitation is not pending owner approval");
+            throw new ConflictException("GROUP_INVITATION_NOT_PENDING", "Invitation is not pending owner approval", null);
         }
 
         invitation.setStatus("declined_by_owner");
@@ -1569,13 +1571,13 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public void acceptInvitation(Long invitationId, UUID inviteeId) {
         GroupInvitation invitation = invitationRepository.findById(invitationId)
-                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_INVITATION_NOT_FOUND", "Invitation not found", null));
 
         if (!inviteeId.equals(invitation.getInviteeId())) {
-            throw new BadRequestException("Only the invited user can accept this invitation");
+            throw new ForbiddenException("GROUP_INVITEE_ONLY", "Only the invited user can accept this invitation", null);
         }
         if (!"pending_user".equals(invitation.getStatus())) {
-            throw new BadRequestException("Invitation is not pending your response");
+            throw new ConflictException("GROUP_INVITATION_NOT_PENDING", "Invitation is not pending your response", null);
         }
 
         finalizeMembership(invitation.getGroupId(), inviteeId, invitation.getInviterId());
@@ -1590,13 +1592,13 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public void rejectInvitation(Long invitationId, UUID inviteeId, String reason) {
         GroupInvitation invitation = invitationRepository.findById(invitationId)
-                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_INVITATION_NOT_FOUND", "Invitation not found", null));
 
         if (!inviteeId.equals(invitation.getInviteeId())) {
-            throw new BadRequestException("Only the invited user can reject this invitation");
+            throw new ForbiddenException("GROUP_INVITEE_ONLY", "Only the invited user can reject this invitation", null);
         }
         if (!"pending_user".equals(invitation.getStatus())) {
-            throw new BadRequestException("Invitation is not pending your response");
+            throw new ConflictException("GROUP_INVITATION_NOT_PENDING", "Invitation is not pending your response", null);
         }
 
         invitation.setStatus("declined_by_user");
@@ -1610,10 +1612,10 @@ public class GroupServiceImpl implements GroupService {
     @Transactional(readOnly = true)
     public Page<GroupInvitationResponse> getGroupInvitations(Long groupId, UUID ownerId, Pageable pageable) {
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
         if (!canManageMembers(groupId, ownerId)) {
-            throw new BadRequestException("Only group owner or admin can view invitations");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can view invitations", null);
         }
         Group group = groupRepository.findById(groupId).orElse(null);
         Page<GroupInvitation> invitationsPage =
@@ -1625,10 +1627,10 @@ public class GroupServiceImpl implements GroupService {
     @Transactional(readOnly = true)
     public Page<GroupInvitationResponse> getDeclinedInvitations(Long groupId, UUID ownerId, Pageable pageable) {
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
         if (!canManageMembers(groupId, ownerId)) {
-            throw new BadRequestException("Only group owner or admin can view declined invitations");
+            throw new ForbiddenException("GROUP_ADMIN_REQUIRED", "Only group owner or admin can view declined invitations", null);
         }
         Group group = groupRepository.findById(groupId).orElse(null);
         Page<GroupInvitation> invitationsPage =
@@ -1672,10 +1674,10 @@ public class GroupServiceImpl implements GroupService {
     @Transactional(readOnly = true)
     public Page<GroupInvitationResponse> getMemberSentInvitations(Long groupId, UUID inviterId, Pageable pageable) {
         if (!groupRepository.existsById(groupId)) {
-            throw new NotFoundException("Group not found");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
         }
         if (!isGroupMember(groupId, inviterId)) {
-            throw new BadRequestException("Only group members can view their sent invitations");
+            throw new ForbiddenException("GROUP_MEMBER_REQUIRED", "Only group members can view their sent invitations", null);
         }
         Group group = groupRepository.findById(groupId).orElse(null);
         Page<GroupInvitation> invitationsPage = invitationRepository.findByGroupIdAndCoInviterIdAndStatusIn(
@@ -1704,23 +1706,23 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public void cancelInvitation(Long invitationId, UUID callerId) {
         GroupInvitation invitation = invitationRepository.findById(invitationId)
-                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_INVITATION_NOT_FOUND", "Invitation not found", null));
 
         // B14: any recorded co-inviter can withdraw their own invite, not just the original —
         // withdrawing only removes the caller's own group_invitation_inviters row; the invitation
         // itself is only deleted once its last co-inviter withdraws.
         if (!invitationInviterRepository.existsByInvitationIdAndInviterId(invitationId, callerId)) {
-            throw new BadRequestException("You can only cancel your own invitation");
+            throw new ForbiddenException("GROUP_INVITER_ONLY", "You can only cancel your own invitation", null);
         }
 
         Group group = groupRepository.findById(invitation.getGroupId())
-                .orElseThrow(() -> new NotFoundException("Group not found"));
+                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
         if (!Boolean.TRUE.equals(group.getIsActive())) {
-            throw new BadRequestException("Group no longer exists");
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group no longer exists", null);
         }
 
         if (!"pending_owner".equals(invitation.getStatus())) {
-            throw new BadRequestException("Invitation is not pending owner approval");
+            throw new ConflictException("GROUP_INVITATION_NOT_PENDING", "Invitation is not pending owner approval", null);
         }
 
         invitationInviterRepository.deleteByInvitationIdAndInviterId(invitationId, callerId);
@@ -2013,8 +2015,9 @@ public class GroupServiceImpl implements GroupService {
                 .orElseThrow(() -> new NotFoundException("Group type not found"));
         long currentMembers = groupMemberRepository.countByGroupId(groupId);
         if (currentMembers >= groupType.getMaxMembers()) {
-            throw new BadRequestException("Group has reached its maximum member capacity of "
-                    + groupType.getMaxMembers());
+            throw new BadRequestException("GROUP_MEMBER_CAPACITY_REACHED",
+                    "Group has reached its maximum member capacity of " + groupType.getMaxMembers(),
+                    Map.of("max", groupType.getMaxMembers()));
         }
     }
 
