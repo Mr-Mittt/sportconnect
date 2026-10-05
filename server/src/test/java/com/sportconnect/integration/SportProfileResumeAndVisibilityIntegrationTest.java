@@ -183,6 +183,8 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sportId\":" + sportId2 + ",\"isResume\":true}"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("PROFILE_NOT_RESUMABLE"))
+                .andExpect(jsonPath("$.errorParams.sportName").value("A20 Pickleball"))
                 .andExpect(jsonPath("$.message").value("No deactivated profile to resume for sport: A20 Pickleball"));
     }
 
@@ -314,6 +316,7 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
 
         mockMvc.perform(get("/api/sports/profiles/{id}", profileId))
                 .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("SPORT_PROFILE_NOT_OWNED"))
                 .andExpect(jsonPath("$.message").value("You can only view your own sport profile"))
                 .andExpect(jsonPath("$.data").doesNotExist());
     }

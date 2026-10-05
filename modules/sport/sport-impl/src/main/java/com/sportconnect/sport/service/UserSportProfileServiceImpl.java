@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.attributes.AttributeSchema;
 import com.sportconnect.common.attributes.value.AttributeValueFilter;
 import com.sportconnect.common.exception.BadRequestException;
+import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest;
@@ -101,7 +102,7 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
                 .orElse(null);
         if (existing != null) {
             if (Boolean.TRUE.equals(existing.getIsActive())) {
-                throw new BadRequestException("User already has a profile for sport: " + sport.getName());
+                throw alreadyHasProfile(sport);
             }
             // Reactivation behaves like a fresh create that happens to reuse the row: every field
             // comes from the request, so a re-added profile never silently inherits values the user
@@ -157,11 +158,12 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
                                                    SportResponse sport) {
         UserSportProfile existing = profileRepository
                 .findByUserIdAndSportId(userId, request.getSportId())
-                .orElseThrow(() -> new BadRequestException(
-                        "No deactivated profile to resume for sport: " + sport.getName()));
+                .orElseThrow(() -> new BadRequestException("PROFILE_NOT_RESUMABLE",
+                        "No deactivated profile to resume for sport: " + sport.getName(),
+                        Map.of("sportName", sport.getName())));
 
         if (Boolean.TRUE.equals(existing.getIsActive())) {
-            throw new BadRequestException("User already has a profile for sport: " + sport.getName());
+            throw alreadyHasProfile(sport);
         }
 
         AttributeSchema schema = sportService.getAttributeSchema(request.getSportId());
@@ -184,7 +186,7 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
         // A7: active-scoped. The unfiltered findById returned soft-deleted profiles, so a profile
         // getUserProfiles omits was still reachable by id.
         UserSportProfile profile = profileRepository.findByIdAndIsActiveTrue(profileId)
-                .orElseThrow(() -> new ResourceNotFoundException("UserSportProfile", "id", profileId));
+                .orElseThrow(() -> profileNotFound("id", profileId));
         
         // A7: this is a GATE, not just a name lookup - requireActiveSportById throws when the sport is
         // deactivated, which is what keeps a profile under a dead sport unreachable individually
@@ -254,7 +256,7 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
     public UserSportProfileResponse getUserProfileForSport(UUID userId, Long sportId) {
         // A7: active-scoped, same reason as getProfileById.
         UserSportProfile profile = profileRepository.findByUserIdAndSportIdAndIsActiveTrue(userId, sportId)
-                .orElseThrow(() -> new ResourceNotFoundException("UserSportProfile", "userId and sportId", userId + ", " + sportId));
+                .orElseThrow(() -> profileNotFound("userId and sportId", userId + ", " + sportId));
         
         // A7: a GATE as well as the name source, exactly as in getProfileById above.
         SportResponse sport = sportService.requireActiveSportById(sportId);
@@ -268,10 +270,10 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
         // A7 gate 1 of 2 - the PROFILE must not be soft-deleted. Re-adding a deleted profile goes
         // through createProfile's reactivation path instead, which repopulates it from the request.
         UserSportProfile profile = profileRepository.findByIdAndIsActiveTrue(profileId)
-                .orElseThrow(() -> new ResourceNotFoundException("UserSportProfile", "id", profileId));
+                .orElseThrow(() -> profileNotFound("id", profileId));
 
         if (!profile.getUserId().equals(callerId)) {
-            throw new ForbiddenException("You can only update your own sport profile");
+            throw profileNotOwned("update");
         }
 
         // A7 gate 2 of 2 - the profile's SPORT must still be active. findByIdAndIsActiveTrue above
@@ -343,10 +345,10 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
     @Transactional
     public void deleteProfile(Long profileId, UUID callerId) {
         UserSportProfile profile = profileRepository.findById(profileId)
-                .orElseThrow(() -> new ResourceNotFoundException("UserSportProfile", "id", profileId));
+                .orElseThrow(() -> profileNotFound("id", profileId));
 
         if (!profile.getUserId().equals(callerId)) {
-            throw new ForbiddenException("You can only delete your own sport profile");
+            throw profileNotOwned("delete");
         }
 
         profile.setIsActive(false);
@@ -393,14 +395,35 @@ public class UserSportProfileServiceImpl implements UserSportProfileService {
         return result;
     }
 
+    /** A25: 409 {@code SPORT_PROFILE_ALREADY_EXISTS} - the caller already holds an active profile for this sport. */
+    private static ConflictException alreadyHasProfile(SportResponse sport) {
+        return new ConflictException("SPORT_PROFILE_ALREADY_EXISTS",
+                "User already has a profile for sport: " + sport.getName(),
+                Map.of("sportName", sport.getName()));
+    }
+
+    /** A25: 404 {@code SPORT_PROFILE_NOT_FOUND}, keeping the stock "not found with" message text. */
+    private static ResourceNotFoundException profileNotFound(String field, Object value) {
+        return ResourceNotFoundException.coded("SPORT_PROFILE_NOT_FOUND",
+                String.format("UserSportProfile not found with %s: '%s'", field, value), null);
+    }
+
+    /** A25: 403 {@code SPORT_PROFILE_NOT_OWNED}; {@code action} only shapes the English fallback. */
+    private static ForbiddenException profileNotOwned(String action) {
+        return new ForbiddenException("SPORT_PROFILE_NOT_OWNED",
+                "You can only " + action + " your own sport profile", null);
+    }
+
     private void validateAttributesSize(Map<String, Object> attributes) {
         try {
             byte[] json = objectMapper.writeValueAsBytes(attributes);
             if (json.length > MAX_ATTRIBUTES_BYTES) {
-                throw new BadRequestException("Sport profile attributes exceed the maximum allowed size (4KB)");
+                throw new BadRequestException("PROFILE_ATTRIBUTES_TOO_LARGE",
+                        "Sport profile attributes exceed the maximum allowed size (4KB)",
+                        Map.of("maxBytes", MAX_ATTRIBUTES_BYTES));
             }
         } catch (JsonProcessingException e) {
-            throw new BadRequestException("Invalid sport profile attributes");
+            throw new BadRequestException("PROFILE_ATTRIBUTES_INVALID", "Invalid sport profile attributes", null);
         }
     }
 

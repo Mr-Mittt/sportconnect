@@ -101,5 +101,19 @@ The 401 written by `JwtAuthenticationEntryPoint` (missing/invalid access token) 
 | `FRIEND_REQUEST_NOT_PENDING` | 409 | none | Accept, decline or cancel of a request that is no longer pending (moved from 400 by U21). |
 | `NOT_FRIENDS` | 409 | none | Unfriend someone who is not a friend (moved from 400 by U21). |
 
+#### sport (A25, `UserSportProfileServiceImpl`, `SportServiceImpl`, `SportController`; user-reachable errors only)
+
+| Code | Status | Params | When |
+|---|---|---|---|
+| `SPORT_PROFILE_ALREADY_EXISTS` | 409 | `{sportName}` | `POST /api/sports/profiles` (create, or resume) while the caller already holds an active profile for the sport (moved from 400 by A25). |
+| `PROFILE_NOT_RESUMABLE` | 400 | `{sportName}` | Create with `isResume: true` when the caller has no deactivated profile for the sport. |
+| `PROFILE_ATTRIBUTES_TOO_LARGE` | 400 | `{maxBytes: 4096}` | Create or update where the filtered `attributes` exceed 4 KB. Backend/diagnostic code: the client shows the generic message, no dedicated copy. |
+| `PROFILE_ATTRIBUTES_INVALID` | 400 | none | `attributes` cannot be serialized (defensive; effectively unreachable). |
+| `SPORT_PROFILE_NOT_OWNED` | 403 | none | View, update or delete of another user's sport profile. |
+| `SPORT_PROFILE_NOT_FOUND` | 404 | none | Profile by id, or the caller's profile for a sport, missing or soft-deleted (get, update, delete). |
+| `SPORT_NOT_FOUND` | 404 | none | A missing or deactivated sport on a user-reachable path: `GET /api/sports/{id}`, the user schema reads, and creating a profile. Also emitted on the same lookup for `location`, `session` and `group` creates. |
+
+Not coded by A25 (admin-only, no localization needed): duplicate sport name, the admin sport create/update/delete and schema `PUT`/`/all` 404s, and the `common.attributes` schema validators. Bean-validation failures on the profile body use `VALIDATION_FAILED`. The group-create gate `You must have a sport profile for this sport to create a group` is a group error (A11).
+
 Not coded by U21: the generic `User not found with id …` 404s (lookups, profile, password and preferences for a missing or deactivated caller use the category copy), and the three `ReferenceService.requireValidSelection` 400s (country/region selection), which belong to REF-5.
-Still to come: each remaining Phase B ticket (A25, A11, A18, SESSION-45, REF-5, LOC-6, NTF-5) adds its section here.
+Still to come: each remaining Phase B ticket (A11, A18, SESSION-45, REF-5, LOC-6, NTF-5) adds its section here.

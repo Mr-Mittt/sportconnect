@@ -9,7 +9,9 @@
 ## What
 Phase C of the error-handling program for **sport**, after A25 defines the codes: add the en + vi `errors:<CODE>` entries for that module's codes (interpolating `errorParams`), switch the affected flows from generic states to the specific one via the CLIENT-ERR-1 classifier and the `ResourceUnavailable`/inline/toast treatment recorded in the backend ticket's audit table, remove the module's remaining ad-hoc `status === 403/404` checks, and update the I18N-4 census row(s) in `documentation/md/I18N_READINESS.md`.
 
-**Flows:** `/profile` Settings tab (`useUpdateSportProfile`, `useDeactivateSportProfile`), add-sport flow, admin sport editors (shared classifier; no vi copy for admin).
+**Flows:** `/profile` Settings tab (`useUpdateSportProfile`, `useDeactivateSportProfile`), add-sport flow. **Admin sport editors are out of scope (2026-10-05, user decision: admin data needs no localization).**
+
+**Final codes from A25 (en + vi copy needed):** `SPORT_PROFILE_ALREADY_EXISTS` (409, `{sportName}`), `PROFILE_NOT_RESUMABLE` (400, `{sportName}`), `PROFILE_ATTRIBUTES_TOO_LARGE` (400, `{maxBytes}`, **no dedicated copy**) and `PROFILE_ATTRIBUTES_INVALID` (400, **no dedicated copy**), `SPORT_PROFILE_NOT_OWNED` (403), `SPORT_PROFILE_NOT_FOUND` (404), `SPORT_NOT_FOUND` (404; also returned by location, session and group creates for a missing/inactive sport, so those flows can reuse the copy). **User decision (2026-10-05): the user must not see the attribute-size error as such.** The 4 KB cap is an internal limit the UI cannot explain or let the user act on, so for `PROFILE_ATTRIBUTES_TOO_LARGE` and `PROFILE_ATTRIBUTES_INVALID` the client adds no `errors:codes` entry and shows the generic message (the 400 category copy via the classifier fallback; never the server prose, and no `maxBytes` in the text). The behavior table must list them as "generic message". The duplicate-profile conflict is now a **409**; the MSW sport handler already mirrors the codes and statuses.
 
 **Localization:** en + vi for every new string (client rule).
 

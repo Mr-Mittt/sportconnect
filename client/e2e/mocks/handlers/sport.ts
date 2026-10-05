@@ -23,8 +23,12 @@ function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
 }
 
-function apiError(message: string): ApiResponse<null> {
-  return { success: false, message, data: null, timestamp: new Date().toISOString() };
+function apiError(
+  message: string,
+  errorCode?: string,
+  errorParams?: Record<string, unknown>,
+): ApiResponse<null> {
+  return { success: false, message, data: null, timestamp: new Date().toISOString(), errorCode, errorParams };
 }
 
 function requireAuth(request: Request): Response | null {
@@ -578,12 +582,15 @@ export const sportHandlers: HttpHandler[] = [
     if (body.isResume === true) {
       if (existing === undefined) {
         return HttpResponse.json(
-          apiError('No deactivated profile to resume for this sport'),
+          apiError('No deactivated profile to resume for this sport', 'PROFILE_NOT_RESUMABLE'),
           { status: 400 },
         );
       }
       if (existing.isActive) {
-        return HttpResponse.json(apiError('Already has a profile for this sport'), { status: 400 });
+        return HttpResponse.json(
+          apiError('Already has a profile for this sport', 'SPORT_PROFILE_ALREADY_EXISTS'),
+          { status: 409 },
+        );
       }
       const reactivated: UserSportProfileResponse = {
         ...existing,
@@ -601,7 +608,10 @@ export const sportHandlers: HttpHandler[] = [
 
     // Fresh create — only an *active* row blocks it (A7 reactivates a soft-deleted one).
     if (existing?.isActive) {
-      return HttpResponse.json(apiError('Already has a profile for this sport'), { status: 400 });
+      return HttpResponse.json(
+          apiError('Already has a profile for this sport', 'SPORT_PROFILE_ALREADY_EXISTS'),
+          { status: 409 },
+        );
     }
     if (session.userSportProfilesState.filter((profile) => profile.isActive).length >= 3) {
       return HttpResponse.json(apiError('Maximum number of sport profiles reached'), {

@@ -5,6 +5,7 @@ import com.sportconnect.common.attributes.AttributeGroup
 import com.sportconnect.common.attributes.AttributeSchema
 import com.sportconnect.common.attributes.node.StringAttribute
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.sport.api.dto.CreateUserSportProfileRequest
@@ -137,7 +138,9 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name(sport.name).isActive(true).build()
         0 * profileRepository.findByUserIdAndSportId(_, _)
         0 * profileRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'PROFILE_ATTRIBUTES_TOO_LARGE'
+        e.errorParams == [maxBytes: 4096]
     }
 
     def "createProfile should throw exception when sport not found"() {
@@ -193,7 +196,9 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Basketball").isActive(true).build()
         1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.of(existing)
         0 * profileRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SPORT_PROFILE_ALREADY_EXISTS'
+        e.errorParams == [sportName: 'Basketball']
     }
 
     def "createProfile reactivates a soft-deleted profile instead of rejecting or inserting"() {
@@ -316,7 +321,9 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Badminton").isActive(true).build()
         1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.empty()
         0 * profileRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'PROFILE_NOT_RESUMABLE'
+        e.errorParams == [sportName: 'Badminton']
     }
 
     def "createProfile with isResume=true still rejects a currently-active profile"() {
@@ -334,7 +341,9 @@ class UserSportProfileServiceImplSpec extends Specification {
         1 * sportService.requireActiveSportById(sportId) >> SportResponse.builder().id(sportId).name("Badminton").isActive(true).build()
         1 * profileRepository.findByUserIdAndSportId(userId, sportId) >> Optional.of(existing)
         0 * profileRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SPORT_PROFILE_ALREADY_EXISTS'
+        e.errorParams == [sportName: 'Badminton']
     }
 
     def "getProfileById should return profile when found"() {
@@ -375,7 +384,9 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         then:
         1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.empty()
-        thrown(ResourceNotFoundException)
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == 'SPORT_PROFILE_NOT_FOUND'
+        e.errorParams == null
     }
 
     def "getUserProfiles should return all active profiles for user"() {
@@ -541,7 +552,9 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         then:
         1 * profileRepository.findByUserIdAndSportIdAndIsActiveTrue(userId, sportId) >> Optional.empty()
-        thrown(ResourceNotFoundException)
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == 'SPORT_PROFILE_NOT_FOUND'
+        e.errorParams == null
     }
 
     def "updateProfile should update all provided fields"() {
@@ -778,7 +791,9 @@ class UserSportProfileServiceImplSpec extends Specification {
         then:
         1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
         0 * profileRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'PROFILE_ATTRIBUTES_TOO_LARGE'
+        e.errorParams == [maxBytes: 4096]
     }
 
     def "updateProfile should throw exception when profile not found"() {
@@ -791,7 +806,9 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         then:
         1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.empty()
-        thrown(ResourceNotFoundException)
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == 'SPORT_PROFILE_NOT_FOUND'
+        e.errorParams == null
     }
 
     def "updateProfile should throw ForbiddenException when caller is not the owner"() {
@@ -812,7 +829,9 @@ class UserSportProfileServiceImplSpec extends Specification {
         then:
         1 * profileRepository.findByIdAndIsActiveTrue(profileId) >> Optional.of(profile)
         0 * profileRepository.save(_)
-        thrown(ForbiddenException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SPORT_PROFILE_NOT_OWNED'
+        e.errorParams == null
     }
 
     def "deleteProfile should soft delete profile"() {
@@ -846,7 +865,9 @@ class UserSportProfileServiceImplSpec extends Specification {
 
         then:
         1 * profileRepository.findById(profileId) >> Optional.empty()
-        thrown(ResourceNotFoundException)
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == 'SPORT_PROFILE_NOT_FOUND'
+        e.errorParams == null
     }
 
     def "deleteProfile should throw ForbiddenException when caller is not the owner"() {
@@ -867,7 +888,9 @@ class UserSportProfileServiceImplSpec extends Specification {
         then:
         1 * profileRepository.findById(profileId) >> Optional.of(profile)
         0 * profileRepository.save(_)
-        thrown(ForbiddenException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SPORT_PROFILE_NOT_OWNED'
+        e.errorParams == null
     }
     // ---- A7: hasActiveProfileForActiveSport ----
     // Renamed from hasProfileForSport, which was a bare existsByUserIdAndSportId and checked
