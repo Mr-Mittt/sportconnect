@@ -55,12 +55,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * directly through the repositories (A11 added the join-request, invitation and pin tables to the
  * H2 test schema).
  *
+ * <p>Extends {@link RedisBaseIT}, not {@link BaseIT}: the pin cases that pass the group checks go
+ * through {@code PostService.getPostById}, whose response mapping touches {@code
+ * StringRedisTemplate}. On plain {@code BaseIT} they pass on a machine with a dev Redis on
+ * localhost and fail with a 500 in CI, which has none.
+ *
  * <p>Not covered here: {@code GROUP_POST_NOT_FOUND} is unreachable through the API ({@code
  * PostService.getPostById} throws its own un-coded post-module 404 before the group check can see
  * a null; that un-coded 404 is A18's territory). {@code GROUP_MEMBER_NOT_FOUND} (role change or
  * ownership transfer for a non-member) is covered by the Spock spec only.
  */
-class GroupErrorCodesIntegrationTest extends BaseIT {
+class GroupErrorCodesIntegrationTest extends RedisBaseIT {
 
     private static final Integer OWNER_ROLE_ID = 1;
     private static final Integer ADMIN_ROLE_ID = 2;

@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | [B7](MVP/B7_NOTIFICATION_OUTBOX_WIRING.md) | Notification outbox wiring — post liked/commented/replied, thread-participant fan-out | `TODO` |
 | 2 | [A18](MVP/A18_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the post module — posts, comments, likes, feed, hashtags; not-found vs forbidden via the post ResourceGate (A14). Pairs with CLIENT-ERR-6 | `TODO` |
+| 3 | [A19](MVP/A19_REDIS_OUTAGE_DEGRADATION.md) | Redis outage must degrade, not fail — post/comment counters and preview cache fall back to the DB with a WARN | `TODO` |
 
 ---
 
