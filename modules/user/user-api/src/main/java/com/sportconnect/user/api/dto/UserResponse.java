@@ -49,7 +49,7 @@ public class UserResponse {
     private String regionName;
     private Integer heightCm;
     private BigDecimal weightKg;
-    private Integer shoeSizeCm;
+    private Integer shoeSizeMm;
     private Boolean isEmailVerified;
     private Boolean isActive;
     private Set<String> roles;

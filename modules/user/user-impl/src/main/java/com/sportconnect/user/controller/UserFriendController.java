@@ -37,7 +37,8 @@ public class UserFriendController {
     @Operation(summary = "Send a friend request")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request sent"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Sent to self, already friends, or a request is already pending"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Sent to self (FRIEND_REQUEST_SELF)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Already friends (ALREADY_FRIENDS) or a request is already pending (FRIEND_REQUEST_ALREADY_PENDING)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Receiver not found")
     })
@@ -54,7 +55,7 @@ public class UserFriendController {
     @Operation(summary = "Accept a friend request", description = "The request must have been sent to the caller — a request id that exists but wasn't addressed to the caller 404s (not 403), since the lookup is scoped by receiver id.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request accepted"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Request is no longer pending"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Request is no longer pending (FRIEND_REQUEST_NOT_PENDING)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Request not found (or not addressed to the caller)")
     })
@@ -71,7 +72,7 @@ public class UserFriendController {
     @Operation(summary = "Decline a friend request", description = "Same ownership-by-lookup semantics as accept.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request declined"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Request is no longer pending"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Request is no longer pending (FRIEND_REQUEST_NOT_PENDING)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Request not found (or not addressed to the caller)")
     })
@@ -88,7 +89,7 @@ public class UserFriendController {
     @Operation(summary = "Cancel a friend request the caller sent", description = "Ownership scoped by sender id, same 404-not-403 semantics as accept/decline.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request cancelled"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Request is no longer pending"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Request is no longer pending (FRIEND_REQUEST_NOT_PENDING)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Request not found (or not sent by the caller)")
     })
@@ -105,7 +106,7 @@ public class UserFriendController {
     @Operation(summary = "Remove a friend")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Friend removed"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not currently friends with this user"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Not currently friends with this user (NOT_FRIENDS)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @DeleteMapping("/{friendId}")

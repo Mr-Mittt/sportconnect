@@ -78,4 +78,28 @@
 
 The 401 written by `JwtAuthenticationEntryPoint` (missing/invalid access token) deliberately has **no code** (C12 decision; A8 left its text unchanged).
 
-Still to come: each remaining Phase B ticket (U21, A25, A11, A18, SESSION-45, REF-5, LOC-6, NTF-5) adds its section here.
+
+#### user (U21, `UserServiceImpl`, `UserPreferenceServiceImpl`, `UserFriendServiceImpl`)
+
+| Code | Status | Params | When |
+|---|---|---|---|
+| `USER_PROFILE_NOT_OWNED` | 403 | none | `PUT /api/users/{id}/profile` for someone else's id. |
+| `HEIGHT_OUT_OF_RANGE` | 400 | `{min: 50, max: 300}` | Profile update, `heightCm` outside the range. |
+| `WEIGHT_OUT_OF_RANGE` | 400 | `{min: 20, max: 300}` | Profile update, `weightKg` outside the range. |
+| `SHOE_SIZE_OUT_OF_RANGE` | 400 | `{min: 10, max: 500}` | Profile update, `shoeSizeMm` outside the range (millimetres since U21; the field was `shoeSizeCm`). |
+| `GENDER_INVALID` | 400 | `{allowed: ["MALE", "FEMALE"]}` | Profile update, `gender` not exactly one of the allowed values. |
+| `LANGUAGE_UNKNOWN` | 400 | `{language}` | Preferences update, or register, with a language code that is unknown or inactive. |
+| `LOCATION_INCOMPLETE` | 400 | none | Register with only one of latitude/longitude. |
+| `LOCATION_OUT_OF_RANGE` | 400 | none | Register with a coordinate outside -90..90 / -180..180. |
+| `CURRENT_PASSWORD_INCORRECT` | 400 | none | `PUT /api/users/me/password` with a wrong current password. |
+| `SEARCH_KEYWORD_TOO_SHORT` | 400 | `{min: 2}` | `GET /api/users/search` with fewer than 2 characters after trimming. |
+| `FRIEND_REQUEST_SELF` | 400 | none | Friend request addressed to the caller. |
+| `USER_NOT_FOUND` | 404 | none | Friend request whose receiver does not exist or is deactivated. Other user lookups stay un-coded (category copy). |
+| `FRIEND_REQUEST_NOT_FOUND` | 404 | none | Accept, decline or cancel of a request that does not exist or is not the caller's to act on. |
+| `ALREADY_FRIENDS` | 409 | none | Friend request to an existing friend (moved from 400 by U21). |
+| `FRIEND_REQUEST_ALREADY_PENDING` | 409 | none | Friend request while the caller's own request is still pending (moved from 400 by U21). |
+| `FRIEND_REQUEST_NOT_PENDING` | 409 | none | Accept, decline or cancel of a request that is no longer pending (moved from 400 by U21). |
+| `NOT_FRIENDS` | 409 | none | Unfriend someone who is not a friend (moved from 400 by U21). |
+
+Not coded by U21: the generic `User not found with id …` 404s (lookups, profile, password and preferences for a missing or deactivated caller use the category copy), and the three `ReferenceService.requireValidSelection` 400s (country/region selection), which belong to REF-5.
+Still to come: each remaining Phase B ticket (A25, A11, A18, SESSION-45, REF-5, LOC-6, NTF-5) adds its section here.

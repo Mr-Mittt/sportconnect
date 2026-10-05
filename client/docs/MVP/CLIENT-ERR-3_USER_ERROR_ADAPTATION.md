@@ -20,3 +20,15 @@ Phase C of the error-handling program for **user / account**, after U21 defines 
 **Tests:** Vitest/RTL per updated component or hook (code → localized text, unknown code → category copy → server prose), a `locale.spec.ts` or flow e2e case for the main flow in `vi`, scoped e2e; update `client/docs/E2E_OVERVIEW.md` if specs change.
 
 **On close:** update this ticket's row in the tracker table in `documentation/md/ERROR_HANDLING_DESIGN.md` (and the module's `BACKLOG_MVP.md`/`PROGRESS.md` as usual).
+
+## Backend codes delivered by U21 (2026-10-05)
+
+Final codes this ticket maps to en + vi copy (full registry and params in `documentation/md/ERROR_CODES.md`; per-endpoint audit table with the proposed client behavior in `modules/user/user-impl/docs/MVP/U21_ERROR_CODE_AUDIT.md`):
+
+- 403 `USER_PROFILE_NOT_OWNED`
+- 400 `HEIGHT_OUT_OF_RANGE`, `WEIGHT_OUT_OF_RANGE`, `SHOE_SIZE_OUT_OF_RANGE` (all `{min,max}`), `GENDER_INVALID` (`{allowed}`), `LANGUAGE_UNKNOWN` (`{language}`), `LOCATION_INCOMPLETE`, `LOCATION_OUT_OF_RANGE`, `CURRENT_PASSWORD_INCORRECT`, `SEARCH_KEYWORD_TOO_SHORT` (`{min}`), `FRIEND_REQUEST_SELF`
+- 404 `USER_NOT_FOUND` (friend-request receiver only), `FRIEND_REQUEST_NOT_FOUND`
+- **409** (moved from 400) `ALREADY_FRIENDS`, `FRIEND_REQUEST_ALREADY_PENDING`, `FRIEND_REQUEST_NOT_PENDING`, `NOT_FRIENDS`
+- Un-coded on purpose: the generic `User not found` 404s (category copy). The country/region 400s stay un-coded until REF-5.
+
+**Shoe size is millimetres now** (U21 renamed `shoeSizeCm` to `shoeSizeMm`, label `Shoe size (JP, mm)`, range 10 to 500); the client side of that rename shipped in U21 itself, so this ticket only adds the `SHOE_SIZE_OUT_OF_RANGE` copy (interpolate `{min}`/`{max}` in mm).

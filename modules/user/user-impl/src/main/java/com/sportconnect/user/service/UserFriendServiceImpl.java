@@ -2,6 +2,7 @@ package com.sportconnect.user.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
+import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.NotFoundException;
 import com.sportconnect.user.api.dto.FriendRequestResponse;
 import com.sportconnect.user.api.dto.FriendRequestStatus;
@@ -86,14 +87,14 @@ public class UserFriendServiceImpl implements UserFriendService {
     @Transactional
     public void sendFriendRequest(UUID senderId, UUID receiverId) {
         if (senderId.equals(receiverId)) {
-            throw new BadRequestException("Cannot send friend request to yourself");
+            throw new BadRequestException("FRIEND_REQUEST_SELF", "Cannot send friend request to yourself", null);
         }
 
         userRepository.findByIdAndIsActiveTrue(receiverId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException("USER_NOT_FOUND", "User not found", null));
 
         if (friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId)) {
-            throw new BadRequestException("You are already friends");
+            throw new ConflictException("ALREADY_FRIENDS", "You are already friends", null);
         }
 
         Optional<FriendRequest> reverseRequest = friendRequestRepository
@@ -110,7 +111,7 @@ public class UserFriendServiceImpl implements UserFriendService {
             FriendRequest request = existing.get();
             FriendRequestStatus previousStatus = request.getStatus();
             if (previousStatus == FriendRequestStatus.PENDING) {
-                throw new BadRequestException("Friend request already pending");
+                throw new ConflictException("FRIEND_REQUEST_ALREADY_PENDING", "Friend request already pending", null);
             }
             request.setStatus(FriendRequestStatus.PENDING);
             friendRequestRepository.save(request);
@@ -216,10 +217,10 @@ public class UserFriendServiceImpl implements UserFriendService {
     @Transactional
     public void acceptFriendRequest(UUID requestId, UUID receiverId) {
         FriendRequest request = friendRequestRepository.findByIdAndReceiverId(requestId, receiverId)
-                .orElseThrow(() -> new NotFoundException("Friend request not found"));
+                .orElseThrow(() -> new NotFoundException("FRIEND_REQUEST_NOT_FOUND", "Friend request not found", null));
 
         if (request.getStatus() != FriendRequestStatus.PENDING) {
-            throw new BadRequestException("Friend request is no longer pending");
+            throw new ConflictException("FRIEND_REQUEST_NOT_PENDING", "Friend request is no longer pending", null);
         }
 
         establishFriendship(request);
@@ -231,10 +232,10 @@ public class UserFriendServiceImpl implements UserFriendService {
     @Transactional
     public void declineFriendRequest(UUID requestId, UUID receiverId) {
         FriendRequest request = friendRequestRepository.findByIdAndReceiverId(requestId, receiverId)
-                .orElseThrow(() -> new NotFoundException("Friend request not found"));
+                .orElseThrow(() -> new NotFoundException("FRIEND_REQUEST_NOT_FOUND", "Friend request not found", null));
 
         if (request.getStatus() != FriendRequestStatus.PENDING) {
-            throw new BadRequestException("Friend request is no longer pending");
+            throw new ConflictException("FRIEND_REQUEST_NOT_PENDING", "Friend request is no longer pending", null);
         }
 
         request.setStatus(FriendRequestStatus.DECLINED);
@@ -246,10 +247,10 @@ public class UserFriendServiceImpl implements UserFriendService {
     @Transactional
     public void cancelFriendRequest(UUID requestId, UUID senderId) {
         FriendRequest request = friendRequestRepository.findByIdAndSenderId(requestId, senderId)
-                .orElseThrow(() -> new NotFoundException("Friend request not found"));
+                .orElseThrow(() -> new NotFoundException("FRIEND_REQUEST_NOT_FOUND", "Friend request not found", null));
 
         if (request.getStatus() != FriendRequestStatus.PENDING) {
-            throw new BadRequestException("Friend request is no longer pending");
+            throw new ConflictException("FRIEND_REQUEST_NOT_PENDING", "Friend request is no longer pending", null);
         }
 
         request.setStatus(FriendRequestStatus.CANCELLED);
@@ -261,7 +262,7 @@ public class UserFriendServiceImpl implements UserFriendService {
     @Transactional
     public void removeFriend(UUID userId, UUID friendId) {
         if (!friendshipRepository.existsByUserIdAndFriendId(userId, friendId)) {
-            throw new BadRequestException("You are not friends with this user");
+            throw new ConflictException("NOT_FRIENDS", "You are not friends with this user", null);
         }
 
         friendshipRepository.deleteBothDirections(userId, friendId);

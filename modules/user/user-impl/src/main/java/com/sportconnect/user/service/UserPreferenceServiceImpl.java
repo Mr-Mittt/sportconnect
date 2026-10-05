@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -56,7 +57,7 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
     public UserPreferenceResponse updatePreferences(UUID userId, UpdateUserPreferenceRequest request) {
         requireActiveCaller(userId);
         if (request.getLanguage() != null && !referenceService.isActiveLanguage(request.getLanguage())) {
-            throw new BadRequestException("Unknown or inactive language: " + request.getLanguage());
+            throw new BadRequestException("LANGUAGE_UNKNOWN", "Unknown or inactive language: " + request.getLanguage(), Map.of("language", request.getLanguage()));
         }
 
         UserPreference preference = findOrCreate(userId);

@@ -172,6 +172,8 @@ class UserPreferenceServiceImplSpec extends Specification {
         then:
         def e = thrown(BadRequestException)
         e.message.contains(language)
+        e.errorCode == "LANGUAGE_UNKNOWN"
+        e.errorParams == [language: language]
         0 * userPreferenceRepository._
 
         where:

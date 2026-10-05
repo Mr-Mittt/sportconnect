@@ -84,3 +84,5 @@ DELETE /api/users/{userId}               ROLE_ADMIN
 - `UserPreference` entity and table (V001): `UserPreferenceServiceImpl` serves `GET`/`PUT /api/users/me/preferences`; the row is created lazily
   on first access, or at register when a language is given. `language` is `VARCHAR(35)` (matches `languages.code`) since V075.
 - Always use `findByIdAndIsActiveTrue()` in new queries — `findById()` returns soft-deleted users too.
+- **Error codes (U21).** Every client-actionable error in this module throws a coded exception (`new BadRequestException("HEIGHT_OUT_OF_RANGE", msg, Map.of(...))`); codes are registered in `documentation/md/ERROR_CODES.md`. The four friend-state conflicts are `ConflictException` (409), not 400. The generic `User not found` 404s stay un-coded on purpose.
+- **Shoe size is millimetres (U21):** `users.shoe_size_mm` / `shoeSizeMm`, range 10 to 500 (V077 renamed it and multiplied by 10). Never reintroduce `shoeSizeCm`.

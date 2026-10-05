@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at TIMESTAMP,
     height_cm INTEGER,
     weight_kg NUMERIC(5,2),
-    shoe_size_cm INTEGER,
+    shoe_size_mm INTEGER,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP
 );

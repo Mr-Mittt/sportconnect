@@ -137,7 +137,7 @@ export const mockMyProfile: UserResponse = {
   regionName: null,
   heightCm: null,
   weightKg: null,
-  shoeSizeCm: null,
+  shoeSizeMm: null,
   isEmailVerified: true,
   isActive: true,
   roles: mockUser.roles,

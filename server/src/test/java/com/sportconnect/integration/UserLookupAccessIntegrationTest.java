@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code /username/{username}}) and the two {@code check/*} availability endpoints must reject an
  * anonymous caller, and the three lookups must never leak a PII field
  * ({@code email}/{@code phoneNumber}/{@code dateOfBirth}/{@code gender}/{@code heightCm}/
- * {@code weightKg}/{@code shoeSizeCm}/{@code location}/{@code lastLoginAt}/{@code roles}/
+ * {@code weightKg}/{@code shoeSizeMm}/{@code location}/{@code lastLoginAt}/{@code roles}/
  * {@code isEmailVerified}/{@code isActive}) even to an authenticated caller looking up someone
  * else. {@code GET /api/users/me} is covered separately — it's the one endpoint that's supposed
  * to return the full shape, for the caller's own id only.
@@ -167,7 +167,7 @@ class UserLookupAccessIntegrationTest extends BaseIT {
                 .andExpect(jsonPath("$.data.gender").doesNotExist())
                 .andExpect(jsonPath("$.data.heightCm").doesNotExist())
                 .andExpect(jsonPath("$.data.weightKg").doesNotExist())
-                .andExpect(jsonPath("$.data.shoeSizeCm").doesNotExist())
+                .andExpect(jsonPath("$.data.shoeSizeMm").doesNotExist())
                 .andExpect(jsonPath("$.data.location").doesNotExist())
                 .andExpect(jsonPath("$.data.lastLoginAt").doesNotExist())
                 .andExpect(jsonPath("$.data.roles").doesNotExist())
@@ -269,7 +269,7 @@ class UserLookupAccessIntegrationTest extends BaseIT {
                 .andExpect(jsonPath("$.data[0].gender").doesNotExist())
                 .andExpect(jsonPath("$.data[0].heightCm").doesNotExist())
                 .andExpect(jsonPath("$.data[0].weightKg").doesNotExist())
-                .andExpect(jsonPath("$.data[0].shoeSizeCm").doesNotExist())
+                .andExpect(jsonPath("$.data[0].shoeSizeMm").doesNotExist())
                 .andExpect(jsonPath("$.data[0].location").doesNotExist())
                 .andExpect(jsonPath("$.data[0].lastLoginAt").doesNotExist())
                 .andExpect(jsonPath("$.data[0].roles").doesNotExist())

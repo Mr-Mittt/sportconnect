@@ -22,7 +22,7 @@ const baseUser: UserResponse = {
   regionName: 'Hanoi',
   heightCm: 170,
   weightKg: 62,
-  shoeSizeCm: 24,
+  shoeSizeMm: 240,
   isEmailVerified: true,
   isActive: true,
   roles: ['USER'],

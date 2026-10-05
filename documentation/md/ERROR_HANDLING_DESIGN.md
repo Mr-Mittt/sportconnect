@@ -53,7 +53,7 @@ Update the matching cell when a ticket closes (each ticket's **On close** line s
 |---|---|---|---|
 | common / client | [C12](../../modules/common/docs/MVP/C12_ERROR_CONTRACT_AND_CATEGORY_TAXONOMY.md) `DONE` · [CLIENT-ERR-1](../../client/docs/MVP/CLIENT-ERR-1_GLOBAL_ERROR_HANDLING.md) `DONE` | n/a | n/a |
 | auth | n/a | [A8](../../modules/auth/docs/MVP/A8_STRUCTURED_ERROR_CODES_ON_APIRESPONSE_ERROR.md) `DONE` | [CLIENT-ERR-2](../../client/docs/MVP/CLIENT-ERR-2_AUTH_ERROR_ADAPTATION.md) `DONE` |
-| user | n/a | [U21](../../modules/user/user-impl/docs/MVP/U21_ERROR_CODE_AUDIT.md) `TODO` | [CLIENT-ERR-3](../../client/docs/MVP/CLIENT-ERR-3_USER_ERROR_ADAPTATION.md) `TODO` |
+| user | n/a | [U21](../../modules/user/user-impl/docs/MVP/U21_ERROR_CODE_AUDIT.md) `DONE` | [CLIENT-ERR-3](../../client/docs/MVP/CLIENT-ERR-3_USER_ERROR_ADAPTATION.md) `TODO` |
 | sport | n/a | [A25](../../modules/sport/sport-impl/docs/MVP/A25_ERROR_CODE_AUDIT.md) `TODO` | [CLIENT-ERR-4](../../client/docs/MVP/CLIENT-ERR-4_SPORT_ERROR_ADAPTATION.md) `TODO` |
 | group | n/a | [A11](../../modules/social/group-impl/docs/MVP/A11_ERROR_CODE_AUDIT.md) `TODO` | [CLIENT-ERR-5](../../client/docs/MVP/CLIENT-ERR-5_GROUP_ERROR_ADAPTATION.md) `TODO` |
 | post | n/a | [A18](../../modules/social/post-impl/docs/MVP/A18_ERROR_CODE_AUDIT.md) `TODO` | [CLIENT-ERR-6](../../client/docs/MVP/CLIENT-ERR-6_POST_ERROR_ADAPTATION.md) `TODO` |
