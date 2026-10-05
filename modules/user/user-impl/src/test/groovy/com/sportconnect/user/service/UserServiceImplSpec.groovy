@@ -412,6 +412,8 @@ class UserServiceImplSpec extends Specification {
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
         def e = thrown(BadRequestException)
         e.message == "gender must be one of: MALE, FEMALE"
+        e.errorCode == "GENDER_INVALID"
+        e.errorParams == [allowed: ["MALE", "FEMALE"]]
         0 * userRepository.save(_)
 
         and: "validated before any field was applied"
@@ -435,7 +437,7 @@ class UserServiceImplSpec extends Specification {
         def request = UpdateProfileRequest.builder()
                 .heightCm(180)
                 .weightKg(new BigDecimal("75.50"))
-                .shoeSizeCm(27)
+                .shoeSizeMm(270)
                 .build()
 
         when:
@@ -446,12 +448,12 @@ class UserServiceImplSpec extends Specification {
         1 * userRepository.save(_) >> { User savedUser ->
             assert savedUser.heightCm == 180
             assert savedUser.weightKg == new BigDecimal("75.50")
-            assert savedUser.shoeSizeCm == 27
+            assert savedUser.shoeSizeMm == 270
             return savedUser
         }
         result.heightCm == 180
         result.weightKg == new BigDecimal("75.50")
-        result.shoeSizeCm == 27
+        result.shoeSizeMm == 270
     }
 
     def "updateProfile leaves physical stats unchanged when omitted"() {
@@ -462,7 +464,7 @@ class UserServiceImplSpec extends Specification {
                 .email("test@example.com")
                 .heightCm(170)
                 .weightKg(new BigDecimal("65.00"))
-                .shoeSizeCm(25)
+                .shoeSizeMm(250)
                 .isActive(true)
                 .roles([] as Set)
                 .build()
@@ -477,7 +479,7 @@ class UserServiceImplSpec extends Specification {
         1 * userRepository.save(_) >> { User savedUser ->
             assert savedUser.heightCm == 170
             assert savedUser.weightKg == new BigDecimal("65.00")
-            assert savedUser.shoeSizeCm == 25
+            assert savedUser.shoeSizeMm == 250
             return savedUser
         }
     }
@@ -494,7 +496,9 @@ class UserServiceImplSpec extends Specification {
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
         0 * userRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == "HEIGHT_OUT_OF_RANGE"
+        e.errorParams == [min: 50, max: 300]
 
         where:
         heightValue << [49, 301]
@@ -512,17 +516,19 @@ class UserServiceImplSpec extends Specification {
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
         0 * userRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == "WEIGHT_OUT_OF_RANGE"
+        e.errorParams == [min: 20, max: 300]
 
         where:
         weightValue << [new BigDecimal("19.99"), new BigDecimal("300.01")]
     }
 
-    def "updateProfile throws BadRequestException when shoeSizeCm is out of bounds"() {
+    def "updateProfile throws BadRequestException when shoeSizeMm is out of bounds (millimetres, 10-500)"() {
         given:
         def userId = UUID.randomUUID()
         def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
-        def request = UpdateProfileRequest.builder().shoeSizeCm(shoeSizeValue).build()
+        def request = UpdateProfileRequest.builder().shoeSizeMm(shoeSizeValue).build()
 
         when:
         userService.updateProfile(userId, userId, request)
@@ -530,7 +536,10 @@ class UserServiceImplSpec extends Specification {
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
         0 * userRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == "SHOE_SIZE_OUT_OF_RANGE"
+        e.errorParams == [min: 10, max: 500]
+        e.message == "shoeSizeMm must be between 10 and 500"
 
         where:
         shoeSizeValue << [9, 501]
@@ -589,7 +598,8 @@ class UserServiceImplSpec extends Specification {
         then:
         0 * userRepository.findByIdAndIsActiveTrue(_)
         0 * userRepository.save(_)
-        thrown(ForbiddenException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == "USER_PROFILE_NOT_OWNED"
     }
 
     def "deleteUser should soft delete user"() {
@@ -747,7 +757,8 @@ class UserServiceImplSpec extends Specification {
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
         1 * passwordEncoder.matches("wrongRaw", "oldHash") >> false
         0 * userRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == "CURRENT_PASSWORD_INCORRECT"
     }
 
     def "changePassword throws ResourceNotFoundException when user not found"() {
@@ -1122,7 +1133,8 @@ class UserServiceImplSpec extends Specification {
 
         then:
         0 * userRepository.searchActiveUsers(_, _, _)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == "SEARCH_KEYWORD_TOO_SHORT"
     }
 
     def "searchUsers throws BadRequestException when keyword is shorter than 2 characters"() {
@@ -1135,7 +1147,9 @@ class UserServiceImplSpec extends Specification {
 
         then:
         0 * userRepository.searchActiveUsers(_, _, _)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == "SEARCH_KEYWORD_TOO_SHORT"
+        e.errorParams == [min: 2]
     }
 
     def "searchUsers trims the keyword before querying"() {
@@ -1265,6 +1279,8 @@ class UserServiceImplSpec extends Specification {
         then:
         def e = thrown(BadRequestException)
         e.message.contains("zz")
+        e.errorCode == "LANGUAGE_UNKNOWN"
+        e.errorParams == [language: "zz"]
         0 * userRepository.save(_)
         0 * userPreferenceRepository.save(_)
     }
@@ -1278,17 +1294,18 @@ class UserServiceImplSpec extends Specification {
                 UserRegistrationDetails.builder().latitude(lat).longitude(lon).build())
 
         then:
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == code
         0 * userRepository.save(_)
 
         where:
-        lat    | lon
-        10.7d  | null
-        null   | 106.7d
-        91.0d  | 0.0d
-        -90.5d | 0.0d
-        0.0d   | 181.0d
-        0.0d   | -180.5d
+        lat    | lon     | code
+        10.7d  | null    | "LOCATION_INCOMPLETE"
+        null   | 106.7d  | "LOCATION_INCOMPLETE"
+        91.0d  | 0.0d    | "LOCATION_OUT_OF_RANGE"
+        -90.5d | 0.0d    | "LOCATION_OUT_OF_RANGE"
+        0.0d   | 181.0d  | "LOCATION_OUT_OF_RANGE"
+        0.0d   | -180.5d | "LOCATION_OUT_OF_RANGE"
     }
 
     // ---------- updateProfile geo rules ----------

@@ -68,5 +68,5 @@ public class UpdateProfileRequest {
 
     private BigDecimal weightKg;
 
-    private Integer shoeSizeCm;
+    private Integer shoeSizeMm;
 }

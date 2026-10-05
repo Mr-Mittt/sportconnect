@@ -601,7 +601,7 @@ describe('App routing', () => {
           regionName: null,
           heightCm: null,
           weightKg: null,
-          shoeSizeCm: null,
+          shoeSizeMm: null,
           dateOfBirth: null,
           gender: null,
           coverUrl: null,

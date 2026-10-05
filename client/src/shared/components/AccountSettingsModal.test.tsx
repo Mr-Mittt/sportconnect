@@ -71,7 +71,7 @@ function user(overrides: Partial<UserResponse> = {}): UserResponse {
     regionName: 'Hanoi',
     heightCm: null,
     weightKg: null,
-    shoeSizeCm: null,
+    shoeSizeMm: null,
     isEmailVerified: true,
     isActive: true,
     roles: ['USER'],
@@ -88,7 +88,7 @@ describe('AccountSettingsModal', () => {
       <AccountSettingsModal
         isOpen
         onClose={vi.fn()}
-        user={user({ phoneNumber: '0123456789', heightCm: 180, weightKg: 75, shoeSizeCm: 26 })}
+        user={user({ phoneNumber: '0123456789', heightCm: 180, weightKg: 75, shoeSizeMm: 265 })}
         languageCode="vi"
         onSave={vi.fn()}
         isSaving={false}
@@ -107,7 +107,7 @@ describe('AccountSettingsModal', () => {
     expect(screen.getByLabelText('Phone number')).toHaveValue('0123456789');
     expect(screen.getByLabelText('Height (cm)')).toHaveValue(180);
     expect(screen.getByLabelText('Weight (kg)')).toHaveValue(75);
-    expect(screen.getByLabelText('Shoe size (JP, cm)')).toHaveValue(26);
+    expect(screen.getByLabelText('Shoe size (JP, mm)')).toHaveValue(265);
   });
 
   it('allows a shoe size up to the raised 500 bound (PROFILE-10)', () => {
@@ -123,7 +123,7 @@ describe('AccountSettingsModal', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Shoe size (JP, cm)')).toHaveAttribute('max', '500');
+    expect(screen.getByLabelText('Shoe size (JP, mm)')).toHaveAttribute('max', '500');
   });
 
   it('clamps the bio textarea at MAX_BIO_LENGTH', () => {
@@ -394,7 +394,7 @@ describe('AccountSettingsModal', () => {
       <AccountSettingsModal isOpen onClose={vi.fn()} user={user()} languageCode="vi" onSave={vi.fn()} isSaving={false} errorMessage={null} />,
     );
 
-    for (const label of ['Height (cm)', 'Weight (kg)', 'Shoe size (JP, cm)']) {
+    for (const label of ['Height (cm)', 'Weight (kg)', 'Shoe size (JP, mm)']) {
       for (const key of ['e', '-', '+', '.']) {
         // fireEvent returns false when the event's default was prevented.
         expect(fireEvent.keyDown(screen.getByLabelText(label), { key })).toBe(false);

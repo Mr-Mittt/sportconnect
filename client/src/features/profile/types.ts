@@ -46,7 +46,7 @@ export interface UserResponse {
   regionName: string | null;
   heightCm: number | null;
   weightKg: number | null;
-  shoeSizeCm: number | null;
+  shoeSizeMm: number | null;
   isEmailVerified: boolean;
   isActive: boolean;
   roles: string[];

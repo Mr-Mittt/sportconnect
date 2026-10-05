@@ -43,7 +43,7 @@ const fixtureProfile: UserResponse = {
   regionName: 'Hanoi',
   heightCm: null,
   weightKg: null,
-  shoeSizeCm: null,
+  shoeSizeMm: null,
   isEmailVerified: true,
   isActive: true,
   roles: ['USER'],

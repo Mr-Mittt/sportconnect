@@ -15,7 +15,7 @@
     "gender": "Gender",
     "heightCm": "Height (cm)",
     "weightKg": "Weight (kg)",
-    "shoeSizeCm": "Shoe size (JP, cm)"
+    "shoeSizeMm": "Shoe size (JP, mm)"
   },
   "legacyCountry": "Currently set to \"{{country}}\" — pick a country below to replace it.",
   "save": "Save changes",

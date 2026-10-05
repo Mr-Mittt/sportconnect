@@ -96,8 +96,8 @@ public class User {
     @Column(name = "weight_kg")
     private BigDecimal weightKg;
 
-    @Column(name = "shoe_size_cm")
-    private Integer shoeSizeCm;
+    @Column(name = "shoe_size_mm")
+    private Integer shoeSizeMm;
 
     @Column(name = "is_email_verified")
     @Builder.Default

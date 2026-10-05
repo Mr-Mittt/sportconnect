@@ -61,7 +61,7 @@ interface AccountSettingsModalProps {
  * Fields cover every non-sport-profile `UpdateProfileRequest` field —
  * widened at pickup (2026-08-27, user decision) from the original 8 to all
  * 14, since the extra 6 (`phoneNumber`/`dateOfBirth`/`gender`/`heightCm`/
- * `weightKg`/`shoeSizeCm`) live on the exact same row/endpoint. See the
+ * `weightKg`/`shoeSizeMm`) live on the exact same row/endpoint. See the
  * ticket doc's Delta for the full reasoning.
  *
  * **CLIENT-REF-3:** the free-text City input is gone — `GeoLocaleCountrySelect`/
@@ -284,15 +284,15 @@ export function AccountSettingsModal({
                 />
               </div>
               <div className="flex-1">
-                <Label htmlFor="account-settings-shoe-size">{t('field.shoeSizeCm')}</Label>
+                <Label htmlFor="account-settings-shoe-size">{t('field.shoeSizeMm')}</Label>
                 <Input
                   id="account-settings-shoe-size"
                   type="number"
                   {...digitsOnlyInputProps}
                   min={10}
                   max={500}
-                  value={draft.shoeSizeCm}
-                  onChange={(event) => set('shoeSizeCm', event.target.value)}
+                  value={draft.shoeSizeMm}
+                  onChange={(event) => set('shoeSizeMm', event.target.value)}
                 />
               </div>
             </div>

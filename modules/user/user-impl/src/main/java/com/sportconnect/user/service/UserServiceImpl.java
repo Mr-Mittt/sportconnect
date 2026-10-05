@@ -211,7 +211,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse updateProfile(UUID userId, UUID callerId, UpdateProfileRequest request) {
         if (!userId.equals(callerId)) {
-            throw new ForbiddenException("You can only update your own profile");
+            throw new ForbiddenException("USER_PROFILE_NOT_OWNED", "You can only update your own profile", null);
         }
 
         User user = userRepository.findByIdAndIsActiveTrue(userId)
@@ -267,22 +267,22 @@ public class UserServiceImpl implements UserService {
         }
         if (request.getHeightCm() != null) {
             if (request.getHeightCm() < 50 || request.getHeightCm() > 300) {
-                throw new BadRequestException("heightCm must be between 50 and 300");
+                throw new BadRequestException("HEIGHT_OUT_OF_RANGE", "heightCm must be between 50 and 300", Map.of("min", 50, "max", 300));
             }
             user.setHeightCm(request.getHeightCm());
         }
         if (request.getWeightKg() != null) {
             if (request.getWeightKg().compareTo(BigDecimal.valueOf(20)) < 0
                     || request.getWeightKg().compareTo(BigDecimal.valueOf(300)) > 0) {
-                throw new BadRequestException("weightKg must be between 20 and 300");
+                throw new BadRequestException("WEIGHT_OUT_OF_RANGE", "weightKg must be between 20 and 300", Map.of("min", 20, "max", 300));
             }
             user.setWeightKg(request.getWeightKg());
         }
-        if (request.getShoeSizeCm() != null) {
-            if (request.getShoeSizeCm() < 10 || request.getShoeSizeCm() > 500) {
-                throw new BadRequestException("shoeSizeCm must be between 10 and 500");
+        if (request.getShoeSizeMm() != null) {
+            if (request.getShoeSizeMm() < 10 || request.getShoeSizeMm() > 500) {
+                throw new BadRequestException("SHOE_SIZE_OUT_OF_RANGE", "shoeSizeMm must be between 10 and 500", Map.of("min", 10, "max", 500));
             }
-            user.setShoeSizeCm(request.getShoeSizeCm());
+            user.setShoeSizeMm(request.getShoeSizeMm());
         }
 
         User savedUser = userRepository.save(user);
@@ -363,7 +363,7 @@ public class UserServiceImpl implements UserService {
         String languageCode = extras.getLanguageCode() == null || extras.getLanguageCode().isBlank()
                 ? null : extras.getLanguageCode().trim();
         if (languageCode != null && !referenceService.isActiveLanguage(languageCode)) {
-            throw new BadRequestException("Unknown or inactive language: " + languageCode);
+            throw new BadRequestException("LANGUAGE_UNKNOWN", "Unknown or inactive language: " + languageCode, Map.of("language", languageCode));
         }
 
         Point location = toPoint(extras.getLatitude(), extras.getLongitude());
@@ -412,7 +412,7 @@ public class UserServiceImpl implements UserService {
         }
         return Gender.fromWire(requested)
                 .map(Gender::name)
-                .orElseThrow(() -> new BadRequestException("gender must be one of: MALE, FEMALE"));
+                .orElseThrow(() -> new BadRequestException("GENDER_INVALID", "gender must be one of: MALE, FEMALE", Map.of("allowed", List.of("MALE", "FEMALE"))));
     }
 
     /**
@@ -440,10 +440,10 @@ public class UserServiceImpl implements UserService {
             return null;
         }
         if (latitude == null || longitude == null) {
-            throw new BadRequestException("latitude and longitude must be provided together");
+            throw new BadRequestException("LOCATION_INCOMPLETE", "latitude and longitude must be provided together", null);
         }
         if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-            throw new BadRequestException("latitude must be between -90 and 90 and longitude between -180 and 180");
+            throw new BadRequestException("LOCATION_OUT_OF_RANGE", "latitude must be between -90 and 90 and longitude between -180 and 180", null);
         }
         return geometryFactory.createPoint(new Coordinate(longitude, latitude));
     }
@@ -495,7 +495,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
-            throw new BadRequestException("Current password is incorrect");
+            throw new BadRequestException("CURRENT_PASSWORD_INCORRECT", "Current password is incorrect", null);
         }
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
@@ -507,7 +507,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSearchResponse> searchUsers(UUID callerId, String keyword, Pageable pageable) {
         if (keyword == null || keyword.trim().length() < 2) {
-            throw new BadRequestException("Search keyword must be at least 2 characters");
+            throw new BadRequestException("SEARCH_KEYWORD_TOO_SHORT", "Search keyword must be at least 2 characters", Map.of("min", 2));
         }
 
         Page<User> users = userRepository.searchActiveUsers(callerId, keyword.trim(), pageable);
@@ -619,7 +619,7 @@ public class UserServiceImpl implements UserService {
                 .regionName(geoNames.regionName(user))
                 .heightCm(user.getHeightCm())
                 .weightKg(user.getWeightKg())
-                .shoeSizeCm(user.getShoeSizeCm())
+                .shoeSizeMm(user.getShoeSizeMm())
                 .isEmailVerified(user.getIsEmailVerified())
                 .isActive(user.getIsActive())
                 .roles(user.getRoles().stream()

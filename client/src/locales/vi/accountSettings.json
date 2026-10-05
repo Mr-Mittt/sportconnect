@@ -15,7 +15,7 @@
     "gender": "Giới tính",
     "heightCm": "Chiều cao (cm)",
     "weightKg": "Cân nặng (kg)",
-    "shoeSizeCm": "Cỡ giày (JP, cm)"
+    "shoeSizeMm": "Cỡ giày (JP, mm)"
   },
   "legacyCountry": "Hiện đang đặt là \"{{country}}\" — chọn một quốc gia bên dưới để thay thế.",
   "save": "Lưu thay đổi",

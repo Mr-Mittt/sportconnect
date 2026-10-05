@@ -25,7 +25,7 @@ export interface UpdateProfilePayload {
   gender?: string;
   heightCm?: number;
   weightKg?: number;
-  shoeSizeCm?: number;
+  shoeSizeMm?: number;
   countryId?: number;
   regionId?: number;
   location?: { latitude: number; longitude: number };
@@ -33,7 +33,7 @@ export interface UpdateProfilePayload {
 
 /** The form's local draft — the plain-text fields only (Country/Region/Language live in
  * `useGeoLocaleFieldsData`'s own state, not here — see `EditProfileModal`). Every field is a
- * string because it is bound to an input — `heightCm`/`weightKg`/`shoeSizeCm` are converted back
+ * string because it is bound to an input — `heightCm`/`weightKg`/`shoeSizeMm` are converted back
  * to numbers only when they are sent (same shape `sportFieldsDraft.ts`'s
  * `minPlayers`/`maxPlayers` already use). */
 export interface ProfileEditDraft {
@@ -48,7 +48,7 @@ export interface ProfileEditDraft {
   gender: string;
   heightCm: string;
   weightKg: string;
-  shoeSizeCm: string;
+  shoeSizeMm: string;
 }
 
 /** Seeds a draft from the server's row. Nulls become `''` so the inputs stay controlled. */
@@ -65,7 +65,7 @@ export function toProfileEditDraft(user: UserResponse): ProfileEditDraft {
     gender: user.gender ?? '',
     heightCm: user.heightCm?.toString() ?? '',
     weightKg: user.weightKg?.toString() ?? '',
-    shoeSizeCm: user.shoeSizeCm?.toString() ?? '',
+    shoeSizeMm: user.shoeSizeMm?.toString() ?? '',
   };
 }
 
@@ -109,7 +109,7 @@ export function applyGeoSelection(
  * (`bio`/`city`/`country`/`phoneNumber`/`gender`/`avatarUrl`/`coverUrl`)
  * *can* be cleared back to `''` — an empty string is still non-null, so it
  * reaches the server and clears the column. `dateOfBirth`/`heightCm`/
- * `weightKg`/`shoeSizeCm` cannot: an emptied `dateOfBirth` would send an
+ * `weightKg`/`shoeSizeMm` cannot: an emptied `dateOfBirth` would send an
  * unparsable empty date string (the server has no "unset" representation for
  * a `LocalDate`), and an emptied numeric field would send `0`/`NaN`, which
  * U7's own bounds validation (50–300 / 20–300 / 10–35) would reject anyway.
@@ -141,8 +141,8 @@ export function buildProfileUpdatePayload(
   if (draft.weightKg !== original.weightKg && draft.weightKg !== '') {
     payload.weightKg = Number(draft.weightKg);
   }
-  if (draft.shoeSizeCm !== original.shoeSizeCm && draft.shoeSizeCm !== '') {
-    payload.shoeSizeCm = Number(draft.shoeSizeCm);
+  if (draft.shoeSizeMm !== original.shoeSizeMm && draft.shoeSizeMm !== '') {
+    payload.shoeSizeMm = Number(draft.shoeSizeMm);
   }
 
   return payload;

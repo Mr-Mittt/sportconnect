@@ -2,6 +2,7 @@ package com.sportconnect.user.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.user.api.dto.FriendRequestStatus
 import com.sportconnect.user.api.dto.UserInfoResponse
@@ -70,7 +71,8 @@ class UserFriendServiceImplSpec extends Specification {
         service.sendFriendRequest(senderId, senderId)
 
         then:
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == "FRIEND_REQUEST_SELF"
         0 * friendRequestRepository.save(_)
     }
 
@@ -80,20 +82,22 @@ class UserFriendServiceImplSpec extends Specification {
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.empty()
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == "USER_NOT_FOUND"
     }
 
-    def "sendFriendRequest should throw BadRequestException when already friends"() {
+    def "sendFriendRequest should throw ConflictException when already friends"() {
         when:
         service.sendFriendRequest(senderId, receiverId)
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(receiverId) >> Optional.of(user(receiverId))
         1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> true
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == "ALREADY_FRIENDS"
     }
 
-    def "sendFriendRequest should throw BadRequestException when request already pending"() {
+    def "sendFriendRequest should throw ConflictException when request already pending"() {
         given:
         def existing = FriendRequest.builder().id(requestId).senderId(senderId).receiverId(receiverId)
                 .status(FriendRequestStatus.PENDING).build()
@@ -106,7 +110,8 @@ class UserFriendServiceImplSpec extends Specification {
         1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
         1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.empty()
         1 * friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId) >> Optional.of(existing)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == "FRIEND_REQUEST_ALREADY_PENDING"
         0 * friendRequestRepository.save(_)
     }
 
@@ -248,7 +253,8 @@ class UserFriendServiceImplSpec extends Specification {
         1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
         1 * friendRequestRepository.findBySenderIdAndReceiverIdAndStatus(receiverId, senderId, FriendRequestStatus.PENDING) >> Optional.empty()
         1 * friendRequestRepository.findBySenderIdAndReceiverId(senderId, receiverId) >> Optional.of(existing)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == "FRIEND_REQUEST_ALREADY_PENDING"
         0 * userOutboxWriter.record(_, _)
     }
 
@@ -318,10 +324,11 @@ class UserFriendServiceImplSpec extends Specification {
 
         then:
         1 * friendRequestRepository.findByIdAndReceiverId(requestId, receiverId) >> Optional.empty()
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == "FRIEND_REQUEST_NOT_FOUND"
     }
 
-    def "acceptFriendRequest should throw BadRequestException when request is not pending"() {
+    def "acceptFriendRequest should throw ConflictException when request is not pending"() {
         given:
         def request = FriendRequest.builder().id(requestId).senderId(senderId).receiverId(receiverId)
                 .status(FriendRequestStatus.DECLINED).build()
@@ -331,7 +338,8 @@ class UserFriendServiceImplSpec extends Specification {
 
         then:
         1 * friendRequestRepository.findByIdAndReceiverId(requestId, receiverId) >> Optional.of(request)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == "FRIEND_REQUEST_NOT_PENDING"
     }
 
     // ─── declineFriendRequest ────────────────────────────────────────────────
@@ -356,7 +364,8 @@ class UserFriendServiceImplSpec extends Specification {
 
         then:
         1 * friendRequestRepository.findByIdAndReceiverId(requestId, receiverId) >> Optional.empty()
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == "FRIEND_REQUEST_NOT_FOUND"
     }
 
     // ─── cancelFriendRequest ─────────────────────────────────────────────────
@@ -380,7 +389,8 @@ class UserFriendServiceImplSpec extends Specification {
 
         then:
         1 * friendRequestRepository.findByIdAndSenderId(requestId, senderId) >> Optional.empty()
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == "FRIEND_REQUEST_NOT_FOUND"
     }
 
     // ─── removeFriend ────────────────────────────────────────────────────────
@@ -416,13 +426,14 @@ class UserFriendServiceImplSpec extends Specification {
         })
     }
 
-    def "removeFriend should throw BadRequestException when not friends"() {
+    def "removeFriend should throw ConflictException when not friends"() {
         when:
         service.removeFriend(senderId, receiverId)
 
         then:
         1 * friendshipRepository.existsByUserIdAndFriendId(senderId, receiverId) >> false
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == "NOT_FRIENDS"
     }
 
     // ─── getFriends / areFriends / getAcceptedFriendIds ─────────────────────

@@ -38,7 +38,7 @@ const profileFixture: UserResponse = {
   regionName: null,
   heightCm: null,
   weightKg: null,
-  shoeSizeCm: null,
+  shoeSizeMm: null,
   isEmailVerified: true,
   isActive: true,
   roles: ['ROLE_USER'],

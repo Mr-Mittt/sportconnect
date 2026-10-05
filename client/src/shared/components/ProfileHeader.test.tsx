@@ -24,7 +24,7 @@ const baseUser: UserResponse = {
   regionName: 'Riverside',
   heightCm: null,
   weightKg: null,
-  shoeSizeCm: null,
+  shoeSizeMm: null,
   isEmailVerified: true,
   isActive: true,
   roles: ['USER'],
