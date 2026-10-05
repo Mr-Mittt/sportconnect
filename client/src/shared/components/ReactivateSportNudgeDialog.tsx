@@ -12,6 +12,8 @@ interface ReactivateSportNudgeDialogProps {
   onReactivate: () => void;
   isReactivating: boolean;
   isError: boolean;
+  /** CLIENT-ERR-4: a code-specific message (`getCodedErrorMessage`) shown instead of the static error line; unset keeps the static line. */
+  errorText?: string;
   /** CLIENT-I18N-3: i18next `"namespace:key.path"` prefix overriding this dialog's default copy
    * (`sharedDialogs.reactivateSportNudge.*`) for a specific caller. No current caller passes this. */
   i18nOverridePrefix?: string;
@@ -32,6 +34,7 @@ export function ReactivateSportNudgeDialog({
   onReactivate,
   isReactivating,
   isError,
+  errorText,
   i18nOverridePrefix,
 }: ReactivateSportNudgeDialogProps) {
   const t = useOverridableText('sharedDialogs', i18nOverridePrefix);
@@ -49,7 +52,7 @@ export function ReactivateSportNudgeDialog({
         <p className="mb-3 text-sm font-medium text-text-primary">{prompt}</p>
         {isError && (
           <p role="alert" className="mb-2 text-2sm text-text-danger">
-            {t('reactivateSportNudge.error', { sportName })}
+            {errorText ?? t('reactivateSportNudge.error', { sportName })}
           </p>
         )}
         <div className="flex justify-end gap-2">

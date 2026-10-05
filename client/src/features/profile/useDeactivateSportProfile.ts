@@ -14,7 +14,8 @@ import type { ApiResponse } from '@/shared/types/api';
  * does (active list, `?includeInactive` list, discover) so the deactivated sport disappears from
  * the switcher, appears as a muted pill, and Discover stops offering it.
  *
- * `errorMessage` surfaces the server's own text, same extraction as `useUpdateSportProfile`.
+ * `errorMessage` is `getErrorMessage` (localized by error code); `error` is exposed so the confirm dialog can
+ * show `getCodedErrorMessage(error)` (CLIENT-ERR-4).
  */
 export function useDeactivateSportProfile() {
   const queryClient = useQueryClient();
@@ -37,6 +38,8 @@ export function useDeactivateSportProfile() {
     deactivateSportProfile: mutation.mutate,
     isPending: mutation.isPending,
     isError: mutation.isError,
+    /** The raw failure, for `getCodedErrorMessage` (CLIENT-ERR-4). */
+    error: mutation.error,
     errorMessage,
     reset: mutation.reset,
   };

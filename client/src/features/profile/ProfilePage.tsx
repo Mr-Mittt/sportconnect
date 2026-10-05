@@ -37,6 +37,7 @@ import { PostsTab } from './components/PostsTab';
 import { ProfileTabs, type ProfileTabKey } from './components/ProfileTabs';
 import { SettingsUnsavedChangesDialog } from './components/SettingsUnsavedChangesDialog';
 import { SportProfileSettingsTab } from './components/SportProfileSettingsTab';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import { SportProfileStatusConfirmDialog } from './components/SportProfileStatusConfirmDialog';
 import { useDeactivateSportProfile } from './useDeactivateSportProfile';
 import { useUpdateMyProfile } from './useUpdateMyProfile';
@@ -366,6 +367,7 @@ export function ProfilePage() {
           resumableProfiles={resumableProfiles}
           isSubmitting={addSportMutation.isPending}
           isError={addSportMutation.isError}
+          errorText={getCodedErrorMessage(addSportMutation.error)}
           onSubmit={(payload) =>
             addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
           }
@@ -404,6 +406,11 @@ export function ProfilePage() {
               ? deactivateSportProfile.isError
               : addSportMutation.isError
           }
+          errorText={getCodedErrorMessage(
+            statusToggle?.mode === 'deactivate'
+              ? deactivateSportProfile.error
+              : addSportMutation.error,
+          )}
         />
         <CreateSessionModal
           key={createSessionModalData.isCreateModalOpen ? 'open' : 'closed'}

@@ -1,6 +1,6 @@
 # CLIENT-ERR-4 · Client error adaptation: sport
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-10-05)
 **Type:** Enhancement
 **Program:** Error handling · Phase C
 **Depends on:** CLIENT-ERR-1, A25 (sport)
@@ -22,3 +22,45 @@ Phase C of the error-handling program for **sport**, after A25 defines the codes
 **Tests:** Vitest/RTL per updated component or hook (code → localized text, unknown code → category copy → server prose), a `locale.spec.ts` or flow e2e case for the main flow in `vi`, scoped e2e; update `client/docs/E2E_OVERVIEW.md` if specs change.
 
 **On close:** update this ticket's row in the tracker table in `documentation/md/ERROR_HANDLING_DESIGN.md` (and the module's `BACKLOG_MVP.md`/`PROGRESS.md` as usual).
+
+## Implementation summary (2026-10-05)
+
+**Approved behavior table** (user sign-off 2026-10-05):
+
+| Flow | Error | Where it shows | After |
+|---|---|---|---|
+| Add sport (modal; inline in the session modals) | `SPORT_PROFILE_ALREADY_EXISTS` | Inline `role=alert` banner (existing slot) | Modal stays open, input kept; the profile list refetches (existing `onSettled`) so the sport leaves the picker |
+| same, resume mode | `PROFILE_NOT_RESUMABLE` | Same banner | Stays open; the resumable list refetches |
+| same | `SPORT_NOT_FOUND` | Same banner | Stays open; the user can cancel or pick another sport |
+| same | `PROFILE_ATTRIBUTES_*` | Same banner, generic copy, no `maxBytes` | Stays open, form kept for retry |
+| Add sport, any uncoded error | 400 / network / 5xx | Existing static "Couldn't add that sport. Try again." | Unchanged |
+| Reactivate nudge (sport pill) | `PROFILE_NOT_RESUMABLE`, `SPORT_NOT_FOUND`, `SPORT_PROFILE_ALREADY_EXISTS` | The dialog's `role=alert` line | Dialog stays, lists refetch, "Later" still works |
+| `/profile` Active toggle: deactivate | `SPORT_PROFILE_NOT_FOUND` | `statusConfirm` alert | Dialog stays; lists refetch (existing `onSettled`), so the stale pill disappears |
+| same, reactivate | `PROFILE_NOT_RESUMABLE`, `SPORT_NOT_FOUND` | Same alert | Same |
+| `/profile` Settings edit | `SPORT_PROFILE_NOT_FOUND` | Existing form banner | Form stays; **new:** both profile lists are invalidated so the removed profile drops out |
+| same | `PROFILE_ATTRIBUTES_*` | Existing banner, generic copy | Form and draft kept |
+| same | `SPORT_PROFILE_NOT_OWNED` | Copy only | Unreachable from the UI, no page state |
+| Attribute-schema read | `SPORT_NOT_FOUND` | Nothing | Unchanged (no attribute fields) |
+
+**Departures from the defaults / the earlier plan:**
+- `PROFILE_ATTRIBUTES_TOO_LARGE` and `PROFILE_ATTRIBUTES_INVALID` ARE registered in `errors:codes`, with the generic line as their text. The ticket note said "no entry", but the classifier lets server prose win for 400s, so without an entry the user would see "...exceed the maximum allowed size (4KB)". The generic copy is the entry; no `maxBytes` is interpolated. The classifier contract is untouched.
+- The schema read (`SPORT_NOT_FOUND`) keeps its silent behavior: that query has no error surface today, and adding one is a new feature.
+
+**Built:**
+- `errors.json` (en + vi): 7 entries (`SPORT_PROFILE_ALREADY_EXISTS` and `PROFILE_NOT_RESUMABLE` with `{{sportName}}`).
+- New `shared/lib/codedErrorMessage.ts`: `getCodedErrorMessage(error)` returns text only when the server sent a code the client has copy for, else `undefined`, so screens that own a static fallback line keep it.
+- `AddSportFields`, `AddSportModal`, `ReactivateSportNudgeDialog`, `SportProfileStatusConfirmDialog`: optional `errorText`, shown as `errorText ?? <static line>`.
+- Wired at every call site: `GroupsPage` (2 modals + group nudge), `HomeFeedPage`, `MatchesPage` (+ an `addSportErrorText` prop on `CreateSessionModal`/`SessionDiscoverModal`), `ProfilePage` (modal + status dialog), `useInactiveSportPillSelect` (nudge). `useDeactivateSportProfile` now returns `error`.
+- `useUpdateSportProfile`: `onError` invalidates both profile lists for `SPORT_PROFILE_NOT_FOUND`; its `errorMessage` (`getErrorMessage`) now localizes by code.
+- No ad-hoc status checks existed in sport code to remove (the `status === 404/403` checks in feed/session belong to other modules).
+
+**Consumer census:** the four components gained one optional prop each (compatible as-is for any caller that omits it; every call-site group is updated here). `useDeactivateSportProfile`'s return gained `error` (additive). No shared type changed. `SPORT_NOT_FOUND` now also localizes where the location/session/group creates already call `getErrorMessage` (no per-flow work, as agreed).
+
+**Tests:**
+- Vitest: new `sportErrorCodes.test.ts` (5 codes in en + vi with params, generic copy for the attribute-size codes with no "4096"/"KB", every A25 code has en + vi, `getCodedErrorMessage` undefined for uncoded/unknown); `errorText` cases added to the `AddSportModal` and `ReactivateSportNudgeDialog` tests; new `SportProfileStatusConfirmDialog.test.tsx` (3); `useUpdateSportProfile.test.tsx` +2 (refetch on `SPORT_PROFILE_NOT_FOUND`, none otherwise). Scoped run: 56 files / 448 passed, then the new dialog test file (3 passed). `tsc -b` clean; `eslint` 0 errors (2 pre-existing warnings in `SessionStartTimePicker.tsx`, not touched).
+- Storybook: stories `CodedErrorState` (`AddSportModal`) and `CodedError` (`SportProfileStatusConfirmDialog`) added; Storybook itself was not opened.
+- **E2E:** scoped `e2e` project, 37 passed (new `sport-errors.spec.ts` 4 tests, plus `profile-journey`, `error-handling`, `feed-groups-journey`, `home-feed-journey`, `matches-journey`, `group-invitations`). The full `e2e` suite was not run (token-saving rule: scoped subset of the specs that reference the changed surfaces).
+- **Visual-regression expectation:** no baselined surface touched (the new text only renders in an error state no baseline opens) - no baseline change expected; a failing `visual-regression` run is the Windows noise floor, not a regression. Not run.
+- Not run: a hand walk of the dev server, and the real backend (the contract is proven by A25's `SportErrorCodesIntegrationTest`).
+
+**Divergences from the design:** none beyond the two departures listed above (both stated at approval).

@@ -78,6 +78,13 @@ describe('AddSportModal', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't add that sport");
   });
 
+  it('CLIENT-ERR-4: shows a code-specific errorText instead of the static line', () => {
+    render(<AddSportModal {...baseProps} isError errorText="You already have a Tennis profile." />);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('You already have a Tennis profile.');
+    expect(alert).not.toHaveTextContent("Couldn't add that sport");
+  });
+
   it('renders no callout by default, and the prompt message when given one', () => {
     const { rerender } = render(<AddSportModal {...baseProps} />);
     expect(screen.queryByText(/add a sport first/i)).not.toBeInTheDocument();

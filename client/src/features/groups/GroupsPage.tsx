@@ -40,6 +40,7 @@ import { ReactivateSportNudgeDialog } from '@/shared/components/ReactivateSportN
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import { getPageAccessNoSportsPrompt } from '@/shared/lib/noSportsPrompt';
 import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -598,6 +599,7 @@ export function GroupsPage() {
           }}
           isReactivating={addSportMutation.isPending}
           isError={addSportMutation.isError}
+          errorText={getCodedErrorMessage(addSportMutation.error)}
         />
         {/* Every modal on this page positions below the group pill row specifically (user
           decision) — regardless of whether the cover banner is also showing underneath it.
@@ -901,6 +903,7 @@ export function GroupsPage() {
           resumableProfiles={resumableProfiles}
           isSubmitting={addSportMutation.isPending}
           isError={addSportMutation.isError}
+          errorText={getCodedErrorMessage(addSportMutation.error)}
           onSubmit={(payload) =>
             addSportMutation.mutate(payload, { onSuccess: () => setIsAddSportOpen(false) })
           }
@@ -948,6 +951,7 @@ export function GroupsPage() {
           resumableProfiles={resumableProfiles}
           isSubmitting={addSportMutation.isPending}
           isError={addSportMutation.isError}
+          errorText={getCodedErrorMessage(addSportMutation.error)}
           onSubmit={(payload) =>
             addSportMutation.mutate(payload, {
               onSuccess: () => {

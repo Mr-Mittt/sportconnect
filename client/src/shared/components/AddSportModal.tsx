@@ -13,6 +13,8 @@ interface AddSportModalProps {
   onSubmit: (payload: AddSportProfileSubmission) => void;
   isSubmitting: boolean;
   isError: boolean;
+  /** CLIENT-ERR-4: a code-specific message (`getCodedErrorMessage`) shown instead of the static error line; unset keeps the static line. */
+  errorText?: string;
   /** A callout rendered above the Sport field — unset for the SportSwitcher "+" pill's normal
    * open, set when this modal is auto-triggered by the zero-sport-profile page-access gate
    * (CLIENT-SESSION-7 follow-up) on Groups/Matches. See `AddSportFields`' own doc comment. */
@@ -45,6 +47,7 @@ export function AddSportModal({
   onSubmit,
   isSubmitting,
   isError,
+  errorText,
   promptMessage,
   resumableProfiles,
   initialSport,
@@ -60,6 +63,7 @@ export function AddSportModal({
           onSubmit={onSubmit}
           isSubmitting={isSubmitting}
           isError={isError}
+          errorText={errorText}
           promptMessage={promptMessage}
           resumableProfiles={resumableProfiles}
           onCancel={onClose}

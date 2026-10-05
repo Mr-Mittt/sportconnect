@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
-import { getErrorMessage } from '@/shared/lib/apiError';
+import { getApiError, getErrorMessage } from '@/shared/lib/apiError';
 import { useAuthStore } from '@/app/authStore';
 import {
   sportProfilesQueryKey,
@@ -25,7 +25,8 @@ interface UpdateSportProfileVariables {
  * the key to the single caller-scoped entry; `userId` stays only as a
  * readiness guard on the patch.
  *
- * `errorMessage` surfaces the server's own text, same extraction as
+ * `errorMessage` is `getErrorMessage` (CLIENT-ERR-4: localized by error code, server prose only for an
+ * uncoded 400/409), same extraction as
  * `useUpdateSport`/`useUpdateMyProfile`.
  */
 export function useUpdateSportProfile() {
@@ -48,6 +49,13 @@ export function useUpdateSportProfile() {
       // SPORT-10: the Settings tab reads the `?includeInactive` list, so patch both entries.
       queryClient.setQueryData<UserSportProfileResponse[]>(sportProfilesQueryKey, patch);
       queryClient.setQueryData<UserSportProfileResponse[]>(sportProfilesWithInactiveQueryKey, patch);
+    },
+    onError: (error) => {
+      // CLIENT-ERR-4: the profile was removed elsewhere — refetch so the stale row drops out of the tab.
+      if (getApiError(error).code === 'SPORT_PROFILE_NOT_FOUND') {
+        queryClient.invalidateQueries({ queryKey: sportProfilesQueryKey });
+        queryClient.invalidateQueries({ queryKey: sportProfilesWithInactiveQueryKey });
+      }
     },
   });
 

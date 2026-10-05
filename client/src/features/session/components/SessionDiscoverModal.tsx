@@ -90,6 +90,8 @@ interface SessionDiscoverModalProps {
   onAddSport: (payload: AddSportProfileSubmission) => void;
   isAddingSport: boolean;
   isAddSportError: boolean;
+  /** CLIENT-ERR-4: code-specific add-sport message; unset keeps the static line. */
+  addSportErrorText?: string;
 }
 
 /**
@@ -159,6 +161,7 @@ export function SessionDiscoverModal({
   onAddSport,
   isAddingSport,
   isAddSportError,
+  addSportErrorText,
   i18nOverridePrefix,
 }: SessionDiscoverModalProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
@@ -191,6 +194,7 @@ export function SessionDiscoverModal({
               onSubmit={onAddSport}
               isSubmitting={isAddingSport}
               isError={isAddSportError}
+              errorText={addSportErrorText}
               promptMessage={t('discover.noSportsPrompt')}
             />
           ) : (

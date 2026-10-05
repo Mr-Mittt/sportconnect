@@ -31,6 +31,8 @@ interface AddSportFieldsProps {
   onSubmit: (payload: AddSportProfileSubmission) => void;
   isSubmitting: boolean;
   isError: boolean;
+  /** CLIENT-ERR-4: a code-specific message (`getCodedErrorMessage`) shown instead of the static error line; unset keeps the static line. */
+  errorText?: string;
   /** A callout rendered above the Sport field — used when this is reached by the "tried to
    * create/join a match with zero sport profiles" gate (CLIENT-SESSION-7 follow-up) rather than
    * the standalone `AddSportModal` (SportSwitcher's own dashed "+" pill), which leaves this unset. */
@@ -73,6 +75,7 @@ export function AddSportFields({
   onSubmit,
   isSubmitting,
   isError,
+  errorText,
   promptMessage,
   resumableProfiles,
   onCancel,
@@ -179,7 +182,7 @@ export function AddSportFields({
         )}
         {isError && (
           <p role="alert" className="text-2sm text-text-danger">
-            {t('addSport.error')}
+            {errorText ?? t('addSport.error')}
           </p>
         )}
       </div>

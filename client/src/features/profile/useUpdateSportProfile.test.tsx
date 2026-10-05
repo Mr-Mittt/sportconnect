@@ -4,7 +4,10 @@ import { act, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
-import { sportProfilesQueryKey } from '@/shared/hooks/useRawMySportProfiles';
+import {
+  sportProfilesQueryKey,
+  sportProfilesWithInactiveQueryKey,
+} from '@/shared/hooks/useRawMySportProfiles';
 import type { UserSportProfileResponse } from '@/shared/types/sport';
 import { useUpdateSportProfile } from './useUpdateSportProfile';
 
@@ -122,5 +125,51 @@ describe('useUpdateSportProfile', () => {
     await waitFor(() =>
       expect(result.current.errorMessage).toBe('heightCm must be between 50 and 300'),
     );
+  });
+
+  it('CLIENT-ERR-4: a SPORT_PROFILE_NOT_FOUND failure refetches both profile lists', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    vi.spyOn(apiClient, 'put').mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        status: 404,
+        data: {
+          success: false,
+          message: "UserSportProfile not found with id: '1'",
+          data: null,
+          errorCode: 'SPORT_PROFILE_NOT_FOUND',
+          timestamp: '',
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useUpdateSportProfile(), { wrapper: wrapper(queryClient) });
+
+    act(() =>
+      result.current.updateSportProfile({ profileId: 1, payload: { sportId: 5, skillLevel: 'advanced' } }),
+    );
+
+    await waitFor(() => expect(result.current.errorMessage).not.toBeNull());
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: sportProfilesQueryKey });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: sportProfilesWithInactiveQueryKey });
+  });
+
+  it('CLIENT-ERR-4: any other failure leaves the lists alone', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    vi.spyOn(apiClient, 'put').mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 400, data: { success: false, message: 'nope', data: null, timestamp: '' } },
+    });
+
+    const { result } = renderHook(() => useUpdateSportProfile(), { wrapper: wrapper(queryClient) });
+
+    act(() =>
+      result.current.updateSportProfile({ profileId: 1, payload: { sportId: 5, skillLevel: 'advanced' } }),
+    );
+
+    await waitFor(() => expect(result.current.errorMessage).not.toBeNull());
+    expect(invalidate).not.toHaveBeenCalled();
   });
 });

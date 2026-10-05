@@ -123,8 +123,9 @@ current whenever I18N-4 itself finally gets scoped:**
 | `/register` | Sign up | `useRegister` | CLIENT-ERR-2 |
 | Any page (avatar dropdown) | Account Settings modal (ACCOUNT-1 — was the `/profile` Edit Profile modal's body) | `useEditProfileSave` (wraps `useUpdateMyProfile` + `useUpdateMyPreferences`) | CLIENT-ERR-3 (done 2026-10-05) |
 | `/profile` | Edit Profile modal (ACCOUNT-1 — avatar/cover URL only) | `useUpdateMyProfile` (its client fallback is now localized; the server message is still shown verbatim) | CLIENT-ERR-3 (done 2026-10-05) |
-| `/profile` | Settings tab — per-sport profile editor | `useUpdateSportProfile` | CLIENT-ERR-4 |
-| `/profile` | Settings tab — deactivate/reactivate a sport profile | `useDeactivateSportProfile` | CLIENT-ERR-4 |
+| `/profile` | Settings tab — per-sport profile editor | `useUpdateSportProfile` | CLIENT-ERR-4 (done 2026-10-05) |
+| `/profile` | Settings tab — deactivate/reactivate a sport profile | `useDeactivateSportProfile` | CLIENT-ERR-4 (done 2026-10-05) |
+| Every page | Add sport (modal, session modals), reactivate nudge, status-confirm dialog | `useAddSportProfile` (via `getCodedErrorMessage` -> `errorText`) | CLIENT-ERR-4 (done 2026-10-05) |
 | `/friends` | Send / accept / decline / cancel friend request (toast) | `useSendFriendRequest`, `useAcceptFriendRequest`, `useDeclineFriendRequest`, `useCancelFriendRequest` | CLIENT-ERR-3 (done 2026-10-05) |
 | `/friends` | Unfriend dialog | `useUnfriend` (via `useFriendsPageData.unfriendErrorText`) | CLIENT-ERR-3 (done 2026-10-05) |
 | Groups page | Invite Friend modal | `useInviteFriendModalData` | CLIENT-ERR-5 |
@@ -142,6 +143,8 @@ those). The three admin hooks keep the server text or their fixed English fallba
 **CLIENT-ERR-2 (2026-10-05):** the `/login` and `/register` rows are done. `errors:codes` now holds en + vi copy for `EMAIL_ALREADY_REGISTERED`, `INVALID_CREDENTIALS`, `ACCOUNT_DEACTIVATED` and the shared C12 code `VALIDATION_FAILED`. `useLogin` shows the `INVALID_CREDENTIALS` line for a 401 and for a 400 `VALIDATION_FAILED` (the login API should not describe the input). `useRegister` also returns `errorCode` and `errorFields`; the register banner adds a "Sign in instead" link for a duplicate email and "Check: <field labels>" for a validation failure. Because `VALIDATION_FAILED` copy is global, every other form whose 400 is a bean-validation failure now shows the localized generic line instead of English "Validation failed" (nothing is lost: that text carried no field detail). Errors with their own codes and prose are untouched.
 
 **CLIENT-ERR-3 (2026-10-05):** the account-settings, edit-profile and friends rows are done. `errors:codes` gains en + vi copy for all 17 U21 codes; range errors interpolate `{min}`/`{max}`. Account Settings keeps its single alert banner (no per-field slots, user decision), the friend toasts now show localized copy instead of English server text, and the unfriend dialog shows the coded `NOT_FRIENDS` line. `CURRENT_PASSWORD_INCORRECT` has copy but no screen (client **ACCOUNT-3**).
+
+**CLIENT-ERR-4 (2026-10-05):** the sport rows are done. `errors:codes` gains en + vi copy for the 7 A25 codes; the two attribute-size codes carry the generic line (no `4KB` shown). The add-sport flow, reactivate nudge and status-confirm dialog take a code-specific `errorText` (new `getCodedErrorMessage`), falling back to their existing static lines for uncoded errors.
 
 Home Feed, Friends (aside from the invite modal), Sessions/Matches, and Notifications don't
 currently surface a raw server message anywhere. **Whoever picks up `CLIENT-I18N-3`/`4`/`5` (or any

@@ -229,6 +229,7 @@ e2e/
     error-handling.spec.ts    # CLIENT-ERR-1
     auth-errors.spec.ts       # CLIENT-ERR-2
     user-errors.spec.ts       # CLIENT-ERR-3
+    sport-errors.spec.ts      # CLIENT-ERR-4
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -1026,6 +1027,17 @@ The user module's coded errors (U21) localized from the error code. The form's o
 | height rejected (vi) | Same alert in Vietnamese ("Chiều cao phải từ 50 đến 300 cm."); the locale is switched by writing `locale-storage` and reloading after login, since the login labels are English. |
 | unfriend `NOT_FRIENDS` | Forced 409 on the unfriend DELETE: the dialog's alert shows "You're no longer friends with this person." instead of the generic "Couldn't unfriend". |
 | accept `FRIEND_REQUEST_NOT_PENDING` | Forced 409 on accept: the toast "This friend request was already answered." appears. |
+
+### `e2e/flows/sport-errors.spec.ts` (CLIENT-ERR-4, 4 `test()`s)
+
+The sport module's coded errors (A25) localized from the error code. Each server error is forced with `page.route` (the MSW sport handler only fails on real conflicts). See `client/docs/MVP/CLIENT-ERR-4_SPORT_ERROR_ADAPTATION.md`.
+
+| Test | What it checks |
+|---|---|
+| duplicate profile (en) | Add-sport submit with a forced 409 `SPORT_PROFILE_ALREADY_EXISTS`: the modal's alert reads "You already have a Badminton profile.", the modal stays open with the skill level kept, and no toast appears. |
+| duplicate profile (vi) | Same alert in Vietnamese ("Bạn đã có hồ sơ Badminton rồi."); the locale is switched by writing `locale-storage` and reloading. |
+| oversized attributes | Settings-tab save with a forced 400 `PROFILE_ATTRIBUTES_TOO_LARGE`: the alert is the generic "Couldn't save your sport details. Please try again." and never contains "4KB"; the draft stays. |
+| deactivate, profile gone | Active toggle, then Deactivate, with a forced 404 `SPORT_PROFILE_NOT_FOUND`: the confirm dialog's alert reads "This sport profile no longer exists." |
 
 ### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
 
