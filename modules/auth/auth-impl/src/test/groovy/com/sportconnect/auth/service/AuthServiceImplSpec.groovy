@@ -9,6 +9,7 @@ import com.sportconnect.auth.repository.EmailVerificationRepository
 import com.sportconnect.auth.repository.PasswordResetTokenRepository
 import com.sportconnect.auth.repository.RefreshTokenRepository
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.UnauthorizedException
 import com.sportconnect.user.api.dto.UserRegistrationDetails
 import com.sportconnect.user.api.dto.UserResponse
@@ -173,6 +174,55 @@ class AuthServiceImplSpec extends Specification {
         0 * refreshTokenRepository.save(_)
     }
 
+    def "register rejects a duplicate email with a 409 ConflictException coded EMAIL_ALREADY_REGISTERED"() {
+        given:
+        def request = RegisterRequest.builder()
+                .email("dup@example.com").password("password123").fullName("Dup User").build()
+        userService.existsByEmail(request.email) >> true
+
+        when:
+        authService.register(request)
+
+        then:
+        def e = thrown(ConflictException)
+        e.message == "Email already registered"
+        e.errorCode == "EMAIL_ALREADY_REGISTERED"
+        0 * userService.createUser(*_)
+    }
+
+    def "login with bad credentials throws UnauthorizedException coded INVALID_CREDENTIALS"() {
+        given:
+        def request = LoginRequest.builder().email("a@example.com").password("wrong").build()
+        userService.verifyPassword(request.email, request.password) >> false
+
+        when:
+        authService.login(request)
+
+        then:
+        def e = thrown(UnauthorizedException)
+        e.message == "Invalid email or password"
+        e.errorCode == "INVALID_CREDENTIALS"
+    }
+
+    def "refresh for a deactivated user throws UnauthorizedException coded ACCOUNT_DEACTIVATED"() {
+        given:
+        def userId = UUID.randomUUID()
+        def token = RefreshToken.builder().id(1L).userId(userId).token("t")
+                .expiresAt(LocalDateTime.now().plusDays(7)).build()
+        refreshTokenRepository.findByToken("t") >> Optional.of(token)
+        def user = Mock(UserResponse)
+        user.getIsActive() >> false
+        userService.getActiveUserForUpdate(userId) >> user
+
+        when:
+        authService.refreshToken("t")
+
+        then:
+        def e = thrown(UnauthorizedException)
+        e.message == "Account is deactivated"
+        e.errorCode == "ACCOUNT_DEACTIVATED"
+    }
+
     def "should login user successfully"() {
         given: "a login request"
         def request = LoginRequest.builder()
@@ -224,6 +274,7 @@ class AuthServiceImplSpec extends Specification {
         then: "should throw UnauthorizedException"
         def exception = thrown(UnauthorizedException)
         exception.message == "Invalid refresh token"
+        exception.errorCode == "REFRESH_TOKEN_INVALID"
     }
 
     def "should throw UnauthorizedException when refresh token is expired"() {
@@ -245,6 +296,7 @@ class AuthServiceImplSpec extends Specification {
         then: "should throw UnauthorizedException"
         def exception = thrown(UnauthorizedException)
         exception.message == "Refresh token expired or revoked"
+        exception.errorCode == "REFRESH_TOKEN_EXPIRED_OR_REVOKED"
     }
 
     def "should throw UnauthorizedException when refresh token is revoked"() {
@@ -267,6 +319,7 @@ class AuthServiceImplSpec extends Specification {
         then: "should throw UnauthorizedException"
         def exception = thrown(UnauthorizedException)
         exception.message == "Refresh token expired or revoked"
+        exception.errorCode == "REFRESH_TOKEN_EXPIRED_OR_REVOKED"
     }
 
     def "should refresh token successfully"() {

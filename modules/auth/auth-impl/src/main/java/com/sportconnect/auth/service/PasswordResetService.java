@@ -45,14 +45,14 @@ public class PasswordResetService {
     @Transactional
     public UUID validateAndUseToken(String token) {
         PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
-                .orElseThrow(() -> new NotFoundException("Invalid reset token"));
+                .orElseThrow(() -> new NotFoundException("RESET_TOKEN_INVALID", "Invalid reset token", null));
 
         if (resetToken.isUsed()) {
-            throw new BadRequestException("Reset token already used");
+            throw new BadRequestException("RESET_TOKEN_USED", "Reset token already used", null);
         }
 
         if (resetToken.isExpired()) {
-            throw new BadRequestException("Reset token has expired");
+            throw new BadRequestException("RESET_TOKEN_EXPIRED", "Reset token has expired", null);
         }
 
         resetToken.setUsedAt(LocalDateTime.now());

@@ -21,7 +21,7 @@
 |---|---|---|---|
 | 1 | [A5](MVP/A5_LOGIN_REGISTRATION_RATE_LIMITING.md) | Login/registration rate limiting | `TODO` |
 | 2 | [A7](MVP/A7_AUDIT_PUBLIC_API_SURFACE_AND_REMOVE_UNUSED_ENDPOINTS.md) | Audit the public API surface and clean up unused endpoints — `permitAll` allowlist dates to the initial commit and was never reviewed; 13 public endpoints have no client caller | `TODO` |
-| 3 | [A8](MVP/A8_STRUCTURED_ERROR_CODES_ON_APIRESPONSE_ERROR.md) | **[Error handling · Phase B]** Structured error codes for the auth module — **scope change 2026-10-02 (user decision, I18N-4 review):** the shared `ApiResponse.errorCode`/`errorParams` contract moved to common **C12**; A8 is now the auth audit (login/register/refresh/reset/verify: check, categorize, define codes, convert throw sites). Depends on C12; pairs with CLIENT-ERR-2. Originally found during client CLIENT-REF-2 | `TODO` |
+| 3 | [A9](MVP/A9_REFRESH_INACTIVE_USER_DEAD_BRANCH_AND_404_LEAK.md) | Refresh for an inactive user: dead `ACCOUNT_DEACTIVATED` branch and a 404 that leaks the user id — found during A8, user decision to keep behavior for now | `TODO` |
 
 ---
 
@@ -29,10 +29,11 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [A6](MVP/A6_DROP_AUTH_TABLES_USER_ID_FKS.md) | Drop DB-level FKs on auth tables' `user_id` columns (cross-domain, violates domain-scoped-tables rule) | `DONE` |
-| 2 | [A4](MVP/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md) | JWT `jti` claim for guaranteed token uniqueness | `DONE` |
-| 3 | [A2](MVP/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md) | Refresh token via httpOnly cookie (client epic's BE-1) | `DONE` |
-| 4 | [A3](MVP/A3_FIX_LOGOUT_AUTHORIZATION.md) | Fix `/api/auth/logout` authorization (client epic's BE-2) | `DONE` |
+| 1 | [A8](MVP/A8_STRUCTURED_ERROR_CODES_ON_APIRESPONSE_ERROR.md) | **[Error handling · Phase B]** Auth error-code audit (2026-10-05): 12 sites coded, register duplicate email 400 → 409, codes in `ERROR_CODES.md`, `AuthErrorCodesIntegrationTest` | `DONE` |
+| 2 | [A6](MVP/A6_DROP_AUTH_TABLES_USER_ID_FKS.md) | Drop DB-level FKs on auth tables' `user_id` columns (cross-domain, violates domain-scoped-tables rule) | `DONE` |
+| 3 | [A4](MVP/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md) | JWT `jti` claim for guaranteed token uniqueness | `DONE` |
+| 4 | [A2](MVP/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md) | Refresh token via httpOnly cookie (client epic's BE-1) | `DONE` |
+| 5 | [A3](MVP/A3_FIX_LOGOUT_AUTHORIZATION.md) | Fix `/api/auth/logout` authorization (client epic's BE-2) | `DONE` |
 
 ---
 

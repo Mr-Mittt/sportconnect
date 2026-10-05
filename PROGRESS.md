@@ -165,7 +165,14 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `refresh_tokens_user_id_fkey` — via `V044__drop_auth_tables_user_id_fks.sql`. Schema-only;
   confirmed no code path relies on `ON DELETE CASCADE` (`UserServiceImpl.deleteUser` is a soft
   delete).
-- **MVP backlog:** 5 tickets (A2–A6) in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4/A6 `DONE`, A5
+- **A8 (2026-10-05, `DONE`, `modules/auth/docs/MVP/A8_STRUCTURED_ERROR_CODES_ON_APIRESPONSE_ERROR.md`):**
+  error-handling Phase B audit of auth. 12 user-reachable throw sites now carry registered
+  `errorCode`s (`EMAIL_ALREADY_REGISTERED`, `INVALID_CREDENTIALS`, the refresh/verify/reset token codes),
+  registered in `documentation/md/ERROR_CODES.md`; register's duplicate email moved 400 → 409
+  (`ConflictException`), every other status and all message text unchanged. New
+  `AuthErrorCodesIntegrationTest` (12 tests). Found that `ACCOUNT_DEACTIVATED` on refresh is
+  unreachable (the user lookup throws a 404 first), kept as is by user decision and filed as A9.
+- **MVP backlog:** 8 tickets (A2–A9) in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4/A6/A8 `DONE`, A5, A7, A9
   `TODO`
 
 #### `modules:user:user-api` + `modules:user:user-impl`

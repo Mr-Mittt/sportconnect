@@ -59,4 +59,23 @@
 
 ### Module codes
 
-None yet. Each Phase B ticket (A8, U21, A25, A11, A18, SESSION-45, REF-5, LOC-6, NTF-5) adds its section here.
+#### auth (A8, `AuthServiceImpl`, `AuthController`, `EmailVerificationService`, `PasswordResetService`)
+
+| Code | Status | Params | When |
+|---|---|---|---|
+| `EMAIL_ALREADY_REGISTERED` | 409 | none | `POST /api/auth/register` with an email that already exists (moved from 400 by A8). |
+| `INVALID_CREDENTIALS` | 401 | none | `POST /api/auth/login`: wrong password, unknown email, or a deactivated account (indistinguishable by design). |
+| `REFRESH_TOKEN_MISSING` | 401 | none | `POST /api/auth/refresh` without the refresh cookie. |
+| `REFRESH_TOKEN_INVALID` | 401 | none | `POST /api/auth/refresh` with a token that is not in the store. |
+| `REFRESH_TOKEN_EXPIRED_OR_REVOKED` | 401 | none | `POST /api/auth/refresh` with an expired or revoked token (what a deactivated user normally gets). |
+| `ACCOUNT_DEACTIVATED` | 401 | none | Refresh for a deactivated user. **Currently unreachable**: the user lookup throws a 404 first (ticket A9). |
+| `VERIFICATION_TOKEN_INVALID` | 404 | none | `POST /api/auth/verify-email` with an unknown token. |
+| `EMAIL_ALREADY_VERIFIED` | 400 | none | `POST /api/auth/verify-email` with an already-used token. |
+| `VERIFICATION_TOKEN_EXPIRED` | 400 | none | `POST /api/auth/verify-email` with an expired token. |
+| `RESET_TOKEN_INVALID` | 404 | none | `POST /api/auth/reset-password` with an unknown token. |
+| `RESET_TOKEN_USED` | 400 | none | `POST /api/auth/reset-password` with an already-used token. |
+| `RESET_TOKEN_EXPIRED` | 400 | none | `POST /api/auth/reset-password` with an expired token. |
+
+The 401 written by `JwtAuthenticationEntryPoint` (missing/invalid access token) deliberately has **no code** (C12 decision; A8 left its text unchanged).
+
+Still to come: each remaining Phase B ticket (U21, A25, A11, A18, SESSION-45, REF-5, LOC-6, NTF-5) adds its section here.

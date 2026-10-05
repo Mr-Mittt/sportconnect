@@ -10,7 +10,7 @@ import com.sportconnect.auth.entity.RefreshToken;
 import com.sportconnect.auth.repository.EmailVerificationRepository;
 import com.sportconnect.auth.repository.PasswordResetTokenRepository;
 import com.sportconnect.auth.repository.RefreshTokenRepository;
-import com.sportconnect.common.exception.BadRequestException;
+import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.UnauthorizedException;
 import com.sportconnect.user.api.dto.UserRegistrationDetails;
 import com.sportconnect.user.api.dto.UserResponse;
@@ -49,7 +49,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse register(RegisterRequest request) {
         // Check if email already exists
         if (userService.existsByEmail(request.getEmail())) {
-            throw new BadRequestException("Email already registered");
+            throw new ConflictException("EMAIL_ALREADY_REGISTERED", "Email already registered", null);
         }
 
         // Parse full name into first and last name
@@ -99,7 +99,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse login(LoginRequest request) {
         // Verify password via UserService
         if (!userService.verifyPassword(request.getEmail(), request.getPassword())) {
-            throw new UnauthorizedException("Invalid email or password");
+            throw new UnauthorizedException("INVALID_CREDENTIALS", "Invalid email or password", null);
         }
 
         // Get user by email
@@ -126,14 +126,18 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    /**
+     * Rotates a refresh token. Failures are 401s with registered codes (A8): {@code REFRESH_TOKEN_INVALID} (unknown
+     * token), {@code REFRESH_TOKEN_EXPIRED_OR_REVOKED}, {@code ACCOUNT_DEACTIVATED} (see the A9 note below).
+     */
     @Override
     @Transactional
     public AuthResponse refreshToken(String refreshTokenString) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenString)
-                .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+                .orElseThrow(() -> new UnauthorizedException("REFRESH_TOKEN_INVALID", "Invalid refresh token", null));
 
         if (!refreshToken.isValid()) {
-            throw new UnauthorizedException("Refresh token expired or revoked");
+            throw new UnauthorizedException("REFRESH_TOKEN_EXPIRED_OR_REVOKED", "Refresh token expired or revoked", null);
         }
 
         // U12: locks the user row (PESSIMISTIC_READ, held for this whole transaction) BEFORE
@@ -147,8 +151,10 @@ public class AuthServiceImpl implements AuthService {
         UUID userId = refreshToken.getUserId();
         UserResponse user = userService.getActiveUserForUpdate(userId);
 
+        // A9: unreachable today -- getActiveUserForUpdate throws ResourceNotFoundException for an inactive user
+        // before this check runs. Kept (user decision, A8) until A9 decides whether to fix or remove it.
         if (!user.getIsActive()) {
-            throw new UnauthorizedException("Account is deactivated");
+            throw new UnauthorizedException("ACCOUNT_DEACTIVATED", "Account is deactivated", null);
         }
 
         // Mark old token as revoked

@@ -54,7 +54,8 @@ public class AuthController {
             description = "Registers a new user and logs them in immediately. Sets the refresh token as an httpOnly cookie rather than returning it in the body.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Registered and logged in"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or email already registered")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Email already registered (errorCode EMAIL_ALREADY_REGISTERED)")
     })
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
@@ -97,7 +98,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(
             @CookieValue(value = REFRESH_COOKIE_NAME, required = false) String refreshToken) {
         if (refreshToken == null) {
-            throw new UnauthorizedException("Refresh token missing");
+            throw new UnauthorizedException("REFRESH_TOKEN_MISSING", "Refresh token missing", null);
         }
         AuthResponse response = authService.refreshToken(refreshToken);
         return ResponseEntity.ok()

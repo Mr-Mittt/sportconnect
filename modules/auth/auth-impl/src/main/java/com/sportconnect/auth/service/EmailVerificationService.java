@@ -41,14 +41,14 @@ public class EmailVerificationService {
     @Transactional
     public void verifyEmail(String token) {
         EmailVerification verification = emailVerificationRepository.findByToken(token)
-                .orElseThrow(() -> new NotFoundException("Invalid verification token"));
+                .orElseThrow(() -> new NotFoundException("VERIFICATION_TOKEN_INVALID", "Invalid verification token", null));
 
         if (verification.isVerified()) {
-            throw new BadRequestException("Email already verified");
+            throw new BadRequestException("EMAIL_ALREADY_VERIFIED", "Email already verified", null);
         }
 
         if (verification.isExpired()) {
-            throw new BadRequestException("Verification token has expired");
+            throw new BadRequestException("VERIFICATION_TOKEN_EXPIRED", "Verification token has expired", null);
         }
 
         verification.setVerifiedAt(LocalDateTime.now());
