@@ -53,7 +53,7 @@ function renderAt(initialEntries: Array<string | { pathname: string; state?: unk
   let capturedOnSuccess: ((user: User) => void) | undefined;
   vi.mocked(useRegister).mockImplementation((options) => {
     capturedOnSuccess = options?.onSuccess;
-    return { register: vi.fn(), isPending: false, errorMessage: null };
+    return { register: vi.fn(), isPending: false, errorMessage: null, errorCode: null, errorFields: [] };
   });
 
   render(
@@ -73,7 +73,7 @@ function renderAt(initialEntries: Array<string | { pathname: string; state?: unk
 
 describe('RegisterPage', () => {
   it('renders the register form', () => {
-    vi.mocked(useRegister).mockReturnValue({ register: vi.fn(), isPending: false, errorMessage: null });
+    vi.mocked(useRegister).mockReturnValue({ register: vi.fn(), isPending: false, errorMessage: null, errorCode: null, errorFields: [] });
 
     render(
       withProviders(

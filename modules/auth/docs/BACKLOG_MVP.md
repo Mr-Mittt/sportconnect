@@ -22,6 +22,7 @@
 | 1 | [A5](MVP/A5_LOGIN_REGISTRATION_RATE_LIMITING.md) | Login/registration rate limiting | `TODO` |
 | 2 | [A7](MVP/A7_AUDIT_PUBLIC_API_SURFACE_AND_REMOVE_UNUSED_ENDPOINTS.md) | Audit the public API surface and clean up unused endpoints — `permitAll` allowlist dates to the initial commit and was never reviewed; 13 public endpoints have no client caller | `TODO` |
 | 3 | [A9](MVP/A9_REFRESH_INACTIVE_USER_DEAD_BRANCH_AND_404_LEAK.md) | Refresh for an inactive user: dead `ACCOUNT_DEACTIVATED` branch and a 404 that leaks the user id — found during A8, user decision to keep behavior for now | `TODO` |
+| 4 | [A10](MVP/A10_WIRE_FORGOT_PASSWORD_TO_RESET_TOKEN_EMAIL.md) | Wire `forgot-password` to issue and email a reset token — it is a placeholder today, so no password reset works end to end; found during CLIENT-ERR-2. Keeps the endpoint A7 would otherwise flag as unused | `TODO` |
 
 ---
 

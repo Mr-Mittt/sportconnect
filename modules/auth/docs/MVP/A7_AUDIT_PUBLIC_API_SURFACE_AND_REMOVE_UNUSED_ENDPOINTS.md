@@ -64,7 +64,7 @@ reflect actual intent — is this ticket.
 | Endpoint | Note |
 |---|---|
 | `POST /api/auth/verify-email` | Email verification never completed from the UI |
-| `POST /api/auth/forgot-password` | No recovery route exists in the client |
+| `POST /api/auth/forgot-password` | No recovery route exists in the client (kept: A10 wires it, client AUTH-9 adds the screens) |
 | `POST /api/auth/reset-password` | ″ |
 | `POST /api/auth/oauth-token` | Swagger token helper, not a product endpoint |
 | `GET /api/sports/{sportId}` | |

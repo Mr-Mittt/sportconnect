@@ -28,6 +28,10 @@ interface RegisterFormProps {
   onSubmit: (payload: RegisterPayload) => void;
   isPending: boolean;
   errorMessage: string | null;
+  /** Server `errorCode` of the failed submit (CLIENT-ERR-2), used to add a "Sign in instead" link. */
+  errorCode?: string | null;
+  /** Server field names of a `VALIDATION_FAILED`; the known ones are named in the banner. */
+  errorFields?: string[];
 }
 
 /**
@@ -36,8 +40,7 @@ interface RegisterFormProps {
  * (ephemeral UI state). Client-side length constraints mirror
  * RegisterRequest's server-side validation (password min 8, full name max
  * 200, phone number max 20); the server response is the source of truth for
- * anything it can't check client-side (e.g. email already taken, itself
- * shown untranslated — see below).
+ * anything it can't check client-side (e.g. email already taken).
  *
  * **Validation is entirely custom (`noValidate` on the `<form>`), not native HTML constraint
  * validation** (2026-09-28 fix) — a browser's own "Please fill out this field" / "Please lengthen
@@ -48,11 +51,11 @@ interface RegisterFormProps {
  * field's own label (user decision — not under the input) instead of submitting, recomputed from
  * current state every render (not separate "touched" flags), so each message clears itself the
  * moment its field becomes valid. `aria-required` replaces the native `required` attribute for the
- * same a11y signal without the untranslatable popup. **The server's own error message
- * (`errorMessage`, e.g. "Email already registered") is a
- * known, accepted exception** — it is arbitrary free text from the backend with no key/i18n
- * contract, so the client has nothing to translate it *into*; showing a generic localized fallback
- * instead would hide genuinely useful specific errors, which is worse.
+ * same a11y signal without the untranslatable popup. **The server error banner is localized**
+ * (CLIENT-ERR-2): `useRegister` resolves `errorMessage` from the response's `errorCode`
+ * (`EMAIL_ALREADY_REGISTERED`, `VALIDATION_FAILED`, or category copy), `errorCode` adds a "Sign in
+ * instead" link for a duplicate email, and `errorFields` names the failed fields from this form's
+ * own labels.
  *
  * CLIENT-REF-2: wires `useGeoLocaleFieldsData()` directly (not lifted to
  * RegisterPage — matches this form's own existing convention of owning its
@@ -74,7 +77,7 @@ interface RegisterFormProps {
  * component — see that file's module doc. Email/Password/Full name get a visual `RequiredMark`;
  * every other field has no "(optional)" suffix, so absence of the mark is itself the signal.
  */
-export function RegisterForm({ onSubmit, isPending, errorMessage }: RegisterFormProps) {
+export function RegisterForm({ onSubmit, isPending, errorMessage, errorCode = null, errorFields = [] }: RegisterFormProps) {
   const { t } = useTranslation('register');
   const setLocale = useLocaleStore((state) => state.setLocale);
   const geoLocale = useGeoLocaleFieldsData();
@@ -85,6 +88,16 @@ export function RegisterForm({ onSubmit, isPending, errorMessage }: RegisterForm
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+
+  // Server-reported failed fields (VALIDATION_FAILED), named with this form's own localized labels.
+  // Keys the form has no label for (languageCode, latitude, ...) are left out of the list.
+  const fieldLabels = new Map([
+    ['email', t('form.email.label')],
+    ['password', t('form.password.label')],
+    ['fullName', t('form.fullName.label')],
+    ['phoneNumber', t('form.phoneNumber.label')],
+  ]);
+  const failedFieldLabels = errorFields.flatMap((field) => fieldLabels.get(field) ?? []);
 
   const isEmailEmpty = email.trim() === '';
   const isEmailInvalid = !isEmailEmpty && !EMAIL_PATTERN.test(email.trim());
@@ -130,7 +143,17 @@ export function RegisterForm({ onSubmit, isPending, errorMessage }: RegisterForm
           role="alert"
           className="mb-4 rounded-lg border-hairline border-border bg-bg-accent px-3 py-2 text-2sm text-text-danger"
         >
-          {errorMessage}
+          <p>{errorMessage}</p>
+          {failedFieldLabels.length > 0 && (
+            <p className="mt-1">{t('form.serverError.checkFields', { fields: failedFieldLabels.join(', ') })}</p>
+          )}
+          {errorCode === 'EMAIL_ALREADY_REGISTERED' && (
+            <p className="mt-1">
+              <Link to="/login" className="font-medium underline">
+                {t('form.serverError.signInInstead')}
+              </Link>
+            </p>
+          )}
         </div>
       )}
 

@@ -37,5 +37,10 @@
       "action": "Tải lại"
     }
   },
-  "codes": {}
+  "codes": {
+    "EMAIL_ALREADY_REGISTERED": "Đã có tài khoản dùng email này.",
+    "INVALID_CREDENTIALS": "Email hoặc mật khẩu không đúng.",
+    "ACCOUNT_DEACTIVATED": "Tài khoản này đã bị vô hiệu hóa.",
+    "VALIDATION_FAILED": "Một số thông tin bạn nhập chưa hợp lệ. Vui lòng kiểm tra lại biểu mẫu rồi thử lại."
+  }
 }

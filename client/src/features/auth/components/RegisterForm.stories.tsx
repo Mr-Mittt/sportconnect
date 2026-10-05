@@ -71,7 +71,21 @@ export const Submitting: Story = {
 };
 
 export const Error: Story = {
-  args: { errorMessage: 'Email already registered' },
+  args: { errorMessage: 'Something went wrong on our side. Try again.' },
+};
+
+/** CLIENT-ERR-2: a 409 EMAIL_ALREADY_REGISTERED — localized copy plus the "Sign in instead" link. */
+export const DuplicateEmail: Story = {
+  args: { errorMessage: 'An account with this email already exists.', errorCode: 'EMAIL_ALREADY_REGISTERED' },
+};
+
+/** CLIENT-ERR-2: a 400 VALIDATION_FAILED — generic line plus the failed fields named with the form's labels. */
+export const ValidationFailed: Story = {
+  args: {
+    errorMessage: 'Some of the information you entered isn’t valid. Check the form and try again.',
+    errorCode: 'VALIDATION_FAILED',
+    errorFields: ['password', 'fullName'],
+  },
 };
 
 /** The silent mount resolve pre-fills Language/Country/Region from a coordinates-shaped result —

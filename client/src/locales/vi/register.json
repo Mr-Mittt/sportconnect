@@ -36,6 +36,10 @@
       "apple": "Tiếp tục với Apple"
     },
     "alreadyHaveAccount": "Đã có tài khoản?",
-    "logIn": "Đăng nhập"
+    "logIn": "Đăng nhập",
+    "serverError": {
+      "signInInstead": "Đăng nhập ngay",
+      "checkFields": "Kiểm tra: {{fields}}."
+    }
   }
 }

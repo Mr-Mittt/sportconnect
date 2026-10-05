@@ -7,6 +7,7 @@ import {
   mockAdminUser,
   mockPassword,
   mockRefreshToken,
+  mockTakenEmail,
   mockUser,
 } from '../fixtures.ts';
 import { getOverrides } from '../overrides.ts';
@@ -16,8 +17,15 @@ function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
 }
 
-function apiError(message: string): ApiResponse<null> {
-  return { success: false, message, data: null, timestamp: new Date().toISOString() };
+function apiError(message: string, errorCode?: string, errorParams?: Record<string, unknown>): ApiResponse<null> {
+  return {
+    success: false,
+    message,
+    ...(errorCode ? { errorCode } : {}),
+    ...(errorParams ? { errorParams } : {}),
+    data: null,
+    timestamp: new Date().toISOString(),
+  };
 }
 
 // Mirrors AuthController.buildRefreshCookie (HttpOnly, Path=/api/auth,
@@ -62,8 +70,18 @@ export const authHandlers: HttpHandler[] = [
   // request (`page.on('request')`), not via anything this handler echoes.
   http.post('/api/auth/register', async ({ request }) => {
     const body = (await request.json()) as RegisterPayload;
-    if (!body.email || !body.password || !body.fullName) {
-      return HttpResponse.json(apiError('Validation failed'), { status: 400 });
+    // Mirrors RegisterRequest's @NotBlank rules, which the form's own checks do not fully cover
+    // (a password of 8 spaces passes the client's length rule, not the server's blank rule).
+    const fields: Record<string, string> = {};
+    if (!body.email?.trim()) fields.email = 'Email is required';
+    if (!body.password?.trim()) fields.password = 'Password is required';
+    if (!body.fullName?.trim()) fields.fullName = 'Full name is required';
+    if (Object.keys(fields).length > 0) {
+      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields }), { status: 400 });
+    }
+    // CLIENT-ERR-2: a fixed taken address, so a spec can reach the duplicate-email (409) path.
+    if (body.email === mockTakenEmail) {
+      return HttpResponse.json(apiError('Email already registered', 'EMAIL_ALREADY_REGISTERED'), { status: 409 });
     }
     return HttpResponse.json(apiResponse(authResult, 'User registered successfully'), {
       status: 200,
@@ -74,7 +92,7 @@ export const authHandlers: HttpHandler[] = [
   http.post('/api/auth/login', async ({ request }) => {
     const body = (await request.json()) as LoginPayload;
     if (body.password !== mockPassword) {
-      return HttpResponse.json(apiError('Invalid email or password'), { status: 401 });
+      return HttpResponse.json(apiError('Invalid email or password', 'INVALID_CREDENTIALS'), { status: 401 });
     }
     // ADMIN-1: two accounts now exist. Each gets its own refresh-token string so
     // a later bootstrap refresh can tell them apart (see sessionFor).
@@ -85,7 +103,7 @@ export const authHandlers: HttpHandler[] = [
       });
     }
     if (body.email !== mockUser.email) {
-      return HttpResponse.json(apiError('Invalid email or password'), { status: 401 });
+      return HttpResponse.json(apiError('Invalid email or password', 'INVALID_CREDENTIALS'), { status: 401 });
     }
     return HttpResponse.json(apiResponse(authResult, 'Login successful'), {
       status: 200,

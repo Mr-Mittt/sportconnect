@@ -28,9 +28,8 @@ interface LoginFormProps {
  *
  * CLIENT-I18N-2 (step 1 of that ticket's "translate the rest of the app"): translated via a new
  * `login` namespace (own namespace, not shared with `register` — their strings don't overlap
- * beyond structure, same "one namespace per page" convention `app/i18n.ts` documents). The server's
- * own `errorMessage` (from `useLogin`) stays untranslated — same accepted exception `RegisterForm`
- * already established (arbitrary backend free text, nothing to translate it into; I18N-4).
+ * beyond structure, same "one namespace per page" convention `app/i18n.ts` documents). The
+ * `errorMessage` from `useLogin` is localized from the response's error code (CLIENT-ERR-2).
  *
  * **Validation is entirely custom (`noValidate` on the `<form>`), not native HTML constraint
  * validation** (2026-09-29 fix, found in review of this same ticket's translation pass —

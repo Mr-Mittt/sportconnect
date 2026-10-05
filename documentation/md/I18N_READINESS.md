@@ -137,6 +137,8 @@ still shows the server text verbatim; a 403, 404, 5xx or offline failure now sho
 those). The three admin hooks keep the server text or their fixed English fallback (no vi copy). The
 "Phase C ticket" column is where each row's per-code copy lands.
 
+**CLIENT-ERR-2 (2026-10-05):** the `/login` and `/register` rows are done. `errors:codes` now holds en + vi copy for `EMAIL_ALREADY_REGISTERED`, `INVALID_CREDENTIALS`, `ACCOUNT_DEACTIVATED` and the shared C12 code `VALIDATION_FAILED`. `useLogin` shows the `INVALID_CREDENTIALS` line for a 401 and for a 400 `VALIDATION_FAILED` (the login API should not describe the input). `useRegister` also returns `errorCode` and `errorFields`; the register banner adds a "Sign in instead" link for a duplicate email and "Check: <field labels>" for a validation failure. Because `VALIDATION_FAILED` copy is global, every other form whose 400 is a bean-validation failure now shows the localized generic line instead of English "Validation failed" (nothing is lost: that text carried no field detail). Errors with their own codes and prose are untouched.
+
 Home Feed, Friends (aside from the invite modal), Sessions/Matches, and Notifications don't
 currently surface a raw server message anywhere. **Whoever picks up `CLIENT-I18N-3`/`4`/`5` (or any
 later translation ticket): if the form you're translating shows a server error verbatim, add its row
