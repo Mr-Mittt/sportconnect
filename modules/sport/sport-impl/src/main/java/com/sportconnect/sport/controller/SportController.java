@@ -321,7 +321,8 @@ public class SportController {
             @PathVariable Long profileId) {
         UserSportProfileResponse response = profileService.getProfileById(profileId);
         if (!UUID.fromString(callerIdStr).equals(response.getUserId())) {
-            throw new ForbiddenException("You can only view your own sport profile");
+            throw new ForbiddenException("SPORT_PROFILE_NOT_OWNED",
+                    "You can only view your own sport profile", null);
         }
         return ResponseEntity.ok(ApiResponse.success("Profile retrieved successfully", response));
     }

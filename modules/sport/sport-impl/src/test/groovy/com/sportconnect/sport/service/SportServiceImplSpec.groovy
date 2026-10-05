@@ -103,7 +103,9 @@ class SportServiceImplSpec extends Specification {
 
         then:
         1 * sportLookupCache.getActiveSportsById() >> [:]
-        thrown(ResourceNotFoundException)
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == 'SPORT_NOT_FOUND'
+        e.errorParams == null
     }
 
     def "getActiveSportsByIds should return a map keyed by id for found sports"() {
@@ -342,7 +344,9 @@ class SportServiceImplSpec extends Specification {
 
         then:
         1 * sportLookupCache.getActiveSportsById() >> [:]
-        thrown(ResourceNotFoundException)
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == 'SPORT_NOT_FOUND'
+        e.errorParams == null
     }
 
     def "replaceAttributeSchema stores a valid document and evicts the cache"() {

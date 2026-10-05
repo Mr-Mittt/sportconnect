@@ -82,7 +82,7 @@ public class SportServiceImpl implements SportService {
     public SportResponse requireActiveSportById(Long sportId) {
         Sport sport = sportLookupCache.getActiveSportsById().get(sportId);
         if (sport == null) {
-            throw new ResourceNotFoundException("Sport", "id", sportId);
+            throw sportNotFound(sportId);
         }
         return toSportResponse(sport);
     }
@@ -252,7 +252,7 @@ public class SportServiceImpl implements SportService {
     public AttributeSchema getAttributeSchema(Long sportId) {
         Sport sport = sportLookupCache.getActiveSportsById().get(sportId);
         if (sport == null) {
-            throw new ResourceNotFoundException("Sport", "id", sportId);
+            throw sportNotFound(sportId);
         }
         return parseStoredSchema(sport.getAttributesSchema());
     }
@@ -405,10 +405,16 @@ public class SportServiceImpl implements SportService {
         return DerivedSchemaResolver.resolve(parseStoredSchema(sport.getAttributesSchema()), sessionSchema, locale);
     }
 
+    /** A25: 404 {@code SPORT_NOT_FOUND} for a missing or inactive sport on the user-reachable paths. */
+    private static ResourceNotFoundException sportNotFound(Long sportId) {
+        return ResourceNotFoundException.coded("SPORT_NOT_FOUND",
+                String.format("Sport not found with id: '%s'", sportId), null);
+    }
+
     private Sport requireActiveSport(Long sportId) {
         Sport sport = sportLookupCache.getActiveSportsById().get(sportId);
         if (sport == null) {
-            throw new ResourceNotFoundException("Sport", "id", sportId);
+            throw sportNotFound(sportId);
         }
         return sport;
     }
