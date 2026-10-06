@@ -18,6 +18,8 @@ export function useApproveInvitation() {
       await apiClient.put<ApiResponse<void>>(`/groups/invitations/${invitationId}/approve`);
       return invitationId;
     },
+    // CLIENT-ERR-5: GroupsPage reports a failure in GroupActionErrorDialog, so the global toast is off.
+    meta: { errorDisplay: 'inline' },
     onSettled: () => queryClient.invalidateQueries({ queryKey: feedKeys.all }),
   });
 }

@@ -237,4 +237,27 @@ describe('useInviteFriendModalData', () => {
     );
     expect(result.current.rows.find((row) => row.user.id === 'user-2')?.error).toBeNull();
   });
+
+  it('hands a coded failure to onCodedError instead of setting a row error (CLIENT-ERR-5)', async () => {
+    mockGet({ search: [searchUser({ id: 'user-1', fullName: 'Robin' })] });
+    const coded = {
+      isAxiosError: true,
+      response: {
+        status: 403,
+        data: { success: false, message: 'English prose', errorCode: 'GROUP_MEMBER_INVITES_DISABLED' },
+      },
+    };
+    vi.spyOn(apiClient, 'post').mockRejectedValue(coded);
+    const onCodedError = vi.fn();
+
+    const { result } = renderHook(() => useInviteFriendModalData(1, true, 'ro', onCodedError), { wrapper });
+    await waitFor(() => expect(result.current.rows).toHaveLength(1), { timeout: 2000 });
+
+    await act(async () => result.current.sendInvite('user-1'));
+
+    await waitFor(() => expect(onCodedError).toHaveBeenCalledTimes(1));
+    expect(onCodedError.mock.calls[0][0]).toBe(coded);
+    expect(result.current.rows[0].error).toBeNull();
+    expect(result.current.rows[0].isSending).toBe(false);
+  });
 });

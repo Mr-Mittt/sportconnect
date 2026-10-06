@@ -40,6 +40,7 @@ import { ReactivateSportNudgeDialog } from '@/shared/components/ReactivateSportN
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useAnchorBottom, ModalAnchorProvider } from '@/shared/lib/modalAnchor';
+import { getApiError, getErrorMessage } from '@/shared/lib/apiError';
 import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import { getPageAccessNoSportsPrompt } from '@/shared/lib/noSportsPrompt';
 import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
@@ -50,6 +51,7 @@ import { GroupChatTab } from './components/GroupChatTab';
 import { GroupCoverBanner } from './components/GroupCoverBanner';
 import { GroupCoverBannerPlaceholder } from './components/GroupCoverBannerPlaceholder';
 import { GroupDiscoveryPanel } from './components/GroupDiscoveryPanel';
+import { GroupActionErrorDialog } from './components/GroupActionErrorDialog';
 import { GroupMembersTab } from './components/GroupMembersTab';
 import { GroupSettingsTab } from './components/GroupSettingsTab';
 import { GroupSpaceSwitcher } from './components/GroupSpaceSwitcher';
@@ -148,6 +150,16 @@ export function GroupsPage() {
   // synchronous setState-in-effect.
   const [activeGroupTab, setActiveGroupTab] = useState<GroupTabKey>('posts');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  // CLIENT-ERR-5: the failure of a join-request / invitation list action (accept, decline, approve,
+  // reject, cancel), shown in GroupActionErrorDialog. Held as the raw error and localized at render
+  // so a locale switch while it is open is picked up; null = closed.
+  const [actionError, setActionError] = useState<{ error: unknown } | null>(null);
+  const showActionError = (error: unknown) => {
+    // A cancelled request is not a failure, and a 401 is owned by the silent-refresh flow.
+    const { canceled, category } = getApiError(error);
+    if (canceled || category === 'UNAUTHENTICATED') return;
+    setActionError({ error });
+  };
   // Bumped on every open (not close) — remounts CreateGroupModal/AddSportModal
   // so their internal form field state starts fresh each time, without an
   // effect calling setState. JoinGroupModal/InviteFriendModal don't need
@@ -286,12 +298,14 @@ export function GroupsPage() {
     lockedSport,
     data.sportProfiles,
     isJoinGroupOpen,
+    showActionError,
   );
   // GRP-4
   const inviteFriendModalData = useInviteFriendModalData(
     selectedGroupId ?? undefined,
     isInviteFriendOpen,
     inviteFriendQuery,
+    showActionError,
   );
 
   const sportsByKey = useMemo(
@@ -354,6 +368,7 @@ export function GroupsPage() {
     selectedGroup?.id,
     activeGroupTab === 'members',
     selectedGroup?.currentUserRole ?? null,
+    showActionError,
   );
 
   // GRP-7/GRP-8 part 1: accepting an invitation lands the user straight in
@@ -366,6 +381,7 @@ export function GroupsPage() {
     currentUserId,
     selectedGroup === null,
     (groupId, sportId) => selectGroupAndShowPosts(groupId, sportId),
+    showActionError,
   );
 
   // Zero-sport-profile gate on page access (not just on create/join a match — see
@@ -655,7 +671,9 @@ export function GroupsPage() {
                 isJoinRequestsLoading={joinRequestsQuery.isLoading}
                 isJoinRequestsError={joinRequestsQuery.isError}
                 onRetryJoinRequests={() => joinRequestsQuery.refetch()}
-                onWithdrawJoinRequest={(requestId) => cancelJoinRequestMutation.mutate(requestId)}
+                onWithdrawJoinRequest={(requestId) =>
+                  cancelJoinRequestMutation.mutate(requestId, { onError: showActionError })
+                }
                 isWithdrawingJoinRequest={cancelJoinRequestMutation.isPending}
               />
             ) : (
@@ -745,9 +763,11 @@ export function GroupsPage() {
                       onUpdatePrivacy={handleUpdatePrivacy}
                       isUpdatingPrivacy={updateGroupMutation.isPending}
                       isUpdatePrivacyError={updateGroupMutation.isError}
+                      privacyErrorText={getCodedErrorMessage(updateGroupMutation.error)}
                       onLeave={handleLeaveGroup}
                       isLeaving={leaveGroupMutation.isPending}
                       isLeaveError={leaveGroupMutation.isError}
+                      leaveErrorText={getCodedErrorMessage(leaveGroupMutation.error)}
                       onRequestDelete={() => setIsDeleteConfirmOpen(true)}
                       groupSettings={settingsGuard.settings}
                       isSettingsLoading={settingsGuard.isSettingsLoading}
@@ -761,6 +781,7 @@ export function GroupsPage() {
                       onSaveSettings={settingsGuard.save}
                       isSavingSettings={settingsGuard.isSaving}
                       isSaveSettingsError={settingsGuard.isSaveError}
+                      saveSettingsErrorText={getCodedErrorMessage(settingsGuard.saveError)}
                     />
                   )}
                 </div>
@@ -849,6 +870,7 @@ export function GroupsPage() {
           initialGroupName={pendingCreateGroupName}
           isSubmitting={createGroupMutation.isPending}
           isError={createGroupMutation.isError}
+          errorText={getCodedErrorMessage(createGroupMutation.error)}
           onSubmit={(payload) =>
             createGroupMutation.mutate(payload, {
               onSuccess: (group) => {
@@ -1011,9 +1033,14 @@ export function GroupsPage() {
             onConfirm={handleConfirmDeleteGroup}
             isSubmitting={deleteGroupMutation.isPending}
             isError={deleteGroupMutation.isError}
+            errorText={getCodedErrorMessage(deleteGroupMutation.error)}
             groupName={selectedGroup.groupName}
           />
         )}
+        <GroupActionErrorDialog
+          message={actionError !== null ? getErrorMessage(actionError.error) : null}
+          onDismiss={() => setActionError(null)}
+        />
         <SettingsUnsavedChangesDialog
           isOpen={settingsGuard.isLeaveDialogOpen}
           onCancel={settingsGuard.cancelLeave}

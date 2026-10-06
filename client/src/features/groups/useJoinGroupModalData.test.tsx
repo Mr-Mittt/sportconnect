@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { AxiosError, type AxiosResponse } from 'axios';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
@@ -241,5 +242,43 @@ describe('useJoinGroupModalData', () => {
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith('/groups/join-requests', { groupName: 'Riverside Ballers' }),
     );
+  });
+
+  function failure(status: number, errorCode?: string) {
+    const error = new AxiosError('failed', 'ERR_BAD_REQUEST');
+    error.response = { status, data: { success: false, message: 'English prose', errorCode } } as AxiosResponse;
+    return error;
+  }
+
+  it('hands a coded request failure to onCodedError and keeps the inline line off (CLIENT-ERR-5)', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(noRequests);
+    const coded = failure(409, 'GROUP_JOIN_REQUEST_ALREADY_PENDING');
+    vi.spyOn(apiClient, 'post').mockRejectedValueOnce(coded);
+    const onCodedError = vi.fn();
+
+    const { result } = renderHook(
+      () => useJoinGroupModalData('user-1', null, sportProfiles, true, onCodedError),
+      { wrapper },
+    );
+    act(() => result.current.requestToJoin('Riverside Ballers'));
+
+    await waitFor(() => expect(onCodedError).toHaveBeenCalledTimes(1));
+    expect(onCodedError.mock.calls[0][0]).toBe(coded);
+    expect(result.current.isRequestError).toBe(false);
+  });
+
+  it('keeps the inline line, and does not call onCodedError, for an uncoded failure', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(noRequests);
+    vi.spyOn(apiClient, 'post').mockRejectedValueOnce(failure(500));
+    const onCodedError = vi.fn();
+
+    const { result } = renderHook(
+      () => useJoinGroupModalData('user-1', null, sportProfiles, true, onCodedError),
+      { wrapper },
+    );
+    act(() => result.current.requestToJoin('Riverside Ballers'));
+
+    await waitFor(() => expect(result.current.isRequestError).toBe(true));
+    expect(onCodedError).not.toHaveBeenCalled();
   });
 });

@@ -95,6 +95,20 @@ export const LeaveError: Story = {
   args: { currentUserRole: 'group_member', isLeaveError: true },
 };
 
+/** CLIENT-ERR-5: coded failures (403 `GROUP_ADMIN_REQUIRED`, `GROUP_OWNER_REQUIRED`, `GROUP_OWNER_CANNOT_LEAVE`) show their own lines. */
+export const CodedErrors: Story = {
+  args: {
+    currentUserRole: 'group_admin',
+    hasUnsavedSettingsChanges: true,
+    isUpdatePrivacyError: true,
+    privacyErrorText: 'Only the group owner or an admin can do this.',
+    isSaveSettingsError: true,
+    saveSettingsErrorText: 'Only the group owner can do this.',
+    isLeaveError: true,
+    leaveErrorText: "The owner can't leave the group. Transfer ownership first.",
+  },
+};
+
 export const SettingsLoading: Story = {
   args: { currentUserRole: 'group_owner', isSettingsLoading: true },
 };

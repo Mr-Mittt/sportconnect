@@ -57,3 +57,27 @@ it for the pin cases, and may go back to `BaseIT` once `A19` ships.
    `services/chat/internal/sync/consumer.go`; what it does when Redis is unreachable (reconnect with
    backoff, crash, or spin) was **not** checked. Look before declaring the topic closed, and file a
    `chat` ticket if it is not resilient.
+
+---
+
+## Group visibility enhancement (noted 2026-10-06)
+
+**Status.** Not yet refined: the goal and scope are still to be defined with the user, and **no ticket
+is filed**. This entry only records what is already known so the refinement session starts from facts.
+
+**What is known (found while building CLIENT-ERR-5).**
+- `GET /api/groups/{id}` returns 403 `GROUP_PRIVATE` for a non-member of a private group, and the full
+  group (including pinned posts) for a public one. `GET /{id}/info` and `/{id}/generalData` instead
+  return a stub (id, name, `isPrivate`) for a non-member of a private group.
+- The client never calls `GET /groups/{id}`. It only opens groups the current user is already a member
+  of (the groups list and the space switcher), and there is no group URL route. So today a non-member
+  cannot view any group, public or private.
+- `GROUP_PRIVATE` already has en + vi copy in `errors:codes` but no UI uses it: CLIENT-ERR-5 dropped
+  the planned "request to join" page state for that reason.
+
+**Not yet checked.** Whether private groups appear in the Join Group search (`usePublicGroups` suggests
+public only; the backend filter was not read).
+
+**Candidates with no ticket yet** (decide after refinement):
+1. Whatever "visibility" ends up meaning: a non-member view of a group, a public/private presentation,
+   or discovery. To be defined.

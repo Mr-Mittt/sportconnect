@@ -177,6 +177,8 @@ export function useSettingsUnsavedGuard(
     save,
     isSaving: updateSettingsMutation.isPending || updateGeneralDataMutation.isPending,
     isSaveError: updateSettingsMutation.isError || updateGeneralDataMutation.isError,
+    /** CLIENT-ERR-5: the failure behind `isSaveError`, for the specific coded line. */
+    saveError: updateSettingsMutation.error ?? updateGeneralDataMutation.error,
     guard,
     isLeaveDialogOpen: pendingAction !== null || blocker.state === 'blocked',
     discard,

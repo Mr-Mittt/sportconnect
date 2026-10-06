@@ -230,6 +230,7 @@ e2e/
     auth-errors.spec.ts       # CLIENT-ERR-2
     user-errors.spec.ts       # CLIENT-ERR-3
     sport-errors.spec.ts      # CLIENT-ERR-4
+    group-errors.spec.ts      # CLIENT-ERR-5
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -1038,6 +1039,27 @@ The sport module's coded errors (A25) localized from the error code. Each server
 | duplicate profile (vi) | Same alert in Vietnamese ("Bạn đã có hồ sơ Badminton rồi."); the locale is switched by writing `locale-storage` and reloading. |
 | oversized attributes | Settings-tab save with a forced 400 `PROFILE_ATTRIBUTES_TOO_LARGE`: the alert is the generic "Couldn't save your sport details. Please try again." and never contains "4KB"; the draft stays. |
 | deactivate, profile gone | Active toggle, then Deactivate, with a forced 404 `SPORT_PROFILE_NOT_FOUND`: the confirm dialog's alert reads "This sport profile no longer exists." |
+
+### `e2e/flows/group-errors.spec.ts` (CLIENT-ERR-5, 14 `test()`s)
+
+The group module's coded errors (A11) localized from the error code. Each server error is forced with `page.route` (the MSW group handlers do not fail on their own). Uses `mockOwnedGroup` ("Weekend Tennis Ladder") as `group-members.spec.ts` does. See `client/docs/MVP/CLIENT-ERR-5_GROUP_ERROR_ADAPTATION.md`.
+
+| Test | What it checks |
+|---|---|
+| accept, already handled (en) | Members tab, accept Priya Shah's join request with a forced 409 `GROUP_JOIN_REQUEST_NOT_PENDING`: the error dialog's alert reads "This join request has already been handled.", no toast appears, "Got it" closes it and the tab stays usable. |
+| accept, already handled (vi) | Same alert in Vietnamese ("Yêu cầu tham gia này đã được xử lý."); the locale is switched by writing `locale-storage` and reloading. |
+| Invite friend, invites disabled | Invite a friend with a forced 403 `GROUP_MEMBER_INVITES_DISABLED`: the error pop-up reads "Members can't invite people to this group.", no toast, "Got it" closes it, and the Invite Friend modal stays open with the Invite button still there and no inline alert. |
+| Join Group modal | Request to join with a forced 409 `GROUP_JOIN_REQUEST_ALREADY_PENDING`: the error pop-up reads "You've already asked to join this group. It's waiting for approval.", "Got it" closes it, and the Join Group modal stays open with no inline alert. The sport filter is narrowed to Pickleball first, because the MSW search reads a single `sportId`. |
+| Create group, name taken | Forced 409 `GROUP_NAME_TAKEN`: the form alert reads "A group with this name already exists. Pick another name." and the typed name is kept. |
+| Delete group | Forced 403 `GROUP_OWNER_REQUIRED`: the confirm dialog's alert reads "Only the group owner can do this." and the dialog stays open. |
+| Settings save | Toggle a permission, Save with a forced 403 `GROUP_OWNER_REQUIRED`: the save alert reads "Only the group owner can do this." and the toggle stays pressed (draft kept). |
+| Privacy toggle | Forced 403 `GROUP_ADMIN_REQUIRED`: the privacy alert reads "Only the group owner or an admin can do this." |
+| Leave group | As a plain member, Leave with a forced 400 `GROUP_OWNER_CANNOT_LEAVE`: the tab's alert reads "The owner can't leave the group. Transfer ownership first." |
+| Decline a join request | Forced 404 `GROUP_JOIN_REQUEST_NOT_FOUND`: the error dialog reads "This join request no longer exists.", no toast; "Got it" closes it. |
+| Withdraw a sent invitation | Forced 403 `GROUP_INVITER_ONLY`: the error dialog reads "You can only cancel invitations you sent." |
+| Accept an invitation, group full | Forced 400 `GROUP_MEMBER_CAPACITY_REACHED` with `{max: 30}`: the error dialog reads "This group is full (up to 30 members)." |
+| Reject an invitation | Forced 409 `GROUP_INVITATION_NOT_PENDING`: after the reject confirm closes, the error dialog reads "This invitation has already been handled." |
+| Withdraw your own join request | Seeded request, forced 404 `GROUP_JOIN_REQUEST_NOT_FOUND` on the DELETE: the error dialog reads "This join request no longer exists." |
 
 ### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
 

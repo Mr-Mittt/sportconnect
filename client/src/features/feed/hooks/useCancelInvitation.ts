@@ -17,6 +17,8 @@ export function useCancelInvitation() {
       await apiClient.delete<ApiResponse<void>>(`/groups/invitations/${invitationId}`);
       return invitationId;
     },
+    // CLIENT-ERR-5: GroupsPage reports a failure in GroupActionErrorDialog, so the global toast is off.
+    meta: { errorDisplay: 'inline' },
     onSettled: () => queryClient.invalidateQueries({ queryKey: feedKeys.all }),
   });
 }

@@ -4,6 +4,7 @@ import { useJoinRequests } from '@/features/feed/hooks/useJoinRequests';
 import { usePublicGroups } from '@/features/feed/hooks/usePublicGroups';
 import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import type { GroupSearchResult } from '@/features/feed/types';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 
 export interface GroupedSearchResults {
@@ -44,6 +45,11 @@ export function useJoinGroupModalData(
   lockedSport: SportKey | null,
   sportProfiles: SportProfile[],
   isOpen: boolean,
+  /** CLIENT-ERR-5: called with a request failure that has a server code the client has copy for;
+   * the page shows it in `GroupActionErrorDialog` (a pop-up with "Got it"), and `isRequestError`
+   * stays false for it. Uncoded failures keep the modal's inline "Couldn't send the request"
+   * line. The requests list reloads on settle either way (`useJoinGroup`). */
+  onCodedError?: (error: unknown) => void,
 ) {
   const [inputValue, setInputValue] = useState('');
   const [submittedKeyword, setSubmittedKeyword] = useState('');
@@ -125,9 +131,19 @@ export function useJoinGroupModalData(
     setSubmittedKeyword(query.trim());
   }, []);
   const requestToJoin = useCallback(
-    (groupName: string) => joinMutation.mutate({ groupName }),
-    [joinMutation],
+    (groupName: string) =>
+      joinMutation.mutate(
+        { groupName },
+        {
+          onError: (error) => {
+            if (onCodedError !== undefined && getCodedErrorMessage(error) !== undefined) onCodedError(error);
+          },
+        },
+      ),
+    [joinMutation, onCodedError],
   );
+  const isRequestCodedError =
+    onCodedError !== undefined && getCodedErrorMessage(joinMutation.error) !== undefined;
 
   return {
     inputValue,
@@ -142,6 +158,6 @@ export function useJoinGroupModalData(
     pendingGroupIds,
     requestToJoin,
     isRequesting: joinMutation.isPending,
-    isRequestError: joinMutation.isError,
+    isRequestError: joinMutation.isError && !isRequestCodedError,
   };
 }

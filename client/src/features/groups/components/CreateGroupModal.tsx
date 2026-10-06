@@ -26,6 +26,8 @@ interface CreateGroupModalProps {
   onSubmit: (payload: CreateGroupPayload) => void;
   isSubmitting: boolean;
   isError: boolean;
+  /** CLIENT-ERR-5: the specific localized line for a coded failure; falls back to `createGroup.error`. */
+  errorText?: string;
   /** GRP-1: pre-fills the name field when opened from GroupDiscoveryPanel's
    * shared "Group name or invite code" input. Only read once, on mount —
    * same remount-on-open convention as the rest of this form's state. */
@@ -59,6 +61,7 @@ export function CreateGroupModal({
   onSubmit,
   isSubmitting,
   isError,
+  errorText,
   initialGroupName = '',
   i18nOverridePrefix,
 }: CreateGroupModalProps) {
@@ -143,7 +146,7 @@ export function CreateGroupModal({
           </label>
           {isError && (
             <p role="alert" className="text-2sm text-text-danger">
-              {t('createGroup.error')}
+              {errorText ?? t('createGroup.error')}
             </p>
           )}
         </div>

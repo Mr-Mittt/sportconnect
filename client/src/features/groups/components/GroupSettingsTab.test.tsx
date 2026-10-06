@@ -322,6 +322,32 @@ describe('GroupSettingsTab', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't save changes. Try again.");
   });
 
+  it('shows the specific error text for privacy, save and leave failures (CLIENT-ERR-5)', () => {
+    render(
+      <GroupSettingsTab
+        {...baseProps}
+        group={group()}
+        currentUserRole="group_admin"
+        isUpdatePrivacyError
+        privacyErrorText="Only the group owner or an admin can do this."
+        isSaveSettingsError
+        saveSettingsErrorText="Only the group owner can do this."
+        isLeaveError
+        leaveErrorText="The owner can't leave the group. Transfer ownership first."
+      />,
+    );
+    const alerts = screen.getAllByRole('alert').map((alert) => alert.textContent);
+    expect(alerts).toEqual(
+      expect.arrayContaining([
+        'Only the group owner or an admin can do this.',
+        'Only the group owner can do this.',
+        "The owner can't leave the group. Transfer ownership first.",
+      ]),
+    );
+    expect(screen.queryByText("Couldn't update privacy. Try again.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't save changes. Try again.")).not.toBeInTheDocument();
+  });
+
   it('member: no Save button at all (nothing editable)', () => {
     render(<GroupSettingsTab {...baseProps} group={group()} currentUserRole="group_member" />);
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();

@@ -30,7 +30,7 @@ export type ApprovalQueueItem =
  * tab has none). Wires the read queries, gated on `isActive` (the Members
  * tab being the one currently shown) and, for join requests and the
  * approval-queue invitations, on `canManage` too — a `group_member` calling
- * either `getGroupJoinRequests` or `getGroupInvitations` gets a 400, so this
+ * either `getGroupJoinRequests` or `getGroupInvitations` gets a 403, so this
  * never fires those requests for them at all rather than firing and hiding
  * the error.
  *
@@ -52,7 +52,11 @@ export function useGroupMembersTabData(
   groupId: number | undefined,
   isActive: boolean,
   currentUserRole: string | null,
+  /** CLIENT-ERR-5: called with the failure of any accept/decline/approve/cancel below; the page
+   * shows it in `GroupActionErrorDialog`. The lists refetch on settle regardless. */
+  onActionError?: (error: unknown) => void,
 ) {
+  const onError = onActionError;
   const canManage = currentUserRole === 'group_owner' || currentUserRole === 'group_admin';
 
   const membersQuery = useGroupMembers(groupId, isActive);
@@ -89,12 +93,12 @@ export function useGroupMembersTabData(
   }, [joinRequestsQuery.data, groupInvitationsQuery.data]);
 
   const acceptApprovalQueueItem = (item: ApprovalQueueItem) => {
-    if (item.type === 'join_request') acceptJoinRequestMutation.mutate(item.data.id);
-    else approveInvitationMutation.mutate(item.data.id);
+    if (item.type === 'join_request') acceptJoinRequestMutation.mutate(item.data.id, { onError });
+    else approveInvitationMutation.mutate(item.data.id, { onError });
   };
   const declineApprovalQueueItem = (item: ApprovalQueueItem) => {
-    if (item.type === 'join_request') declineJoinRequestMutation.mutate(item.data.id);
-    else declineInvitationMutation.mutate(item.data.id);
+    if (item.type === 'join_request') declineJoinRequestMutation.mutate(item.data.id, { onError });
+    else declineInvitationMutation.mutate(item.data.id, { onError });
   };
 
   return {
@@ -119,7 +123,7 @@ export function useGroupMembersTabData(
     // invitations — every row in `sentInvitations` is already the caller's
     // own (see `useSentInvitations`), so no extra ownership check needed
     // here; `GroupMembersTab` only shows the button for `pending_owner` rows.
-    cancelInvitation: (invitationId: number) => cancelInvitationMutation.mutate(invitationId),
+    cancelInvitation: (invitationId: number) => cancelInvitationMutation.mutate(invitationId, { onError }),
     isCancelingInvitation: cancelInvitationMutation.isPending,
     acceptApprovalQueueItem,
     isAcceptingApprovalQueueItem:

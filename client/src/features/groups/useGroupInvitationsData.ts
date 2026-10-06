@@ -29,6 +29,10 @@ export function useGroupInvitationsData(
   userId: string | undefined,
   enabled: boolean,
   onAccepted: (groupId: number, sportId: number) => void,
+  /** CLIENT-ERR-5: called with an accept or reject failure; the page shows it in
+   * `GroupActionErrorDialog`. (A reject can't use `RejectInvitationConfirmDialog`'s own error line:
+   * that dialog closes the moment the user confirms.) */
+  onActionError?: (error: unknown) => void,
 ) {
   const invitationsQuery = useUserPendingInvitations(userId, enabled);
   const acceptMutation = useAcceptInvitation();
@@ -48,6 +52,7 @@ export function useGroupInvitationsData(
       onSuccess: () => {
         if (invitation !== undefined) onAccepted(invitation.groupId, invitation.sportId);
       },
+      onError: onActionError,
     });
   };
 
@@ -59,7 +64,7 @@ export function useGroupInvitationsData(
     acceptInvitation,
     isAccepting: acceptMutation.isPending,
     rejectInvitation: (invitationId: number, reason?: string) =>
-      rejectMutation.mutate({ invitationId, reason }),
+      rejectMutation.mutate({ invitationId, reason }, { onError: onActionError }),
     isRejecting: rejectMutation.isPending,
     isRejectError: rejectMutation.isError,
     /**

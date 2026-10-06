@@ -18,6 +18,8 @@ export function useAcceptJoinRequest() {
       await apiClient.put<ApiResponse<void>>(`/groups/join-requests/${requestId}/accept`);
       return requestId;
     },
+    // CLIENT-ERR-5: GroupsPage reports a failure in GroupActionErrorDialog, so the global toast is off.
+    meta: { errorDisplay: 'inline' },
     onSettled: () => queryClient.invalidateQueries({ queryKey: feedKeys.all }),
   });
 }
