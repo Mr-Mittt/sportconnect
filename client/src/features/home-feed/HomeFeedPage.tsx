@@ -5,6 +5,7 @@ import { useAuthStore } from '@/app/authStore';
 import { useGroupsPageStore } from '@/app/groupsPageStore';
 import { useHomeFeedStore } from '@/app/homeFeedStore';
 import { usePost } from '@/features/feed/hooks/usePost';
+import { usePostErrorGuard } from '@/features/feed/postErrors';
 import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
@@ -130,6 +131,7 @@ export function HomeFeedPage() {
     createPost,
     isCreatingPost,
     isCreatePostError,
+    createPostError,
     currentUserId,
     hasMorePosts,
     isFetchingMorePosts,
@@ -148,6 +150,10 @@ export function HomeFeedPage() {
   const activeCommentsPostQuery = usePost(
     activeCommentsPostId ?? -1,
     activeCommentsPostId !== null,
+  );
+  const { hideComments } = usePostErrorGuard(
+    [activeCommentsPostQuery.error, commentsData.error],
+    closeComments,
   );
   const hashtagResultsData = useHashtagResultsData(activeHashtag, activeHashtag !== null);
   const addSportMutation = useAddSportProfile(currentUserId);
@@ -260,6 +266,7 @@ export function HomeFeedPage() {
           onSubmit={createPost}
           isSubmitting={isCreatingPost}
           isError={isCreatePostError}
+          errorText={getCodedErrorMessage(createPostError)}
           onPhotoClick={noop}
           onLocationClick={noop}
           onTagSportClick={noop}
@@ -323,7 +330,7 @@ export function HomeFeedPage() {
           </div>
         </div>
         <CommentSection
-          isOpen={activeCommentsPostId !== null}
+          isOpen={activeCommentsPostId !== null && !hideComments}
           onClose={closeComments}
           currentUserId={currentUserId}
           currentUser={{

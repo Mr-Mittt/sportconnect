@@ -231,6 +231,7 @@ e2e/
     user-errors.spec.ts       # CLIENT-ERR-3
     sport-errors.spec.ts      # CLIENT-ERR-4
     group-errors.spec.ts      # CLIENT-ERR-5
+    post-errors.spec.ts       # CLIENT-ERR-6
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -1060,6 +1061,21 @@ The group module's coded errors (A11) localized from the error code. Each server
 | Accept an invitation, group full | Forced 400 `GROUP_MEMBER_CAPACITY_REACHED` with `{max: 30}`: the error dialog reads "This group is full (up to 30 members)." |
 | Reject an invitation | Forced 409 `GROUP_INVITATION_NOT_PENDING`: after the reject confirm closes, the error dialog reads "This invitation has already been handled." |
 | Withdraw your own join request | Seeded request, forced 404 `GROUP_JOIN_REQUEST_NOT_FOUND` on the DELETE: the error dialog reads "This join request no longer exists." |
+
+### `e2e/flows/post-errors.spec.ts` (CLIENT-ERR-6, 8 `test()`s)
+
+The post module's coded errors (A18) localized from the error code. Each server error is forced with `page.route` (the MSW feed handlers do not fail on their own). "Pop-up" is the app-wide `PostActionErrorDialog` ("Post unavailable", one message and "Got it"). Behavior table: `client/docs/MVP/CLIENT-ERR-6_POST_ERROR_ADAPTATION.md`.
+
+| Test | What it checks |
+|---|---|
+| shared link to a deleted post | `/posts/999` with a forced 404 `POST_NOT_FOUND` on the post load: the pop-up reads "This post no longer exists.", the comments modal never appears, no toast; "Got it" returns to `/` with the feed visible. |
+| same pop-up in Vietnamese | Forced 403 `POST_FORBIDDEN` on a dead link with the locale stored as `vi`: the pop-up reads "Bạn không có quyền xem bài viết này.", "Đã hiểu" returns to `/`. |
+| comment on a vanished post | Comments modal open, add a comment with a forced 404 `POST_NOT_FOUND`: the pop-up opens over the modal, no toast; "Got it" closes the pop-up **and** the modal (URL back to `/`). |
+| like a deleted post | Forced 404 `POST_NOT_FOUND` on the like from a feed card: the pop-up opens; "Got it" closes it and the feed stays. |
+| delete without permission | Forced 403 `POST_DELETE_FORBIDDEN` on delete: the pop-up reads "You can’t delete this post."; the post count is unchanged afterwards. |
+| repeat like (409) | Forced 409 `POST_ALREADY_LIKED`: no toast and no pop-up; the optimistic flip rolls back and the like button shows its true state (count 3). |
+| comment delete, `COMMENT_NOT_FOUND` | Add a comment, delete it with a forced 404 `COMMENT_NOT_FOUND`: no toast, no pop-up, the comments modal stays. |
+| create post as a non-member | Forced 403 `POST_GROUP_MEMBER_REQUIRED` on create: the line under the composer reads "Join this group to post here.", no toast. (The composer clears its text on submit by existing design, so the text is not kept.) |
 
 ### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
 

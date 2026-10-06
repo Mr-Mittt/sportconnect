@@ -5,6 +5,7 @@ import {
   snapshotFeedCaches,
   updatePostInFeedCaches,
 } from '../optimisticFeedUpdates';
+import { reportPostMutationError } from '../postErrors';
 import { feedKeys } from '../queryKeys';
 
 /**
@@ -18,6 +19,7 @@ import { feedKeys } from '../queryKeys';
 export function useLikePost() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: (postId: number) => apiClient.post(`/posts/${postId}/like`),
     onMutate: async (postId: number) => {
       await queryClient.cancelQueries({ queryKey: feedKeys.all });
@@ -29,7 +31,8 @@ export function useLikePost() {
       }));
       return { previous };
     },
-    onError: (_err, _postId, context) => {
+    onError: (err, _postId, context) => {
+      reportPostMutationError(err);
       if (context) restoreFeedCaches(queryClient, context.previous);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: feedKeys.all }),

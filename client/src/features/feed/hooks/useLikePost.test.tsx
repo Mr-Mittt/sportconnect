@@ -1,8 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
+import { AxiosError, type AxiosResponse } from 'axios';
 import { act, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
+import { usePostErrorDialogStore } from '@/app/postErrorDialogStore';
+import * as errorToast from '@/shared/lib/errorToast';
 import { feedKeys } from '../queryKeys';
 import type { PageResponse, Post } from '../types';
 import { useLikePost } from './useLikePost';
@@ -219,6 +222,44 @@ describe('useLikePost', () => {
     expect(cached?.pages[0].content[0]).toMatchObject({
       isLikedByCurrentUser: false,
       likeCount: 3,
+    });
+  });
+
+  describe('failure reporting (CLIENT-ERR-6)', () => {
+    function failWith(status: number, errorCode: string) {
+      const error = new AxiosError('failed', 'ERR_BAD_REQUEST');
+      error.response = { status, data: { success: false, message: 'x', errorCode } } as AxiosResponse;
+      vi.spyOn(apiClient, 'post').mockRejectedValueOnce(error);
+      return error;
+    }
+
+    async function run() {
+      const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+      seedPersonalFeedCache(queryClient, fixturePost);
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      );
+      const { result } = renderHook(() => useLikePost(), { wrapper });
+      act(() => result.current.mutate(7));
+      await waitFor(() => expect(result.current.isError).toBe(true));
+    }
+
+    it('is silent on 409 POST_ALREADY_LIKED (no toast, no pop-up)', async () => {
+      const toast = vi.spyOn(errorToast, 'showErrorToast').mockImplementation(() => {});
+      usePostErrorDialogStore.setState({ error: null });
+      failWith(409, 'POST_ALREADY_LIKED');
+      await run();
+      expect(toast).not.toHaveBeenCalled();
+      expect(usePostErrorDialogStore.getState().error).toBeNull();
+    });
+
+    it('opens the error pop-up, not a toast, on 404 POST_NOT_FOUND', async () => {
+      const toast = vi.spyOn(errorToast, 'showErrorToast').mockImplementation(() => {});
+      usePostErrorDialogStore.setState({ error: null });
+      const error = failWith(404, 'POST_NOT_FOUND');
+      await run();
+      expect(toast).not.toHaveBeenCalled();
+      expect(usePostErrorDialogStore.getState().error).toBe(error);
     });
   });
 });

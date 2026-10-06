@@ -8,6 +8,8 @@ interface UpdateBroadcastConfirmDialogProps {
   onConfirm: () => void;
   isSubmitting: boolean;
   isError: boolean;
+  /** CLIENT-ERR-6: code-specific failure text; replaces the generic line when set. */
+  errorText?: string;
   /** The selected group's current active broadcast message, shown for
    * context so the admin knows what they're about to replace. */
   existingText: string;
@@ -31,6 +33,7 @@ export function UpdateBroadcastConfirmDialog({
   onConfirm,
   isSubmitting,
   isError,
+  errorText,
   existingText,
   i18nOverridePrefix,
 }: UpdateBroadcastConfirmDialogProps) {
@@ -44,7 +47,7 @@ export function UpdateBroadcastConfirmDialog({
           {existingText}
         </p>
         {isError && (
-          <p className="mb-2 text-2sm text-text-danger">{t('updateBroadcast.error')}</p>
+          <p className="mb-2 text-2sm text-text-danger">{errorText ?? t('updateBroadcast.error')}</p>
         )}
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>

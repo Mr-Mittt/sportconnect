@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
 import { removeCommentFromCommentsCache } from '../optimisticCommentUpdates';
 import { restoreFeedCaches, snapshotFeedCaches, updatePostInFeedCaches } from '../optimisticFeedUpdates';
+import { reportPostMutationError } from '../postErrors';
 import { feedKeys } from '../queryKeys';
 
 interface DeleteCommentVariables {
@@ -32,6 +33,7 @@ interface DeleteCommentVariables {
 export function useDeleteComment() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: ({ commentId }: DeleteCommentVariables) =>
       apiClient.delete(`/posts/comments/${commentId}`),
     onMutate: async ({ postId, commentId, parentCommentId }: DeleteCommentVariables) => {
@@ -46,7 +48,8 @@ export function useDeleteComment() {
       }
       return { previous };
     },
-    onError: (_err, _variables, context) => {
+    onError: (err, _variables, context) => {
+      reportPostMutationError(err);
       if (context) restoreFeedCaches(queryClient, context.previous);
     },
     onSettled: (_data, _error, { postId }) => {

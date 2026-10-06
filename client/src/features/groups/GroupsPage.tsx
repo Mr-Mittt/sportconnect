@@ -9,6 +9,7 @@ import { useDeleteGroup } from '@/features/feed/hooks/useDeleteGroup';
 import { useJoinRequests } from '@/features/feed/hooks/useJoinRequests';
 import { useLeaveGroup } from '@/features/feed/hooks/useLeaveGroup';
 import { usePost } from '@/features/feed/hooks/usePost';
+import { usePostErrorGuard } from '@/features/feed/postErrors';
 import { useUpdateGroup } from '@/features/feed/hooks/useUpdateGroup';
 import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import { useCommentsData } from '@/features/feed/useCommentsData';
@@ -195,11 +196,13 @@ export function GroupsPage() {
     createPost,
     isCreatingPost,
     isCreatePostError,
+    createPostError,
     canBroadcast,
     activeBroadcastForSelectedGroup,
     updateBroadcast,
     isUpdatingBroadcast,
     isBroadcastUpdateError,
+    broadcastUpdateError,
     resetBroadcastUpdate,
     currentUserId,
     hasMorePosts,
@@ -262,6 +265,10 @@ export function GroupsPage() {
   const activeCommentsPostQuery = usePost(
     activeCommentsPostId ?? -1,
     activeCommentsPostId !== null,
+  );
+  const { hideComments } = usePostErrorGuard(
+    [activeCommentsPostQuery.error, commentsData.error],
+    () => setActiveCommentsPostId(null),
   );
   const hashtagResultsData = useHashtagResultsData(activeHashtag, activeHashtag !== null);
   const createGroupMutation = useCreateGroup(currentUserId);
@@ -694,6 +701,7 @@ export function GroupsPage() {
                         onSubmit={handleSubmitPost}
                         isSubmitting={isCreatingPost}
                         isError={isCreatePostError}
+                        errorText={getCodedErrorMessage(createPostError)}
                         onPhotoClick={noop}
                         onLocationClick={noop}
                         onTagSportClick={noop}
@@ -822,7 +830,7 @@ export function GroupsPage() {
           </div>
         </div>
         <CommentSection
-          isOpen={activeCommentsPostId !== null}
+          isOpen={activeCommentsPostId !== null && !hideComments}
           onClose={() => setActiveCommentsPostId(null)}
           currentUserId={currentUserId}
           currentUser={{
@@ -1021,6 +1029,7 @@ export function GroupsPage() {
           onConfirm={confirmUpdateBroadcast}
           isSubmitting={isUpdatingBroadcast}
           isError={isBroadcastUpdateError}
+          errorText={getCodedErrorMessage(broadcastUpdateError)}
           existingText={activeBroadcastForSelectedGroup?.content ?? ''}
         />
         {selectedGroup !== null && (

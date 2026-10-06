@@ -142,6 +142,12 @@ describe('CreatePostForm', () => {
     expect(screen.getByText("Couldn't create post. Try again.")).toBeInTheDocument();
   });
 
+  it('shows the code-specific errorText instead of the generic line (CLIENT-ERR-6)', () => {
+    renderForm(<CreatePostForm {...baseProps} isError errorText="Join this group to post here." />);
+    expect(screen.getByText('Join this group to post here.')).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't create post. Try again.")).not.toBeInTheDocument();
+  });
+
   describe('unsaved-changes guard (PROFILE-10)', () => {
     it('blocks in-app navigation while there is unsubmitted text, and Leave lets it through', async () => {
       const user = userEvent.setup();
