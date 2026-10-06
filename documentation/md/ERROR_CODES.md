@@ -185,4 +185,27 @@ A18 moved statuses the same way A11 did: permission failures 400 → 403, "alrea
 
 Not coded by A18: none of the post-module sites are left un-coded. Bean-validation failures on post and comment bodies use `VALIDATION_FAILED`. A deactivated caller gets no special answer from any of these endpoints (U12 known gap, no check added).
 
-Still to come: each remaining Phase B ticket (SESSION-45, REF-5, LOC-6, NTF-5) adds its section here.
+#### session (SESSION-45, `SessionServiceImpl`, `SessionController`, `SessionGate`, `SessionDetailGate`)
+
+SESSION-45 moved statuses the same way A11 and A18 did: permission failures 400 → 403, state conflicts 400 → 409, a missing pending join request 400 → 404. The session comment proxy reaches the post `COMMENT_*`/`POST_*` codes as well (see § post).
+
+| Code | Status | Params | When |
+|---|---|---|---|
+| `SESSION_NOT_FOUND` | 404 | none | Any session-scoped call (detail, comments, likes, join, leave, cancel, update, approve, reject) for a session that does not exist, or whose parent group is no longer active (gate paths). |
+| `SESSION_JOIN_REQUEST_NOT_FOUND` | 404 | none | Approve or reject for a user with no `REQUESTED` participant row (moved from 400 by SESSION-45). |
+| `SESSION_FORBIDDEN` | 403 | none | The session exists but the caller may not see it: `GET /api/sessions/{id}` (`SessionDetailGate`) and the comments/likes routes (`SessionGate`). |
+| `SESSION_GROUP_MEMBER_REQUIRED` | 403 | none | `GET /api/sessions/group/{id}` by a non-member; joining a group session as a non-member (moved from 400). |
+| `SESSION_GROUP_ADMIN_REQUIRED` | 403 | none | Creating a group session, or modifying, cancelling, approving or rejecting on one, without being group owner or admin (moved from 400). |
+| `SESSION_CREATOR_REQUIRED` | 403 | none | Modifying, cancelling, approving or rejecting on a standalone session without being its creator (moved from 400). |
+| `SESSION_CANCELLED` | 409 | none | Join, approve or reject on a cancelled session (moved from 400). |
+| `SESSION_NOT_CANCELLABLE` | 409 | `{status}` | Cancelling a session that is already `COMPLETED` or `CANCELLED` (moved from 400). |
+| `SESSION_NOT_PREPARING` | 409 | none | Changing `locationId`/`feeType` once the session is past `PREPARING` (moved from 400). |
+| `SESSION_NOT_PARTICIPANT` | 409 | none | Leaving a session the caller has no active participant row in (moved from 400). |
+| `SESSION_CREATOR_CANNOT_LEAVE` | 400 | none | The creator of a standalone session calls leave (cancel is their way out). |
+| `SESSION_SPORT_REQUIRED` | 400 | none | Creating a standalone session without `sportId`. |
+| `SESSION_LOCATION_SPORT_MISMATCH` | 400 | none | Create or update with a `locationId` whose sport differs from the session's. |
+| `SESSION_FEE_AMOUNT_REQUIRED` | 400 | none | `feeType` FIXED without `feeAmountVnd`. |
+
+Deliberately **not coded** (user decision, SESSION-45): the technical validation 400s — session attributes too large or unserializable, an invalid `viewerZoneId`, and the 11 `SessionController` query-parameter checks on upcoming/history/discover/counts. They keep their English `message`, the client shows the generic copy, and each throw site logs a `warn` with the offending value. A sport or location missing on create/update surfaces the `SPORT_NOT_FOUND` code (§ sport) or the location module's own error (LOC-6). A deactivated caller gets no special answer from any session endpoint (U12 known gap, no check added). A deleted group makes join/modify/cancel/approve answer a 403 group code rather than `SESSION_NOT_FOUND`, because the group membership check fails first.
+
+Still to come: each remaining Phase B ticket (REF-5, LOC-6, NTF-5) adds its section here.

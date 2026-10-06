@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.attributes.AttributeSchema;
 import com.sportconnect.common.attributes.value.AttributeValueFilter;
 import com.sportconnect.common.exception.BadRequestException;
+import com.sportconnect.common.exception.ConflictException;
+import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
@@ -163,14 +165,14 @@ public class SessionServiceImpl implements SessionService {
 
         if (groupId != null) {
             if (!groupService.canManageMembers(groupId, userId)) {
-                throw new BadRequestException("Only group owners and admins can create sessions for this group");
+                throw new ForbiddenException("SESSION_GROUP_ADMIN_REQUIRED", "Only group owners and admins can create sessions for this group", null);
             }
             GroupResponse group = groupService.getGroup(groupId, userId);
             sportId = request.getSportId() != null ? request.getSportId() : group.getSportId();
             sessionType = SessionType.GROUP_RECURRING;
         } else {
             if (request.getSportId() == null) {
-                throw new BadRequestException("sportId is required for a standalone session");
+                throw new BadRequestException("SESSION_SPORT_REQUIRED", "sportId is required for a standalone session", null);
             }
             sportId = request.getSportId();
             sessionType = SessionType.STANDALONE;
@@ -195,7 +197,7 @@ public class SessionServiceImpl implements SessionService {
         if (request.getLocationId() != null) {
             LocationResponse location = locationService.getLocation(request.getLocationId());
             if (!Objects.equals(location.getSportId(), sportId)) {
-                throw new BadRequestException("locationId does not match this session's sport");
+                throw new BadRequestException("SESSION_LOCATION_SPORT_MISMATCH", "locationId does not match this session's sport", null);
             }
         }
         SessionStatus initialStatus = (request.getLocationId() != null && request.getFeeType() != null)
@@ -296,7 +298,8 @@ public class SessionServiceImpl implements SessionService {
     public SessionResponse getSession(Long sessionId, UUID callerId) {
         Session session = sessionRepository.findById(sessionId).orElse(null);
         return toResponse(sessionDetailGate.require(session, callerId,
-                "Session not found", "You don't have access to this session"), callerId);
+                "SESSION_NOT_FOUND", "Session not found",
+                "SESSION_FORBIDDEN", "You don't have access to this session"), callerId);
     }
 
     /**
@@ -314,7 +317,7 @@ public class SessionServiceImpl implements SessionService {
     @Transactional(readOnly = true)
     public Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, Pageable pageable) {
         if (!groupService.isGroupMember(groupId, currentUserId)) {
-            throw new BadRequestException("Only group members can view this group's sessions");
+            throw new ForbiddenException("SESSION_GROUP_MEMBER_REQUIRED", "Only group members can view this group's sessions", null);
         }
         return toResponsePage(sessionRepository.findByGroupId(groupId, pageable), currentUserId);
     }
@@ -419,6 +422,7 @@ public class SessionServiceImpl implements SessionService {
         try {
             return ZoneId.of(viewerZoneId);
         } catch (DateTimeException e) {
+            log.warn("Rejected invalid viewerZoneId: {}", viewerZoneId);
             throw new BadRequestException("viewerZoneId is not a valid IANA zone id: " + viewerZoneId);
         }
     }
@@ -479,7 +483,7 @@ public class SessionServiceImpl implements SessionService {
         // before applying any field so a rejected request leaves the session fully untouched.
         if ((request.getLocationId() != null || request.getFeeType() != null)
                 && session.getStatus() != SessionStatus.PREPARING) {
-            throw new BadRequestException("locationId/feeType can only be changed while the session is PREPARING");
+            throw new ConflictException("SESSION_NOT_PREPARING", "locationId/feeType can only be changed while the session is PREPARING", null);
         }
 
         if (request.getTitle() != null) {
@@ -491,7 +495,7 @@ public class SessionServiceImpl implements SessionService {
         if (request.getLocationId() != null) {
             LocationResponse location = locationService.getLocation(request.getLocationId());
             if (!Objects.equals(location.getSportId(), session.getSportId())) {
-                throw new BadRequestException("locationId does not match this session's sport");
+                throw new BadRequestException("SESSION_LOCATION_SPORT_MISMATCH", "locationId does not match this session's sport", null);
             }
             session.setLocationId(request.getLocationId());
         }
@@ -586,9 +590,11 @@ public class SessionServiceImpl implements SessionService {
         try {
             byte[] json = objectMapper.writeValueAsBytes(attributes);
             if (json.length > MAX_ATTRIBUTES_BYTES) {
+                log.warn("Rejected session attributes: {} bytes exceeds the {}-byte limit", json.length, MAX_ATTRIBUTES_BYTES);
                 throw new BadRequestException("Session attributes exceed the maximum allowed size (4KB)");
             }
         } catch (JsonProcessingException e) {
+            log.warn("Rejected session attributes: could not serialize to JSON", e);
             throw new BadRequestException("Invalid session attributes");
         }
     }
@@ -598,7 +604,7 @@ public class SessionServiceImpl implements SessionService {
     private Long resolveFeeAmountVnd(FeeType feeType, Long candidateAmount) {
         if (feeType == FeeType.FIXED) {
             if (candidateAmount == null) {
-                throw new BadRequestException("feeAmountVnd is required when feeType is FIXED");
+                throw new BadRequestException("SESSION_FEE_AMOUNT_REQUIRED", "feeAmountVnd is required when feeType is FIXED", null);
             }
             return candidateAmount;
         }
@@ -611,7 +617,7 @@ public class SessionServiceImpl implements SessionService {
         Session session = findSessionOrThrow(sessionId);
         requireCanModify(session, userId);
         if (session.getStatus() == SessionStatus.COMPLETED || session.getStatus() == SessionStatus.CANCELLED) {
-            throw new BadRequestException("Cannot cancel a session that is already " + session.getStatus());
+            throw new ConflictException("SESSION_NOT_CANCELLABLE", "Cannot cancel a session that is already " + session.getStatus(), Map.of("status", session.getStatus().name()));
         }
 
         session.setStatus(SessionStatus.CANCELLED);
@@ -627,10 +633,10 @@ public class SessionServiceImpl implements SessionService {
     public void joinSession(Long sessionId, UUID userId) {
         Session session = findSessionOrThrow(sessionId);
         if (session.getStatus() == SessionStatus.CANCELLED) {
-            throw new BadRequestException("Cannot join a cancelled session");
+            throw new ConflictException("SESSION_CANCELLED", "Cannot join a cancelled session", null);
         }
         if (session.getGroupId() != null && !groupService.isGroupMember(session.getGroupId(), userId)) {
-            throw new BadRequestException("Only group members can join this session");
+            throw new ForbiddenException("SESSION_GROUP_MEMBER_REQUIRED", "Only group members can join this session", null);
         }
 
         Optional<SessionParticipant> existingParticipant = sessionParticipantRepository
@@ -696,7 +702,7 @@ public class SessionServiceImpl implements SessionService {
         // one too — their real ownership lever there is group role, not this participant row.
         Session session = findSessionOrThrow(sessionId);
         if (session.getGroupId() == null && userId.equals(session.getCreatedBy())) {
-            throw new BadRequestException("The creator cannot leave their own session — cancel it instead");
+            throw new BadRequestException("SESSION_CREATOR_CANNOT_LEAVE", "The creator cannot leave their own session — cancel it instead", null);
         }
 
         SessionParticipant participant = sessionParticipantRepository
@@ -704,7 +710,7 @@ public class SessionServiceImpl implements SessionService {
                 .filter(p -> p.getStatus() == ParticipantStatus.JOINED
                         || p.getStatus() == ParticipantStatus.INVITED
                         || p.getStatus() == ParticipantStatus.REQUESTED)
-                .orElseThrow(() -> new BadRequestException("Not currently a participant in this session"));
+                .orElseThrow(() -> new ConflictException("SESSION_NOT_PARTICIPANT", "Not currently a participant in this session", null));
         // SESSION-19: read BEFORE the flip below — the row is mutated in place, so after
         // setStatus(LEFT) there is no way left to tell which of the three allowed source states
         // this leave actually came from.
@@ -809,11 +815,11 @@ public class SessionServiceImpl implements SessionService {
         Long sessionId = session.getId();
         requireCanModify(session, callerId);
         if (session.getStatus() == SessionStatus.CANCELLED) {
-            throw new BadRequestException("Cannot approve or reject participants for a cancelled session");
+            throw new ConflictException("SESSION_CANCELLED", "Cannot approve or reject participants for a cancelled session", null);
         }
         return sessionParticipantRepository.findBySessionIdAndUserId(sessionId, userId)
                 .filter(p -> p.getStatus() == ParticipantStatus.REQUESTED)
-                .orElseThrow(() -> new BadRequestException("No pending join request for this user"));
+                .orElseThrow(() -> ResourceNotFoundException.coded("SESSION_JOIN_REQUEST_NOT_FOUND", "No pending join request for this user", null));
     }
 
     /**
@@ -1146,12 +1152,13 @@ public class SessionServiceImpl implements SessionService {
     private Session requireSessionAccess(Long sessionId, UUID callerId) {
         Session session = sessionRepository.findById(sessionId).orElse(null);
         return sessionGate.require(session, callerId,
-                "Session not found", "You don't have access to this session");
+                "SESSION_NOT_FOUND", "Session not found",
+                "SESSION_FORBIDDEN", "You don't have access to this session");
     }
 
     private Session findSessionOrThrow(Long sessionId) {
         return sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Session", "id", sessionId));
+                .orElseThrow(() -> ResourceNotFoundException.coded("SESSION_NOT_FOUND", "Session not found with id: '" + sessionId + "'", null));
     }
 
     /**
@@ -1190,10 +1197,10 @@ public class SessionServiceImpl implements SessionService {
     private void requireCanModify(Session session, UUID userId) {
         if (session.getGroupId() == null) {
             if (!session.getCreatedBy().equals(userId)) {
-                throw new BadRequestException("Only the creator can modify this session");
+                throw new ForbiddenException("SESSION_CREATOR_REQUIRED", "Only the creator can modify this session", null);
             }
         } else if (!groupService.canManageMembers(session.getGroupId(), userId)) {
-            throw new BadRequestException("Only group owners and admins can modify this session");
+            throw new ForbiddenException("SESSION_GROUP_ADMIN_REQUIRED", "Only group owners and admins can modify this session", null);
         }
     }
 

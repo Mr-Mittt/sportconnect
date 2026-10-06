@@ -24,6 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -239,7 +240,8 @@ class SessionAccessGateIntegrationTest extends BaseIT {
         authenticateAs(viewerId);
 
         mockMvc.perform(get("/api/sessions/group/{groupId}", groupId))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_MEMBER_REQUIRED"));
     }
 
     @Test
@@ -258,7 +260,8 @@ class SessionAccessGateIntegrationTest extends BaseIT {
         authenticateAs(viewerId);
 
         mockMvc.perform(get("/api/sessions/group/{groupId}", groupId))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_MEMBER_REQUIRED"));
     }
 
     @Test

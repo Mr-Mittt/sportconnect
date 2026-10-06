@@ -170,6 +170,7 @@ ownership-only), so there's nothing this module needs to wrap.
     sessions — its own repository method (`findHistoryDateCounts`) is this module's second native
     query (`ProcessedMessageRepository.insertIfAbsent` in `notification-impl` is the first;
     `GROUP BY`/`LIMIT` on a date cast has no portable JPQL form).
+- **Every user-reachable throw is a coded exception (SESSION-45), with the status the availability-vs-visibility rule demands:** gate 404 `SESSION_NOT_FOUND` / 403 `SESSION_FORBIDDEN` (both `SessionGate` and `SessionDetailGate` use the coded `ResourceGate.require` overload), permission failures 403 (`SESSION_GROUP_MEMBER_REQUIRED`, `SESSION_GROUP_ADMIN_REQUIRED`, `SESSION_CREATOR_REQUIRED`), state conflicts 409 (`SESSION_CANCELLED`, `SESSION_NOT_CANCELLABLE`, `SESSION_NOT_PREPARING`, `SESSION_NOT_PARTICIPANT`), input rules 400. Technical validation (attributes size, `viewerZoneId`, controller query-param checks) stays un-coded and logs a `warn`. New throw sites must register a code in `documentation/md/ERROR_CODES.md` § session; `SessionErrorCodesIntegrationTest` is the real-pipeline check.
 
 ## Gotchas
 

@@ -22,3 +22,5 @@ Phase C of the error-handling program for **session**, after SESSION-45 defines 
 **Tests:** Vitest/RTL per updated component or hook (code → localized text, unknown code → category copy → server prose), a `locale.spec.ts` or flow e2e case for the main flow in `vi`, scoped e2e; update `client/docs/E2E_OVERVIEW.md` if specs change.
 
 **On close:** update this ticket's row in the tracker table in `documentation/md/ERROR_HANDLING_DESIGN.md` (and the module's `BACKLOG_MVP.md`/`PROGRESS.md` as usual).
+
+**Carried over from SESSION-45 consumer census (2026-10-06):** the MSW session handlers in `client/e2e/mocks/handlers/sessions.ts` still return the pre-audit shapes (400 for "not a participant" ~line 871 and "no pending join request" ~lines 906/929, uncoded 404s for "Session not found"). SESSION-45 moves these to 409 `SESSION_NOT_PARTICIPANT`, 404 `SESSION_JOIN_REQUEST_NOT_FOUND` and a coded 404 `SESSION_NOT_FOUND`; update the mocks to the real codes/statuses in this ticket. The final code list is the `ERROR_CODES.md` § session registry.
