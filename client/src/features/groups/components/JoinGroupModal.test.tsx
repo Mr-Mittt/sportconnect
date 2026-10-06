@@ -152,6 +152,12 @@ describe('JoinGroupModal', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't send the request");
   });
 
+  it('shows the specific requestErrorText instead of the static line (CLIENT-ERR-5)', () => {
+    render(<JoinGroupModal {...baseProps} isRequestError requestErrorText="Already a member of this group." />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Already a member of this group.');
+    expect(screen.queryByText(/Couldn't send the request/)).not.toBeInTheDocument();
+  });
+
   it('shows an empty state when there are no grouped results (no matches, or zero sports selected)', () => {
     render(<JoinGroupModal {...baseProps} selectedSports={new Set()} groupedResults={[]} />);
     expect(screen.getByText('No groups found.')).toBeInTheDocument();

@@ -93,9 +93,12 @@ interface GroupSettingsTabProps {
   onUpdatePrivacy: (isPrivate: boolean) => void;
   isUpdatingPrivacy: boolean;
   isUpdatePrivacyError: boolean;
+  /** CLIENT-ERR-5: the specific localized line for a coded failure; each falls back to its static line. */
+  privacyErrorText?: string;
   onLeave: () => void;
   isLeaving: boolean;
   isLeaveError: boolean;
+  leaveErrorText?: string;
   onRequestDelete: () => void;
   /** GRP-2 — undefined while loading, per `useGroupSettings`. */
   groupSettings: GroupSettings | undefined;
@@ -115,6 +118,7 @@ interface GroupSettingsTabProps {
   onSaveSettings: () => void;
   isSavingSettings: boolean;
   isSaveSettingsError: boolean;
+  saveSettingsErrorText?: string;
   /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
@@ -153,9 +157,11 @@ export function GroupSettingsTab({
   onUpdatePrivacy,
   isUpdatingPrivacy,
   isUpdatePrivacyError,
+  privacyErrorText,
   onLeave,
   isLeaving,
   isLeaveError,
+  leaveErrorText,
   onRequestDelete,
   groupSettings,
   isSettingsLoading,
@@ -169,6 +175,7 @@ export function GroupSettingsTab({
   onSaveSettings,
   isSavingSettings,
   isSaveSettingsError,
+  saveSettingsErrorText,
   i18nOverridePrefix,
 }: GroupSettingsTabProps) {
   const t = useOverridableText('groups', i18nOverridePrefix);
@@ -233,7 +240,7 @@ export function GroupSettingsTab({
           </div>
           {isUpdatePrivacyError && (
             <p role="alert" className="-mt-2.5 text-2xs text-text-danger">
-              {t('settings.privacyError')}
+              {privacyErrorText ?? t('settings.privacyError')}
             </p>
           )}
           {!canEdit && (
@@ -329,7 +336,7 @@ export function GroupSettingsTab({
         <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
           {isSaveSettingsError ? (
             <p role="alert" className="text-2xs text-text-danger">
-              {t('settings.saveError')}
+              {saveSettingsErrorText ?? t('settings.saveError')}
             </p>
           ) : (
             <span />
@@ -356,7 +363,7 @@ export function GroupSettingsTab({
         )}
         {isLeaveError && (
           <p role="alert" className="mt-1.5 text-2xs text-text-danger">
-            {t('settings.leaveError')}
+            {leaveErrorText ?? t('settings.leaveError')}
           </p>
         )}
       </div>

@@ -20,3 +20,8 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 export const Submitting: Story = { args: { isSubmitting: true } };
 export const ErrorState: Story = { args: { isError: true } };
+
+/** CLIENT-ERR-5: a coded failure (403 `GROUP_OWNER_REQUIRED`) shows its specific line. */
+export const CodedErrorState: Story = {
+  args: { isError: true, errorText: 'Only the group owner can do this.' },
+};

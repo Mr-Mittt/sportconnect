@@ -184,5 +184,9 @@
   },
   "page": {
     "title": "Nhóm"
+  },
+  "actionError": {
+    "title": "Không thể hoàn tất thao tác",
+    "gotIt": "Đã hiểu"
   }
 }

@@ -128,7 +128,10 @@ current whenever I18N-4 itself finally gets scoped:**
 | Every page | Add sport (modal, session modals), reactivate nudge, status-confirm dialog | `useAddSportProfile` (via `getCodedErrorMessage` -> `errorText`) | CLIENT-ERR-4 (done 2026-10-05) |
 | `/friends` | Send / accept / decline / cancel friend request (toast) | `useSendFriendRequest`, `useAcceptFriendRequest`, `useDeclineFriendRequest`, `useCancelFriendRequest` | CLIENT-ERR-3 (done 2026-10-05) |
 | `/friends` | Unfriend dialog | `useUnfriend` (via `useFriendsPageData.unfriendErrorText`) | CLIENT-ERR-3 (done 2026-10-05) |
-| Groups page | Invite Friend modal | `useInviteFriendModalData` | CLIENT-ERR-5 |
+| Groups page | Invite Friend modal | `useInviteFriendModalData` | CLIENT-ERR-5 (done 2026-10-06) |
+| Groups page | Join Group modal | `useJoinGroupModalData` (`requestError` via `getCodedErrorMessage` -> `requestErrorText`) | CLIENT-ERR-5 (done 2026-10-06) |
+| Groups page | Create group modal, Delete group dialog, Settings tab (privacy, save, leave) | `GroupsPage` (`getCodedErrorMessage` -> `errorText` / `privacyErrorText` / `saveSettingsErrorText` / `leaveErrorText`) | CLIENT-ERR-5 (done 2026-10-06) |
+| Groups page | Join-request and invitation list actions (accept, decline, approve, reject, cancel) | `useGroupMembersTabData`, `useGroupInvitationsData` (`onActionError` -> `GroupActionErrorDialog`) | CLIENT-ERR-5 (done 2026-10-06) |
 | Admin | Sport fields editor | `useUpdateSport` | CLIENT-ERR-1 (shared classifier only; no vi copy) |
 | Admin | Sport attribute-schema editor | `useReplaceSportAttributeSchema` | CLIENT-ERR-1 (shared classifier only; no vi copy) |
 | Admin | Session attribute-schema editor | `useReplaceSessionAttributeSchema` | CLIENT-ERR-1 (shared classifier only; no vi copy) |

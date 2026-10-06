@@ -143,5 +143,6 @@ export function useJoinGroupModalData(
     requestToJoin,
     isRequesting: joinMutation.isPending,
     isRequestError: joinMutation.isError,
+    requestError: joinMutation.error,
   };
 }

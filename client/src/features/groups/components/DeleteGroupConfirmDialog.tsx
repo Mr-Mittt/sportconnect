@@ -8,6 +8,8 @@ interface DeleteGroupConfirmDialogProps {
   onConfirm: () => void;
   isSubmitting: boolean;
   isError: boolean;
+  /** CLIENT-ERR-5: the specific localized line for a coded failure; falls back to `deleteGroup.error`. */
+  errorText?: string;
   groupName: string;
   /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
@@ -24,6 +26,7 @@ export function DeleteGroupConfirmDialog({
   onConfirm,
   isSubmitting,
   isError,
+  errorText,
   groupName,
   i18nOverridePrefix,
 }: DeleteGroupConfirmDialogProps) {
@@ -37,7 +40,7 @@ export function DeleteGroupConfirmDialog({
         </p>
         {isError && (
           <p role="alert" className="mb-2 text-2sm text-text-danger">
-            {t('deleteGroup.error')}
+            {errorText ?? t('deleteGroup.error')}
           </p>
         )}
         <div className="flex justify-end gap-2">

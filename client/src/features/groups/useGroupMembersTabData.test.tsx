@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
+import { AxiosError, type AxiosResponse } from 'axios';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
-import type { GroupMember, PageResponse } from '@/features/feed/types';
+import type { GroupMember, JoinRequest, PageResponse } from '@/features/feed/types';
 import { useGroupMembersTabData } from './useGroupMembersTabData';
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -74,6 +75,40 @@ describe('useGroupMembersTabData', () => {
     expect(result.current.canManage).toBe(true);
     expect(getSpy).toHaveBeenCalledWith('/groups/1/join-requests', { params: { size: 100 } });
     expect(getSpy).toHaveBeenCalledWith('/groups/1/invitations', { params: { size: 100 } });
+  });
+
+  it('hands a failed accept / cancel to onActionError and refetches the lists (CLIENT-ERR-5)', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValue({
+      data: { success: true, message: '', data: emptyPage, timestamp: '' },
+    });
+    const failure = new AxiosError('conflict', 'ERR_BAD_REQUEST');
+    failure.response = {
+      status: 409,
+      data: { success: false, message: 'x', errorCode: 'GROUP_JOIN_REQUEST_NOT_PENDING' },
+    } as AxiosResponse;
+    vi.spyOn(apiClient, 'put').mockRejectedValue(failure);
+    vi.spyOn(apiClient, 'delete').mockRejectedValue(failure);
+    const onActionError = vi.fn();
+
+    const { result } = renderHook(
+      () => useGroupMembersTabData(1, true, 'group_owner', onActionError),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.isMembersLoading).toBe(false));
+    const readsBefore = getSpy.mock.calls.length;
+
+    result.current.acceptApprovalQueueItem({
+      type: 'join_request',
+      data: { id: 5 } as JoinRequest,
+    });
+    await waitFor(() => expect(onActionError).toHaveBeenCalledTimes(1));
+    // TanStack also passes the variables and context after the error.
+    expect(onActionError.mock.calls[0][0]).toBe(failure);
+    result.current.cancelInvitation(9);
+    await waitFor(() => expect(onActionError).toHaveBeenCalledTimes(2));
+    expect(onActionError.mock.calls[1][0]).toBe(failure);
+    // onSettled invalidates, so the stale row is re-read from the server.
+    await waitFor(() => expect(getSpy.mock.calls.length).toBeGreaterThan(readsBefore));
   });
 
   it('does not fetch anything while inactive', () => {

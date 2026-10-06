@@ -39,6 +39,11 @@ describe('DeleteGroupConfirmDialog', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't delete the group. Please try again.");
   });
 
+  it('shows the specific errorText instead of the static line (CLIENT-ERR-5)', () => {
+    render(<DeleteGroupConfirmDialog {...baseProps} isError errorText="Only the group owner can do this." />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Only the group owner can do this.');
+  });
+
   it('disables both buttons while submitting', () => {
     render(<DeleteGroupConfirmDialog {...baseProps} isSubmitting />);
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();

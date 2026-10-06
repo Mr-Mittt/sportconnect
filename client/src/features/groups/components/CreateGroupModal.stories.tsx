@@ -37,6 +37,15 @@ export const Submitting: Story = {
   args: { lockedSport: 'football', isSubmitting: true },
 };
 
+/** CLIENT-ERR-5: a coded failure (409 `GROUP_NAME_TAKEN`) shows its specific line, not the static one. */
+export const CodedErrorState: Story = {
+  args: {
+    lockedSport: 'football',
+    isError: true,
+    errorText: 'A group with this name already exists. Pick another name.',
+  },
+};
+
 export const ErrorState: Story = {
   args: { lockedSport: 'football', isError: true },
 };

@@ -25,6 +25,8 @@ interface JoinGroupModalProps {
   onRequestToJoin: (groupName: string) => void;
   isRequesting: boolean;
   isRequestError: boolean;
+  /** CLIENT-ERR-5: the specific localized line for a coded failure; falls back to `join.requestError`. */
+  requestErrorText?: string;
   /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
@@ -159,6 +161,7 @@ export function JoinGroupModal({
   onRequestToJoin,
   isRequesting,
   isRequestError,
+  requestErrorText,
   i18nOverridePrefix,
 }: JoinGroupModalProps) {
   const t = useOverridableText('groups', i18nOverridePrefix);
@@ -202,7 +205,7 @@ export function JoinGroupModal({
           {isSearchError && <p className="text-2sm text-text-danger">{t('join.loadError')}</p>}
           {isRequestError && (
             <p role="alert" className="mb-2.5 text-2sm text-text-danger">
-              {t('join.requestError')}
+              {requestErrorText ?? t('join.requestError')}
             </p>
           )}
           {!isSearching && !isSearchError && groupedResults.length === 0 && (

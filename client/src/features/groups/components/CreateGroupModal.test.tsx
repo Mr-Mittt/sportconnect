@@ -100,6 +100,12 @@ describe('CreateGroupModal', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't create the group");
   });
 
+  it('shows the specific errorText instead of the static line (CLIENT-ERR-5)', () => {
+    render(<CreateGroupModal {...baseProps} isError errorText="A group with this name already exists. Pick another name." />);
+    expect(screen.getByRole('alert')).toHaveTextContent('A group with this name already exists');
+    expect(screen.queryByText(/Couldn't create the group/)).not.toBeInTheDocument();
+  });
+
   it('pre-fills the name field from initialGroupName (GRP-1)', () => {
     render(<CreateGroupModal {...baseProps} lockedSport="football" initialGroupName="Riverside Ballers" />);
     expect(screen.getByLabelText('Group name')).toHaveValue('Riverside Ballers');
