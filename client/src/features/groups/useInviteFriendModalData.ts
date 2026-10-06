@@ -6,6 +6,7 @@ import { useSentInvitations } from '@/features/feed/hooks/useSentInvitations';
 import { useSendGroupInvitation } from '@/features/feed/hooks/useSendGroupInvitation';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { getApiError, getErrorMessage } from '@/shared/lib/apiError';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import type { UserSearchResult } from '@/features/friends/types';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -63,6 +64,11 @@ export function useInviteFriendModalData(
   groupId: number | undefined,
   isOpen: boolean,
   initialQuery: string,
+  /** CLIENT-ERR-5: called instead of setting the row's inline error when the failure has a server
+   * code the client has copy for; the page shows it in `GroupActionErrorDialog` (a pop-up with
+   * "Got it", not a line in the modal). Uncoded failures (network, 5xx, unknown) keep the row's
+   * inline line. The lists reload on settle either way (`useSendGroupInvitation`). */
+  onCodedError?: (error: unknown) => void,
 ) {
   const [inputValue, setInputValue] = useState('');
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
@@ -149,6 +155,10 @@ export function useInviteFriendModalData(
     });
     sendMutation.mutate(userId, {
       onError: (error) => {
+        if (onCodedError !== undefined && getCodedErrorMessage(error) !== undefined) {
+          onCodedError(error);
+          return;
+        }
         setErrorsByUserId((previous) => ({ ...previous, [userId]: extractErrorMessage(error) }));
       },
       onSettled: () => {

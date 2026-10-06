@@ -298,12 +298,14 @@ export function GroupsPage() {
     lockedSport,
     data.sportProfiles,
     isJoinGroupOpen,
+    showActionError,
   );
   // GRP-4
   const inviteFriendModalData = useInviteFriendModalData(
     selectedGroupId ?? undefined,
     isInviteFriendOpen,
     inviteFriendQuery,
+    showActionError,
   );
 
   const sportsByKey = useMemo(
@@ -894,7 +896,6 @@ export function GroupsPage() {
           onRequestToJoin={joinGroupModalData.requestToJoin}
           isRequesting={joinGroupModalData.isRequesting}
           isRequestError={joinGroupModalData.isRequestError}
-          requestErrorText={getCodedErrorMessage(joinGroupModalData.requestError)}
         />
         <InviteFriendModal
           isOpen={isInviteFriendOpen}

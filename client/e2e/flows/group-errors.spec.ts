@@ -46,7 +46,7 @@ async function forceFailure(
 
 /** Asserts the shared error dialog's text, that no toast appeared, then dismisses it with "Got it". */
 async function expectErrorDialog(page: Page, text: string) {
-  const dialog = page.getByRole('dialog');
+  const dialog = page.getByRole('dialog', { name: "Couldn't complete that" });
   await expect(dialog.getByRole('alert')).toHaveText(text);
   await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Got it' }).click();
@@ -99,7 +99,7 @@ test('the same failure in vi', async ({ page }) => {
   await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('Yêu cầu tham gia này đã được xử lý.');
 });
 
-test('Invite friend shows the member-invites-disabled error on the row and keeps the dialog open', async ({
+test('Invite friend shows the member-invites-disabled error in a pop-up and keeps the modal open', async ({
   page,
 }) => {
   await page.route(/\/api\/groups\/\d+\/invitations$/, (route) =>
@@ -115,14 +115,16 @@ test('Invite friend shows the member-invites-disabled error on the row and keeps
   await expect(dialog.getByText('Priya Shah')).toBeVisible();
   await dialog.getByRole('button', { name: 'Invite' }).click();
 
-  await expect(dialog.getByRole('alert')).toHaveText("Members can't invite people to this group.");
+  await expectErrorDialog(page, "Members can't invite people to this group.");
+  // The pop-up sits on top of the Invite Friend modal; closing it leaves the modal as it was.
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Invite' })).toBeVisible();
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
 });
 
 /* ---- The rest of the approved behavior table (en only; vi is proven once above) ---- */
 
-test('Join Group modal shows the already-pending error and stays open', async ({ page }) => {
+test('Join Group modal shows the already-pending error in a pop-up and stays open', async ({ page }) => {
   await forceFailure(page, /\/api\/groups\/join-requests$/, 'POST', 409, 'GROUP_JOIN_REQUEST_ALREADY_PENDING');
   await seedAuthenticatedSession(page, '/groups');
 
@@ -131,14 +133,21 @@ test('Join Group modal shows the already-pending error and stays open', async ({
   await dialog.getByLabel('Search groups').fill('Riverside');
   await dialog.getByRole('button', { name: 'Search' }).click();
   // The MSW search reads a single sportId, so narrow the filter to the group's sport (Pickleball).
-  await dialog.getByRole('button', { name: 'Badminton' }).click();
+  // Force the filter to Pickleball only. The pills are seeded once, when the modal opens: from the user's
+  // profiles (both on) if they have loaded by then, otherwise from an empty set (both off), so set each
+  // pill to the state we need rather than toggling blindly.
+  const badminton = dialog.getByRole('button', { name: 'Badminton' });
+  const pickleball = dialog.getByRole('button', { name: 'Pickleball' });
+  if ((await badminton.getAttribute('aria-pressed')) === 'true') await badminton.click();
+  if ((await pickleball.getAttribute('aria-pressed')) !== 'true') await pickleball.click();
+  await expect(badminton).toHaveAttribute('aria-pressed', 'false');
+  await expect(pickleball).toHaveAttribute('aria-pressed', 'true');
   await dialog.getByRole('button', { name: 'Search' }).click();
   await dialog.getByRole('button', { name: 'Request to join' }).click();
 
-  await expect(dialog.getByRole('alert')).toHaveText(
-    "You've already asked to join this group. It's waiting for approval.",
-  );
+  await expectErrorDialog(page, "You've already asked to join this group. It's waiting for approval.");
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
 });
 
 test('Create group with a taken name shows the specific error and keeps the form', async ({ page }) => {

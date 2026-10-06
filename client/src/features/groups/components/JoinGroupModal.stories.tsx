@@ -94,16 +94,6 @@ export const SearchErrorState: Story = {
   args: { inputValue: 'club', isSearchError: true },
 };
 
-/** CLIENT-ERR-5: a coded failure (409 `GROUP_JOIN_REQUEST_ALREADY_PENDING`) shows its specific line. */
-export const CodedRequestErrorState: Story = {
-  args: {
-    inputValue: 'club',
-    groupedResults,
-    isRequestError: true,
-    requestErrorText: "You've already asked to join this group. It's waiting for approval.",
-  },
-};
-
 export const RequestErrorState: Story = {
   args: { inputValue: 'club', groupedResults, isRequestError: true },
 };
