@@ -34,6 +34,7 @@ import java.util.UUID;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -468,13 +469,14 @@ class SessionPostAccessGateIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void unlikeSession_notCurrentlyLiked_returnsBadRequest() throws Exception {
+    void unlikeSession_notCurrentlyLiked_returnsConflictPostNotLiked() throws Exception {
         Long postId = createSessionPostAnchor();
         Long sessionId = createSession(null, postId);
         addParticipant(sessionId, creatorId, ParticipantStatus.JOINED);
         authenticateAs(creatorId);
 
         mockMvc.perform(delete("/api/sessions/{sessionId}/like", sessionId))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("POST_NOT_LIKED"));
     }
 }

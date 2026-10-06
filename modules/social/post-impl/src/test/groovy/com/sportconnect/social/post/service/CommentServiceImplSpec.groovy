@@ -2,6 +2,7 @@ package com.sportconnect.social.post.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.social.post.access.PostGate
@@ -94,7 +95,7 @@ class CommentServiceImplSpec extends Specification {
 
         then: "post exists"
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         1 * commentRepository.save(_ as Comment) >> savedComment
         1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":comments"])
         // countByCommentId called once from mapToResponse, once from buildPreviewResponse in addToPreviewCache
@@ -128,7 +129,7 @@ class CommentServiceImplSpec extends Specification {
 
         then: "post not found"
         1 * postRepository.findById(postId) >> Optional.empty()
-        1 * postGate.require(null, userId, _, _) >> { throw new NotFoundException("Post not found") }
+        1 * postGate.require(null, userId, _, _, _, _) >> { throw new NotFoundException("Post not found") }
 
         and: "exception is thrown"
         thrown(NotFoundException)
@@ -148,7 +149,7 @@ class CommentServiceImplSpec extends Specification {
 
         then: "post exists but is not visible"
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+        1 * postGate.require(post, userId, _, _, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
 
         and: "exception is thrown"
         thrown(ForbiddenException)
@@ -187,7 +188,7 @@ class CommentServiceImplSpec extends Specification {
 
         then: "post and parent comment exist"
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         // SESSION-21 replaced existsById with findById here — the reply guard needs the parent's commentType
         1 * commentRepository.findById(parentCommentId) >> Optional.of(
                 Comment.builder().id(parentCommentId).postId(postId).isActive(true).build())
@@ -218,12 +219,13 @@ class CommentServiceImplSpec extends Specification {
 
         then: "post exists but parent comment not found"
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         // SESSION-21 replaced existsById with findById here — same not-found outcome
         1 * commentRepository.findById(parentCommentId) >> Optional.empty()
 
         and: "exception is thrown"
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'COMMENT_PARENT_NOT_FOUND'
     }
 
     def "getPostComments should return paginated comments"() {
@@ -255,7 +257,7 @@ class CommentServiceImplSpec extends Specification {
 
         then: "post is active"
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
 
         and: "comments are retrieved"
         1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> page
@@ -280,7 +282,7 @@ class CommentServiceImplSpec extends Specification {
 
         then: "post not found as active"
         1 * postRepository.findById(postId) >> Optional.empty()
-        1 * postGate.require(null, userId, _, _) >> { throw new NotFoundException("Post not found") }
+        1 * postGate.require(null, userId, _, _, _, _) >> { throw new NotFoundException("Post not found") }
 
         and: "exception is thrown"
         thrown(NotFoundException)
@@ -296,7 +298,7 @@ class CommentServiceImplSpec extends Specification {
 
         then: "post exists but is not visible"
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+        1 * postGate.require(post, userId, _, _, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
 
         and: "exception is thrown"
         thrown(ForbiddenException)
@@ -329,7 +331,8 @@ class CommentServiceImplSpec extends Specification {
         1 * commentRepository.findById(commentId) >> Optional.empty()
 
         and: "exception is thrown"
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'COMMENT_NOT_FOUND'
     }
 
     def "deleteComment should throw BadRequestException when user is not owner"() {
@@ -349,7 +352,8 @@ class CommentServiceImplSpec extends Specification {
         1 * commentRepository.findById(commentId) >> Optional.of(comment)
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'COMMENT_DELETE_FORBIDDEN'
     }
 
     def "likeComment should create like when not already liked"() {
@@ -363,7 +367,7 @@ class CommentServiceImplSpec extends Specification {
         then: "like is created"
         1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
         1 * commentLikeRepository.save(_ as CommentLike) >> new CommentLike()
         1 * stringRedisTemplate.execute(_ as RedisScript, ["comment:" + commentId + ":likes"])
@@ -377,7 +381,8 @@ class CommentServiceImplSpec extends Specification {
         1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.empty()
 
         and: "exception is thrown"
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'COMMENT_NOT_FOUND'
     }
 
     def "likeComment should throw ForbiddenException when caller cannot view the parent post"() {
@@ -391,7 +396,7 @@ class CommentServiceImplSpec extends Specification {
         then: "comment exists but its post is not visible"
         1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+        1 * postGate.require(post, userId, _, _, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
 
         and: "exception is thrown"
         thrown(ForbiddenException)
@@ -408,11 +413,12 @@ class CommentServiceImplSpec extends Specification {
         then: "comment exists and is already liked"
         1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> true
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'COMMENT_ALREADY_LIKED'
     }
 
     def "unlikeComment should remove like when liked"() {
@@ -426,7 +432,7 @@ class CommentServiceImplSpec extends Specification {
         then: "like is removed"
         1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> true
         1 * commentLikeRepository.deleteByCommentIdAndUserId(commentId, userId)
         1 * stringRedisTemplate.execute(_ as RedisScript, ["comment:" + commentId + ":likes"])
@@ -440,7 +446,8 @@ class CommentServiceImplSpec extends Specification {
         1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.empty()
 
         and: "exception is thrown"
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'COMMENT_NOT_FOUND'
     }
 
     def "unlikeComment should throw BadRequestException when not liked"() {
@@ -454,11 +461,12 @@ class CommentServiceImplSpec extends Specification {
         then: "comment is not liked"
         1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(comment)
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         1 * commentLikeRepository.existsByCommentIdAndUserId(commentId, userId) >> false
 
         and: "exception is thrown"
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'COMMENT_NOT_LIKED'
     }
 
     def "getPostComments should include nested replies, batched not per-comment"() {
@@ -497,7 +505,7 @@ class CommentServiceImplSpec extends Specification {
 
         then: "post is active, root comments and their replies are each fetched once for the whole page"
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([parentComment])
         1 * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc([1L]) >> [replyComment]
         // both parent and reply are authored by the same user here — one batched call covers both
@@ -533,7 +541,7 @@ class CommentServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([comment])
         valueOps.get("comment:" + commentId + ":likes") >> "4"
         valueOps.get("comment:" + commentId + ":replies") >> "6"
@@ -565,7 +573,7 @@ class CommentServiceImplSpec extends Specification {
 
         then: "post is active"
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
 
         and: "comments are retrieved, but the author id resolves to nothing (deleted/missing user)"
         1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([comment])
@@ -614,7 +622,8 @@ class CommentServiceImplSpec extends Specification {
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.empty()
         0 * postGate._
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'POST_NOT_FOUND'
     }
 
     def "createSessionComment throws NotFoundException when the post exists but isn't a SESSION_POST"() {
@@ -629,7 +638,8 @@ class CommentServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * postGate._
         0 * commentRepository.save(_)
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'POST_NOT_FOUND'
     }
 
     def "getSessionPostComments bypasses PostGate, only checks the post is an active SESSION_POST"() {
@@ -666,7 +676,8 @@ class CommentServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * postGate._
         0 * commentRepository._
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'POST_NOT_FOUND'
     }
 
     def "likeSessionComment bypasses PostGate, only checks the comment belongs to the given SESSION_POST"() {
@@ -712,7 +723,8 @@ class CommentServiceImplSpec extends Specification {
         0 * postRepository._
         0 * postGate._
         0 * commentLikeRepository._
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'COMMENT_NOT_FOUND'
     }
 
     def "unlikeSessionComment bypasses PostGate, only checks the comment belongs to the given SESSION_POST"() {
@@ -744,7 +756,8 @@ class CommentServiceImplSpec extends Specification {
         0 * postRepository._
         0 * postGate._
         0 * commentLikeRepository._
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'COMMENT_NOT_FOUND'
     }
 
     // ── SESSION-21 system comments ────────────────────────────────────────────
@@ -839,7 +852,8 @@ class CommentServiceImplSpec extends Specification {
         then: "all-or-nothing — nothing is written"
         1 * postRepository.findByIdInAndIsActiveTrue([1L, 2L]) >> posts
         0 * commentRepository.saveAll(_)
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'POST_NOT_FOUND'
     }
 
     def "deleteComment refuses a system comment even for its nominal author"() {
@@ -854,7 +868,9 @@ class CommentServiceImplSpec extends Specification {
         then:
         1 * commentRepository.findById(commentId) >> Optional.of(systemComment)
         0 * commentRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'COMMENT_SYSTEM_READONLY'
+        e.errorParams == [action: 'delete']
     }
 
     def "createSessionComment refuses to reply to a system comment"() {
@@ -871,7 +887,9 @@ class CommentServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         1 * commentRepository.findById(99L) >> Optional.of(systemComment)
         0 * commentRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'COMMENT_SYSTEM_READONLY'
+        e.errorParams == [action: 'reply']
     }
 
     def "session-proxy #method refuses a system comment"() {
@@ -888,7 +906,9 @@ class CommentServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * commentLikeRepository.save(_)
         0 * commentLikeRepository.deleteByCommentIdAndUserId(_, _)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'COMMENT_SYSTEM_READONLY'
+        e.errorParams == [action: 'like']
 
         where:
         method << ["likeSessionComment", "unlikeSessionComment"]
@@ -906,10 +926,12 @@ class CommentServiceImplSpec extends Specification {
         then:
         1 * commentRepository.findByIdAndIsActiveTrue(commentId) >> Optional.of(systemComment)
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         0 * commentLikeRepository.save(_)
         0 * commentLikeRepository.deleteByCommentIdAndUserId(_, _)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'COMMENT_SYSTEM_READONLY'
+        e.errorParams == [action: 'like']
 
         where:
         method << ["likeComment", "unlikeComment"]
