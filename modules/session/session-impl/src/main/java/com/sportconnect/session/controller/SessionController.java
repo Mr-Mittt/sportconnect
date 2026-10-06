@@ -23,6 +23,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -46,6 +47,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/sessions")
 @RequiredArgsConstructor
@@ -61,10 +63,19 @@ public class SessionController {
     private static final Set<SessionStatus> DISCOVERABLE_STATUSES =
             Set.of(SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING);
 
+    /** Builds the un-coded 400 for a technical query-parameter validation failure (SESSION-45: the
+     * client never produces these, so no error code - the English message is the generic answer)
+     * and logs it so a bad caller can be investigated from the server log. */
+    private static BadRequestException invalidRequest(String message) {
+        log.warn("Rejected session request parameters: {}", message);
+        return new BadRequestException(message);
+    }
+
     @Operation(summary = "Create a session", description = "groupId omitted → standalone (any user). groupId set → owner/admin of that group only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Session created"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, not permitted, or locationId's sport doesn't match"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed (SESSION_SPORT_REQUIRED, SESSION_LOCATION_SPORT_MISMATCH, SESSION_FEE_AMOUNT_REQUIRED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin of the group (SESSION_GROUP_ADMIN_REQUIRED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PostMapping
@@ -96,7 +107,7 @@ public class SessionController {
     @Operation(summary = "List a group's sessions", description = "SESSION-40: member-only regardless of the group's own public/private flag (widened 2026-09-22 from the previous private-group-only gate, which left a public group's sessions listable by any authenticated user).")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Caller is not a member of this group")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Caller is not a member of this group (SESSION_GROUP_MEMBER_REQUIRED)")
     })
     @GetMapping("/group/{groupId}")
     @PreAuthorize("hasRole('USER')")
@@ -124,7 +135,7 @@ public class SessionController {
             @RequestParam(required = false) Long sportId,
             @PageableDefault(size = 20) Pageable pageable) {
         if (date == null && viewerZoneId != null) {
-            throw new BadRequestException("viewerZoneId is only valid alongside date");
+            throw invalidRequest("viewerZoneId is only valid alongside date");
         }
         Page<SessionResponse> response = sessionService.getUpcomingSessions(
                 SecurityUtils.extractUserId(authentication), date, viewerZoneId, sportId, pageable);
@@ -163,13 +174,13 @@ public class SessionController {
             @RequestParam Long sportId,
             @PageableDefault(size = 20) Pageable pageable) {
         if ((date == null) == (dateCount == null)) {
-            throw new BadRequestException("Exactly one of date or dateCount is required");
+            throw invalidRequest("Exactly one of date or dateCount is required");
         }
         if (dateCount == null && before != null) {
-            throw new BadRequestException("before is only valid alongside dateCount");
+            throw invalidRequest("before is only valid alongside dateCount");
         }
         if (dateCount != null && dateCount <= 0) {
-            throw new BadRequestException("dateCount must be positive");
+            throw invalidRequest("dateCount must be positive");
         }
 
         UUID userId = SecurityUtils.extractUserId(authentication);
@@ -205,13 +216,13 @@ public class SessionController {
             @RequestParam(required = false) List<SessionStatus> status,
             @PageableDefault(size = 10) Pageable pageable) {
         if (minOpenSlots != null && minOpenSlots < 0) {
-            throw new BadRequestException("minOpenSlots must be >= 0");
+            throw invalidRequest("minOpenSlots must be >= 0");
         }
         if (maxFeeAmountVnd != null && maxFeeAmountVnd < 0) {
-            throw new BadRequestException("maxFeeAmountVnd must be >= 0");
+            throw invalidRequest("maxFeeAmountVnd must be >= 0");
         }
         if (status != null && !DISCOVERABLE_STATUSES.containsAll(status)) {
-            throw new BadRequestException("status must be one of PREPARING, SCHEDULED, ONGOING");
+            throw invalidRequest("status must be one of PREPARING, SCHEDULED, ONGOING");
         }
 
         Page<SessionResponse> response = sessionService.discoverSessions(
@@ -247,16 +258,16 @@ public class SessionController {
             @RequestParam(required = false) String viewerZoneId,
             @RequestParam(required = false) List<SessionStatus> status) {
         if (minOpenSlots != null && minOpenSlots < 0) {
-            throw new BadRequestException("minOpenSlots must be >= 0");
+            throw invalidRequest("minOpenSlots must be >= 0");
         }
         if (maxFeeAmountVnd != null && maxFeeAmountVnd < 0) {
-            throw new BadRequestException("maxFeeAmountVnd must be >= 0");
+            throw invalidRequest("maxFeeAmountVnd must be >= 0");
         }
         if (status != null && !DISCOVERABLE_STATUSES.containsAll(status)) {
-            throw new BadRequestException("status must be one of PREPARING, SCHEDULED, ONGOING");
+            throw invalidRequest("status must be one of PREPARING, SCHEDULED, ONGOING");
         }
         if (date != null && date.size() > MAX_DISCOVER_COUNT_DATES) {
-            throw new BadRequestException("date accepts at most " + MAX_DISCOVER_COUNT_DATES + " values");
+            throw invalidRequest("date accepts at most " + MAX_DISCOVER_COUNT_DATES + " values");
         }
 
         SessionDiscoverDateCountsResponse response = sessionService.getSessionDiscoverDateCounts(
@@ -284,7 +295,8 @@ public class SessionController {
     @Operation(summary = "Update a session", description = "Standalone → creator only. Group-linked → owner/admin only. Partial update.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, not permitted, or locationId's sport doesn't match"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or locationId/feeType changed outside PREPARING (409 SESSION_NOT_PREPARING)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the creator / not a group owner or admin (SESSION_CREATOR_REQUIRED, SESSION_GROUP_ADMIN_REQUIRED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
     })
@@ -302,7 +314,8 @@ public class SessionController {
     @Operation(summary = "Cancel a session", description = "Same gating as update. Soft action — the row is kept with status=CANCELLED. Rejected if already completed or cancelled.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session cancelled"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not permitted, or already completed/cancelled"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the creator / not a group owner or admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Already completed or cancelled (SESSION_NOT_CANCELLABLE)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
     })
@@ -320,7 +333,8 @@ public class SessionController {
     @Operation(summary = "Join a session", description = "Group-linked sessions require group membership; standalone is open.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Joined"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not a group member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a group member (SESSION_GROUP_MEMBER_REQUIRED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Session is cancelled (SESSION_CANCELLED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
     })
@@ -336,7 +350,8 @@ public class SessionController {
     @Operation(summary = "Leave a session", description = "Also doubles as declining an INVITED row or cancelling the caller's own REQUESTED row (SESSION-9) — same endpoint, just a different button label client-side depending on the caller's current status.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Left / declined / cancelled"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not currently a participant (no row, or already LEFT)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "The creator of a standalone session cannot leave (SESSION_CREATOR_CANNOT_LEAVE)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Not currently a participant (SESSION_NOT_PARTICIPANT)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @DeleteMapping("/{sessionId}/leave")
@@ -368,7 +383,9 @@ public class SessionController {
     @Operation(summary = "Approve a REQUESTED participant", description = "Same gating as cancelSession/updateSession. Rejected if the session is CANCELLED or the user has no REQUESTED row.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Approved"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not permitted, session cancelled, or no pending request for this user")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the creator / not a group owner or admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found, or no pending request for this user (SESSION_JOIN_REQUEST_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Session is cancelled (SESSION_CANCELLED)")
     })
     @PostMapping("/{sessionId}/participants/{userId}/approve")
     @PreAuthorize("hasRole('USER')")
@@ -383,7 +400,9 @@ public class SessionController {
     @Operation(summary = "Reject a REQUESTED participant", description = "Same gating/exceptions as approve. Optional reason persisted on the participant row.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Rejected"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not permitted, session cancelled, or no pending request for this user")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the creator / not a group owner or admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found, or no pending request for this user (SESSION_JOIN_REQUEST_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Session is cancelled (SESSION_CANCELLED)")
     })
     @PostMapping("/{sessionId}/participants/{userId}/reject")
     @PreAuthorize("hasRole('USER')")

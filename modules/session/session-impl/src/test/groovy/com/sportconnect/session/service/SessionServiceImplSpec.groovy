@@ -4,6 +4,7 @@ import com.sportconnect.common.attributes.AttributeGroup
 import com.sportconnect.common.attributes.AttributeSchema
 import com.sportconnect.common.attributes.node.StringAttribute
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.common.exception.ResourceNotFoundException
@@ -164,7 +165,8 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * groupService.canManageMembers(5L, userId) >> false
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_ADMIN_REQUIRED'
         0 * sessionRepository.save(_)
     }
 
@@ -498,7 +500,8 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * groupService.isGroupMember(5L, userId) >> false
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_MEMBER_REQUIRED'
         0 * sessionRepository.findByGroupId(*_)
     }
 
@@ -527,7 +530,8 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_CREATOR_REQUIRED'
     }
 
     def "updateSession for a group-linked session requires canManageMembers"() {
@@ -541,7 +545,8 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * groupService.canManageMembers(5L, userId) >> false
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_ADMIN_REQUIRED'
     }
 
     def "cancelSession rejects cancelling a completed session"() {
@@ -554,7 +559,8 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_NOT_CANCELLABLE'
         0 * sessionRepository.save(_)
     }
 
@@ -568,7 +574,8 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_NOT_CANCELLABLE'
         0 * sessionRepository.save(_)
     }
 
@@ -605,7 +612,8 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * groupService.canManageMembers(5L, userId) >> false
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_ADMIN_REQUIRED'
         0 * sessionRepository.save(_)
     }
 
@@ -621,7 +629,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(99L) >> Optional.empty()
-        1 * sessionDetailGate.require(null, callerId, _, _) >> { throw new NotFoundException("Session not found") }
+        1 * sessionDetailGate.require(null, callerId, _, _, _, _) >> { throw new NotFoundException("SESSION_NOT_FOUND", "Session not found", null) }
         thrown(NotFoundException)
     }
 
@@ -635,7 +643,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionDetailGate.require(session, callerId, _, _) >> { throw new ForbiddenException("You don't have access to this session") }
+        1 * sessionDetailGate.require(session, callerId, _, _, _, _) >> { throw new ForbiddenException("SESSION_FORBIDDEN", "You don't have access to this session", null) }
         thrown(ForbiddenException)
     }
 
@@ -652,7 +660,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionDetailGate.require(session, callerId, _, _) >> session
+        1 * sessionDetailGate.require(session, callerId, _, _, _, _) >> session
         1 * sessionParticipantRepository.findBySessionIdInAndUserId([1L], callerId) >> [ownRow]
         response.callerParticipation.status == ParticipantStatus.REQUESTED
         response.callerParticipation.id == 9L
@@ -671,7 +679,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionDetailGate.require(session, callerId, _, _) >> session
+        1 * sessionDetailGate.require(session, callerId, _, _, _, _) >> session
         1 * sessionParticipantRepository.findBySessionIdInAndUserId([1L], callerId) >> []
         response.callerParticipation == null
     }
@@ -687,7 +695,8 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         0 * groupService._
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_CANCELLED'
         0 * sessionParticipantRepository.save(_)
     }
 
@@ -702,7 +711,8 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * groupService.isGroupMember(5L, userId) >> false
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_MEMBER_REQUIRED'
         0 * sessionParticipantRepository.save(_)
     }
 
@@ -875,7 +885,8 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_NOT_PARTICIPANT'
     }
 
     def "leaveSession rejects a row that's already LEFT"() {
@@ -890,7 +901,8 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_NOT_PARTICIPANT'
         0 * sessionParticipantRepository.save(_)
     }
 
@@ -1000,7 +1012,8 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_CREATOR_REQUIRED'
         0 * sessionParticipantRepository.findBySessionIdAndStatus(*_)
     }
 
@@ -1068,7 +1081,8 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
-        thrown(BadRequestException)
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == 'SESSION_JOIN_REQUEST_NOT_FOUND'
         0 * sessionParticipantRepository.save(_)
     }
 
@@ -1085,7 +1099,8 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(participant)
-        thrown(BadRequestException)
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == 'SESSION_JOIN_REQUEST_NOT_FOUND'
         0 * sessionParticipantRepository.save(_)
     }
 
@@ -1100,7 +1115,8 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_CANCELLED'
         0 * sessionParticipantRepository.findBySessionIdAndUserId(_, _)
     }
 
@@ -1155,7 +1171,8 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * groupService.canManageMembers(5L, callerId) >> false
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_ADMIN_REQUIRED'
         0 * sessionParticipantRepository.findBySessionIdAndUserId(_, _)
     }
 
@@ -2410,7 +2427,8 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_NOT_PREPARING'
         0 * sessionRepository.save(_)
     }
 
@@ -2427,7 +2445,8 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_NOT_PREPARING'
         0 * sessionRepository.save(_)
         0 * locationService.getLocation(_)
     }
@@ -2631,7 +2650,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * sessionGate.require(session, userId, _, _, _, _) >> session
         1 * commentService.createSessionComment(999L, userId, request) >> response
         result == response
     }
@@ -2648,7 +2667,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * sessionGate.require(session, userId, _, _, _, _) >> session
         1 * commentService.createSessionComment(999L, userId, request) >> response
         1 * sessionOutboxWriter.record("session.comment.created", { SessionCommentCreatedEvent e ->
             e.sessionId == 1L && e.actorId == userId && e.commentId == 5L
@@ -2666,7 +2685,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionGate.require(session, userId, _, _) >> { throw new ForbiddenException("You don't have access to this session's comments") }
+        1 * sessionGate.require(session, userId, _, _, _, _) >> { throw new ForbiddenException("SESSION_FORBIDDEN", "You don't have access to this session's comments", null) }
         0 * commentService._
         thrown(ForbiddenException)
     }
@@ -2681,7 +2700,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(999L) >> Optional.empty()
-        1 * sessionGate.require(null, userId, _, _) >> { throw new NotFoundException("Session not found") }
+        1 * sessionGate.require(null, userId, _, _, _, _) >> { throw new NotFoundException("SESSION_NOT_FOUND", "Session not found", null) }
         0 * commentService._
         thrown(NotFoundException)
     }
@@ -2698,7 +2717,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionGate.require(session, callerId, _, _) >> session
+        1 * sessionGate.require(session, callerId, _, _, _, _) >> session
         1 * commentService.getSessionPostComments(999L, callerId, pageable) >> page
         result == page
     }
@@ -2713,7 +2732,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * sessionGate.require(session, userId, _, _, _, _) >> session
         1 * commentService.likeSessionComment(999L, 5L, userId)
     }
 
@@ -2727,7 +2746,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * sessionGate.require(session, userId, _, _, _, _) >> session
         1 * commentService.unlikeSessionComment(999L, 5L, userId)
     }
 
@@ -2743,7 +2762,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * sessionGate.require(session, userId, _, _, _, _) >> session
         1 * postService.likeSessionPost(999L, userId)
     }
 
@@ -2757,7 +2776,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionGate.require(session, userId, _, _) >> { throw new ForbiddenException("You don't have access to this session") }
+        1 * sessionGate.require(session, userId, _, _, _, _) >> { throw new ForbiddenException("SESSION_FORBIDDEN", "You don't have access to this session", null) }
         0 * postService.likeSessionPost(_, _)
         thrown(ForbiddenException)
     }
@@ -2772,7 +2791,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * sessionGate.require(session, userId, _, _, _, _) >> session
         1 * postService.unlikeSessionPost(999L, userId)
     }
 
@@ -2889,7 +2908,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionDetailGate.require(session, userId, _, _) >> session
+        1 * sessionDetailGate.require(session, userId, _, _, _, _) >> session
         userService.getUserSummariesByIds(_) >> [:]
         sportService.getActiveSportsByIds(_) >> [:]
         locationService.getLocationsByIds(_) >> [1L: basketballLocation]
@@ -2914,7 +2933,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionDetailGate.require(session, userId, _, _) >> session
+        1 * sessionDetailGate.require(session, userId, _, _, _, _) >> session
         interaction { stubBatchEnrichment() }
         result.likeCount == 0L
         result.isLikedByCurrentUser == false
@@ -3088,7 +3107,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionGate.require(session, userId, _, _) >> session
+        1 * sessionGate.require(session, userId, _, _, _, _) >> session
         1 * commentService.createSessionComment(999L, userId, request) >> response
         1 * sessionOutboxWriter.record("session.comment.created", _)
         0 * commentService.createSystemSessionComment(_, _, _)
