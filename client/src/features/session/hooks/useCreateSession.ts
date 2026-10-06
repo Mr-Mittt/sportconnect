@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
+import { reportSessionDialogError } from '../sessionErrors';
 import { sessionKeys } from '../queryKeys';
 import type { CreateSessionPayload, Session } from '../types';
 import type { ApiResponse } from '@/shared/types/api';
@@ -9,6 +10,7 @@ export function useCreateSession() {
   const queryClient = useQueryClient();
   return useMutation({
     meta: { errorDisplay: 'inline' },
+    onError: reportSessionDialogError,
     mutationFn: async (payload: CreateSessionPayload) => {
       const response = await apiClient.post<ApiResponse<Session>>('/sessions', payload);
       return response.data.data;

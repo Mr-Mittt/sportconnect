@@ -269,6 +269,7 @@ export function FriendsPage() {
           onSubmit={createSessionModalData.submitCreate}
           isSubmitting={createSessionModalData.isCreating}
           isError={createSessionModalData.isCreateError}
+          errorText={createSessionModalData.createErrorText}
           sessionAttributeSchema={createSessionModalData.sessionAttributeSchema}
           sessionAttributeValues={createSessionModalData.sessionAttributeValues}
           onSessionAttributeChange={createSessionModalData.onSessionAttributeChange}
@@ -340,6 +341,7 @@ export function FriendsPage() {
           refBaseSchema={discoverModalData.refBaseSchema}
           isLoading={discoverModalData.isSessionLoading}
           isError={discoverModalData.isSessionError}
+          loadError={discoverModalData.sessionLoadError}
           participants={discoverModalData.participants}
           isParticipantsLoading={discoverModalData.isParticipantsLoading}
           isParticipantsError={discoverModalData.isParticipantsError}

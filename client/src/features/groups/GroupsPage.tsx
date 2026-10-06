@@ -1076,6 +1076,7 @@ export function GroupsPage() {
           onSubmit={createSessionModalData.submitCreate}
           isSubmitting={createSessionModalData.isCreating}
           isError={createSessionModalData.isCreateError}
+          errorText={createSessionModalData.createErrorText}
           sessionAttributeSchema={createSessionModalData.sessionAttributeSchema}
           sessionAttributeValues={createSessionModalData.sessionAttributeValues}
           onSessionAttributeChange={createSessionModalData.onSessionAttributeChange}
@@ -1149,6 +1150,7 @@ export function GroupsPage() {
           refBaseSchema={discoverModalData.refBaseSchema}
           isLoading={discoverModalData.isSessionLoading}
           isError={discoverModalData.isSessionError}
+          loadError={discoverModalData.sessionLoadError}
           participants={discoverModalData.participants}
           isParticipantsLoading={discoverModalData.isParticipantsLoading}
           isParticipantsError={discoverModalData.isParticipantsError}

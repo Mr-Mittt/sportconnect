@@ -8,11 +8,13 @@ import { useLocationPickerData } from '@/features/location/useLocationPickerData
 import { useSessionAttributeSchema } from '@/shared/hooks/useSessionAttributeSchema';
 import { useSportAttributeSchema } from '@/shared/hooks/useSportAttributeSchema';
 import { useRawMySportProfiles } from '@/shared/hooks/useRawMySportProfiles';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import type { Location } from '@/shared/types/location';
 import type { ResolvedSportAttributeSchema } from '@/shared/types/sport';
 import { useCreateSession } from './hooks/useCreateSession';
 import { collectSchemaPaths, pickPaths } from './sessionAttributePaths';
+import { isSessionDialogError } from './sessionErrors';
 import type { CreateSessionPayload } from './types';
 
 /**
@@ -183,7 +185,11 @@ export function useCreateSessionModalData() {
     locationPickerForCreate,
     submitCreate,
     isCreating: createSessionMutation.isPending,
-    isCreateError: createSessionMutation.isError,
+    // CLIENT-ERR-7: a session dialog code (e.g. not a group admin) is shown by the app-wide error
+    // dialog, so the form's own line only covers everything else.
+    isCreateError: createSessionMutation.isError && !isSessionDialogError(createSessionMutation.error),
+    /** Specific copy for the form's inline line (sport/location/fee 400 codes); `undefined` keeps the generic line. */
+    createErrorText: getCodedErrorMessage(createSessionMutation.error),
     friends: friendsQuery.data ?? [],
     isFriendsLoading: friendsQuery.isLoading,
     onEffectiveSportChangeForCreate,

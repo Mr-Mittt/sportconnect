@@ -116,6 +116,20 @@
     "COMMENT_SYSTEM_READONLY": "Automatic comments can’t be replied to, liked or deleted.",
     "COMMENT_DELETE_FORBIDDEN": "You can only delete your own comments.",
     "COMMENT_ALREADY_LIKED": "You already liked this comment.",
-    "COMMENT_NOT_LIKED": "You haven’t liked this comment."
+    "COMMENT_NOT_LIKED": "You haven’t liked this comment.",
+    "SESSION_NOT_FOUND": "This session no longer exists.",
+    "SESSION_JOIN_REQUEST_NOT_FOUND": "This join request is no longer pending.",
+    "SESSION_FORBIDDEN": "You don't have access to this session.",
+    "SESSION_GROUP_MEMBER_REQUIRED": "Only members of this group can do that. Join the group first.",
+    "SESSION_GROUP_ADMIN_REQUIRED": "Only the group owner or an admin can do that.",
+    "SESSION_CREATOR_REQUIRED": "Only the session's creator can do that.",
+    "SESSION_CANCELLED": "This session has been cancelled.",
+    "SESSION_NOT_CANCELLABLE": "This session has already ended or been cancelled.",
+    "SESSION_NOT_PREPARING": "Location and fee can only be changed while the session is still being prepared.",
+    "SESSION_NOT_PARTICIPANT": "You're no longer part of this session.",
+    "SESSION_CREATOR_CANNOT_LEAVE": "As the creator you can't leave this session. Cancel it instead.",
+    "SESSION_SPORT_REQUIRED": "Choose a sport for this session.",
+    "SESSION_LOCATION_SPORT_MISMATCH": "This location isn't for the session's sport. Choose another one.",
+    "SESSION_FEE_AMOUNT_REQUIRED": "Enter the fee amount."
   }
 }

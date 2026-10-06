@@ -3,6 +3,7 @@ import { apiClient } from '@/app/apiClient';
 import { useJoinFeedbackStore, type JoinFeedbackKind } from '@/app/joinFeedbackStore';
 import type { ApiResponse } from '@/shared/types/api';
 import type { Session } from '@/shared/types/session';
+import { reportSessionMutationError } from '../sessionErrors';
 import { sessionKeys } from '../queryKeys';
 
 /**
@@ -27,6 +28,8 @@ import { sessionKeys } from '../queryKeys';
 export function useJoinSession({ offerOpenSession = false }: { offerOpenSession?: boolean } = {}) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
+    onError: reportSessionMutationError,
     mutationFn: async (sessionId: number): Promise<JoinFeedbackKind | null> => {
       await apiClient.post(`/sessions/${sessionId}/join`);
       try {

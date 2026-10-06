@@ -232,6 +232,7 @@ e2e/
     sport-errors.spec.ts      # CLIENT-ERR-4
     group-errors.spec.ts      # CLIENT-ERR-5
     post-errors.spec.ts       # CLIENT-ERR-6
+    session-errors.spec.ts    # CLIENT-ERR-7
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -1076,6 +1077,18 @@ The post module's coded errors (A18) localized from the error code. Each server 
 | repeat like (409) | Forced 409 `POST_ALREADY_LIKED`: no toast and no pop-up; the optimistic flip rolls back and the like button shows its true state (count 3). |
 | comment delete, `COMMENT_NOT_FOUND` | Add a comment, delete it with a forced 404 `COMMENT_NOT_FOUND`: no toast, no pop-up, the comments modal stays. |
 | create post as a non-member | Forced 403 `POST_GROUP_MEMBER_REQUIRED` on create: the line under the composer reads "Join this group to post here.", no toast. (The composer clears its text on submit by existing design, so the text is not kept.) |
+
+### `e2e/flows/session-errors.spec.ts` (CLIENT-ERR-7, 5 `test()`s)
+
+The session module's coded errors (SESSION-45) localized from the error code. Each server error is forced with `page.route` on top of the MSW session handlers. "Dialog" is the app-wide session error dialog (`PostActionErrorDialog` fed by `sessionErrorDialogStore`, "Session unavailable", one message and "Got it"). Behavior table: `client/docs/MVP/CLIENT-ERR-7_SESSION_ERROR_ADAPTATION.md`.
+
+| Test | What it checks |
+|---|---|
+| join, session cancelled | Forced 409 `SESSION_CANCELLED` on join from the detail modal: the dialog reads "This session has been cancelled.", no toast, no inline "Couldn't complete that action" line behind it; "Got it" closes the dialog and the **modal stays open**. |
+| join, 403 | Forced 403 `SESSION_GROUP_MEMBER_REQUIRED`: the dialog reads the group-member copy; "Got it" closes the dialog **and the session modal**. |
+| same dialog in Vietnamese | Locale stored as `vi`, forced 404 `SESSION_NOT_FOUND` on join: the dialog reads "Buổi chơi này không còn tồn tại.", "Đã hiểu" closes it. |
+| open a session that no longer exists | Forced 404 `SESSION_NOT_FOUND` on the detail load: the modal body shows the "No longer available" state (not "Couldn't load this session."), no toast; Close closes the modal. |
+| leave from a card, not a participant | Forced 409 `SESSION_NOT_PARTICIPANT` on a card's Leave (no modal open): the dialog reads "You're no longer part of this session.", no toast. |
 
 ### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
 

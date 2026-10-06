@@ -52,5 +52,11 @@
     "cancel": "Hủy",
     "confirm": "Cập nhật thông báo",
     "updating": "Đang cập nhật…"
+  },
+  "sessionActionError": {
+    "postActionError": {
+      "title": "Buổi chơi không khả dụng",
+      "gotIt": "Đã hiểu"
+    }
   }
 }

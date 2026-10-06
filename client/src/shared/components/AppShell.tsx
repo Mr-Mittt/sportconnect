@@ -11,6 +11,7 @@ import { NotificationBell } from '@/features/notifications/components/Notificati
 import { useNotificationBellData } from '@/features/notifications/useNotificationBellData';
 import { useNotificationLiveSocket } from '@/features/notifications/useNotificationLiveSocket';
 import { SessionDetailModal } from '@/features/session/components/SessionDetailModal';
+import { useSessionErrorDialog } from '@/features/session/sessionErrors';
 import { useSessionDetailModalData } from '@/features/session/useSessionDetailModalData';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
@@ -100,6 +101,7 @@ export function AppShell() {
   const dismissJoinFeedback = useJoinFeedbackStore((state) => state.dismiss);
   const postError = usePostErrorDialogStore((state) => state.error);
   const dismissPostError = usePostErrorDialogStore((state) => state.dismiss);
+  const { error: sessionError, onDismiss: dismissSessionError } = useSessionErrorDialog();
 
   // ACCOUNT-1: the Account Settings modal (opened from TopBar's avatar dropdown) lives here, not on
   // a page — it is reachable from every page.
@@ -110,7 +112,7 @@ export function AppShell() {
   const accountSettingsSave = useEditProfileSave();
 
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
-  const sessionDetailData = useSessionDetailModalData(selectedSessionId);
+  const sessionDetailData = useSessionDetailModalData(selectedSessionId, () => setSelectedSessionId(null));
   const sportProfilesQuery = useSportProfiles();
   const sportsByKey = useMemo(
     () =>
@@ -175,6 +177,7 @@ export function AppShell() {
         refBaseSchema={sessionDetailData.refBaseSchema}
         isLoading={sessionDetailData.isSessionLoading}
         isError={sessionDetailData.isSessionError}
+        loadError={sessionDetailData.sessionLoadError}
         participants={sessionDetailData.participants}
         isParticipantsLoading={sessionDetailData.isParticipantsLoading}
         isParticipantsError={sessionDetailData.isParticipantsError}
@@ -236,6 +239,11 @@ export function AppShell() {
       />
 
       <PostActionErrorDialog error={postError} onDismiss={dismissPostError} />
+      <PostActionErrorDialog
+        error={sessionError}
+        onDismiss={dismissSessionError}
+        i18nOverridePrefix="sharedDialogs:sessionActionError"
+      />
     </div>
   );
 }

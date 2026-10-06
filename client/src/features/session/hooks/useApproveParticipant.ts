@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
+import { reportSessionMutationError } from '../sessionErrors';
 import { sessionKeys } from '../queryKeys';
 
 /**
@@ -10,6 +11,8 @@ import { sessionKeys } from '../queryKeys';
 export function useApproveParticipant() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
+    onError: reportSessionMutationError,
     mutationFn: async ({ sessionId, userId }: { sessionId: number; userId: string }) => {
       await apiClient.post(`/sessions/${sessionId}/participants/${userId}/approve`);
     },

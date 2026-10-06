@@ -18,6 +18,8 @@ import { useState } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import type { Comment } from '@/features/feed/types';
 import { SportIcon } from '@/shared/components/SportIcon';
+import { ResourceUnavailable } from '@/shared/components/ResourceUnavailable';
+import { getApiError } from '@/shared/lib/apiError';
 import { getSportLabelForId } from '@/shared/lib/sportProfileFromId';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { directionsUrl } from '@/shared/lib/mapsLinks';
@@ -54,6 +56,8 @@ interface SessionDetailModalProps {
   session: Session | undefined;
   isLoading: boolean;
   isError: boolean;
+  /** CLIENT-ERR-7: the raw detail-load failure; a 404 / 403 shows the matching "unavailable" state instead of the generic line. */
+  loadError?: unknown;
 
   participants: SessionParticipant[];
   isParticipantsLoading: boolean;
@@ -265,6 +269,7 @@ export function SessionDetailModal({
   session,
   isLoading,
   isError,
+  loadError,
   participants,
   isParticipantsLoading,
   isParticipantsError,
@@ -342,6 +347,8 @@ export function SessionDetailModal({
   const isLeaveHiddenForCreator =
     participationAction?.kind === 'LEAVE' && session !== undefined && session.createdBy === currentUserId;
 
+  const loadCategory = isError && loadError !== undefined ? getApiError(loadError).category : undefined;
+
   return (
     <Dialog
       open={isOpen}
@@ -392,7 +399,15 @@ export function SessionDetailModal({
 
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-3.5">
           {isLoading && <p className="text-2sm text-text-muted">{t('common.loading')}</p>}
-          {isError && <p role="alert" className="text-2sm text-text-danger">{t('detail.error')}</p>}
+          {isError && loadCategory === 'NOT_FOUND' && (
+            <ResourceUnavailable variant="unavailable" onAction={onClose} actionLabel={t('common.close')} />
+          )}
+          {isError && loadCategory === 'FORBIDDEN' && (
+            <ResourceUnavailable variant="forbidden" onAction={onClose} actionLabel={t('common.close')} />
+          )}
+          {isError && loadCategory !== 'NOT_FOUND' && loadCategory !== 'FORBIDDEN' && (
+            <p role="alert" className="text-2sm text-text-danger">{t('detail.error')}</p>
+          )}
 
           {session !== undefined && (
             <>
