@@ -5,6 +5,7 @@ import {
   snapshotCommentsCache,
   updateCommentInCommentsCache,
 } from '../optimisticCommentUpdates';
+import { reportPostMutationError } from '../postErrors';
 import { feedKeys } from '../queryKeys';
 
 interface LikeCommentVariables {
@@ -21,6 +22,7 @@ interface LikeCommentVariables {
 export function useLikeComment() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: ({ commentId }: LikeCommentVariables) =>
       apiClient.post(`/posts/comments/${commentId}/like`),
     onMutate: async ({ postId, commentId }: LikeCommentVariables) => {
@@ -33,7 +35,8 @@ export function useLikeComment() {
       }));
       return { postId, previous };
     },
-    onError: (_err, _variables, context) => {
+    onError: (err, _variables, context) => {
+      reportPostMutationError(err);
       if (context) restoreCommentsCache(queryClient, context.postId, context.previous);
     },
     onSettled: (_data, _error, { postId }) => {

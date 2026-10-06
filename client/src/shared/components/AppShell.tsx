@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/authStore';
 import { useJoinFeedbackStore } from '@/app/joinFeedbackStore';
+import { usePostErrorDialogStore } from '@/app/postErrorDialogStore';
 import { useLogout } from '@/features/auth/useLogout';
 import { useEditProfileSave } from '@/features/profile/useEditProfileSave';
 import { useMyProfile } from '@/features/profile/useMyProfile';
@@ -18,6 +19,7 @@ import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { AccountSettingsModal } from './AccountSettingsModal';
 import { AuthLoadingState } from './AuthLoadingState';
 import { JoinFeedbackDialog } from './JoinFeedbackDialog';
+import { PostActionErrorDialog } from './PostActionErrorDialog';
 import { NavTabs, type NavTabKey } from './NavTabs';
 import { TopBar } from './TopBar';
 
@@ -96,6 +98,8 @@ export function AppShell() {
   const joinFeedbackKind = useJoinFeedbackStore((state) => state.kind);
   const joinFeedbackOpenSessionId = useJoinFeedbackStore((state) => state.openSessionId);
   const dismissJoinFeedback = useJoinFeedbackStore((state) => state.dismiss);
+  const postError = usePostErrorDialogStore((state) => state.error);
+  const dismissPostError = usePostErrorDialogStore((state) => state.dismiss);
 
   // ACCOUNT-1: the Account Settings modal (opened from TopBar's avatar dropdown) lives here, not on
   // a page — it is reachable from every page.
@@ -230,6 +234,8 @@ export function AppShell() {
               }
         }
       />
+
+      <PostActionErrorDialog error={postError} onDismiss={dismissPostError} />
     </div>
   );
 }

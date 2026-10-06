@@ -50,4 +50,10 @@ describe('UpdateBroadcastConfirmDialog', () => {
     render(<UpdateBroadcastConfirmDialog {...baseProps} isError />);
     expect(screen.getByText("Couldn't update the broadcast. Please try again.")).toBeInTheDocument();
   });
+
+  it('shows the code-specific errorText instead of the generic line (CLIENT-ERR-6)', () => {
+    render(<UpdateBroadcastConfirmDialog {...baseProps} isError errorText="You can only edit your own posts." />);
+    expect(screen.getByText('You can only edit your own posts.')).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't update the broadcast. Please try again.")).not.toBeInTheDocument();
+  });
 });

@@ -30,6 +30,8 @@ interface CreatePostFormProps {
    * retypes and submits again. Defaults to false so every other existing
    * call site doesn't need updating. */
   isError?: boolean;
+  /** CLIENT-ERR-6: code-specific failure text (e.g. not a member of the group); replaces the generic line when set. */
+  errorText?: string;
   /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
    * copy (`sharedComponents.createPostForm.*`) for a specific caller. No current caller passes
    * this. */
@@ -82,6 +84,7 @@ export function CreatePostForm({
   onTagSportClick,
   canBroadcast = false,
   isError = false,
+  errorText,
   i18nOverridePrefix,
 }: CreatePostFormProps) {
   const t = useOverridableText('sharedComponents', i18nOverridePrefix);
@@ -195,7 +198,7 @@ export function CreatePostForm({
         </Button>
       </div>
       {isError && (
-        <p className="mt-2 text-2xs text-text-danger">{t('createPostForm.error')}</p>
+        <p className="mt-2 text-2xs text-text-danger">{errorText ?? t('createPostForm.error')}</p>
       )}
       <UnsavedPostConfirmDialog
         isOpen={unsavedGuard.isLeaveDialogOpen}

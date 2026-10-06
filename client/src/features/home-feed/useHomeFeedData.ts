@@ -70,6 +70,8 @@ export function useHomeFeedData(): {
   createPost: (content: string) => void;
   isCreatingPost: boolean;
   isCreatePostError: boolean;
+  /** CLIENT-ERR-6: the raw failure, for the form's code-specific line (null while none). */
+  createPostError: unknown;
   currentUserId: string | undefined;
   hasMorePosts: boolean;
   isFetchingMorePosts: boolean;
@@ -186,6 +188,7 @@ export function useHomeFeedData(): {
     createPost,
     isCreatingPost: createMutation.isPending,
     isCreatePostError: createMutation.isError,
+    createPostError: createMutation.error,
     currentUserId,
     hasMorePosts: feedQuery.hasNextPage ?? false,
     isFetchingMorePosts: feedQuery.isFetchingNextPage,

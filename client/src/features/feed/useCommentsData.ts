@@ -62,6 +62,7 @@ export function useCommentsData(postId: number, isOpen: boolean) {
     data: comments,
     isLoading: commentsQuery.isLoading,
     isError: commentsQuery.isError,
+    error: commentsQuery.error,
     hasMore: commentsQuery.hasNextPage ?? false,
     isFetchingMore: commentsQuery.isFetchingNextPage,
     fetchMore: () => commentsQuery.fetchNextPage(),

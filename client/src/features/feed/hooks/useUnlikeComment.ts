@@ -5,6 +5,7 @@ import {
   snapshotCommentsCache,
   updateCommentInCommentsCache,
 } from '../optimisticCommentUpdates';
+import { reportPostMutationError } from '../postErrors';
 import { feedKeys } from '../queryKeys';
 
 interface UnlikeCommentVariables {
@@ -16,6 +17,7 @@ interface UnlikeCommentVariables {
 export function useUnlikeComment() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: ({ commentId }: UnlikeCommentVariables) =>
       apiClient.delete(`/posts/comments/${commentId}/like`),
     onMutate: async ({ postId, commentId }: UnlikeCommentVariables) => {
@@ -28,7 +30,8 @@ export function useUnlikeComment() {
       }));
       return { postId, previous };
     },
-    onError: (_err, _variables, context) => {
+    onError: (err, _variables, context) => {
+      reportPostMutationError(err);
       if (context) restoreCommentsCache(queryClient, context.postId, context.previous);
     },
     onSettled: (_data, _error, { postId }) => {

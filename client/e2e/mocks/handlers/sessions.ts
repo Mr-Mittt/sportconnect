@@ -32,8 +32,14 @@ function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
 }
 
-function apiError(message: string): ApiResponse<null> {
-  return { success: false, message, data: null, timestamp: new Date().toISOString() };
+function apiError(message: string, errorCode?: string): ApiResponse<null> {
+  return {
+    success: false,
+    message,
+    data: null,
+    timestamp: new Date().toISOString(),
+    ...(errorCode ? { errorCode } : {}),
+  };
 }
 
 /**
@@ -1030,7 +1036,7 @@ export const sessionHandlers: HttpHandler[] = [
       return HttpResponse.json(apiError('Session not found'), { status: 404 });
     }
     if (existing.isLikedByCurrentUser) {
-      return HttpResponse.json(apiError('Already liked'), { status: 400 });
+      return HttpResponse.json(apiError('Already liked', 'POST_ALREADY_LIKED'), { status: 409 });
     }
     session.sessionsState = session.sessionsState.map((candidate) =>
       candidate.id === sessionId
@@ -1050,7 +1056,7 @@ export const sessionHandlers: HttpHandler[] = [
       return HttpResponse.json(apiError('Session not found'), { status: 404 });
     }
     if (!existing.isLikedByCurrentUser) {
-      return HttpResponse.json(apiError('Not currently liked'), { status: 400 });
+      return HttpResponse.json(apiError('Not currently liked', 'POST_NOT_LIKED'), { status: 409 });
     }
     session.sessionsState = session.sessionsState.map((candidate) =>
       candidate.id === sessionId

@@ -93,11 +93,14 @@ export function useGroupsPageData(): {
   createPost: (content: string, options?: { asBroadcast: boolean }) => void;
   isCreatingPost: boolean;
   isCreatePostError: boolean;
+  /** CLIENT-ERR-6: the raw failure, for the form's code-specific line (null while none). */
+  createPostError: unknown;
   canBroadcast: boolean;
   activeBroadcastForSelectedGroup: Post | null;
   updateBroadcast: (content: string, options?: { onSuccess?: () => void }) => void;
   isUpdatingBroadcast: boolean;
   isBroadcastUpdateError: boolean;
+  broadcastUpdateError: unknown;
   /** CLIENT-MODAL-1: clears a failed broadcast update so the confirm dialog reopens clean. */
   resetBroadcastUpdate: () => void;
   currentUserId: string | undefined;
@@ -287,11 +290,13 @@ export function useGroupsPageData(): {
     createPost,
     isCreatingPost: createMutation.isPending,
     isCreatePostError: createMutation.isError,
+    createPostError: createMutation.error,
     canBroadcast,
     activeBroadcastForSelectedGroup,
     updateBroadcast,
     isUpdatingBroadcast: updateMutation.isPending,
     isBroadcastUpdateError: updateMutation.isError,
+    broadcastUpdateError: updateMutation.error,
     resetBroadcastUpdate: () => updateMutation.reset(),
     currentUserId,
     hasMorePosts: activeFeedQuery.hasNextPage ?? false,

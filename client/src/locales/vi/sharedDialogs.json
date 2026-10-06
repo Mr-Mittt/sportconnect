@@ -1,4 +1,8 @@
 {
+  "postActionError": {
+    "title": "Bài viết không khả dụng",
+    "gotIt": "Đã hiểu"
+  },
   "joinFeedback": {
     "joined": {
       "title": "Bạn đã tham gia buổi chơi",

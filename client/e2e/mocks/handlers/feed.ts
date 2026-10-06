@@ -26,8 +26,14 @@ function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
 }
 
-function apiError(message: string): ApiResponse<null> {
-  return { success: false, message, data: null, timestamp: new Date().toISOString() };
+function apiError(message: string, errorCode?: string): ApiResponse<null> {
+  return {
+    success: false,
+    message,
+    data: null,
+    timestamp: new Date().toISOString(),
+    ...(errorCode ? { errorCode } : {}),
+  };
 }
 
 interface FeedSession {
@@ -250,6 +256,10 @@ export const feedHandlers: HttpHandler[] = [
     if (unauthorized) return unauthorized;
     const postId = Number(params.postId);
     const session = feedSessions.get(sessionIdFromRequest(request));
+    // A18: the real backend answers a repeat like with 409 POST_ALREADY_LIKED (was 400).
+    if (session.postsState.some((post) => post.id === postId && post.isLikedByCurrentUser)) {
+      return HttpResponse.json(apiError("Already liked", "POST_ALREADY_LIKED"), { status: 409 });
+    }
     session.postsState = session.postsState.map((post) =>
       post.id === postId
         ? { ...post, isLikedByCurrentUser: true, likeCount: post.likeCount + 1 }
@@ -263,6 +273,9 @@ export const feedHandlers: HttpHandler[] = [
     if (unauthorized) return unauthorized;
     const postId = Number(params.postId);
     const session = feedSessions.get(sessionIdFromRequest(request));
+    if (session.postsState.some((post) => post.id === postId && !post.isLikedByCurrentUser)) {
+      return HttpResponse.json(apiError("Not currently liked", "POST_NOT_LIKED"), { status: 409 });
+    }
     session.postsState = session.postsState.map((post) =>
       post.id === postId
         ? { ...post, isLikedByCurrentUser: false, likeCount: Math.max(0, post.likeCount - 1) }

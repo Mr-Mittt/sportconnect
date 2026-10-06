@@ -3,10 +3,12 @@ import { useAuthStore } from '@/app/authStore';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { usePost } from '@/features/feed/hooks/usePost';
+import { usePostErrorGuard } from '@/features/feed/postErrors';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { CreatePostForm } from '@/shared/components/CreatePostForm';
 import { Feed } from '@/shared/components/Feed';
 import { CommentSection } from '@/shared/components/CommentSection';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import { HashtagPostsModal } from '@/shared/components/HashtagPostsModal';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { usePostsTabData } from '../usePostsTabData';
@@ -34,6 +36,7 @@ export function PostsTab({ i18nOverridePrefix }: { i18nOverridePrefix?: string }
     createPost,
     isCreatingPost,
     isCreatePostError,
+    createPostError,
     currentUserId,
     hasMorePosts,
     isFetchingMorePosts,
@@ -50,6 +53,10 @@ export function PostsTab({ i18nOverridePrefix }: { i18nOverridePrefix?: string }
   const activeCommentsPostQuery = usePost(
     activeCommentsPostId ?? -1,
     activeCommentsPostId !== null,
+  );
+  const { hideComments } = usePostErrorGuard(
+    [activeCommentsPostQuery.error, commentsData.error],
+    () => setActiveCommentsPostId(null),
   );
   const hashtagResultsData = useHashtagResultsData(activeHashtag, isHashtagModalOpen);
 
@@ -83,6 +90,7 @@ export function PostsTab({ i18nOverridePrefix }: { i18nOverridePrefix?: string }
         onLocationClick={() => {}}
         onTagSportClick={() => {}}
         isError={isCreatePostError}
+        errorText={getCodedErrorMessage(createPostError)}
       />
       <Feed
         posts={data.posts}
@@ -107,7 +115,7 @@ export function PostsTab({ i18nOverridePrefix }: { i18nOverridePrefix?: string }
         showSportBadge={false}
       />
       <CommentSection
-        isOpen={activeCommentsPostId !== null}
+        isOpen={activeCommentsPostId !== null && !hideComments}
         onClose={closeComments}
         currentUserId={currentUserId}
         currentUser={{ fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}

@@ -1,4 +1,8 @@
 {
+  "postActionError": {
+    "title": "Post unavailable",
+    "gotIt": "Got it"
+  },
   "joinFeedback": {
     "joined": {
       "title": "You joined the session",

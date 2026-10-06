@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
 import { restoreFeedCaches, snapshotFeedCaches, updatePostInFeedCaches } from '../optimisticFeedUpdates';
+import { reportPostMutationError } from '../postErrors';
 import { feedKeys } from '../queryKeys';
 import type { CreateCommentPayload } from '../types';
 
@@ -22,6 +23,7 @@ interface CreateCommentVariables {
 export function useCreateComment() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: ({ postId, payload }: CreateCommentVariables) =>
       apiClient.post(`/posts/${postId}/comments`, payload),
     onMutate: async ({ postId, payload }: CreateCommentVariables) => {
@@ -34,7 +36,8 @@ export function useCreateComment() {
       }));
       return { previous };
     },
-    onError: (_err, _variables, context) => {
+    onError: (err, _variables, context) => {
+      reportPostMutationError(err);
       if (context) restoreFeedCaches(queryClient, context.previous);
     },
     onSuccess: (_data, { postId }) => {
